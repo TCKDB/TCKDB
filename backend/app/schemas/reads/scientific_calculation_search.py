@@ -45,6 +45,7 @@ from app.schemas.reads.scientific_calculation import (
 )
 from app.schemas.reads.scientific_common import (
     GeometryValidationStatus,
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
@@ -183,7 +184,7 @@ class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request — surfaced in the response envelope."""
 
     filter: dict[str, object]
-    sort: str
+    sort: OrderEcho
     include: list[str] = Field(default_factory=list)
 
 

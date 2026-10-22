@@ -98,7 +98,7 @@ from app.schemas.reads.scientific_analytics import (
     ThermoAnalyticsResponse,
     WatermarkEcho,
 )
-from app.schemas.reads.scientific_common import ReviewStatusSummary
+from app.schemas.reads.scientific_common import ReviewStatusSummary, browse_order
 from app.services.scientific_read.common import (
     build_pagination,
     reject_client_sort,
@@ -134,11 +134,12 @@ from app.services.scientific_read.sql_review import (
     visible_review_filter,
 )
 
-#: The one sort every analytics endpoint uses. Best-reviewed first, then
-#: newest id first. The trailing key is the primary key, which is what makes
-#: the order a total order and therefore keyset-safe: without a unique final
-#: key the "strictly after" predicate would skip rows tied on every other key.
-DEFAULT_SORT = "review_rank,id"
+#: The one display order every analytics endpoint uses: review rank (approved first; ``under_review`` and
+#: ``not_reviewed`` tie), then deposition time (the row's ``created_at``) newest first, then the primary key newest
+#: first. The trailing key is the primary key, which is what makes the order a total order and therefore keyset-safe:
+#: without a unique final key the "strictly after" predicate would skip rows tied on every other key. It is display
+#: order, not a scientific preference.
+DEFAULT_SORT = browse_order("review_rank", "created_at", "id")
 
 #: Analytics responses carry no nested sub-resources, so the only include
 #: token that means anything is the internal-id opt-in.
@@ -292,7 +293,10 @@ def _run_page(
     )
 
     candidates = candidate_stmt.subquery("analytics_candidates")
-    ranked_base = select(candidates.c.id)
+    record_class = id_column.class_
+    ranked_base = select(candidates.c.id, record_class.created_at.label("created_at")).join(
+        record_class, record_class.id == candidates.c.id
+    )
     ranked_base, review = join_review(ranked_base, candidates.c.id, record_type)
     ranked = (
         ranked_base.add_columns(
@@ -323,12 +327,12 @@ def _run_page(
     summary = summary_from_sql(session, ranked)
 
     page_stmt = select(
-        ranked.c.id, ranked.c.review_rank, ranked.c.review_status
-    ).order_by(ranked.c.review_rank.asc(), ranked.c.id.desc())
+        ranked.c.id, ranked.c.review_rank, ranked.c.created_at, ranked.c.review_status
+    ).order_by(ranked.c.review_rank.asc(), ranked.c.created_at.desc(), ranked.c.id.desc())
     if cursor is not None:
         page_stmt = page_stmt.where(
             keyset_predicate(
-                [(ranked.c.review_rank, "asc"), (ranked.c.id, "desc")],
+                [(ranked.c.review_rank, "asc"), (ranked.c.created_at, "desc"), (ranked.c.id, "desc")],
                 cursor.last_values,
             )
         )
@@ -347,7 +351,7 @@ def _run_page(
         next_cursor = encode_cursor(
             Cursor(
                 watermark=watermark,
-                last_values=[int(last.review_rank), int(last.id)],
+                last_values=[int(last.review_rank), last.created_at, int(last.id)],
                 query_signature=signature,
             )
         )

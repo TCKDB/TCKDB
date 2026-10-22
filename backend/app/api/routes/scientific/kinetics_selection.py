@@ -1,7 +1,8 @@
 """POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select (+ ``/manifest``).
 
-Method-aware selection among one reaction entry's stored rate coefficients, for one stated gas-phase kinetic
-question. Read-only: a POST because the request is a structured body, not because anything is written. The
+Selection among one reaction entry's stored rate coefficients, for one stated gas-phase kinetic
+question: which determinations are eligible and, among those, the display order of ``docs/specs/browse_order.md``.
+TCKDB ranks no method above another. Read-only: a POST because the request is a structured body, not because anything is written. The
 ordinary ``GET .../kinetics`` browse order is untouched.
 
 The path takes a public ``rxe_...`` ref only; an integer id is refused. The request body is a
@@ -14,8 +15,7 @@ manifest says so. ``get_db`` cannot be used here: its session may already have r
 level cannot be changed after one.
 
 The response is built from public refs only and is returned directly, not through the internal-id stripper that
-other scientific routes use: that stripper drops every key ending in ``_id``, which would delete the rule registry
-key (``rule_id``) from the decision. A test asserts instead that no database id appears anywhere in either document.
+other scientific routes use. A test asserts instead that no database id appears anywhere in either document.
 """
 
 from __future__ import annotations
@@ -74,16 +74,15 @@ def select_reaction_kinetics(
     A record answers the question only if its stored claims say so (direction, target, coefficient basis, phase,
     temperature and pressure coverage, collider); a missing fact makes it ``unresolved`` and a form this selector
     does not evaluate makes it ``unsupported``, never applicable by default. ``outcome`` is the selection basis:
-    ``policy_preferred`` (a registered, active rule leaves one determination with nothing preferred over it),
-    ``incomparable_alternatives`` (the rules do not rank the leading determinations), ``sole_eligible_candidate``,
-    ``no_applicable_candidate`` or ``policy_conflict`` (opposing rules or a cycle: nothing is selected). Every
-    rule shipped in this release is inactive, so ``method_preferred`` ranks nothing today and says so.
+    ``sole_eligible_candidate`` (one determination is eligible; it is the only one, not the best),
+    ``incomparable_alternatives`` (several are eligible and TCKDB ranks none above another) or
+    ``no_applicable_candidate``.
 
     More than 500 visible candidates is refused with 422 ``kinetics_selection_population_too_large``: nothing is
-    assessed, because a winner picked from part of the population would say nothing about the rest. Only records
+    assessed, because an answer picked from part of the population would say nothing about the rest. Only records
     visible under the caller's read profile are counted.
 
-    ``mode=first`` may name a determination among unranked first-front alternatives; the ``selection`` then says
+    ``mode=first`` may name the first determination in display order among the alternatives; the ``selection`` then says
     ``administrative_first`` and that this is not a method claim. A determination is returned with every eligible
     fitted representation of it.
     """
@@ -111,7 +110,7 @@ def select_reaction_kinetics_manifest(
     """The same request as ``/kinetics/select``, answered with the decision manifest as a download.
 
     The manifest holds the normalised request, the snapshot isolation it was read under, every assessed candidate
-    with its normalised inputs, the determinations, the rules consulted, each comparison and the administrative
+    with its normalised inputs, the determinations and the administrative
     order, as public refs only. It is enough to recompute the decision with no database. It is a new snapshot of
     the current data, not a retrieval of an earlier selection. The same visibility rules apply as for
     ``/kinetics/select``.

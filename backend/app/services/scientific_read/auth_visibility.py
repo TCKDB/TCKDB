@@ -1,7 +1,7 @@
 """Auth-gated field visibility for the scientific read surface.
 
 The scientific read API is otherwise unauthenticated — see
-``docs/specs/read_api_mvp.md`` — but a small number of fields are only
+``docs/specs/browse_order.md`` — but a small number of fields are only
 meaningful to a caller who can act on the record they identify.
 ``submission_ref`` is the first: it names the moderation unit a curator
 would open to review this record, and it is the answer to "which upload

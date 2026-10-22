@@ -246,27 +246,6 @@ def test_under_curated_hidden_solves_are_not_counted_listed_or_named_in_a_refusa
     assert len(assess(db_session, channel_request(world)).solves) == 7
 
 
-def test_a_reference_model_must_be_a_visible_solve_of_this_network_and_a_hidden_one_reads_as_unknown(db_session, world):
-    from tckdb_schemas.network_declarations import NetworkComparisonObjective
-
-    from app.db.models.common import RecordReviewStatus
-
-    add_solve(db_session, world, fits=[fit_spec("assoc")])
-    reference = add_solve(db_session, world, fits=[fit_spec("assoc", det="ref")])
-    hidden = add_solve(db_session, world, fits=[fit_spec("assoc", det="hid")], review=S.not_reviewed)
-    objective = NetworkComparisonObjective.model_fidelity
-    assert assess(db_session, channel_request(world, objective=objective, reference_model_ref=reference.public_ref)).solves
-    token = curated()
-    try:
-        with pytest.raises(NotFoundError):
-            assess(db_session, channel_request(world, objective=objective, reference_model_ref=hidden.public_ref))
-    finally:
-        reset_current_read_profile(token)
-    with pytest.raises(NotFoundError):
-        assess(db_session, channel_request(world, objective=objective, reference_model_ref="nsolve_nonesuch"))
-    assert RecordReviewStatus.approved
-
-
 # -- snapshot, errors, determinism ------------------------------------------------------------------
 
 

@@ -1,7 +1,7 @@
-"""Values shared by the H298 candidate assessor, the rule registry and the preference engine.
+"""Values shared by the H298 candidate assessor and the ordering engine.
 
 Everything here is plain data. The normalised candidate (:class:`NormalizedCandidate`)
-is the whole of what a preference rule and the ordering engine may look at: public
+is the whole of what the ordering engine may look at: public
 refs, review state, timestamps and declared claims, never a database id or an ORM
 row. That is what lets a decision manifest be replayed without a database.
 """
@@ -15,13 +15,7 @@ from typing import Any
 from app.db.models.common import RecordReviewStatus, ThermoTargetKind
 from app.schemas.reads.scientific_common import SelectionPolicy
 from app.services.manifest_formats import new_current_only_registry, new_format_registry
-from app.services.selection_kernel import (  # noqa: F401  (re-exported: the vocabulary moved to the kernel)
-    Applicability,
-    Edge,
-    Outcome,
-    RuleMatch,
-    Tri,
-)
+from app.services.selection_kernel import Applicability, Outcome
 
 #: The one quantity this selector answers.
 QUANTITY = "formation_enthalpy_298k"
@@ -31,14 +25,14 @@ REFERENCE_TEMPERATURE_K = 298.15
 PHASE = "gas"
 #: Candidate populations larger than this are not assessed; the search is refused instead.
 MAX_CANDIDATES = 500
-#: Version of the DECISION PROCEDURE only: outcomes, front construction and ordering, which is what
+#: Version of the DECISION PROCEDURE only: outcomes and administrative ordering, which is what
 #: ``replay_decision`` re-runs. How a candidate's eligibility is *assessed* (the evidence rubric version, the
 #: source-finding gate) is a separate contract, ``ASSESSMENT_SEMANTICS_VERSION`` below, recorded in its own
 #: structured manifest block; replay reads the recorded ``eligible`` flags and never reruns the assessment.
-#: A decision manifest records both versions.
-POLICY_NAME = "h298_method_preferred"
-#: A superseded rule is removed before conflicts are judged (the shared kernel's rule). A manifest made under another
-#: version is refused by ``replay_decision`` rather than silently re-answered.
+#: A decision manifest records both versions. The procedure carries no method-versus-method rule.
+POLICY_NAME = "h298_selection"
+#: A manifest made under another name or version is refused by ``replay_decision`` rather than silently re-answered.
+#: The name changed with the removal of the method-preference rules (it was ``h298_method_preferred``).
 POLICY_VERSION = 1
 #: Version of how eligibility is assessed: an automated geometry-validation fail is advisory and a live confirmed
 #: finding about a source calculation excludes the record (``structure_selection.source_findings``). A manifest with no
@@ -49,8 +43,9 @@ ASSESSMENT_SEMANTICS = new_current_only_registry(
     "thermo_selection_assessment_semantics", ASSESSMENT_SEMANTICS_NAME, ASSESSMENT_SEMANTICS_VERSION
 )
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
-#: reads exactly this format; a manifest in any other is refused.
-MANIFEST_FORMAT_VERSION = 1
+#: reads exactly this format; a manifest in any other is refused. Version 2: the decision no longer holds rules,
+#: rule matches, edges, overridden edges, opposing pairs or cycles.
+MANIFEST_FORMAT_VERSION = 2
 MANIFEST_FORMAT_NAME = "thermo_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "thermo_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -65,7 +60,7 @@ class H298Request:
     :param conformer_group_id: The conformer group a ``single_conformer`` target names (same species entry);
         refused for an equilibrium target.
     :param min_review_status: Optional caller floor; the read-profile floor is applied on top.
-    :param admin_policy: Administrative order within a preference front. Never reorders fronts.
+    :param admin_policy: Administrative order of the eligible candidates. Display order, never a method preference.
     :param max_candidates: Population cap; the endpoint contract is 500.
     """
 
@@ -86,7 +81,7 @@ class H298Request:
 
 @dataclass(frozen=True)
 class Subject:
-    """The species entry every candidate belongs to, as the rules need to see it."""
+    """The species entry every candidate belongs to: the identity context the manifest records."""
 
     species_entry_ref: str
     inchi_key: str
@@ -107,7 +102,7 @@ class Subject:
 
 @dataclass(frozen=True)
 class NormalizedCandidate:
-    """What the ordering engine and the rules know about one eligible thermo record.
+    """What the ordering engine knows about one eligible thermo record.
 
     Built from the record's own columns and the links it actually holds; a thermo's evidence
     is only what it links (#645/#646), so nothing here comes from a sibling record of the
@@ -228,12 +223,6 @@ class Decision:
     fronts: tuple[tuple[str, ...], ...]
     administrative_order: tuple[str, ...]
     administrative_first: dict[str, str] | None
-    edges: tuple[Edge, ...]
-    overridden_edges: tuple[dict[str, Any], ...]
-    opposing_pairs: tuple[dict[str, Any], ...]
-    cycles: tuple[tuple[str, ...], ...]
-    rule_matches: tuple[dict[str, Any], ...]
-    rules: tuple[dict[str, Any], ...]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -243,12 +232,6 @@ class Decision:
             "fronts": [list(f) for f in self.fronts],
             "administrative_order": list(self.administrative_order),
             "administrative_first": self.administrative_first,
-            "edges": [e.to_dict() for e in self.edges],
-            "overridden_edges": [dict(e) for e in self.overridden_edges],
-            "opposing_pairs": [dict(p) for p in self.opposing_pairs],
-            "cycles": [list(c) for c in self.cycles],
-            "rule_matches": [dict(m) for m in self.rule_matches],
-            "rules": [dict(r) for r in self.rules],
         }
 
 

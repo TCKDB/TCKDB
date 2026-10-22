@@ -1,6 +1,6 @@
 """Read schemas for /api/v1/scientific/species-entries/{id}/thermo.
 
-See docs/specs/read_api_mvp.md §Endpoint 4.
+See docs/specs/browse_order.md.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from app.schemas.reads.scientific_common import (
     CollapseMode,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     RecordReviewBadge,
@@ -323,10 +324,13 @@ class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed query."""
 
     filter: dict[str, object]
-    sort: str
+    sort: OrderEcho
     collapse: CollapseMode
     selection_policy: SelectionPolicy = SelectionPolicy.default
     include: list[str]
+    #: The display order that actually ordered the returned records, in the same shape as ``sort``. ``sort`` stays the
+    #: candidate-list (``collapse=all``) order; with ``collapse=first&selection_policy=latest`` this drops the review rank.
+    effective_order: OrderEcho | None = None
 
 
 class ScientificSpeciesThermoResponse(BaseModel):

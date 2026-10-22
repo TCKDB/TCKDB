@@ -105,7 +105,7 @@ Common gotchas:
 
 ## Recipe 2 — Thermo search by species
 
-**Q:** Give me the top thermo record for this species, and tell me whether it covers the temperature window I care about.
+**Q:** Give me the first thermo record for this species (in display order), and tell me whether it covers the temperature window I care about.
 
 ```python
 thermo = client.search_thermo(
@@ -126,7 +126,7 @@ print("H298 =", rec["thermo"]["h298_kj_mol"], "kJ/mol")
 print("S298 =", rec["thermo"]["s298_j_mol_k"], "J/mol/K")
 ```
 
-The backend's locked sort order for thermo (`review_rank ASC, created_at DESC, id DESC`: best review status, then newest) decides who wins for `collapse="first"`. It is the same order the export, CHEMKIN and ML selection use, so the website and an export pick the same record. Origin does not matter: a newer experimental record beats an older computed one with the same review status. The client does not re-rank.
+The backend's locked display order for thermo (`review_rank ASC, created_at DESC, id DESC`: approved first, `under_review` and `not_reviewed` together, then newest deposited; see [Browse order](../specs/browse_order.md)) decides which record is first for `collapse="first"`. It is the same order the export, CHEMKIN and ML selection use, so the website and an export list the same record first. That is display order, not a scientific preference: TCKDB does not rank one method above another. Origin does not matter: a newer experimental record is listed before an older computed one with the same review status. The client does not re-rank.
 
 Useful fields:
 

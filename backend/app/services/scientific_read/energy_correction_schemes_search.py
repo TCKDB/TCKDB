@@ -25,7 +25,7 @@ from app.db.models.energy_correction import (
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
 from app.db.models.software import Software, SoftwareRelease
-from app.schemas.reads.scientific_common import ReviewStatusSummary
+from app.schemas.reads.scientific_common import ReviewStatusSummary, browse_order
 from app.schemas.reads.scientific_energy_correction_scheme import (
     ScientificEnergyCorrectionSchemeRecord,
 )
@@ -83,7 +83,7 @@ _DEFERRED_FILTER_FIELDS: tuple[str, ...] = ("used_by_thermo",)
 #: while the query ordered by ``(kind, name, id)`` -- the echo advertised a
 #: sort key the query never applied, which was wrong before
 #: ``a7d4e2b9c351`` removed the column and merely more obvious after.
-_DEFAULT_SORT_ECHO = "scheme_kind,name,id"
+_DEFAULT_SORT_ECHO = browse_order("scheme_kind", "name", ("id", "asc"))
 
 
 def search_energy_correction_schemes(

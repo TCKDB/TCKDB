@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.reads.scientific_common import (
     CollapseMode,
+    OrderEcho,
     ProfiledRequestEcho,
 )
 
@@ -42,7 +43,7 @@ class RequestEcho(ProfiledRequestEcho):
     """
 
     filter: dict[str, object] = Field(default_factory=dict)
-    sort: str = ""
+    sort: OrderEcho | None = None
     collapse: CollapseMode = CollapseMode.all
     include: list[str] = Field(default_factory=list)
 

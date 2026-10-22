@@ -35,16 +35,16 @@ from ._path_handles import PUBLIC_REF_MAX_LENGTH, validate_path_handle
 
 TOOL_NAME = "tckdb_select_species_entry_thermo"
 TOOL_DESCRIPTION = (
-    "Select which stored thermo record of a species_entry to use for the gas-phase "
-    "formation enthalpy at 298.15 K, with the reason. Requires a public species_entry_ref "
+    "Select which stored thermo records of a species_entry are eligible for the gas-phase "
+    "formation enthalpy at 298.15 K, in display order, with the reason. TCKDB ranks no method above another. Requires a public species_entry_ref "
     "(starts with 'spe_') and a target: equilibrium_ensemble, or single_conformer with a "
     "conformer_group_ref ('cg_'). Read-only. Returns the server response unchanged: report "
-    "its 'outcome' and 'basis' verbatim. 'incomparable_alternatives' and 'policy_conflict' "
-    "mean nothing was scientifically selected; a 'selection' with administrative=true is a "
-    "review/recency choice, not a method claim."
+    "its 'outcome' and 'basis' verbatim. 'incomparable_alternatives' means several records are "
+    "eligible and none is preferred; a 'selection' with administrative=true is first in display order, "
+    "not a method claim."
 )
 
-POLICIES = ("method_preferred", "default", "most_reviewed", "latest")
+POLICIES = ("default", "most_reviewed", "latest")
 RESULT_MODES = ("all", "first")
 PROFILES = ("exploratory", "curated")
 TARGET_KINDS = ("equilibrium_ensemble", "single_conformer")
@@ -97,10 +97,10 @@ INPUT_SCHEMA: dict[str, Any] = {
         "policy": {
             "type": "string",
             "enum": list(POLICIES),
-            "default": "method_preferred",
+            "default": "default",
             "description": (
-                "method_preferred applies the registered method rules; default, most_reviewed "
-                "and latest apply review/recency order only."
+                "An administrative display order, never a method claim: default and most_reviewed order "
+                "by review rank then newest deposited; latest by newest deposited."
             ),
         },
         "result_mode": {"type": "string", "enum": list(RESULT_MODES), "default": "all"},

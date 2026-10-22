@@ -60,6 +60,7 @@ from app.schemas.reads.scientific_calculation import (
 from app.schemas.reads.scientific_common import (
     CollapseMode,
     LevelOfTheorySummary,
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     RecordReviewBadge,
@@ -417,7 +418,7 @@ class RequestEcho(ProfiledRequestEcho):
 
     filter: dict[str, object]
     ranking: CalculationRanking
-    sort: str
+    sort: OrderEcho
     collapse: CollapseMode
     include: list[str]
 

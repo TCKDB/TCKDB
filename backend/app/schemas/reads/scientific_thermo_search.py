@@ -6,7 +6,7 @@ identity attached. Reuses the per-record ``ThermoRecord`` shape from
 ``scientific_thermo`` so workflow tools see the same thermo block as the
 entry-id detail endpoint.
 
-See docs/specs/read_api_mvp.md and docs/guides/workflow_tool_scientific_reads.md.
+See docs/specs/browse_order.md and docs/guides/workflow_tool_scientific_reads.md.
 """
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ from app.schemas.reads._field_bounds import (
 )
 from app.schemas.reads.scientific_common import (
     CollapseMode,
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     RecordReviewBadge,
@@ -151,7 +152,7 @@ class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed query."""
 
     filter: dict[str, object]
-    sort: str
+    sort: OrderEcho
     collapse: CollapseMode
     include: list[str]
 

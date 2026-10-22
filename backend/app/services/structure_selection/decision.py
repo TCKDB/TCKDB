@@ -1,4 +1,4 @@
-"""The structure decision: cohorts, repeats, numerical order and protocol preference over assessed units.
+"""The structure decision: cohorts, repeats, numerical order and protocol coverage over assessed units.
 
 Pure. It reads no database, so a recorded decision replays from its manifest alone. Input is every assessed unit
 (with its assessment) and the request; output is a :class:`StructureDecision` over public refs.
@@ -11,9 +11,9 @@ What is specific to structures, and lives here and not in the shared kernel:
   a conditional minimum; they never produce one overall winner by absolute total energy, because two methods'
   total energies are not on one scale. Several cohorts therefore end as ``incomparable_alternatives`` with each
   cohort's own minimum listed.
-* **A number never decides a method.** Numerical order finds the lowest *value* in a justified cohort. Which
-  *protocol* is preferred is a different question and is answered only by audited rules through the shared graph
-  kernel; with none active every protocol stays unranked.
+* **A number never decides a method.** Numerical order finds the lowest *value* in a justified cohort. TCKDB carries
+  no ranking between protocols, so ``protocol_coverage`` can only list the protocols (cohorts) that cover every
+  requested member: one is a sole eligible candidate, several are incomparable alternatives in display order.
 * **Exact ties are all kept.** There is no tolerance and no "near" chain: values compare exactly, ties keep every
   tied reference, and the administrative key only orders what is already tied or already in one scientific front.
 * **Repeats are retained.** Several determinations of one target (one basin, geometry or saddle) are alternates
@@ -47,14 +47,7 @@ from typing import Any
 
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import REVIEW_RANK, SelectionPolicy
-from app.services.selection_kernel import (
-    ADMIN_FIRST_BASIS,
-    AdminNode,
-    Edge,
-    Outcome,
-    Tri,
-    decide_graph,
-)
+from app.services.selection_kernel import ADMIN_FIRST_BASIS, AdminNode, Outcome, decide_alternatives
 from app.services.structure_selection.models import (
     AdminPolicy,
     CoverageRequirement,
@@ -69,20 +62,16 @@ from app.services.structure_selection.models import (
     StructureAssessment,
     StructureOutcome,
     StructureRequest,
-    StructureSubject,
-)
-from app.services.structure_selection.rules import (
-    EDGE_LABEL,
-    RULE_ACTIVE,
-    ProtocolCandidate,
-    StructureRule,
-    validate_rules,
 )
 
-#: Version of the decision semantics (cohorts, repeats, ordering, outcome selection).
+#: Version of the decision semantics (cohorts, repeats, ordering, outcome selection). Held at 1 on purpose when the
+#: method-preference rules were removed: the transition-state badge pins this number (``TS_SCOPED_STRUCTURE_VERSIONS``) for
+#: the ``qualify_evidence`` question, which never ran a rule, so its meaning did not change. What did change is the
+#: document shape, and that is refused through the manifest format (``MANIFEST_FORMAT_VERSION``), not through this number.
 DECISION_VERSION = 1
-#: Version of the administrative key below.
-ADMIN_KEY_VERSION = 1
+#: Version of the administrative key below. Version 2: ``under_review`` and ``not_reviewed`` rank equally in the review
+#: key (``docs/specs/browse_order.md``).
+ADMIN_KEY_VERSION = 2
 
 ADMIN_KEY_SPEC: dict[str, Any] = {
     "version": ADMIN_KEY_VERSION,
@@ -144,6 +133,25 @@ SEARCH_COMPLETENESS = (
     "coverage is the caller's authorized population only; it proves neither a corpus-wide best nor an exhaustive "
     "conformational search"
 )
+
+
+@dataclass(frozen=True)
+class ProtocolCandidate:
+    """One protocol: a cohort of units, its shared recipe, and which units it holds."""
+
+    cohort_id: str
+    recipe: NormalizedRecipe
+    unit_refs: tuple[str, ...]
+    #: Public refs of the targets (basins, geometries, saddles) the cohort holds a unit for.
+    target_keys: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "cohort_id": self.cohort_id,
+            "unit_refs": list(self.unit_refs),
+            "target_keys": list(self.target_keys),
+            "recipe": self.recipe.to_dict(),
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -584,19 +592,16 @@ def _numerical(request: StructureRequest, eligible: list[_U], everyone: list[_U]
 
 
 # ---------------------------------------------------------------------------
-# Protocol preference
+# Protocol coverage
 # ---------------------------------------------------------------------------
 
 
 def _protocol(
     request: StructureRequest,
-    subject: StructureSubject,
     eligible: list[_U],
     everyone: list[_U],
     contested: list[dict[str, Any]],
-    rules: Sequence[StructureRule],
 ) -> StructureDecision:
-    validate_rules(rules)
     needed_targets = sorted({u.target for u in everyone})
     cohorts: dict[str, list[_U]] = defaultdict(list)
     uncohorted = [u for u in eligible if u.cohort is None]
@@ -656,52 +661,7 @@ def _protocol(
             created_at=best.node.created_at,
             admin_key=best.admin_key,
         )
-    applied = tuple(rules) if request.apply_rules else ()
-    edges: list[Edge] = []
-    rule_matches: list[dict[str, Any]] = []
-    pair_checks: list[dict[str, Any]] = []
-    for rule in applied:
-        header = {"rule_id": rule.rule_id, "rule_version": rule.version}
-        if rule.status != RULE_ACTIVE:
-            rule_matches.append({**header, "applied": False, "why": f"rule_status_{rule.status}", "reasons": list(rule.inactive_reasons)})
-            continue
-        if rule.observable != "structure_energy":
-            rule_matches.append({**header, "applied": False, "why": f"rule_observable_{rule.observable}"})
-            continue
-        if rule.objective is not request.objective or rule.reference_model != request.reference_model:
-            rule_matches.append({**header, "applied": False, "why": "objective_or_reference_model_differs"})
-            continue
-        scope = rule.scope(subject, request)
-        if scope.state is not Tri.true:
-            why = "scope_unknown" if scope.state is Tri.unknown else "outside_rule_scope"
-            rule_matches.append({**header, "applied": False, "why": why, "scope": scope.to_dict()})
-            continue
-        sides = {cid: (rule.preferred_side(c), rule.yielding_side(c)) for cid, c in candidates.items()}
-        for a in candidates.values():
-            for b in candidates.values():
-                if a.cohort_id == b.cohort_id:
-                    continue
-                if sides[a.cohort_id][0].state is not Tri.true or sides[b.cohort_id][1].state is not Tri.true:
-                    continue
-                compatible = rule.compatible(a, b)
-                pair_checks.append(
-                    {**header, "preferred": a.cohort_id, "dispreferred": b.cohort_id, "compatible": compatible.to_dict()}
-                )
-                if compatible.state is Tri.true:
-                    edges.append(Edge(a.cohort_id, b.cohort_id, rule.rule_id, rule.version))
-        rule_matches.append(
-            {
-                **header,
-                "applied": True,
-                "scope": scope.to_dict(),
-                "protocols": [
-                    {"cohort_id": cid, "preferred": sides[cid][0].to_dict(), "yielding": sides[cid][1].to_dict()}
-                    for cid in sorted(sides)
-                ],
-            }
-        )
-    supersedes = {r.rule_id: r.supersedes for r in applied}
-    verdict = decide_graph(list(nodes.values()), edges, supersedes=supersedes, admin_policy=SelectionPolicy.default)
+    verdict = decide_alternatives(list(nodes.values()), admin_policy=SelectionPolicy.default)
     graph_outcome = StructureOutcome(verdict.outcome.value)
     first = None
     if (
@@ -720,16 +680,6 @@ def _protocol(
         for cid, c in sorted(candidates.items())
     ]
     protocol = {
-        "objective": request.objective.value if request.objective is not None else None,
-        "reference_model": request.reference_model,
-        "rules_applied": request.apply_rules,
-        "rules": [r.describe() for r in applied],
-        "rule_matches": rule_matches,
-        "pair_checks": pair_checks,
-        "edges": [{**e.to_dict(), "label": EDGE_LABEL} for e in verdict.edges],
-        "overridden_edges": [dict(e) for e in verdict.overridden_edges],
-        "opposing_pairs": [dict(p) for p in verdict.opposing_pairs],
-        "cycles": [list(c) for c in verdict.cycles],
         "fronts": [list(f) for f in verdict.fronts],
         "administrative_order": list(verdict.administrative_order),
         "uncovered": uncovered,
@@ -755,11 +705,9 @@ def _protocol(
 def decide_structures(
     *,
     request: StructureRequest,
-    subject: StructureSubject,
     units: Sequence[NormalizedCalculation | NormalizedDetermination],
     assessments: Sequence[StructureAssessment],
     calculations: dict[str, NormalizedCalculation],
-    rules: Sequence[StructureRule],
 ) -> StructureDecision:
     """Decide over every assessed unit. Pure; see the module docstring for the semantics.
 
@@ -841,7 +789,7 @@ def decide_structures(
         )
 
     if request.coverage is CoverageRequirement.all_requested_members and len(eligible) != len(us):
-        if request.intent is not Intent.protocol_preferred:
+        if request.intent is not Intent.protocol_coverage:
             missing = sorted(u.ref for u in us if u not in eligible)
             return StructureDecision(
                 StructureOutcome.evidence_conflict if contested else StructureOutcome.unresolved_comparability,
@@ -857,8 +805,8 @@ def decide_structures(
                 },
             )
 
-    if request.intent is Intent.protocol_preferred:
-        return _protocol(request, subject, eligible, us, contested, rules)
+    if request.intent is Intent.protocol_coverage:
+        return _protocol(request, eligible, us, contested)
     return _numerical(request, eligible, us, contested)
 
 

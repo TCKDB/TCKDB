@@ -34,6 +34,7 @@ from app.schemas.reads._field_bounds import (
 )
 from app.schemas.reads.scientific_common import (
     CollapseMode,
+    OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
@@ -113,10 +114,13 @@ class RequestEcho(ProfiledRequestEcho):
     """
 
     filter: dict[str, Any]
-    sort: str
+    sort: OrderEcho
     include: list[str] = Field(default_factory=list)
     collapse: CollapseMode | None = None
     selection_policy: SelectionPolicy | None = None
+    #: The display order that actually ordered the returned records, in the same shape as ``sort``. ``sort`` stays the
+    #: candidate-list (``collapse=all``) order; with ``collapse=first&selection_policy=latest`` this drops the review rank.
+    effective_order: OrderEcho | None = None
 
 
 class ScientificTransportSearchResponse(BaseModel):

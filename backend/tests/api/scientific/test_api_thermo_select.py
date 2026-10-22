@@ -1,6 +1,6 @@
 """``POST /scientific/species-entries/{ref}/thermo/select``: the public H298 selection endpoint.
 
-The engine, rules and manifest are tested under ``tests/services/thermo_selection``. These
+The engine and manifest are tested under ``tests/services/thermo_selection``. These
 tests hold the HTTP contract: the request is normalised or refused, every outcome is reachable,
 the response says why, visibility follows the read profile, the manifest replays, and no
 database id leaves the building.
@@ -31,7 +31,6 @@ from tests.services.scientific_read._factories import (
     set_review,
 )
 from tests.services.thermo_selection._support import T0, make_thermo, protocol, species_entry_for
-from tests.services.thermo_selection.test_engine import LabelRule
 
 EQUILIBRIUM = {"target": {"kind": "equilibrium_ensemble"}}
 
@@ -64,10 +63,10 @@ def code(response) -> str:
     return response.json()["code"]
 
 
-# -- the headline: scientific preference outranks recency, end to end ------------------------------------
+# -- the headline: no method outranks another, end to end -------------------------------------------------
 
 
-def test_an_older_qualifying_g4_is_selected_over_a_newer_g3_while_browse_still_lists_g3_first(
+def test_an_older_g4_and_a_newer_g3_are_incomparable_and_listed_in_display_order_like_browse(
     client, db_session, methane
 ):
     old_g4 = g4(db_session, methane, age_days=500, status=S.approved)
@@ -75,25 +74,19 @@ def test_an_older_qualifying_g4_is_selected_over_a_newer_g3_while_browse_still_l
 
     browse = client.get(f"/api/v1/scientific/species-entries/{methane.public_ref}/thermo", params={"collapse": "first"})
     assert browse.status_code == 200
-    assert browse.json()["records"][0]["thermo_ref"] == new_g3.public_ref  # browse order is unchanged
+    assert browse.json()["records"][0]["thermo_ref"] == new_g3.public_ref
 
     response = post(client, methane)
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["outcome"] == "policy_preferred"
-    assert body["selection"] == {
-        "thermo_ref": old_g4.public_ref,
-        "basis": "policy_preferred",
-        "administrative": False,
-        "explanation": body["basis"],
-    }
-    assert body["fronts"] == [[old_g4.public_ref], [new_g3.public_ref]]
-    assert body["administrative_order"][0] == new_g3.public_ref  # administrative order alone says G3
-    assert body["relations"]["edges"] == [
-        {"preferred": old_g4.public_ref, "dispreferred": new_g3.public_ref, "rule_id": "E1", "rule_version": 1}
-    ]
-    assert body["policy"]["rules"][0]["rule_id"] == "E1"
-    assert body["policy"]["name"] == "h298_method_preferred" and body["policy"]["version"] == 1
+    assert body["outcome"] == "incomparable_alternatives"
+    assert body["selection"] is None
+    assert body["fronts"] == [[new_g3.public_ref, old_g4.public_ref]]  # one front, newest deposited first
+    assert body["administrative_order"] == [new_g3.public_ref, old_g4.public_ref]
+    assert body["policy"] == {"name": "h298_selection", "version": 1}
+    for dead in ("relations", "rule_matches"):
+        assert dead not in body
+    assert "rules" not in body["policy"]
 
 
 def test_the_response_echoes_the_normalised_request_and_the_effective_floor(client, db_session, methane):
@@ -102,7 +95,7 @@ def test_the_response_echoes_the_normalised_request_and_the_effective_floor(clie
     assert body["request"]["species_entry_ref"] == methane.public_ref
     assert body["request"]["quantity"] == "formation_enthalpy_298k"
     assert body["request"]["temperature_k"] == 298.15 and body["request"]["phase"] == "gas"
-    assert body["request"]["policy"] == "method_preferred" and body["request"]["result_mode"] == "all"
+    assert body["request"]["policy"] == "default" and body["request"]["result_mode"] == "all"
     assert body["request"]["target"] == {"kind": "equilibrium_ensemble", "conformer_group_ref": None}
     assert body["request"]["profile"] == "exploratory"
     assert body["review"]["effective_floor"] == "not_reviewed"
@@ -144,16 +137,7 @@ def test_no_applicable_candidate_when_every_record_is_inapplicable_and_is_listed
     assert body["candidates"][0]["applicability"] == "unresolved" and body["candidates"][0]["eligible"] is False
 
 
-def test_policy_conflict(client, db_session, methane, monkeypatch):
-    a = g4(db_session, methane, proto=protocol("g4", label="a"), age_days=5)
-    b = g4(db_session, methane, proto=protocol("g4", label="b"), age_days=1)
-    rules = (LabelRule("T1", {"a"}, {"b"}), LabelRule("T2", {"b"}, {"a"}))
-    monkeypatch.setattr("app.services.thermo_selection.service.default_rules", lambda: rules)
-    body = post(client, methane).json()
-    assert body["outcome"] == "policy_conflict"
-    assert body["selection"] is None
-    assert body["relations"]["opposing_pairs"]
-    assert {a.public_ref, b.public_ref} == set(body["administrative_order"])
+
 
 
 def _bulk(session, entry, n, *, offset=0):
@@ -232,21 +216,34 @@ def test_first_picks_administratively_among_unranked_alternatives_and_says_so(cl
     assert every["selection"] is None
 
 
-def test_first_does_not_relabel_a_policy_preferred_result_as_administrative(client, db_session, methane):
-    old_g4 = g4(db_session, methane, age_days=500)
-    g3(db_session, methane, age_days=1)
+def test_first_on_a_sole_candidate_is_not_administrative(client, db_session, methane):
+    only = g4(db_session, methane, age_days=500)
     body = post(client, methane, {**EQUILIBRIUM, "result_mode": "first"}).json()
-    assert body["selection"]["thermo_ref"] == old_g4.public_ref
-    assert body["selection"]["basis"] == "policy_preferred" and body["selection"]["administrative"] is False
+    assert body["selection"]["thermo_ref"] == only.public_ref
+    assert body["selection"]["basis"] == "sole_eligible_candidate" and body["selection"]["administrative"] is False
+
+
+def test_first_among_alternatives_is_labelled_administrative_and_not_a_method_claim(client, db_session, methane):
+    g4(db_session, methane, age_days=500)
+    newer = g3(db_session, methane, age_days=1)
+    body = post(client, methane, {**EQUILIBRIUM, "result_mode": "first"}).json()
+    assert body["outcome"] == "incomparable_alternatives"
+    assert body["selection"]["thermo_ref"] == newer.public_ref
+    assert body["selection"]["basis"] == "administrative_first" and body["selection"]["administrative"] is True
+    assert "not a claim" in body["selection"]["explanation"]
 
 
 @pytest.mark.parametrize("policy", ["default", "most_reviewed", "latest"])
-def test_administrative_policies_apply_no_method_rule(client, db_session, methane, policy):
+def test_every_policy_is_administrative_and_ranks_no_method(client, db_session, methane, policy):
     g4(db_session, methane, age_days=500)
     g3(db_session, methane, age_days=1)
     body = post(client, methane, {**EQUILIBRIUM, "policy": policy}).json()
-    assert body["outcome"] == "incomparable_alternatives"
-    assert body["relations"]["edges"] == [] and body["policy"]["rules"] == []
+    assert body["outcome"] == "incomparable_alternatives" and len(body["fronts"]) == 1
+
+
+def test_the_method_preferred_policy_is_retired(client, methane):
+    response = post(client, methane, {**EQUILIBRIUM, "policy": "method_preferred"})
+    assert response.status_code == 422
 
 
 def test_latest_and_most_reviewed_order_differently(client, db_session, methane):
@@ -368,8 +365,8 @@ def test_the_callers_floor_changes_eligibility_and_lists_what_it_excluded(client
         {"thermo_ref": pending.public_ref, "review_status": "under_review", "reason": "below_review_floor"}
     ]
     assert body["disclosures"]["excluded_by_review_withheld"] is False
-    # Without the floor the older G4 wins: the floor, not the timestamp, decided the result above.
-    assert post(client, methane).json()["selection"]["thermo_ref"] == pending.public_ref
+    # Without the floor both compete: the floor, not the timestamp, decided the result above.
+    assert post(client, methane).json()["outcome"] == "incomparable_alternatives"
 
 
 def test_rejected_and_deprecated_never_compete_and_are_listed_when_the_profile_has_no_floor(
@@ -429,12 +426,12 @@ def test_the_manifest_download_replays_to_the_decision_it_records(client, db_ses
     assert response.status_code == 200
     assert response.headers["content-disposition"].startswith("attachment;")
     manifest = response.json()
-    assert manifest["outcome"] == "policy_preferred"
+    assert manifest["outcome"] == "incomparable_alternatives"
+    assert manifest["format"] == {"name": "thermo_selection_manifest", "version": 2}
     assert replay_matches(manifest)
-    assert replay_decision(manifest)["selected_ref"] == manifest["decision"]["selected_ref"]
+    assert replay_decision(manifest)["fronts"] == manifest["decision"]["fronts"]
     # The response and the download are one decision.
     body = post(client, methane).json()
-    assert body["selection"]["thermo_ref"] == manifest["decision"]["selected_ref"]
     assert body["fronts"] == manifest["decision"]["fronts"]
 
 
@@ -442,7 +439,7 @@ def test_a_manifest_for_an_administrative_policy_replays_too(client, db_session,
     g4(db_session, methane, age_days=500)
     g3(db_session, methane, age_days=1)
     manifest = post(client, methane, {**EQUILIBRIUM, "policy": "latest"}, manifest=True).json()
-    assert manifest["decision"]["rules"] == [] and replay_matches(manifest)
+    assert "rules" not in manifest["decision"] and replay_matches(manifest)
 
 
 def test_a_curated_manifest_still_replays(client, db_session, methane):
@@ -455,8 +452,8 @@ def test_a_curated_manifest_still_replays(client, db_session, methane):
 
 # -- no internal ids -------------------------------------------------------------------------------------
 
-#: Registry keys (``E1``), not row ids.
-_ALLOWED_ID_SHAPED_KEYS = {"rule_id", "overridden_by_rule_id"}
+#: No id-shaped key is allowed anywhere in either document.
+_ALLOWED_ID_SHAPED_KEYS: set[str] = set()
 
 
 _ALLOWED_REF_PREFIXES = {"thm", "spe", "cg", "calc"}
@@ -513,7 +510,7 @@ def _assert_integers_are_pinned(doc, *, is_manifest, curated):
     if is_manifest:
         population = doc["population"]
         pinned.update({
-            "format.version": lambda v: v == [1],
+            "format.version": lambda v: v == [2],
             "candidates[].id_rank": lambda v: sorted(v) == list(range(1, len(candidates) + 1)),
             "population.visible_candidates": lambda v: v == [len(candidates)],
             "population.assessed": lambda v: v == [len(candidates)],
@@ -547,7 +544,7 @@ def _ref_values(value):
             yield from _ref_values(item)
 
 
-def test_no_internal_id_appears_in_the_response_or_the_manifest(client, db_session, methane, monkeypatch):
+def test_no_internal_id_appears_in_the_response_or_the_manifest(client, db_session, methane):
     group = make_conformer_group(db_session, methane)
     g4(db_session, methane, age_days=500, status=S.approved)
     g3(db_session, methane, age_days=1, status=S.approved)
@@ -556,11 +553,8 @@ def test_no_internal_id_appears_in_the_response_or_the_manifest(client, db_sessi
     g4(db_session, methane, status=S.rejected)
     with_calc = {**protocol("g4"), "supporting_calculations": [{"calculation_ref": "calc_0123456789ab"}]}
     make_thermo(db_session, methane, proto=with_calc, age_days=2, status=S.approved)
-    # Two rules, one superseding the other, so the decision carries an overridden edge.
     a = make_thermo(db_session, methane, proto=protocol("g4", label="a"), age_days=5, status=S.approved)
     b = make_thermo(db_session, methane, proto=protocol("g4", label="b"), age_days=4, status=S.approved)
-    rules = (LabelRule("S1", {"a"}, {"b"}, supersedes=("S2",)), LabelRule("S2", {"b"}, {"a"}))
-    monkeypatch.setattr("app.services.thermo_selection.service.default_rules", lambda: rules)
 
     docs = [
         post(client, methane).json(),
@@ -569,8 +563,6 @@ def test_no_internal_id_appears_in_the_response_or_the_manifest(client, db_sessi
         post(client, methane, profile="curated", manifest=True).json(),
         post(client, methane, {"target": {"kind": "single_conformer", "conformer_group_ref": group.public_ref}}).json(),
     ]
-    assert docs[0]["relations"]["overridden_edges"], "the fixture no longer produces an overridden edge"
-    assert "overridden_by_rule_id" in json.dumps(docs[0]["relations"]["overridden_edges"])
     assert any(
         c["protocol"] and c["protocol"].get("supporting_calculations") for c in docs[0]["candidates"]
     ), "the fixture no longer carries supporting calculations"

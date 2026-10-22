@@ -16,8 +16,8 @@ Composition order (final response ordering):
    thermo per-record ordering already applied above.
 4. Apply collapse and pagination to the flat list.
 
-This means ``collapse="first"`` returns the best-thermo-of-the-best-entry
-candidate. The full ordering is documented in code comments and tests.
+This means ``collapse="first"`` returns the first thermo record of the first entry
+in display order (not a scientific preference). The full ordering is documented in code comments and tests.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     CollapseMode,
     ReviewStatusSummary,
+    browse_order,
 )
 from app.schemas.reads.scientific_species import SpeciesSearchRequest
 from app.schemas.reads.scientific_thermo import ThermoReadRequest
@@ -88,9 +89,8 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments", "trust"}
 # either token through, add it back here and to ``_LEGAL_INCLUDE_TOKENS``.
 _THERMO_LEGAL_INCLUDES_PASSTHROUGH = {"provenance", "calculations", "review", "artifacts"}
 
-_DEFAULT_SORT_ECHO = (
-    "species_review_rank,species_created_at,species_id;"
-    "review_rank,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order(
+    "species_review_rank", "species_entry_id", "review_rank", "created_at", "id"
 )
 
 

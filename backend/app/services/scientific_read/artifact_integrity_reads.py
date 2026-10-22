@@ -28,7 +28,7 @@ from app.schemas.reads.scientific_artifact_integrity import (
     ScientificArtifactIntegrityHistoryResponse,
     ScientificArtifactIntegrityResponse,
 )
-from app.schemas.reads.scientific_common import Pagination
+from app.schemas.reads.scientific_common import Pagination, browse_order
 from app.services.scientific_read.common import (
     reject_client_sort,
     validate_pagination,
@@ -43,7 +43,7 @@ _BREAK_FINDINGS = tuple(
 
 #: v0 sort vocabulary. Most recently observed first, because the question
 #: this surface answers is almost always "what has gone wrong lately".
-_SORT = "last_observed_at:desc"
+_SORT = browse_order("last_observed_at", "sha256")
 
 
 def _observation(row: ArtifactIntegrityEvent) -> ArtifactIntegrityObservation:
@@ -296,7 +296,7 @@ def artifact_integrity_history(
         .limit(limit)
     ).all()
     return ScientificArtifactIntegrityHistoryResponse(
-        request=IntegrityRequestEcho(filter={"sha256": sha256}, sort="detected_at:asc"),
+        request=IntegrityRequestEcho(filter={"sha256": sha256}, sort=browse_order(("id", "asc"))),
         sha256=sha256,
         summary=summaries[0] if summaries else None,
         observations=[_observation(row) for row in rows],

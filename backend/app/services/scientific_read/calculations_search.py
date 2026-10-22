@@ -81,6 +81,7 @@ from app.schemas.reads.scientific_calculation_search import (
     RequestEcho,
     ScientificCalculationsSearchResponse,
 )
+from app.schemas.reads.scientific_common import browse_order
 from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.calculations import (
     _INTERNAL_INCLUDE_TOKENS,
@@ -188,7 +189,7 @@ _PRIMARY_RESULT_TABLE: dict[CalculationType, type] = {
 }
 
 
-_DEFAULT_SORT_ECHO = "review_rank,quality_rank,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "quality_rank", "created_at", "id")
 
 
 def search_calculations(

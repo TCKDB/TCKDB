@@ -84,10 +84,11 @@ def join_review(
 
 
 def review_rank_expr(review):
-    """SQL ``review_rank`` (lower is better) over a joined review alias.
+    """SQL ``review_rank`` (lower sorts first) over a joined review alias.
 
-    Mirrors :data:`app.schemas.reads.scientific_common.REVIEW_RANK` exactly,
-    including mapping "no review row" to the ``not_reviewed`` rank.
+    Built from :data:`app.schemas.reads.scientific_common.REVIEW_RANK`, the one
+    definition of the display rank, including mapping "no review row" to the
+    ``not_reviewed`` rank.
     """
     return case(
         *(
@@ -96,6 +97,16 @@ def review_rank_expr(review):
         ),
         else_=_NO_REVIEW_ROW_RANK,
     )
+
+
+def review_rank_case_sql(status_sql: str) -> str:
+    """The same rank as :func:`review_rank_expr`, as a raw SQL ``CASE`` over a text status expression.
+
+    For the hand-written SQL of structure search. Generated from ``REVIEW_RANK`` so there is no second copy of the
+    table; an unknown or missing status takes the ``not_reviewed`` rank, as everywhere else.
+    """
+    arms = " ".join(f"WHEN '{status.value}' THEN {rank}" for status, rank in REVIEW_RANK.items())
+    return f"CASE {status_sql} {arms} ELSE {_NO_REVIEW_ROW_RANK} END"
 
 
 def review_status_expr(review):
@@ -171,6 +182,7 @@ def summary_from_sql(session: Session, ranked) -> ReviewStatusSummary:
 __all__ = [
     "join_review",
     "review_alias",
+    "review_rank_case_sql",
     "review_rank_expr",
     "review_status_expr",
     "status_from_sql",

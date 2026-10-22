@@ -55,8 +55,9 @@ from sqlalchemy import and_, or_
 from app.versioning import same_value
 
 #: Bumped when the cursor payload's shape changes, so an old cursor is
-#: rejected with a clear error instead of being silently misread.
-CURSOR_VERSION = 1
+#: rejected with a clear error instead of being silently misread. Version 2: the analytics key is
+#: ``review_rank, created_at, id`` (it was ``review_rank, id``), so a version 1 cursor holds the wrong number of values.
+CURSOR_VERSION = 2
 
 SortDirection = Literal["asc", "desc"]
 

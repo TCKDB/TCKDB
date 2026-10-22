@@ -6,10 +6,12 @@ can take part. It describes the selection endpoint, what each answer means,
 and what the endpoint refuses to claim.
 
 In plain terms: a species entry can hold many thermo records from different
-sources. Browsing lists them in a fixed order (review status, then newest).
-Selection is a separate, opt-in question: "of the records that can answer
-this exact quantity, which one should I use, and why?" The answer says how
-sure TCKDB is, and says so when it is not.
+sources. Browsing lists them in a fixed display order (review rank, then newest
+deposited; see [`browse_order.md`](../specs/browse_order.md)). Selection is a
+separate, opt-in question: "which of the records can answer this exact
+quantity, and what is the situation among them?" TCKDB carries no ranking of
+one method above another, so the answer never says one eligible record is
+better than another.
 
 ## What it is, and what it is not
 
@@ -21,8 +23,7 @@ sure TCKDB is, and says so when it is not.
 - **One quantity.** Gas-phase formation enthalpy at 298.15 K. Heat capacity
   intervals, entropy, coherent H/S/Cp sets and export are not covered.
 - **Not a recommendation.** A curator or a dataset release recommends
-  records; this endpoint applies a published, versioned rule to what is
-  stored. See [`dataset_release_and_profiles.md`](../../backend/docs/specs/dataset_release_and_profiles.md)
+  records; this endpoint applies no method preference to what is stored. See [`dataset_release_and_profiles.md`](../../backend/docs/specs/dataset_release_and_profiles.md)
   for attributed recommendations.
 
 ## The request
@@ -34,7 +35,7 @@ The path takes a public `spe_...` ref. An integer id is refused. The body:
 ```json
 {
   "target": { "kind": "equilibrium_ensemble" },
-  "policy": "method_preferred",
+  "policy": "default",
   "result_mode": "all",
   "min_review_status": "approved"
 }
@@ -44,7 +45,7 @@ The path takes a public `spe_...` ref. An integer id is refused. The body:
 | --- | --- |
 | `target` (required) | `equilibrium_ensemble`, or `single_conformer` with `conformer_group_ref` (`cg_...`, a group of the same species entry). A record only competes when it declared the same target. |
 | `quantity`, `temperature_k`, `phase` | Optional. If given they must be `formation_enthalpy_298k`, `298.15` and `gas`. Anything else is refused with 422, never changed (`thermo_selection_condition_conflict`). |
-| `policy` | `method_preferred` (default) applies the registered method rules. `default`, `most_reviewed` and `latest` apply review and recency order only, as on the browse endpoints, and apply no method rule. |
+| `policy` | An administrative display order, never a method claim: `default` (default) and `most_reviewed` order by review rank then newest deposited; `latest` by newest deposited. `method_preferred` was retired and is refused. |
 | `result_mode` | `all` (default) returns the whole assessment. `first` additionally names one record where the outcome supports one (see below). |
 | `min_review_status` | Optional review floor, applied on top of the read profile's floor. The stricter of the two wins. |
 
@@ -61,21 +62,20 @@ decision manifest instead of the typed response (see "Replaying a decision").
 
 | Outcome | Meaning | `selection` |
 | --- | --- | --- |
-| `policy_preferred` | A registered rule prefers one eligible record over every other eligible record, and nothing is preferred over it. | That record, `administrative: false`. |
-| `incomparable_alternatives` | More than one eligible record is not ranked by any rule. They are unranked, not equally accurate. | `null` for `result_mode=all`. For `first`, the leading record by review status then recency, with `basis: administrative_first` and `administrative: true`. |
+| `incomparable_alternatives` | More than one record is eligible and TCKDB ranks none above another. They are listed in one front, in display order. | `null` for `result_mode=all`. For `first`, the first record in display order, with `basis: administrative_first` and `administrative: true`. |
 | `sole_eligible_candidate` | Exactly one record is eligible. | That record. It is the only one found, not a claim that it is the best possible value. |
 | `no_applicable_candidate` | No record is eligible for this request. | `null`. |
-| `policy_conflict` | Opposing rules, or a preference cycle, contradict each other. | `null`. There is no silent fallback. |
 
 More than 500 visible records is not an outcome but a refusal: 422
-`thermo_selection_population_too_large`. Nothing is assessed, because a winner
+`thermo_selection_population_too_large`. Nothing is assessed, because an answer
 picked from part of the population would say nothing about the rest. Only
 records visible under the caller's read profile and review floor are counted,
 so the refusal cannot reveal records the profile hides; `min_review_status` or
 `profile=curated` narrows the population.
 
 An `administrative_first` choice is a convenience for a caller who needs one
-record regardless. It is not a claim that the record is better.
+record regardless: it is the first record in display order. It is not a claim
+that the record is better, preferred or recommended.
 
 ## How a record qualifies
 
@@ -96,57 +96,12 @@ deprecated records never compete. Unresolved and unsupported records are
 listed under `disclosures`, because they might compete if their missing facts
 were recorded.
 
-## What "unknown" means
+## No method rule
 
-TCKDB never guesses a missing fact. For a method rule, each prerequisite is
-true, false or unknown:
-
-- **true**: the record states it, and it matches.
-- **false**: the record states something that differs.
-- **unknown**: the record says nothing, or its evidence cannot be read.
-
-A rule only prefers a record when every prerequisite is true. Unknown never
-counts as a match, so a record that says less can never be preferred over one
-that says more. A deposit with no protocol declaration is simply
-unranked; it still competes, and it can still be the sole candidate.
-
-## The one rule shipped today: E1
-
-E1 prefers a standard G4 calculation over a standard G3 calculation for the
-gas-phase formation enthalpy at 298.15 K. Version 1.0.0, with audited
-membership manifest 1.0.0.
-
-- **Scope.** Neutral, non-isotopologue minimum entries of one of the 38
-  hydrocarbons in the audited benchmark manifest (an exact InChIKey, charge and
-  multiplicity match). Every member except methylene must also be recorded as
-  ground state. Methylene is in scope as the singlet only (multiplicity 1) and is
-  told apart from the triplet by multiplicity alone, so a singlet entry labelled
-  with an excited electronic state is still in scope. Any other species is
-  outside the rule and gets no preference.
-- **Both records must state**: a computed origin; the recipe exactly `g4`
-  (preferred) or `g3` (yielding); an explicit, empty list of departures from
-  the standard recipe; a formation enthalpy derived by atomization; and the
-  benchmark route (harmonic internal motion, the single lowest conformer, JANAF
-  or CODATA atomic data). A stated different value is a no. An omitted one is
-  unknown.
-- **Does not match**: G4(MP2), G4(complete), any `other` recipe such as G3(MP2)
-  or G3B3, any stated departure, an isodesmic or working-reaction derivation,
-  or a linked level of theory that names a different composite method.
-- **The declaration is a claim.** A matching label is the depositor's word.
-  The response says whether a linked level corroborates it or the declaration
-  stands alone.
-- **Evidence limits.** The preference rests on mean absolute deviations of
-  G3 0.69 and G4 0.48 kcal/mol, averaged over these same 38 hydrocarbons. They
-  sit inside both methods' fit sets (all 38 for G4, 22 for G3), so the figures
-  are in-sample development-set performance, aggregate, and not independent
-  validation. They are not a per-molecule guarantee, not a per-record
-  uncertainty, and not a curator recommendation. The limits ship in the
-  response's `policy.rules`.
-
-Because E1 applies only inside its manifest, an older qualifying G4 record
-outranks a newer qualifying G3 record for those species. Recency never
-reverses an accepted preference. Elsewhere, review status then recency orders
-records that no rule ranks.
+TCKDB ships no method-preference rule, and does not rank one method above
+another. A record's declared protocol and linked levels are shown on each
+candidate as facts, so a reader can judge for themselves. They never change the
+outcome.
 
 ## Visibility
 
@@ -167,11 +122,11 @@ The same visibility rules as the other `/scientific/` reads apply.
 
 `POST .../thermo/select/manifest` downloads the decision manifest: the normalised
 request, the effective floor, every assessed candidate with its normalised
-inputs, the rules applied (id, version, evidence limits), each rule's verdict
-per candidate, the preference edges, the fronts and the administrative order.
+inputs, the fronts and the administrative order.
 It holds public refs only, and records the read profile it was made under. The decision can be recomputed from it with no
 database (`app.services.thermo_selection.replay_decision`). A manifest made
-under a rule version the running server does not carry is refused rather than
+under a format, policy or assessment version the running server does not carry
+is refused rather than
 replayed under another.
 
 ## From the client and the MCP server
@@ -195,9 +150,10 @@ verbatim.
 
 ## For depositors
 
-A record can take part in method preference only if it declares its target
-and protocol (see [`depositing_a_thermo_record.md`](depositing_a_thermo_record.md)).
-Records deposited without them remain valid and visible; they are reported as
-unresolved or unranked, never as lower quality. Declarations on an approved
+A record can answer a selection only if it declares its target (see
+[`depositing_a_thermo_record.md`](depositing_a_thermo_record.md)). Declaring a
+protocol makes the record's method visible to readers; it does not rank it.
+Records deposited without a target remain valid and visible; they are reported
+as unresolved, never as lower quality. Declarations on an approved
 record cannot be edited, so correcting one goes through the usual
 replacement and supersession process.

@@ -687,9 +687,9 @@ class CalculationsRanking(str, Enum):
 
 Default composite (in this order):
 
-1. `review_rank ASC` — `approved (0) < under_review (1) < not_reviewed (2)`
-   (rejected=4 / deprecated=3 are excluded by default; if the caller
-   opts them in they sort last).
+1. `review_rank ASC` — the one review rank defined in [`docs/specs/browse_order.md`](../../../docs/specs/browse_order.md)
+   (it is not restated here; `under_review` and `not_reviewed` rank equally, and
+   rejected and deprecated are excluded by default and sort last when opted in).
 2. `quality_rank ASC` — `curated (0) < raw (1) < rejected (2)`
    (rejected only present with `include_rejected_quality=true`).
 3. `evidence_completeness DESC` — same `EvidenceCompletenessBreakdown`

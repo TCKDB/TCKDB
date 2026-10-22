@@ -46,6 +46,7 @@ from app.schemas.reads.scientific_calculation import CalculationArtifactSummary
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     RecordReviewBadge,
+    browse_order,
 )
 from app.services.scientific_read.calculations import (
     _build_lot_summary,
@@ -108,7 +109,7 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
 )
 
 
-_DEFAULT_SORT_ECHO = "review_rank,created_at,artifact_id"
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "artifact_created_at", "artifact_id")
 
 
 def search_artifacts(

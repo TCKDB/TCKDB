@@ -17,7 +17,7 @@ Policy choices enforced here (in addition to server-side validation):
   ``quantity`` may be explicit null (the one null that is sent) for evidence-only qualification, which asks for no energy.
 - ``bounds``, ``max_candidates``, ``manifest_bytes``, ``limit``, ``offset`` and any pagination, sort or rule field are
   rejected: the engineering bounds are the server's, a selection is over the *complete* authorized population (above a
-  bound the server refuses with a coded 422), and a caller cannot author a rule or a sort. This tool never caps, pages,
+  bound the server refuses with a coded 422), and a caller cannot author a sort. This tool never caps, pages,
   filters or chooses candidates itself.
 - The server's response is returned unchanged. ``outcome``, ``basis`` and ``selected_refs`` carry the explanation, so
   these tools add no prose of their own and never reduce an outcome to a recommendation: an agent that reports a result
@@ -41,14 +41,13 @@ CLAIMS = ("local_minimum", "first_order_saddle", "higher_order_saddle", "reactiv
 QUALITIES = ("raw", "curated", "rejected")
 ADMIN_POLICIES = ("default", "latest", "earliest")
 MODES = ("all", "first")
-OBJECTIVES = ("physical_accuracy", "expected_accuracy", "model_fidelity")
 REPEAT_POLICIES = ("retain_alternates", "administrative_representative")
 
 _REJECTED_INTEGER_FIELDS: frozenset[str] = frozenset(
     {"species_entry_id", "transition_state_entry_id", "calculation_id", "geometry_id", "determination_id", "species_id"}
 )
 _REJECTED_BOUND_FIELDS: frozenset[str] = frozenset(
-    {"bounds", "max_candidates", "manifest_bytes", "limit", "offset", "page", "page_size", "cursor", "sort", "rules"}
+    {"bounds", "max_candidates", "manifest_bytes", "limit", "offset", "page", "page_size", "cursor", "sort", "rules", "apply_rules", "objective", "reference_model"}
 )
 
 
@@ -68,11 +67,11 @@ class StructureTool:
 _COMMON_DESCRIPTION = (
     "Read-only. Returns the server response unchanged: report its 'outcome' and 'basis' verbatim. Values are ordered only "
     "inside one cohort (the same established recipe, quantity and energy convention); several cohorts end as "
-    "'incomparable_alternatives' and a lower absolute energy never names a method winner. 'unresolved_comparability', "
-    "'evidence_conflict' and 'policy_conflict' mean nothing was selected; 'representative_minimum' is the lowest "
+    "'incomparable_alternatives' and a lower absolute energy never names a method winner. 'unresolved_comparability' "
+    "and 'evidence_conflict' mean nothing was selected; 'representative_minimum' is the lowest "
     "administrative representative per target, never the minimum of all stored values; the answer is conditional on the "
     "authorized population the caller can see and is never a global-search certificate. A population over the server's "
-    "bounds is a coded 422, never a prefix winner. A deferred quantity (enthalpy, Gibbs energy, barrier, rate) is "
+    "bounds is a coded 422, never an answer from a prefix. A deferred quantity (enthalpy, Gibbs energy, barrier, rate) is "
     "'structure_selection_unsupported'. The tool never caps, pages or chooses candidates itself."
 )
 
@@ -80,23 +79,24 @@ TOOLS: dict[str, StructureTool] = {
     "tckdb_select_species_entry_calculations": StructureTool(
         name="tckdb_select_species_entry_calculations",
         description=(
-            "Select among one species entry's calculations for the lowest comparable recorded energy, or an audited-rule "
-            "protocol preference. Requires a public species_entry_ref (starts with 'spe_'). intent is 'recorded_minimum' "
-            "(default) or 'protocol_preferred' (which also needs an objective and a fixed geometry_ref). " + _COMMON_DESCRIPTION
+            "Select among one species entry's calculations for the lowest comparable recorded energy, or (intent "
+            "'protocol_coverage') list the protocols that cover every requested member. Requires a public species_entry_ref "
+            "(starts with 'spe_'). intent is 'recorded_minimum' (default) or 'protocol_coverage' (which also needs a fixed "
+            "geometry_ref). " + _COMMON_DESCRIPTION
         ),
         family="species-entries",
         operation="calculations",
         ref_field="species_entry_ref",
         prefix="spe_",
-        intents=("recorded_minimum", "protocol_preferred"),
+        intents=("recorded_minimum", "protocol_coverage"),
         default_intent="recorded_minimum",
     ),
     "tckdb_select_species_entry_conformers": StructureTool(
         name="tckdb_select_species_entry_conformers",
         description=(
             "Select among one species entry's validated conformer basins: the lowest of one cohort, the basins that support "
-            "a stated claim (intent 'qualify_evidence', with quantity null and a validation_claim), or a protocol "
-            "preference. Requires a public species_entry_ref ('spe_'). A basin needs curvature evidence on its own "
+            "a stated claim (intent 'qualify_evidence', with quantity null and a validation_claim), or the protocols "
+            "that cover them. Requires a public species_entry_ref ('spe_'). A basin needs curvature evidence on its own "
             "geometry, judged by magnitude against the stored tau (never by counting imaginary modes); repeated "
             "determinations of one basin are alternates, not confirmation. " + _COMMON_DESCRIPTION
         ),
@@ -104,14 +104,14 @@ TOOLS: dict[str, StructureTool] = {
         operation="conformers",
         ref_field="species_entry_ref",
         prefix="spe_",
-        intents=("validated_minimum", "qualify_evidence", "protocol_preferred"),
+        intents=("validated_minimum", "qualify_evidence", "protocol_coverage"),
         default_intent="validated_minimum",
     ),
     "tckdb_select_transition_state_entry_evidence": StructureTool(
         name="tckdb_select_transition_state_entry_evidence",
         description=(
             "Select among one transition state ENTRY's saddle determinations: those that support a claim (default a "
-            "conventional first-order saddle), the lowest, or a protocol preference. Requires a public "
+            "conventional first-order saddle), the lowest, or the protocols that cover them. Requires a public "
             "transition_state_entry_ref ('tse_'), not the transition-state concept ('ts_'). A higher-order "
             "characterization never implies first-order TST suitability; reactive connectivity is an additional claim "
             "(require_connectivity). Sibling entries are assessed one at a time. " + _COMMON_DESCRIPTION
@@ -120,7 +120,7 @@ TOOLS: dict[str, StructureTool] = {
         operation="evidence",
         ref_field="transition_state_entry_ref",
         prefix="tse_",
-        intents=("validated_saddle", "qualify_evidence", "protocol_preferred"),
+        intents=("validated_saddle", "qualify_evidence", "protocol_coverage"),
         default_intent="validated_saddle",
         connectivity=True,
     ),
@@ -163,9 +163,6 @@ def _input_schema(tool: StructureTool) -> dict[str, Any]:
         "require_stable_reference": {"type": "boolean"},
         "administrative_policy": {"type": "string", "enum": list(ADMIN_POLICIES), "default": "default"},
         "result_mode": {"type": "string", "enum": list(MODES), "default": "all"},
-        "apply_rules": {"type": "boolean", "default": True},
-        "objective": {"type": "string", "enum": list(OBJECTIVES), "description": "Required for protocol_preferred."},
-        "reference_model": {"type": "string", "maxLength": 200},
         "repeat_policy": {"type": "string", "enum": list(REPEAT_POLICIES), "default": "retain_alternates"},
         "profile": {"type": "string", "enum": list(PROFILES), "default": "exploratory"},
     }
@@ -245,15 +242,14 @@ def run(name: str, client: TCKDBHttpClient, config: Config, arguments: dict[str,
         ("validation_claim", CLAIMS),
         ("administrative_policy", ADMIN_POLICIES),
         ("result_mode", MODES),
-        ("objective", OBJECTIVES),
         ("repeat_policy", REPEAT_POLICIES),
     ):
         if field_name in args:
             body[field_name] = _enum(args, field_name, allowed)
-    for field_name in ("require_stable_reference", "apply_rules") + (("require_connectivity",) if tool.connectivity else ()):
+    for field_name in ("require_stable_reference",) + (("require_connectivity",) if tool.connectivity else ()):
         if field_name in args:
             body[field_name] = _bool(args, field_name)
-    for field_name, limit in (("min_review_status", 64), ("reference_model", 200)):
+    for field_name, limit in (("min_review_status", 64),):
         if field_name in args:
             body[field_name] = _string(args, field_name, max_length=limit)
     if "geometry_ref" in args:

@@ -38,7 +38,7 @@ from app.db.models.species import Species, SpeciesEntry
 from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
 from app.db.models.transport import Transport
-from app.schemas.reads.scientific_common import RecordReviewBadge
+from app.schemas.reads.scientific_common import RecordReviewBadge, browse_order
 from app.schemas.reads.scientific_literature_records import (
     SUPPORTED_RECORD_TYPES,
     LiteratureLinkedRecordSummary,
@@ -194,7 +194,7 @@ def get_literature_records(
     return ScientificLiteratureRecordsResponse(
         request=RequestEcho(
             filter=_echo_filter(request, lit_ref=lit.public_ref, lit_id=lit.id),
-            sort="default",
+            sort=browse_order("record_type", "created_at", "id"),
             include=sorted(includes),
         ),
         review_summary=rs,

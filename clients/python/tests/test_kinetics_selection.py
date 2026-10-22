@@ -40,7 +40,7 @@ def _recorder(answer: dict | None = None, status: int = 200):
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        return httpx.Response(status, json=answer if answer is not None else {"outcome": "policy_preferred"})
+        return httpx.Response(status, json=answer if answer is not None else {"outcome": "sole_eligible_candidate"})
 
     return seen, handler
 
@@ -122,8 +122,8 @@ def test_the_manifest_method_refuses_an_integer_id_too():
 def test_the_response_type_names_the_outcome_vocabulary():
     outcomes = set(get_args(get_type_hints(KineticsSelectionResponse)["outcome"]))
     assert outcomes == {
-        "policy_preferred", "incomparable_alternatives", "sole_eligible_candidate",
-        "no_applicable_candidate", "policy_conflict",
+        "incomparable_alternatives", "sole_eligible_candidate",
+        "no_applicable_candidate",
     }
 
 

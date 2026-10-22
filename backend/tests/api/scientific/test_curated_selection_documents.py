@@ -388,18 +388,18 @@ def test_the_current_format_version_of_every_engine_is_written(client, world):
         manifest = _post(client, route.path, route.body, "exploratory")
         versions[route.name] = ((manifest.get("format") or {}).get("version"), (manifest.get("versions") or {}).get("relative_energy"))
     assert versions == {
-        "thermo": (1, None),
-        "kinetics": (1, None),
-        "network": (1, None),
-        "structure": (1, None),
-        "statmech": (1, None),
-        "relative_energy": (1, 1),
+        "thermo": (2, None),
+        "kinetics": (2, None),
+        "network": (2, None),
+        "structure": (2, None),
+        "statmech": (2, None),
+        "relative_energy": (2, 1),
     }
 
 
 @pytest.mark.parametrize(
     ("name", "previous"),
-    [("thermo", 2), ("kinetics", 2), ("network", 2), ("structure", 2), ("statmech", 2)],
+    [("thermo", 1), ("kinetics", 1), ("network", 1), ("structure", 1), ("statmech", 1)],
 )
 def test_a_manifest_of_another_format_version_is_refused(client, world, name, previous):
     """Kills: another format version added to an engine's registry.

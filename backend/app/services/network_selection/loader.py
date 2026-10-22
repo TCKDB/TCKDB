@@ -479,24 +479,3 @@ def load_population(session: Session, scan: PopulationScan, request: NetworkRequ
             )
         )
     return network, tuple(out)
-
-
-def resolve_reference_model(session: Session, request: NetworkRequest) -> None:
-    """The pinned reference model of a model-fidelity request must be a visible solve of this network.
-
-    A solve the read profile hides, a solve of another network and a ref that names nothing all read the same
-    way (404), so the refusal does not tell a caller whether a hidden solve exists.
-    """
-    if request.reference_model_ref is None:
-        return
-    row = session.execute(
-        select(NetworkSolve.id, Network.public_ref)
-        .join(Network, Network.id == NetworkSolve.network_id)
-        .where(NetworkSolve.public_ref == request.reference_model_ref)
-    ).one_or_none()
-    visible = False
-    if row is not None and row[1] == request.network_ref:
-        badge = fetch_review_badges(session, record_type=SubmissionRecordType.network_solve, record_ids=[row[0]])[row[0]]
-        visible = badge.status in _profile_visible()
-    if not visible:
-        raise not_found("network_solve", ref=request.reference_model_ref)

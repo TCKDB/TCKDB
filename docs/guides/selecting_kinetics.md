@@ -5,10 +5,10 @@ whoever deposits them and wants to know when a deposit can take part. It describ
 answer means, and what the endpoint refuses to claim.
 
 In plain terms: a reaction entry can hold many kinetics records from different sources, fitted in different forms,
-valid over different temperatures and pressures. Browsing lists them in a fixed order (review status, then newest).
-Selection is a separate, opt-in question: "of the records that can answer this exact question, which one should I
-use, and why?" The answer says how sure TCKDB is, and says so when it is not. Today the honest answer is usually
-"these records answer your question and nothing ranks them", because no ranking rule has been approved yet.
+valid over different temperatures and pressures. Browsing lists them in a fixed display order (review rank, then newest
+deposited; see [`browse_order.md`](../specs/browse_order.md)). Selection is a separate, opt-in question: "which of the
+records can answer this exact question, and what is the situation among them?" TCKDB carries no ranking of one method
+above another, so the honest answer is "these records answer your question, and none is preferred".
 
 ## What it is, and what it is not
 
@@ -17,8 +17,8 @@ use, and why?" The answer says how sure TCKDB is, and says so when it is not. To
 - **One quantity.** A supplied gas-phase rate coefficient. It never evaluates a rate, never extrapolates, never
   derives a reverse rate, and never assembles additive components. Rates of progress, net forward-minus-reverse rates
   and whole mechanisms are not covered.
-- **Not a recommendation.** A curator or a dataset release recommends records; this endpoint applies published,
-  versioned rules to what is stored. See
+- **Not a recommendation.** A curator or a dataset release recommends records; this endpoint applies no method
+  preference to what is stored. See
   [`dataset_release_and_profiles.md`](../../backend/docs/specs/dataset_release_and_profiles.md).
 
 ## The request
@@ -36,7 +36,7 @@ defaulted:
   "temperature_min_k": 500.0,
   "temperature_max_k": 1500.0,
   "pressure": { "kind": "independent" },
-  "policy": "method_preferred",
+  "policy": "default",
   "mode": "all"
 }
 ```
@@ -50,7 +50,7 @@ defaulted:
 | `pressure` (required) | `{"kind": "independent"}`, `{"kind": "high_pressure_limit"}` or `{"kind": "finite", "min_bar": ..., "max_bar": ...}` (equal for a point). A pressure-independent record also answers a high-pressure-limit request; the reverse is not true. |
 | `collider` | `{"components": [{"species_ref": "spc_..."}]}` for a specified collider, or two or more components each with a `mole_fraction` summing to one for a mixture (never renormalised). Required for a finite pressure and for a composition-effective coefficient. |
 | `quantity`, `phase` | Optional. If given they must be `rate_coefficient` and `gas`. Anything else is refused with 422, never changed. |
-| `policy` | `method_preferred` (default) applies the registered rules. `default`, `most_reviewed` and `latest` apply review and recency order only, as on the browse endpoints, and apply no rule. |
+| `policy` | An administrative display order, never a method claim: `default` (default) and `most_reviewed` order by review rank then newest deposited; `latest` by newest deposited. `method_preferred` was retired and is refused. |
 | `mode` | `all` (default) returns the whole assessment. `first` additionally names one determination where the outcome supports one (see below). |
 | `min_review_status` | Optional review floor, applied on top of the read profile's floor. The stricter of the two wins. |
 
@@ -69,11 +69,9 @@ selection.
 
 | Outcome | Meaning | `selection` |
 | --- | --- | --- |
-| `policy_preferred` | A registered, active rule prefers one eligible determination over every other eligible determination, and nothing is preferred over it. | That determination with all its eligible fitted representations, `administrative: false`. |
-| `incomparable_alternatives` | More than one eligible determination is not ranked by any rule. They are unranked, not equally accurate. | `null` for `mode=all`. For `first`, the leading determination by review status then recency, with `basis: administrative_first` and `administrative: true`. |
-| `sole_eligible_candidate` | Exactly one determination is eligible. | That determination. It is the only one found, not a comparative accuracy claim. |
+| `incomparable_alternatives` | More than one determination is eligible and TCKDB ranks none above another. They are listed in one front, in display order. | `null` for `mode=all`. For `first`, the first determination in display order, with `basis: administrative_first` and `administrative: true`. |
+| `sole_eligible_candidate` | Exactly one determination is eligible. | That determination with all its eligible fitted representations. It is the only one found, not a comparative accuracy claim. |
 | `no_applicable_candidate` | No record answers this question. | `null`. |
-| `policy_conflict` | Opposing rules, or a preference cycle, contradict each other. | `null`, even for `mode=first`. There is no silent fallback. |
 
 More than 500 visible records is not an outcome but a refusal: 422 `kinetics_selection_population_too_large`. Nothing
 is assessed. Only records visible under the caller's read profile and review floor are counted, so the refusal cannot
@@ -91,29 +89,16 @@ A record answers the question only if its stored claims say so. What it does not
 - **unresolved**: a necessary fact is not stated (no determination, no applicability block, no temperature bound, no
   units on one term of a multi-fit). It does not compete, and it is listed under `disclosures`.
 
-Precedence when several apply: incompatible, unsupported, unresolved. Missing comparison evidence (for example an
-undeclared protocol) leaves an otherwise applicable record eligible; it only prevents a rule from ranking it.
+Precedence when several apply: incompatible, unsupported, unresolved. An undeclared protocol leaves an otherwise applicable record eligible: the protocol is shown as a fact and never ranks it.
 
 **Determinations.** Records that are alternate fits of the same declared determination (a Troe fit and a PLOG fit of
 one master-equation result, say) are one candidate. They are returned together and are never independent
 confirmation: three fits of one result do not outweigh one fit of another.
 
-## How rules rank, and why none does yet
+## No method rule
 
-A rule is a scoped, attributed comparison between two protocols. An edge between two determinations needs every
-representation of both on the rule's sides and every pair of representations verified compatible on everything else
-the rule does not compare. Anything unstated makes the prerequisite unknown, and unknown never makes an edge. Edges
-are labelled `expected-performance inference`: a benchmark, not a measurement of the individual rate. Edges under
-more than one objective are not composed into one path; they are listed under `relations.unused_edges`.
-
-**Every rule in this release is inactive.** `policy.rules` lists each rule consulted with its status and why it is
-inactive. The XYG3 versus B3LYP classical-barrier rule is audited from its primary sources and shipped inactive.
-Its comparator basis is now resolved (a same-basis comparison exists), but a stored barrier cannot declare which
-geometry it used, the benchmark evidence holds at QCISD/MG3 geometries only, how to treat the 7 of 76 barriers where
-B3LYP is closer is undecided, and there is no owner sign-off. The owner chose to keep it inactive for now; whether to
-record the geometry in the schema or accept it as a stated limitation is undecided. The multipath, tunneling and master-equation examples are registered
-inactive without an audit. Activation needs a named curator's sign-off on an audited manifest. Until then
-`method_preferred` ranks nothing and says so.
+TCKDB ships no method-preference rule. A record's declared protocol, applicability and linked levels are shown on each
+candidate as facts, so a reader can judge for themselves; they never change the outcome.
 
 ## Visibility
 
@@ -125,16 +110,16 @@ reason (at most 100, with the total in `excluded_count`).
 ## Replaying a decision
 
 The manifest holds the normalised request, the snapshot isolation the data was read under (a read-only REPEATABLE
-READ snapshot, so one consistent state), every assessed candidate with its normalised inputs, the determinations, the
-rules consulted, each comparison and the administrative order, as public refs only. It is enough to recompute the
-decision with no database. A replay refuses a manifest made under another policy version, or one whose rule version,
-status or audited manifest is not what the running registry carries; it never substitutes another. Rule versions are integers and the running registry carries one version of each rule (all 1), so there are no replay-only legacy versions: a decision recorded under any other version is refused on replay (`UnknownVersion`, surfaced as the engine's `ReplayError`).
+READ snapshot, so one consistent state), every assessed candidate with its normalised inputs, the determinations and
+the administrative order, as public refs only. It is enough to recompute the decision with no database. A replay
+refuses a manifest of another format or policy version; it never substitutes another, and no reader for an older shape
+is kept.
 
 ## Depositing so that a record can take part
 
-State what the record answers: its determination (direction and target), its applicability declaration (coefficient
-basis, phase, observable, pressure dependence and domain, collider), and, for a method comparison, its protocol and
-the calculations that gave its energies. A record that says nothing is read as unresolved; it is never assumed to be a
+State what the record answers: its determination (direction and target) and its applicability declaration (coefficient
+basis, phase, observable, pressure dependence and domain, collider). Its protocol and the calculations that gave its
+energies are shown to readers as facts. A record that says nothing is read as unresolved; it is never assumed to be a
 standard elementary forward rate. See the depositing guide for the declaration fields. The coverage inventory
 (`backend/scripts/ops/kinetics_selection_coverage_inventory.py`, which needs `--database-url` or, on purpose,
 `--use-configured-database`, and never defaults to the configured database) reports, read-only, how many stored records qualify,

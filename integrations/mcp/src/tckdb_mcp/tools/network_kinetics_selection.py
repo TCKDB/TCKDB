@@ -42,16 +42,15 @@ TOOL_DESCRIPTION = (
     "and the whole question: coefficient_basis, a temperature window and a pressure window in bar, a bath (public "
     "'spe_' species refs) and a state partition (composition hashes), and either channel_key with observable or, for "
     "a bundle or the full network, a list of outputs. Read-only. Returns the server response unchanged: report its "
-    "'outcome' and 'basis' verbatim. 'incomparable_alternatives' and 'policy_conflict' mean nothing was "
-    "scientifically selected; 'sole_eligible_candidate' is not a comparative claim; a 'selection' with "
-    "administrative=true is a review/recency choice, not a method claim. A selection names a node with every "
+    "'outcome' and 'basis' verbatim. 'incomparable_alternatives' means several nodes are eligible and none "
+    "is preferred; 'sole_eligible_candidate' is not a comparative claim; a 'selection' with "
+    "administrative=true is first in display order, not a method claim. A selection names a node with every "
     "eligible fitted representation of each member, and 'disclosures' lists what did not compete."
 )
 
 SCOPES = ("single_channel", "projected_bundle", "full_network")
 BASES = ("kernel", "composition_effective")
-OBJECTIVES = ("physical_accuracy", "model_fidelity", "representation_fidelity")
-POLICIES = ("method_preferred", "default", "most_reviewed", "latest")
+POLICIES = ("default", "most_reviewed", "latest")
 MODES = ("all", "first")
 PROFILES = ("exploratory", "curated")
 REGIME_KINDS = ("time_independent", "initial_population_restricted")
@@ -60,14 +59,14 @@ _ACCEPTED_FIELDS: frozenset[str] = frozenset(
     {
         "network_ref", "quantity", "phase", "scope", "channel_key", "observable", "outputs", "coefficient_basis",
         "degeneracy_applied", "temperature_min_k", "temperature_max_k", "pressure_min_bar", "pressure_max_bar",
-        "bath", "partition", "boundaries", "regime", "source_composition_hash", "sink_composition_hash", "objective",
-        "reference_model_ref", "reference_outputs", "policy", "mode", "min_review_status", "profile",
+        "bath", "partition", "boundaries", "regime", "source_composition_hash", "sink_composition_hash",
+        "policy", "mode", "min_review_status", "profile",
     }
 )
 _REJECTED_INTEGER_FIELDS: frozenset[str] = frozenset(
     {
         "network_id", "channel_id", "state_id", "species_id", "species_entry_id", "solve_id", "network_solve_id",
-        "kinetics_id", "reference_model_id",
+        "kinetics_id",
     }
 )
 _REJECTED_PAGING_FIELDS: frozenset[str] = frozenset(
@@ -166,24 +165,13 @@ INPUT_SCHEMA: dict[str, Any] = {
         },
         "source_composition_hash": {"type": "string", "maxLength": 128},
         "sink_composition_hash": {"type": "string", "maxLength": 128},
-        "objective": {"type": "string", "enum": list(OBJECTIVES), "default": "physical_accuracy"},
-        "reference_model_ref": {
-            "type": "string",
-            "maxLength": PUBLIC_REF_MAX_LENGTH,
-            "description": "Public network-solve ref ('nsolve_'). Required for, and only for, model_fidelity.",
-        },
-        "reference_outputs": {
-            "type": "string",
-            "maxLength": 512,
-            "description": "Names the reference output set. Required for, and only for, representation_fidelity.",
-        },
         "policy": {
             "type": "string",
             "enum": list(POLICIES),
-            "default": "method_preferred",
+            "default": "default",
             "description": (
-                "method_preferred applies the registered audited rules (none is active in this release, so it "
-                "ranks nothing yet); default, most_reviewed and latest apply review/recency order only."
+                "An administrative display order, never a method claim: default and most_reviewed order "
+                "by review rank then newest deposited; latest by newest deposited."
             ),
         },
         "mode": {"type": "string", "enum": list(MODES), "default": "all"},
@@ -202,7 +190,7 @@ def run(client: TCKDBHttpClient, config: Config, arguments: dict[str, Any] | Non
     if rejected_int:
         raise invalid_input(
             f"integer-id fields are not accepted by the MCP: {rejected_int!r}. "
-            "Use network_ref and the bath and reference-model public refs, not integer IDs."
+            "Use network_ref and the bath public refs, not integer IDs."
         )
     rejected_paging = sorted(_REJECTED_PAGING_FIELDS & args.keys())
     if rejected_paging:
@@ -224,17 +212,13 @@ def run(client: TCKDBHttpClient, config: Config, arguments: dict[str, Any] | Non
         "bath": _validate_bath(args.get("bath")),
         "partition": _validate_partition(args.get("partition")),
     }
-    for name, allowed in (("scope", SCOPES), ("objective", OBJECTIVES), ("policy", POLICIES), ("mode", MODES)):
+    for name, allowed in (("scope", SCOPES), ("policy", POLICIES), ("mode", MODES)):
         if name in args:
             body[name] = _enum(args, name, allowed, required=False)
     for name in ("channel_key", "observable", "source_composition_hash", "sink_composition_hash",
-                 "reference_outputs", "min_review_status", "phase"):
+                 "min_review_status", "phase"):
         if name in args:
             body[name] = _string(args, name)
-    if "reference_model_ref" in args:
-        body["reference_model_ref"] = validate_path_handle(
-            args["reference_model_ref"], field_name="reference_model_ref", expected_prefix="nsolve_"
-        )
     if "degeneracy_applied" in args:
         if not isinstance(args["degeneracy_applied"], bool):
             raise invalid_input(f"degeneracy_applied must be a boolean; got {args['degeneracy_applied']!r}")

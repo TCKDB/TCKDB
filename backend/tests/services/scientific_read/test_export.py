@@ -154,7 +154,7 @@ def test_unresolvable_ref_raises(db_session):
 # ---------------------------------------------------------------------------
 
 
-def test_selection_picks_policy_preferred_thermo(db_session):
+def test_selection_lists_the_approved_thermo_first(db_session):
     sp = make_species(db_session, smiles="C", inchi_key=next_inchi_key("SE"))
     entry = make_species_entry(db_session, sp)
 

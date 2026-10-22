@@ -51,7 +51,7 @@ from app.db.models.structure_determination import (
     StructureEvidenceFinding,
 )
 from app.db.models.transition_state import TransitionStateEntry, TransitionStateValidationEvidence
-from app.schemas.reads.scientific_common import REVIEW_RANK
+from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
 from app.services.scientific_read.common import fetch_review_badges, visible_statuses
 from app.services.scientific_read.composite_binding import composite_scheme_summaries
 from app.services.scientific_read.handles import canonical_level_of_theory_id
@@ -353,7 +353,7 @@ def _scan_determinations(
         owners = [owner_badge.status]
         if observation_of[i] is not None:
             owners.append(observation_badges[observation_of[i]].status)
-        weakest = max(owners, key=lambda s: REVIEW_RANK[s])
+        weakest = max(owners, key=lambda s: REVIEW_FLOOR_ORDER[s])
         unit_status[i] = weakest
         if weakest in _TERMINAL:
             excluded.append((i, weakest, REASON_TERMINAL))

@@ -1,48 +1,34 @@
-"""The domain-neutral core of method-aware selection.
+"""The domain-neutral core of selection.
 
-Nodes, attributed preference edges, supersession information and administrative keys go in;
-conflicts, preference fronts and an outcome come out. Nothing here knows what a node *is*
-(a formation enthalpy, a rate coefficient, a determination): the thermo and kinetics selectors
-each keep their own quantity checks, candidate types, rules and serialization, and pass this
-module only refs and the keys the administrative order needs.
+Eligible nodes and an administrative key go in; an outcome and the display order come out. TCKDB carries no
+method-versus-method ranking, so there are no preference edges, rules or conflicts here: one eligible candidate is a
+sole eligible candidate, several are incomparable alternatives listed in administrative order, none is no applicable
+candidate. Nothing here knows what a node *is* (a formation enthalpy, a rate coefficient, a determination): each
+selector keeps its own quantity checks, candidate types and serialization, and passes this module only refs and the
+keys the administrative order needs.
 """
 
 from app.services.selection_kernel.graph import (
     ADMIN_FIRST_BASIS,
-    BASIS_CONFLICT,
     BASIS_INCOMPARABLE,
-    BASIS_INCOMPARABLE_NO_RULE,
     BASIS_NONE_ELIGIBLE,
-    BASIS_PREFERRED,
     BASIS_SOLE,
     AdminNode,
     GraphVerdict,
-    decide_graph,
-    fronts,
+    decide_alternatives,
     order_admin,
-    resolve_opposing,
-    strongly_connected,
 )
-from app.services.selection_kernel.vocabulary import Applicability, Edge, Outcome, RuleMatch, Tri
+from app.services.selection_kernel.vocabulary import Applicability, Outcome
 
 __all__ = [
     "ADMIN_FIRST_BASIS",
-    "BASIS_CONFLICT",
     "BASIS_INCOMPARABLE",
-    "BASIS_INCOMPARABLE_NO_RULE",
     "BASIS_NONE_ELIGIBLE",
-    "BASIS_PREFERRED",
     "BASIS_SOLE",
     "AdminNode",
     "Applicability",
-    "Edge",
     "GraphVerdict",
     "Outcome",
-    "RuleMatch",
-    "Tri",
-    "decide_graph",
-    "fronts",
+    "decide_alternatives",
     "order_admin",
-    "resolve_opposing",
-    "strongly_connected",
 ]

@@ -36,7 +36,6 @@ from app.services.statmech_selection.vocabulary import (
     Intent,
     IsotopeConvention,
     Normalization,
-    Objective,
     Observable,
     OwnerKind,
     PopulationKind,
@@ -50,7 +49,8 @@ from app.services.statmech_selection.vocabulary import (
 ASSESSMENT_VERSION = 1
 NORMALIZER_VERSION = 1
 DECISION_VERSION = 1
-ADMIN_KEY_VERSION = 1
+#: Version 2: ``under_review`` and ``not_reviewed`` rank equally in the review key (``docs/specs/browse_order.md``).
+ADMIN_KEY_VERSION = 2
 #: The finding semantics this release reads (shared with structure selection).
 SUPPORTED_FINDING_VERSIONS = frozenset({1})
 
@@ -325,8 +325,6 @@ class StatmechRequest:
     conditions: Conditions = field(default_factory=Conditions)
     population: Population = field(default_factory=Population)
     coverage: CoverageRequirement = CoverageRequirement.entire_requested_domain
-    objective: Objective | None = None
-    reference_model_ref: str | None = None
     admin_policy: SelectionPolicy = SelectionPolicy.default
     result_mode: ResultMode = ResultMode.all
     min_review_status: RecordReviewStatus | None = None
@@ -346,17 +344,9 @@ class StatmechRequest:
 
     def _check_intent(self) -> None:
         if self.intent is Intent.qualify:
-            if self.objective is not None or self.reference_model_ref is not None:
-                raise ValueError("a qualify intent compares nothing: omit comparison_objective and reference_model_ref")
             if self.result_mode is ResultMode.first:
                 raise ValueError("a qualify intent returns assessments and no selection: result_mode first is contradictory")
             return
-        if self.objective is None:
-            raise ValueError("protocol_preferred states its comparison_objective")
-        if self.objective is Objective.model_fidelity and not self.reference_model_ref:
-            raise ValueError("a model_fidelity objective names the pinned reference_model_ref it is measured against")
-        if self.objective is not Objective.model_fidelity and self.reference_model_ref is not None:
-            raise ValueError("reference_model_ref belongs to a model_fidelity objective")
 
     def _check_deferred(self) -> None:
         allowed = DEFERRED_TASK_OBSERVABLES[self.task]  # type: ignore[index]
@@ -431,8 +421,6 @@ class StatmechRequest:
             "conditions": self.conditions.to_dict(),
             "population": self.population.to_dict(),
             "coverage_requirement": self.coverage.value,
-            "comparison_objective": self.objective.value if self.objective else None,
-            "reference_model_ref": self.reference_model_ref,
             "administrative_policy": self.admin_policy.value,
             "result_mode": self.result_mode.value,
             "min_review_status": self.min_review_status.value if self.min_review_status else None,
@@ -451,8 +439,6 @@ class StatmechRequest:
             conditions=Conditions.from_dict(raw["conditions"]),
             population=Population.from_dict(raw["population"]),
             coverage=CoverageRequirement(raw["coverage_requirement"]),
-            objective=Objective(raw["comparison_objective"]) if raw["comparison_objective"] else None,
-            reference_model_ref=raw["reference_model_ref"],
             admin_policy=SelectionPolicy(raw["administrative_policy"]),
             result_mode=ResultMode(raw["result_mode"]),
             min_review_status=RecordReviewStatus(raw["min_review_status"]) if raw["min_review_status"] else None,

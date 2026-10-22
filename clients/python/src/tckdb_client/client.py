@@ -310,7 +310,7 @@ def _structure_selection_path(family: str, ref: str, operation: str) -> str:
 
 
 _STRUCTURE_SELECTION_REFUSED = frozenset(
-    {"bounds", "limit", "offset", "page", "page_size", "cursor", "max_candidates", "manifest_bytes", "sort", "rules"}
+    {"bounds", "limit", "offset", "page", "page_size", "cursor", "max_candidates", "manifest_bytes", "sort", "rules", "apply_rules", "objective", "reference_model"}
 )
 
 
@@ -1574,7 +1574,7 @@ class TCKDBClient:
     # Thin wrappers over the backend scientific read API. They serialize
     # parameters and return parsed JSON; they do NOT rank, select, or
     # interpret responses, and they hold no ARC/RMG-specific logic. See
-    # docs/specs/read_api_mvp.md for the response contract.
+    # docs/specs/browse_order.md for the response contract.
 
     def search_species(
         self,
@@ -1989,15 +1989,16 @@ class TCKDBClient:
     ) -> ThermoSelectionResponse:
         """``POST /scientific/species-entries/{ref}/thermo/select``.
 
-        Method-aware selection of one species entry's thermo record for the
-        gas-phase formation enthalpy at 298.15 K. Read-only; the ordinary
+        Selection of one species entry's thermo record for the
+        gas-phase formation enthalpy at 298.15 K: which records are eligible and their display order. TCKDB
+        ranks no method above another. Read-only; the ordinary
         :meth:`get_species_thermo` browse order is unchanged.
 
         ``species_entry_ref`` must be a public ``spe_...`` ref; an integer id is
         refused here and by the server. ``target`` is required:
         ``{"kind": "equilibrium_ensemble"}`` or ``{"kind": "single_conformer",
-        "conformer_group_ref": "cg_..."}``. ``policy`` is ``method_preferred``
-        (the server default), ``default``, ``most_reviewed`` or ``latest``;
+        "conformer_group_ref": "cg_..."}``. ``policy`` is an administrative order: ``default`` (the server
+        default), ``most_reviewed`` or ``latest``;
         ``result_mode`` is ``all`` (default) or ``first``. ``temperature_k`` and
         ``phase`` exist only so a conflicting value is refused by the server
         (422 ``thermo_selection_condition_conflict``), never silently changed.
@@ -2059,8 +2060,9 @@ class TCKDBClient:
     ) -> KineticsSelectionResponse:
         """``POST /scientific/reaction-entries/{ref}/kinetics/select``.
 
-        Method-aware selection among one reaction entry's stored rate coefficients, for one stated gas-phase
-        question. Read-only; the ordinary :meth:`get_reaction_kinetics` browse order is unchanged.
+        Selection among one reaction entry's stored rate coefficients, for one stated gas-phase
+        question: which determinations are eligible and their display order. TCKDB ranks no method above another.
+        Read-only; the ordinary :meth:`get_reaction_kinetics` browse order is unchanged.
 
         ``reaction_entry_ref`` must be a public ``rxe_...`` ref; an integer id is refused here and by the server.
         The question is required and is never defaulted: ``direction`` (``forward`` or ``reverse``, relative to the
@@ -2070,8 +2072,8 @@ class TCKDBClient:
         temperature window and ``pressure`` (``{"kind": "independent"}``, ``{"kind": "high_pressure_limit"}`` or
         ``{"kind": "finite", "min_bar": ..., "max_bar": ...}``). A ``collider``
         (``{"components": [{"species_ref": "spc_..."}]}``, with ``mole_fraction`` on each of two or more for a
-        mixture) is required for a finite pressure and for a composition-effective coefficient. ``policy`` is
-        ``method_preferred`` (the server default), ``default``, ``most_reviewed`` or ``latest``; ``mode`` is ``all``
+        mixture) is required for a finite pressure and for a composition-effective coefficient. ``policy`` is an
+        administrative order: ``default`` (the server default), ``most_reviewed`` or ``latest``; ``mode`` is ``all``
         (default) or ``first``. ``phase`` exists only so a conflicting value is refused by the server.
 
         The result's ``outcome`` and ``basis`` are the server's explanation: report them verbatim. ``selection``
@@ -2138,21 +2140,19 @@ class TCKDBClient:
         require_stable_reference: bool | None = None,
         administrative_policy: str | None = None,
         result_mode: str | None = None,
-        apply_rules: bool | None = None,
-        objective: str | None = None,
-        reference_model: str | None = None,
         repeat_policy: str | None = None,
         profile: str | None = None,
     ) -> StructureSelectionResponse:
         """``POST /scientific/species-entries/{ref}/calculations/select``.
 
-        The lowest comparable recorded energy among one species entry's calculations, or an audited-rule protocol
-        preference. Read-only; browse orders are unchanged. ``intent`` is ``recorded_minimum`` (the server default) or
-        ``protocol_preferred`` (which needs ``objective`` and a fixed ``geometry_ref``).
+        The lowest comparable recorded energy among one species entry's calculations, or (``protocol_coverage``) the
+        protocols that cover every requested member, listed in display order. Read-only; browse orders are unchanged.
+        ``intent`` is ``recorded_minimum`` (the server default) or ``protocol_coverage`` (which needs a fixed
+        ``geometry_ref``).
 
         Values are ordered only inside one cohort (the same established recipe, quantity and energy convention);
         several cohorts end as ``incomparable_alternatives``. The answer is conditional on the authorized population
-        the caller can see. A population over the server's bounds is a coded 422, never a prefix winner; this client
+        the caller can see. A population over the server's bounds is a coded 422, never an answer from a prefix; this client
         never caps or pages it. Report ``outcome`` and ``basis`` verbatim. The client invents no default of the
         question: only the fields you pass are sent.
         """
@@ -2164,7 +2164,6 @@ class TCKDBClient:
                 "permitted_quality": permitted_quality, "geometry_ref": geometry_ref, "member_refs": member_refs,
                 "recipe": recipe, "require_stable_reference": require_stable_reference,
                 "administrative_policy": administrative_policy, "result_mode": result_mode,
-                "apply_rules": apply_rules, "objective": objective, "reference_model": reference_model,
                 "repeat_policy": repeat_policy,
             }
         )
@@ -2200,17 +2199,14 @@ class TCKDBClient:
         require_stable_reference: bool | None = None,
         administrative_policy: str | None = None,
         result_mode: str | None = None,
-        apply_rules: bool | None = None,
-        objective: str | None = None,
-        reference_model: str | None = None,
         repeat_policy: str | None = None,
         profile: str | None = None,
     ) -> StructureSelectionResponse:
         """``POST /scientific/species-entries/{ref}/conformers/select``.
 
-        The lowest validated conformer basin of one cohort, the basins that support a claim, or a protocol
-        preference. ``intent`` is ``validated_minimum`` (the server default), ``qualify_evidence`` (pass
-        ``quantity=None`` and a ``validation_claim``) or ``protocol_preferred``. A basin needs curvature evidence on
+        The lowest validated conformer basin of one cohort, the basins that support a claim, or the protocols
+        that cover every requested member. ``intent`` is ``validated_minimum`` (the server default), ``qualify_evidence`` (pass
+        ``quantity=None`` and a ``validation_claim``) or ``protocol_coverage``. A basin needs curvature evidence on
         its own geometry, judged by magnitude against the stored tau (never by counting imaginary modes). Repeated
         determinations of one basin are alternates, not independent confirmation. Report ``outcome`` and ``basis``
         verbatim.
@@ -2223,7 +2219,6 @@ class TCKDBClient:
                 "permitted_quality": permitted_quality, "geometry_ref": geometry_ref, "member_refs": member_refs,
                 "recipe": recipe, "require_stable_reference": require_stable_reference,
                 "administrative_policy": administrative_policy, "result_mode": result_mode,
-                "apply_rules": apply_rules, "objective": objective, "reference_model": reference_model,
                 "repeat_policy": repeat_policy,
             }
         )
@@ -2258,9 +2253,6 @@ class TCKDBClient:
         require_connectivity: bool | None = None,
         administrative_policy: str | None = None,
         result_mode: str | None = None,
-        apply_rules: bool | None = None,
-        objective: str | None = None,
-        reference_model: str | None = None,
         repeat_policy: str | None = None,
         profile: str | None = None,
     ) -> StructureSelectionResponse:
@@ -2268,7 +2260,7 @@ class TCKDBClient:
 
         Which saddle determinations of one transition state *entry* support a claim (by default a conventional
         first-order saddle), or are lowest. ``intent`` is ``validated_saddle`` (the server default),
-        ``qualify_evidence`` (``quantity=None`` plus a ``validation_claim``) or ``protocol_preferred``. A higher-order
+        ``qualify_evidence`` (``quantity=None`` plus a ``validation_claim``) or ``protocol_coverage``. A higher-order
         characterization never implies first-order TST suitability; reactive connectivity is an additional claim
         (``require_connectivity``). Report ``outcome`` and ``basis`` verbatim.
         """
@@ -2280,8 +2272,7 @@ class TCKDBClient:
                 "permitted_quality": permitted_quality, "geometry_ref": geometry_ref, "member_refs": member_refs,
                 "recipe": recipe, "require_stable_reference": require_stable_reference,
                 "require_connectivity": require_connectivity, "administrative_policy": administrative_policy,
-                "result_mode": result_mode, "apply_rules": apply_rules, "objective": objective,
-                "reference_model": reference_model, "repeat_policy": repeat_policy,
+                "result_mode": result_mode, "repeat_policy": repeat_policy,
             }
         )
         return self.request_json("POST", path, json=body, params={"profile": profile}, authenticated=False).data
@@ -2451,14 +2442,14 @@ class TCKDBClient:
         """``POST /scientific/statmech/select``.
 
         Which supplied statistical models of one species or transition-state entry support a stated use
-        (``intent="qualify"``), and, with ``intent="protocol_preferred"``, which whole applicable model audited rules prefer.
+        (``intent="qualify"``), and, with ``intent="protocol_coverage"``, the qualified whole models listed in display order.
         ``request`` is the full body (see :class:`~tckdb_client.StatmechSelectionRequest`); the client sends it as given.
         Read-only; browse orders are unchanged and no computed thermodynamic value is returned.
 
-        This server ships no active preference rule, so the answer is the qualified models, a sole eligible model or
-        incomparable alternatives (unranked, not equally accurate), never an invented ranking. A valid negative outcome is a
-        200; a population over the server's bounds is a coded 422 (``statmech_selection_bound_exceeded``), never a prefix
-        winner, and this client never caps or pages it. Report ``outcome``, ``basis`` and ``notices`` verbatim, and read
+        TCKDB ranks no model above another, so the answer is the qualified models, a sole eligible model or
+        incomparable alternatives (listed in display order, none preferred), never an invented ranking. A valid negative outcome is a
+        200; a population over the server's bounds is a coded 422 (``statmech_selection_bound_exceeded``), never an answer
+        from a prefix, and this client never caps or pages it. Report ``outcome``, ``basis`` and ``notices`` verbatim, and read
         each candidate's ``advisory``: an imported source whose own stationary-point statement was not re-judged, or a
         literature citation with no DOI or ISBN, is disclosed there.
         """
@@ -2500,9 +2491,6 @@ class TCKDBClient:
         regime: Mapping[str, Any] | None = None,
         source_composition_hash: str | None = None,
         sink_composition_hash: str | None = None,
-        objective: str | None = None,
-        reference_model_ref: str | None = None,
-        reference_outputs: str | None = None,
         policy: str | None = None,
         mode: str | None = None,
         min_review_status: str | None = None,
@@ -2511,8 +2499,9 @@ class TCKDBClient:
     ) -> NetworkSelectionResponse:
         """``POST /scientific/networks/{ref}/kinetics/select``.
 
-        Method-aware selection among one network's stored pressure-dependent solves, for one stated gas-phase
-        rate-coefficient question. Read-only; the ordinary network reads are unchanged.
+        Selection among one network's stored pressure-dependent solves, for one stated gas-phase
+        rate-coefficient question: which solves are eligible and their display order. TCKDB ranks no method above
+        another. Read-only; the ordinary network reads are unchanged.
 
         ``network_ref`` must be a public ``net_...`` ref; an integer id is refused here and by the server, and
         ``channel_key`` is a body field, never part of the path. The question is required and never defaulted:
@@ -2521,10 +2510,8 @@ class TCKDBClient:
         for a mixture) and ``partition`` (``{"retained": [<composition hash>, ...], "eliminated": [...],
         "lumps": [[...]]}``). A single-channel question (``scope`` omitted or ``single_channel``) names
         ``channel_key`` and ``observable``; ``projected_bundle`` and ``full_network`` list ``outputs``
-        (``[{"channel_key": ..., "observable": ...}]``) instead. ``objective`` defaults to
-        ``physical_accuracy``; ``model_fidelity`` needs ``reference_model_ref`` (``nsolve_...``) and
-        ``representation_fidelity`` needs ``reference_outputs``. ``policy`` is ``method_preferred`` (the server
-        default), ``default``, ``most_reviewed`` or ``latest``; ``mode`` is ``all`` (default) or ``first``.
+        (``[{"channel_key": ..., "observable": ...}]``) instead. ``policy`` is an administrative order:
+        ``default`` (the server default), ``most_reviewed`` or ``latest``; ``mode`` is ``all`` (default) or ``first``.
         ``phase`` exists only so a conflicting value is refused by the server.
 
         The result's ``outcome`` and ``basis`` are the server's explanation: report them verbatim. ``selection``
@@ -2539,7 +2526,6 @@ class TCKDBClient:
             bath=bath, partition=partition, scope=scope, channel_key=channel_key, observable=observable,
             outputs=outputs, degeneracy_applied=degeneracy_applied, boundaries=boundaries, regime=regime,
             source_composition_hash=source_composition_hash, sink_composition_hash=sink_composition_hash,
-            objective=objective, reference_model_ref=reference_model_ref, reference_outputs=reference_outputs,
             policy=policy, mode=mode, min_review_status=min_review_status, phase=phase,
         )
         return self.request_json(
@@ -2566,9 +2552,6 @@ class TCKDBClient:
         regime: Mapping[str, Any] | None = None,
         source_composition_hash: str | None = None,
         sink_composition_hash: str | None = None,
-        objective: str | None = None,
-        reference_model_ref: str | None = None,
-        reference_outputs: str | None = None,
         policy: str | None = None,
         mode: str | None = None,
         min_review_status: str | None = None,
@@ -2587,7 +2570,6 @@ class TCKDBClient:
             bath=bath, partition=partition, scope=scope, channel_key=channel_key, observable=observable,
             outputs=outputs, degeneracy_applied=degeneracy_applied, boundaries=boundaries, regime=regime,
             source_composition_hash=source_composition_hash, sink_composition_hash=sink_composition_hash,
-            objective=objective, reference_model_ref=reference_model_ref, reference_outputs=reference_outputs,
             policy=policy, mode=mode, min_review_status=min_review_status, phase=phase,
         )
         return self.request_json(

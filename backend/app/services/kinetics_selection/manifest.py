@@ -3,21 +3,18 @@
 A selection is only as trustworthy as the inputs it can be re-derived from. The manifest holds the
 normalised request, the snapshot isolation it was read under, the subject reaction entry, the population
 counts, every assessed record with its normalised inputs and applicability verdict, the determinations the
-eligible ones form, the registry entries (rule id, version, status, evidence limits, audited manifest digest)
-that were consulted, each rule's verdict per determination, the pair-compatibility checks, the accepted edges,
-the overridden and unused ones, the fronts and the administrative order. It is a JSON-ready dict built from
+eligible ones form, the fronts and the administrative order. It is a JSON-ready dict built from
 public refs only: no database id, no internal key. ``id_rank`` is an ordinal standing in for the id as the
 last tie-break and cannot be turned back into one.
 
 :func:`replay_decision` re-runs the engine over the manifest's eligible records with no database. A digest
 would only prove the manifest was not altered; replay proves the decision follows from what it records. A
-policy version or a rule version, status or audited-manifest digest that the running registry does not carry
+manifest format, policy version or assessment-semantics version that the running registry does not carry
 refuses the replay rather than substituting another.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import Any
 
 from app.services.kinetics_selection.engine import KineticsDecision, build_candidates, decide
@@ -29,12 +26,9 @@ from app.services.kinetics_selection.models import (
     POLICY_VERSION,
     KineticsAssessmentResult,
     KineticsRequest,
-    KineticsSubject,
     NormalizedKinetics,
 )
-from app.services.kinetics_selection.rules import KineticsRule, default_rules
 from app.services.manifest_formats import manifest_header, new_format_registry, read_manifest_format
-from app.services.rule_registry import rule_recorded_in, rules_registry
 from app.services.selection_kernel.assessment_semantics import (
     UnsupportedAssessmentSemantics,
     check_supported,
@@ -44,8 +38,9 @@ from app.services.trust.rubrics import COMPUTED_KINETICS
 from app.versioning import same_value
 
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
-#: reads exactly this format; a manifest in any other is refused.
-MANIFEST_FORMAT_VERSION = 1
+#: reads exactly this format; a manifest in any other is refused. Version 2: the decision no longer holds rules,
+#: rule matches, pair checks, edges, overridden or unused edges, opposing pairs or cycles.
+MANIFEST_FORMAT_VERSION = 2
 MANIFEST_FORMAT_NAME = "kinetics_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "kinetics_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -102,31 +97,13 @@ def build_manifest(result: KineticsAssessmentResult, decision: KineticsDecision)
     }
 
 
-def _rules_for(manifest: dict[str, Any], rules: Sequence[KineticsRule] | None) -> tuple[KineticsRule, ...]:
-    registry = rules_registry("kinetics_selection_rules", default_rules() if rules is None else rules)
-    used: list[KineticsRule] = []
-    for entry in manifest["decision"]["rules"]:
-        key = (entry["rule_id"], entry["version"])
-        rule = rule_recorded_in(registry, entry, ReplayError)
-        described = rule.describe()
-        if described["status"] != entry["status"]:
-            raise ReplayError(
-                f"rule {key[0]} version {key[1]} was {entry['status']} when this decision was made and is "
-                f"{described['status']} now; a rule's status change is a new version"
-            )
-        if described.get("manifest_sha256") != entry.get("manifest_sha256"):
-            raise ReplayError(f"rule {key[0]} version {key[1]} now rests on a different audited manifest")
-        used.append(rule)
-    return tuple(used)
-
-
-def replay_decision(manifest: dict[str, Any], *, rules: Sequence[KineticsRule] | None = None) -> dict[str, Any]:
+def replay_decision(manifest: dict[str, Any]) -> dict[str, Any]:
     """Recompute the decision from the manifest's recorded inputs; no database.
 
     :returns: ``KineticsDecision.to_dict()``.
-    :raises ReplayError: if the manifest's format or policy version, or a rule's version, status or audited
-        manifest, is not what the running registry carries; or if the manifest contradicts itself (a record's
-        recorded eligibility, or the determinations it says the eligible records form).
+    :raises ReplayError: if the manifest's format, policy version or assessment semantics is not what the running
+        registry carries; or if the manifest contradicts itself (a record's recorded eligibility, or the
+        determinations it says the eligible records form).
     """
     read_manifest_format(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME, manifest, ReplayError)
     if not same_value(manifest["policy"], {"name": POLICY_NAME, "version": POLICY_VERSION}):
@@ -137,7 +114,6 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[KineticsRule] |
         check_supported(manifest, semantics=ASSESSMENT_SEMANTICS, name=ASSESSMENT_SEMANTICS_NAME)
     except UnsupportedAssessmentSemantics as exc:
         raise ReplayError(str(exc)) from exc
-    used = _rules_for(manifest, rules)
     for c in manifest["candidates"]:
         if c["eligible"] != c["assessment"]["physically_eligible"]:
             raise ReplayError(
@@ -161,12 +137,7 @@ def replay_decision(manifest: dict[str, Any], *, rules: Sequence[KineticsRule] |
     ]
     if recorded != rebuilt:
         raise ReplayError("the recorded determinations are not the ones the eligible candidates form")
-    decision = decide(
-        candidates,
-        subject=KineticsSubject.from_dict(manifest["subject"]),
-        request=request,
-        rules=used,
-    )
+    decision = decide(candidates, admin_policy=request.admin_policy)
     return decision.to_dict()
 
 
@@ -175,12 +146,12 @@ def _candidate_fields(candidate: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in candidate.items() if k not in {"assessment", "eligible"}}
 
 
-def replay_matches(manifest: dict[str, Any], *, rules: Sequence[KineticsRule] | None = None) -> bool:
+def replay_matches(manifest: dict[str, Any]) -> bool:
     """True when replaying the manifest reproduces the decision it records and the outcome it states.
 
     The top-level ``outcome`` is compared too: it is a summary a reader trusts, so an edit of it that the decision
     does not support must not "match".
     """
-    replayed = replay_decision(manifest, rules=rules)
+    replayed = replay_decision(manifest)
     return replayed == manifest["decision"] and replayed["outcome"] == manifest["outcome"]
 

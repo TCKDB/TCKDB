@@ -22,6 +22,7 @@ from app.db.models.software import Software, SoftwareRelease
 from app.db.models.statmech import Statmech
 from app.schemas.reads.scientific_common import (
     ReviewStatusSummary,
+    browse_order,
 )
 from app.schemas.reads.scientific_frequency_scale_factor import (
     ScientificFrequencyScaleFactorRecord,
@@ -74,7 +75,7 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
 _DEFERRED_FILTER_FIELDS: tuple[str, ...] = ("model_kind",)
 
 
-_DEFAULT_SORT_ECHO = "scale_kind,value,id"
+_DEFAULT_SORT_ECHO = browse_order("scale_kind", "value", ("id", "asc"))
 
 
 def search_frequency_scale_factors(

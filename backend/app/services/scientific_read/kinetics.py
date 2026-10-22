@@ -1,6 +1,6 @@
 """Service implementation for /api/v1/scientific/reaction-entries/{id}/kinetics.
 
-See docs/specs/read_api_mvp.md §Endpoint 3.
+See docs/specs/browse_order.md.
 
 Provenance keys are always present per Phase 2.2; TS-chain fields are populated
 only for TS-backed records. Evidence completeness uses the L1 kinetics
@@ -78,6 +78,7 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     ValidationSummary,
     WorkflowToolReleaseSummary,
+    browse_order,
     simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_kinetics import (
@@ -235,9 +236,7 @@ _PDEP_EAGER_LOADS = (
     selectinload(Kinetics.third_body_efficiencies),
 )
 
-_DEFAULT_SORT_ECHO = (
-    "review_rank,created_at,id"
-)
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 # Priority order for resolving the "primary" source calculation per spec.
 _LOT_FILTER_ROLE_PRIORITY = (

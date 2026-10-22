@@ -1,6 +1,6 @@
 """Service implementation for /api/v1/scientific/species-entries/{id}/thermo.
 
-See docs/specs/read_api_mvp.md §Endpoint 4.
+See docs/specs/browse_order.md.
 """
 
 from __future__ import annotations
@@ -60,6 +60,8 @@ from app.schemas.reads.scientific_common import (
     SelectionPolicy,
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
+    browse_order,
+    effective_order_echo,
     simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_thermo import (
@@ -195,9 +197,7 @@ _TRUST_EAGER_LOADS = (
 # calling ``evaluate_loaded_thermo``.
 THERMO_TRUST_EAGER_LOADS = _TRUST_EAGER_LOADS
 
-_DEFAULT_SORT_ECHO = (
-    "review_rank,created_at,id"
-)
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 # Priority order for links that are not a typed composite: sp → composite →
 # freq → opt → any. A calculation of *type* ``composite`` ranks above all of
@@ -659,7 +659,7 @@ def get_species_thermo(
 
     # L3 thermo sort (#648): review status, then newest -- the same key the
     # export, CHEMKIN and ML selection use (``simple_selection_sort_key``), so
-    # the read and the export cannot pick different "best" records.
+    # the read and the export cannot list different records first (display order, never a preference).
     #
     # Deliberately NOT in the key:
     #   * ``evidence_completeness.score``: six of its eight predicates are
@@ -715,6 +715,9 @@ def get_species_thermo(
             collapse=request.collapse,
             selection_policy=request.selection_policy,
             include=sorted(includes),
+            effective_order=effective_order_echo(
+                collapse_first=request.collapse.value == "first", policy=request.selection_policy
+            ),
         ),
         species_entry_id=species_entry_id,
         species_entry_ref=species_entry_ref,
@@ -1784,6 +1787,9 @@ def _empty_response(
             collapse=request.collapse,
             selection_policy=request.selection_policy,
             include=sorted(includes),
+            effective_order=effective_order_echo(
+                collapse_first=request.collapse.value == "first", policy=request.selection_policy
+            ),
         ),
         species_entry_id=species_entry_id,
         species_entry_ref=species_entry_ref,

@@ -39,7 +39,7 @@ class DeferredTask(str, Enum):
 
 class Intent(str, Enum):
     qualify = "qualify"
-    protocol_preferred = "protocol_preferred"
+    protocol_coverage = "protocol_coverage"
 
 
 class Observable(str, Enum):
@@ -205,12 +205,6 @@ class CoverageRequirement(str, Enum):
     eligible_population = "eligible_population"
 
 
-class Objective(str, Enum):
-    physical_accuracy = "physical_accuracy"
-    expected_accuracy = "expected_accuracy"
-    model_fidelity = "model_fidelity"
-
-
 class ResultMode(str, Enum):
     all = "all"
     first = "first"
@@ -234,10 +228,7 @@ class Outcome(str, Enum):
     unsupported_task = "unsupported_task"
     unsupported_model = "unsupported_model"
     evidence_conflict = "evidence_conflict"
-    unresolved_comparability = "unresolved_comparability"
-    policy_conflict = "policy_conflict"
     sole_eligible_candidate = "sole_eligible_candidate"
-    policy_preferred = "policy_preferred"
     incomparable_alternatives = "incomparable_alternatives"
 
 
@@ -248,8 +239,7 @@ OUTCOME_PRECEDENCE: tuple[str, ...] = (
     "no_candidates",
     "none_qualified: evidence_conflict, unsupported_model, missing_required_data, unresolved_applicability, "
     "no_applicable_candidate",
-    "preference: policy_conflict (unless an undecided rule could supersede a conflicting one), unresolved_comparability, "
-    "sole_eligible_candidate, policy_preferred, incomparable_alternatives",
+    "listing: sole_eligible_candidate, incomparable_alternatives",
 )
 
 #: The machine code of a bounded-completeness refusal (HTTP 422). One code; the context names the bound.
@@ -264,7 +254,6 @@ REASON_CODES: tuple[str, ...] = (
     "counting_conflict",
     "required_member_unavailable",
     "required_evidence_unavailable",
-    "comparison_prerequisite_unknown",
     "isotope_convention_unsupported",
     "environment_not_supported",
     "dividing_surface_not_supported",

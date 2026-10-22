@@ -5,10 +5,10 @@ for one stated gas-phase question, and for whoever deposits them and wants to kn
 describes the selection endpoint, what each answer means, and what the endpoint refuses to claim.
 
 In plain terms: a network can hold several solves of its master equation, fitted in different forms, over different
-temperatures and pressures, in different baths. Browsing lists them. Selection is a separate, opt-in question: "of the
-solves that can answer this exact question, which one should I use, and why?" The answer says how sure TCKDB is, and
-says so when it is not. Today the honest answer is usually "these solves answer your question and nothing ranks
-them", because no ranking rule has been approved yet.
+temperatures and pressures, in different baths. Browsing lists them in a fixed display order (see
+[`browse_order.md`](../specs/browse_order.md)). Selection is a separate, opt-in question: "which of the solves can
+answer this exact question, and what is the situation among them?" TCKDB carries no ranking of one method above
+another, so the honest answer is "these solves answer your question, and none is preferred".
 
 ## What it is, and what it is not
 
@@ -17,8 +17,8 @@ them", because no ranking rule has been approved yet.
 - **One quantity.** A supplied gas-phase rate coefficient of a network, for a stated state partition, boundaries,
   regime, bath, temperature window and pressure window. It never evaluates a rate, never extrapolates, never splices
   channels across solves or temperature windows, and never averages.
-- **Not a recommendation.** A curator or a dataset release recommends records; this endpoint applies published,
-  versioned rules to what is stored.
+- **Not a recommendation.** A curator or a dataset release recommends records; this endpoint applies no method
+  preference to what is stored.
 
 ## The request
 
@@ -37,8 +37,7 @@ segment. The question is the body, and none of it is defaulted:
 | `channel_key`, `observable` | A single-channel question names both. |
 | `outputs` | A bundle or full-network question lists each required output: a channel and an observable. |
 | `boundaries`, `regime`, `source_composition_hash`, `sink_composition_hash`, `degeneracy_applied` | Further parts of the observable, stated when they matter. |
-| `objective` | `physical_accuracy` (default), `model_fidelity` (needs `reference_model_ref`, an `nsolve_...` ref) or `representation_fidelity` (needs `reference_outputs`). |
-| `policy` | `method_preferred` (default), `default`, `most_reviewed` or `latest`. |
+| `policy` | An administrative display order, never a method claim: `default` (default), `most_reviewed` or `latest`. `method_preferred` was retired and is refused. |
 | `mode` | `all` (default) or `first`. |
 | `min_review_status` | An optional floor on top of the read profile's. |
 
@@ -58,34 +57,33 @@ never assembled from fits that happen to be available.
 
 `outcome` is the selection basis, and `basis` says why in one sentence. Report both verbatim.
 
-- `policy_preferred`: a registered, active rule leaves one node with nothing preferred over it.
 - `sole_eligible_candidate`: one node answers the question. That is not a comparative accuracy claim.
-- `incomparable_alternatives`: several nodes answer it and no rule ranks them. Nothing was scientifically selected.
-- `policy_conflict`: opposing rules or a cycle. Nothing is selected.
-- `no_applicable_candidate`: nothing answers the question; `determinations` and `bundles` say why, solve by solve.
+- `incomparable_alternatives`: several nodes answer it and TCKDB ranks none above another. They are listed in one front,
+  in display order. Nothing was scientifically selected.
+- `no_applicable_candidate`: nothing answers the question; `determinations` and `bundles` say so, solve by solve.
 
 `selection` names a node, its solve and, for each member, every eligible fitted representation. With `mode=first` an
-`incomparable_alternatives` answer may still name a node, labelled `administrative_first`: a review and recency
-choice, not a method claim. Alternate fits of one determination are never independent confirmation, and with
-`representation_fidelity` they get their own nested fronts that rank no solve.
+`incomparable_alternatives` answer may still name a node, labelled `administrative_first`: the first node in display
+order, not a method claim. Alternate fits of one determination are never independent confirmation; they are listed
+in display order under `representations` and rank no solve.
 
-**Every rule shipped in this release is inactive**, so `method_preferred` ranks nothing today and the response lists
-the rules it considered and why each is inactive. See [`network_selection_rules.md`](network_selection_rules.md).
+TCKDB ships no method-preference rule. A solve's declared protocol and validation are shown as facts and never change
+the outcome.
 
 ## Bounds, and what a refusal means
 
 The server fixes its bounds: 200 solves, 2000 kinetics parents, 500 channel nodes, 500 bundle nodes, 1000 states,
 2000 channels, 200 required outputs, 10000 evidence entries, 100000 numeric cells and an 8 MiB snapshot. Over any of
 them the answer is a 422, `network_selection_population_too_large` or `network_selection_snapshot_too_large`, with the
-bound and the visible count, and nothing is assessed: a winner picked from part of a population would say nothing
-about the rest. Only solves visible to the caller's read profile are counted.
+bound and the visible count, and nothing is assessed: an answer picked from part of a population would say
+nothing about the rest. Only solves visible to the caller's read profile are counted.
 
 ## Visibility and the manifest
 
 The read is one read-only REPEATABLE READ snapshot, opened before the network ref is resolved. Under the `curated`
 profile a solve below the review floor is neither listed nor counted (`excluded_by_review_withheld` is true), whether
 or not any exist. The manifest holds the normalised request, every captured solve with its normalised facts, every
-assessment, the rules consulted and each comparison, as public refs only, with a SHA-256 digest. It can be replayed
+assessment and the administrative order, as public refs only, with a SHA-256 digest. It can be replayed
 with no database at two levels: the assessments are recomputed from the captured facts, then the decision from those
 assessments, and both are compared with what the manifest records.
 
@@ -99,7 +97,7 @@ endpoint compares them with what the server holds.
 `POST /api/v1/scientific/networks/{network_ref}/kinetics/export-selected` serialises one selection, after checking it.
 You send the manifest you saved from `.../select/manifest` exactly as downloaded, the node you chose (`node_ref`) and
 `representation_refs`: exactly one eligible fitted representation for every member of that node. `format` is `native`
-(default) or `chemkin`. You send no rule, no verdict the server should believe and no database id.
+(default) or `chemkin`. You send no verdict the server should believe and no database id.
 
 The server does not trust the manifest's digest. It requires the manifest complete and for this network, replays it from
 its own captured inputs, then re-runs the selection against its own content and your authorised population in one
@@ -108,13 +106,13 @@ snapshot and requires everything scientific to match. Each refusal is a 422, not
 | Code | Meaning |
 | --- | --- |
 | `network_export_manifest_invalid` | incomplete, another network's, too large, or it does not replay (edited, or a forgery that was resealed) |
-| `network_export_manifest_stale` | the content, review states, rules, population or read profile no longer match: run a fresh selection |
-| `network_export_choice_not_allowed` | not the selected node; an unranked alternative without `allow_administrative_choice` (false by default); or a selection that chose nothing |
+| `network_export_manifest_stale` | the content, review states, population or read profile no longer match: run a fresh selection |
+| `network_export_choice_not_allowed` | not the selected node; an unranked alternative without `allow_administrative_choice` (false by default); or a selection that chose nothing (no applicable candidate) |
 | `network_export_representation_choice_invalid` | not exactly one eligible fit per member, or a fit that is not this node's |
 | `network_export_unsupported_form` | a form or species with no CHEMKIN serialisation, or two chosen channels with one equation |
 
-`allow_administrative_choice` permits exporting one of several unranked leading alternatives, and the response then says
-`administrative: true`: a review and recency choice, not a method claim. It never bypasses a conflict, an empty
+`allow_administrative_choice` permits exporting one of several unranked alternatives, and the response then says
+`administrative: true`: a display-order choice, not a method claim. It never bypasses an empty
 selection, an incomplete membership or an unsupported form.
 
 **Literature-reported rates (ADR 0010).** A solve of kind `reported` holds rates transcribed from a publication, and a

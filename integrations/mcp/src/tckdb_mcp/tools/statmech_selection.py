@@ -3,8 +3,8 @@
 Wraps ``POST /api/v1/scientific/statmech/select``.
 
 A read, not a write: nothing is stored and the browse orders are unchanged. The tool exists so an agent can ask "which
-supplied statistical model of this species or transition-state entry supports this stated use, and is any whole model
-preferred by audited rules", and be told the server's own answer. No computed thermodynamic value is returned.
+supplied statistical model of this species or transition-state entry supports this stated use, and in what display
+order?", and be told the server's own answer. No computed thermodynamic value is returned.
 
 Policy choices enforced here (in addition to server-side validation):
 
@@ -14,7 +14,7 @@ Policy choices enforced here (in addition to server-side validation):
 - The question is never defaulted by the tool: whatever the agent states is forwarded, the rest is the server's default.
 - ``bounds``, ``max_candidates``, ``manifest_bytes``, ``limit``, ``offset`` and any pagination, sort or rule field are
   rejected: the engineering bounds are the server's, a selection is over the *complete* authorized population (above a
-  bound the server refuses with a coded 422), and a caller cannot author a rule or a sort. This tool never caps, pages,
+  bound the server refuses with a coded 422), and a caller cannot author a sort. This tool never caps, pages,
   filters or chooses candidates itself.
 - The server's response is returned unchanged. ``outcome``, ``basis``, ``selection`` and ``notices`` carry the
   explanation, so this tool adds no prose of its own and never reduces an outcome to a recommendation: an agent that
@@ -33,9 +33,8 @@ from ._path_handles import PUBLIC_REF_MAX_LENGTH, validate_path_handle
 TOOL_NAME = "tckdb_select_statmech_models"
 
 PROFILES = ("exploratory", "curated")
-INTENTS = ("qualify", "protocol_preferred")
+INTENTS = ("qualify", "protocol_coverage")
 COVERAGE = ("entire_requested_domain", "eligible_population")
-OBJECTIVES = ("physical_accuracy", "expected_accuracy", "model_fidelity")
 ADMIN_POLICIES = ("default", "latest", "most_reviewed")
 MODES = ("all", "first")
 TARGET_REFS = {
@@ -52,18 +51,18 @@ _REJECTED_BOUND_FIELDS: frozenset[str] = frozenset(
 
 TOOL_DESCRIPTION = (
     "Select among one species entry's or transition-state entry's supplied statistical-mechanics models: which of them "
-    "support a stated use (intent 'qualify'), and, with intent 'protocol_preferred' (which needs a comparison_objective), "
-    "which whole applicable model audited rules prefer. The target is {'kind': 'species_entry', 'species_entry_ref': "
+    "support a stated use (intent 'qualify'), and, with intent 'protocol_coverage', the qualified whole models listed "
+    "in display order. The target is {'kind': 'species_entry', 'species_entry_ref': "
     "'spe_...', 'scope': {...}, ...} or {'kind': 'transition_state_entry', 'transition_state_entry_ref': 'tse_...', "
     "'scope': {...}, ...}. Read-only. Returns the server response unchanged: report its 'outcome' and 'basis' verbatim. "
-    "This server ships no active preference rule, so the answer is the qualified models, a sole eligible model or "
-    "'incomparable_alternatives' (unranked, not equally accurate); 'unresolved_comparability', 'policy_conflict', "
-    "'evidence_conflict' and every unresolved outcome mean nothing was selected. Read each candidate's 'advisory' and the "
+    "TCKDB ranks no model above another, so the answer is the qualified models, a sole eligible model or "
+    "'incomparable_alternatives' (listed in display order, none preferred); 'evidence_conflict' and every unresolved "
+    "outcome mean nothing was selected. Read each candidate's 'advisory' and the "
     "response 'notices': an imported source whose own stationary-point statement was not re-judged "
     "(imported_parameters_not_revalidated:<role>) and a literature citation with no DOI or ISBN "
     "(source_literature_unidentified:<role>) are disclosed there. The answer is conditional on the authorized population "
     "the caller can see and is never a physical-search certificate. A population over the server's bounds is a coded 422, "
-    "never a prefix winner. No computed thermodynamic value is returned. The tool never caps, pages or chooses candidates "
+    "never an answer from a prefix. No computed thermodynamic value is returned. The tool never caps, pages or chooses candidates "
     "itself."
 )
 
@@ -97,8 +96,6 @@ INPUT_SCHEMA: dict[str, Any] = {
             ),
         },
         "coverage_requirement": {"type": "string", "enum": list(COVERAGE), "default": "entire_requested_domain"},
-        "comparison_objective": {"type": "string", "enum": list(OBJECTIVES), "description": "Required for protocol_preferred."},
-        "reference_model_ref": {"type": "string", "description": "A pinned smd_ ref, for model_fidelity.", "maxLength": PUBLIC_REF_MAX_LENGTH},
         "administrative_policy": {"type": "string", "enum": list(ADMIN_POLICIES), "default": "default"},
         "result_mode": {"type": "string", "enum": list(MODES), "default": "all"},
         "min_review_status": {"type": "string", "description": "Optional review floor, applied on top of the profile's floor."},
@@ -110,7 +107,6 @@ INPUT_SCHEMA: dict[str, Any] = {
 _BODY_OBJECTS = ("conditions", "population")
 _BODY_ENUMS = (
     ("coverage_requirement", COVERAGE),
-    ("comparison_objective", OBJECTIVES),
     ("administrative_policy", ADMIN_POLICIES),
     ("result_mode", MODES),
 )
@@ -183,10 +179,6 @@ def run(client: TCKDBHttpClient, config: Config, arguments: dict[str, Any] | Non
             if args[name] not in allowed:
                 raise invalid_input(f"{name} must be one of {list(allowed)!r}; got {args[name]!r}")
             body[name] = args[name]
-    if "reference_model_ref" in args:
-        body["reference_model_ref"] = validate_path_handle(
-            args["reference_model_ref"], field_name="reference_model_ref", expected_prefix="smd_"
-        )
     if "min_review_status" in args:
         body["min_review_status"] = _string(args, "min_review_status", max_length=64)
 

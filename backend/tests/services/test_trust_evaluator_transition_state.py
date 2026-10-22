@@ -557,7 +557,7 @@ def test_none_input_hard_fails():
     assert result.label is EvidenceBadge.hard_failed
     assert result.hard_fail_reason is HardFailReason.transition_state_entry_missing
     assert result.rubric == "computed_transition_state"
-    assert result.rubric_version == 1
+    assert result.rubric_version == 2
     assert result.record_type == "transition_state_entry"
     assert result.record_id is None
 
@@ -1078,8 +1078,9 @@ def test_session_wrapper_returns_hard_fail_for_missing_id(db_session: Session):
 def test_rubric_metadata_pinned():
     """Pin the public contract of the rubric metadata."""
     assert COMPUTED_TRANSITION_STATE.name == "computed_transition_state"
-    # Every rubric is at version 1, the release baseline; a later change to what a check means is a version bump.
-    assert COMPUTED_TRANSITION_STATE.version == 1
+    # Version 2: the badge's qualifying refs are listed in the structure administrative key, version 2 (under_review
+    # ranks equal to not_reviewed). A later change to what a check means is a further version bump.
+    assert COMPUTED_TRANSITION_STATE.version == 2
     assert COMPUTED_TRANSITION_STATE.record_type == "transition_state_entry"
     assert len(COMPUTED_TRANSITION_STATE.checks) == 32
     # The undesignated-modes warning (#729) sits right after the zero-mode warning and carries no weight.

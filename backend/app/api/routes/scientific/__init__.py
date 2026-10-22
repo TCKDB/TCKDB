@@ -140,7 +140,7 @@ scientific_router.include_router(structure_selection.tse_router)
 # Relative conformer energies against a named reference conformer: a sibling of the conformer basin selection,
 # same prefix, a distinct deeper path (a read, not a selection: no rank, no winner).
 scientific_router.include_router(relative_conformer_energy.router)
-# Statmech selection (qualify supplied statistical models; prefer only where audited rules say so): one typed target
+# Statmech selection (qualify supplied statistical models, listed in display order; none is ranked): one typed target
 # union under /statmech, sibling of the statmech search and detail reads (POST /select, GET /{ref}).
 scientific_router.include_router(statmech_selection.router)
 # Sibling per-entry subresource reads (statmech / transport) sharing the

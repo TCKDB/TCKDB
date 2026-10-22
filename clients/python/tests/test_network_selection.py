@@ -43,7 +43,7 @@ def _recorder(answer: dict | None = None, status: int = 200):
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        return httpx.Response(status, json=answer if answer is not None else {"outcome": "policy_preferred"})
+        return httpx.Response(status, json=answer if answer is not None else {"outcome": "sole_eligible_candidate"})
 
     return seen, handler
 
@@ -55,7 +55,7 @@ def test_posts_the_question_to_the_select_path_without_inventing_defaults():
     (request,) = seen
     assert request.method == "POST"
     assert urlsplit(str(request.url)).path.endswith(f"/scientific/networks/{NETWORK}/kinetics/select")
-    assert json.loads(request.content) == {**QUESTION, **CHANNEL}  # no scope, objective, policy or mode of ours
+    assert json.loads(request.content) == {**QUESTION, **CHANNEL}  # no scope, policy or mode of ours
     assert "profile" not in parse_qs(urlsplit(str(request.url)).query)
 
 
@@ -72,7 +72,7 @@ def test_none_valued_optionals_are_dropped_not_sent_as_null():
     with _client(handler) as client:
         client.select_network_kinetics(
             NETWORK, **QUESTION, **CHANNEL, scope=None, outputs=None, boundaries=None, regime=None, policy=None,
-            mode=None, objective=None, reference_model_ref=None, min_review_status=None, phase=None,
+            mode=None, min_review_status=None, phase=None,
         )
     body = json.loads(seen[0].content)
     assert body == {**QUESTION, **CHANNEL}
@@ -91,13 +91,13 @@ def test_forwards_every_supplied_field_and_the_profile():
         client.select_network_kinetics(
             NETWORK, **QUESTION, scope="projected_bundle", outputs=outputs, degeneracy_applied=True, boundaries=boundaries,
             regime=regime, source_composition_hash="a" * 64, sink_composition_hash="b" * 64,
-            objective="model_fidelity", reference_model_ref="nsolve_xyz", policy="latest", mode="first",
+            policy="latest", mode="first",
             min_review_status="approved", phase="gas", profile="curated",
         )
     assert json.loads(seen[0].content) == {
         **QUESTION, "scope": "projected_bundle", "outputs": outputs, "degeneracy_applied": True,
         "boundaries": boundaries, "regime": regime, "source_composition_hash": "a" * 64,
-        "sink_composition_hash": "b" * 64, "objective": "model_fidelity", "reference_model_ref": "nsolve_xyz",
+        "sink_composition_hash": "b" * 64,
         "policy": "latest", "mode": "first", "min_review_status": "approved", "phase": "gas",
     }
     assert parse_qs(urlsplit(str(seen[0].url)).query) == {"profile": ["curated"]}
@@ -158,8 +158,8 @@ def test_the_manifest_method_posts_to_the_manifest_path_and_forwards_the_profile
 def test_the_response_type_names_the_outcome_vocabulary():
     outcomes = set(get_args(get_type_hints(NetworkSelectionResponse)["outcome"]))
     assert outcomes == {
-        "policy_preferred", "incomparable_alternatives", "sole_eligible_candidate",
-        "no_applicable_candidate", "policy_conflict",
+        "incomparable_alternatives", "sole_eligible_candidate",
+        "no_applicable_candidate",
     }
 
 

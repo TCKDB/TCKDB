@@ -55,6 +55,7 @@ from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     SelectionPolicy,
+    browse_order,
     effective_order_echo,
     simple_selection_sort_key,
 )
@@ -111,7 +112,7 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
 )
 
 
-_DEFAULT_SORT_ECHO = "review_rank,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 
 def search_statmech(

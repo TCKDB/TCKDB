@@ -30,7 +30,7 @@ from app.services.network_selection import replay_network
 from app.services.record_review import ensure_record_review, set_record_review_status
 from tests import conftest
 from tests.conftest import scratch_database_name
-from tests.services.network_selection._rules import protocol
+from tests.services.network_selection._protocol import protocol
 from tests.services.network_selection._world import add_solve, build_world, fit_spec
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]

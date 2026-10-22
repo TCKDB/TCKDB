@@ -124,6 +124,9 @@ DESCRIBES_THE_READ_PATHS = frozenset(
 #: Fields whose value is a MAP of slots keyed by role (``/full``'s ``transition_states[*].calculations``), not a model
 #: with fixed keys. A slot whose calculation is hidden is removed from the map; the key of a model is never removed.
 REMOVABLE_MAP_FIELDS = frozenset({"calculations", "levels_of_theory"})
+#: Maps keyed by calculation type that are only a map at this exact path (a bare ``software`` field elsewhere is a model).
+#: The type of a hidden calculation is removed from them, as from ``levels_of_theory`` (owner decision D5).
+REMOVABLE_MAP_PATHS = ("evidence_summary.software",)
 
 #: Key stem -> world kind, for the integer-id check.
 ID_STEM_TO_KIND = {
@@ -277,7 +280,7 @@ def withholding_violations(exp: Any, cur: Any, path: str = "") -> list[str]:
             ):
                 continue
             if key not in cur:
-                if path.rsplit(".", 1)[-1] in REMOVABLE_MAP_FIELDS:
+                if path.rsplit(".", 1)[-1] in REMOVABLE_MAP_FIELDS or path.endswith(REMOVABLE_MAP_PATHS):
                     continue  # a slot of a map, withheld whole
                 out.append(f"{sub}<key removed>")
             elif key not in exp:

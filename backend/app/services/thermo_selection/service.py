@@ -6,12 +6,10 @@ decision record. Browse order and every existing read are untouched.
 
 Flow: scan the visible population (review floor first, rejected and deprecated out) and
 refuse above the cap; load and normalise it; assess every record for H298 applicability;
-hand the physically eligible ones to the preference engine; build the manifest.
+hand the physically eligible ones to the ordering engine; build the manifest.
 """
 
 from __future__ import annotations
-
-from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -42,7 +40,6 @@ from app.services.thermo_selection.models import (
     H298Selection,
     Outcome,
 )
-from app.services.thermo_selection.rules import PreferenceRule, default_rules
 from app.services.trust import evaluate_loaded_thermo
 
 
@@ -84,13 +81,10 @@ def select_h298(
     *,
     species_entry_id: int,
     request: H298Request,
-    rules: Sequence[PreferenceRule] | None = None,
     require_snapshot: bool = True,
 ) -> H298Selection:
     """Assess every visible thermo record of a species entry for H298 and decide among the eligible.
 
-    :param rules: The registry to apply; defaults to the rules shipped with this release (E1).
-        Tests pass additional rules to build conflicts and cycles.
     :param require_snapshot: Insist that the read runs in one read-only REPEATABLE READ snapshot, so the review
         states, rows, children and source findings are one consistent state (``SnapshotNotConsistentError``
         otherwise). A route opens a session for the purpose (``get_snapshot_db``); only a caller that cannot hold
@@ -100,13 +94,12 @@ def select_h298(
         (``thermo_target_group_owner_mismatch``).
     """
     begin_read_snapshot(session, require=require_snapshot)
-    registry = tuple(default_rules() if rules is None else rules)
     group_ref = _group_ref(session, request, species_entry_id)
     scan = scan_population(session, species_entry_id=species_entry_id, request=request)
     excluded = _excluded_refs(session, scan)
 
     if scan.over_cap:
-        # Refuse before loading or assessing anything: a winner chosen from a prefix would be a claim
+        # Refuse before loading or assessing anything: an answer chosen from a prefix would be a claim
         # about a population that was never examined.
         manifest = build_manifest(
             request=request, conformer_group_ref=group_ref, effective_statuses=scan.effective_statuses,
@@ -136,7 +129,7 @@ def select_h298(
         rows.append((loaded.candidates[thermo.id], assessment, assessment.physically_eligible))
 
     eligible = [norm for norm, _, ok in rows if ok]
-    decision = decide(eligible, subject=loaded.subject, admin_policy=request.admin_policy, rules=registry)
+    decision = decide(eligible, admin_policy=request.admin_policy)
     manifest = build_manifest(
         request=request, conformer_group_ref=group_ref, effective_statuses=scan.effective_statuses,
         subject=loaded.subject, total_rows=scan.total_rows,

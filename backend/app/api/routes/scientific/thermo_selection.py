@@ -1,7 +1,8 @@
 """POST /api/v1/scientific/species-entries/{species_entry_ref}/thermo/select (+ ``/manifest``).
 
-Method-aware selection of one species entry's thermo record for the formation enthalpy at
-298.15 K. Read-only: a POST because the request is a structured body, not because anything
+Selection of one species entry's thermo record for the formation enthalpy at
+298.15 K: which records are eligible and, among those, the display order of
+``docs/specs/browse_order.md``. TCKDB ranks no method above another. Read-only: a POST because the request is a structured body, not because anything
 is written. The ordinary ``GET .../thermo`` browse order is untouched.
 
 The path takes a public ``spe_...`` ref only; an integer id is refused. The request body is a
@@ -10,9 +11,7 @@ fixed server-side at 500 visible records; above it the answer is the 422
 ``thermo_selection_population_too_large``).
 
 The response is built from public refs only and is returned directly, not through the
-internal-id stripper that other scientific routes use: that stripper drops every key ending in
-``_id``, which would delete the rule registry key (``rule_id``, e.g. ``E1``) from the decision.
-A test asserts instead that no database id appears anywhere in either document.
+internal-id stripper that other scientific routes use. A test asserts instead that no database id appears anywhere in either document.
 
 The session is a read-only REPEATABLE READ snapshot opened **before** the route body runs (``get_snapshot_db``), so
 resolving the entry and conformer-group refs and the selection itself read one consistent state.
@@ -70,15 +69,14 @@ def select_species_thermo(
 ) -> ThermoSelectionResponse:
     """Assess every visible thermo record of the entry for H298 and say which, if any, to use.
 
-    ``outcome`` is the selection basis: ``policy_preferred`` (a registered method rule leaves one
-    candidate with nothing preferred over it), ``incomparable_alternatives`` (the rules do not
-    rank the leading candidates), ``sole_eligible_candidate``, ``no_applicable_candidate`` or
-    ``policy_conflict`` (opposing rules or a cycle: nothing is selected). More than 500 visible
+    ``outcome`` is the selection basis: ``sole_eligible_candidate`` (one record is eligible; it is the
+    only one, not the best), ``incomparable_alternatives`` (several are eligible and TCKDB ranks none
+    above another) or ``no_applicable_candidate``. More than 500 visible
     candidates is refused with 422 ``thermo_selection_population_too_large``: nothing is assessed,
-    because a winner picked from part of the population would say nothing about the rest. Only records
+    because an answer picked from part of the population would say nothing about the rest. Only records
     visible under the caller's read profile are counted.
 
-    ``result_mode=first`` may name a record among unranked first-front alternatives; the
+    ``result_mode=first`` may name the first record in display order among the alternatives; the
     ``selection`` then says ``administrative_first`` and that this is not a method claim.
     """
     _refuse_unknown_query_keys(request)
@@ -104,7 +102,7 @@ def select_species_thermo_manifest(
     """The same request as ``/thermo/select``, answered with the decision manifest as a download.
 
     The manifest holds the normalised request, the effective review floor, every assessed
-    candidate with its normalised inputs, the rules applied, each comparison and the
+    candidate with its normalised inputs and the
     administrative order, as public refs only. It is enough to recompute the decision with no
     database. The same visibility rules apply as for ``/thermo/select``.
     """

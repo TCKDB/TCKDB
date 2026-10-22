@@ -1,7 +1,8 @@
 """POST /api/v1/scientific/networks/{network_ref}/kinetics/select (+ ``/manifest``).
 
-Method-aware selection among one network's stored pressure-dependent solves, for one stated gas-phase
-rate-coefficient question. Read-only: a POST because the request is a structured body, not because anything is
+Selection among one network's stored pressure-dependent solves, for one stated gas-phase rate-coefficient
+question: which solves are eligible and, among those, the display order of ``docs/specs/browse_order.md``. TCKDB
+ranks no method above another. Read-only: a POST because the request is a structured body, not because anything is
 written. The ordinary network browse and evaluation endpoints are untouched.
 
 The path takes a public ``net_...`` ref only; an integer id is refused. ``channel_key`` and every other part of the
@@ -12,8 +13,7 @@ The session is a read-only REPEATABLE READ snapshot opened **before** the route 
 resolving the network, counting the population and loading every solve are one consistent state, and the manifest
 says so. ``get_db`` cannot be used here: its session may already have run a statement.
 
-The response is returned directly, not through the internal-id stripper other scientific routes use: that stripper
-drops every key ending in ``_id``, which would delete the rule registry key (``rule_id``) from the decision. A test
+The response is returned directly, not through the internal-id stripper other scientific routes use. A test
 asserts instead that no database id appears anywhere in either document.
 """
 
@@ -76,15 +76,15 @@ def select_network_kinetics(
     missing fact makes it ``unresolved`` and a form this selector does not evaluate makes it ``unsupported``, never
     applicable by default. Nothing is derived, re-anchored, evaluated, spliced across solves or averaged.
 
-    ``outcome`` is the selection basis: ``policy_preferred``, ``incomparable_alternatives``,
-    ``sole_eligible_candidate``, ``no_applicable_candidate`` or ``policy_conflict``. Every rule shipped in this
-    release is inactive, so ``method_preferred`` ranks nothing today and says so. A population over a server bound
+    ``outcome`` is the selection basis: ``sole_eligible_candidate`` (the only one, not the best),
+    ``incomparable_alternatives`` (several are eligible and TCKDB ranks none above another) or
+    ``no_applicable_candidate``. A population over a server bound
     (solves, kinetics parents, channel or bundle nodes, states, channels, required outputs, evidence entries, numeric
     cells, snapshot size) is refused with 422 ``network_selection_population_too_large`` or
-    ``network_selection_snapshot_too_large``: nothing is assessed, because a winner picked from part of the
+    ``network_selection_snapshot_too_large``: nothing is assessed, because an answer picked from part of the
     population would say nothing about the rest.
 
-    ``mode=first`` may name a node among unranked first-front alternatives; the ``selection`` then says
+    ``mode=first`` may name the first node in display order among the alternatives; the ``selection`` then says
     ``administrative_first`` and that this is not a method claim.
     """
     _refuse_unknown_query_keys(request)
@@ -111,7 +111,7 @@ def select_network_kinetics_manifest(
     """The same request as ``/kinetics/select``, answered with the decision manifest as a download.
 
     The manifest holds the normalised request, the snapshot isolation it was read under, every captured solve with
-    its normalised facts, every assessment, the rules consulted, each comparison and the administrative order, as
+    its normalised facts, every assessment and the administrative order, as
     public refs only. It is enough to recompute the decision, and check the recorded assessments and outcome, with no
     database. It is a new snapshot of the current data, not a retrieval of an earlier selection.
     """

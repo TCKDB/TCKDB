@@ -16,8 +16,8 @@ What is decided here, and nowhere else:
 * **No statistic over a subset when a complete answer was asked for.** Under ``all_requested_members`` any excluded
   pair gives ``incomplete_pairing`` and no statistics.
 * **The comparison is descriptive.** It never says that one protocol is better, and it does not rank. The evidence a
-  superiority claim would need (E1 to E7) is listed as missing, always, in this version. Nothing here builds a
-  selection-kernel edge or consults the rule registry; a test pins that this module imports from neither.
+  superiority claim would need (E1 to E7) is listed as missing, always, in this version. Nothing here
+  imports the selection kernel or calls a decision function; a test pins that this module does neither.
 * **Two stored uncertainties are never combined.** Each side's is echoed as the engine stores it.
 """
 

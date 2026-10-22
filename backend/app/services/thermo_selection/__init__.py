@@ -1,7 +1,7 @@
-"""Method-aware selection of a thermo record for formation enthalpy at 298.15 K (service layer).
+"""Selection of a thermo record for formation enthalpy at 298.15 K (service layer): eligibility, then display order.
 
 See :mod:`app.services.thermo_selection.service` for the entry point and the module
-docstrings of ``assessment``, ``engine``, ``rules`` and ``manifest`` for the semantics.
+docstrings of ``assessment``, ``engine`` and ``manifest`` for the semantics.
 Nothing here is wired to a route yet, and nothing here persists a selection.
 """
 

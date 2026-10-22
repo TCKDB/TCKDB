@@ -1,7 +1,7 @@
 """Builders shared by the thermo-selection tests.
 
-Two kinds: plain :class:`NormalizedCandidate` values for the pure rule and engine tests, and
-ORM rows (species from the E1 manifest, thermo records with declarations) for the database
+Two kinds: plain :class:`NormalizedCandidate` values for the pure engine tests, and
+ORM rows (a few small species, thermo records with declarations) for the database
 tests. ``created_at`` is always set explicitly: every row in one test transaction would
 otherwise share the same ``now()``, and recency could not be exercised.
 """
@@ -10,12 +10,8 @@ from __future__ import annotations
 
 import zlib
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any
 
-import yaml
-
-from app.chemistry.thermo_rules import e1_manifest
 from app.db.models.common import (
     EnthalpyReferenceKind,
     PhaseKind,
@@ -26,14 +22,17 @@ from app.db.models.common import (
 )
 from app.db.models.species import SpeciesEntry
 from app.db.models.thermo import Thermo
-from app.services.thermo_selection.models import NormalizedCandidate, Subject
+from app.services.thermo_selection.models import NormalizedCandidate
 from tests.services.scientific_read._factories import make_species, make_species_entry, set_review
 
 T0 = datetime(2026, 6, 1, 12, 0, 0)
 
-_RAW = yaml.safe_load(Path(e1_manifest.MANIFEST_PATH).read_text(encoding="utf-8"))
-MEMBERS = {m["member_id"]: m for m in _RAW["members"]}
-BY_NAME = {m["common_name"]: m for m in _RAW["members"]}
+#: The small species the database tests deposit thermo records for, by common name.
+BY_NAME = {
+    "Methane": {"smiles": "C", "inchikey": "VNWKTOKETHGBQD-UHFFFAOYSA-N", "multiplicity": 1},
+    "Propane": {"smiles": "CCC", "inchikey": "ATUOYWHBWRKTHZ-UHFFFAOYSA-N", "multiplicity": 1},
+    "Methylene": {"smiles": "[CH2]", "inchikey": "HZVOZRGWRWCICA-UHFFFAOYSA-N", "multiplicity": 1},
+}
 
 
 def protocol(
@@ -47,7 +46,7 @@ def protocol(
     other_name: str | None = None,
     label: str | None = None,
 ) -> dict[str, Any]:
-    """A stored (version 1) protocol declaration, by default stating the E1 benchmark route completely
+    """A stored (version 1) protocol declaration, by default stating one route completely
     (harmonic, lowest conformer, JANAF, atomization). ``None`` omits a component (states nothing);
     ``departures=()`` states there are none."""
     body: dict[str, Any] = {"version": 1, "departures": None if departures is None else list(departures)}
@@ -65,23 +64,6 @@ def protocol(
     if thermal:
         body["thermal_approximation"] = thermal
     return body
-
-
-def subject_for(name: str, *, multiplicity: int | None = None, **overrides: Any) -> Subject:
-    """The :class:`Subject` of a manifest member (by common name), optionally with another multiplicity."""
-    m = BY_NAME[name]
-    facts: dict[str, Any] = {
-        "species_entry_ref": f"sp_{name}",
-        "inchi_key": m["inchikey"],
-        "molecular_formula": m["molecular_formula"],
-        "charge": 0,
-        "multiplicity": m["multiplicity"] if multiplicity is None else multiplicity,
-        "isotope_key": None,
-        "electronic_state_kind": "ground",
-        "entry_kind": "minimum",
-    }
-    facts.update(overrides)
-    return Subject(**facts)
 
 
 def cand(
@@ -114,7 +96,7 @@ def cand(
 
 
 def species_entry_for(session, name: str, *, multiplicity: int | None = None) -> SpeciesEntry:
-    """A species entry for a manifest member, with the member's own InChIKey and SMILES."""
+    """A species entry for one of ``BY_NAME``, with its own InChIKey and SMILES."""
     m = BY_NAME[name]
     species = make_species(
         session,

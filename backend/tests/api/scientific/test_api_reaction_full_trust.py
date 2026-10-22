@@ -490,7 +490,7 @@ def test_full_include_trust_attaches_ts_trust(client, db_session):
     assert trust["is_certified"] is False
     assert trust["evidence"]["record_type"] == "transition_state_entry"
     assert trust["evidence"]["rubric"] == "computed_transition_state"
-    assert trust["evidence"]["rubric_version"] == 1
+    assert trust["evidence"]["rubric_version"] == 2
     checks = trust["evidence"]["checks"]
     assert checks, "the TS rubric ran, so the check map cannot be empty"
     assert set(checks.values()) <= {

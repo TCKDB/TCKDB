@@ -36,9 +36,25 @@ class Pagination(TypedDict):
     post_collapse_total: NotRequired[int]
 
 
+class OrderKeyEcho(TypedDict):
+    """One key of a display order: its name, direction and plain meaning."""
+
+    key: str
+    direction: Literal["asc", "desc"]
+    meaning: str
+
+
+class OrderEcho(TypedDict):
+    """The display order a browse or list response applied. It is display order, never a scientific preference."""
+
+    kind: Literal["display_order"]
+    keys: list[OrderKeyEcho]
+    statement: str
+
+
 class ScientificRequestEcho(TypedDict, total=False):
     filter: JSONDict
-    sort: str
+    sort: OrderEcho
     collapse: str
     ranking: str
     include: list[str]
@@ -958,7 +974,7 @@ class LiteratureLinkedRecord(TypedDict, total=False):
 
 class AnalyticsRequestEcho(TypedDict, total=False):
     filter: Required[JSONDict]
-    sort: Required[str]
+    sort: Required[OrderEcho]
     pagination_mode: Required[str]
     include: list[str]
     profile: str
@@ -1147,29 +1163,27 @@ class ThermoSelectionRequest(TypedDict, total=False):
     quantity: Literal["formation_enthalpy_298k"]
     temperature_k: float
     phase: Literal["gas"]
-    policy: Literal["method_preferred", "default", "most_reviewed", "latest"]
+    policy: Literal["default", "most_reviewed", "latest"]
     result_mode: Literal["all", "first"]
     min_review_status: str
 
 
 ThermoSelectionOutcomeToken: TypeAlias = Literal[
-    "policy_preferred",
     "incomparable_alternatives",
     "sole_eligible_candidate",
     "no_applicable_candidate",
-    "policy_conflict",
 ]
 
 
 class ThermoSelectionPick(TypedDict):
     """The one record the response names, and exactly why.
 
-    ``administrative`` is true when the record was chosen by review/recency order among
-    alternatives the method rules do not rank: that is not a claim it is method-superior.
+    ``administrative`` is true when the record is first in display order among several eligible
+    alternatives: that is not a claim it is better, preferred or method-superior.
     """
 
     thermo_ref: str
-    basis: Literal["policy_preferred", "sole_eligible_candidate", "administrative_first"]
+    basis: Literal["sole_eligible_candidate", "administrative_first"]
     administrative: bool
     explanation: str
 
@@ -1209,8 +1223,8 @@ class ThermoSelectionResponse(TypedDict):
     """The decision, its basis, and everything it rests on, as public refs only.
 
     ``outcome`` is the selection basis. Preserve it and ``basis`` verbatim when
-    reporting a result: ``incomparable_alternatives`` and ``policy_conflict`` mean
-    nothing was scientifically selected.
+    reporting a result: ``incomparable_alternatives`` means several records are eligible and TCKDB
+    ranks none above another.
     """
 
     request: JSONDict
@@ -1222,8 +1236,6 @@ class ThermoSelectionResponse(TypedDict):
     fronts: list[list[str]]
     administrative_order: list[str]
     candidates: list[ThermoSelectionCandidate]
-    relations: JSONDict
-    rule_matches: list[JSONDict]
     disclosures: ThermoSelectionDisclosures
 
 
@@ -1276,30 +1288,29 @@ class KineticsSelectionRequest(TypedDict, total=False):
     collider: KineticsSelectionColliderIn
     quantity: Literal["rate_coefficient"]
     phase: Literal["gas"]
-    policy: Literal["method_preferred", "default", "most_reviewed", "latest"]
+    policy: Literal["default", "most_reviewed", "latest"]
     mode: Literal["all", "first"]
     min_review_status: str
 
 
 KineticsSelectionOutcomeToken: TypeAlias = Literal[
-    "policy_preferred",
     "incomparable_alternatives",
     "sole_eligible_candidate",
     "no_applicable_candidate",
-    "policy_conflict",
 ]
 
 
 class KineticsSelectionPick(TypedDict):
     """The determination the response names (with every eligible fitted representation of it), and exactly why.
 
-    ``administrative`` is true when it was chosen by review/recency order among alternatives the rules do not rank:
-    that is not a claim it is method-superior. Alternate fits of one determination are not independent confirmation.
+    ``administrative`` is true when it is first in display order among several eligible alternatives: that is not a
+    claim it is better, preferred or method-superior. Alternate fits of one determination are not independent
+    confirmation.
     """
 
     determination_ref: str
     kinetics_refs: list[str]
-    basis: Literal["policy_preferred", "sole_eligible_candidate", "administrative_first"]
+    basis: Literal["sole_eligible_candidate", "administrative_first"]
     administrative: bool
     explanation: str
 
@@ -1338,8 +1349,8 @@ class KineticsSelectionResponse(TypedDict):
     """The decision, its basis, and everything it rests on, as public refs only.
 
     ``outcome`` is the selection basis. Preserve it and ``basis`` verbatim when reporting a result:
-    ``incomparable_alternatives`` and ``policy_conflict`` mean nothing was scientifically selected, and a
-    ``sole_eligible_candidate`` is not a comparative accuracy claim. A winner is scoped to the eligible population;
+    ``incomparable_alternatives`` means several are eligible and TCKDB ranks none above another, and a
+    ``sole_eligible_candidate`` is not a comparative accuracy claim. The answer is scoped to the eligible population;
     ``disclosures`` lists the candidates that did not compete.
     """
 
@@ -1353,9 +1364,6 @@ class KineticsSelectionResponse(TypedDict):
     administrative_order: list[str]
     determinations: list[JSONDict]
     candidates: list[KineticsSelectionCandidate]
-    relations: JSONDict
-    rule_matches: list[JSONDict]
-    pair_checks: list[JSONDict]
     disclosures: KineticsSelectionDisclosures
 
 
@@ -1399,8 +1407,7 @@ class NetworkSelectionRequest(TypedDict, total=False):
 
     ``coefficient_basis``, the temperature and pressure windows, ``bath`` and ``partition`` are required. A
     single-channel question names ``channel_key`` and ``observable``; a bundle or full-network question lists
-    ``outputs`` instead. ``objective`` defaults to physical accuracy; ``model_fidelity`` needs
-    ``reference_model_ref`` (an ``nsolve_...`` ref) and ``representation_fidelity`` needs ``reference_outputs``.
+    ``outputs`` instead.
     """
 
     coefficient_basis: Required[Literal["kernel", "composition_effective"]]
@@ -1419,22 +1426,17 @@ class NetworkSelectionRequest(TypedDict, total=False):
     regime: NetworkSelectionRegimeIn
     source_composition_hash: str
     sink_composition_hash: str
-    objective: Literal["physical_accuracy", "model_fidelity", "representation_fidelity"]
-    reference_model_ref: str
-    reference_outputs: str
     quantity: Literal["rate_coefficient"]
     phase: Literal["gas"]
-    policy: Literal["method_preferred", "default", "most_reviewed", "latest"]
+    policy: Literal["default", "most_reviewed", "latest"]
     mode: Literal["all", "first"]
     min_review_status: str
 
 
 NetworkSelectionOutcomeToken: TypeAlias = Literal[
-    "policy_preferred",
     "incomparable_alternatives",
     "sole_eligible_candidate",
     "no_applicable_candidate",
-    "policy_conflict",
 ]
 
 
@@ -1447,15 +1449,16 @@ class NetworkSelectionMember(TypedDict):
 class NetworkSelectionPick(TypedDict):
     """The node the response names: a determination of one channel, or a declared product set of one solve.
 
-    ``administrative`` is true when it was chosen by review/recency order among alternatives the rules do not rank:
-    that is not a claim it is method-superior. Alternate fits of one determination are not independent confirmation.
+    ``administrative`` is true when it is first in display order among several eligible alternatives: that is not a
+    claim it is better, preferred or method-superior. Alternate fits of one determination are not independent
+    confirmation.
     """
 
     node_ref: str
     scope: Literal["single_channel", "projected_bundle", "full_network"]
     solve_ref: str
     members: list[NetworkSelectionMember]
-    basis: Literal["policy_preferred", "sole_eligible_candidate", "administrative_first"]
+    basis: Literal["sole_eligible_candidate", "administrative_first"]
     administrative: bool
     explanation: str
 
@@ -1475,8 +1478,8 @@ class NetworkSelectionResponse(TypedDict):
     """The decision, its basis and everything it rests on, as public refs only.
 
     ``outcome`` is the selection basis. Preserve it and ``basis`` verbatim when reporting a result:
-    ``incomparable_alternatives`` and ``policy_conflict`` mean nothing was scientifically selected, and a
-    ``sole_eligible_candidate`` is not a comparative accuracy claim. A winner is scoped to the eligible population;
+    ``incomparable_alternatives`` means several are eligible and TCKDB ranks none above another, and a
+    ``sole_eligible_candidate`` is not a comparative accuracy claim. The answer is scoped to the eligible population;
     ``disclosures`` lists what did not compete.
     """
 
@@ -1490,10 +1493,7 @@ class NetworkSelectionResponse(TypedDict):
     administrative_order: list[str]
     determinations: list[JSONDict]
     bundles: list[JSONDict]
-    relations: JSONDict
     representations: list[JSONDict]
-    rule_matches: list[JSONDict]
-    pair_checks: list[JSONDict]
     disclosures: NetworkSelectionDisclosures
 
 
@@ -1746,6 +1746,8 @@ __all__ = [
     "ReproducibilityAssessmentSummary",
     "ReviewStatusSummary",
     "ScientificDetailResponse",
+    "OrderEcho",
+    "OrderKeyEcho",
     "ScientificRequestEcho",
     "ScientificSearchResponse",
     "ScientificSoftwareReleaseIdentity",
@@ -1801,19 +1803,17 @@ StructureSelectionOutcomeToken: TypeAlias = Literal[
     "representative_minimum",
     "qualified_evidence",
     "validated_corpus_minimum",
-    "policy_preferred",
     "sole_eligible_candidate",
     "incomparable_alternatives",
-    "policy_conflict",
     "evidence_conflict",
 ]
-"""The 13 outcomes of a structure selection. ``incomparable_alternatives`` means more than one cohort (or protocol)
+"""The 11 outcomes of a structure selection. ``incomparable_alternatives`` means more than one cohort (or protocol)
 survived and none is named: total energies of different protocols are not on one scale. ``representative_minimum`` is
 the lowest administrative *representative* per target and is never the minimum of all stored values."""
 
 
 class _StructureSelectionRequestBase(TypedDict, total=False):
-    """Fields every structure selection request may carry. Nothing here is a database id, a bound, a sort or a rule.
+    """Fields every structure selection request may carry. Nothing here is a database id, a bound or a sort.
 
     ``quantity`` is ``electronic_energy`` (the server default) or ``zero_kelvin_energy``; send ``None`` explicitly (JSON
     null) only for evidence-only qualification. A recognised deferred quantity (enthalpy, Gibbs energy, barrier, rate,
@@ -1831,22 +1831,19 @@ class _StructureSelectionRequestBase(TypedDict, total=False):
     require_stable_reference: bool
     administrative_policy: Literal["default", "latest", "earliest"]
     result_mode: Literal["all", "first"]
-    apply_rules: bool
-    objective: Literal["physical_accuracy", "expected_accuracy", "model_fidelity"]
-    reference_model: str
     repeat_policy: Literal["retain_alternates", "administrative_representative"]
 
 
 class CalculationSelectionRequest(_StructureSelectionRequestBase, total=False):
     """Body of ``POST .../species-entries/{ref}/calculations/select``."""
 
-    intent: Literal["recorded_minimum", "protocol_preferred"]
+    intent: Literal["recorded_minimum", "protocol_coverage"]
 
 
 class ConformerSelectionRequest(_StructureSelectionRequestBase, total=False):
     """Body of ``POST .../species-entries/{ref}/conformers/select``."""
 
-    intent: Literal["validated_minimum", "qualify_evidence", "protocol_preferred"]
+    intent: Literal["validated_minimum", "qualify_evidence", "protocol_coverage"]
 
 
 class TransitionStateEvidenceSelectionRequest(_StructureSelectionRequestBase, total=False):
@@ -1856,7 +1853,7 @@ class TransitionStateEvidenceSelectionRequest(_StructureSelectionRequestBase, to
     taken yet.
     """
 
-    intent: Literal["validated_saddle", "qualify_evidence", "protocol_preferred"]
+    intent: Literal["validated_saddle", "qualify_evidence", "protocol_coverage"]
     require_connectivity: bool
 
 
@@ -2101,7 +2098,7 @@ class RelativeConformerEnergyCompareManifest(TypedDict, total=False):
 
 
 # ---------------------------------------------------------------------------
-# Statmech selection (qualify supplied statistical models; prefer only where audited rules say so)
+# Statmech selection (qualify supplied statistical models; list the qualified ones in display order)
 # ---------------------------------------------------------------------------
 
 StatmechSelectionOutcomeToken: TypeAlias = Literal[
@@ -2113,14 +2110,11 @@ StatmechSelectionOutcomeToken: TypeAlias = Literal[
     "unsupported_task",
     "unsupported_model",
     "evidence_conflict",
-    "unresolved_comparability",
-    "policy_conflict",
     "sole_eligible_candidate",
-    "policy_preferred",
     "incomparable_alternatives",
 ]
-"""The 13 outcomes of a statmech selection. ``incomparable_alternatives`` means more than one applicable whole model and
-no active rule that ranks them: unranked, not equally accurate. A valid negative outcome is an HTTP 200."""
+"""The 10 outcomes of a statmech selection. ``incomparable_alternatives`` means more than one applicable whole model and
+TCKDB ranks none above another. A valid negative outcome is an HTTP 200."""
 
 
 class StatmechSelectionRequest(TypedDict, total=False):
@@ -2128,19 +2122,17 @@ class StatmechSelectionRequest(TypedDict, total=False):
 
     ``target`` is ``{"kind": "species_entry", "species_entry_ref": "spe_...", "scope": {...}, ...}`` or
     ``{"kind": "transition_state_entry", "transition_state_entry_ref": "tse_...", "scope": {...}, ...}``; every ref is a
-    public ref. Nothing here is a database id, a bound, a page, a sort or a rule.
+    public ref. Nothing here is a database id, a bound, a page or a sort.
     """
 
     contract_version: Literal[1]
-    intent: Literal["qualify", "protocol_preferred"]
+    intent: Literal["qualify", "protocol_coverage"]
     task: str
     observable: str
     target: JSONDict
     conditions: JSONDict
     population: JSONDict
     coverage_requirement: Literal["entire_requested_domain", "eligible_population"]
-    comparison_objective: Literal["physical_accuracy", "expected_accuracy", "model_fidelity"]
-    reference_model_ref: str
     administrative_policy: Literal["default", "latest", "most_reviewed"]
     result_mode: Literal["all", "first"]
     min_review_status: str
@@ -2165,9 +2157,8 @@ class StatmechSelectionCandidate(TypedDict):
 
 
 class StatmechSelectionSelection(TypedDict):
-    """The three mutually exclusive references; at most one is set, with its basis and population limit."""
+    """The two mutually exclusive references; at most one is set, with its basis and population limit."""
 
-    scientific_ref: str | None
     sole_eligible_ref: str | None
     administrative_ref: str | None
     basis: str | None
@@ -2193,13 +2184,11 @@ class StatmechSelectionResponse(TypedDict):
     population: JSONDict
     coverage: JSONDict
     candidates: list[StatmechSelectionCandidate]
-    edges: list[JSONDict]
     fronts: list[list[str]]
-    conflicts: JSONDict
-    undecided: list[JSONDict]
+    administrative_order: list[str]
+    administrative_key: JSONDict
     advisories: dict[str, list[str]]
     notices: list[str]
-    protocol: JSONDict
     manifest: JSONDict
     snapshot_isolation: str
     integrity: JSONDict

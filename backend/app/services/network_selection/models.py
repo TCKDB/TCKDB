@@ -1,7 +1,7 @@
 """Plain values for pressure-dependent network selection: the normalised request, one solve's
 normalised facts, and the assessment of a determination or a product-set bundle.
 
-Everything here is data. :class:`SolveFacts` is the whole of what the assessor (and, later, a rule)
+Everything here is data. :class:`SolveFacts` is the whole of what the assessor
 may look at: public refs, composition hashes, review state, timestamps, stored columns and the
 declared claims; never a database id or an ORM row. That is what lets a decision manifest be
 replayed without a database. ``id_rank`` is a record's position when its population is ordered by
@@ -19,11 +19,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from tckdb_schemas.network_declarations import (
-    NetworkComparisonObjective,
-    NetworkObservable,
-    NetworkRegimeKind,
-)
+from tckdb_schemas.network_declarations import NetworkObservable, NetworkRegimeKind
 
 from app.api.error_contract import CodedValueError
 from app.db.models.common import RecordReviewStatus
@@ -32,9 +28,11 @@ from app.services.selection_kernel import Applicability
 
 QUANTITY = "rate_coefficient"
 PHASE = "gas"
-#: Version of the selection semantics (eligibility, grouping, certification). A change to any of them is a
-#: new version, and a decision manifest records the version it was made under.
-POLICY_NAME = "network_method_preferred"
+#: Version of the selection semantics (eligibility, grouping, ordering). A change to any of them is a
+#: new version, and a decision manifest records the version it was made under. The procedure carries no
+#: method-versus-method rule. The name changed with the removal of the method-preference rules and the request's
+#: comparison objective (it was ``network_method_preferred``).
+POLICY_NAME = "network_selection"
 POLICY_VERSION = 1
 #: Absolute tolerance on a bath mixture's mole fractions: the one the upload applies.
 MOLE_FRACTION_TOLERANCE = 1e-9
@@ -178,8 +176,6 @@ class NetworkRequest:
     :param partition: Required: the states' treatment, by composition hash.
     :param boundaries: ``(composition_hash, boundary kind)`` pairs the observable requires; unlisted states unconstrained.
     :param source_composition_hash: With ``sink_composition_hash``, the directed endpoints expected of a single channel.
-    :param objective: What the comparison is a comparison of. ``reference_model_ref`` is required for
-        ``model_fidelity`` and ``reference_outputs`` for ``representation_fidelity``, and refused otherwise.
     """
 
     network_ref: str
@@ -191,7 +187,6 @@ class NetworkRequest:
     pressure_max_bar: float
     bath: BathRequest
     partition: PartitionRequest
-    objective: NetworkComparisonObjective
     regime_kind: NetworkRegimeKind = NetworkRegimeKind.time_independent
     initial_state_hashes: tuple[str, ...] = ()
     boundaries: tuple[tuple[str, str], ...] = ()
@@ -201,12 +196,9 @@ class NetworkRequest:
     degeneracy_applied: bool | None = None
     source_composition_hash: str | None = None
     sink_composition_hash: str | None = None
-    reference_model_ref: str | None = None
-    reference_outputs: str | None = None
     min_review_status: RecordReviewStatus | None = None
     admin_policy: SelectionPolicy = SelectionPolicy.default
     first_only: bool = False
-    apply_rules: bool = True
     bounds: SelectionBounds = field(default=DEFAULT_BOUNDS)
 
     def __post_init__(self) -> None:
@@ -245,15 +237,6 @@ class NetworkRequest:
                 )
         if (self.source_composition_hash is None) != (self.sink_composition_hash is None):
             raise ValueError("source and sink composition hashes are stated together")
-        has_model, has_outputs = self.reference_model_ref is not None, self.reference_outputs is not None
-        if self.objective is NetworkComparisonObjective.model_fidelity and not has_model:
-            raise ValueError("a model-fidelity comparison pins its reference model")
-        if self.objective is NetworkComparisonObjective.representation_fidelity and not has_outputs:
-            raise ValueError("a representation-fidelity comparison pins its reference outputs")
-        if has_model and self.objective is not NetworkComparisonObjective.model_fidelity:
-            raise ValueError("reference_model_ref is only for the model_fidelity objective")
-        if has_outputs and self.objective is not NetworkComparisonObjective.representation_fidelity:
-            raise ValueError("reference_outputs is only for the representation_fidelity objective")
         restricted = self.regime_kind is NetworkRegimeKind.initial_population_restricted
         if restricted != bool(self.initial_state_hashes):
             raise ValueError("initial states are stated for, and only for, an initial-population-restricted regime")
@@ -286,13 +269,9 @@ class NetworkRequest:
             "initial_state_hashes": sorted(self.initial_state_hashes),
             "source_composition_hash": self.source_composition_hash,
             "sink_composition_hash": self.sink_composition_hash,
-            "objective": self.objective.value,
-            "reference_model_ref": self.reference_model_ref,
-            "reference_outputs": self.reference_outputs,
             "min_review_status": self.min_review_status.value if self.min_review_status else None,
             "administrative_policy": self.admin_policy.value,
             "result_mode": "first" if self.first_only else "all",
-            "apply_rules": self.apply_rules,
             "bounds": self.bounds.to_dict(),
         }
 
@@ -319,13 +298,9 @@ class NetworkRequest:
             initial_state_hashes=tuple(raw["initial_state_hashes"]),
             source_composition_hash=raw["source_composition_hash"],
             sink_composition_hash=raw["sink_composition_hash"],
-            objective=NetworkComparisonObjective(raw["objective"]),
-            reference_model_ref=raw["reference_model_ref"],
-            reference_outputs=raw["reference_outputs"],
             min_review_status=RecordReviewStatus(raw["min_review_status"]) if raw["min_review_status"] else None,
             admin_policy=SelectionPolicy(raw["administrative_policy"]),
             first_only=raw["result_mode"] == "first",
-            apply_rules=raw["apply_rules"],
             bounds=SelectionBounds.from_dict(raw["bounds"]),
         )
 

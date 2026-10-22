@@ -51,7 +51,7 @@ from app.db.models.species import (
 from app.db.models.statmech import Statmech
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.transport import Transport
-from app.schemas.reads.scientific_common import REVIEW_RANK
+from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
 from app.services.public_refs import PREFIXES
 
 logger = logging.getLogger(__name__)
@@ -257,7 +257,7 @@ def status_hidden_under_profile(status: RecordReviewStatus, *, profile: Any = No
     floor = resolved.review_floor
     if floor is None:
         return False
-    return REVIEW_RANK[status] > REVIEW_RANK[floor]
+    return REVIEW_FLOOR_ORDER[status] > REVIEW_FLOOR_ORDER[floor]
 
 
 def _hidden_by_floor(session: Session, model_cls: type, row_id: int) -> RecordReviewStatus | None:

@@ -22,8 +22,8 @@ def seeded(db_session):
     baseline = h298_coverage_inventory(db_session)
     methane = species_entry_for(db_session, "Methane")
     propane = species_entry_for(db_session, "Propane")
-    make_thermo(db_session, methane, proto=protocol("g4"), status=S.approved)                 # E1 preferred side
-    make_thermo(db_session, methane, proto=protocol("g3"), status=S.approved)                 # E1 yielding side
+    make_thermo(db_session, methane, proto=protocol("g4"), status=S.approved)
+    make_thermo(db_session, methane, proto=protocol("g3"), status=S.approved)
     make_thermo(db_session, methane, proto=None)                                              # no protocol: unknown
     make_thermo(db_session, methane, proto=protocol("g4", departures=None))                   # departures unknown
     make_thermo(db_session, methane, target=None)                                             # target undeclared
@@ -60,17 +60,8 @@ def test_inventory_counts_applicability_and_the_reasons_behind_it(db_session, se
     assert delta(after, seeded, "h298_answered_by_representation", "h298") == 7
 
 
-def test_inventory_reports_how_many_records_each_rule_side_can_act_on_and_what_is_missing(db_session, seeded):
-    after = h298_coverage_inventory(db_session)["rules"]["E1"]
-    before = seeded["rules"]["E1"]
-    assert delta(after, before, "scope", "true") == 9    # eight methane records and one propane record, both in the manifest
-    assert after["preferred"].get("true", 0) - before["preferred"].get("true", 0) == 2  # the two G4 declarations
-    assert after["yielding"].get("true", 0) - before["yielding"].get("true", 0) == 1   # the one G3
-    reasons = after["unknown_or_false_reasons"]
-    assert reasons.get("preferred:protocol_not_declared", 0) - before["unknown_or_false_reasons"].get(
-        "preferred:protocol_not_declared", 0) >= 1
-    assert reasons.get("preferred:departures_not_stated", 0) - before["unknown_or_false_reasons"].get(
-        "preferred:departures_not_stated", 0) == 1
+def test_inventory_carries_no_rule_tally(db_session, seeded):
+    assert "rules" not in h298_coverage_inventory(db_session)
 
 
 def test_inventory_output_is_json_and_states_its_own_limits(db_session, seeded):

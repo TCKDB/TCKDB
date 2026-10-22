@@ -2,7 +2,7 @@
 
 Composite scientific read endpoints answer user-facing chemistry questions
 (species/reaction lookup, kinetics, thermo, provenance) with built-in trust
-and provenance summaries. See docs/specs/read_api_mvp.md for the contracts.
+and provenance summaries. See docs/specs/browse_order.md for the contracts.
 
 Public service entry points:
     search_species        — see species.py

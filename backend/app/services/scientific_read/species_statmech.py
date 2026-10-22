@@ -35,6 +35,7 @@ from app.schemas.reads.scientific_common import (
     CollapseMode,
     RecordReviewBadge,
     SelectionPolicy,
+    browse_order,
     effective_order_echo,
     simple_selection_sort_key,
 )
@@ -70,7 +71,7 @@ from app.services.scientific_read.supersession import fetch_supersession_notices
 # Candidate-list ordering (``collapse=all``) matches the statmech search
 # service: review rank ASC, created_at DESC, id DESC. The order that actually
 # produced the returned records is reported separately as ``effective_order``.
-_DEFAULT_SORT_ECHO = "review_rank,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 
 def get_species_statmech(

@@ -9,7 +9,7 @@ ordinary browse order is untouched. See ``backend/docs/specs/structure_selection
 is and is not, and ``docs/guides/selecting_structures.md`` for how to read one.
 
 The requests are strict: unknown fields are refused, references are public refs (never a database id), there is no
-caller-authored rule, no sort expression and no pagination (a selection is over the *complete* authorized
+sort expression and no pagination (a selection is over the *complete* authorized
 population, or it refuses), and the engineering bounds are the server's. A caller cannot set ``bounds`` or any limit.
 Every violation of a request's own rules is an ordinary 422 naming the field.
 """
@@ -31,7 +31,6 @@ from app.services.structure_selection.models import (
     CoverageRequirement,
     Grain,
     Intent,
-    Objective,
     Quantity,
     RepeatPolicy,
     ResultMode,
@@ -92,12 +91,9 @@ class _StrictRequest(BaseModel):
     require_stable_reference: bool = False
     administrative_policy: AdminPolicy = Field(
         default=AdminPolicy.default,
-        description="Administrative order within a scientific front or among exact ties. Never reorders fronts.",
+        description="Administrative order of exact ties and tied cohorts: display order, never a method preference.",
     )
     result_mode: ResultMode = ResultMode.all
-    apply_rules: bool = Field(default=True, description="Whether the audited rule registry takes part (it holds no active rule in this release).")
-    objective: Objective | None = Field(default=None, description="Required for protocol_preferred; refused otherwise.")
-    reference_model: str | None = Field(default=None, min_length=1, max_length=200)
     repeat_policy: RepeatPolicy = RepeatPolicy.retain_alternates
 
     @field_validator("quantity")
@@ -138,9 +134,6 @@ def _build(body: _StrictRequest, grain: Grain, intent: Intent, *, claim: Validat
         require_connectivity=connectivity,
         admin_policy=body.administrative_policy,
         result_mode=body.result_mode,
-        apply_rules=body.apply_rules,
-        objective=body.objective,
-        reference_model=body.reference_model,
         repeat_policy=body.repeat_policy,
     )
 
@@ -168,7 +161,7 @@ def _validate_against_service(body: Any, grain: Grain) -> None:
 class CalculationSelectionRequest(_StrictRequest):
     """Which of one species entry's calculations supplies the lowest comparable recorded energy (or which protocol)."""
 
-    intent: Literal[Intent.recorded_minimum, Intent.protocol_preferred] = Intent.recorded_minimum
+    intent: Literal[Intent.recorded_minimum, Intent.protocol_coverage] = Intent.recorded_minimum
 
     @model_validator(mode="after")
     def _service_rules(self) -> CalculationSelectionRequest:
@@ -182,9 +175,9 @@ class CalculationSelectionRequest(_StrictRequest):
 
 
 class ConformerSelectionRequest(_StrictRequest):
-    """Which of one species entry's validated conformer basins is lowest, which support a claim, or which protocol."""
+    """Which of one species entry's validated conformer basins is lowest, which support a claim, or which protocols cover it."""
 
-    intent: Literal[Intent.validated_minimum, Intent.qualify_evidence, Intent.protocol_preferred] = Intent.validated_minimum
+    intent: Literal[Intent.validated_minimum, Intent.qualify_evidence, Intent.protocol_coverage] = Intent.validated_minimum
 
     @model_validator(mode="after")
     def _service_rules(self) -> ConformerSelectionRequest:
@@ -198,13 +191,13 @@ class ConformerSelectionRequest(_StrictRequest):
 
 
 class TransitionStateEvidenceSelectionRequest(_StrictRequest):
-    """Which of one transition state entry's saddle determinations support a claim, are lowest, or which protocol.
+    """Which of one transition state entry's saddle determinations support a claim, are lowest, or which protocols cover it.
 
     One entry only: comparison across several entries needs an explicit validated same-path declaration, which this
     release does not take, so sibling entries are assessed one at a time.
     """
 
-    intent: Literal[Intent.validated_saddle, Intent.qualify_evidence, Intent.protocol_preferred] = Intent.validated_saddle
+    intent: Literal[Intent.validated_saddle, Intent.qualify_evidence, Intent.protocol_coverage] = Intent.validated_saddle
     require_connectivity: bool = Field(
         default=False, description="Also require reactive-connectivity evidence (IRC or a supported alternative) bound to the saddle."
     )
@@ -250,9 +243,6 @@ class StructureSelectionRequestEcho(ProfiledRequestEcho):
     require_connectivity: bool
     administrative_policy: str
     result_mode: str
-    apply_rules: bool
-    objective: str | None = None
-    reference_model: str | None = None
     repeat_policy: str
     bounds: dict[str, Any] = Field(
         description="The server's engineering bounds this decision was made under (never settable by the caller)."

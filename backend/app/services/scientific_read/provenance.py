@@ -1,7 +1,7 @@
 """Service implementation for /api/v1/scientific/reaction-entries/{id}/full.
 
 Composite document: joins species, kinetics, transition states, calculations,
-review summary into a single response. See docs/specs/read_api_mvp.md §Endpoint 5.
+review summary into a single response. See docs/specs/browse_order.md.
 """
 
 from __future__ import annotations

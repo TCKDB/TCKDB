@@ -1,6 +1,6 @@
 """The structure selection routes: the HTTP contract.
 
-The assessor, decision, rules and manifest are tested under ``tests/services/structure_selection``. These tests hold
+The assessor, decision and manifest are tested under ``tests/services/structure_selection``. These tests hold
 what only the routes can break: a strict request (nothing a caller can set that is not theirs to set), public refs
 only, an outcome for every question the route is for, visibility under the read profile, a manifest that downloads and
 replays, and no database id anywhere in either document.
@@ -119,7 +119,7 @@ def test_the_transition_state_route_takes_an_entry_and_qualifies_a_saddle_withou
     assert lowest["request"]["validation_claim"] == "first_order_saddle"
 
 
-def test_a_protocol_request_with_the_shipped_registry_ranks_nothing_and_lists_the_inactive_rules(client, db_session):
+def test_a_protocol_request_ranks_nothing_and_lists_the_complete_protocols(client, db_session):
     world = make_world(db_session)
     from tests.services.scientific_read._factories import make_lot
     from tests.services.structure_selection.test_manifest import DECL_B
@@ -131,13 +131,20 @@ def test_a_protocol_request_with_the_shipped_registry_ranks_nothing_and_lists_th
     build_basin(world, energy=-76.50, geometry=first, lot=other, declared=DECL_B)
     build_basin(world, energy=-76.51, geometry=second, lot=other, declared=DECL_B)
     world.settle()
-    response = client.post(conformer_url(world.entry), json={"intent": "protocol_preferred", "objective": "expected_accuracy"})
+    response = client.post(conformer_url(world.entry), json={"intent": "protocol_coverage"})
     assert response.status_code == 200, response.text
     out = response.json()
     assert out["outcome"] == "incomparable_alternatives" and out["selected_refs"] == []
-    matches = out["protocol"]["rule_matches"]
-    assert {m["why"] for m in matches} == {"rule_status_inactive"} and len(matches) == 3
-    assert response.json()["protocol"]["edges"] == []
+    assert set(out["protocol"]) == {"fronts", "administrative_order", "uncovered"}
+    assert len(out["protocol"]["fronts"]) == 1 and len(out["cohorts"]) == 2
+    assert "objective" not in out["request"] and "apply_rules" not in out["request"]
+
+
+def test_the_retired_intent_name_is_refused_not_accepted_as_an_alias(client, db_session):
+    """Kills: keeping ``protocol_preferred`` as a second spelling, so the old name still reads as a preference."""
+    world = make_world(db_session)
+    response = client.post(conformer_url(world.entry), json={"intent": "protocol_preferred"})
+    assert response.status_code == 422, response.text
 
 
 # ---------------------------------------------------------------------------
@@ -196,9 +203,9 @@ def test_an_intent_the_route_does_not_serve_is_refused(client, calc_world, basin
 @pytest.mark.parametrize(
     "body",
     [
-        {"intent": "protocol_preferred"},  # no objective
-        {"objective": "expected_accuracy"},  # an objective with no protocol preference
-        {"intent": "protocol_preferred", "objective": "model_fidelity"},  # no reference model
+        {"objective": "expected_accuracy"},  # retired
+        {"apply_rules": False},  # retired
+        {"reference_model": "ref@1"},  # retired
         {"member_refs": []},
         {"member_refs": ["calc_a", "calc_a"]},
         {"quantity": "kinetic_energy"},

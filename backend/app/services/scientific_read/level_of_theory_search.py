@@ -39,7 +39,7 @@ from app.db.models.calculation import Calculation
 from app.db.models.common import SubmissionRecordType
 from app.db.models.energy_correction import EnergyCorrectionScheme, FrequencyScaleFactor
 from app.db.models.level_of_theory import LevelOfTheory
-from app.schemas.reads.scientific_common import ReviewStatusSummary
+from app.schemas.reads.scientific_common import ReviewStatusSummary, browse_order
 from app.schemas.reads.scientific_level_of_theory import (
     ScientificLevelOfTheoryRecord,
 )
@@ -95,7 +95,7 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
 # rather than silently no-op" posture as ECS's deferred software filters.
 _DEFERRED_FILTER_FIELDS: tuple[str, ...] = ()
 
-_DEFAULT_SORT_ECHO = "method,basis,id"
+_DEFAULT_SORT_ECHO = browse_order("method", "basis", ("id", "asc"))
 
 
 def search_levels_of_theory(

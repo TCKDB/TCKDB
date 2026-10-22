@@ -21,10 +21,6 @@ from app.api.startup_checks import (
     report_artifact_storage_at_startup,
     report_database_encoding_at_startup,
     validate_deployment_safety,
-    validate_kinetics_selection_rules,
-    validate_network_selection_rules,
-    validate_structure_selection_rules,
-    validate_thermo_selection_rules,
     validate_version_registries,
 )
 from app.services.trust.ts_scoped import validate_ts_scoped_structure_versions
@@ -125,11 +121,6 @@ def create_app() -> FastAPI:
     # fixtures are unaffected. See app/api/startup_checks.py and
     # docs/deployment/production_checklist.md.
     validate_deployment_safety(settings)
-    # A bad pin on the selection rule manifest fails the deploy here, not a request later.
-    validate_thermo_selection_rules()
-    validate_kinetics_selection_rules()
-    validate_network_selection_rules()
-    validate_structure_selection_rules()
     # Every registry of versioned things must give each name a current version.
     validate_version_registries()
     # The transition-state badge's structure assessment is pinned to the structure-selection versions it was written for.

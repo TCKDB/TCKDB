@@ -28,7 +28,7 @@ from app.db.models.common import RecordReviewStatus
 from app.db.models.geometry import Geometry
 from app.db.models.species import SpeciesEntry
 from app.db.models.transition_state import TransitionStateEntry
-from app.schemas.reads.scientific_common import REVIEW_RANK
+from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
 from app.schemas.reads.scientific_structure_selection import (
     CalculationSelectionRequest,
     ConformerSelectionRequest,
@@ -120,9 +120,6 @@ def _echo(manifest: dict[str, Any], entry_ref: str) -> StructureSelectionRequest
         require_connectivity=request["require_connectivity"],
         administrative_policy=request["administrative_policy"],
         result_mode=request["result_mode"],
-        apply_rules=request["apply_rules"],
-        objective=request["objective"],
-        reference_model=request["reference_model"],
         repeat_policy=request["repeat_policy"],
         bounds=request["bounds"],
     )
@@ -134,7 +131,7 @@ def build_response(selection: StructureSelection, *, entry_ref: str) -> Structur
     decision = manifest["decision"]
     population = manifest["population"]
     disclosures = manifest.get("disclosures", {})
-    statuses = sorted((RecordReviewStatus(v) for v in manifest["effective_review_statuses"]), key=lambda s: REVIEW_RANK[s])
+    statuses = sorted((RecordReviewStatus(v) for v in manifest["effective_review_statuses"]), key=lambda s: REVIEW_FLOOR_ORDER[s])
     floor = statuses[-1] if statuses else RecordReviewStatus.approved
     by_unit = {a["unit_ref"]: a for a in manifest["assessments"]}
     rows = {c["calculation_ref"]: c for c in manifest["calculations"]} | {

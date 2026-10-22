@@ -1,10 +1,10 @@
 """Service implementation for /api/v1/scientific/species/search.
 
-See docs/specs/read_api_mvp.md §Endpoint 1 for the contract.
+See docs/specs/browse_order.md for the contract.
 
 Where the work happens
 ----------------------
-A species record is ranked by its *best visible entry*, so review
+A species record is ordered by its *first visible entry in display order*, so review
 visibility and ranking are properties of the ``species_entry`` set, not of
 ``species``. Both are expressed in SQL (see
 :mod:`app.services.scientific_read.sql_review`) over one candidate-species
@@ -49,6 +49,7 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     RecordReviewBadge,
+    browse_order,
 )
 from app.schemas.reads.scientific_species import (
     ElementMatchMode,
@@ -150,7 +151,17 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 #: should never have handed them in the first place.
 _BROWSE_LEGAL_INCLUDE_TOKENS: set[str] = {"review", "internal_ids", "all"}
 
-_DEFAULT_SORT_ECHO = "review_rank,has_entries,created_at,id"
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "has_entries", "created_at", "id")
+#: A substructure or similarity browse leads with the size of the match (``order_by_size``), so it says so.
+_SIZE_FIRST_SORT_ECHO = browse_order("heavy_atom_count", "review_rank", "has_entries", "created_at", "id")
+
+
+def _browse_orders_by_size(request, structure_query) -> bool:
+    """True when a browse lists the smallest match first: a structure query in substructure or similarity mode."""
+    return structure_query is not None and request.mode in (
+        StructureSearchMode.substructure,
+        StructureSearchMode.similarity,
+    )
 
 #: The rank a species with no *visible* entry sorts at. Deliberately worse
 #: than every real review rank, so "has entries the caller may see" beats
@@ -651,7 +662,7 @@ def search_species(
         limit=1 if collapse_first else limit,
     )
     if collapse_first:
-        # ``collapse=first`` keeps the single best record and *then* applies
+        # ``collapse=first`` keeps the single first record in display order and *then* applies
         # offset/limit to that one-element list, so any offset past it is
         # an empty page. Mirrored here rather than folded into the SQL.
         page_species_ids = page_species_ids[offset : offset + limit]
@@ -692,7 +703,7 @@ def browse_species(
 ) -> ScientificSpeciesBrowseResponse:
     """List species by secondary filter alone — no identifier required.
 
-    See docs/specs/read_api_mvp.md §Endpoint 1 for the sibling
+    See docs/specs/browse_order.md for the sibling
     ``/species/search`` contract this deliberately mirrors. The two
     surfaces exist because ``search_species`` rejects an identifier-free
     request (``missing_identifier``) by design: a caller who *knows* what
@@ -783,10 +794,7 @@ def browse_species(
     # molecules of different sizes, which is exactly the incremental-typing
     # case the owner described (see _rank_and_slice_species's
     # ``order_by_size`` docstring for why ``exact`` is excluded).
-    order_by_size = structure_query is not None and request.mode in (
-        StructureSearchMode.substructure,
-        StructureSearchMode.similarity,
-    )
+    order_by_size = _browse_orders_by_size(request, structure_query)
 
     visible = visible_statuses(
         min_review_status=request.min_review_status,
@@ -852,7 +860,7 @@ def browse_species(
     return ScientificSpeciesBrowseResponse(
         request=RequestEcho(
             filter=_browse_filter_echo(request, element_symbols, structure_query),
-            sort=_DEFAULT_SORT_ECHO,
+            sort=_SIZE_FIRST_SORT_ECHO if _browse_orders_by_size(request, structure_query) else _DEFAULT_SORT_ECHO,
             collapse=request.collapse,
             include=sorted(includes),
         ),
@@ -1807,7 +1815,7 @@ def _empty_browse_response(
     return ScientificSpeciesBrowseResponse(
         request=RequestEcho(
             filter=_browse_filter_echo(request, element_symbols, structure_query),
-            sort=_DEFAULT_SORT_ECHO,
+            sort=_SIZE_FIRST_SORT_ECHO if _browse_orders_by_size(request, structure_query) else _DEFAULT_SORT_ECHO,
             collapse=request.collapse,
             include=sorted(includes),
         ),

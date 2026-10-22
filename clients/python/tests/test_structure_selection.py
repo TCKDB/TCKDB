@@ -76,7 +76,7 @@ def test_quantity_none_is_json_null_and_every_other_none_is_not_sent():
     seen, handler = _recorder()
     with _client(handler) as client:
         client.select_conformer_basins(SPECIES, intent="qualify_evidence", quantity=None, validation_claim="local_minimum",
-                                         geometry_ref=None, member_refs=None, objective=None)
+                                         geometry_ref=None, member_refs=None)
         client.select_conformer_basins(SPECIES, intent="validated_minimum")
     assert json.loads(seen[0].content) == {"intent": "qualify_evidence", "quantity": None, "validation_claim": "local_minimum"}
     assert json.loads(seen[1].content) == {"intent": "validated_minimum"}  # quantity omitted, not null
@@ -87,19 +87,19 @@ def test_forwards_every_supplied_field():
     recipe = {"version": 1, "source": {"origin": "producer_declared"}, "spin_treatment": {"state": "known", "value": "restricted"}}
     with _client(handler) as client:
         client.select_transition_state_evidence(
-            TSE, intent="protocol_preferred", quantity="zero_kelvin_energy", coverage_requirement="all_requested_members",
+            TSE, intent="protocol_coverage", quantity="zero_kelvin_energy", coverage_requirement="all_requested_members",
             validation_claim="first_order_saddle", min_review_status="approved", permitted_quality=("raw", "curated"),
             geometry_ref="geom_x", member_refs=("sdet_a", "sdet_b"), recipe=recipe, require_stable_reference=True,
-            require_connectivity=True, administrative_policy="latest", result_mode="first", apply_rules=False,
-            objective="model_fidelity", reference_model="ref@1", repeat_policy="administrative_representative",
+            require_connectivity=True, administrative_policy="latest", result_mode="first",
+            repeat_policy="administrative_representative",
             profile="curated",
         )
     assert json.loads(seen[0].content) == {
-        "intent": "protocol_preferred", "quantity": "zero_kelvin_energy", "coverage_requirement": "all_requested_members",
+        "intent": "protocol_coverage", "quantity": "zero_kelvin_energy", "coverage_requirement": "all_requested_members",
         "validation_claim": "first_order_saddle", "min_review_status": "approved", "permitted_quality": ["raw", "curated"],
         "geometry_ref": "geom_x", "member_refs": ["sdet_a", "sdet_b"], "recipe": recipe, "require_stable_reference": True,
-        "require_connectivity": True, "administrative_policy": "latest", "result_mode": "first", "apply_rules": False,
-        "objective": "model_fidelity", "reference_model": "ref@1", "repeat_policy": "administrative_representative",
+        "require_connectivity": True, "administrative_policy": "latest", "result_mode": "first",
+        "repeat_policy": "administrative_representative",
     }
     assert parse_qs(urlsplit(str(seen[0].url)).query) == {"profile": ["curated"]}
 
@@ -144,8 +144,8 @@ def test_the_response_type_names_every_outcome_the_server_can_return():
 
     assert set(get_args(StructureSelectionOutcomeToken)) == {
         "no_candidates", "energy_unavailable", "unresolved_comparability", "no_applicable_candidate", "recorded_minimum",
-        "representative_minimum", "qualified_evidence", "validated_corpus_minimum", "policy_preferred",
-        "sole_eligible_candidate", "incomparable_alternatives", "policy_conflict", "evidence_conflict",
+        "representative_minimum", "qualified_evidence", "validated_corpus_minimum",
+        "sole_eligible_candidate", "incomparable_alternatives", "evidence_conflict",
     }
     assert StructureSelectionResponse.__required_keys__ >= {"outcome", "basis", "selected_refs", "coverage", "integrity"}
 

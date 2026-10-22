@@ -67,7 +67,6 @@ def to_structure_request(request: RelativeEnergyRequest, determination_refs: tup
         member_refs=determination_refs or None,
         recipe=request.recipe,
         require_stable_reference=request.require_stable_reference,
-        apply_rules=False,
         repeat_policy=request.repeat_policy,
     )
 
