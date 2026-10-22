@@ -17,12 +17,12 @@ For the energy difference between a conformer and a reference conformer you name
 
 - **Read-only.** Nothing is stored and nothing is edited. Browse orders are unchanged.
 - **Opt-in.** The browse endpoints keep their order. A selection is a separate `POST`.
-- **Not a recommendation.** A curator or a dataset release recommends records; selection applies stated rules to what
-  is stored and shows its working.
+- **Not a recommendation.** A curator or a dataset release recommends records; selection applies stated conditions to
+  what is stored and shows its working.
 - **Not a global-search certificate.** Coverage is the population you are allowed to see. A complete claim is not
   evidence that every conformer or saddle was found.
-- **No hidden rules.** The audited literature rules are listed but inactive. Nothing here ranks by a literature rule
-  unless a rule is active, and none is.
+- **No method ranking.** TCKDB ranks no method or protocol above another. A lower absolute energy never prefers a
+  protocol, and the first record in a list is display order ([`browse_order.md`](../specs/browse_order.md)).
 
 ## The three endpoints
 
@@ -52,7 +52,7 @@ defaults; the client libraries invent none.
 | `geometry_ref`, `member_refs` | Restrict to one geometry (`geom_...`) or named members. |
 | `recipe`, `require_stable_reference` | The method recipe the caller asserts, and whether a stable reference is required. |
 | `require_connectivity` | Transition states only. |
-| `administrative_policy`, `result_mode`, `apply_rules`, `objective`, `reference_model`, `repeat_policy` | Tie handling, whether to name one winner, rule use, and how repeated calculations are treated. |
+| `administrative_policy`, `result_mode`, `repeat_policy` | Tie handling, whether to name the first record in display order, and how repeated calculations are treated. |
 
 The read profile is the usual `?profile=exploratory|curated` query parameter. Other query keys on the `POST` are
 refused. There is no candidate cap, paging or sort field: the engineering bounds belong to the server. Above them the
@@ -74,11 +74,10 @@ Quote `outcome` and `basis` verbatim.
 | `representative_minimum` | The lowest of per-source representatives under `repeat_policy=administrative_representative`. It is not the minimum of every stored value. |
 | `validated_corpus_minimum` | The lowest validated basin or saddle within one cohort. |
 | `qualified_evidence` | These determinations support the stated claim. No number. |
-| `policy_preferred` | A whole protocol preferred by an active audited rule. None are active today. |
 | `sole_eligible_candidate` | Only one candidate can answer; it is not compared with anything. |
 | `incomparable_alternatives` | Several protocols each have a minimum and no scale ranks them. Nothing is selected. |
 | `unresolved_comparability` | No cohort could be ordered. Nothing is selected. |
-| `policy_conflict`, `evidence_conflict` | Rules or evidence contradict each other. Nothing is selected. |
+| `evidence_conflict` | Evidence contradicts itself. Nothing is selected. |
 | `no_candidates`, `energy_unavailable`, `no_applicable_candidate` | Nothing to compare, no usable energy, or nothing meets the stated requirements. |
 
 A negative outcome is an answer, not an error. A cohort is the same established recipe, quantity, energy convention

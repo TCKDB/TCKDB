@@ -1,6 +1,6 @@
 """Service implementation for /api/v1/scientific/species-entries/{id}/thermo.
 
-See docs/specs/read_api_mvp.md §Endpoint 4.
+See docs/specs/browse_order.md.
 """
 
 from __future__ import annotations
@@ -658,7 +658,7 @@ def get_species_thermo(
 
     # L3 thermo sort (#648): review status, then newest -- the same key the
     # export, CHEMKIN and ML selection use (``simple_selection_sort_key``), so
-    # the read and the export cannot pick different "best" records.
+    # the read and the export cannot list different records first (display order, never a preference).
     #
     # Deliberately NOT in the key:
     #   * ``evidence_completeness.score``: six of its eight predicates are

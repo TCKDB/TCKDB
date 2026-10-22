@@ -905,15 +905,15 @@ _SELECTION_POLICY = Vocabulary(
     enum=SelectionPolicy,
     carried_by="the `selection_policy` request parameter, meaningful when `collapse=first`",
     summary=(
-        "Which candidate wins when the response is collapsed to one. Naming the "
+        "Which record is listed first when the response is collapsed to one. Naming the "
         "policy makes \"show me one\" an explicit choice rather than a silent "
         "one. No policy persists a curator decision — for an attributed "
         "endorsement, use a dataset release."
     ),
     terms=(
-        Term(token="default", means="The endpoint's standard ranking."),
-        Term(token="latest", means="Most recently created first."),
-        Term(token="most_reviewed", means="Best review status first, then most recent."),
+        Term(token="default", means="The endpoint's display order: review rank, then newest deposited."),
+        Term(token="latest", means="Most recently deposited first."),
+        Term(token="most_reviewed", means="Review rank first (approved, then under_review and not_reviewed together), then most recently deposited."),
     ),
 )
 

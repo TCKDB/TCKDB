@@ -1,6 +1,6 @@
 """Service implementation for /api/v1/scientific/reaction-entries/{id}/kinetics.
 
-See docs/specs/read_api_mvp.md §Endpoint 3.
+See docs/specs/browse_order.md.
 
 Provenance keys are always present per Phase 2.2; TS-chain fields are populated
 only for TS-backed records. Evidence completeness uses the L1 kinetics

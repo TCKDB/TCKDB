@@ -14,11 +14,11 @@ structural claim. The decision never re-judges a unit; it compares assessed unit
 | `recorded_minimum` (calculation grain) | Which known, eligible recorded value is lowest within one justified cohort? |
 | `validated_minimum` / `validated_saddle` | Which validated, completely assessed basin or saddle is lowest within one cohort? |
 | `qualify_evidence` | Which determinations support the stated structural claim? (No number.) |
-| `protocol_preferred` | Which whole protocol do audited rules prefer, for a stated objective? |
+| `protocol_preferred` | Which whole protocols (cohorts) cover every requested target? Listed in display order; none is ranked. |
 
 Outcomes: `no_candidates`, `energy_unavailable`, `unresolved_comparability`, `no_applicable_candidate`,
-`recorded_minimum`, `representative_minimum`, `qualified_evidence`, `validated_corpus_minimum`, `policy_preferred`,
-`sole_eligible_candidate`, `incomparable_alternatives`, `policy_conflict`, `evidence_conflict` (13). A negative scientific outcome is an answer, not an
+`recorded_minimum`, `representative_minimum`, `qualified_evidence`, `validated_corpus_minimum`,
+`sole_eligible_candidate`, `incomparable_alternatives`, `evidence_conflict` (11). A negative scientific outcome is an answer, not an
 error. Coverage is always the caller's authorized population: even a complete claim is not a global-search or
 exhaustive-conformational-search certificate.
 
@@ -58,41 +58,25 @@ confirmation. Nothing infers that differently keyed determinations are repeats.
 ## Administrative key
 
 Review rank ascending, permitted-quality rank ascending, creation time descending, ordinal descending; `latest` is time
-and ordinal descending, `earliest` time and ordinal ascending. The key (version `1`) is echoed with every decision. It
-orders only within a scientific front or among exact ties; it never moves a unit across a front. `result_mode=first`
-adds a labelled administrative presentation where several alternatives remain and never bypasses a conflict, incomplete
+and ordinal descending, `earliest` time and ordinal ascending. The key (version `2`: `under_review` and `not_reviewed` rank equally) is echoed with every decision. It
+orders exact ties and tied cohorts; it is display order, never a method preference. `result_mode=first`
+adds a labelled administrative presentation where several alternatives remain and never bypasses incomplete
 coverage or unresolved comparability.
 
-## Protocol preference
+## Protocol listing
 
-Requires an objective (`physical_accuracy`, `expected_accuracy`, or `model_fidelity` with a pinned reference model).
-Candidates are whole protocols (cohorts) that cover every requested target; no mixed-method profile is invented from each
-basin's available method. Edges come only from audited rules through the shared graph kernel
-(`app.services.selection_kernel`), a rule applies only under its own objective and reference model, an unknown
-prerequisite makes no edge, and sole eligibility is `sole_eligible_candidate`, not superiority. A rule is active only if
-it names its objective and pins the digest of its audited manifest. This release registers three audited candidates, all inactive (next section).
-
-## The rule registry and what was audited
-
-`app/chemistry/structure_rules/structure_rule_candidates.yaml` is the audit record, loaded only against its pinned SHA-256 (`STRUCTURE_RULE_MANIFEST_SHA256`) by `app/services/structure_selection/rules.py`, which registers each entry inactive with its blockers as the reasons. An entry that claims approval must carry the owner's dated acceptance and no blockers; one that does not must list a blocker and what would be needed. Even an approved entry applies no edge until its predicates are written and reviewed (`RULES_WITH_IMPLEMENTED_PREDICATES`, empty). A model-fidelity rule additionally needs a pinned reference model to be active. An agent never activates a rule.
-
-Registered (all inactive; the manifest is `structure_rule_candidates.yaml`, `name` plus `version: 1`):
-
-| Rule | Rests on | Why it is inactive (headline) |
-| --- | --- | --- |
-| `S-ACONFL-LNO-LARGE-BASIS` | Santra and Martin, J. Phys. Chem. A 126, 9375 (2022), Tables 4 and 5 | The ACONF16 and ACONF20 reference is MP2-F12/CBS plus the LNO-CCSD(T)/vTight/AV{Q,5}Z correction (HLC14), the protocol the rule prefers, so only the 12 ACONF12 conformers are an independent comparison; no numeric reference uncertainty (the revision moved energies by up to +0.60/-0.67 kcal/mol, MAD 0.31 between old and new references); the figures are set MADs, not per-conformer errors; core treatment, corrections and the geometry level are not stated; a relative conformer energy against a named reference conformer has no intent in structure selection yet |
-| `S-ACONFL-DLPNO-F12-VERYTIGHT` | the same article, Table 6 | The same reference and uncertainty limits; the reference is not canonical beyond n-dodecane; VeryTightPNO is a program-specific ORCA setting the declaration vocabulary does not type; its larger-basis variants exist for ACONF12 only |
-| `S-FIXED-MODEL-CONVERGENCE` | none (the council's proposed form) | No source, no scope, no pinned reference and no recorded reference comparison to rest on; a tighter keyword is not evidence of accuracy |
-
-The council's thermochemistry-decomposition, GOAT-ensemble and TS mode/IRC examples support distinctions the assessment already makes and are recorded in the manifest as considered and deliberately not preference rules. What was read of the Santra and Martin article, from which version, is pinned by SHA-256 with a `used_for` line per source; the open-access reprint is recorded with its URL and SHA-256 as supplied by the owner, and its Table 4 prints the per-conformer best-estimate values. The numbers quoted were read from Europe PMC's open-access full text, the page anchors are those of the arXiv v2 PDF, and the Supporting Information PDF was read for Table S1 only. The per-conformer method energies in the Supporting Information archive were located and not extracted. A footnote-marker discrepancy for the ACONF20 reference in Table 4 is recorded in the manifest, not resolved.
-
-One manifest version is loadable: version 1 (`structure_rule_candidates.yaml`, `STRUCTURE_RULE_MANIFEST_SHA256`). `default_rules()` carries every rule at version 1 (an integer) and a decision records that. There is no replay-only registry: a rule version this release does not carry is refused (`rule_unavailable`), and an entry naming other audited bytes is refused (`rule_manifest_changed`). A test hashes the shipped file against the pin, so a manifest edited without a new pin fails. `validate_rules` is strict on rule id. Nothing is activated: every rule is unapproved, and `RULES_WITH_IMPLEMENTED_PREDICATES` is empty.
+`intent=protocol_preferred` takes no objective, no reference model and no rule switch. Candidates are whole protocols
+(cohorts) that cover every requested target; no mixed-method profile is invented from each basin's available method.
+TCKDB carries no ranking of one protocol above another, so one covering protocol is `sole_eligible_candidate` (not
+superiority) and several are `incomparable_alternatives`, listed in one front in display order.
+`result_mode=first` may label the first of them administrative. A lower absolute total energy never prefers a protocol:
+total energies of different protocols are not on one scale.
 
 ## Manifest and replay
 
 The manifest records the normalised request, read profile and effective review statuses, snapshot isolation, subject,
-every normalised unit and source calculation (public refs and stored facts, no database id), each assessment, the
-registry entries consulted and the decision. A manifest above 10 MiB is refused whole
+every normalised unit and source calculation (public refs and stored facts, no database id), each assessment and the
+decision. A manifest above 10 MiB is refused whole
 (`structure_selection_manifest_too_large`; the limit itself is allowed): a truncated manifest would replay to something else.
 `SelectionBounds.manifest_bytes` is the endpoint's, fixed server-side: a public interface must never let a caller set it above
 10 MiB.
@@ -100,16 +84,15 @@ registry entries consulted and the decision. A manifest above 10 MiB is refused 
 `replay_structure_assessment` recomputes every assessment from the normalised inputs and refuses on any difference from the
 recorded one; it does not trust a recorded `eligible`, `applicable` or assessment flag. `replay_structure_decision` then
 decides over the recomputed assessments and compares the result with the recorded decision and outcome. Replay refuses an
-unknown manifest format, assessment, normaliser, decision, key, rule or finding-semantics version, a failed checksum, a
+unknown manifest format (the shape that held rules and edges is not read), assessment, normaliser, decision, key or finding-semantics version, a failed checksum, a
 review status or profile the recorded request could not have seen (every recorded calculation and determination is checked, not
 only the units, so a manifest relabelled curated while its sources are not approved is refused; duplicate or missing assessments
 are refused; the recorded visible-unit count must be the number of recorded units; the other population counts are recorded and
-not proven), and a rule that is unavailable, changed status or
-rests on a different audited manifest.
+not proven).
 
 **The digests are checksums, not signatures.** There is one per normalised input and one over the whole manifest. They
 detect an accidental or careless edit; anyone who edits a manifest can recompute them. Replay therefore reproduces
 reasoning from captured inputs. It does not authenticate scientific truth, and it cannot prove that a forged population was
 the complete one. Verifying a manifest against current server-held content and authorization is a separate step that no
-replay performs. A historic replay keeps the statuses captured in the manifest: a later withdrawal, supersession or rule
-deactivation changes a new live decision, never the historical artifact.
+replay performs. A historic replay keeps the statuses captured in the manifest: a later withdrawal or supersession
+changes a new live decision, never the historical artifact.

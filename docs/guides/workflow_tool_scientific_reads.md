@@ -87,7 +87,7 @@ The boundary is intentional:
 
 - **TCKDB backend** owns scientific read/query semantics, filtering,
   deterministic ranking, provenance summaries, and review/trust state.
-  Documented in `docs/specs/read_api_mvp.md`.
+  Documented in `docs/specs/browse_order.md`.
 - **`tckdb-client`** is a thin Python HTTP client. It serializes
   parameters, calls the backend, and returns parsed JSON. It does not
   rank, select, or interpret responses.
@@ -394,10 +394,12 @@ Each record carries:
   calculation references
 - `review` — direct review badge for the thermo record
 
-`collapse="first"` returns at most one record using TCKDB's documented
-deterministic backend ordering: best review status, then newest, then
-highest id. That is the same order the export uses. The client does not
-define "best thermo" — it only returns what the backend ranked first.
+`collapse="first"` returns at most one record: the first in TCKDB's documented
+deterministic display order (approved first, `under_review` and `not_reviewed`
+together, then newest deposited, then highest id; see
+[Browse order](../specs/browse_order.md)). That is the same order the export
+uses. It is display order, not a scientific preference, and the client does not
+define "best thermo": it only returns what the backend listed first.
 `temperature_coverage` and `evidence_completeness` are displayed, not ranked.
 Experimental thermo scores low on `evidence_completeness` by construction
 (most predicates are calculation traceability), which is why the thermo and

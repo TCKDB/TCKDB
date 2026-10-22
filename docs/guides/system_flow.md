@@ -23,9 +23,9 @@ Every write is wrapped in a **submission** (a reviewable unit). A
 that *deduplicate identity* and *attach provenance*, then persist
 *append-only results*. A parallel **curation** layer (reviews, trust,
 machine review) tracks how much to believe each record without ever
-mutating the science. Reads select the "best" product at query time
-using review status and evidence — nothing is marked "preferred" in
-the database.
+mutating the science. Reads list products at query time in a documented display order
+(review status, then deposition time) — nothing is marked "preferred" in
+the database, and the first record is never a scientific preference.
 
 Hold onto these four buckets — every table lives in exactly one, and
 the whole design falls out of keeping them separate:
@@ -190,13 +190,15 @@ None of this mutates the science; it decides *how much to trust it*.
   default; the provider payload it feeds is the single machine-review contract
   (root `format` marker, `{"name": "machine_review", "version": 1}`).
 
-### Step 5 — Reads select the best product *at query time* (`app/services/scientific_read/`)
+### Step 5 — Reads order products *at query time* (`app/services/scientific_read/`)
 
 There is no "preferred" flag in the database. When a client reads, e.g.,
 `/scientific/species-entries/{ref}/thermo`, the read service *sorts*
-candidate records and returns the top one (`collapse=first`) or the full
-list (`collapse=all`). The thermo sort key (`scientific_read/thermo.py`)
-is, in order: higher review status → newer → higher id (the same
+candidate records and returns the first in display order (`collapse=first`)
+or the full list (`collapse=all`). The first record is display order, never a
+scientific preference ([`browse_order.md`](../specs/browse_order.md)). The thermo
+sort key (`scientific_read/thermo.py`) is, in order: review rank (approved
+first; `under_review` and `not_reviewed` rank equally) → newer deposited → higher id (the same
 `simple_selection_sort_key` the export uses; temperature coverage and the
 evidence score are displayed on each record but do not order them). `ConformerSelection` rows exist for
 curator-pinned display defaults but are currently *advisory*; the
@@ -209,7 +211,7 @@ explicitly opt into drafts.
 
 ### Step 6 — Curated selection and citable releases (`app/services/release/`)
 
-Read-time sorting answers "give me a sensible one". It does not answer
+Read-time ordering answers "list them in a documented order". It does not answer
 "what does TCKDB *recommend*?" — that needs a named human. Stage 3 adds
 an attributed, **append-only** selection layer on top, which still never
 touches the science:
@@ -257,7 +259,7 @@ ADR 0006 and ADR 0007.
 | Trust & review | `services/{record_review,trust,machine_review,llm_precheck}/` | [`automated_trust_layer.md`](../../backend/docs/specs/automated_trust_layer.md) |
 | Uploads & idempotency | `api/routes/uploads.py`, `services/upload_reconciliation.py` | DR-0024 |
 | Bundles / offline | `api/routes/bundles*.py` | [`contribution-bundles/format.md`](../contribution-bundles/format.md) |
-| Read/query API | `services/scientific_read/`, `api/routes/` | `read_api_mvp.md` |
+| Read/query API | `services/scientific_read/`, `api/routes/` | [`browse_order.md`](../specs/browse_order.md) |
 | Curated selection & releases | `services/release/`, `db/models/dataset_release.py` | [`dataset_release_and_profiles.md`](../../backend/docs/specs/dataset_release_and_profiles.md) |
 | Async jobs | `workers/upload_worker.py`, `db/models/upload_job.py` | `upload_worker_tests_spec.md` |
 | Auth & roles | `api/` dependencies | `auth-and-roles-v1-spec.md` |

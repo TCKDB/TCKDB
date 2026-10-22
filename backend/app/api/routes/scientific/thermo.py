@@ -62,7 +62,7 @@ def species_thermo(
     Path handle is strictly the species-entry resource: an integer
     ``species_entry.id`` or a public ref starting with ``spe_``. A
     ``species.id`` (or any other prefix) returns 422 / 404.
-    ``sort=`` is rejected (v0). See ``docs/specs/read_api_mvp.md``
+    ``sort=`` is rejected (v0). See ``docs/specs/browse_order.md``
     §Endpoint 4 and ``docs/specs/public_identifier_policy.md``.
     """
     resolved_species_entry_id = resolve_species_entry_handle(session, species_entry_id)

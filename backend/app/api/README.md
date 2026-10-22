@@ -55,5 +55,5 @@ exists.
 Uploads are gated by `require_supported_tckdb_client` so stale clients
 can't write malformed payloads. See
 [`docs/guides/system_flow.md`](../../../docs/guides/system_flow.md) §2
-for the full request lifecycle and `docs/specs/read_api_mvp.md` for the
+for the full request lifecycle and `docs/specs/browse_order.md` for the
 read-API envelope contract.

@@ -52,7 +52,7 @@ def reaction_search_get(
     ``?reactants=NN`` returns every reaction with NN among its reactants and
     leaves the product side unconstrained. ``match=exact`` asks for precisely
     one equation, both sides, counts included. See
-    ``docs/specs/read_api_mvp.md`` §Endpoint 2.
+    ``docs/specs/browse_order.md`` §Endpoint 2.
     """
     request = ReactionSearchRequest(
         reactants=reactants or [],

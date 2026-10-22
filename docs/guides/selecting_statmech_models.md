@@ -7,19 +7,19 @@ and what it refuses to claim.
 In plain terms: a statmech record says how a molecule's rotation, vibration, symmetry and electronic levels were
 treated. Several records can exist for one entry, made differently, and some say more than others. Selection is a
 separate, opt-in question: "of the models that can answer this exact question, which ones do, which cannot be judged
-because something is not stated, and does any audited rule prefer one?" It returns **no number**: no entropy, heat
-capacity, partition function, rate or population is computed. The honest answer is often "these models qualify and
-nothing ranks them", and the endpoint says so instead of picking one.
+because something is not stated, and in what display order do the qualified ones come?" It returns **no number**: no entropy, heat
+capacity, partition function, rate or population is computed. TCKDB ranks no model above another, so the honest answer is
+"these models qualify and none is preferred", and the endpoint says so instead of picking one.
 
 ## What it is, and what it is not
 
 - **Read-only.** Nothing is stored and nothing is edited. Browse orders are unchanged.
 - **Opt-in.** The statmech search and detail reads keep their order. A selection is a separate `POST`.
-- **Not a recommendation.** A curator or a dataset release recommends records; selection applies stated rules to what is
-  stored and shows its working.
+- **Not a recommendation.** A curator or a dataset release recommends records; selection applies stated conditions to what
+  is stored and shows its working.
 - **Not a physical-search certificate.** Coverage is the population you are allowed to see.
-- **No hidden rules.** This release ships **no active preference rule**. Qualification is the whole of what an
-  unmodified server returns; a preference is possible only once an audited rule is activated.
+- **No model ranking.** TCKDB carries no preference between models. Qualification and display order are the whole of
+  what the server returns.
 - **Unknown is never unity.** A fact a model does not state (a scale factor's application, an energy zero, a counted
   symmetry factor) is reported as missing; nothing is filled in.
 
@@ -28,7 +28,7 @@ nothing ranks them", and the endpoint says so instead of picking one.
 `POST /api/v1/scientific/statmech/select` answers the request below; `POST /api/v1/scientific/statmech/select/manifest`
 answers the same request with the replayable decision manifest. One typed target covers a species entry (`spe_`) or a
 transition state *entry* (`tse_`); a basin, determination, ensemble declaration or candidate is named by its public ref.
-No integer id, bound, page, sort or rule is accepted; a misspelled token is a 422.
+No integer id, bound, page or sort is accepted; a misspelled token is a 422.
 
 ```json
 {
@@ -47,18 +47,18 @@ No integer id, bound, page, sort or rule is accepted; a misspelled token is a 42
 }
 ```
 
-`intent` is `qualify` (assessments, nothing selected) or `protocol_preferred` (also compares whole applicable models, and
-needs a `comparison_objective`). The tasks are `rotational_component`, `vibrational_component`, `zpe_component`,
+`intent` is `qualify` (assessments, nothing selected) or `protocol_preferred` (also lists the qualified whole models in
+display order; nothing is ranked). The tasks are `rotational_component`, `vibrational_component`, `zpe_component`,
 `within_basin_thermal`, `canonical_model` and `conventional_ts_transverse_model`; a recognised deferred task
 (for example `numerical_evaluation`) is a valid request answered `unsupported_task`.
 
 ## Reading the answer
 
 - **`outcome`** and **`basis`** are the answer; quote them verbatim. A valid negative outcome is HTTP 200: nothing
-  qualifies, a conflict, an unresolved comparability.
-- **`selection`** holds at most one of `scientific_ref` (supported dominance over every eligible alternative),
-  `sole_eligible_ref` (a lone eligible model; noncomparative) and `administrative_ref` (only with `result_mode: first`,
-  among incomparable alternatives; an administrative order, not a scientific one). Each carries its basis and its
+  qualifies, or the evidence conflicts.
+- **`selection`** holds at most one of `sole_eligible_ref` (a lone eligible model; noncomparative) and
+  `administrative_ref` (only with `result_mode: first`, among incomparable alternatives: the first in display order, not
+  a scientific preference). Each carries its basis and its
   population limit. `qualify` and every unresolved outcome carry none.
 - **`candidates`** lists every assessed candidate by public ref: `smd_` for a declared model, `sm_` for a legacy record
   read as it was stored. Each has `applicability`, `reasons`, the `recipe` it states, the `evidence` roles it rests on, and
@@ -67,8 +67,8 @@ needs a `comparison_objective`). The tasks are `rotational_component`, `vibratio
   `imported_parameters_not_revalidated:<role>` (an imported literature source stands for that role without a local job;
   the stationary-point character it was computed at is the source's own statement and was not re-judged) and
   `source_literature_unidentified:<role>` (a cited source has no DOI or ISBN, so it is kept but meets no role).
-- **`fronts`, `edges`, `conflicts`, `undecided`** are the comparison, over public refs. With no active rule there are no
-  edges and one front: the alternatives are unranked, **not equally accurate**.
+- **`fronts`, `administrative_order`, `administrative_key`** are the display order, over public refs: one front, the
+  alternatives listed in the order the key names, none preferred.
 - **`request`** echoes the **normalised** request the decision was made under, with the read profile and the server's own
   `bounds`. Its `target` is `kind` plus `owner_ref` with every scope key present (absent ones `null`); it is not the shape
   you posted and **cannot be re-posted as a request body**. Build the next request from your own, not from the echo.
@@ -79,10 +79,7 @@ needs a `comparison_objective`). The tasks are `rotational_component`, `vibratio
 | --- | --- |
 | `qualified_models` | The listed models support the claim (qualify). |
 | `sole_eligible_candidate` | One eligible model; not a comparative claim. |
-| `policy_preferred` | An audited rule prefers one whole model over every alternative. |
-| `incomparable_alternatives` | More than one applicable model and no active rule that ranks them. |
-| `unresolved_comparability` | A rule might rank them but a prerequisite is unknown; nothing is selected. |
-| `policy_conflict` | Rules oppose each other or form a cycle; nothing is selected. |
+| `incomparable_alternatives` | More than one applicable model; TCKDB ranks none above another. |
 | `no_candidates`, `no_applicable_candidate`, `unresolved_applicability`, `missing_required_data`, `unsupported_model`, `evidence_conflict`, `unsupported_task` | Why nothing qualifies. |
 
 With qualified models next to undecided ones, a request for the entire requested domain is not certified: the unresolved
@@ -101,7 +98,7 @@ record is hidden, so the answer never reveals a record you could not otherwise s
 
 A ref you *may* see but that belongs to another entry than the target is a contradictory question, not an empty answer: it
 is a 422 `statmech_selection_scope_owner_mismatch` whose `context.field` names the ref (`conformer_group_ref`,
-`determination_ref`, `ensemble_declaration_ref` or `reference_model_ref`). The 404 equivalence is applied first, so this
+`determination_ref` or `ensemble_declaration_ref`). The 404 equivalence is applied first, so this
 never discloses a hidden record, and the other owner is never named.
 
 ## The manifest
@@ -115,6 +112,6 @@ are true nor that the population was complete. The download is a new snapshot of
 ## From the client and the agent tool
 
 `TCKDBClient.select_statmech_models(request)` and `get_statmech_selection_manifest(request)` send the request as given,
-refuse an integer id, a ref of the wrong kind and any bound, page, sort or rule before a request is made, and return the
+refuse an integer id, a ref of the wrong kind and any bound, page or sort before a request is made, and return the
 server's answer untouched. The MCP tool `tckdb_select_statmech_models` does the same. Neither pages, caps, or chooses a
 candidate.

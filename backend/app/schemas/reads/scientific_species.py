@@ -1,6 +1,6 @@
 """Read schemas for /api/v1/scientific/species/search.
 
-See docs/specs/read_api_mvp.md §Endpoint 1.
+See docs/specs/browse_order.md.
 """
 
 from __future__ import annotations

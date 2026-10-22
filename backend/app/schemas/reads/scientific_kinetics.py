@@ -1,6 +1,6 @@
 """Read schemas for /api/v1/scientific/reaction-entries/{id}/kinetics.
 
-See docs/specs/read_api_mvp.md §Endpoint 3.
+See docs/specs/browse_order.md.
 
 Provenance keys are always present (Phase 2.2). TS-chain fields are populated
 for TS-backed computational kinetics and ``null`` for non-TS-backed records

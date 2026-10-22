@@ -16,8 +16,8 @@ Composition order (final response ordering):
    thermo per-record ordering already applied above.
 4. Apply collapse and pagination to the flat list.
 
-This means ``collapse="first"`` returns the best-thermo-of-the-best-entry
-candidate. The full ordering is documented in code comments and tests.
+This means ``collapse="first"`` returns the first thermo record of the first entry
+in display order (not a scientific preference). The full ordering is documented in code comments and tests.
 """
 
 from __future__ import annotations
