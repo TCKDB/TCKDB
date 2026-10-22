@@ -9603,7 +9603,7 @@
             "default": "recorded_minimum",
             "enum": [
               "recorded_minimum",
-              "protocol_preferred"
+              "protocol_coverage"
             ],
             "title": "Intent",
             "type": "string"
@@ -14576,7 +14576,7 @@
             "enum": [
               "validated_minimum",
               "qualify_evidence",
-              "protocol_preferred"
+              "protocol_coverage"
             ],
             "title": "Intent",
             "type": "string"
@@ -21103,7 +21103,7 @@
       "Intent": {
         "enum": [
           "qualify",
-          "protocol_preferred"
+          "protocol_coverage"
         ],
         "title": "Intent",
         "type": "string"
@@ -63303,7 +63303,7 @@
             "enum": [
               "validated_saddle",
               "qualify_evidence",
-              "protocol_preferred"
+              "protocol_coverage"
             ],
             "title": "Intent",
             "type": "string"
@@ -68944,6 +68944,16 @@
           "collapse": {
             "$ref": "#/components/schemas/CollapseMode"
           },
+          "effective_order": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrderEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -69160,6 +69170,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/CollapseMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effective_order": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrderEcho"
               },
               {
                 "type": "null"
@@ -96468,7 +96488,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_ref}/calculations/select": {
       "post": {
-        "description": "The lowest comparable recorded energy among the entry's calculations, or (``intent=protocol_preferred``) the protocols that cover every requested member, listed in display order.\n\nValues are ordered only inside one cohort (the same established recipe, quantity and energy convention); several\ncohorts end as ``incomparable_alternatives`` and a lower absolute energy never names a method winner. A calculation\nkeeps its own record: observations are not collapsed. The answer is conditional on the authorized population the\ncaller can see and is never a global-search certificate. More than 500 visible candidates, 5,000 nested rows, a\ndependency traversal past depth 8 or a manifest over 10 MiB is refused with a coded 422: nothing is chosen from a\nprefix. A deferred quantity (enthalpy, Gibbs energy, barrier, rate, ...) is 422 ``structure_selection_unsupported``.",
+        "description": "The lowest comparable recorded energy among the entry's calculations, or (``intent=protocol_coverage``) the protocols that cover every requested member, listed in display order.\n\nValues are ordered only inside one cohort (the same established recipe, quantity and energy convention); several\ncohorts end as ``incomparable_alternatives`` and a lower absolute energy never names a method winner. A calculation\nkeeps its own record: observations are not collapsed. The answer is conditional on the authorized population the\ncaller can see and is never a global-search certificate. More than 500 visible candidates, 5,000 nested rows, a\ndependency traversal past depth 8 or a manifest over 10 MiB is refused with a coded 422: nothing is chosen from a\nprefix. A deferred quantity (enthalpy, Gibbs energy, barrier, rate, ...) is 422 ``structure_selection_unsupported``.",
         "operationId": "select_species_calculations_api_v1_scientific_species_entries__species_entry_ref__calculations_select_post",
         "parameters": [
           {
@@ -96972,7 +96992,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/select": {
       "post": {
-        "description": "The lowest validated basin of one cohort, the basins that support a claim, or the protocol preference.\n\nA basin needs supported curvature evidence on its own geometry: imaginary modes are judged by magnitude against\nthe stored tau (ADR 0012), never counted. Repeated determinations of one basin are alternates, not independent\nconfirmation, and a basin with a passing and a refuted determination is contested. A complete profile claim\n(``all_requested_members``) needs every requested basin eligible and in one cohort; no mixed-method profile is\never built from each basin's available method.",
+        "description": "The lowest validated basin of one cohort, the basins that support a claim, or the protocols that cover a request, in display order.\n\nA basin needs supported curvature evidence on its own geometry: imaginary modes are judged by magnitude against\nthe stored tau (ADR 0012), never counted. Repeated determinations of one basin are alternates, not independent\nconfirmation, and a basin with a passing and a refuted determination is contested. A complete profile claim\n(``all_requested_members``) needs every requested basin eligible and in one cohort; no mixed-method profile is\never built from each basin's available method.",
         "operationId": "select_species_conformers_api_v1_scientific_species_entries__species_entry_ref__conformers_select_post",
         "parameters": [
           {
@@ -98951,7 +98971,7 @@
     },
     "/api/v1/scientific/statmech/select": {
       "post": {
-        "description": "Which of one species or transition-state entry's statmech models support the stated claim, or the preferred one.\n\n``intent=qualify`` returns every candidate's assessment and selects nothing. ``intent=protocol_preferred`` also\ncompares whole applicable models, but only where an audited rule says one precedes another for exactly this task,\nobjective and scope; **this release ships no active rule**, so the answer is the qualified models, a sole eligible\nmodel, or incomparable alternatives, never an invented ranking. Alternatives are not equally accurate, only\nunranked. Unknown is never unity: a recipe fact a model does not state is reported as missing.\n\nA valid negative scientific outcome is 200. Refusals are 422: a contradictory request, a deferred bound exceeded\n(``statmech_selection_bound_exceeded``: more than 500 visible candidates, 25,000 nested rows, a dependency traversal\npast depth 8 or a manifest over 10 MiB; nothing is chosen from a prefix), a population this release does not\nevaluate (``statmech_selection_unsupported``), or a scope ref the caller may see but that belongs to another entry\nthan the target (``statmech_selection_scope_owner_mismatch``; ``context.field`` names the ref). An unknown or hidden\ntarget, basin, determination, declaration or candidate ref is one 404 (``unknown_statmech_candidate_ref`` for a\ncandidate).",
+        "description": "Which of one species or transition-state entry's statmech models support the stated claim, in display order.\n\n``intent=qualify`` returns every candidate's assessment and selects nothing. ``intent=protocol_coverage`` also\nlists the qualified whole models in display order. TCKDB ranks no model above another, so the answer is the\nqualified models, a sole eligible model, or incomparable alternatives, never an invented ranking. Alternatives are\nnot equally accurate, only unranked. Unknown is never unity: a recipe fact a model does not state is reported as missing.\n\nA valid negative scientific outcome is 200. Refusals are 422: a contradictory request, a deferred bound exceeded\n(``statmech_selection_bound_exceeded``: more than 500 visible candidates, 25,000 nested rows, a dependency traversal\npast depth 8 or a manifest over 10 MiB; nothing is chosen from a prefix), a population this release does not\nevaluate (``statmech_selection_unsupported``), or a scope ref the caller may see but that belongs to another entry\nthan the target (``statmech_selection_scope_owner_mismatch``; ``context.field`` names the ref). An unknown or hidden\ntarget, basin, determination, declaration or candidate ref is one 404 (``unknown_statmech_candidate_ref`` for a\ncandidate).",
         "operationId": "select_statmech_models_api_v1_scientific_statmech_select_post",
         "parameters": [
           {
@@ -99016,7 +99036,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Qualify supplied statistical models for a stated use, and prefer one only where audited rules say so",
+        "summary": "Qualify supplied statistical models for a stated use, listed in display order (none is ranked above another)",
         "tags": [
           "scientific"
         ]

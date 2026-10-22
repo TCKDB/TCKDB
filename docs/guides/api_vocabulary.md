@@ -146,7 +146,7 @@ What a **human curator** has said about one scientific record. It is the only vo
 | `rejected` | A curator reviewed the record and does not accept it. Absent from results unless the request asks for it with `include_rejected=true`. |
 | `deprecated` | The record should no longer be used — superseded by a better one, or withdrawn. It is kept rather than deleted so an existing citation still resolves. Absent from results unless the request asks with `include_deprecated=true`. |
 
-> When a response ranks candidates it orders them `approved`, `under_review`, `not_reviewed`, `deprecated`, `rejected` — `REVIEW_RANK` in `backend/app/schemas/reads/scientific_common.py`.
+> A response lists records in a fixed display order, echoed in `request.sort`. The review part of it is defined once, in `docs/specs/browse_order.md`; it is not a scientific preference.
 
 ## What TCKDB can check by itself
 
@@ -275,7 +275,7 @@ A check name is an assertion, so read it together with its value: `"irc_evidence
 
 `kind` decides what a failure costs: **required** — failing it stops the record reaching `well_supported`, however good the ratio is; **optional** — contributes to completeness; its absence blocks no badge; **warning** — informational; carries zero weight. `weight` is that check's share of the completeness ratio.
 
-Which rubric applies is decided by the kind of record, and for a statmech record by what owns it (`computed_statmech` for a species entry, `computed_ts_statmech` for a transition-state entry): `computed_calculation` (v1), `computed_kinetics` (v1), `computed_statmech` (v1), `computed_thermo` (v1), `computed_transition_state` (v1), `computed_transport` (v1), `computed_ts_statmech` (v1).
+Which rubric applies is decided by the kind of record, and for a statmech record by what owns it (`computed_statmech` for a species entry, `computed_ts_statmech` for a transition-state entry): `computed_calculation` (v1), `computed_kinetics` (v1), `computed_statmech` (v1), `computed_thermo` (v1), `computed_transition_state` (v2), `computed_transport` (v1), `computed_ts_statmech` (v1).
 
 | Check | Rubric | Kind | Weight | What it asks |
 | --- | --- | --- | --- | --- |
