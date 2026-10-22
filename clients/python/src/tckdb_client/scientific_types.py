@@ -7,7 +7,7 @@ dependency or changing the objects returned by existing methods.
 
 from __future__ import annotations
 
-from typing import Any, Generic, Literal, NotRequired, Required, TypeAlias, TypedDict, TypeVar
+from typing import Any, Generic, Literal, NotRequired, Required, TypeAlias, TypeVar, TypedDict
 
 JSONDict: TypeAlias = dict[str, Any]
 
@@ -1737,8 +1737,6 @@ __all__ = [
     "NetworkStateCompositionParticipant",
     "NetworkStateSummary",
     "ObservationRecord",
-    "OrderEcho",
-    "OrderKeyEcho",
     "Pagination",
     "PublicAssessmentSummary",
     "ReactionKineticsResponse",
@@ -1748,6 +1746,8 @@ __all__ = [
     "ReproducibilityAssessmentSummary",
     "ReviewStatusSummary",
     "ScientificDetailResponse",
+    "OrderEcho",
+    "OrderKeyEcho",
     "ScientificRequestEcho",
     "ScientificSearchResponse",
     "ScientificSoftwareReleaseIdentity",

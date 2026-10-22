@@ -129,9 +129,9 @@ def run(
 
 
 __all__ = [
+    "TOOL_NAME",
+    "TOOL_DESCRIPTION",
     "INPUT_SCHEMA",
     "LEGAL_INCLUDE_TOKENS",
-    "TOOL_DESCRIPTION",
-    "TOOL_NAME",
     "run",
 ]

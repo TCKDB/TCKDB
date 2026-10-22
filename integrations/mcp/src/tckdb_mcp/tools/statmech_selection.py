@@ -28,7 +28,7 @@ from typing import Any
 from ..config import Config
 from ..errors import invalid_input
 from ..http_client import TCKDBHttpClient
-from ._path_handles import validate_path_handle
+from ._path_handles import PUBLIC_REF_MAX_LENGTH, validate_path_handle
 
 TOOL_NAME = "tckdb_select_statmech_models"
 

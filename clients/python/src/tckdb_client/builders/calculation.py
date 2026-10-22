@@ -31,9 +31,9 @@ from tckdb_client.builders.validation import (
 )
 
 __all__ = [
-    "Calculation",
     "LevelOfTheory",
     "SoftwareRelease",
+    "Calculation",
 ]
 
 # Allowed calculation types in Phase 1. The full backend

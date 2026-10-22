@@ -14,9 +14,9 @@ import re
 
 __all__ = [
     "TCKDBBuilderValidationError",
-    "ensure_int",
     "ensure_non_empty_str",
     "ensure_optional_non_empty_str",
+    "ensure_int",
     "ensure_positive_int",
     "slugify_label",
 ]

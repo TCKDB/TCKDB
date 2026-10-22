@@ -85,7 +85,7 @@ def validate_path_handle(
 
 
 __all__ = [
-    "PATH_UNSAFE_CHARS",
     "PUBLIC_REF_MAX_LENGTH",
+    "PATH_UNSAFE_CHARS",
     "validate_path_handle",
 ]

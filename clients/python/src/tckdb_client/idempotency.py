@@ -76,4 +76,4 @@ def make_idempotency_key(*parts: str) -> str:
     return validate_idempotency_key(key)
 
 
-__all__ = ["make_idempotency_key", "validate_idempotency_key"]
+__all__ = ["validate_idempotency_key", "make_idempotency_key"]

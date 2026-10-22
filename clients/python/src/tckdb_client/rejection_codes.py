@@ -70,8 +70,8 @@ __all__ = [
     "CONFLICT_REJECTION_CODES",
     "NON_RETRYABLE_CODES",
     "REJECTION_STATUSES",
-    "VALIDATION_REJECTION_CODES",
     "RejectionCode",
+    "VALIDATION_REJECTION_CODES",
     "rejection_code",
 ]
 

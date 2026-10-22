@@ -194,10 +194,10 @@ def run(
 
 
 __all__ = [
-    "INPUT_SCHEMA",
-    "LEGAL_INCLUDE_REVIEW",
-    "LEGAL_INCLUDE_TOKENS",
-    "TOOL_DESCRIPTION",
     "TOOL_NAME",
+    "TOOL_DESCRIPTION",
+    "INPUT_SCHEMA",
+    "LEGAL_INCLUDE_TOKENS",
+    "LEGAL_INCLUDE_REVIEW",
     "run",
 ]

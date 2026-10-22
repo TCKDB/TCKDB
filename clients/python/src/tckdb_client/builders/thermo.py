@@ -21,10 +21,9 @@ non-empty values rather than silently dropping them.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable
+import math
 
 from pydantic import ValidationError
 from tckdb_schemas.enthalpy_reference import enthalpy_reference_error
@@ -33,6 +32,7 @@ from tckdb_schemas.thermo_declarations import (
     ThermoProtocolDeclaration,
     thermo_declaration_error,
 )
+from typing import TYPE_CHECKING, Any, Callable
 
 from tckdb_client.builders.validation import (
     TCKDBBuilderValidationError,

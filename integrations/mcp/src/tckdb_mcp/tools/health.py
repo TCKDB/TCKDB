@@ -37,4 +37,4 @@ def run(
     return {"status": "ok"}
 
 
-__all__ = ["INPUT_SCHEMA", "TOOL_DESCRIPTION", "TOOL_NAME", "run"]
+__all__ = ["TOOL_NAME", "TOOL_DESCRIPTION", "INPUT_SCHEMA", "run"]

@@ -207,4 +207,4 @@ def _validate_target(value: Any) -> dict[str, Any]:
     return out
 
 
-__all__ = ["INPUT_SCHEMA", "TOOL_DESCRIPTION", "TOOL_NAME", "run"]
+__all__ = ["TOOL_NAME", "TOOL_DESCRIPTION", "INPUT_SCHEMA", "run"]
