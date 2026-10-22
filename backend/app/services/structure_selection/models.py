@@ -1,6 +1,6 @@
 """Plain values for structure selection: the normalised request, one unit's normalised facts, its assessment.
 
-Everything here is data. The assessor (and, later, a decision engine and a replay) may look at nothing but these
+Everything here is data. The assessor (and the decision engine and a replay) may look at nothing but these
 values: public refs, review state, timestamps, stored columns and declared claims, never a database id or an ORM
 row. That is what lets a decision manifest be replayed without a database. ``id_rank`` is a unit's position when the
 population is ordered by database id: it stands in for the id as the last tie-break and is not an id.
@@ -132,14 +132,6 @@ class AdminPolicy(str, Enum):
     earliest = "earliest"
 
 
-class Objective(str, Enum):
-    """What a protocol preference optimises. ``model_fidelity`` is relative to a *pinned* reference model."""
-
-    physical_accuracy = "physical_accuracy"
-    expected_accuracy = "expected_accuracy"
-    model_fidelity = "model_fidelity"
-
-
 class StructureOutcome(str, Enum):
     """What a decision found. A negative scientific outcome is a valid answer, not an error."""
 
@@ -152,10 +144,8 @@ class StructureOutcome(str, Enum):
     representative_minimum = "representative_minimum"
     qualified_evidence = "qualified_evidence"
     validated_corpus_minimum = "validated_corpus_minimum"
-    policy_preferred = "policy_preferred"
     sole_eligible_candidate = "sole_eligible_candidate"
     incomparable_alternatives = "incomparable_alternatives"
-    policy_conflict = "policy_conflict"
     evidence_conflict = "evidence_conflict"
 
 
@@ -235,11 +225,8 @@ class StructureRequest:
         facts must establish it; a request never manufactures a missing fact.
     :param require_stable_reference: Require SCF stability evidence on the energy source.
     :param require_connectivity: Also require reactive-connectivity evidence (transition-state grain).
-    :param admin_policy: Administrative order within a front. Never reorders fronts.
+    :param admin_policy: Administrative order of tied units and cohorts. Display order, never a method preference.
     :param result_mode: ``all``, or ``first`` (a labelled administrative presentation, never past a conflict).
-    :param apply_rules: Whether the rule registry takes part (the decision stage; ignored by assessment).
-    :param objective: What a protocol preference optimises (``protocol_preferred`` only, and then required).
-    :param reference_model: The pinned reference model a ``model_fidelity`` objective is measured against.
     :param repeat_policy: How repeated determinations of one target are treated.
     :param bounds: The engineering limits; the endpoint contract is the default.
     """
@@ -258,9 +245,6 @@ class StructureRequest:
     require_connectivity: bool = False
     admin_policy: AdminPolicy = AdminPolicy.default
     result_mode: ResultMode = ResultMode.all
-    apply_rules: bool = True
-    objective: Objective | None = None
-    reference_model: str | None = None
     repeat_policy: RepeatPolicy = RepeatPolicy.retain_alternates
     bounds: SelectionBounds = field(default_factory=SelectionBounds)
 
@@ -285,16 +269,8 @@ class StructureRequest:
         if self.require_connectivity and self.grain is not Grain.transition_state:
             raise ValueError("require_connectivity belongs to the transition_state grain")
         if self.intent is Intent.protocol_preferred:
-            if self.objective is None:
-                raise ValueError("protocol preference states its comparison objective")
-            if self.objective is Objective.model_fidelity and not self.reference_model:
-                raise ValueError("a model_fidelity objective names the pinned reference_model it is measured against")
             if self.grain is Grain.calculation and self.geometry_ref is None:
-                raise ValueError("protocol preference between calculations compares at one fixed geometry: state geometry_ref")
-        elif self.objective is not None or self.reference_model is not None:
-            raise ValueError("objective and reference_model belong to protocol preference only")
-        if self.reference_model is not None and self.objective is not Objective.model_fidelity:
-            raise ValueError("reference_model belongs to a model_fidelity objective")
+                raise ValueError("protocol listing between calculations compares at one fixed geometry: state geometry_ref")
         if self.member_refs is not None and not self.member_refs:
             raise ValueError("member_refs names no member; omit it to ask for the complete authorized corpus")
         if self.member_refs is not None and len(set(self.member_refs)) != len(self.member_refs):
@@ -328,9 +304,6 @@ class StructureRequest:
             "require_connectivity": self.require_connectivity,
             "administrative_policy": self.admin_policy.value,
             "result_mode": self.result_mode.value,
-            "apply_rules": self.apply_rules,
-            "objective": self.objective.value if self.objective is not None else None,
-            "reference_model": self.reference_model,
             "repeat_policy": self.repeat_policy.value,
             "bounds": self.bounds.to_dict(),
         }
@@ -353,9 +326,6 @@ class StructureRequest:
             require_connectivity=raw["require_connectivity"],
             admin_policy=AdminPolicy(raw["administrative_policy"]),
             result_mode=ResultMode(raw["result_mode"]),
-            apply_rules=raw["apply_rules"],
-            objective=Objective(raw["objective"]) if raw["objective"] is not None else None,
-            reference_model=raw["reference_model"],
             repeat_policy=RepeatPolicy(raw["repeat_policy"]),
             bounds=SelectionBounds.from_dict(raw["bounds"]),
         )

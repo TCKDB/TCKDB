@@ -38,7 +38,6 @@ from app.schemas.reads.scientific_network_selection import (
     NetworkSelectionPick,
     NetworkSelectionPolicy,
     NetworkSelectionPolicyInfo,
-    NetworkSelectionRelations,
     NetworkSelectionRequest,
     NetworkSelectionRequestEcho,
     NetworkSelectionResponse,
@@ -80,8 +79,6 @@ def check_request_refs(session: Session, body: NetworkSelectionRequest) -> None:
 
 
 def _admin_policy(policy: NetworkSelectionPolicy) -> SelectionPolicy:
-    if policy is NetworkSelectionPolicy.method_preferred:
-        return SelectionPolicy.default
     return SelectionPolicy(policy.value)
 
 
@@ -114,14 +111,9 @@ def to_service_request(body: NetworkSelectionRequest, *, network_ref: str) -> Ne
         initial_state_hashes=tuple(body.regime.initial_state_hashes),
         source_composition_hash=body.source_composition_hash,
         sink_composition_hash=body.sink_composition_hash,
-        objective=body.objective,
-        reference_model_ref=body.reference_model_ref,
-        reference_outputs=body.reference_outputs,
         min_review_status=body.min_review_status,
         admin_policy=_admin_policy(body.policy),
         first_only=body.mode is NetworkSelectionMode.first,
-        # The route, not the engine, decides whether rules apply: only ``method_preferred`` consults any.
-        apply_rules=body.policy is NetworkSelectionPolicy.method_preferred,
     )
 
 
@@ -198,7 +190,7 @@ def _pick(manifest: dict[str, Any], mode: NetworkSelectionMode) -> NetworkSelect
     decision = manifest["decision"]
     outcome = decision["outcome"]
     scope = NetworkSelectionScope(manifest["request"]["scope"])
-    if outcome in (Outcome.policy_preferred.value, Outcome.sole_eligible_candidate.value):
+    if outcome == Outcome.sole_eligible_candidate.value:
         node_ref = decision["selected_ref"]
         basis, administrative, explanation = outcome, False, decision["basis"]
     else:
@@ -233,8 +225,6 @@ def build_response(
             name=manifest["policy"]["name"],
             version=manifest["policy"]["version"],
             bounds_version=manifest["policy"]["bounds_version"],
-            rules_applied=decision["rules_applied"],
-            rules=decision["rules"],
         ),
         outcome=NetworkSelectionOutcome(manifest["outcome"]),
         basis=decision["basis"],
@@ -243,16 +233,7 @@ def build_response(
         administrative_order=decision["administrative_order"],
         determinations=manifest["assessments"]["determinations"],
         bundles=manifest["assessments"]["bundles"],
-        relations=NetworkSelectionRelations(
-            edges=decision["edges"],
-            overridden_edges=decision["overridden_edges"],
-            opposing_pairs=decision["opposing_pairs"],
-            cycles=decision["cycles"],
-            unused_edges=decision["unused_edges"],
-        ),
         representations=decision["representations"],
-        rule_matches=decision["rule_matches"],
-        pair_checks=decision["pair_checks"],
         disclosures=NetworkSelectionDisclosures(
             unresolved_refs=disclosures.get("unresolved_refs", []),
             unsupported_refs=disclosures.get("unsupported_refs", []),

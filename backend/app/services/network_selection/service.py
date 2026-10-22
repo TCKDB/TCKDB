@@ -34,7 +34,6 @@ from app.services.network_selection.bounds import check_snapshot_size
 from app.services.network_selection.loader import (
     excluded_listing,
     load_population,
-    resolve_reference_model,
     scan_population,
 )
 from app.services.network_selection.models import (
@@ -113,14 +112,13 @@ def assess_network(
         population and everything loaded for it are one consistent state (``SnapshotNotConsistentError``
         otherwise). A route opens a session for the purpose; only a caller that cannot (a test inside one
         outer transaction) passes ``False``, and the isolation level actually in force is reported either way.
-    :raises NotFoundError: unknown network, or an unknown or hidden reference model.
+    :raises NotFoundError: unknown network.
     :raises CodedValueError: ``network_selection_population_too_large`` or ``..._snapshot_too_large`` (nothing
         is assessed), or ``network_declaration_invalid`` for a request that names states or channels the
         network does not have.
     """
     isolation = begin_read_snapshot(session, require=require_snapshot)
     scan = scan_population(session, request=request)
-    resolve_reference_model(session, request)
     network, solves = load_population(session, scan, request)
     # The loader to engine seam (guard PR-3): a hidden ref in the captured facts (a validation entry's reference solve)
     # becomes a placeholder token BEFORE the solves are assessed, decided or sealed into the manifest.

@@ -4,23 +4,21 @@ A selection is only as trustworthy as the inputs it can be re-derived from. The 
 request, the snapshot isolation it was read under, the visibility scope (the read profile and the review states
 observed), the network's states with the exact content behind each locator, every authorized solve with its
 declarations, determinations and fit summaries, every assessment with its reasons and evidence states, the
-registry entries consulted (rule id, version, status, audited manifest digest), each rule's verdict per node, the
-pair-compatibility checks, the accepted, overridden and unused edges, the fronts, the conflicts and the selected
-basis. It is built from public references and captured content only: no database id, no internal key. Hashes alone
-are never the record; the canonical inputs are.
+fronts and the administrative order. It is built from public references and captured content only: no database id,
+no internal key. Hashes alone are never the record; the canonical inputs are.
 
 Two replay levels, because a decision rests on two things and a forged document could change either:
 
 * :func:`replay_network_assessment` recomputes every applicability verdict (grouping, applicability, coverage,
   qualification-dependent reasons, the pinned product-set content) from the captured normalised inputs under the
   pinned semantic versions, and refuses if any recomputed verdict differs from the recorded one.
-* :func:`replay_network_decision` recomputes compatible edges, conflicts, fronts and the selection from the
-  *recomputed* assessments, never from recorded eligibility flags, so a mirrored edit of ``eligible`` together with
+* :func:`replay_network_decision` recomputes the outcome and the administrative order from the *recomputed*
+  assessments, never from recorded eligibility flags, so a mirrored edit of ``eligible`` together with
   its recorded assessment cannot bypass re-assessment.
 
-:func:`replay_network` does both, and also compares the recorded ``outcome`` as well as the decision. A policy,
-assessment, bounds, declaration or rule version that the running code does not carry refuses the replay rather than
-substituting another.
+:func:`replay_network` does both, and also compares the recorded ``outcome`` as well as the decision. A manifest
+format, policy, assessment, bounds or declaration version that the running code does not carry refuses the replay
+rather than substituting another.
 
 What replay is, and is not. It reproduces the *reasoning* from captured inputs. It does not authenticate the
 scientific truth of those inputs, and it cannot prove that no authorized candidate was left out of a forged
@@ -28,16 +26,15 @@ document: a document that omits a candidate replays cleanly. The record carries 
 provenance, and a release carries its own signature and checksum facilities, so the manifest says where it came
 from; trust in that origin is not something replay supplies.
 
-A historic replay uses the review states and rule statuses it captured. A withdrawal, a new review or a rule
-deactivation since then changes a fresh decision, not the historical artifact, and the manifest says which review
-states it observed so its validity is never mistaken for a current recommendation.
+A historic replay uses the review states it captured. A withdrawal or a new review since then changes a fresh
+decision, not the historical artifact, and the manifest says which review states it observed so its validity is
+never mistaken for a current recommendation.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Sequence
 from typing import Any
 
 from tckdb_schemas.network_declarations import NETWORK_DECLARATION_VERSIONS
@@ -62,16 +59,16 @@ from app.services.network_selection.models import (
     Scope,
     SolveFacts,
 )
-from app.services.network_selection.rules import NetworkRule, default_rules
-from app.services.rule_registry import rule_recorded_in, rules_registry
 from app.services.scientific_read.profile import current_read_profile
 from app.versioning import same_value
 
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. The
 #: network's one such position, a validation entry's reference to a solve the reader cannot open, is evidence and reads
 #: as unavailable (``reference_solve_ref`` null, ``reference_withheld`` true), as on a reference to nothing; no token
-#: stands there today. Replay reads exactly this format; a manifest in any other is refused.
-MANIFEST_FORMAT_VERSION = 1
+#: stands there today. Replay reads exactly this format; a manifest in any other is refused. Version 2: the decision no
+#: longer holds rules, rule matches, pair checks, edges, overridden or unused edges, opposing pairs or cycles, and the
+#: request no longer holds an objective, a reference model or reference outputs.
+MANIFEST_FORMAT_VERSION = 2
 MANIFEST_FORMAT_NAME = "network_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "network_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -167,24 +164,6 @@ def _check_versions(manifest: dict[str, Any]) -> None:
                 )
 
 
-def _rules_for(manifest: dict[str, Any], rules: Sequence[NetworkRule] | None) -> tuple[NetworkRule, ...]:
-    registry = rules_registry("network_selection_rules", default_rules() if rules is None else rules)
-    used: list[NetworkRule] = []
-    for entry in manifest["decision"]["rules"]:
-        key = (entry["rule_id"], entry["version"])
-        rule = rule_recorded_in(registry, entry, ReplayError)
-        described = rule.describe()
-        if described["status"] != entry["status"]:
-            raise ReplayError(
-                f"rule {key[0]} version {key[1]} was {entry['status']} when this decision was made and is "
-                f"{described['status']} now; a rule's status change is a new version"
-            )
-        if described.get("manifest_sha256") != entry.get("manifest_sha256"):
-            raise ReplayError(f"rule {key[0]} version {key[1]} now rests on a different audited manifest")
-        used.append(rule)
-    return tuple(used)
-
-
 def _inputs(manifest: dict[str, Any]) -> tuple[NetworkRequest, NetworkFacts, tuple[SolveFacts, ...]]:
     request = NetworkRequest.from_dict({k: v for k, v in manifest["request"].items() if k != "effective_review_statuses"})
     network = NetworkFacts.from_dict(manifest["network"])
@@ -278,39 +257,32 @@ def replay_network_assessment(manifest: dict[str, Any]) -> dict[str, Any]:
 
 
 def _decide_from(
-    manifest: dict[str, Any],
-    rules: Sequence[NetworkRule] | None,
     request: NetworkRequest,
-    network: NetworkFacts,
     solves: tuple[SolveFacts, ...],
     dets: list[DeterminationAssessment],
     bundles: list[BundleAssessment],
 ) -> dict[str, Any]:
-    used = _rules_for(manifest, rules)
     candidates = build_candidates(request, solves, dets, bundles)
-    return decide(candidates, network=network, request=request, rules=used).to_dict()
+    return decide(candidates, request=request).to_dict()
 
 
-def replay_network_decision(manifest: dict[str, Any], *, rules: Sequence[NetworkRule] | None = None) -> dict[str, Any]:
-    """Recompute edges, conflicts, fronts and the selection from *recomputed* assessments; no database.
+def replay_network_decision(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Recompute the outcome, the fronts and the administrative order from *recomputed* assessments; no database.
 
     The candidates are built from freshly recomputed verdicts, never from recorded eligibility flags, and a caller
     cannot hand in assessments of its own: a decision replay that trusted them would reproduce any winner.
 
     :returns: ``NetworkDecision.to_dict()``.
-    :raises ReplayError: for an unknown version, or a rule version, status or audited manifest the running
-        registry does not carry.
+    :raises ReplayError: for an unknown manifest format or version.
     """
     _check_versions(manifest)
     _check_consistency(manifest)
     request, network, solves = _inputs(manifest)
     dets, bundles, _ = _recompute_assessments(request, network, solves)
-    return _decide_from(manifest, rules, request, network, solves, dets, bundles)
+    return _decide_from(request, solves, dets, bundles)
 
 
-def replay_network(
-    manifest: dict[str, Any], *, rules: Sequence[NetworkRule] | None = None, check_digest: bool = True
-) -> dict[str, Any]:
+def replay_network(manifest: dict[str, Any], *, check_digest: bool = True) -> dict[str, Any]:
     """Both replay levels, then a comparison with what the manifest records: decision *and* outcome.
 
     :raises ReplayError: on any refusal of either level, a digest that does not match the manifest body (when the
@@ -319,8 +291,8 @@ def replay_network(
     """
     if check_digest and "digest" in manifest and manifest["digest"]["value"] != manifest_digest(manifest):
         raise ReplayError("the manifest does not match its recorded digest")
-    request, network, solves, dets, bundles, _ = _verified_assessments(manifest)
-    decision = _decide_from(manifest, rules, request, network, solves, dets, bundles)
+    request, _, solves, dets, bundles, _ = _verified_assessments(manifest)
+    decision = _decide_from(request, solves, dets, bundles)
     if decision["outcome"] != manifest["outcome"]:
         raise ReplayError(
             f"the recomputed outcome {decision['outcome']!r} differs from the recorded {manifest['outcome']!r}"
@@ -330,6 +302,6 @@ def replay_network(
     return decision
 
 
-def replay_matches(manifest: dict[str, Any], *, rules: Sequence[NetworkRule] | None = None) -> bool:
+def replay_matches(manifest: dict[str, Any]) -> bool:
     """True when both levels reproduce what the manifest records; any refusal propagates."""
-    return replay_network(manifest, rules=rules) == manifest["decision"]
+    return replay_network(manifest) == manifest["decision"]

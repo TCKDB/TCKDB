@@ -1,11 +1,11 @@
 """The request schema of the statmech selection operation (``POST /scientific/statmech/select``).
 
-Which supplied statistical model supports a declared use, and is any applicable whole recipe preferred by scoped
-evidence? A read: nothing is stored, no endorsement is created, browse order is untouched. See
+Which supplied statistical model supports a declared use, and, among the models that do, in what display order
+(``docs/specs/browse_order.md``)? TCKDB ranks no model above another. A read: nothing is stored, no endorsement is created, browse order is untouched. See
 ``backend/docs/specs/statmech_selection_contract.md``.
 
 The request is strict. Unknown fields are refused; references are typed public refs (never a database id); there
-is no pagination, no sort expression and no caller-authored rule; and the engineering bounds are the server's:
+is no pagination and no sort expression; and the engineering bounds are the server's:
 the schema has no field for one. A misspelled token is a validation error. A *recognised deferred* task is valid
 and is answered with a scientific ``unsupported_task`` outcome. Every cross-field rule lives in
 :class:`~app.services.statmech_selection.models.StatmechRequest`, which this schema builds, so the two cannot
@@ -41,7 +41,6 @@ from app.services.statmech_selection.vocabulary import (
     Intent,
     IsotopeConvention,
     Normalization,
-    Objective,
     Observable,
     Outcome,
     OwnerKind,
@@ -174,7 +173,7 @@ PopulationBody = Annotated[
 class StatmechSelectionRequest(_Strict):
     """Qualify a supplied statistical model for a declared use, or compare applicable whole recipes."""
 
-    contract_version: Literal[1] = 1
+    contract_version: Literal[2] = 2
     intent: Intent
     task: Task | DeferredTask
     observable: Observable | None = Field(
@@ -184,8 +183,6 @@ class StatmechSelectionRequest(_Strict):
     conditions: ConditionsBody = Field(default_factory=ConditionsBody)
     population: PopulationBody = Field(default_factory=lambda: AuthorizedMatchingModels(kind="authorized_matching_models"))
     coverage_requirement: CoverageRequirement = CoverageRequirement.entire_requested_domain
-    comparison_objective: Objective | None = None
-    reference_model_ref: ModelRef | None = None
     administrative_policy: SelectionPolicy = SelectionPolicy.default
     result_mode: ResultMode = ResultMode.all
     min_review_status: RecordReviewStatus | None = Field(
@@ -252,8 +249,6 @@ class StatmechSelectionRequest(_Strict):
             conditions=conditions,
             population=population,
             coverage=self.coverage_requirement,
-            objective=self.comparison_objective,
-            reference_model_ref=self.reference_model_ref,
             admin_policy=self.administrative_policy,
             result_mode=self.result_mode,
             min_review_status=self.min_review_status,
@@ -282,8 +277,6 @@ class StatmechSelectionRequestEcho(ProfiledRequestEcho):
     conditions: dict[str, Any]
     population: dict[str, Any]
     coverage_requirement: str
-    comparison_objective: str | None = None
-    reference_model_ref: str | None = None
     administrative_policy: str
     result_mode: str
     min_review_status: RecordReviewStatus | None = None
@@ -325,9 +318,8 @@ class StatmechSelectionCandidate(BaseModel):
 
 
 class StatmechSelectionSelection(BaseModel):
-    """The three mutually exclusive references. At most one is set; each carries its basis and population limit."""
+    """The two mutually exclusive references. At most one is set; each carries its basis and population limit."""
 
-    scientific_ref: str | None = None
     sole_eligible_ref: str | None = None
     administrative_ref: str | None = None
     basis: str | None = None
@@ -340,12 +332,6 @@ class StatmechSelectionPopulation(BaseModel):
     excluded_by_review: list[dict[str, str]]
     excluded_count: int
     excluded_by_review_withheld: bool
-
-
-class StatmechSelectionConflicts(BaseModel):
-    opposing_pairs: list[dict[str, Any]]
-    cycles: list[list[str]]
-    overridden_edges: list[dict[str, Any]]
 
 
 class StatmechSelectionManifestDescriptor(BaseModel):
@@ -384,13 +370,16 @@ class StatmechSelectionResponse(BaseModel):
     population: StatmechSelectionPopulation
     coverage: dict[str, Any]
     candidates: list[StatmechSelectionCandidate]
-    edges: list[dict[str, Any]]
-    fronts: list[list[str]]
-    conflicts: StatmechSelectionConflicts
-    undecided: list[dict[str, Any]]
+    fronts: list[list[str]] = Field(
+        description="The qualified models that tie, in display order: one front, or none when nothing is listed. Its "
+        "order is not a preference."
+    )
+    administrative_order: list[str]
+    administrative_key: dict[str, Any] = Field(
+        description="The versioned display-order key (review rank, deposition time, tie-breaker)."
+    )
     advisories: dict[str, list[str]]
     notices: list[str]
-    protocol: dict[str, Any]
     manifest: StatmechSelectionManifestDescriptor
     snapshot_isolation: str
     integrity: StatmechSelectionIntegrity
@@ -406,7 +395,7 @@ class StatmechSelectionManifest(BaseModel):
     """The replayable decision manifest of the ``/manifest`` download.
 
     Public refs only: the normalised request, read profile, snapshot isolation, subject, every candidate's facts and
-    source calculation, each assessment, the registry entries consulted and the decision. ``reproduce_statmech_ordering``,
+    source calculation, each assessment and the decision. ``reproduce_statmech_ordering``,
     ``reassess_statmech_captured_inputs`` and ``replay_statmech_decision`` recompute it offline. The digests in
     ``integrity`` are checksums, not signatures: anyone who edits a manifest can recompute them, so replay shows the
     reasoning follows from the captured inputs and proves neither that they are true nor that the population was

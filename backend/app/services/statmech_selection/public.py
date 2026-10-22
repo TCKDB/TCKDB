@@ -37,7 +37,6 @@ from app.db.models.structure_determination import StructureDetermination
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
 from app.schemas.reads.scientific_statmech_selection import (
     StatmechSelectionCandidate,
-    StatmechSelectionConflicts,
     StatmechSelectionIntegrity,
     StatmechSelectionManifestDescriptor,
     StatmechSelectionPopulation,
@@ -156,10 +155,7 @@ def check_request_refs(
             session, field="determination_ref", kind_label="structure_determination", ref=determination,
             owner=_owner_of(saddle), target=target, statmech_id=None, profile=profile,
         )
-    for field, ref in (
-        ("ensemble_declaration_ref", getattr(scope, "ensemble_declaration_ref", None)),
-        ("reference_model_ref", body.reference_model_ref),
-    ):
+    for field, ref in (("ensemble_declaration_ref", getattr(scope, "ensemble_declaration_ref", None)),):
         if ref is None:
             continue
         declaration_id = _ref_only(session, StatmechModelDeclaration, ref, kind_label="statmech_model_declaration")
@@ -216,7 +212,7 @@ def build_response(selection: StatmechSelection) -> StatmechSelectionResponse:
     """The typed response, built from the manifest. Public refs only."""
     manifest = selection.manifest
     decision = manifest["decision"]
-    protocol = decision["protocol"]
+    ordering = decision["ordering"]
     population = manifest["population"]
     statuses = sorted((RecordReviewStatus(v) for v in manifest["effective_review_statuses"]), key=lambda s: REVIEW_FLOOR_ORDER[s])
     floor = statuses[-1] if statuses else RecordReviewStatus.approved
@@ -239,17 +235,11 @@ def build_response(selection: StatmechSelection) -> StatmechSelectionResponse:
         ),
         coverage=decision["coverage"],
         candidates=candidates,
-        edges=protocol["edges"],
-        fronts=protocol["fronts"],
-        conflicts=StatmechSelectionConflicts(
-            opposing_pairs=protocol["opposing_pairs"],
-            cycles=protocol["cycles"],
-            overridden_edges=protocol["overridden_edges"],
-        ),
-        undecided=protocol["undecided"],
+        fronts=ordering["fronts"],
+        administrative_order=ordering["administrative_order"],
+        administrative_key=ordering["admin_key"],
         advisories=decision["advisories"],
         notices=decision["notices"],
-        protocol=protocol,
         manifest=StatmechSelectionManifestDescriptor(
             manifest_format=VersionRef(name=MANIFEST_FORMAT_NAME, version=MANIFEST_FORMAT_VERSION),
             manifest_sha256=manifest["integrity"]["manifest_sha256"],

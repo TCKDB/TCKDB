@@ -120,9 +120,6 @@ def _echo(manifest: dict[str, Any], entry_ref: str) -> StructureSelectionRequest
         require_connectivity=request["require_connectivity"],
         administrative_policy=request["administrative_policy"],
         result_mode=request["result_mode"],
-        apply_rules=request["apply_rules"],
-        objective=request["objective"],
-        reference_model=request["reference_model"],
         repeat_policy=request["repeat_policy"],
         bounds=request["bounds"],
     )

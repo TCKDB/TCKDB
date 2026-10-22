@@ -39,7 +39,6 @@ from app.schemas.reads.scientific_thermo_selection import (
     W_THERMO_SELECTION_POPULATION_TOO_LARGE,
     ThermoSelectionCandidate,
     ThermoSelectionDisclosures,
-    ThermoSelectionEdge,
     ThermoSelectionExcluded,
     ThermoSelectionMode,
     ThermoSelectionOutcome,
@@ -47,7 +46,6 @@ from app.schemas.reads.scientific_thermo_selection import (
     ThermoSelectionPolicy,
     ThermoSelectionPolicyInfo,
     ThermoSelectionReason,
-    ThermoSelectionRelations,
     ThermoSelectionRequest,
     ThermoSelectionRequestEcho,
     ThermoSelectionResponse,
@@ -99,8 +97,6 @@ def resolve_group_ref(session: Session, ref: str) -> int:
 
 
 def _admin_policy(policy: ThermoSelectionPolicy) -> SelectionPolicy:
-    if policy is ThermoSelectionPolicy.method_preferred:
-        return SelectionPolicy.default
     return SelectionPolicy(policy.value)
 
 
@@ -109,9 +105,8 @@ def run_selection(
 ) -> tuple[H298Selection, str | None]:
     """Run the service for a public request. Returns the selection and the conformer-group ref, if any.
 
-    ``method_preferred`` applies the shipped registry. The administrative policies apply no rule at
-    all: they order by review status and recency exactly as the browse endpoints do, and say so.
-    The population cap is the service's fixed 500; it is not a request field.
+    Every policy is administrative: it orders by review status and deposition time exactly as the browse
+    endpoints do. The population cap is the service's fixed 500; it is not a request field.
 
     The session must be a read-only snapshot (see ``get_snapshot_db``), and this insists on it: a session that is
     not one (``get_db``'s, say, if a route were wired to it by mistake) raises ``SnapshotNotConsistentError`` instead
@@ -126,12 +121,10 @@ def run_selection(
         min_review_status=body.min_review_status,
         admin_policy=_admin_policy(body.policy),
     )
-    rules = None if body.policy is ThermoSelectionPolicy.method_preferred else ()
     selection = select_h298(
         session,
         species_entry_id=species_entry_id,
         request=request,
-        rules=rules,
         require_snapshot=not session.info.get(SNAPSHOT_OPT_OUT, False),
     )
     if selection.outcome is Outcome.bounded_search_exceeded:
@@ -183,7 +176,7 @@ def _pick(manifest: dict[str, Any], mode: ThermoSelectionMode) -> ThermoSelectio
     if decision is None:
         return None
     outcome = decision["outcome"]
-    if outcome in (Outcome.policy_preferred.value, Outcome.sole_eligible_candidate.value):
+    if outcome == Outcome.sole_eligible_candidate.value:
         return ThermoSelectionPick(
             thermo_ref=decision["selected_ref"], basis=outcome, administrative=False, explanation=decision["basis"]
         )
@@ -232,16 +225,6 @@ def build_response(
         )
         for c in manifest["candidates"]
     ]
-    relations = ThermoSelectionRelations()
-    if decision is not None:
-        relations = ThermoSelectionRelations(
-            edges=[
-                ThermoSelectionEdge(**e) for e in decision["edges"]
-            ],
-            overridden_edges=decision["overridden_edges"],
-            opposing_pairs=decision["opposing_pairs"],
-            cycles=decision["cycles"],
-        )
     target = manifest["request"]["target"]
     return ThermoSelectionResponse(
         request=ThermoSelectionRequestEcho(
@@ -260,7 +243,6 @@ def build_response(
         policy=ThermoSelectionPolicyInfo(
             name=manifest["policy"]["name"],
             version=manifest["policy"]["version"],
-            rules=[] if decision is None else decision["rules"],
         ),
         outcome=ThermoSelectionOutcome(manifest["outcome"]),
         basis=_basis(selection, decision),
@@ -268,8 +250,6 @@ def build_response(
         fronts=[] if decision is None else decision["fronts"],
         administrative_order=[] if decision is None else decision["administrative_order"],
         candidates=candidates,
-        relations=relations,
-        rule_matches=[] if decision is None else decision["rule_matches"],
         disclosures=ThermoSelectionDisclosures(
             unresolved_refs=disclosures.get("unresolved_refs", []),
             unsupported_refs=disclosures.get("unsupported_refs", []),

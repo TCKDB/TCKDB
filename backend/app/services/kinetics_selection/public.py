@@ -3,7 +3,7 @@
 ``select_reaction_entry_kinetics`` (selection.py) decides and records; this module is the thin layer the HTTP
 routes, and nothing else, go through. It does five things:
 
-1. maps the public request onto the service's request and registry, with no database id accepted from the caller;
+1. maps the public request onto the service's request, with no database id accepted from the caller;
 2. checks every public ref the request names (the reaction entry, a transition state entry, a network, each
    collider species) through the ordinary path-handle resolver, so a typo is a 404 and not a silent "nothing
    applies", and so a ref the caller's read profile hides answers exactly as it does anywhere else;
@@ -40,7 +40,6 @@ from app.schemas.reads.scientific_kinetics_selection import (
     KineticsSelectionColliderEcho,
     KineticsSelectionDetermination,
     KineticsSelectionDisclosures,
-    KineticsSelectionEdge,
     KineticsSelectionExcluded,
     KineticsSelectionMode,
     KineticsSelectionOutcome,
@@ -49,7 +48,6 @@ from app.schemas.reads.scientific_kinetics_selection import (
     KineticsSelectionPolicyInfo,
     KineticsSelectionPressureEcho,
     KineticsSelectionReason,
-    KineticsSelectionRelations,
     KineticsSelectionRequest,
     KineticsSelectionRequestEcho,
     KineticsSelectionResponse,
@@ -99,8 +97,6 @@ def check_request_refs(session: Session, body: KineticsSelectionRequest) -> None
 
 
 def _admin_policy(policy: KineticsSelectionPolicy) -> SelectionPolicy:
-    if policy is KineticsSelectionPolicy.method_preferred:
-        return SelectionPolicy.default
     return SelectionPolicy(policy.value)
 
 
@@ -128,16 +124,14 @@ def to_service_request(body: KineticsSelectionRequest) -> KineticsRequest:
         min_review_status=body.min_review_status,
         admin_policy=_admin_policy(body.policy),
         max_candidates=MAX_CANDIDATES,
-        apply_rules=body.policy is KineticsSelectionPolicy.method_preferred,
     )
 
 
 def run_selection(session: Session, *, reaction_entry_id: int, body: KineticsSelectionRequest) -> KineticsSelection:
     """Run the service for a public request.
 
-    ``method_preferred`` applies the shipped registry (every rule in this release is inactive, which the response
-    says). The administrative policies apply no rule at all: they order by review status and recency exactly as the
-    browse endpoints do, and say so. The population cap is the service's fixed 500 (a coded 422 raised before
+    Every policy is administrative: it orders by review status and deposition time exactly as the browse endpoints
+    do, and says so. The population cap is the service's fixed 500 (a coded 422 raised before
     anything is assessed); it counts only records visible to the caller.
 
     The session must be a read-only snapshot (see ``get_snapshot_db``), and this insists on it: a session that is
@@ -195,7 +189,7 @@ def _effective_floor(
 def _pick(manifest: dict[str, Any], mode: KineticsSelectionMode) -> KineticsSelectionPick | None:
     decision = manifest["decision"]
     outcome = decision["outcome"]
-    if outcome in (Outcome.policy_preferred.value, Outcome.sole_eligible_candidate.value):
+    if outcome == Outcome.sole_eligible_candidate.value:
         return KineticsSelectionPick(
             determination_ref=decision["selected_determination_ref"],
             kinetics_refs=list(decision["representation_refs"]),
@@ -253,13 +247,6 @@ def build_response(
         )
         for c in manifest["candidates"]
     ]
-    relations = KineticsSelectionRelations(
-        edges=[KineticsSelectionEdge(**e) for e in decision["edges"]],
-        overridden_edges=decision["overridden_edges"],
-        opposing_pairs=decision["opposing_pairs"],
-        cycles=decision["cycles"],
-        unused_edges=decision["unused_edges"],
-    )
     request = manifest["request"]
     collider = request["collider"]
     return KineticsSelectionResponse(
@@ -292,8 +279,6 @@ def build_response(
         policy=KineticsSelectionPolicyInfo(
             name=manifest["policy"]["name"],
             version=manifest["policy"]["version"],
-            rules_applied=decision["rules_applied"],
-            rules=decision["rules"],
         ),
         outcome=KineticsSelectionOutcome(manifest["outcome"]),
         basis=decision["basis"],
@@ -304,9 +289,6 @@ def build_response(
             KineticsSelectionDetermination(**d) for d in manifest["determinations"]
         ],
         candidates=candidates,
-        relations=relations,
-        rule_matches=decision["rule_matches"],
-        pair_checks=decision["pair_checks"],
         disclosures=KineticsSelectionDisclosures(
             unresolved_refs=disclosures.get("unresolved_refs", []),
             unsupported_refs=disclosures.get("unsupported_refs", []),

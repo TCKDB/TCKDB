@@ -13,14 +13,13 @@ evidence is an entry, and comparing several entries of one concept needs a valid
 not taken yet, so sibling entries are assessed one at a time.
 
 Paths take public refs only; an integer id is refused. The body carries no database id, no sort expression, no
-pagination, no caller-authored rule and no bound (the engineering bounds are fixed server-side; above them the answer
-is a coded 422 and never a prefix winner).
+pagination and no bound (the engineering bounds are fixed server-side; above them the answer
+is a coded 422 and never an answer from a prefix).
 
 The session is a read-only REPEATABLE READ snapshot opened **before** the route body runs (``get_snapshot_db``), so
 resolving the entry, counting the population and loading every record are one consistent state, and the manifest says
-so. The response is built from public refs only and is returned directly, not through the internal-id stripper
-(which would delete the rule registry key ``rule_id`` from the decision); a test asserts instead that no database id
-appears in either document.
+so. The response is built from public refs only and is returned directly, not through the internal-id stripper;
+a test asserts instead that no database id appears in either document.
 """
 
 from __future__ import annotations
@@ -96,7 +95,7 @@ def select_species_calculations(
     species_entry_ref: str = Path(..., min_length=1, max_length=64),
     session: Session = Depends(get_snapshot_db),
 ) -> StructureSelectionResponse:
-    """The lowest comparable recorded energy among the entry's calculations, or the audited-rule protocol preference.
+    """The lowest comparable recorded energy among the entry's calculations, or (``intent=protocol_preferred``) the protocols that cover every requested member, listed in display order.
 
     Values are ordered only inside one cohort (the same established recipe, quantity and energy convention); several
     cohorts end as ``incomparable_alternatives`` and a lower absolute energy never names a method winner. A calculation

@@ -3,7 +3,7 @@
 A selection is only as trustworthy as the inputs it can be re-derived from. The manifest holds the normalised
 request, the read profile and effective review statuses it was made under, the snapshot isolation, the subject
 entry, the population counts, **every normalised unit and source calculation** (public refs and stored facts, no
-database id), each unit's assessment, the registry entries consulted, and the decision. ``id_rank`` is an ordinal
+database id), each unit's assessment, and the decision. ``id_rank`` is an ordinal
 standing in for the id as the last tie-break; it cannot be turned back into one.
 
 Replay has two levels and does both by default:
@@ -11,7 +11,7 @@ Replay has two levels and does both by default:
 1. :func:`replay_structure_assessment` recomputes every unit's assessment from the normalised inputs. It does not
    trust a recorded ``eligible``, ``applicable`` or assessment flag: the recorded assessment is compared with the
    recomputed one, and any difference refuses the replay.
-2. :func:`replay_structure_decision` runs the decision (cohorts, repeats, ordering, rules, fronts) over the
+2. :func:`replay_structure_decision` runs the decision (cohorts, repeats, ordering, fronts) over the
    *recomputed* assessments and compares it with the recorded decision and outcome.
 
 What replay is and is not. It reproduces reasoning from captured inputs. It does not authenticate scientific
@@ -19,10 +19,10 @@ truth, and it cannot prove that a forged population was the complete one. The di
 normalised input and one over the whole) are **checksums, not signatures**: they detect an accidental or careless
 edit, and anyone who edits a manifest can recompute them. A digest therefore proves nothing about who made the
 manifest; verifying a manifest against current server-held content and authorization is a separate step that no
-replay performs. A historic replay keeps the review statuses captured in the manifest: a later withdrawal,
-supersession or rule deactivation changes a new live decision, never the historical artifact.
+replay performs. A historic replay keeps the review statuses captured in the manifest: a later withdrawal
+or supersession changes a new live decision, never the historical artifact.
 
-A manifest or rule version this release does not carry refuses the replay rather than substituting another.
+A manifest format or semantic version this release does not carry refuses the replay rather than substituting another.
 """
 
 from __future__ import annotations
@@ -35,7 +35,6 @@ from typing import Any
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import default_visible_statuses, status_at_or_above
 from app.services.manifest_formats import manifest_header, new_format_registry, read_manifest_format
-from app.services.rule_registry import rule_recorded_in, rules_registry
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 from app.services.structure_selection.assessment import assess_unit
 from app.services.structure_selection.bounds import check_manifest_size
@@ -57,16 +56,13 @@ from app.services.structure_selection.models import (
     StructureRequest,
     StructureSubject,
 )
-from app.services.structure_selection.rules import (
-    RULES_VERSION,
-    StructureRule,
-    default_rules,
-)
 from app.versioning import same_value
 
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
-#: reads exactly this format; a manifest in any other is refused.
-MANIFEST_FORMAT_VERSION = 1
+#: reads exactly this format; a manifest in any other is refused. Version 2: the decision no longer holds rules, rule
+#: matches, pair checks, edges, overridden edges, opposing pairs or cycles, and the request no longer holds
+#: ``apply_rules``, an objective or a reference model.
+MANIFEST_FORMAT_VERSION = 2
 MANIFEST_FORMAT_NAME = "structure_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "structure_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -155,7 +151,6 @@ def build_manifest(
     decision: StructureDecision,
     *,
     profile: dict[str, Any],
-    rules: Sequence[StructureRule],
 ) -> dict[str, Any]:
     """Assemble the manifest of one decision over one assessed population.
 
@@ -169,7 +164,6 @@ def build_manifest(
             "normalizer": NORMALIZER_VERSION,
             "decision": DECISION_VERSION,
             "administrative_key": ADMIN_KEY_VERSION,
-            "rules": RULES_VERSION,
             "finding_semantics": sorted(SUPPORTED_FINDING_VERSIONS),
         },
         "request": result.request.to_dict(),
@@ -213,7 +207,6 @@ def _check_versions(manifest: dict[str, Any]) -> None:
         "normalizer": NORMALIZER_VERSION,
         "decision": DECISION_VERSION,
         "administrative_key": ADMIN_KEY_VERSION,
-        "rules": RULES_VERSION,
         "finding_semantics": sorted(SUPPORTED_FINDING_VERSIONS),
     }
     for name, value in running.items():
@@ -314,51 +307,26 @@ def replay_structure_assessment(manifest: dict[str, Any]) -> list[StructureAsses
     return recomputed
 
 
-def _rules_for(manifest: dict[str, Any], rules: Sequence[StructureRule] | None) -> tuple[StructureRule, ...]:
-    # A rule version this release does not carry is refused below.
-    registry = rules_registry("structure_selection_rules", default_rules() if rules is None else rules)
-    protocol = manifest["decision"].get("protocol") or {}
-    used: list[StructureRule] = []
-    for entry in protocol.get("rules", []):
-        key = (entry["rule_id"], entry["version"])
-        rule = rule_recorded_in(registry, entry, lambda message: ReplayError("rule_unavailable", message))
-        described = rule.describe()
-        if described["status"] != entry["status"]:
-            raise ReplayError(
-                "rule_status_changed",
-                f"rule {key[0]} version {key[1]} was {entry['status']} when this decision was made and is "
-                f"{described['status']} now; a rule's status change is a new version",
-            )
-        if described.get("manifest_sha256") != entry.get("manifest_sha256"):
-            raise ReplayError("rule_manifest_changed", f"rule {key[0]} version {key[1]} now rests on a different audited manifest")
-        used.append(rule)
-    return tuple(used)
-
-
-def replay_structure_decision(manifest: dict[str, Any], *, rules: Sequence[StructureRule] | None = None) -> dict[str, Any]:
-    """Recompute the decision from the manifest: assessments first, then cohorts, rules, fronts and ordering.
+def replay_structure_decision(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Recompute the decision from the manifest: assessments first, then cohorts, fronts and ordering.
 
     The decision runs over the *recomputed* assessments, never the recorded ones.
 
     :returns: ``StructureDecision.to_dict()`` of the replayed decision.
-    :raises ReplayError: as :func:`replay_structure_assessment`, plus an unavailable rule or one whose status or
-        audited manifest is not what the decision was made under.
+    :raises ReplayError: as :func:`replay_structure_assessment`.
     """
     assessments = replay_structure_assessment(manifest)
-    used = _rules_for(manifest, rules)
-    request, subject, units, calcs, _ = _parse(manifest)
-    decision = decide_structures(
-        request=request, subject=subject, units=units, assessments=assessments, calculations=calcs, rules=used
-    )
+    request, _, units, calcs, _ = _parse(manifest)
+    decision = decide_structures(request=request, units=units, assessments=assessments, calculations=calcs)
     return decision.to_dict()
 
 
-def replay_matches(manifest: dict[str, Any], *, rules: Sequence[StructureRule] | None = None) -> bool:
+def replay_matches(manifest: dict[str, Any]) -> bool:
     """True when both levels of replay reproduce what the manifest records.
 
     The top-level ``outcome`` is compared too: it is a summary a reader trusts, so an edit of it that the decision
     does not support must not "match".
     """
-    replayed = replay_structure_decision(manifest, rules=rules)
+    replayed = replay_structure_decision(manifest)
     return _canon(replayed) == _canon(manifest["decision"]) and replayed["outcome"] == manifest["outcome"]
 

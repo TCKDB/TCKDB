@@ -1,7 +1,7 @@
 """Kinetics assessment: load, assess, group.
 
 Service layer only. No HTTP, no persistence: the function reads and returns a result. Browse order
-and every existing read are untouched. Ordering and outcomes (rules, conflicts, fronts) are the
+and every existing read are untouched. Ordering and outcomes (fronts, display order) are the
 stage built on this result; here the question is only which records answer the requested rate
 coefficient and which determinations they form.
 
