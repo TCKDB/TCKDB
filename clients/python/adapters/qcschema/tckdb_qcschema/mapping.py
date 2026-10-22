@@ -450,8 +450,9 @@ def _tckdb_qcschema_block(
     }
 
 
-def _parser_version() -> str:
-    return f"tckdb-qcschema/{_ADAPTER_VERSION};qcelemental/{qcelemental.__version__}"
+def _parser_stamp() -> dict[str, str]:
+    """This adapter's own parser stamp: its name, and its version (the adapter's and the qcelemental it ran)."""
+    return {"name": "tckdb-qcschema", "version": f"{_ADAPTER_VERSION};qcelemental/{qcelemental.__version__}"}
 
 
 def build_conformer_upload_payload(
@@ -541,7 +542,7 @@ def build_conformer_upload_payload(
     # entries while the block is built; the report is then re-snapshotted.
     complete_mapping_report(record, report)
     payload["calculation"]["parameters_json"]["tckdb_qcschema"]["mapping_report"] = report.to_dict()
-    payload["calculation"]["parameters_parser_version"] = _parser_version()
+    payload["calculation"]["parameters_parser"] = _parser_stamp()
     # Deliberately NOT datetime.now(): the backend hashes the whole
     # canonical request body per idempotency key, so a wall-clock stamp
     # would make byte-identical reruns of the same document produce a

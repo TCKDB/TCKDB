@@ -280,3 +280,25 @@ class TestPressureAndStateBasis:
             **_cp_kwargs(state_basis=ObservedStateBasis.real_gas)
         )
         assert m.state_basis == ObservedStateBasis.real_gas
+
+
+class TestParserNameCarriesNoVersion:
+    """``external_source_parser_name`` is a name: a version fused into it is refused, as ``ParserStamp`` refuses it."""
+
+    @pytest.mark.parametrize("name", ["gaussian_v2", "cccbdb.parser.v1", "GAUSSIAN_V1", "reader@2"])
+    def test_a_fused_name_is_refused_on_create(self, name):
+        with pytest.raises(ValidationError, match="embeds a version"):
+            MolecularPropertyObservationCreate(**_kwargs(external_source_parser_name=name))
+
+    @pytest.mark.parametrize("name", ["gaussian_v2", "cccbdb.parser.v1"])
+    def test_a_fused_name_is_refused_on_the_source_metadata_view(self, name):
+        from app.schemas.entities.molecular_property_observation import MolecularPropertyObservationSourceMetadata
+
+        with pytest.raises(ValidationError, match="embeds a version"):
+            MolecularPropertyObservationSourceMetadata(external_source_parser_name=name)
+
+    def test_a_clean_name_and_a_text_version_are_accepted(self):
+        m = MolecularPropertyObservationCreate(
+            **_kwargs(external_source_parser_name="cccbdb_experimental_species", external_source_parser_version="1")
+        )
+        assert m.external_source_parser_name == "cccbdb_experimental_species"

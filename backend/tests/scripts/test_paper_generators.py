@@ -302,6 +302,7 @@ def test_thermoml_source_provenance_lists_custody_rows_with_counts(db_session):
         raw_uri="artifacts/paper-generator-test",
         parser_name="thermoml_cp_parser",
         parser_version="1.0.0",
+        mapping_name="thermoml_cp_mapping",
         mapping_version="1.0.0",
         mapping_report_json={"values_mapped": [1, 2, 3], "rejected": []},
     )

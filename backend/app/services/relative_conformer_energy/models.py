@@ -22,11 +22,11 @@ from app.db.models.common import CalculationQuality, RecordReviewStatus
 from app.services.structure_selection.models import CoverageRequirement, RepeatPolicy
 
 #: Version of the relative-energy semantics (grouping, level filter, repeats, differencing) and of the document that
-#: records them. 3: a hidden ref in the captured facts is a placeholder token (``withheld:<n>``) under a profile with a
-#: review floor (guard PR-3); nothing is differenced differently.
-RELATIVE_ENERGY_VERSION = "3"
+#: records them. A hidden ref in the captured facts is a placeholder token (``withheld:<n>``) under a profile with a
+#: review floor.
+RELATIVE_ENERGY_VERSION = 1
 #: Version of the engineering bounds below.
-BOUNDS_VERSION = "1"
+BOUNDS_VERSION = 1
 #: The most conformer groups one request is answered for. Same number as the structure candidate bound.
 MAX_MEMBERS = 500
 

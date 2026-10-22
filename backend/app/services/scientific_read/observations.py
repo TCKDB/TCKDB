@@ -302,7 +302,9 @@ def _build_external_source(
             record_key=esr.source_record_key,
             content_sha256=esr.content_sha256,
             schema_label=esr.schema_id,
+            parser_name=esr.parser_name,
             parser_version=esr.parser_version,
+            mapping_name=esr.mapping_name,
             mapping_version=esr.mapping_version,
         )
     if (
@@ -311,6 +313,7 @@ def _build_external_source(
         and obs.external_source_doi is None
         and obs.external_source_record_key is None
         and obs.external_source_content_sha256 is None
+        and obs.external_source_parser_name is None
         and obs.external_source_parser_version is None
     ):
         return None
@@ -321,7 +324,9 @@ def _build_external_source(
         record_key=obs.external_source_record_key,
         content_sha256=obs.external_source_content_sha256,
         schema_label=None,
+        parser_name=obs.external_source_parser_name,
         parser_version=obs.external_source_parser_version,
+        mapping_name=None,
         mapping_version=None,
     )
 

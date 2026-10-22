@@ -1,6 +1,6 @@
 # Execution environment manifests
 
-`tckdb.execution-environment.v1` is a typed, secret-free, immutable record of
+The `tckdb.execution-environment` manifest (`schema_name` plus integer `schema_version`, currently 1) is a typed, secret-free, immutable record of
 the environment a calculation ran in. It accepts **four** runtime variants at
 two tiers, and the tier is readable from `runtime_kind`.
 

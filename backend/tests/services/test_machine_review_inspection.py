@@ -42,7 +42,7 @@ from app.services.machine_review.providers.interface import (
     machine_review_result_to_details_json,
 )
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_SCHEMA_VERSION,
+    MACHINE_REVIEW_FORMAT,
     MachineReviewProviderFinding,
     MachineReviewProviderResult,
 )
@@ -85,7 +85,7 @@ def _details(
 ) -> dict[str, Any]:
     """Build a realistic persisted ``details_json`` payload."""
     result = MachineReviewProviderResult(
-        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+        format=MACHINE_REVIEW_FORMAT,
         status=status,
         summary="advisory summary",
         findings=findings,
@@ -313,7 +313,7 @@ def test_inspection_preserves_unmapped_diagnostics():
 def test_inspection_preserves_parse_warnings():
     """A malformed payload degrades to a preserved parse warning, never a raise."""
     malformed = _AuditEvent(
-        details_json={"schema_version": MACHINE_REVIEW_SCHEMA_VERSION, "status": "not-a-real-status", "findings": []},
+        details_json={"format": MACHINE_REVIEW_FORMAT.model_dump(), "status": "not-a-real-status", "findings": []},
         submission_id=5,
     )
 

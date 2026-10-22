@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import case, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.api.deps import get_db, get_write_db, require_admin, require_curator_or_admin
 from app.api.errors import not_found
@@ -434,9 +435,9 @@ class AdminRunFakeMachineReviewResponse(BaseModel):
     record_type: str
     record_id: int
     context_hash: str
-    context_schema_version: str
-    prompt_version: str
-    rubric_versions: dict[str, str]
+    context_schema_version: int
+    prompt: VersionRef
+    rubric: VersionRef
     summary: str | None = None
 
 
@@ -476,8 +477,8 @@ def run_fake_machine_review_for_record(
         record_id=result.record_id,
         context_hash=result.context_hash,
         context_schema_version=result.context_schema_version,
-        prompt_version=result.prompt_version,
-        rubric_versions=result.rubric_versions,
+        prompt=result.prompt,
+        rubric=result.rubric,
         summary=result.summary,
     )
 

@@ -903,7 +903,7 @@ def test_thermo_inline_ensemble_with_declared_geometries_is_accepted(client):
 
 def _bundle_submit_envelope(thermo_upload: dict) -> dict:
     """Minimal ``ContributionBundle`` envelope carrying one thermo
-    upload, mirroring ``examples/bundles/thermo-bundle-v0.json``.
+    upload, mirroring ``examples/bundles/thermo-bundle.json``.
     ``/bundles/submit`` imports each ``records.thermo_uploads`` entry
     through :func:`app.workflows.thermo.persist_thermo_upload` -- the
     same function the standalone ``/uploads/thermo`` route calls -- so
@@ -912,7 +912,7 @@ def _bundle_submit_envelope(thermo_upload: dict) -> dict:
     """
     return {
         "bundle_format": "tckdb-contribution-bundle",
-        "bundle_version": "0.1",
+        "bundle_version": 1,
         "bundle_kind": "thermo",
         "created_at": "2026-04-25T00:00:00Z",
         "source_instance": {

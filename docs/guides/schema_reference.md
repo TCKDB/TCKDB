@@ -53,14 +53,17 @@ the gap.
 |---|---|---|---|---|---|---|
 | `id` | BIGINT | no | — | — | — | not documented |
 | `dataset_release_id` | BIGINT | no | — | dataset_release.id | — | not documented |
-| `manifest_schema` | VARCHAR(64) | no | — | — | — | not documented |
+| `manifest_format_name` | VARCHAR(64) | no | — | — | — | not documented |
+| `manifest_format_version` | INTEGER | no | — | — | — | not documented |
 | `profile` | ReadProfile (enum) | no | curated | — | `exploratory`, `curated` | not documented |
 | `alembic_revision` | VARCHAR(64) | no | — | — | — | not documented |
 | `backend_version` | VARCHAR(64) | no | — | — | — | not documented |
 | `schemas_package_version` | VARCHAR(64) | no | — | — | — | not documented |
-| `review_policy_version` | VARCHAR(64) | no | — | — | — | not documented |
+| `review_policy_name` | VARCHAR(64) | no | — | — | — | not documented |
+| `review_policy_version` | INTEGER | no | — | — | — | not documented |
 | `curation_policy_id` | BIGINT | no | — | curation_policy.id | — | not documented |
-| `recovery_archive_schema` | VARCHAR(64) | no | — | — | — | not documented |
+| `recovery_archive_format_name` | VARCHAR(64) | no | — | — | — | not documented |
+| `recovery_archive_format_version` | INTEGER | no | — | — | — | not documented |
 | `release_public_ref` | VARCHAR(40) | no | — | — | — | not documented |
 | `release_published_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
 | `release_tag` | VARCHAR(64) | no | — | — | — | not documented |
@@ -94,6 +97,7 @@ the gap.
 - `ck_release_manifest_candidate_count_nonneg`: `candidate_record_count >= 0`
 - `ck_release_manifest_content_sha256_hex`: `content_sha256 ~ '^[0-9a-f]{64}$'`
 - `ck_release_manifest_selected_count_nonneg`: `selected_record_count >= 0`
+- `ck_release_manifest_versions_positive`: `manifest_format_version >= 1 AND review_policy_version >= 1 AND recovery_archive_format_version >= 1`
 
 ### `species_entry_review`
 
@@ -168,6 +172,7 @@ the gap.
 | `unit` | TEXT | yes | — | — | — | not documented |
 | `parameter_index` | INTEGER | yes | — | — | — | not documented |
 | `source` | ParameterSource (enum) | no | upload | — | `parser`, `upload`, `curated` | not documented |
+| `parser_name` | TEXT | yes | — | — | — | not documented |
 | `parser_version` | TEXT | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 
@@ -415,7 +420,7 @@ the gap.
 |---|---|---|---|---|---|---|
 | `id` | BIGINT | no | — | — | — | not documented |
 | `name` | VARCHAR(128) | no | — | — | — | not documented |
-| `version` | VARCHAR(64) | no | — | — | — | not documented |
+| `version` | INTEGER | no | — | — | — | not documented |
 | `scope` | ConformerAssignmentScopeKind (enum) | no | canonical | — | `canonical`, `imported`, `experimental`, `custom` | not documented |
 | `description` | TEXT | yes | — | — | — | not documented |
 | `parameters_json` | JSONB | yes | — | — | — | not documented |
@@ -424,6 +429,10 @@ the gap.
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_conformer_assignment_scheme_version_positive`: `version >= 1`
 
 ### `conformer_observation`
 
@@ -466,6 +475,7 @@ the gap.
 | `schema_valid` | BOOLEAN | yes | — | — | — | not documented |
 | `parser_name` | TEXT | no | — | — | — | not documented |
 | `parser_version` | TEXT | no | — | — | — | not documented |
+| `mapping_name` | TEXT | no | — | — | — | not documented |
 | `mapping_version` | TEXT | no | — | — | — | not documented |
 | `mapping_report_json` | JSONB | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
@@ -554,6 +564,7 @@ the gap.
 | `external_source_record_key` | TEXT | yes | — | — | — | not documented |
 | `external_source_page_kind` | TEXT | yes | — | — | — | not documented |
 | `external_source_content_sha256` | TEXT | yes | — | — | — | not documented |
+| `external_source_parser_name` | TEXT | yes | — | — | — | not documented |
 | `external_source_parser_version` | TEXT | yes | — | — | — | not documented |
 | `external_source_record_id` | BIGINT | yes | — | external_source_record.id | — | not documented |
 | `reference_label` | TEXT | yes | — | — | — | not documented |
@@ -1132,6 +1143,7 @@ the gap.
 | `natoms` | INTEGER | no | — | — | — | not documented |
 | `lower_triangle_hartree_bohr2` | FLOAT[] | no | — | — | — | not documented |
 | `source` | HessianSource (enum) | no | — | — | `parsed_fchk`, `parsed_hess`, `parsed_log`, `uploaded`, `derived` | not documented |
+| `parser_name` | TEXT | yes | — | — | — | not documented |
 | `parser_version` | TEXT | yes | — | — | — | not documented |
 | `note` | TEXT | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
@@ -1402,6 +1414,7 @@ the gap.
 | `execution_environment_manifest_id` | BIGINT | yes | — | execution_environment_manifest.id | — | not documented |
 | `conformer_observation_id` | BIGINT | yes | — | conformer_observation.id | — | not documented |
 | `parameters_json` | JSONB | yes | — | — | — | not documented |
+| `parameters_parser_name` | TEXT | yes | — | — | — | not documented |
 | `parameters_parser_version` | TEXT | yes | — | — | — | not documented |
 | `parameters_extracted_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
 | `software_reconciliation_status` | SoftwareReconciliationStatus (enum) | yes | — | — | `matched`, `enriched`, `mismatch`, `declared_only`, `parsed_only` | not documented |
@@ -1681,7 +1694,8 @@ the gap.
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
 | `id` | BIGINT | no | — | — | — | not documented |
-| `schema_version` | VARCHAR(32) | no | — | — | — | not documented |
+| `schema_name` | VARCHAR(64) | no | — | — | — | not documented |
+| `schema_version` | INTEGER | no | — | — | — | not documented |
 | `content_digest` | VARCHAR(71) | no | — | — | — | not documented |
 | `runtime_kind` | VARCHAR(32) | no | — | — | — | not documented |
 | `runtime_locator` | TEXT | no | — | — | — | not documented |
@@ -1697,6 +1711,7 @@ the gap.
 - `ck_execution_environment_manifest_canonical_json_object`: `jsonb_typeof(canonical_json) = 'object'`
 - `ck_execution_environment_manifest_closure_json_array`: `jsonb_typeof(closure_json) = 'array'`
 - `ck_execution_environment_manifest_content_digest_sha256`: `content_digest ~ '^sha256:[0-9a-f]{64}$'`
+- `ck_execution_environment_manifest_schema_version_positive`: `schema_version >= 1`
 
 ### `external_source`
 
@@ -2585,9 +2600,11 @@ the gap.
 | `model` | VARCHAR(128) | yes | — | — | — | not documented |
 | `provider` | VARCHAR(128) | yes | — | — | — | not documented |
 | `context_hash` | VARCHAR(64) | no | — | — | — | not documented |
-| `context_schema_version` | VARCHAR(32) | no | — | — | — | not documented |
-| `prompt_version` | VARCHAR(64) | no | — | — | — | not documented |
-| `rubric_versions_json` | JSONB | no | — | — | — | not documented |
+| `context_schema_version` | INTEGER | no | — | — | — | not documented |
+| `prompt_name` | VARCHAR(128) | no | — | — | — | not documented |
+| `prompt_version` | INTEGER | no | — | — | — | not documented |
+| `rubric_name` | VARCHAR(128) | no | — | — | — | not documented |
+| `rubric_version` | INTEGER | no | — | — | — | not documented |
 | `source_submission_id` | BIGINT | yes | — | submission.id | — | not documented |
 | `source_audit_event_id` | BIGINT | yes | — | submission_audit_event.id | — | not documented |
 | `reviewed_at` | TIMESTAMP WITHOUT TIME ZONE | no | — | — | — | not documented |
@@ -2597,6 +2614,7 @@ the gap.
 
 - `ck_record_machine_review_context_hash_len`: `char_length(context_hash) = 64`
 - `ck_record_machine_review_findings_json_is_array`: `jsonb_typeof(findings_json) = 'array'`
+- `ck_record_machine_review_versions_in_range`: `context_schema_version >= 1 AND prompt_version >= 0 AND rubric_version >= 0`
 
 ### `record_reproducibility_assessment`
 
@@ -2611,7 +2629,7 @@ the gap.
 | `record_id` | BIGINT | no | — | — | — | not documented |
 | `grade` | ReproducibilityGrade (enum) | no | — | — | `insufficient`, `described`, `auditable`, `rerunnable` | not documented |
 | `rubric_name` | VARCHAR(128) | no | — | — | — | not documented |
-| `rubric_version` | VARCHAR(64) | no | — | — | — | not documented |
+| `rubric_version` | INTEGER | no | — | — | — | not documented |
 | `context_hash` | VARCHAR(64) | no | — | — | — | not documented |
 | `context_json` | JSONB | no | — | — | — | not documented |
 | `passed_json` | JSONB | no | []'::jsonb | — | — | not documented |
@@ -2631,6 +2649,7 @@ the gap.
 - `ck_record_reproducibility_assessment_context_json_is_object`: `jsonb_typeof(context_json) = 'object'`
 - `ck_record_reproducibility_assessment_missing_json_is_array`: `jsonb_typeof(missing_json) = 'array'`
 - `ck_record_reproducibility_assessment_passed_json_is_array`: `jsonb_typeof(passed_json) = 'array'`
+- `ck_record_reproducibility_assessment_rubric_version_nonneg`: `rubric_version >= 0`
 - `ck_record_reproducibility_assessment_warnings_json_is_array`: `jsonb_typeof(warnings_json) = 'array'`
 
 ### `record_review`

@@ -13,6 +13,7 @@ from typing import Self
 from pydantic import Field, field_validator, model_validator
 
 from tckdb_schemas.common import SchemaBase
+from tckdb_schemas.fragments.version import ParserStamp
 from tckdb_schemas.enums import (
     CalculationQuality,
     CalculationType,
@@ -116,7 +117,7 @@ class CalculationIn(SchemaBase):
     :param parameters: Optional parsed execution-control parameter observations,
         routed through the shared calculation persistence seam.
     :param parameters_json: Optional JSON snapshot from the parser.
-    :param parameters_parser_version: Optional parser version tag.
+    :param parameters_parser: Optional stamp (name and version) of the parser that produced the observations.
     :param parameters_extracted_at: Optional extraction timestamp.
     :param wavefunction_diagnostic: Optional inline T1/D1 wavefunction
         diagnostic, forwarded to the shared calculation persistence seam.
@@ -185,7 +186,7 @@ class CalculationIn(SchemaBase):
     # Parsed execution-control parameters (routed through the shared seam).
     parameters: list[CalculationParameterObservation] | None = None
     parameters_json: dict | None = None
-    parameters_parser_version: str | None = None
+    parameters_parser: ParserStamp | None = None
     parameters_extracted_at: datetime | None = None
 
     # Optional file artifacts
@@ -425,7 +426,7 @@ def calculation_in_to_with_results_payload(
         ),
         parameters=calc_in.parameters,
         parameters_json=calc_in.parameters_json,
-        parameters_parser_version=calc_in.parameters_parser_version,
+        parameters_parser=calc_in.parameters_parser,
         parameters_extracted_at=calc_in.parameters_extracted_at,
     )
 

@@ -440,7 +440,7 @@ def test_an_experimental_rate_needs_no_computational_chain_and_a_computed_hard_f
     experimental = assess_candidate(norm(scientific_origin="experimental"), request=request(), evidence=None)
     assert experimental.physically_eligible and "evidence_rubric_not_applicable:experimental" in experimental.advisory
     failed = EvidenceEvaluation(
-        record_type="kinetics", record_id=1, rubric="computed_kinetics_v1", rubric_version="1",
+        record_type="kinetics", record_id=1, rubric="computed_kinetics", rubric_version=1,
         label=EvidenceBadge.hard_failed, checks={}, passed_count=0, possible_count=1, evidence_completeness=0.0,
         is_certified=False, hard_fail_reason=HardFailReason.source_calculation_hard_failed_for_required_role,
         check_results=(),

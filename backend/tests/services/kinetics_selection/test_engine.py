@@ -22,7 +22,7 @@ SUBJECT = KineticsSubject("rxe_x", (), ())
 class LabelRule(KineticsRule):
     """Test-only rule: records carry a label in ``protocol['method_kind']``; ``wins`` precede ``loses``."""
 
-    def __init__(self, rule_id, wins, loses, *, objective_key="o", supersedes=(), version="1", scope_state=Tri.true,
+    def __init__(self, rule_id, wins, loses, *, objective_key="o", supersedes=(), version=1, scope_state=Tri.true,
                  status=RULE_ACTIVE, compat=None, observable="rate_coefficient"):
         self.rule_id, self.version, self.objective_key = rule_id, version, objective_key
         self.objective = f"test objective {objective_key}"

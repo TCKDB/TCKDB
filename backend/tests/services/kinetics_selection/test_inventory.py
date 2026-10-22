@@ -159,7 +159,7 @@ def test_a_record_the_evidence_rubric_hard_fails_is_not_counted_as_qualifying(db
     before = kinetics_coverage_inventory(db_session)
     declared(db_session, world, determination(db_session, world, "d-fail"), status=S.approved)
     failed = EvidenceEvaluation(
-        record_type="kinetics", record_id=1, rubric="computed_kinetics_v1", rubric_version="1",
+        record_type="kinetics", record_id=1, rubric="computed_kinetics", rubric_version=1,
         label=EvidenceBadge.hard_failed, checks={}, passed_count=0, possible_count=1, evidence_completeness=0.0,
         is_certified=False, hard_fail_reason=HardFailReason.source_calculation_hard_failed_for_required_role,
         check_results=(),

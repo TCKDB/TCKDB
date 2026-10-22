@@ -35,7 +35,7 @@ PHASE = "gas"
 #: Version of the selection semantics (eligibility, grouping, certification). A change to any of them is a
 #: new version, and a decision manifest records the version it was made under.
 POLICY_NAME = "network_method_preferred"
-POLICY_VERSION = "1"
+POLICY_VERSION = 1
 #: Absolute tolerance on a bath mixture's mole fractions: the one the upload applies.
 MOLE_FRACTION_TOLERANCE = 1e-9
 #: A request bound matches a declared or stored bound within this (the existing browse tolerances).
@@ -52,7 +52,7 @@ class SelectionBounds:
     refusal names the bound and the visible count, never a hidden population.
     """
 
-    version: str = "1"
+    version: int = 1
     solves: int = 200
     kinetics_parents: int = 2000
     channel_nodes: int = 500

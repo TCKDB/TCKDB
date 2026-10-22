@@ -1,4 +1,4 @@
-# PDep upload contract v2
+# PDep upload contract
 
 Status: required before the next production PDep network upload.
 

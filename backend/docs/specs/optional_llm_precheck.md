@@ -1,7 +1,10 @@
 # Optional LLM Precheck / AI Review Assistant
 
 **Status:** draft spec - optional plumbing exists, advisory persistence
-policy
+policy. The persistence-option analysis (section 12) was written under the
+original label vocabulary; what is implemented is Option B, an audit event whose
+`details_json` is the machine-review payload, with failure expressed as
+status `machine_review_failed`.
 **Date:** 2026-05-27
 **Scope:** TCKDB backend only. No real LLM calls, persistence tables,
 migrations, RAG, ARC changes, or `tckdb-client` changes.
@@ -18,7 +21,10 @@ recorded here onto submission-linked records for debugging.
 `machine_review_real_provider_plumbing.md` designs the real (Off / Cloud /
 Local) provider plumbing that reuses the `AI_REVIEW_ASSISTANT_MODE` /
 `LLM_PRECHECK_*` configuration and failure contract specified here, but emits
-the native machine-review v2 payload instead of the v1 `LLMPrecheckResult`.
+the native machine-review payload (format `machine_review`, version 1; see
+`machine_review_provider_contract.md`). The earlier submission-level
+`LLMPrecheckResult` / label contract no longer exists: there is one provider
+contract, and no label-to-status translation.
 
 ---
 
@@ -33,7 +39,7 @@ rejection, read availability, or scientific correctness.
 Optional precheck plumbing was introduced in commit
 `0087c35 Add optional LLM precheck plumbing`. The current implementation
 has disabled and fake providers, context-builder scaffolding, service
-orchestration, failure conversion to `failed_to_review`,
+orchestration, failure conversion to `machine_review_failed`,
 submission-scoped audit event persistence, a submission-scoped latest
 AI review summary endpoint, and an admin-only submission machine-review
 inspection endpoint (commit `2b0f8d4`) that projects those audit events onto
@@ -174,52 +180,22 @@ These are explicitly out of scope for this spec and the MVP:
 
 ---
 
-## 6. Proposed Backend Structure
+## 6. Backend Structure
 
-Future implementation should live under:
+Submission-level context construction lives under:
 
 ```text
 backend/app/services/llm_precheck/
   __init__.py
-  schemas.py
-  interface.py
-  providers.py
-  context_builder.py
-  service.py
+  schemas.py          # LLMPrecheckContext, LLMRecordRef
+  context_builder.py  # compact, structured submission context
 ```
 
-Conceptual responsibilities:
-
-| Module | Responsibility |
-|---|---|
-| `schemas.py` | Internal Pydantic or typed result/context schemas. |
-| `interface.py` | Provider protocol and common provider errors. |
-| `providers.py` | Provider factory and provider-mode selection. No provider-specific MVP implementation required by this spec. |
-| `context_builder.py` | Compact, structured submission context construction. |
-| `service.py` | Orchestration, error handling, persistence, audit event creation. |
-
-Core concepts:
-
-- `LLMPrecheckProvider`
-- `LLMPrecheckContext`
-- `LLMPrecheckResult`
-- `LLMFinding`
-- `LLMPrecheckService`
-
-Provider interface:
-
-```python
-class LLMPrecheckProvider(Protocol):
-    """Provider interface for optional LLM-based submission prechecks."""
-
-    def review_submission(
-        self,
-        context: LLMPrecheckContext,
-    ) -> LLMPrecheckResult:
-        """Return a structured advisory precheck result for a submission."""
-```
-
-Use sync or async according to backend conventions at implementation time.
+The provider contract, the audit adapter, the runner and persistence live in
+`backend/app/services/machine_review/` and speak the machine-review vocabulary
+natively; see `machine_review_provider_contract.md` and
+`machine_review_real_provider_plumbing.md`. This spec keeps the principles,
+configuration, failure and privacy rules that apply to them.
 
 ---
 
@@ -356,7 +332,7 @@ Context too large behavior:
 
 - Prefer compacting summaries before failing.
 - If the compacted context still exceeds `LLM_PRECHECK_MAX_INPUT_TOKENS`,
-  return/persist `label=failed_to_review` with a summary indicating that
+  return/persist `label=machine_review_failed` with a summary indicating that
   the context was too large.
 - Do not fail the upload.
 
@@ -364,49 +340,18 @@ Context too large behavior:
 
 ## 11. Structured Output Schema
 
-Desired provider result shape:
-
-```json
-{
-  "label": "not_run | pass | warning | needs_attention | failed_to_review",
-  "summary": "Short curator-facing summary.",
-  "findings": [
-    {
-      "severity": "info | warning | critical",
-      "category": "provenance | units | geometry | kinetics | thermo | statmech | calculation_parameters | consistency",
-      "record_type": "kinetics",
-      "record_id": 123,
-      "message": "No IRC source calculation is linked.",
-      "evidence_keys": [
-        "missing_checks.irc_evidence_present"
-      ]
-    }
-  ],
-  "model": "provider/model-name",
-  "used_rag": false
-}
-```
-
-Labels:
-
-| Label | Meaning |
-|---|---|
-| `not_run` | Assistant disabled or intentionally skipped. |
-| `pass` | No notable advisory concerns found. Does not mean approved. |
-| `warning` | Advisory issues found that may deserve curator review. |
-| `needs_attention` | Strong advisory signal that a curator should inspect the submission. |
-| `failed_to_review` | Provider timeout/error, malformed output, context too large, or other precheck failure. |
+The provider result is the machine-review payload defined in
+`machine_review_provider_contract.md`: a root `format` marker
+(`{"name": "machine_review", "version": 1}`), a record-level `status`
+(`MachineReviewStatus`), `curator_priority`, `summary`, `findings`, `model`,
+`provider` and `used_rag`. There is no separate advisory label vocabulary and
+no label-to-status translation.
 
 Model output must be schema-validated before persistence. Malformed output
-becomes:
+becomes a parse warning and status `machine_review_failed`; it must not fail
+the upload.
 
-```text
-label=failed_to_review
-```
-
-Malformed output must not fail the upload.
-
-The result schema should also enforce:
+The result schema also enforces:
 
 - `summary` length bounds
 - known enum values only
@@ -461,7 +406,7 @@ not_run
 pass
 warning
 needs_attention
-failed_to_review
+machine_review_failed
 ```
 
 The existing `mark_precheck_result` helper is not appropriate for the AI
@@ -491,7 +436,7 @@ Cons:
 
 - The existing enum may require a migration before it can represent
   `not_run`, `pass`, `warning`, `needs_attention`, and
-  `failed_to_review`.
+  `machine_review_failed`.
 - Overloads existing field semantics because the old labels are
   `passed`/`flagged`, while the advisory vocabulary is
   `pass`/`warning`/`needs_attention`.
@@ -532,8 +477,8 @@ Suggested audit event detail shape:
 
 ```json
 {
-  "kind": "llm_precheck_recorded",
-  "label": "warning",
+  "format": {"name": "machine_review", "version": 1},
+  "status": "machine_screened_warning",
   "summary": "Two provenance gaps found.",
   "model": "provider/model-name",
   "used_rag": false,
@@ -555,7 +500,7 @@ Pros:
 - Preserves history.
 - Does not overload submission status.
 - Good MVP shape.
-- Supports `failed_to_review` without treating provider failure as upload
+- Supports `machine_review_failed` without treating provider failure as upload
   failure.
 
 Cons:
@@ -654,10 +599,10 @@ Alembic revision. Do not edit the initial schema migration.
 | Scenario | Required behavior |
 |---|---|
 | AI Review Assistant off | Return `not_run` where a runtime result object is needed. Do not require provider config. Do not write persistence rows by default. |
-| Provider timeout | Mark `failed_to_review`, write advisory metadata/audit event, do not fail upload. |
-| Provider error | Mark `failed_to_review`, write advisory metadata/audit event, do not fail upload. |
-| Malformed model output | Schema validation fails into `failed_to_review`, do not fail upload. |
-| Context too large | Compact if possible; otherwise `failed_to_review`, do not fail upload. |
+| Provider timeout | Mark `machine_review_failed`, write advisory metadata/audit event, do not fail upload. |
+| Provider error | Mark `machine_review_failed`, write advisory metadata/audit event, do not fail upload. |
+| Malformed model output | Schema validation fails into `machine_review_failed`, do not fail upload. |
+| Context too large | Compact if possible; otherwise `machine_review_failed`, do not fail upload. |
 | Submission has no linked records | Prefer `not_run` or `pass` with a summary explaining that there were no linked scientific records to inspect; do not fail upload. |
 | Database rollback | Precheck persistence rolls back with the surrounding transaction; no separate durability guarantee in MVP. |
 
@@ -827,7 +772,7 @@ Future implementation should include tests proving:
 
 - AI Review result persists without changing `submission.status`.
 - AI Review result persists without mutating scientific records.
-- Provider failure writes a `failed_to_review` advisory event.
+- Provider failure writes a `machine_review_failed` advisory event.
 - Submission summary endpoint returns the latest advisory result.
 - Scientific `trust.llm_precheck` remains disabled/not_run unless explicit
   mapping is enabled.
@@ -838,9 +783,9 @@ Future implementation should include tests proving:
 - disabled/off mode requires no API key
 - fake provider writes an advisory result without changing
   `submission.status`
-- provider failure writes `failed_to_review` as an advisory result without
+- provider failure writes `machine_review_failed` as an advisory result without
   changing `submission.status`
-- malformed provider output becomes `failed_to_review`
+- malformed provider output becomes `machine_review_failed`
 - provider timeout does not fail upload
 - full structured result appears in `submission_audit_event.details_json`
 - summary/model/time fields update only if that optional summary path is

@@ -71,13 +71,13 @@ def _fresh_smiles() -> str:
 
 
 def _thermo_record(smiles: str) -> dict:
-    record = _example("thermo-bundle-v0.json")["records"]["thermo_uploads"][0]
+    record = _example("thermo-bundle.json")["records"]["thermo_uploads"][0]
     record["species_entry"] = {"smiles": smiles, "charge": 0, "multiplicity": 1}
     return record
 
 
 def _thermo_bundle(*smiles: str, **record_changes: Any) -> dict:
-    bundle = _example("thermo-bundle-v0.json")
+    bundle = _example("thermo-bundle.json")
     bundle["records"]["thermo_uploads"] = [
         {**_thermo_record(s), **record_changes} for s in smiles
     ]

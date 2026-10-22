@@ -162,7 +162,7 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
         "assessments"
     ]
     assert unassessed["deterministic_trust"]["rubric"] == "computed_thermo"
-    assert unassessed["deterministic_trust"]["rubric_version"] == "2"
+    assert unassessed["deterministic_trust"]["rubric_version"] == 1
     assert unassessed["reproducibility"] == {
         "state": "unassessed",
         "assessment_ref": None,
@@ -183,7 +183,7 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
     assert current["state"] == "current"
     assert current["assessment_ref"] == current_row.public_ref
     assert current["rubric"] == "tckdb_reproducibility"
-    assert current["rubric_version"] == "v1"
+    assert current["rubric_version"] == 1
     assert current["assessed_at"] is not None
 
     stale_row = append_reproducibility_assessment(
@@ -192,7 +192,7 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
         record_id=thermo.id,
         grade=ReproducibilityGrade.described,
         rubric_name="tckdb_reproducibility",
-        rubric_version="v1",
+        rubric_version=1,
         context_json={"outdated": True},
         assessor_kind=ReproducibilityAssessorKind.system,
     )
@@ -243,8 +243,8 @@ def test_include_trust_returns_fragment(client, db_session):
     assert trust["is_certified"] is False
     evidence = trust["evidence"]
     assert evidence["record_type"] == "thermo"
-    assert evidence["rubric"] == "computed_thermo_v2"
-    assert evidence["rubric_version"] == 2
+    assert evidence["rubric"] == "computed_thermo"
+    assert evidence["rubric_version"] == 1
     assert evidence["checks"]["scalar_thermo_present"] == "passed"
     assert evidence["checks"]["source_calculations_present"] == "missing"
     assert "record_id" not in evidence

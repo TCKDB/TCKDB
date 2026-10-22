@@ -30,9 +30,9 @@ patterns, so the two cannot disagree about what counts.
 from __future__ import annotations
 
 import re
-from typing import Self
+from typing import Any, Self
 
-from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic import BeforeValidator, ConfigDict, Field, StrictInt, model_validator
 
 from tckdb_schemas.common import SchemaBase
 
@@ -80,6 +80,19 @@ VERSIONED_NAME_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 
+def _exact_int(value: Any) -> Any:
+    """Refuse anything that is not exactly an ``int``: a ``bool`` and a ``float`` are not versions."""
+    if type(value) is not int:
+        raise ValueError(f"a version must be an integer, not {type(value).__name__} {value!r}")
+    return value
+
+
+#: Put this on a ``Literal[N]`` version field (``Annotated[Literal[1], ExactInt]``). Pydantic matches a ``Literal`` by
+#: equality, so a bare ``Literal[1]`` accepts ``true`` and ``1.0``; ``Strict()`` cannot be applied to a ``Literal``.
+#: ``VersionRef.version`` is already ``StrictInt``; this is the same refusal for a field that is a literal.
+ExactInt = BeforeValidator(_exact_int)
+
+
 def embeds_version(name: str) -> bool:
     """True if *name* has a version fused into it (see the patterns above)."""
     return any(pattern.search(name) for pattern in VERSIONED_NAME_PATTERNS)
@@ -120,3 +133,28 @@ class VersionRef(SchemaBase):
 
     def __str__(self) -> str:
         return f"{self.name} (version {self.version})"
+
+
+class ParserStamp(SchemaBase):
+    """The parser that produced a recorded value: its ``name`` beside its ``version``, as text.
+
+    This is the stamp for a parser the *producer* owns (a client's own log reader, say): its version is somebody
+    else's and is recorded as given, never renumbered, which is why it is text where a :class:`VersionRef` is an
+    integer. A parser TCKDB owns writes the same stamp with its integer version spelled as text. The name never
+    contains the version.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str = Field(min_length=1, max_length=128, description="Stable name of the parser. Never contains a version.")
+    version: str = Field(
+        min_length=1, max_length=64, description="The parser's version, exactly as its owner spells it."
+    )
+
+    @model_validator(mode="after")
+    def _name_carries_no_version(self) -> Self:
+        if embeds_version(self.name):
+            raise ValueError(
+                f"parser name {self.name!r} embeds a version; the version belongs in the separate 'version' field"
+            )
+        return self

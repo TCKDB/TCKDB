@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,7 +27,8 @@ class ExecutionEnvironmentManifest(Base, TimestampMixin):
     __tablename__ = "execution_environment_manifest"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    schema_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    schema_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
     content_digest: Mapped[str] = mapped_column(String(71), nullable=False)
     runtime_kind: Mapped[str] = mapped_column(String(32), nullable=False)
     runtime_locator: Mapped[str] = mapped_column(Text, nullable=False)
@@ -70,5 +71,6 @@ class ExecutionEnvironmentManifest(Base, TimestampMixin):
         CheckConstraint("content_digest ~ '^sha256:[0-9a-f]{64}$'", name="content_digest_sha256"),
         CheckConstraint("jsonb_typeof(closure_json) = 'array'", name="closure_json_array"),
         CheckConstraint("jsonb_typeof(canonical_json) = 'object'", name="canonical_json_object"),
+        CheckConstraint("schema_version >= 1", name="schema_version_positive"),
         UniqueConstraint("content_digest", name="uq_execution_environment_manifest_content_digest"),
     )

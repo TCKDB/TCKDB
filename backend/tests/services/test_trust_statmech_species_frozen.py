@@ -1,7 +1,7 @@
 """Species-owned statmech badges are frozen: the owner-scoped TS rubric must not move a single one.
 
 The trust correction adds an owner-scoped rubric for transition-state-owned records. Every
-species-owned record keeps ``computed_statmech`` v2, its check map, its badge and its
+species-owned record keeps ``computed_statmech``, its check map, its badge and its
 completeness, byte for byte. This file pins that in two independent ways:
 
 * ``FROZEN`` holds literals captured from the evaluator as it stood on ``main`` before the change.
@@ -111,13 +111,15 @@ def digest(evaluation: EvidenceEvaluation) -> str:
 
 
 #: ``(label, hard_fail, completeness, digest)`` per scenario, captured from ``main`` before the owner-scoped rubric.
+#: The digests were re-captured once, in versioning PR-4, because the digest covers ``rubric_version`` and the rubric
+#: restarted at 1 (it was 2): label, hard-fail reason, completeness and the whole check map are byte-identical.
 FROZEN: dict[str, tuple[str, str | None, float, str]] = {
-    "sparse": ("unsupported", None, 0.1111, "f01d345b26b08236f4ef27de5729458489ebaa0d981c24fcd453b29b1f55b4b2"),
-    "full_metadata_no_sources": ("sparse", None, 0.4444, "29c2d83fe81982a06e1415387533d49482eaba0370c196e3bf4003538a3020e5"),
-    "opt_freq_sp": ("well_supported", None, 0.9, "44862735edf9e1c373a523221d4e7e0b08c38ba52674ef22a3c388ff377ea351"),
-    "torsion_bearing_with_scan": ("mostly_supported", None, 0.8261, "26e196497a08726cc6912dd04b09a3ebd23704b661a4dcab7d90053758f808ee"),
-    "rejected_required_role": ("hard_failed", "source_calculation_hard_failed_for_required_role", 0.7895, "d5d7d89d023c4bbbf2e121f31eae12a72a8443b1dcb6d940d962d12168753d13"),
-    "geometry_validation_failed": ("mostly_supported", None, 0.8421, "c3206664eeae40460bebd4c2209536321f4f67588443e64ffd024f63e68da3e2"),
+    "sparse": ("unsupported", None, 0.1111, "24196551ded32dac4f9a8c951dedd8fd5e866d62f530a5eaca05a0382ed3f6ef"),
+    "full_metadata_no_sources": ("sparse", None, 0.4444, "e078edab4701f5172a81c8f5e33642c9348091705e2aefadf4c3a81f9471ce25"),
+    "opt_freq_sp": ("well_supported", None, 0.9, "fff9fc20326b56fc9a1bb2cefebc5fc9c1b2df1bd62e6aa6f9ef088f8425038e"),
+    "torsion_bearing_with_scan": ("mostly_supported", None, 0.8261, "548f503e0ccc4da814784a7ab203466e746d3e73773a92f2a198ecadfa52b991"),
+    "rejected_required_role": ("hard_failed", "source_calculation_hard_failed_for_required_role", 0.7895, "99a8d263ff28aa7c57308b49389a65b094e00da8307563a2fe3ac8b78c4bbb67"),
+    "geometry_validation_failed": ("mostly_supported", None, 0.8421, "b2e3d5781c17390016b4ad5c5642ce97ea241cd48fae544db35c28e3d6aceeaa"),
 }
 
 
@@ -135,5 +137,5 @@ def test_a_species_owned_statmech_evaluates_exactly_as_it_did_before_the_change(
     assert evaluation.label.value == label
     assert (evaluation.hard_fail_reason.value if evaluation.hard_fail_reason else None) == hard_fail
     assert round(evaluation.evidence_completeness, 6) == completeness
-    assert (evaluation.rubric, evaluation.rubric_version) == ("computed_statmech", 2)
+    assert (evaluation.rubric, evaluation.rubric_version) == ("computed_statmech", 1)
     assert digest(evaluation) == expected_digest

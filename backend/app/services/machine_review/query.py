@@ -27,12 +27,12 @@ Boundaries:
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from enum import Enum
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import UnaryExpression
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import SubmissionRecordType
 from app.db.models.record_machine_review import RecordMachineReviewRow
@@ -65,7 +65,7 @@ class MachineReviewRecordFamily(str, Enum):
 
     ``record_machine_review`` is one append-only table shared by two
     unrelated kinds of row: the **reviewer** recipe (human/LLM machine
-    review, ``computed_thermo_v1`` / ``machine_review_v1`` and friends) and
+    review, the ``computed_thermo`` rubric and the ``machine_review`` prompt) and
     deterministic **scientific-check** runners (e.g. the review-tier
     external-Cp-comparison check) that persist through the same helper with
     ``provider=SCIENTIFIC_CHECK_PROVIDER`` (exact string, not a prefix --
@@ -82,9 +82,8 @@ class MachineReviewRecordFamily(str, Enum):
 
     ``scientific_check`` selects rows whose ``provider`` **equals**
     :data:`SCIENTIFIC_CHECK_PROVIDER`, optionally narrowed further by
-    ``model`` (each scientific-check runner's
-    :data:`~app.services.external_comparison.cp.RUNNER_VERSION`-style
-    identity) so "the current run of check X" is a well-defined notion.
+    ``model`` (each scientific-check runner's name, e.g.
+    :data:`~app.services.external_comparison.cp.RUNNER`) so "the current run of check X" is a well-defined notion.
     """
 
     reviewer = "reviewer"
@@ -196,8 +195,8 @@ def get_record_machine_review_currency_for_record(
     record_type: str,
     record_id: int,
     current_context: MachineReviewContextDigest,
-    active_prompt_version: str,
-    active_rubric_versions: Mapping[str, str],
+    active_prompt: VersionRef,
+    active_rubric: VersionRef,
     family: MachineReviewRecordFamily = MachineReviewRecordFamily.reviewer,
     model: str | None = None,
 ) -> MachineReviewCurrencyClassification:
@@ -230,6 +229,6 @@ def get_record_machine_review_currency_for_record(
     return classify_record_machine_review_currency_from_rows(
         rows,
         current_context=current_context,
-        active_prompt_version=active_prompt_version,
-        active_rubric_versions=active_rubric_versions,
+        active_prompt=active_prompt,
+        active_rubric=active_rubric,
     )

@@ -23,7 +23,7 @@ from app.services.gaussian_parameter_parser import parse_hessian as parse_gaussi
 from app.services.hessian_parsing import (
     BOHR_TO_ANGSTROM,
     GAUSSIAN_HESSIAN_MARKER,
-    HESSIAN_PARSER_VERSION,
+    HESSIAN_PARSER,
     parse_hessian_from_artifact,
     parse_orca_hess_force_constants,
     parse_orca_hess_reference_atoms,
@@ -163,8 +163,9 @@ class TestArtifactDispatch:
         assert parse_hessian_from_artifact("", from_hess_file=False) is None
         assert parse_hessian_from_artifact(None, from_hess_file=True) is None
 
-    def test_parser_version_is_stamped_constant(self):
-        assert HESSIAN_PARSER_VERSION == "hessian_v1"
+    def test_the_parser_is_a_registered_name_with_an_integer_version(self):
+        assert (HESSIAN_PARSER.name, HESSIAN_PARSER.version) == ("hessian", 1)
+        assert HESSIAN_PARSER.stamp().model_dump() == {"name": "hessian", "version": "1"}
 
 
 class TestRobustness:

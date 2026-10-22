@@ -1638,6 +1638,7 @@ def make_external_source_record(
         schema_id=schema_id,
         parser_name="thermoml_parser",
         parser_version=parser_version,
+        mapping_name="thermoml_cp_mapping",
         mapping_version=mapping_version,
     )
     session.add(row)

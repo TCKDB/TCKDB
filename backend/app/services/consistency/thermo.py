@@ -73,5 +73,5 @@ def compare_thermo(thermo, *, comparison=None, temperature_grid=()):
     return AdvisoryResult(thermo, RUNNER, THERMO_CONSISTENCY, tuple(findings), encoded({
         "engine": f"cantera/{engine.ENGINE_VERSION}", "grid": grid,
         "target": thermo_inputs(thermo), "comparison": thermo_inputs(comparison) if comparison else None,
-        "units": "J/mol/K;bar;K", "boundary_policy": "nasa7-low;nasa9-upper;exact-points-v1",
+        "units": "J/mol/K;bar;K", "boundary_policy": "nasa7-low;nasa9-upper;exact-points",
     }))

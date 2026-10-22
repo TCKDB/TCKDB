@@ -38,7 +38,7 @@ If you are new to the project:
 4. Try the [Querying](querying.md) examples.
 
 If you are integrating a workflow tool, start with [Uploads](uploads.md)
-and the [ARC adapter spec](../specs/arc-tckdb-adapter-v0-spec.md).
+and the [ARC adapter spec](../specs/arc-tckdb-adapter-spec.md).
 
 If you are deploying TCKDB for other people, start with
 [Deployment](deployment.md).

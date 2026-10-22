@@ -429,7 +429,7 @@ class TestAutoPopulationOnInsert:
 
 class TestSeededConformerAssignmentScheme:
     def test_default_torsion_basin_scheme_has_public_ref(self, db_session):
-        """The migration backfills the seeded torsion_basin v1 row's public_ref."""
+        """The migration backfills the seeded torsion_basin row's public_ref."""
         from sqlalchemy import select
 
         cas = db_session.scalar(
@@ -443,7 +443,7 @@ class TestSeededConformerAssignmentScheme:
         # Recompute: the migration's backfill must match the helper's output.
         expected = generate_ref_for(cas)
         # generate_ref_for hashes the live attributes; the seeded row uses
-        # name='torsion_basin', version='v1', scope='canonical'.
+        # name='torsion_basin', version=1, scope='canonical'.
         assert cas.public_ref == expected
 
 
@@ -916,12 +916,12 @@ class TestCanonicalizerInvariants:
 
         a = ConformerAssignmentScheme(
             name="alpha",
-            version="v1",
+            version=1,
             scope=ConformerAssignmentScopeKind.canonical,
         )
         b = ConformerAssignmentScheme(
             name="beta",
-            version="v1",
+            version=1,
             scope=ConformerAssignmentScopeKind.canonical,
         )
         assert generate_ref_for(a) != generate_ref_for(b)
@@ -933,12 +933,12 @@ class TestCanonicalizerInvariants:
 
         a = ConformerAssignmentScheme(
             name="gamma",
-            version="v2",
+            version=2,
             scope=ConformerAssignmentScopeKind.canonical,
         )
         b = ConformerAssignmentScheme(
             name="gamma",
-            version="v2",
+            version=2,
             scope=ConformerAssignmentScopeKind.canonical,
         )
         assert generate_ref_for(a) == generate_ref_for(b)

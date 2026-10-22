@@ -4,17 +4,17 @@
 OpenAI / Anthropic / local models, no public API change, no migration, no public
 `trust.machine_review`, no automatic task creation, no ARC / `tckdb-client`
 change. Designs how a *real* (Off / Cloud / Local) machine-review provider would
-be wired in front of the already-implemented v2 contract + adapter dispatch.
+be wired in front of the already-implemented contract + adapter dispatch.
 **Date:** 2026-05-31
 **Scope:** TCKDB backend design only. The producer side (provider + context +
-config validation) that emits v2 payloads; everything from
+config validation) that emits payloads; everything from
 `submission_audit_event.details_json` downstream is unchanged.
 **Audience:** the maintainer who will implement off/cloud/local provider
 plumbing (handoff §11 "Option 2"), and whoever later turns on a real model.
 
 **Related specs:**
 
-- `machine_review_provider_contract_v2.md` — the v2 provider output contract
+- `machine_review_provider_contract.md` — the provider output contract
   (`MachineReviewProviderResult` / `MachineReviewProviderFinding` /
   `MACHINE_REVIEW_SCHEMA_VERSION`) that real providers must emit. This spec
   is the *producer* in front of that contract; that spec is the *wire shape*.
@@ -34,7 +34,7 @@ plumbing (handoff §11 "Option 2"), and whoever later turns on a real model.
 
 The machine-review **consumer** side is complete and tested: a payload on a
 `submission_audit_event` flows through `audit_adapter.py` (which requires the
-`schema_version` marker) →
+`format` marker) →
 `MachineReviewResult` → `map_findings_to_submission_records` →
 `RecordMachineReview` → `MachineReviewRecordSummary` → admin inspection →
 `build_curator_tasks_for_submission` → the admin curator-task API.
@@ -81,7 +81,7 @@ Real providers change the *producer*, never the *contract* or the *consumer*:
 
 ```text
 The wire shape is frozen: providers MUST emit MachineReviewProviderResult
-  (schema_version="machine_review_v2"). No new payload shape is introduced here.
+  (root `format` marker `{"name": "machine_review", "version": 1}`). No new payload shape is introduced here.
 Provider output is UNTRUSTED. It is schema-validated at the service boundary
   before any persistence. Malformed output degrades to a failed review.
 A provider CANNOT approve / reject / certify / hide / mutate. It writes nothing
@@ -153,8 +153,8 @@ Renaming env vars is a coordinated, cross-deployment migration (hosted, lab,
 
 The `MACHINE_REVIEW_*` names listed in the handoff prompt are recorded below as
 a **deferred future rename**, to be done (if ever) only alongside the larger
-`llm_precheck_recorded` → `machine_review_recorded` event-kind rename that the v2
-contract spec (§8) also defers. Until then, `LLM_PRECHECK_*` is the source of
+`llm_precheck_recorded` → `machine_review_recorded` event-kind rename that the
+provider contract spec (section 7) also defers. Until then, `LLM_PRECHECK_*` is the source of
 truth.
 
 ### 4.2 Settings used (all already in `config.py`)
@@ -221,7 +221,7 @@ check surfaces the same error earlier so operators see it at deploy time.
 
 ## 5. Where provider code lives
 
-### 5.1 Decision: a v2-native provider package beside the v2 contract
+### 5.1 Decision: a native provider package beside the contract
 
 Real providers emit the **machine-review** provider contract, which lives in
 `app/services/machine_review/schemas.py`. The producer lives beside it in
@@ -240,14 +240,14 @@ the machine-review context; §7 says how it is wrapped.
 `run_machine_review_for_submission` persists the validated payload through
 `record_machine_review_audit_event` (`app/services/submission.py`). The event
 kind (`llm_precheck_recorded`) and actor (`llm`) are as before, and
-`details_json` carries `schema_version="machine_review_v2"`, the marker the
-adapter requires.
+`details_json` carries the root `format` marker
+(`{"name": "machine_review", "version": 1}`), which the adapter requires.
 
 ---
 
 ## 6. Provider interface
 
-Designed around v2 (the prompt's shape, made concrete):
+Designed around (the prompt's shape, made concrete):
 
 ```python
 from typing import Protocol
@@ -256,13 +256,13 @@ from app.services.machine_review.schemas import MachineReviewProviderResult
 
 
 class MachineReviewProvider(Protocol):
-    """Provider interface for native v2 machine-review results."""
+    """Provider interface for native machine-review results."""
 
     def review_submission(
         self,
         context: MachineReviewContext,
     ) -> MachineReviewProviderResult:
-        """Return a schema-validated v2 machine-review result.
+        """Return a schema-validated machine-review result.
 
         Implementations call a real or fake model, then pass the raw model
         output through ``parse_machine_review_payload`` (the single trust
@@ -298,7 +298,7 @@ The disabled and fake providers skip the network but still return a valid
 
 ### 7.1 Decision: a `MachineReviewContext`, seeded from the precheck context builder
 
-The prompt names `MachineReviewContext`, and v2 providers want richer context
+The prompt names `MachineReviewContext`, and providers want richer context
 than `LLMPrecheckContext` carries (it has submission metadata +
 record_refs + an empty `trust_summaries` placeholder, `schemas.py:65-80`). Define
 a `MachineReviewContext` that **extends** that shape with the deterministic
@@ -360,14 +360,14 @@ If the compacted context still exceeds LLM_PRECHECK_MAX_INPUT_TOKENS, return a
 
 ## 8. Prompt / output contract
 
-### 8.1 Output: the v2 contract, verbatim
+### 8.1 Output: the contract, verbatim
 
 Real providers must return JSON matching `MachineReviewProviderResult`
 (`machine_review/schemas.py:177-200`), validated through `parse_machine_review_payload`:
 
 ```json
 {
-  "schema_version": "machine_review_v2",
+  "format": {"name": "machine_review", "version": 1},
   "status": "machine_screened_needs_attention",
   "curator_priority": "high",
   "summary": "One critical transition-state contradiction.",
@@ -388,12 +388,12 @@ Real providers must return JSON matching `MachineReviewProviderResult`
 }
 ```
 
-Required constraints (all already enforced by the v2 Pydantic model — the prompt
+Required constraints (all already enforced by the Pydantic model — the prompt
 template restates them so a real model is told the rules it will be validated
 against):
 
 ```text
-schema_version == "machine_review_v2"            (required marker)
+format == {"name": "machine_review", "version": 1}   (required marker)
 used_rag == false                                (Literal[False]; any truthy fails)
 extra fields forbidden                           (extra="forbid")
 no mutation payloads                             (no set_*/override/mutation field)
@@ -440,12 +440,12 @@ payload on every failure path, so the audit trail stays in one format:
 | Scenario | Behavior |
 |---|---|
 | Off mode | Disabled provider; **write nothing** by default (absence ⇒ `not_run`). |
-| Provider timeout (`LLM_PRECHECK_TIMEOUT_SECONDS`) | Synthesize v2 `status=machine_review_failed`, persist advisory audit event, **do not fail upload**. |
-| Provider error (network, auth, 5xx) | Same: v2 `machine_review_failed`, persisted, upload unaffected. |
-| Malformed / non-JSON / extra-field / `used_rag=true` output | `parse_machine_review_payload` raises → caught → v2 `machine_review_failed`. Upload unaffected. |
-| Context too large after compaction | v2 `machine_review_failed` with an explanatory summary (§7.4). |
+| Provider timeout (`LLM_PRECHECK_TIMEOUT_SECONDS`) | Synthesize `status=machine_review_failed`, persist advisory audit event, **do not fail upload**. |
+| Provider error (network, auth, 5xx) | Same: `machine_review_failed`, persisted, upload unaffected. |
+| Malformed / non-JSON / extra-field / `used_rag=true` output | `parse_machine_review_payload` raises → caught → `machine_review_failed`. Upload unaffected. |
+| Context too large after compaction | `machine_review_failed` with an explanatory summary (§7.4). |
 | Config error (missing key/base URL) | `MachineReviewProviderConfigurationError` → `machine_review_failed`; also caught at startup (§4.3). |
-| Submission has no linked records | `not_run` or a v2 `machine_screened_pass` with a summary saying there was nothing to inspect. |
+| Submission has no linked records | `not_run` or a `machine_screened_pass` with a summary saying there was nothing to inspect. |
 | DB rollback | Audit event rolls back with the surrounding transaction; no separate durability guarantee in MVP. |
 
 Hard guarantees (each a required test, §12):
@@ -467,14 +467,14 @@ behavior of every failure path.
 
 ## 10. Persistence
 
-Unchanged from the v2 contract spec §8 — no migration, no new event kind, no new
+Unchanged from the provider contract spec (section 7) — no migration, no new event kind, no new
 table:
 
 ```text
-submission_audit_event.details_json   <- the validated v2 payload
+submission_audit_event.details_json   <- the validated payload
 event_kind = llm_precheck_recorded     (unchanged; event_is_machine_review keys on it)
 actor_kind = llm                       (unchanged)
-schema_version = "machine_review_v2"   inside details_json (the version marker)
+format = {"name": "machine_review", "version": 1}   inside details_json (the marker)
 ```
 
 ```text
@@ -485,7 +485,7 @@ The persistence layer is the one recorder in §5.2.
 ```
 
 The future `llm_precheck_recorded` → `machine_review_recorded` event-kind rename
-stays deferred (v2 contract spec §8); it is a migration + adapter update and is
+stays deferred (provider contract spec, section 7); it is a migration + adapter update and is
 out of scope here.
 
 ---
@@ -530,8 +530,8 @@ extra / mutation field in output rejected         -> failed review
 malformed (non-JSON / wrong enum) output           -> failed review
 provider timeout                                   -> failed review, upload OK
 context too large after compaction                 -> failed review with summary
-v2 payload persisted to submission_audit_event.details_json
-v2 payload flows through inspection and (when admin-triggered) creates a
+payload persisted to submission_audit_event.details_json
+payload flows through inspection and (when admin-triggered) creates a
   curator task for warning/critical exact-mapped findings
 provider NEVER mutates submission.status, RecordReviewStatus, scientific records,
   evidence, or public trust
@@ -549,11 +549,11 @@ These extend the test list in `optional_llm_precheck.md` §17 and the invariants
 
 ## 13. Other formats are refused
 
-The adapter reads exactly one format: a payload carrying
-`schema_version="machine_review_v2"`.
+The adapter reads exactly one format: a payload whose root `format` marker
+is `{"name": "machine_review", "version": 1}`.
 
 ```text
-A payload with no schema_version, or with another one, is an unknown format:
+A payload with no format marker, or with another one, is an unknown format:
   no result, one parse warning. Nothing is translated or guessed.
 The retired precheck contract (a `label`, no marker) and its providers, runner
   and result models were deleted; only LLMPrecheckContext and its builder remain.
@@ -586,10 +586,10 @@ spec or by the stub providers it describes.
 1. Settings/config validation only.
    Add §4.3 validation to a factory (build_machine_review_provider) + a startup
    check. No provider logic yet. Cloud/Local still raise until step 6.
-2. Provider interface + disabled + fake v2 provider.
-   base.py Protocol, disabled.py (off), fake.py (deterministic v2). Wire
-   run_machine_review_for_submission to persist a v2 payload via the §5.2
-   helper tweak. Tests: off writes nothing; fake writes a validated v2 event.
+2. Provider interface + disabled + fake provider.
+   base.py Protocol, disabled.py (off), fake.py (deterministic). Wire
+   run_machine_review_for_submission to persist a payload via the §5.2
+   helper tweak. Tests: off writes nothing; fake writes a validated event.
 3. Local-http provider stub with mocked tests.
    local.py that builds only when base URL + model are configured; the HTTP call
    is mocked in tests. Assert timeout -> failed review, malformed -> failed.
@@ -620,7 +620,7 @@ No frontend / curator UI.
 No migration (no new event kind, no new table; version lives in details_json).
 No ARC / tckdb-client changes.
 No new MACHINE_REVIEW_* config namespace (reuse LLM_PRECHECK_*; §4).
-No change to the v2 wire contract, the adapter, the mapping, the inspection
+No change to the wire contract, the adapter, the mapping, the inspection
   projection, the curator-task services, or any public schema.
 No RAG (used_rag stays false).
 ```

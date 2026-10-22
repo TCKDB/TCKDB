@@ -39,9 +39,17 @@ import json
 from collections.abc import Sequence
 from typing import Any
 
+from tckdb_schemas.fragments.version import VersionRef
+
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import default_visible_statuses, status_at_or_above
-from app.services.manifest_formats import new_format_registry, read_manifest_format
+from app.services.manifest_formats import (
+    manifest_header,
+    new_current_only_registry,
+    new_format_registry,
+    read_manifest_format,
+)
+from app.services.rule_registry import rule_recorded_in, rules_registry
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 from app.services.selection_kernel import assessment_semantics as semantics
 from app.services.statmech_selection.assessment import StatmechAssessment, assess_candidate
@@ -63,18 +71,22 @@ from app.services.statmech_selection.rules import RULES_VERSION, StatmechRule, d
 from app.services.statmech_selection.service import StatmechQualification
 from app.services.statmech_selection.vocabulary import CONTRACT_VERSION
 from app.services.structure_selection.models import NormalizedCalculation
+from app.versioning import same_value
 
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
 #: reads exactly this format; a manifest in any other is refused.
-MANIFEST_FORMAT_VERSION = 2
+MANIFEST_FORMAT_VERSION = 1
 MANIFEST_FORMAT_NAME = "statmech_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "statmech_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
 )
 
 #: Assessment semantics versions this release can reassess. A manifest made under another is refused, not run under today's.
-SUPPORTED_ASSESSMENT_SEMANTICS = frozenset({ASSESSMENT_VERSION})
-EVIDENCE_RUBRIC = f"statmech_qualification@{ASSESSMENT_VERSION}"
+ASSESSMENT_SEMANTICS_NAME = "statmech_selection_assessment"
+ASSESSMENT_SEMANTICS = new_current_only_registry(
+    "statmech_selection_assessment_semantics", ASSESSMENT_SEMANTICS_NAME, ASSESSMENT_VERSION
+)
+EVIDENCE_RUBRIC = VersionRef(name="statmech_qualification", version=ASSESSMENT_VERSION)
 
 INTEGRITY_NOTE = (
     "sha256 checksums over the canonical JSON of each captured input and of the whole manifest; they detect edits and "
@@ -166,9 +178,11 @@ def build_manifest(
         exceeds the request's bound; nothing is returned without its whole manifest.
     """
     body: dict[str, Any] = {
-        "manifest_format_version": MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version,
+        "format": manifest_header(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME),
         "versions": _versions(),
-        "assessment_semantics": semantics.semantics_block(version=ASSESSMENT_VERSION, evidence_rubric=EVIDENCE_RUBRIC),
+        "assessment_semantics": semantics.semantics_block(
+            name=ASSESSMENT_SEMANTICS_NAME, version=ASSESSMENT_VERSION, evidence_rubric=EVIDENCE_RUBRIC
+        ),
         "request": result.request.to_dict(),
         "effective_review_statuses": sorted(s.value for s in result.effective_statuses),
         "read_profile": dict(profile),
@@ -201,18 +215,18 @@ def _check_format(manifest: dict[str, Any]) -> None:
     )
 
 
-def _check_versions(manifest: dict[str, Any], *, reassessing: bool) -> str:
+def _check_versions(manifest: dict[str, Any], *, reassessing: bool) -> int:
     """Refuse a manifest made under a version this release does not carry. Returns the assessment semantics version."""
     versions = manifest.get("versions") or {}
     running = _versions()
     for name in ("contract", "decision", "administrative_key", "rules"):
-        if versions.get(name) != running[name]:
+        if not same_value(versions.get(name), running[name]):
             raise ReplayError(
                 "unsupported_semantic_version",
                 f"manifest was made under {name} version {versions.get(name)!r}; this release replays {running[name]!r}",
             )
     try:
-        recorded = semantics.check_supported(manifest, supported=SUPPORTED_ASSESSMENT_SEMANTICS)
+        recorded = semantics.check_supported(manifest, semantics=ASSESSMENT_SEMANTICS, name=ASSESSMENT_SEMANTICS_NAME)
     except semantics.UnsupportedAssessmentSemantics as exc:
         raise ReplayError("unsupported_assessment_semantics", str(exc)) from exc
     if reassessing:
@@ -226,7 +240,7 @@ def _check_versions(manifest: dict[str, Any], *, reassessing: bool) -> str:
                 "only, so its recorded ordering can be reproduced but its candidates cannot be reassessed",
             )
         for name in ("assessment", "normalizer", "finding_semantics"):
-            if versions.get(name) != running[name]:
+            if not same_value(versions.get(name), running[name]):
                 raise ReplayError(
                     "unsupported_semantic_version",
                     f"manifest was made under {name} version {versions.get(name)!r}; this release reassesses {running[name]!r}",
@@ -301,7 +315,7 @@ def _check_consistency(
         raise ReplayError("inconsistent_manifest", "the top-level outcome is not the decision's")
 
 
-def _prepare(manifest: dict[str, Any], *, reassessing: bool) -> tuple[str, StatmechRequest, SubjectFacts, list[CandidateFacts], dict[str, NormalizedCalculation]]:
+def _prepare(manifest: dict[str, Any], *, reassessing: bool) -> tuple[int, StatmechRequest, SubjectFacts, list[CandidateFacts], dict[str, NormalizedCalculation]]:
     _check_format(manifest)
     recorded = _check_versions(manifest, reassessing=reassessing)
     _check_integrity(manifest)
@@ -326,15 +340,13 @@ def _recorded_assessments(manifest: dict[str, Any], candidates: Sequence[Candida
 
 
 def _rules_for(manifest: dict[str, Any], rules: Sequence[StatmechRule] | None) -> tuple[StatmechRule, ...]:
-    registry = tuple(default_rules() if rules is None else rules)
-    validate_rules(registry)
-    available = {(r.rule_id, r.version): r for r in registry}
+    candidates = tuple(default_rules() if rules is None else rules)
+    validate_rules(candidates)
+    registry = rules_registry("statmech_selection_rules", candidates)
     used: list[StatmechRule] = []
     for entry in (manifest["decision"].get("protocol") or {}).get("rules", []):
         key = (entry["rule_id"], entry["version"])
-        if key not in available:
-            raise ReplayError("rule_unavailable", f"rule {key[0]} version {key[1]} is not in the running registry")
-        rule = available[key]
+        rule = rule_recorded_in(registry, entry, lambda message: ReplayError("rule_unavailable", message))
         described = rule.describe()
         if described["status"] != entry["status"]:
             raise ReplayError(
@@ -353,7 +365,7 @@ def _rules_for(manifest: dict[str, Any], rules: Sequence[StatmechRule] | None) -
 # ---------------------------------------------------------------------------
 
 
-def describe_reassessment(manifest: dict[str, Any], *, recorded: str) -> dict[str, Any]:
+def describe_reassessment(manifest: dict[str, Any], *, recorded: int) -> dict[str, Any]:
     """Label a reassessment or full replay. It runs only under the running semantics, so it is always ``current``."""
     return {
         "recorded_assessment_semantics": recorded,
@@ -390,7 +402,7 @@ def reproduce_statmech_ordering(manifest: dict[str, Any], *, rules: Sequence[Sta
     used = _rules_for(manifest, rules)
     decision = decide_statmech(request=request, subject=subject, candidates=candidates, assessments=recorded, rules=used)
     _compare_with_recorded(manifest, decision)
-    label = semantics.describe_replay(manifest, current=ASSESSMENT_VERSION, supported=SUPPORTED_ASSESSMENT_SEMANTICS)
+    label = semantics.describe_replay(manifest, semantics=ASSESSMENT_SEMANTICS, name=ASSESSMENT_SEMANTICS_NAME)
     return {"label": label, "decision": decision.to_dict()}
 
 
@@ -457,10 +469,11 @@ def replay_matches(manifest: dict[str, Any], *, rules: Sequence[StatmechRule] | 
 
 
 __all__ = [
+    "ASSESSMENT_SEMANTICS",
+    "ASSESSMENT_SEMANTICS_NAME",
     "EVIDENCE_RUBRIC",
     "INTEGRITY_NOTE",
     "MANIFEST_FORMAT_VERSION",
-    "SUPPORTED_ASSESSMENT_SEMANTICS",
     "ReplayError",
     "build_manifest",
     "canonical",

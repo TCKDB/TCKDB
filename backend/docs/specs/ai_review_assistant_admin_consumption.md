@@ -111,7 +111,7 @@ Suggested card shape:
 
 ```json
 {
-  "label": "warning",
+  "label": "machine_screened_warning",
   "summary": "The upload has core provenance but is missing IRC evidence.",
   "model": "fake/test",
   "used_rag": false,
@@ -128,7 +128,7 @@ Field mapping:
 
 | Card field | Source |
 |---|---|
-| `label` | `details_json.label` |
+| `label` | `details_json.status` (the card's wire name `label` carries the reviewer's `status`) |
 | `summary` | `details_json.summary`, falling back to audit event `summary` |
 | `model` | `details_json.model` |
 | `used_rag` | `details_json.used_rag` |
@@ -182,7 +182,7 @@ Recommended interpretation:
 | Display item | Source |
 |---|---|
 | Event title | Literal: `AI Review Assistant recorded a precheck` |
-| Label | `details_json.label` |
+| Label | `details_json.status` |
 | Summary | `details_json.summary`, falling back to audit event `summary` |
 | Provider/model | `details_json.provider` and `details_json.model` |
 | Finding count | length of `details_json.findings` |

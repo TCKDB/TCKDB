@@ -90,7 +90,7 @@ def _counts(session) -> dict[str, int]:
 
 
 def test_anonymous_submit_rejected(raw_client, db_session) -> None:
-    bundle = _load_bundle("thermo-bundle-v0.json")
+    bundle = _load_bundle("thermo-bundle.json")
     before = _counts(db_session)
     resp = raw_client.post(ENDPOINT, json=bundle)
     after = _counts(db_session)
@@ -100,7 +100,7 @@ def test_anonymous_submit_rejected(raw_client, db_session) -> None:
 
 
 def test_invalid_api_key_rejected(raw_client, db_session) -> None:
-    bundle = _load_bundle("thermo-bundle-v0.json")
+    bundle = _load_bundle("thermo-bundle.json")
     before = _counts(db_session)
     resp = raw_client.post(
         ENDPOINT, json=bundle, headers={"X-API-Key": "definitely-not-valid"}
@@ -120,7 +120,7 @@ def test_valid_api_key_submit_imports_with_owner_as_actor(
     'testuser' and an API key 'test-api-key-for-tckdb'. That user must
     end up as ``submission.created_by`` and as ``thermo.created_by``.
     """
-    bundle = _load_bundle("thermo-bundle-v0.json")
+    bundle = _load_bundle("thermo-bundle.json")
     resp = raw_client.post(
         ENDPOINT,
         json=bundle,
@@ -150,7 +150,7 @@ def test_valid_api_key_submit_imports_with_owner_as_actor(
 
 
 def test_valid_thermo_bundle_imports(client, db_session) -> None:
-    bundle = _load_bundle("thermo-bundle-v0.json")
+    bundle = _load_bundle("thermo-bundle.json")
 
     before = _counts(db_session)
     resp = client.post(ENDPOINT, json=bundle)
@@ -219,7 +219,7 @@ def test_valid_thermo_bundle_imports(client, db_session) -> None:
 
 
 def test_valid_kinetics_bundle_imports(client, db_session) -> None:
-    bundle = _load_bundle("kinetics-bundle-v0.json")
+    bundle = _load_bundle("kinetics-bundle.json")
 
     before = _counts(db_session)
     resp = client.post(ENDPOINT, json=bundle)
@@ -277,7 +277,7 @@ def test_dry_run_blocking_error_prevents_import(client, db_session) -> None:
     when ``canonical_species_identity`` raises, which trips the strict
     gate.
     """
-    bundle = _load_bundle("kinetics-bundle-v0.json")
+    bundle = _load_bundle("kinetics-bundle.json")
     # Replace every reactant SMILES with an unparseable string so
     # canonicalization fails at the first participant.
     for participant in bundle["records"]["kinetics_uploads"][0]["reaction"][
@@ -295,7 +295,7 @@ def test_dry_run_blocking_error_prevents_import(client, db_session) -> None:
 
 def test_invalid_bundle_returns_validation_error(client, db_session) -> None:
     """Structurally invalid bundles fail through normal Pydantic validation."""
-    bundle = _load_bundle("thermo-bundle-v0.json")
+    bundle = _load_bundle("thermo-bundle.json")
     del bundle["bundle_kind"]
 
     before = _counts(db_session)
@@ -308,7 +308,7 @@ def test_invalid_bundle_returns_validation_error(client, db_session) -> None:
 
 def test_imported_records_are_unreviewed(client, db_session) -> None:
     """Response and submission row both surface unreviewed/pending state."""
-    bundle = _load_bundle("thermo-bundle-v0.json")
+    bundle = _load_bundle("thermo-bundle.json")
     resp = client.post(ENDPOINT, json=bundle)
     assert resp.status_code == 201
     body = resp.json()
@@ -332,7 +332,7 @@ def test_local_exporter_label_does_not_become_hosted_actor(
     actor must remain the authenticated test user (``testuser``), and no
     AppUser row named ``example-user`` may be created during import.
     """
-    bundle = _load_bundle("thermo-bundle-v0.json")
+    bundle = _load_bundle("thermo-bundle.json")
     assert bundle["exporter"]["local_user_label"] == "example-user"
 
     resp = client.post(ENDPOINT, json=bundle)

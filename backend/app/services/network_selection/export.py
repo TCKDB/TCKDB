@@ -78,7 +78,7 @@ FORMATS = ("native", "chemkin")
 #: Manifest sections that must match server-held content for the export to proceed.
 _CONTENT_SECTIONS = ("network", "solves", "assessments", "decision", "outcome", "policy", "declaration_versions")
 _REQUIRED_KEYS = (
-    "manifest_format_version", "policy", "request", "visibility", "network", "population", "solves", "assessments",
+    "format", "policy", "request", "visibility", "network", "population", "solves", "assessments",
     "decision", "outcome", "digest",
 )
 _REPLAY_ERRORS = (ReplayError, KeyError, TypeError, ValueError, AttributeError, IndexError)

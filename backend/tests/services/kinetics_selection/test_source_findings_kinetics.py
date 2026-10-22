@@ -155,7 +155,7 @@ def test_a_computed_record_names_the_evidence_rubric_version_that_produced_its_v
     calc, _, role = sources.energy()
     record(db_session, world, "d", sources, links=[(calc, role)])
     assessment = only(run(db_session, world.entry))
-    assert "evidence_rubric:computed_kinetics@2" in assessment.advisory
+    assert {"evidence_rubric:computed_kinetics", "evidence_rubric_version:1"} <= set(assessment.advisory)
 
 
 def test_links_that_supply_no_structural_role_are_not_consulted(db_session, world):

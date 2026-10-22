@@ -318,7 +318,7 @@ def test_complete_deposited_evidence_is_rerunnable_without_a_manifest(
 
 def _execution_environment_payload() -> dict:
     return {
-        "schema_version": "tckdb.execution-environment.v1", "software_release": {"name": "Gaussian", "version": "16"},
+        "schema_name": "tckdb.execution-environment", "schema_version": 1, "software_release": {"name": "Gaussian", "version": "16"},
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
         "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
         "closure": [
@@ -356,7 +356,7 @@ def test_manifest_is_recorded_provenance_and_never_changes_the_grade(db_session,
 
     stored = evaluate_and_append_reproducibility(db_session, record_type="calculation", record_id=calculation.id,
                                                     artifact_loader=_verified_loader(objects))
-    assert stored.rubric_version == "v1"
+    assert stored.rubric_version == 1
     assert stored.grade is ReproducibilityGrade.rerunnable
 
 
@@ -459,7 +459,7 @@ def test_never_awards_rerunnable_to_product_records(db_session, record_type, fac
 
     result = evaluate_reproducibility(db_session, record_type=record_type, record_id=target.id)
     assert result.grade is not ReproducibilityGrade.rerunnable
-    assert result.context_json["rubric"]["version"] == "v1"
+    assert result.context_json["rubric"]["version"] == 1
 
 
 @pytest.mark.parametrize("failure", ["unavailable", "integrity"])

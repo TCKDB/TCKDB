@@ -7,7 +7,7 @@ module.
 """
 
 from app.services.archive.core import (
-    ARCHIVE_SCHEMA,
+    ARCHIVE_FORMAT,
     ArchiveCompatibilityError,
     ArchiveError,
     ArchiveIntegrityError,
@@ -20,7 +20,7 @@ from app.services.archive.core import (
 )
 
 __all__ = [
-    "ARCHIVE_SCHEMA",
+    "ARCHIVE_FORMAT",
     "ArchiveCompatibilityError",
     "ArchiveError",
     "ArchiveIntegrityError",

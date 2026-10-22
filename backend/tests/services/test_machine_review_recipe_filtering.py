@@ -1,23 +1,24 @@
-"""A stored machine-review recipe must be the filtered view (issue #553).
+"""A stored machine-review recipe holds exactly one rubric, so an unrelated rubric never restales it (issue #553).
 
-Currency compares a review's stored ``rubric_versions`` for exact equality with
-the active one. Every consumer therefore stamps -- and later compares against --
-only the one key for its own rubric out of ``ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS``:
+Currency compares a review's stored ``rubric`` ref with the active one. Every consumer therefore stamps -- and later
+compares against -- the one rubric ref for its own check, never a set:
 
-* reviewer family, per record type: ``active_rubric_versions_for_record_type``;
-* scientific-check family, per advisory check and runner: ``AdvisoryResult.recipe``;
+* reviewer family, per record type: ``active_rubric_for_record_type`` (or, owner-aware,
+  ``active_rubric_for_fragment``);
+* scientific-check family, per advisory check and runner: ``AdvisoryResult.rubric_ref``;
 * the external-Cp runner: ``cp.run_and_record`` / ``cp.cp_comparison_currency``.
 
-These tests store each filtered recipe, then add a rubric key none of them owns
-(the shape of every Phase D addition), and assert every stored recipe still
-compares current. A consumer that stored the unfiltered dict turns them red --
-the control in each test shows that dict *does* go stale under the same change.
+The rule used to be a convention about filtering a dict; it is now structural, because the recipe has a single ``rubric``
+field. These tests keep it that way: they store each consumer's ref, register a rubric none of them owns (the shape of
+every later addition) and assert every stored ref still compares current, and that bumping only *one* rubric restales only
+the reviews made under that rubric.
 """
 from __future__ import annotations
 
 from datetime import datetime
 
 import pytest
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.services.consistency import gibbs, hess, isotope_identity, kinetics, kirchhoff
 from app.services.consistency import thermo as thermo_check
@@ -26,7 +27,8 @@ from app.services.consistency.service import invoke
 from app.services.external_comparison import cp
 from app.services.machine_review.admin_trigger import (
     SUPPORTED_RECORD_TYPES,
-    active_rubric_versions_for_record_type,
+    active_rubric_for_fragment,
+    active_rubric_for_record_type,
 )
 from app.services.machine_review.context_hash import MachineReviewContextDigest
 from app.services.machine_review.currency import (
@@ -37,65 +39,64 @@ from app.services.machine_review.currency import (
 )
 from app.services.machine_review.persistence import create_record_machine_review_row
 from app.services.machine_review.read_model import RecordMachineReview
-from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS
+from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT
 from app.services.machine_review.rereview import (
     MachineReviewReReviewDecision,
     plan_record_machine_rereview,
 )
 from app.services.machine_review.schemas import MachineReviewStatus
+from app.services.trust.models import TrustFragment
 from app.services.trust.rubrics import (
     EXTERNAL_CP_COMPARISON,
     GIBBS_SELF_CONSISTENCY,
     HESS_CONSISTENCY,
     ISOTOPE_IDENTITY_CONSISTENCY,
     KIRCHHOFF_CONSISTENCY,
+    RUBRICS,
     THERMO_CONSISTENCY,
     THERMO_KINETICS_CONSISTENCY,
 )
+from tests.services._rubric_registry import bump, register_unrelated
 
-#: A rubric key no current consumer owns -- stands in for the next check added.
-UNRELATED_KEY = "unrelated_future_check_v1"
+_DIGEST = MachineReviewContextDigest(context_hash="c" * 64, context_schema_version=1)
+_PROMPT = ACTIVE_MACHINE_REVIEW_PROMPT
 
-_DIGEST = MachineReviewContextDigest(context_hash="c" * 64, context_schema_version="v1")
-_PROMPT = "machine_review_v1"
-
-#: What each reviewer-family record type must store: exactly its own rubric.
+#: What each reviewer-family record type must store: exactly its own rubric (every rubric is at version 1).
 _REVIEWER_RECIPES = {
-    "calculation": {"computed_calculation_v2": "2"},
-    "kinetics": {"computed_kinetics_v2": "2"},
-    "thermo": {"computed_thermo_v2": "2"},
-    "statmech": {"computed_statmech_v2": "2"},
-    "transport": {"computed_transport_v2": "2"},
-    "transition_state_entry": {"computed_transition_state_v5": "5"},
+    "calculation": VersionRef(name="computed_calculation", version=1),
+    "kinetics": VersionRef(name="computed_kinetics", version=1),
+    "thermo": VersionRef(name="computed_thermo", version=1),
+    "statmech": VersionRef(name="computed_statmech", version=1),
+    "transport": VersionRef(name="computed_transport", version=1),
+    "transition_state_entry": VersionRef(name="computed_transition_state", version=1),
 }
 
-#: Owner-scoped reviewer rubrics: selected per record by the rubric that evaluated it, so
-#: they are keyed by public rubric name, not by record type. Each is still exactly one key.
+#: Owner-scoped reviewer rubrics: selected per record by the rubric that evaluated it, so they are keyed by rubric
+#: name, not by record type.
 _OWNER_SCOPED_REVIEWER_RECIPES = {
-    "computed_ts_statmech_v1": {"computed_ts_statmech_v1": "1"},
+    "computed_ts_statmech": VersionRef(name="computed_ts_statmech", version=1),
 }
 
 #: What each scientific-check runner must store: exactly its own rubric.
 _ADVISORY_RECIPES = {
-    (thermo_check.RUNNER, THERMO_CONSISTENCY): {"thermo_consistency_v1": "1"},
-    (kinetics.RUNNER, THERMO_KINETICS_CONSISTENCY): {"thermo_kinetics_consistency_v1": "1"},
-    (gibbs.RUNNER, GIBBS_SELF_CONSISTENCY): {"gibbs_self_consistency_v1": "1"},
-    (hess.RUNNER, HESS_CONSISTENCY): {"hess_consistency_v1": "1"},
-    (isotope_identity.RUNNER, ISOTOPE_IDENTITY_CONSISTENCY): {"isotope_identity_consistency_v1": "1"},
-    (kirchhoff.RUNNER, KIRCHHOFF_CONSISTENCY): {"kirchhoff_consistency_v1": "1"},
-    (cp.RUNNER_VERSION, EXTERNAL_CP_COMPARISON): {"external_cp_comparison_v2": "2"},
+    (thermo_check.RUNNER, THERMO_CONSISTENCY): VersionRef(name="thermo_consistency", version=1),
+    (kinetics.RUNNER, THERMO_KINETICS_CONSISTENCY): VersionRef(name="thermo_kinetics_consistency", version=1),
+    (gibbs.RUNNER, GIBBS_SELF_CONSISTENCY): VersionRef(name="gibbs_self_consistency", version=1),
+    (hess.RUNNER, HESS_CONSISTENCY): VersionRef(name="hess_consistency", version=1),
+    (isotope_identity.RUNNER, ISOTOPE_IDENTITY_CONSISTENCY): VersionRef(name="isotope_identity_consistency", version=1),
+    (kirchhoff.RUNNER, KIRCHHOFF_CONSISTENCY): VersionRef(name="kirchhoff_consistency", version=1),
+    (cp.RUNNER, EXTERNAL_CP_COMPARISON): VersionRef(name="external_cp_comparison", version=1),
 }
 
 
-def _classify(stored_rubric_versions, active_rubric_versions, *, prompt=_PROMPT):
+def _classify(stored_rubric: VersionRef, active_rubric: VersionRef, *, prompt=_PROMPT):
     stored = StoredMachineReviewProjection(
         record_type="thermo", record_id=1, reviewed_at=datetime(2026, 9, 1),
         context_schema_version=_DIGEST.context_schema_version, context_hash=_DIGEST.context_hash,
-        prompt_version=prompt, rubric_versions=stored_rubric_versions,
+        prompt=prompt, rubric=stored_rubric,
     )
     return classify_machine_review_currency(
-        [stored], current_context=_DIGEST, active_prompt_version=prompt,
-        active_rubric_versions=active_rubric_versions,
+        [stored], current_context=_DIGEST, active_prompt=prompt, active_rubric=active_rubric,
     )
 
 
@@ -104,34 +105,42 @@ def test_the_expected_tables_cover_every_consumer():
     assert set(_REVIEWER_RECIPES) == set(SUPPORTED_RECORD_TYPES)
     assert len(_REVIEWER_RECIPES) == 6
     owned = {
-        key
-        for recipe in (
+        ref.name
+        for ref in (
             *_REVIEWER_RECIPES.values(),
             *_OWNER_SCOPED_REVIEWER_RECIPES.values(),
             *_ADVISORY_RECIPES.values(),
         )
-        for key in recipe
     }
-    assert owned == set(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS)
-    assert UNRELATED_KEY not in ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS
+    assert owned == {ref.name for ref in RUBRICS.refs()}
 
 
 @pytest.mark.parametrize("record_type", sorted(_REVIEWER_RECIPES))
 def test_reviewer_recipe_survives_an_unrelated_rubric(record_type, monkeypatch):
-    stored = active_rubric_versions_for_record_type(record_type)
+    stored = active_rubric_for_record_type(record_type)
     assert stored == _REVIEWER_RECIPES[record_type]
-    unfiltered = dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS)
 
-    monkeypatch.setitem(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, UNRELATED_KEY, "1")
+    unrelated = register_unrelated(monkeypatch)
+    assert unrelated in {ref.name for ref in RUBRICS.refs()}
 
-    active = active_rubric_versions_for_record_type(record_type)
+    active = active_rubric_for_record_type(record_type)
     assert active == _REVIEWER_RECIPES[record_type]
     result = _classify(stored, active)
     assert (result.state, result.stale_reasons) == (MachineReviewCurrencyState.current, ())
-    # Control: had the consumer stored the unfiltered dict, the same change restales it.
-    control = _classify(unfiltered, dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS))
-    assert (control.state, control.stale_reasons) == (
-        MachineReviewCurrencyState.stale, (MachineReviewStaleReason.rubric_versions_mismatch,))
+
+
+@pytest.mark.parametrize("record_type", sorted(_REVIEWER_RECIPES))
+def test_bumping_one_rubric_restales_only_its_own_reviews(record_type, monkeypatch):
+    """The rubric of one record type changing never touches another record type's reviews."""
+    stored = {rt: active_rubric_for_record_type(rt) for rt in _REVIEWER_RECIPES}
+    bump(monkeypatch, _REVIEWER_RECIPES[record_type].name, 2)
+    for rt, ref in stored.items():
+        result = _classify(ref, active_rubric_for_record_type(rt))
+        if rt == record_type:
+            assert (result.state, result.stale_reasons) == (
+                MachineReviewCurrencyState.stale, (MachineReviewStaleReason.rubric_versions_mismatch,))
+        else:
+            assert (result.state, result.stale_reasons) == (MachineReviewCurrencyState.current, ())
 
 
 def test_the_owner_scoped_reviewer_table_is_not_empty():
@@ -140,24 +149,19 @@ def test_the_owner_scoped_reviewer_table_is_not_empty():
 
 @pytest.mark.parametrize("rubric_name", sorted(_OWNER_SCOPED_REVIEWER_RECIPES))
 def test_owner_scoped_reviewer_recipe_survives_an_unrelated_rubric(rubric_name, monkeypatch):
-    """A transition-state-owned statmech review is stamped with its own one key, so it too is not restaled."""
-    from app.services.machine_review.admin_trigger import active_rubric_versions_for_fragment
-    from app.services.trust.models import TrustFragment
-
-    fragment = TrustFragment(trust_status="partial", evidence={"rubric": rubric_name})
-    stored = active_rubric_versions_for_fragment("statmech", fragment)
+    """A transition-state-owned statmech review is stamped with its own one rubric, so it too is not restaled."""
+    fragment = TrustFragment(
+        trust_status="partial", evidence={"rubric": rubric_name, "rubric_version": 1}
+    )
+    stored = active_rubric_for_fragment("statmech", fragment)
     assert stored == _OWNER_SCOPED_REVIEWER_RECIPES[rubric_name]
-    unfiltered = dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS)
 
-    monkeypatch.setitem(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, UNRELATED_KEY, "1")
+    register_unrelated(monkeypatch)
 
-    active = active_rubric_versions_for_fragment("statmech", fragment)
+    active = active_rubric_for_fragment("statmech", fragment)
     assert active == _OWNER_SCOPED_REVIEWER_RECIPES[rubric_name]
     result = _classify(stored, active)
     assert (result.state, result.stale_reasons) == (MachineReviewCurrencyState.current, ())
-    control = _classify(unfiltered, dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS))
-    assert (control.state, control.stale_reasons) == (
-        MachineReviewCurrencyState.stale, (MachineReviewStaleReason.rubric_versions_mismatch,))
 
 
 @pytest.mark.parametrize("runner,rubric", list(_ADVISORY_RECIPES), ids=lambda v: getattr(v, "name", v))
@@ -165,19 +169,15 @@ def test_scientific_check_recipe_survives_an_unrelated_rubric(runner, rubric, mo
     def result():
         return AdvisoryResult(target=None, runner=runner, rubric=rubric, findings=(), inputs_json="{}")
 
-    stored = result().recipe
+    stored = result().rubric_ref
     assert stored == _ADVISORY_RECIPES[(runner, rubric)]
-    unfiltered = dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS)
 
-    monkeypatch.setitem(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, UNRELATED_KEY, "1")
+    register_unrelated(monkeypatch)
 
-    active = result().recipe
+    active = result().rubric_ref
     assert active == _ADVISORY_RECIPES[(runner, rubric)]
-    classified = _classify(stored, active, prompt=runner)
+    classified = _classify(stored, active, prompt=result().prompt)
     assert (classified.state, classified.stale_reasons) == (MachineReviewCurrencyState.current, ())
-    control = _classify(unfiltered, dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS), prompt=runner)
-    assert (control.state, control.stale_reasons) == (
-        MachineReviewCurrencyState.stale, (MachineReviewStaleReason.rubric_versions_mismatch,))
 
 
 def test_persisted_reviews_survive_an_unrelated_rubric(db_session, monkeypatch):
@@ -185,7 +185,7 @@ def test_persisted_reviews_survive_an_unrelated_rubric(db_session, monkeypatch):
 
     A reviewer-family thermo review, a D1 advisory row and an external-Cp row
     (via both the advisory service and ``cp.run_and_record``) are persisted with
-    the recipe as it stands, then an unrelated key is added and each is
+    the recipe as it stands, then an unrelated rubric is registered and each is
     re-classified with its consumer's own live currency call.
     """
     from tests.services.test_phase_d_persistence import request, setup_records
@@ -193,7 +193,7 @@ def test_persisted_reviews_survive_an_unrelated_rubric(db_session, monkeypatch):
     thermo, _, _ = setup_records(db_session)
     create_record_machine_review_row(
         db_session, record_type="thermo", record_id=thermo.id, context_digest=_DIGEST,
-        prompt_version=_PROMPT, rubric_versions=active_rubric_versions_for_record_type("thermo"),
+        prompt=_PROMPT, rubric=active_rubric_for_record_type("thermo"),
         review=RecordMachineReview(record_type="thermo", record_ref=thermo.public_ref, record_id=thermo.id,
                                    status=MachineReviewStatus.machine_screened_pass,
                                    reviewed_at=datetime(2026, 9, 1)),
@@ -201,19 +201,19 @@ def test_persisted_reviews_survive_an_unrelated_rubric(db_session, monkeypatch):
     d1, d1_row = invoke(db_session, commit=True, **request(thermo, "thermo"))
     cp_row = cp.run_and_record(db_session, thermo.id)
     db_session.flush()
-    assert d1_row.rubric_versions_json == {"thermo_consistency_v1": "1"}
-    assert cp_row.rubric_versions_json == {"external_cp_comparison_v2": "2"}
+    assert (d1_row.rubric_name, d1_row.rubric_version) == ("thermo_consistency", 1)
+    assert (cp_row.rubric_name, cp_row.rubric_version) == ("external_cp_comparison", 1)
+    assert (cp_row.prompt_name, cp_row.prompt_version, cp_row.model) == (
+        "external_cp_comparison", 1, "external_cp_comparison")
 
     def states():
         plan = plan_record_machine_rereview(
             db_session, record_type="thermo", record_id=thermo.id, current_context=_DIGEST,
-            active_prompt_version=_PROMPT, active_rubric_versions=active_rubric_versions_for_record_type("thermo"))
+            active_prompt=_PROMPT, active_rubric=active_rubric_for_record_type("thermo"))
         return (plan.decision, currency(db_session, d1).state.value,
                 cp.cp_comparison_currency(db_session, thermo.id).state.value)
 
     expected = (MachineReviewReReviewDecision.skip_current, "current", "current")
     assert states() == expected
-    before = dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS)
-    monkeypatch.setitem(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, UNRELATED_KEY, "1")
-    assert set(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS) - set(before) == {UNRELATED_KEY}
+    register_unrelated(monkeypatch)
     assert states() == expected

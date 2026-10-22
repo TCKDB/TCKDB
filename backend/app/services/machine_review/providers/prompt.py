@@ -1,9 +1,9 @@
 """The machine-review prompt, versioned alongside the recipe.
 
-``ACTIVE_MACHINE_REVIEW_PROMPT_VERSION`` in :mod:`app.services.machine_review.recipe`
+``ACTIVE_MACHINE_REVIEW_PROMPT`` in :mod:`app.services.machine_review.recipe`
 has existed as a label since the foundation slice with nothing behind it. This
 module is the text it names. The two are bound by
-:data:`MACHINE_REVIEW_PROMPT_VERSION` and pinned together by a test, so the
+:data:`MACHINE_REVIEW_PROMPT` and pinned together by a test, so the
 version in a stored ``context_hash`` always identifies the words that produced
 the review.
 
@@ -35,12 +35,12 @@ import json
 from typing import Any
 
 from app.services.machine_review.providers.interface import MachineReviewContext
-from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT_VERSION
+from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT
 
 #: The prompt version this text is. Bound to the recipe's active version, and
 #: pinned by ``tests/services/test_machine_review_prompt.py`` so the two cannot
 #: drift apart silently.
-MACHINE_REVIEW_PROMPT_VERSION = ACTIVE_MACHINE_REVIEW_PROMPT_VERSION
+MACHINE_REVIEW_PROMPT = ACTIVE_MACHINE_REVIEW_PROMPT
 
 
 MACHINE_REVIEW_SYSTEM_PROMPT = """\
@@ -57,7 +57,7 @@ Answer with a single JSON object and nothing else. No prose before or after,
 no markdown fence.
 
 {
-  "schema_version": "machine_review_v2",
+  "format": {"name": "machine_review", "version": 1},
   "status": one of "machine_screened_pass",
                    "machine_screened_warning",
                    "machine_screened_needs_attention",
@@ -154,7 +154,7 @@ def build_user_message(context: MachineReviewContext) -> str:
 
 
 __all__ = [
-    "MACHINE_REVIEW_PROMPT_VERSION",
+    "MACHINE_REVIEW_PROMPT",
     "MACHINE_REVIEW_SYSTEM_PROMPT",
     "build_user_message",
 ]

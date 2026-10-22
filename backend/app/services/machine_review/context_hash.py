@@ -28,8 +28,8 @@ Design choices (policy §3, mirroring :func:`compute_finding_fingerprint`):
   prior-recipe review as current (policy §3.4).
 * **Provenance excluded.** ``provider``/``model`` and all timestamps are
   excluded: the hash is the currency of the *evidence*, not the reviewer
-  (policy §3.3/§3.5). Reviewer-recipe currency (``prompt_version``,
-  ``rubric_versions``) lives in the currency key, not here.
+  (policy §3.3/§3.5). Reviewer-recipe currency (``prompt``,
+  ``rubric``) lives in the currency key, not here.
 """
 
 from __future__ import annotations
@@ -44,7 +44,11 @@ from pydantic import BaseModel, ConfigDict, Field
 #: Version of the context-hash recipe (input set + canonicalisation). Bump this
 #: whenever the hashed inputs or their canonical form change; every prior digest
 #: then differs and prior reviews become stale until re-reviewed (policy §3.4).
-MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION = "v1"
+#:
+#: This is 1 like every other TCKDB-owned version: no version is exempt from the 2026-10 reset. Reviews stored before
+#: the reset are stale for a *named* reason that does not depend on this number or on the hash -- the migration stored
+#: their prompt at version 0 and their rubric at 1 or 0 (see ``currency.py``), and no registry holds a 0.
+MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION = 1
 
 
 class SourceCalculationContext(BaseModel):
@@ -145,7 +149,7 @@ class MachineReviewContextDigest:
     """
 
     context_hash: str
-    context_schema_version: str
+    context_schema_version: int
 
 
 def _sorted_pairs(pairs: list[tuple[Any, Any]]) -> list[list[Any]]:
@@ -167,7 +171,7 @@ def _sorted_pairs(pairs: list[tuple[Any, Any]]) -> list[list[Any]]:
 def build_machine_review_context_hash(
     context: MachineReviewEvidenceContext,
     *,
-    context_schema_version: str = MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION,
+    context_schema_version: int = MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION,
 ) -> MachineReviewContextDigest:
     """Build a stable digest for a machine-review evidence context.
 

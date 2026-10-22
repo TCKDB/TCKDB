@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     ForeignKey,
     Index,
+    Integer,
     SmallInteger,
     String,
     Text,
@@ -378,7 +379,8 @@ class ConformerAssignmentScheme(Base, TimestampMixin, CreatedByMixin, PublicRefM
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
 
     name: Mapped[str] = mapped_column(String(128), nullable=False)
-    version: Mapped[str] = mapped_column(String(64), nullable=False)
+    # TCKDB owns the scheme: its version is an integer, never text.
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
     scope: Mapped[ConformerAssignmentScopeKind] = mapped_column(
         SAEnum(ConformerAssignmentScopeKind, name="conformer_assignment_scope_kind"),
         nullable=False,
@@ -412,6 +414,7 @@ class ConformerAssignmentScheme(Base, TimestampMixin, CreatedByMixin, PublicRefM
             "version",
             name="uq_conformer_assignment_scheme_name",
         ),
+        CheckConstraint("version >= 1", name="version_positive"),
     )
 
 

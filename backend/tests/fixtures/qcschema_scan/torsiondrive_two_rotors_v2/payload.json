@@ -231,7 +231,10 @@
               "software_source": "per-point trajectory provenance"
             }
           },
-          "parameters_parser_version": "tckdb-qcschema/0.6.0;qcelemental/0.51.2",
+          "parameters_parser": {
+            "name": "tckdb-qcschema",
+            "version": "0.6.0;qcelemental/0.51.2"
+          },
           "quality": "raw",
           "scan_result": {
             "constraints": [],
@@ -546,7 +549,10 @@
               "software_source": "per-point trajectory provenance"
             }
           },
-          "parameters_parser_version": "tckdb-qcschema/0.6.0;qcelemental/0.51.2",
+          "parameters_parser": {
+            "name": "tckdb-qcschema",
+            "version": "0.6.0;qcelemental/0.51.2"
+          },
           "quality": "raw",
           "scan_result": {
             "constraints": [],
@@ -780,7 +786,10 @@
             "software_source": "trajectory[-1].provenance"
           }
         },
-        "parameters_parser_version": "tckdb-qcschema/0.6.0;qcelemental/0.51.2",
+        "parameters_parser": {
+          "name": "tckdb-qcschema",
+          "version": "0.6.0;qcelemental/0.51.2"
+        },
         "quality": "raw",
         "software_release": {
           "name": "Psi4",

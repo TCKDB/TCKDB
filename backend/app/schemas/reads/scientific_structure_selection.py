@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from tckdb_schemas.fragments.version import VersionRef
 from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 
 from app.db.models.common import CalculationQuality, RecordReviewStatus
@@ -357,7 +358,7 @@ class StructureSelectionManifest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    manifest_format_version: int
+    format: VersionRef
     versions: dict[str, Any]
     request: StructureSelectionManifestRequest
     effective_review_statuses: list[RecordReviewStatus]

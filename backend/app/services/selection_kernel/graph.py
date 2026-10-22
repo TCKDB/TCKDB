@@ -184,7 +184,7 @@ def resolve_opposing(
 
     overridden: list[dict[str, Any]] = []
     dropped: set[Edge] = set()
-    recorded: set[tuple[Edge, str, str]] = set()
+    recorded: set[tuple[Edge, str, int]] = set()
     for f, r in pairs:
         f_over_r = r.rule_id in supersedes[f.rule_id]
         r_over_f = f.rule_id in supersedes[r.rule_id]
@@ -203,14 +203,17 @@ def resolve_opposing(
                 "overridden_by_rule_version": winner.rule_version,
             })
 
-    unresolved: set[tuple[tuple[str, str], tuple[str, ...]]] = set()
+    unresolved: set[tuple[tuple[str, str], tuple[tuple[str, int], ...]]] = set()
     for f, r in pairs:
         if f in dropped or r in dropped:
             continue
-        pair_rules = tuple(sorted({f"{f.rule_id}@{f.rule_version}", f"{r.rule_id}@{r.rule_version}"}))
+        pair_rules = tuple(sorted({(f.rule_id, f.rule_version), (r.rule_id, r.rule_version)}))
         unresolved.add(((f.preferred, f.dispreferred), pair_rules))
     kept = [e for e in edges if e not in dropped]
-    opposing = [{"between": list(pair), "rules": list(pair_rules)} for pair, pair_rules in sorted(unresolved)]
+    opposing = [
+        {"between": list(pair), "rules": [{"rule_id": rule_id, "rule_version": version} for rule_id, version in pair_rules]}
+        for pair, pair_rules in sorted(unresolved)
+    ]
     return kept, overridden, opposing
 
 

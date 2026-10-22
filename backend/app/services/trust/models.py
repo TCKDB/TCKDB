@@ -494,7 +494,7 @@ class TransitionStateScopedAssessment(BaseModel):
     contested_target_count: int = 0
     units: list[TransitionStateScopedAssessmentUnit] = Field(default_factory=list)
     refusal_code: Optional[str] = None
-    versions: Optional[dict[str, str]] = None
+    versions: Optional[dict[str, int]] = None
 
 
 class TransitionStateTrustFragment(TrustFragment):

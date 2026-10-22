@@ -52,7 +52,7 @@ class ProtocolRule(NetworkRule):
         manifest_sha256: str | None = SYNTHETIC_PIN,
     ) -> None:
         self.rule_id = rule_id
-        self.version = "0.0.0-test"
+        self.version = 1
         self.objective = objective
         self.objective_key = objective_key
         self._prefer, self._yield, self._field = prefer, yield_, field
@@ -99,7 +99,7 @@ class FitKindRule(NetworkRepresentationRule):
 
     def __init__(self, rule_id: str, *, prefer: str, yield_: str, objective_key: str = "test_fit_kind") -> None:
         self.rule_id = rule_id
-        self.version = "0.0.0-test"
+        self.version = 1
         self.objective_key = objective_key
         self.manifest_sha256 = SYNTHETIC_PIN
         self._prefer, self._yield = prefer, yield_
@@ -132,7 +132,7 @@ class FitTminRule(NetworkRepresentationRule):
         scope_state: Tri = Tri.true,
     ) -> None:
         self.rule_id = rule_id
-        self.version = "0.0.0-test"
+        self.version = 1
         self.objective_key = objective_key
         self.manifest_sha256 = SYNTHETIC_PIN
         self.supersedes = supersedes

@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import weakref
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Generic, TypeVar
 
 from tckdb_schemas.fragments.version import VersionRef
@@ -47,6 +48,32 @@ T = TypeVar("T")
 #: Registries that opted in to the startup check, held weakly so a registry a
 #: test builds and drops never lingers into the next ``create_app()``.
 _STARTUP_REGISTRIES: weakref.WeakSet[VersionRegistry] = weakref.WeakSet()
+
+
+@dataclass(frozen=True, eq=False)
+class StoredVersionRef:
+    """A ``(name, version)`` read back from a stored row, where version ``0`` is allowed.
+
+    ``VersionRef`` and every registry refuse version 0: nothing TCKDB runs is version 0, so 0 is never current. But a
+    row stored before the 2026-10 versioning reset can carry 0 -- the migration maps every older rubric and prompt
+    version to 0 -- and a stored review has to be readable to be called stale. This is the type for that: it compares
+    equal to a ``VersionRef`` with the same name and version (and never to a 0, since a ``VersionRef`` cannot hold one),
+    so ``stored != active`` is the mismatch test it always was.
+    """
+
+    name: str
+    version: int
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, (StoredVersionRef, VersionRef)):
+            return (self.name, self.version) == (other.name, other.version)
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash((self.name, self.version))
+
+    def __str__(self) -> str:
+        return f"{self.name} (version {self.version})"
 
 
 class UnknownVersion(LookupError):
@@ -178,6 +205,30 @@ class VersionRegistry(Generic[T]):
             for name in sorted(self._impls)
             for version in sorted(self._impls[name])
         )
+
+
+def same_value(recorded: object, expected: object) -> bool:
+    """Equality that does not let ``True`` pass for ``1`` or ``1.0`` for ``1``, all the way down.
+
+    A manifest records the versions it was made under; a replay compares them with the running ones. Plain ``==`` (and
+    ``!=``, and ``in``) says ``True == 1`` and ``1.0 == 1``, so a manifest recording ``true`` as a version would be read
+    as version 1. Here the types must match as well as the values: through dicts (same keys), lists and tuples
+    (same length, element by element), and for every scalar. Use this, never ``==``, to compare a recorded version or a
+    recorded ``{"name", "version"}`` block with the running one.
+    """
+    if isinstance(expected, dict):
+        return (
+            isinstance(recorded, dict)
+            and set(recorded) == set(expected)
+            and all(same_value(recorded[k], expected[k]) for k in expected)
+        )
+    if isinstance(expected, (list, tuple)):
+        return (
+            isinstance(recorded, (list, tuple))
+            and len(recorded) == len(expected)
+            and all(same_value(r, e) for r, e in zip(recorded, expected, strict=True))
+        )
+    return type(recorded) is type(expected) and recorded == expected
 
 
 def validate_startup_registries() -> None:

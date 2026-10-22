@@ -39,21 +39,30 @@ from __future__ import annotations
 import hashlib
 
 from app.services.machine_review.providers.prompt import (
-    MACHINE_REVIEW_PROMPT_VERSION,
+    MACHINE_REVIEW_PROMPT,
     MACHINE_REVIEW_SYSTEM_PROMPT,
 )
-from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT_VERSION
+from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT
 
 #: SHA-256 of :data:`MACHINE_REVIEW_SYSTEM_PROMPT`, encoded UTF-8.
 #:
-#: **Changing the prompt text means changing this constant AND
-#: ``ACTIVE_MACHINE_REVIEW_PROMPT_VERSION``, in the same commit.** Updating
-#: only this one to get the test green re-opens exactly the hole the test
-#: exists to close: reviews stored under the old version would still read as
-#: current, and would still name a prompt whose words had changed underneath
-#: them. If you are here because this assertion failed, the question to answer
-#: is not "what is the new hash" but "does the recipe version need to move".
-_PROMPT_SHA256 = "7e49c35c2806438f6658344e7ec38ce33683ae8f0cc4d2bee40bbbee6d75a832"
+#: **Changing the prompt text means bumping the prompt's version in
+#: ``ACTIVE_MACHINE_REVIEW_PROMPT`` and updating this constant, in the same
+#: commit.** Updating only this one to get the test green re-opens exactly the
+#: hole the test exists to close: reviews stored under the old version would
+#: still read as current, and would still name a prompt whose words had changed
+#: underneath them. If you are here because this assertion failed, the question
+#: to answer is not "what is the new hash" but "does the prompt version need to
+#: move".
+#:
+#: The one exception was the versioning reset (PR-4): the prompt's answer format
+#: changed (a ``format`` block replaced the fused ``schema_version`` marker) in the
+#: same release that restarted every version at 1, so the prompt stayed at version 1
+#: with new words. Reviews stored before it are not read as current under those words:
+#: the context recipe version moved 1 -> 2 in that release, which makes every one of them
+#: stale (see ``MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION``). That is a one-off; from here on
+#: the rule above holds without exception.
+_PROMPT_SHA256 = "c5c39a2b51054d1afb0775510068b8cb1225c5595bb08ff8a0377f5b01b90e13"
 
 
 def test_prompt_version_is_the_recipes_active_version() -> None:
@@ -63,7 +72,7 @@ def test_prompt_version_is_the_recipes_active_version() -> None:
     while the review is produced by the prompt's. If they part company, a
     review is stamped with a version that did not write it.
     """
-    assert MACHINE_REVIEW_PROMPT_VERSION == ACTIVE_MACHINE_REVIEW_PROMPT_VERSION
+    assert MACHINE_REVIEW_PROMPT == ACTIVE_MACHINE_REVIEW_PROMPT
 
 
 def test_prompt_text_is_pinned_to_its_version() -> None:
@@ -76,7 +85,7 @@ def test_prompt_text_is_pinned_to_its_version() -> None:
     assert digest == _PROMPT_SHA256, (
         "The machine-review system prompt changed. Decide whether this is a new "
         "prompt version: if the model is being asked something different, bump "
-        "ACTIVE_MACHINE_REVIEW_PROMPT_VERSION (and MACHINE_REVIEW_PROMPT_VERSION "
+        "ACTIVE_MACHINE_REVIEW_PROMPT (and MACHINE_REVIEW_PROMPT "
         "with it) so stored reviews re-review instead of silently claiming words "
         "they never saw. Then update _PROMPT_SHA256 here."
     )

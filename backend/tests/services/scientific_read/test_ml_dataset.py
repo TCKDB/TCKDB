@@ -154,7 +154,7 @@ def test_species_export_shape(db_session):
     parsed = _parse(lines)
 
     assert parsed[0]["record_type"] == "manifest"
-    assert parsed[0]["schema"] == "tckdb.ml.v0"
+    assert parsed[0]["format"] == {"name": "tckdb.ml", "version": 1}
     assert parsed[0]["dataset"] == "species"
     assert parsed[-1]["record_type"] == "export_summary"
     assert parsed[-1]["counts"]["records"] == 1

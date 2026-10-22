@@ -1,6 +1,6 @@
-# TCKDB scientific archive v1
+# TCKDB scientific archive
 
-`tckdb.archive.v1` is a portable archive of TCKDB scientific, provenance,
+The `tckdb.archive` format (version 1) is a portable archive of TCKDB scientific, provenance,
 submission, and curation state. It is not an operational PostgreSQL backup.
 Use `pg_dump` plus an object-store snapshot when authentication state, request
 replay state, worker queues, or deployment-exact storage configuration must be
@@ -41,7 +41,7 @@ artifact identity.
 
 The uncompressed deterministic tar contains:
 
-- `manifest.json`: schema tag, Alembic revision, exact table/column registry,
+- `manifest.json`: `format` object (`name`, integer `version`), Alembic revision, exact table/column registry,
   exclusions, row counts/checksum, and blob inventory.
 - `rows.ndjson`: one complete SQL row per line, ordered by FK-safe table order
   and primary key.

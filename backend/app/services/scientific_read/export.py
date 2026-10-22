@@ -78,6 +78,7 @@ from app.schemas.reads.scientific_common import (
     SelectionPolicy,
     simple_selection_sort_key,
 )
+from app.services.document_formats import ARCHIVE, DATASET_RELEASE, EXPORT, current_header
 from app.services.frequency_geometry_linearity import (
     GeometryLinearity,
     classify_xyz_linearity,
@@ -98,8 +99,8 @@ from app.services.scientific_read.profile import (
 logger = logging.getLogger(__name__)
 
 #: Schema tag for the selected scientific projection.  This is intentionally
-#: distinct from the future ``tckdb.archive.v1`` lossless archive contract.
-EXPORT_SCHEMA = "tckdb.export.v0"
+#: distinct from the future ``tckdb.archive`` lossless archive contract.
+EXPORT_FORMAT = current_header(EXPORT)
 
 #: Hard cap on ``all`` exports (guards the "no silent bulk scan" posture).
 DEFAULT_ALL_CAP = 50_000
@@ -122,8 +123,8 @@ def _projection_contract() -> dict:
         # of them (see backend/docs/specs/dataset_release_and_profiles.md).
         "citable_release": False,
         "distinct_from": {
-            "citable_release": "tckdb.dataset_release.v1",
-            "recovery_archive": "tckdb.archive.v1",
+            "citable_release": current_header(DATASET_RELEASE),
+            "recovery_archive": current_header(ARCHIVE),
         },
         "omits": [
             "unselected_candidates",
@@ -560,7 +561,7 @@ class ExportRecordSet:
         resolved = self.read_profile or current_read_profile()
         return {
             "record_type": "manifest",
-            "schema": EXPORT_SCHEMA,
+            "format": EXPORT_FORMAT,
             "contract": _projection_contract(),
             # Echoed in every dataset manifest, exactly as in every scientific
             # response, so a consumer never has to guess which contract the
@@ -1383,7 +1384,7 @@ def _stream_ndjson(
     generated_at = datetime.now(timezone.utc)
     header = {
         "record_type": "manifest",
-        "schema": EXPORT_SCHEMA,
+        "format": EXPORT_FORMAT,
         "contract": _projection_contract(),
         # Echoed in every dataset manifest, exactly as in every enveloped
         # scientific response.
@@ -1440,7 +1441,7 @@ def _stream_ndjson(
 
     summary = {
         "record_type": "export_summary",
-        "schema": EXPORT_SCHEMA,
+        "format": EXPORT_FORMAT,
         "generated_at": generated_at.isoformat(),
         "counts": {
             "species": n_species,
@@ -1455,7 +1456,7 @@ def _stream_ndjson(
 __all__ = [
     "DEFAULT_ALL_CAP",
     "DEFAULT_MIN_REVIEW_STATUS",
-    "EXPORT_SCHEMA",
+    "EXPORT_FORMAT",
     "ExportGap",
     "ExportRecordSet",
     "ReactionExportRecord",

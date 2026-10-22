@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
+from tckdb_schemas.fragments.version import ParserStamp
 from tckdb_schemas.composite_scheme_rules import COMPOSITE_INPUT_MISSING, match_inputs_to_definition
 from tckdb_schemas.enums import (
     CalculationGeometryRole,
@@ -1002,7 +1003,7 @@ class HessianPayload(SchemaBase):
     :param lower_triangle_hartree_bohr2: Packed lower triangle (with
         diagonal), row-major, length ``3N(3N+1)/2``, in hartree/bohr².
     :param source: Where the matrix was obtained from.
-    :param parser_version: Optional version tag of the parser that
+    :param parser: Optional stamp (name and version) of the parser that
         produced the matrix.
     :param note: Optional free-text annotation.
     """
@@ -1010,7 +1011,7 @@ class HessianPayload(SchemaBase):
     geometry: GeometryPayload
     lower_triangle_hartree_bohr2: list[float] = Field(min_length=1)
     source: HessianSource
-    parser_version: str | None = None
+    parser: ParserStamp | None = None
     note: str | None = None
 
     @model_validator(mode="after")
@@ -1419,7 +1420,7 @@ class CalculationWithResultsPayload(CalculationPayload):
         observations. Each becomes one ``calculation_parameter`` row.
     :param parameters_json: Optional JSON snapshot of the parser output
         (debug/traceability only — relational rows are the queryable layer).
-    :param parameters_parser_version: Optional version tag of the parser
+    :param parameters_parser: Optional stamp (name and version) of the parser
         that produced the observations.
     :param parameters_extracted_at: Optional timestamp of extraction.
     """
@@ -1468,7 +1469,7 @@ class CalculationWithResultsPayload(CalculationPayload):
 
     parameters: list[CalculationParameterObservation] | None = None
     parameters_json: dict | None = None
-    parameters_parser_version: str | None = None
+    parameters_parser: ParserStamp | None = None
     parameters_extracted_at: datetime | None = None
 
     constraints: list[CalculationConstraintCreate] = Field(

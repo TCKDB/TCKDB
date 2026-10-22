@@ -23,9 +23,10 @@ Boundaries kept deliberately tight:
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import SubmissionRecordType
 from app.db.models.record_machine_review import RecordMachineReviewRow
@@ -36,6 +37,7 @@ from app.services.machine_review.currency import (
     classify_machine_review_currency,
 )
 from app.services.machine_review.read_model import RecordMachineReview
+from app.versioning import StoredVersionRef
 
 
 def stored_projection_from_record_machine_review_row(
@@ -44,8 +46,8 @@ def stored_projection_from_record_machine_review_row(
     """Project a persisted record-machine-review row into the classifier input.
 
     A pure value-for-value mapping: the row's currency key
-    (``context_hash`` / ``context_schema_version`` / ``prompt_version`` /
-    ``rubric_versions_json``), ``status``, ``reviewed_at``, and the latest-
+    (``context_hash`` / ``context_schema_version`` / ``prompt_name`` +
+    ``prompt_version`` / ``rubric_name`` + ``rubric_version``), ``status``, ``reviewed_at``, and the latest-
     selection tiebreaks (``id``, ``source_audit_event_id``) become a
     :class:`StoredMachineReviewProjection`. The DB enum ``record_type`` /
     ``status`` are surfaced as their string/app-enum values. No DB access.
@@ -56,8 +58,8 @@ def stored_projection_from_record_machine_review_row(
         reviewed_at=row.reviewed_at,
         context_schema_version=row.context_schema_version,
         context_hash=row.context_hash,
-        prompt_version=row.prompt_version,
-        rubric_versions=dict(row.rubric_versions_json or {}),
+        prompt=StoredVersionRef(name=row.prompt_name, version=row.prompt_version),
+        rubric=StoredVersionRef(name=row.rubric_name, version=row.rubric_version),
         status=row.status,
         id=row.id,
         source_audit_event_id=row.source_audit_event_id,
@@ -68,8 +70,8 @@ def classify_record_machine_review_currency_from_rows(
     rows: Sequence[RecordMachineReviewRow],
     *,
     current_context: MachineReviewContextDigest,
-    active_prompt_version: str,
-    active_rubric_versions: Mapping[str, str],
+    active_prompt: VersionRef,
+    active_rubric: VersionRef,
 ) -> MachineReviewCurrencyClassification:
     """Classify persisted record-machine-review rows for one record.
 
@@ -85,8 +87,8 @@ def classify_record_machine_review_currency_from_rows(
     return classify_machine_review_currency(
         projections,
         current_context=current_context,
-        active_prompt_version=active_prompt_version,
-        active_rubric_versions=active_rubric_versions,
+        active_prompt=active_prompt,
+        active_rubric=active_rubric,
     )
 
 
@@ -97,8 +99,8 @@ def create_record_machine_review_row(
     record_id: int,
     review: RecordMachineReview,
     context_digest: MachineReviewContextDigest,
-    prompt_version: str,
-    rubric_versions: Mapping[str, str],
+    prompt: VersionRef,
+    rubric: VersionRef,
     source_submission_id: int | None = None,
     source_audit_event_id: int | None = None,
 ) -> RecordMachineReviewRow:
@@ -108,7 +110,7 @@ def create_record_machine_review_row(
     pass plus its currency stamps; it never updates an existing row. The
     review's ``findings`` are serialised to ``findings_json``; the digest's
     ``context_hash`` / ``context_schema_version`` and the supplied
-    ``prompt_version`` / ``rubric_versions`` form the currency key; ``model`` /
+    ``prompt`` / ``rubric`` refs (each stored as a name beside an integer version) form the currency key; ``model`` /
     ``provider`` / ``curator_priority`` / ``status`` / ``reviewed_at`` are copied
     from the review. Source ids default to the review's own
     ``submission_id`` / ``audit_event_id`` when not supplied (the read model's
@@ -160,8 +162,10 @@ def create_record_machine_review_row(
         provider=review.provider,
         context_hash=context_digest.context_hash,
         context_schema_version=context_digest.context_schema_version,
-        prompt_version=prompt_version,
-        rubric_versions_json=dict(rubric_versions),
+        prompt_name=prompt.name,
+        prompt_version=prompt.version,
+        rubric_name=rubric.name,
+        rubric_version=rubric.version,
         source_submission_id=resolved_submission_id,
         source_audit_event_id=resolved_audit_event_id,
         reviewed_at=review.reviewed_at,

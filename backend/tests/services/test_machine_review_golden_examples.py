@@ -74,7 +74,7 @@ _CASES = (
     "malformed_payload_parse_warning_only",
 )
 
-# Provider-contract golden cases (machine_review_provider_contract_v2.md). They
+# Provider-contract golden cases (machine_review_provider_contract.md). They
 # run through the SAME pipeline helpers; the adapter requires the schema_version
 # marker in the payload.
 _V2_CASES = (
@@ -347,14 +347,14 @@ def test_v2_transition_state_case_closes_v1_gap(db_session, _api_test_user):
 
 
 def test_a_payload_without_the_format_marker_is_refused_and_creates_no_task(db_session, _api_test_user):
-    """A payload with no ``schema_version`` is an unknown format: a parse warning, no summary, no task.
+    """A payload with no ``format`` marker is an unknown format: a parse warning, no summary, no task.
 
     The marker-less shape belonged to the retired precheck contract. Everything else about this payload is well
     formed and addresses a linked record, so only the missing marker decides the outcome.
     """
     fixture = _load("kinetics_warning_creates_task")
     fixture["audit_event_details_json"] = {
-        k: v for k, v in fixture["audit_event_details_json"].items() if k != "schema_version"
+        k: v for k, v in fixture["audit_event_details_json"].items() if k != "format"
     }
     submission = _seed(db_session, _api_test_user, fixture)
     inspection = _inspect(db_session, submission)

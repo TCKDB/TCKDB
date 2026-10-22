@@ -33,7 +33,7 @@ const conformerGroupContextSchema = z.object({
 const assignmentSchemeSchema = z.object({
     assignment_scheme_ref: z.string().nullable().optional(),
     name: z.string(),
-    version: z.string().nullable().optional(),
+    version: z.number().nullable().optional(),
     scope: z.string().nullable().optional(),
     is_default: z.boolean().nullable().optional(),
 }).passthrough()

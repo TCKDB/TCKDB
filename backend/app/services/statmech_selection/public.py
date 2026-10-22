@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.api.error_contract import CodedValueError
 from app.api.errors import NotFoundError, not_found
@@ -49,7 +50,7 @@ from app.schemas.reads.scientific_statmech_selection import (
 from app.services.scientific_read.common import fetch_review_badges
 from app.services.statmech_selection.loader import _statuses as statuses_for
 from app.services.statmech_selection.loader import assert_subject_visible, entry_visible
-from app.services.statmech_selection.manifest import MANIFEST_FORMAT_VERSION, canonical
+from app.services.statmech_selection.manifest import MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION, canonical
 from app.services.statmech_selection.models import StatmechRequest
 from app.services.statmech_selection.selection import StatmechSelection, select_statmech
 from app.services.statmech_selection.vocabulary import Outcome, OwnerKind
@@ -250,7 +251,7 @@ def build_response(selection: StatmechSelection) -> StatmechSelectionResponse:
         notices=decision["notices"],
         protocol=protocol,
         manifest=StatmechSelectionManifestDescriptor(
-            manifest_format_version=MANIFEST_FORMAT_VERSION,
+            manifest_format=VersionRef(name=MANIFEST_FORMAT_NAME, version=MANIFEST_FORMAT_VERSION),
             manifest_sha256=manifest["integrity"]["manifest_sha256"],
             canonical_bytes=len(canonical(manifest).encode()),
             path=MANIFEST_PATH,

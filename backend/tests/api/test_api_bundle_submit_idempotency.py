@@ -54,7 +54,7 @@ def _counts(session) -> dict[str, int]:
 
 class TestBundleSubmitReplay:
     def test_thermo_bundle_replay_does_not_duplicate(self, client, db_session) -> None:
-        bundle = _load_bundle("thermo-bundle-v0.json")
+        bundle = _load_bundle("thermo-bundle.json")
 
         first = client.post(
             ENDPOINT,
@@ -83,7 +83,7 @@ class TestBundleSubmitReplay:
     def test_kinetics_bundle_replay_does_not_duplicate(
         self, client, db_session
     ) -> None:
-        bundle = _load_bundle("kinetics-bundle-v0.json")
+        bundle = _load_bundle("kinetics-bundle.json")
 
         first = client.post(
             ENDPOINT,
@@ -107,7 +107,7 @@ class TestBundleSubmitReplay:
     def test_bundle_submit_conflict_when_payload_differs(
         self, client, db_session
     ) -> None:
-        bundle_a = _load_bundle("thermo-bundle-v0.json")
+        bundle_a = _load_bundle("thermo-bundle.json")
         # Mutate the payload (an unrelated metadata field would do).
         bundle_b = json.loads(json.dumps(bundle_a))
         bundle_b.setdefault("notes", "different submission")

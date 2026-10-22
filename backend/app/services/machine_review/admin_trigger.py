@@ -26,8 +26,8 @@ background worker; nothing here is wired into uploads or any public read, and no
 Active recipe
 -------------
 
-The active prompt version is a private constant; the active rubric versions are
-**derived from the existing trust rubric constants** (so a rubric bump changes
+The active prompt version is a private constant; the active rubric is
+**derived from the existing trust rubric registry** (so a rubric bump changes
 the currency key without a second source of truth) rather than hand-maintained.
 Only the record types that already have both a computed trust evaluator and a
 persisted-machine-review home are supported; any other ``record_type`` is a
@@ -42,6 +42,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.api.errors import DomainError, NotFoundError
 from app.db.models.calculation import Calculation
@@ -59,11 +60,7 @@ from app.services.machine_review.producer import (
     FakeMachineReviewProducer,
     MachineReviewProducer,
 )
-from app.services.machine_review.recipe import (
-    ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
-    ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
-    public_rubric_name,
-)
+from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_PROMPT, active_rubric
 from app.services.record_review import get_record_review
 from app.services.trust.evaluator import (
     evaluate_computed_calculation,
@@ -79,6 +76,7 @@ from app.services.trust.models import (
     TrustFragment,
 )
 from app.services.trust.rubrics import RUBRICS
+from app.versioning import UnknownVersion
 
 
 @dataclass(frozen=True)
@@ -89,7 +87,7 @@ class _RecordTypeResolver:
     existing computed trust evaluator that owns rubric logic (never duplicated
     here); ``submission_record_type`` keys the human-review lookup that feeds
     the read-only ``review_status`` context input; ``rubric_name`` names the code-defined
-    rubric (resolved through ``RUBRICS``) whose versioned public name forms this record type's currency key.
+    rubric (resolved through ``RUBRICS``) whose current ref forms this record type's currency key.
     """
 
     model: type
@@ -154,22 +152,19 @@ def _require_resolver(record_type: str) -> _RecordTypeResolver:
     return resolver
 
 
-def active_rubric_versions_for_record_type(record_type: str) -> dict[str, str]:
-    """Return the active rubric-version recipe for one record type.
+def active_rubric_for_record_type(record_type: str) -> VersionRef:
+    """Return the active rubric ref for one record type.
 
-    Only the rubric relevant to ``record_type`` is included, so bumping (say)
+    Only the rubric relevant to ``record_type`` is returned, so bumping (say)
     the thermo rubric never restales calculation reviews. Raises
     :class:`DomainError` for an unsupported type.
     """
     resolver = _require_resolver(record_type)
-    name = public_rubric_name(RUBRICS.get(resolver.rubric_name))
-    return {name: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[name]}
+    return active_rubric(resolver.rubric_name)
 
 
-def active_rubric_versions_for_fragment(
-    record_type: str, fragment: TrustFragment
-) -> dict[str, str]:
-    """Return the active recipe for the rubric that *actually evaluated* this record.
+def active_rubric_for_fragment(record_type: str, fragment: TrustFragment) -> VersionRef:
+    """Return the ref of the rubric that *actually evaluated* this record.
 
     A record type can have more than one rubric: a statmech record is graded by
     ``computed_statmech`` when a species entry owns it and by ``computed_ts_statmech`` when
@@ -178,21 +173,27 @@ def active_rubric_versions_for_fragment(
     default instead would give a review that contradicts itself and reads stale on arrival.
 
     Fails loudly (a bare ``RuntimeError``, which the API answers with 500) when the rubric
-    that ran is not in the active table: that is a code defect, and silently falling back
-    to the record type's default would hide it.
+    that ran is not registered: that is a code defect, and silently falling back to the
+    record type's default would hide it.
 
-    :func:`active_rubric_versions_for_record_type` is *not* owner-aware: it returns the
+    :func:`active_rubric_for_record_type` is *not* owner-aware: it returns the
     record type's default rubric (for statmech, the species one) and remains the lookup for
     callers that have no evaluated record in hand.
     """
     _require_resolver(record_type)
     name = fragment.evidence.get("rubric")
-    if not isinstance(name, str) or name not in ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS:
+    version = fragment.evidence.get("rubric_version")
+    if not isinstance(name, str) or type(version) is not int:
         raise RuntimeError(
-            f"The {record_type} rubric that evaluated this record ({name!r}) has no entry in the "
-            "active machine-review rubric table."
+            f"The {record_type} trust fragment names no rubric and version ({name!r}, {version!r})."
         )
-    return {name: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[name]}
+    try:
+        RUBRICS.get(name, version)
+    except UnknownVersion as exc:
+        raise RuntimeError(
+            f"The {record_type} rubric that evaluated this record ({name!r}, version {version}) is not registered."
+        ) from exc
+    return VersionRef(name=name, version=version)
 
 
 def resolve_record_trust_fragment(
@@ -270,8 +271,8 @@ def run_admin_fake_machine_review(
         # ``app.services.record_refs``.
         record_ref=str(record_id),
         trust_fragment=fragment,
-        active_prompt_version=ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
-        active_rubric_versions=active_rubric_versions_for_fragment(record_type, fragment),
+        active_prompt=ACTIVE_MACHINE_REVIEW_PROMPT,
+        active_rubric=active_rubric_for_fragment(record_type, fragment),
         producer=producer if producer is not None else FakeMachineReviewProducer(),
         reviewed_at=reviewed_at,
     )

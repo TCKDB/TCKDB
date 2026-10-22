@@ -1845,7 +1845,7 @@ def test_search_by_assignment_scheme_ref(client, db_session):
 
     _, cg_a, _ = _make_group_with_obs(db_session, label="a")
     _, _, _ = _make_group_with_obs(db_session, label="b")
-    scheme = ConformerAssignmentScheme(name="canon", version="v1")
+    scheme = ConformerAssignmentScheme(name="canon", version=1)
     db_session.add(scheme)
     db_session.flush()
     sel = attach_conformer_selection(

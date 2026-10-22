@@ -1,4 +1,4 @@
-"""Provider interface + boundary helpers for native v2 machine review.
+"""Provider interface + boundary helpers for native machine review.
 
 This module defines the *producer* boundary for machine review (the consumer
 side — adapter, mapping, inspection, curator tasks — already exists). It holds:
@@ -14,11 +14,11 @@ side — adapter, mapping, inspection, curator tasks — already exists). It hol
 * :class:`MachineReviewProviderConfigurationError` — raised when a configured
   mode (cloud/local) is missing required configuration.
 * :func:`parse_machine_review_payload` — the single strict-parse / trust
-  boundary: untrusted raw model output (``str`` or ``dict``) in, a validated v2
+  boundary: untrusted raw model output (``str`` or ``dict``) in, a validated
   model out, or an exception the caller converts to a failed review.
-* :func:`machine_review_result_to_details_json` — serialize a validated v2
-  result into the ``submission_audit_event.details_json`` shape the adapter's v2
-  path consumes. This is the only persistence-edge helper added in this slice;
+* :func:`machine_review_result_to_details_json` — serialize a validated
+  result into the ``submission_audit_event.details_json`` shape the adapter's
+  format registry reads. This is the only persistence-edge helper added in this slice;
   upload/precheck wiring of it is a later integration step (spec §5.2).
 
 Configuration namespace: ``AI_REVIEW_ASSISTANT_MODE`` + ``LLM_PRECHECK_*``
@@ -78,13 +78,13 @@ class MachineReviewContext(BaseModel):
 
 @runtime_checkable
 class MachineReviewProvider(Protocol):
-    """Provider interface for native v2 machine-review results."""
+    """Provider interface for native machine-review results."""
 
     def review_submission(
         self,
         context: MachineReviewContext,
     ) -> MachineReviewProviderResult:
-        """Return a validated native v2 machine-review result.
+        """Return a validated native machine-review result.
 
         Implementations may receive raw model output but MUST return a
         schema-validated :class:`MachineReviewProviderResult` (e.g. via
@@ -134,7 +134,7 @@ class ReservedMachineReviewStatusError(ValueError):
 def parse_machine_review_payload(
     raw: str | dict[str, Any],
 ) -> MachineReviewProviderResult:
-    """Strictly parse untrusted raw model output into the v2 contract.
+    """Strictly parse untrusted raw model output into the provider contract.
 
     The single trust boundary for provider output. ``raw`` may be a JSON string
     (parsed with :func:`json.loads`) or an already-decoded ``dict``. The result
@@ -160,7 +160,7 @@ def parse_machine_review_payload(
         raw = json.loads(raw)
     if not isinstance(raw, dict):
         raise TypeError(
-            "machine-review v2 payload must be a JSON object, got "
+            "machine-review payload must be a JSON object, got "
             f"{type(raw).__name__}."
         )
     parsed = MachineReviewProviderResult.model_validate(raw)
@@ -176,12 +176,12 @@ def parse_machine_review_payload(
 def machine_review_result_to_details_json(
     result: MachineReviewProviderResult,
 ) -> dict[str, Any]:
-    """Serialize a validated v2 result into an audit-event ``details_json`` dict.
+    """Serialize a validated result into an audit-event ``details_json`` dict.
 
-    The dump carries ``schema_version="machine_review_v2"`` at its root, so the
-    adapter's version dispatch routes it to the native v2 path with no
+    The dump carries ``format`` (the name ``machine_review`` beside its integer version) at its
+    root, so the adapter's format registry routes it to the reader for that version with no
     label->status translation. This is the persistence-edge helper for the
-    *future* integration step; wiring it into the upload/precheck flow (so a v2
+    *future* integration step; wiring it into the upload/precheck flow (so a
     provider result lands on a ``submission_audit_event``) is intentionally not
     part of this foundation slice (spec §5.2).
     """

@@ -18,7 +18,7 @@ from collections.abc import Callable
 from typing import Any
 
 from app.db.models.common import RecordReviewStatus
-from app.services.manifest_formats import ManifestFormat, new_format_registry, read_manifest_format
+from app.services.manifest_formats import ManifestFormat, manifest_header, new_format_registry, read_manifest_format
 from app.services.relative_conformer_energy.compare import COMPARISON_VERSION, ComparisonRequest, compare_results
 from app.services.relative_conformer_energy.compute import compute_relative_energies
 from app.services.relative_conformer_energy.models import (
@@ -51,6 +51,7 @@ from app.services.structure_selection.models import (
     StructureRequest,
     StructureSubject,
 )
+from app.versioning import same_value
 
 MANIFEST_FORMAT = "relative_conformer_energy_manifest"
 MANIFEST_FORMAT_VERSION = 1
@@ -92,8 +93,7 @@ def build_manifest(
         nothing is returned without its whole manifest.
     """
     body: dict[str, Any] = {
-        "manifest_format": MANIFEST_FORMAT,
-        "manifest_format_version": MANIFEST_FORMATS.current(MANIFEST_FORMAT).version,
+        "format": manifest_header(MANIFEST_FORMATS, MANIFEST_FORMAT),
         "versions": _versions(),
         "request": request.to_dict(),
         "structure_request": assessment.request.to_dict(),
@@ -130,7 +130,7 @@ def _check_versions(manifest: dict[str, Any]) -> None:
     _check_format(manifest, MANIFEST_FORMAT)
     versions = manifest.get("versions") or {}
     for name, value in _versions().items():
-        if versions.get(name) != value:
+        if not same_value(versions.get(name), value):
             raise ReplayError(
                 "unsupported_semantic_version",
                 f"manifest was made under {name} version {versions.get(name)!r}; this release replays {value!r}",
@@ -294,18 +294,15 @@ MANIFEST_FORMATS.validate()
 
 
 def _refuse_format(manifest: dict[str, Any]) -> Callable[[str], ReplayError]:
-    """The refusal both manifests raise: it names the recorded format name, as it always has."""
+    """The refusal both manifests raise: it names the recorded format block."""
     return lambda _message: ReplayError(
-        "unsupported_manifest_format", f"unknown manifest format {manifest.get('manifest_format')!r}"
+        "unsupported_manifest_format", f"unknown manifest format {manifest.get('format')!r}"
     )
 
 
 def _check_format(manifest: dict[str, Any], name: str) -> None:
     """Refuse a manifest recorded under another format name or a version the registry does not hold."""
-    refuse = _refuse_format(manifest)
-    if manifest.get("manifest_format") != name:
-        raise refuse("")
-    read_manifest_format(MANIFEST_FORMATS, name, manifest, refuse)
+    read_manifest_format(MANIFEST_FORMATS, name, manifest, _refuse_format(manifest))
 
 
 def build_comparison_manifest(
@@ -327,8 +324,7 @@ def build_comparison_manifest(
         each run) exceeds the bound; nothing is returned without its whole manifest.
     """
     body: dict[str, Any] = {
-        "manifest_format": COMPARISON_MANIFEST_FORMAT,
-        "manifest_format_version": MANIFEST_FORMATS.current(COMPARISON_MANIFEST_FORMAT).version,
+        "format": manifest_header(MANIFEST_FORMATS, COMPARISON_MANIFEST_FORMAT),
         "versions": {**_versions(), "comparison": COMPARISON_VERSION},
         "request": request.to_dict(),
         "read_profile": dict(profile),
@@ -355,7 +351,7 @@ def replay_comparison(manifest: dict[str, Any]) -> dict[str, Any]:
     _check_format(manifest, COMPARISON_MANIFEST_FORMAT)
     versions = manifest.get("versions") or {}
     for name, value in {**_versions(), "comparison": COMPARISON_VERSION}.items():
-        if versions.get(name) != value:
+        if not same_value(versions.get(name), value):
             raise ReplayError(
                 "unsupported_semantic_version",
                 f"manifest was made under {name} version {versions.get(name)!r}; this release replays {value!r}",
@@ -386,7 +382,7 @@ def replay_comparison(manifest: dict[str, Any]) -> dict[str, Any]:
             raise ReplayError("inconsistent_manifest", "the two runs were not made over one population")
     for name in _RUNS:
         # Both runs are made under the comparison's own versions, which are the running ones (checked above).
-        if runs[name].get("versions") != _canon(_versions()):
+        if not same_value(runs[name].get("versions"), _canon(_versions())):
             raise ReplayError("inconsistent_manifest", f"the {name} run was made under another semantic version")
     replayed = {name: replay_relative_energies(runs[name]) for name in _RUNS}
     result = _canon(

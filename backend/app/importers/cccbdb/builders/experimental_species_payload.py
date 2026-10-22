@@ -5,6 +5,7 @@ Assembles the per-section builders into a single :class:`BuildResult`.
 
 from __future__ import annotations
 
+from app.importers.cccbdb import PARSER_NAME
 from app.importers.cccbdb.builders.common import (
     BuildResult,
     external_source_from_record,
@@ -115,6 +116,7 @@ def _enthalpy_observations(record: CCCBDBExperimentalSpeciesRecord) -> list[dict
             external_source_doi=meta.source_database_doi,
             external_source_url=meta.source_url,
             external_source_record_key=meta.source_record_key,
+            external_source_parser_name=PARSER_NAME,
             external_source_parser_version=meta.parser_version,
             raw_payload_json={
                 "identity_hint": record.identity.model_dump(mode="json"),

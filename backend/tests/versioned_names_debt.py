@@ -5,28 +5,21 @@ TCKDB version fused into a name. It is short on purpose. An entry that
 matches nothing fails the guard, so the list cannot rot into a blanket
 exemption.
 
-``DEBT`` is the temporary list: every place that already violates the rule,
-with the number of occurrences and the PR of the versioning programme that
-removes it (``PR-2`` deletes the legacy versions, ``PR-3`` renames the code
-identifiers, ``PR-4`` rewrites the stored and wire strings). It may only
-shrink:
+``DEBT`` is the list of what the guard still owes. It is **empty**: the versioning programme is finished (PR-2
+deleted the legacy versions, PR-3 renamed the code identifiers, PR-4 split the stored and wire strings), so every match
+is either fixed or carries a reasoned ``ALLOWED`` entry. The tuple stays so that ``scripts/check_versioned_debt_not_grown.py``
+has a binding to read at the merge base and at the head, and so a future bulk change (a new generation of rule
+manifests, say) has somewhere to say what it is deferring. Anything put here may only shrink, and the ceilings in
+``tests/test_no_versioned_names.py`` are zero, so adding a row means raising a ceiling in the same change.
 
-* an entry the scan no longer finds fails the guard (delete the entry);
-* an entry whose count differs from the scan fails the guard (fix the count --
-  a lower count after a partial clean-up is the only change that is allowed);
-* a row naming a PR in ``COMPLETED_PRS`` fails the guard (that PR said it was done);
-* the ceilings in ``tests/test_no_versioned_names.py`` fail any growth in
-  entries or occurrences, so a new violation cannot be hidden by adding a row.
-
-Regenerate the rows with ``python -m tests.versioned_names_scan`` and keep the
-``PR`` column by hand. PR-4 deletes ``DEBT`` and asserts the scan is clean.
+Regenerate candidate rows with ``python -m tests.versioned_names_scan``.
 """
 
 from __future__ import annotations
 
 #: PRs of the versioning programme that have landed. No debt row may name one;
 #: each later PR adds itself here in the same change that empties its rows.
-COMPLETED_PRS: frozenset[str] = frozenset({"PR-2", "PR-3"})
+COMPLETED_PRS: frozenset[str] = frozenset({"PR-2", "PR-3", "PR-4"})
 
 #: Allowances this change adds, as (path glob, kind, token glob). A new ``ALLOWED`` entry, or a
 #: widened glob (a different key), that the merge base does not have fails
@@ -34,55 +27,6 @@ COMPLETED_PRS: frozenset[str] = frozenset({"PR-2", "PR-3"})
 #: script print the entry and its reason for the reviewer. Empty when nothing is being added.
 #: Bound exactly once, as a literal tuple: the script refuses anything else.
 NEW_ALLOWANCES: tuple[tuple[str, str, str], ...] = ()
-
-#: The identifier renames PR-3 made. A ``MOVED_DEBT`` row is valid only if its new text is its old text with
-#: these whole-word identifiers replaced and nothing else, and every new name here must itself pass the guard
-#: (``scripts/check_versioned_debt_not_grown.py`` checks both against the merge base's patterns). Bound exactly
-#: once, as a literal tuple. PR-4 deletes it with ``MOVED_DEBT``.
-RENAMES: tuple[tuple[str, str], ...] = (
-    ('COMPUTED_CALCULATION_V2', 'COMPUTED_CALCULATION'),
-    ('COMPUTED_KINETICS_V2', 'COMPUTED_KINETICS'),
-    ('COMPUTED_STATMECH_V2', 'COMPUTED_STATMECH'),
-    ('COMPUTED_THERMO_V2', 'COMPUTED_THERMO'),
-    ('COMPUTED_TRANSPORT_V2', 'COMPUTED_TRANSPORT'),
-    ('COMPUTED_TRANSITION_STATE_V5', 'COMPUTED_TRANSITION_STATE'),
-    ('COMPUTED_TS_STATMECH_V1', 'COMPUTED_TS_STATMECH'),
-    ('EXTERNAL_CP_COMPARISON_V2', 'EXTERNAL_CP_COMPARISON'),
-    ('THERMO_CONSISTENCY_V1', 'THERMO_CONSISTENCY'),
-    ('THERMO_KINETICS_CONSISTENCY_V1', 'THERMO_KINETICS_CONSISTENCY'),
-    ('GIBBS_SELF_CONSISTENCY_V1', 'GIBBS_SELF_CONSISTENCY'),
-    ('HESS_CONSISTENCY_V1', 'HESS_CONSISTENCY'),
-    ('KIRCHHOFF_CONSISTENCY_V1', 'KIRCHHOFF_CONSISTENCY'),
-    ('ISOTOPE_IDENTITY_CONSISTENCY_V1', 'ISOTOPE_IDENTITY_CONSISTENCY'),
-    ('BOUNDS_V1', 'DEFAULT_BOUNDS'),
-    ('ContributionBundleV0', 'ContributionBundle'),
-    ('MachineReviewProviderFindingV2', 'MachineReviewProviderFinding'),
-    ('MachineReviewProviderResultV2', 'MachineReviewProviderResult'),
-    ('MACHINE_REVIEW_V2_SCHEMA_VERSION', 'MACHINE_REVIEW_SCHEMA_VERSION'),
-    ('parse_machine_review_v2_payload', 'parse_machine_review_payload'),
-    ('machine_review_v2_result_to_details_json', 'machine_review_result_to_details_json'),
-    ('record_machine_review_v2_audit_event', 'record_machine_review_audit_event'),
-)
-
-#: Debt rows whose token text changed only because a rename (a PR-3 rename of an identifier the text mentions)
-#: rewrote it: ``(path, kind, old token, new token)``. The violation, its file, its kind and its count are the
-#: same as at the merge base; ``scripts/check_versioned_debt_not_grown.py`` accepts the new text instead of
-#: calling it a new violation, and prints each move for the reviewer. PR-4 deletes the rows and this tuple.
-#: Bound exactly once, as a literal tuple.
-MOVED_DEBT: tuple[tuple[str, str, str, str], ...] = (
-    (
-        'backend/app/services/kinetics_selection/manifest.py',
-        'fstring',
-        "f'{COMPUTED_KINETICS_V2.name}@{COMPUTED_KINETICS_V2.version}'",
-        "f'{COMPUTED_KINETICS.name}@{COMPUTED_KINETICS.version}'",
-    ),
-    (
-        'backend/app/services/thermo_selection/manifest.py',
-        'fstring',
-        "f'{COMPUTED_THERMO_V2.name}@{COMPUTED_THERMO_V2.version}'",
-        "f'{COMPUTED_THERMO.name}@{COMPUTED_THERMO.version}'",
-    ),
-)
 
 #: (path glob, kind, token glob, reason). ``path`` is repo-relative.
 ALLOWED: tuple[tuple[str, str, str, str], ...] = (
@@ -136,63 +80,5 @@ ALLOWED: tuple[tuple[str, str, str, str], ...] = (
     ),
 )
 
-#: (path, kind, token, occurrences, removed by).
-DEBT: tuple[tuple[str, str, str, int, str], ...] = (
-    ('backend/app/chemistry/network_rules/network_rule_candidates.yaml', 'yaml', 'proposed evidence rule (the Network-v1 council record, section 3, "alternate fits of one solve").', 1, 'PR-4'),
-    ('backend/app/chemistry/structure_rules/structure_rule_candidates.yaml', 'yaml', 'Records owner decision D (O5, 2026-10-13): relative conformer energies are a named-reference oper...', 1, 'PR-4'),
-    ('backend/app/importers/cccbdb/__init__.py', 'string', 'cccbdb-experimental-species-parser/0.1.0', 1, 'PR-4'),
-    ('backend/app/importers/cccbdb/diagnostics/runner.py', 'string', 'cccbdb-resolver-diagnostics/0.1.0', 1, 'PR-4'),
-    ('backend/app/importers/cccbdb/form_resolver.py', 'string', 'cccbdb-form-resolver/0.1.0', 1, 'PR-4'),
-    ('backend/app/importers/cccbdb/snapshot.py', 'string', 'cccbdb-experimental-payload-builder/0.1.0', 1, 'PR-4'),
-    ('backend/app/importers/thermoml/__init__.py', 'string', 'thermoml-cp-mapping/0.1.0', 1, 'PR-4'),
-    ('backend/app/importers/thermoml/__init__.py', 'string', 'thermoml-cp-parser/0.1.0', 1, 'PR-4'),
-    ('backend/app/importers/thermoml/mapping.py', 'string', 'not on the observed-method-string allowlist (origin.smethodname_allowlist.v1)', 1, 'PR-4'),
-    ('backend/app/importers/thermoml/mapping.py', 'string', 'origin.prediction_type_map.v1', 1, 'PR-4'),
-    ('backend/app/importers/thermoml/mapping.py', 'string', 'origin.smethodname_allowlist.v1', 1, 'PR-4'),
-    ('backend/app/importers/thermoml/mapping.py', 'string', 'pressure.kpa_to_bar.v1', 1, 'PR-4'),
-    ('backend/app/importers/thermoml/mapping.py', 'string', 'state_basis.phase_map.v1', 1, 'PR-4'),
-    ('backend/app/importers/thermoml/mapping.py', 'string', 'thermoml.mapping.v1', 1, 'PR-4'),
-    ('backend/app/importers/thermoml/mapping.py', 'string', 'uncertainty.precedence.v1', 1, 'PR-4'),
-    ('backend/app/schemas/reads/scientific_statmech_selection.py', 'string', 'statmech-selection-v1', 2, 'PR-4'),
-    ('backend/app/services/archive/core.py', 'string', 'No tckdb.archive.v1 codec for SQL type', 2, 'PR-4'),
-    ('backend/app/services/archive/core.py', 'string', 'Not a tckdb.archive.v1 manifest', 1, 'PR-4'),
-    ('backend/app/services/archive/core.py', 'string', 'tckdb.archive.v1', 1, 'PR-4'),
-    ('backend/app/services/consistency/thermo.py', 'string', 'nasa7-low;nasa9-upper;exact-points-v1', 1, 'PR-4'),
-    ('backend/app/services/deposit/build.py', 'string', 'tckdb.deposit.v1', 1, 'PR-4'),
-    ('backend/app/services/external_comparison/cp.py', 'string', 'external_cp_comparison_v1', 1, 'PR-4'),
-    ('backend/app/services/gaussian_parameter_parser.py', 'string', 'gaussian_v1', 1, 'PR-4'),
-    ('backend/app/services/hessian_parsing.py', 'string', 'hessian_v1', 1, 'PR-4'),
-    ('backend/app/services/kinetics_selection/assessment.py', 'fstring', "f'evidence_rubric:{evidence.rubric}@{evidence.rubric_version}'", 1, 'PR-4'),
-    ('backend/app/services/kinetics_selection/manifest.py', 'fstring', "f'{COMPUTED_KINETICS.name}@{COMPUTED_KINETICS.version}'", 1, 'PR-4'),
-    ('backend/app/services/machine_review/providers/fake.py', 'string', 'fake_test/machine-review-v2', 1, 'PR-4'),
-    ('backend/app/services/machine_review/providers/prompt.py', 'string', 'You are screening a submission to TCKDB, an archive of computed thermochemistry and reaction kine...', 1, 'PR-4'),
-    ('backend/app/services/machine_review/recipe.py', 'fstring', "f'{rubric.name}_v{rubric.version}'", 1, 'PR-4'),
-    ('backend/app/services/machine_review/recipe.py', 'string', 'machine_review_v1', 1, 'PR-4'),
-    ('backend/app/services/machine_review/schemas.py', 'string', 'machine_review_v2', 2, 'PR-4'),
-    ('backend/app/services/molpro_parameter_parser.py', 'string', 'molpro_v1', 1, 'PR-4'),
-    ('backend/app/services/orca_parameter_parser.py', 'string', 'orca_v2', 1, 'PR-4'),
-    ('backend/app/services/psi4_parameter_parser.py', 'string', 'psi4-0.1.0', 1, 'PR-4'),
-    ('backend/app/services/release/manifest.py', 'string', 'tckdb.export.v0', 1, 'PR-4'),
-    ('backend/app/services/release/versions.py', 'string', 'record_review.v1', 1, 'PR-4'),
-    ('backend/app/services/release/versions.py', 'string', 'tckdb.archive.v1', 1, 'PR-4'),
-    ('backend/app/services/release/versions.py', 'string', 'tckdb.dataset_release.v2', 1, 'PR-4'),
-    ('backend/app/services/reproducibility_rubric.py', 'string', 'no_typed_result_contract_v1', 1, 'PR-4'),
-    ('backend/app/services/reproducibility_rubric.py', 'string', 'selected_collection_requires_scientific_provenance_v1', 1, 'PR-4'),
-    ('backend/app/services/scientific_read/export.py', 'string', 'tckdb.archive.v1', 1, 'PR-4'),
-    ('backend/app/services/scientific_read/export.py', 'string', 'tckdb.dataset_release.v1', 1, 'PR-4'),
-    ('backend/app/services/scientific_read/export.py', 'string', 'tckdb.export.v0', 1, 'PR-4'),
-    ('backend/app/services/scientific_read/ml_dataset.py', 'string', 'tckdb.ml.v0', 1, 'PR-4'),
-    ('backend/app/services/selection_kernel/graph.py', 'fstring', "f'{f.rule_id}@{f.rule_version}'", 1, 'PR-4'),
-    ('backend/app/services/selection_kernel/graph.py', 'fstring', "f'{r.rule_id}@{r.rule_version}'", 1, 'PR-4'),
-    ('backend/app/services/statmech_selection/manifest.py', 'fstring', "f'statmech_qualification@{ASSESSMENT_VERSION}'", 1, 'PR-4'),
-    ('backend/app/services/statmech_selection/models.py', 'string', 'statmech-selection-v1', 1, 'PR-4'),
-    ('backend/app/services/statmech_selection/vocabulary.py', 'string', 'statmech-selection-v1', 1, 'PR-4'),
-    ('backend/app/services/structure_selection/loader.py', 'fstring', "f'{c.software_release.software.name}@{c.software_release.version}'", 1, 'PR-4'),
-    ('backend/app/services/thermo_selection/assessment.py', 'fstring', "f'evidence_rubric:{evidence.rubric}@{evidence.rubric_version}'", 1, 'PR-4'),
-    ('backend/app/services/thermo_selection/manifest.py', 'fstring', "f'{COMPUTED_THERMO.name}@{COMPUTED_THERMO.version}'", 1, 'PR-4'),
-    ('backend/app/services/trust/fragment.py', 'fstring', "f'_v{evaluation.rubric_version}'", 1, 'PR-4'),
-    ('backend/tests/api/golden/openapi.json', 'openapi', 'value:statmech-selection-v1', 1, 'PR-4'),
-    ('backend/tests/api/golden/openapi.json', 'openapi', 'value:tckdb.execution-environment.v1', 2, 'PR-4'),
-    ('clients/python/src/tckdb_client/scientific_types.py', 'string', 'statmech-selection-v1', 1, 'PR-4'),
-    ('schemas/python/tckdb-schemas/tckdb_schemas/fragments/execution_environment.py', 'string', 'tckdb.execution-environment.v1', 1, 'PR-4'),
-)
+#: (path, kind, token, occurrences, removed by). Empty: see the module docstring.
+DEBT: tuple[tuple[str, str, str, int, str], ...] = ()

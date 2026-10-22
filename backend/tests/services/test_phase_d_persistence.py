@@ -4,6 +4,7 @@ from datetime import datetime
 
 import pytest
 from sqlalchemy import event, func, select
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import ObservedStateBasis, ObservedUncertaintyKind
 from app.db.models.record_machine_review import RecordMachineReviewRow
@@ -14,12 +15,12 @@ from app.services.external_comparison import cp
 from app.services.machine_review.context_hash import MachineReviewContextDigest
 from app.services.machine_review.persistence import create_record_machine_review_row
 from app.services.machine_review.read_model import RecordMachineReview
-from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, public_rubric_name
 from app.services.machine_review.rereview import (
     MachineReviewReReviewDecision,
     plan_record_machine_rereview,
 )
 from app.services.machine_review.schemas import MachineReviewStatus as ServiceMachineReviewStatus
+from tests.services._rubric_registry import bump
 from tests.services.scientific_read._factories import attach_thermo_nasa, attach_thermo_points
 from tests.services.test_external_cp_comparison import _make_external_source_record, _make_observation, _make_thermo
 
@@ -92,7 +93,7 @@ def test_checks_and_rubrics_have_independent_currency(db_session, monkeypatch):
     assert latest_recorded(db_session, a).id == second_a.id
     assert latest_recorded(db_session, b).id == first_b.id
     assert currency(db_session, b).state.value == "current"
-    monkeypatch.setitem(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, public_rubric_name(a.rubric), "999")
+    bump(monkeypatch, a.rubric.name, 2)
     assert currency(db_session, a).state.value == "stale"
     assert currency(db_session, b).state.value == "current"
 
@@ -264,9 +265,9 @@ def _seed_reviewer_review(session, *, record_type, record_id, record_ref):
     """A fake "current" reviewer-family (LLM) review, recorded before either
     new check ever runs -- mirrors test_external_cp_comparison.py's fixture.
     """
-    digest = MachineReviewContextDigest(context_hash="e" * 64, context_schema_version="v1")
-    prompt_version = "reviewer_prompt_v9"
-    rubric_versions = {"computed_thermo_v1": "1"}
+    digest = MachineReviewContextDigest(context_hash="e" * 64, context_schema_version=1)
+    prompt = VersionRef(name="reviewer_prompt", version=9)
+    rubric = VersionRef(name="computed_thermo", version=1)
     create_record_machine_review_row(
         session,
         record_type=record_type,
@@ -279,24 +280,24 @@ def _seed_reviewer_review(session, *, record_type, record_id, record_ref):
             record_id=record_id,
         ),
         context_digest=digest,
-        prompt_version=prompt_version,
-        rubric_versions=rubric_versions,
+        prompt=prompt,
+        rubric=rubric,
     )
     session.flush()
-    return digest, prompt_version, rubric_versions
+    return digest, prompt, rubric
 
 
 def test_thermo_consistency_check_does_not_restale_the_reviewer_familys_current_review(db_session):
     thermo, _, _ = setup_records(db_session)
-    digest, prompt_version, rubric_versions = _seed_reviewer_review(
+    digest, prompt, rubric = _seed_reviewer_review(
         db_session, record_type="thermo", record_id=thermo.id, record_ref=thermo.public_ref,
     )
 
     def _plan():
         return plan_record_machine_rereview(
             db_session, record_type="thermo", record_id=thermo.id,
-            current_context=digest, active_prompt_version=prompt_version,
-            active_rubric_versions=rubric_versions,
+            current_context=digest, active_prompt=prompt,
+            active_rubric=rubric,
         )
 
     assert _plan().decision is MachineReviewReReviewDecision.skip_current
@@ -346,15 +347,15 @@ def test_thermo_kinetics_check_does_not_restale_the_reviewer_familys_current_rev
         rate.degeneracy_convention = KineticsDegeneracyConvention.already_applied
     db_session.flush()
 
-    digest, prompt_version, rubric_versions = _seed_reviewer_review(
+    digest, prompt, rubric = _seed_reviewer_review(
         db_session, record_type="kinetics", record_id=forward.id, record_ref=forward.public_ref,
     )
 
     def _plan():
         return plan_record_machine_rereview(
             db_session, record_type="kinetics", record_id=forward.id,
-            current_context=digest, active_prompt_version=prompt_version,
-            active_rubric_versions=rubric_versions,
+            current_context=digest, active_prompt=prompt,
+            active_rubric=rubric,
         )
 
     assert _plan().decision is MachineReviewReReviewDecision.skip_current
@@ -443,16 +444,16 @@ def test_gibbs_commit_appends_one_review_and_changes_no_scientific_state(db_sess
     assert len(rows) == 4 and len(evaluated) == 4
     assert flushed == ["RecordMachineReviewRow"]
     assert count_reviews(db_session) == count_before + 1
-    assert (row.record_type.value, row.record_id, row.model, row.prompt_version) == (
-        "thermo", thermo.id, "gibbs_self_consistency", "gibbs_self_consistency")
-    assert row.rubric_versions_json == {"gibbs_self_consistency_v1": "1"}
+    assert (row.record_type.value, row.record_id, row.model, row.prompt_name, row.prompt_version) == (
+        "thermo", thermo.id, "gibbs_self_consistency", "gibbs_self_consistency", 1)
+    assert (row.rubric_name, row.rubric_version) == ("gibbs_self_consistency", 1)
     assert thermo_inputs(thermo) == before
     assert current(db_session, **gibbs_request(thermo)).state.value == "current"
 
 
 def test_gibbs_check_does_not_restale_the_reviewer_review_or_d1_rows(db_session, monkeypatch):
     thermo = gibbs_records(db_session)
-    digest, prompt_version, rubric_versions = _seed_reviewer_review(
+    digest, prompt, rubric = _seed_reviewer_review(
         db_session, record_type="thermo", record_id=thermo.id, record_ref=thermo.public_ref,
     )
     d1, _ = invoke(db_session, commit=True, **request(thermo, "thermo"))
@@ -461,8 +462,8 @@ def test_gibbs_check_does_not_restale_the_reviewer_review_or_d1_rows(db_session,
     def _plan():
         return plan_record_machine_rereview(
             db_session, record_type="thermo", record_id=thermo.id,
-            current_context=digest, active_prompt_version=prompt_version,
-            active_rubric_versions=rubric_versions,
+            current_context=digest, active_prompt=prompt,
+            active_rubric=rubric,
         )
 
     assert _plan().decision is MachineReviewReReviewDecision.skip_current
@@ -475,52 +476,10 @@ def test_gibbs_check_does_not_restale_the_reviewer_review_or_d1_rows(db_session,
     assert currency(db_session, d1).state.value == "current"
     assert latest_recorded(db_session, d1).id != second.id
     # Bumping D4's own rubric stales D4 and nothing else.
-    monkeypatch.setitem(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, public_rubric_name(d4.rubric), "999")
+    bump(monkeypatch, d4.rubric.name, 2)
     assert currency(db_session, d4).state.value == "stale"
     assert currency(db_session, d1).state.value == "current"
     assert _plan().decision is MachineReviewReReviewDecision.skip_current
-
-
-def test_adding_the_gibbs_rubric_restales_no_stored_review(db_session, monkeypatch):
-    """Record every existing kind of thermo review in a world WITHOUT the D4 key,
-    then add the key back: nothing recorded before it existed may go stale.
-    """
-    from app.services.machine_review.admin_trigger import active_rubric_versions_for_record_type
-    from app.services.trust.rubrics import GIBBS_SELF_CONSISTENCY
-
-    key = public_rubric_name(GIBBS_SELF_CONSISTENCY)
-    thermo, _, _ = setup_records(db_session)
-    with_key = dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS)
-    monkeypatch.delitem(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, key)
-    without_key = dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS)
-    assert set(with_key) - set(without_key) == {key}  # premise: the full recipe really changes
-
-    reviewer_recipe_before = active_rubric_versions_for_record_type("thermo")
-    digest = MachineReviewContextDigest(context_hash="f" * 64, context_schema_version="v1")
-    create_record_machine_review_row(
-        db_session, record_type="thermo", record_id=thermo.id,
-        review=RecordMachineReview(record_type="thermo", record_ref=thermo.public_ref,
-                                   status=ServiceMachineReviewStatus.machine_screened_pass,
-                                   reviewed_at=datetime(2026, 9, 1), record_id=thermo.id),
-        context_digest=digest, prompt_version="machine_review_v1", rubric_versions=reviewer_recipe_before,
-    )
-    recorded = {check: invoke(db_session, commit=True, **request(thermo, check))[0]
-                for check in ("thermo", "external-cp")}
-    db_session.flush()
-    assert len(recorded) == 2
-    assert all(currency(db_session, r).state.value == "current" for r in recorded.values())
-
-    monkeypatch.setitem(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, key, with_key[key])
-    assert dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS) == with_key
-    reviewer_recipe_after = active_rubric_versions_for_record_type("thermo")
-    assert reviewer_recipe_after == reviewer_recipe_before
-    plan = plan_record_machine_rereview(
-        db_session, record_type="thermo", record_id=thermo.id, current_context=digest,
-        active_prompt_version="machine_review_v1", active_rubric_versions=reviewer_recipe_after,
-    )
-    assert plan.decision is MachineReviewReReviewDecision.skip_current
-    states = {check: currency(db_session, r).state.value for check, r in recorded.items()}
-    assert states == {"thermo": "current", "external-cp": "current"}
 
 
 @pytest.mark.parametrize("location,field,value", [
@@ -595,7 +554,6 @@ def test_gibbs_service_refuses_neighbours_and_grids_and_the_cli_dry_runs(db_sess
 # Rows come from the thermo upload workflow (tests/services/test_phase_d_kirchhoff.py).
 # --------------------------------------------------------------------------- #
 
-KIRCHHOFF_KEY = "kirchhoff_consistency_v1"
 
 
 def _kirchhoff_record(session):
@@ -631,60 +589,9 @@ def test_kirchhoff_dry_run_stages_nothing_and_commit_appends_one_row(db_session)
     assert flushed == ["RecordMachineReviewRow"]
     assert count_reviews(db_session) == before + 1
     assert (row.record_id, row.model, row.provider) == (thermo.id, "kirchhoff_consistency", "tckdb.scientific_checks")
-    assert row.rubric_versions_json == {KIRCHHOFF_KEY: "1"}
+    assert (row.rubric_name, row.rubric_version) == ("kirchhoff_consistency", 1)
     assert all(f.severity.value == "info" for f in committed.findings)
     assert thermo_inputs(thermo) == inputs
-
-
-def test_adding_the_kirchhoff_rubric_restales_no_stored_review(db_session, monkeypatch):
-    """The plan's claim, measured: rows recorded under the pre-D5 recipe stay current.
-
-    Every reviewer-family recipe is filtered to its own record type, and every
-    scientific-check row is keyed by its own rubric, so the new key reaches
-    no stored row's currency. Rows are recorded with the key absent (the
-    recipe as it was before D5), then classified with it present.
-    """
-    from app.services.machine_review.admin_trigger import (
-        SUPPORTED_RECORD_TYPES,
-        active_rubric_versions_for_record_type,
-    )
-    assert KIRCHHOFF_KEY in ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS
-    with_key = {rt: active_rubric_versions_for_record_type(rt) for rt in SUPPORTED_RECORD_TYPES}
-    assert len(with_key) == 6
-    assert all(KIRCHHOFF_KEY not in recipe for recipe in with_key.values())
-
-    thermo, _, _ = setup_records(db_session)
-    monkeypatch.delitem(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, KIRCHHOFF_KEY)
-    assert {rt: active_rubric_versions_for_record_type(rt) for rt in SUPPORTED_RECORD_TYPES} == with_key
-    digest = MachineReviewContextDigest(context_hash="e" * 64, context_schema_version="v1")
-    reviewer_recipe = active_rubric_versions_for_record_type("thermo")
-    create_record_machine_review_row(
-        db_session, record_type="thermo", record_id=thermo.id, context_digest=digest,
-        prompt_version="reviewer_prompt_v9", rubric_versions=reviewer_recipe,
-        review=RecordMachineReview(record_type="thermo", record_ref=thermo.public_ref, record_id=thermo.id,
-                                   status=ServiceMachineReviewStatus.machine_screened_pass,
-                                   reviewed_at=datetime(2026, 9, 1)),
-    )
-    d1, _ = invoke(db_session, commit=True, **request(thermo, "thermo"))
-    cp.run_and_record(db_session, thermo.id)
-    db_session.flush()
-    monkeypatch.undo()
-    assert KIRCHHOFF_KEY in ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS
-
-    def states():
-        plan = plan_record_machine_rereview(
-            db_session, record_type="thermo", record_id=thermo.id, current_context=digest,
-            active_prompt_version="reviewer_prompt_v9",
-            active_rubric_versions=active_rubric_versions_for_record_type("thermo"))
-        return (plan.decision, currency(db_session, d1).state.value,
-                cp.cp_comparison_currency(db_session, thermo.id).state.value)
-
-    expected = (MachineReviewReReviewDecision.skip_current, "current", "current")
-    assert states() == expected
-    k, _ = invoke(db_session, commit=True, **request(thermo, "kirchhoff"))
-    db_session.flush()
-    assert states() == expected
-    assert currency(db_session, k).state.value == "current"
 
 
 @pytest.mark.parametrize("location,field,value", [

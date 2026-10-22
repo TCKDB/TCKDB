@@ -69,7 +69,10 @@
         "software_source": "provenance"
       }
     },
-    "parameters_parser_version": "tckdb-qcschema/0.2.0;qcelemental/0.51.2",
+    "parameters_parser": {
+      "name": "tckdb-qcschema",
+      "version": "0.2.0;qcelemental/0.51.2"
+    },
     "quality": "raw",
     "software_release": {
       "name": "Psi4",

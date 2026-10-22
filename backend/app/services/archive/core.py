@@ -1,4 +1,4 @@
-"""Deterministic ``tckdb.archive.v1`` writer and empty-target restorer.
+"""Deterministic ``tckdb.archive`` writer and empty-target restorer.
 
 The archive is a portable scientific-state archive, not an operational
 PostgreSQL backup.  Its declared registry excludes credentials and ephemeral
@@ -44,6 +44,7 @@ from sqlalchemy.sql.sqltypes import (
     String,
     Text,
 )
+from tckdb_schemas.fragments.version import VersionRef
 
 import app.db.models  # noqa: F401 -- register the complete mapper graph
 from app.db.base import Base
@@ -63,8 +64,9 @@ from app.services.artifact_storage import (
     load_artifact_bytes,
     store_artifact,
 )
+from app.services.document_formats import ARCHIVE, FORMATS, header_of, reads_as
 
-ARCHIVE_SCHEMA = "tckdb.archive.v1"
+ARCHIVE_FORMAT: VersionRef = FORMATS.current(ARCHIVE)
 _MANIFEST_PATH = "manifest.json"
 _ROWS_PATH = "rows.ndjson"
 _BLOB_PREFIX = "blobs/"
@@ -151,7 +153,7 @@ def _encode_value(value: Any, sql_type) -> Any:
         return str(value)
     if isinstance(sql_type, (CHAR, String, Text, RDKitMol)):
         return str(value)
-    raise ArchiveCompatibilityError(f"No tckdb.archive.v1 codec for SQL type {type(sql_type)!r}")
+    raise ArchiveCompatibilityError(f"No tckdb.archive codec for SQL type {type(sql_type)!r}")
 
 
 def _decode_value(value: Any, sql_type) -> Any:
@@ -198,7 +200,7 @@ def _decode_value(value: Any, sql_type) -> Any:
         if not isinstance(value, str):
             raise ArchiveIntegrityError("Text archive value is malformed")
         return value
-    raise ArchiveCompatibilityError(f"No tckdb.archive.v1 codec for SQL type {type(sql_type)!r}")
+    raise ArchiveCompatibilityError(f"No tckdb.archive codec for SQL type {type(sql_type)!r}")
 
 
 def _supports_type(sql_type) -> bool:
@@ -356,7 +358,7 @@ def _manifest(
     blobs: list[_BlobSpool],
 ) -> dict[str, Any]:
     return {
-        "schema": ARCHIVE_SCHEMA,
+        "format": header_of(ARCHIVE_FORMAT),
         "database_revisions": revisions,
         "tables": [
             {
@@ -416,7 +418,7 @@ def _add_bytes(archive: tarfile.TarFile, name: str, content: bytes) -> None:
 
 
 def write_archive(session: Session, destination: PathOrBinaryIO) -> dict[str, Any]:
-    """Write a deterministic ``tckdb.archive.v1`` tar archive.
+    """Write a deterministic ``tckdb.archive`` tar archive.
 
     ``destination`` may be a filesystem path or a seekable binary file object.
     Before reading any revision, row, or artifact metadata, the writer takes
@@ -497,8 +499,8 @@ def _validate_manifest(
     tables,
     revisions: list[str],
 ) -> None:
-    if not isinstance(manifest, dict) or manifest.get("schema") != ARCHIVE_SCHEMA:
-        raise ArchiveCompatibilityError("Not a tckdb.archive.v1 manifest")
+    if not isinstance(manifest, dict) or reads_as(manifest.get("format"), ARCHIVE) != ARCHIVE_FORMAT:
+        raise ArchiveCompatibilityError("Not a tckdb.archive manifest of the format this release reads")
     if manifest.get("database_revisions") != revisions:
         raise ArchiveCompatibilityError("Archive Alembic revision does not match the target database")
     if manifest.get("excluded_tables") != dict(EXCLUDED_TABLES):
@@ -683,7 +685,7 @@ def _repair_sequences(session: Session, tables) -> None:
 class ArchiveVerificationReport:
     """Result of the offline member-hash check of one archive file."""
 
-    schema: str | None
+    format: VersionRef | None
     database_revisions: list[str]
     rows_declared: int
     blobs_declared: int
@@ -723,7 +725,7 @@ def verify_archive(source: PathOrBinaryIO) -> ArchiveVerificationReport:
     """
 
     problems: list[str] = []
-    schema: str | None = None
+    declared: VersionRef | None = None
     revisions: list[str] = []
     rows_declared = 0
     blobs_declared = 0
@@ -748,9 +750,10 @@ def verify_archive(source: PathOrBinaryIO) -> ArchiveVerificationReport:
         if not isinstance(manifest, dict):
             return ArchiveVerificationReport(None, [], 0, 0, 0, ["manifest.json is not an object"])
 
-        schema = manifest.get("schema") if isinstance(manifest.get("schema"), str) else None
-        if schema != ARCHIVE_SCHEMA:
-            problems.append(f"manifest schema is {schema!r}, expected {ARCHIVE_SCHEMA!r}")
+        declared_format = manifest.get("format")
+        declared = reads_as(declared_format, ARCHIVE)
+        if declared != ARCHIVE_FORMAT:
+            problems.append(f"manifest format is {declared_format!r}, expected {header_of(ARCHIVE_FORMAT)!r}")
         declared_revisions = manifest.get("database_revisions")
         if isinstance(declared_revisions, list) and all(isinstance(r, str) for r in declared_revisions):
             revisions = list(declared_revisions)
@@ -812,7 +815,7 @@ def verify_archive(source: PathOrBinaryIO) -> ArchiveVerificationReport:
             problems.append(f"archive contains undeclared members: {undeclared}")
 
     return ArchiveVerificationReport(
-        schema=schema,
+        format=declared,
         database_revisions=revisions,
         rows_declared=rows_declared,
         blobs_declared=blobs_declared,
@@ -869,7 +872,7 @@ def restore_archive(
     session: Session,
     source: PathOrBinaryIO,
 ) -> ArchiveRestoreReport:
-    """Verify and restore a ``tckdb.archive.v1`` archive.
+    """Verify and restore a ``tckdb.archive`` archive.
 
     Validation completes before blob or database writes begin. V1 requires an
     otherwise-empty migrated target with its exact canonical seed identities
@@ -961,7 +964,7 @@ def restore_archive(
 
 
 __all__ = [
-    "ARCHIVE_SCHEMA",
+    "ARCHIVE_FORMAT",
     "ArchiveCompatibilityError",
     "ArchiveError",
     "ArchiveIntegrityError",

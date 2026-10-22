@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from typing import Any, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from tckdb_schemas.fragments.version import embeds_version
 
 from app.db.models.common import (
     MolecularPropertyKind,
@@ -95,6 +96,7 @@ class MolecularPropertyObservationBase(BaseModel):
     external_source_record_key: str | None = None
     external_source_page_kind: str | None = None
     external_source_content_sha256: str | None = None
+    external_source_parser_name: str | None = None
     external_source_parser_version: str | None = None
 
     # Phase C-E1 source custody. Follows the same convention as the FK ids
@@ -110,6 +112,16 @@ class MolecularPropertyObservationBase(BaseModel):
 
     raw_payload_json: dict[str, Any] | None = None
     note: str | None = None
+
+    @field_validator("external_source_parser_name")
+    @classmethod
+    def _parser_name_carries_no_version(cls, value: str | None) -> str | None:
+        if value is not None and embeds_version(value):
+            raise ValueError(
+                f"external_source_parser_name {value!r} embeds a version; the version belongs in "
+                "external_source_parser_version, never in the name"
+            )
+        return value
 
     @model_validator(mode="after")
     def _at_least_one_value_representation(self) -> Self:
@@ -230,4 +242,15 @@ class MolecularPropertyObservationSourceMetadata(BaseModel):
     external_source_record_key: str | None = None
     external_source_page_kind: str | None = None
     external_source_content_sha256: str | None = None
+    external_source_parser_name: str | None = None
     external_source_parser_version: str | None = None
+
+    @field_validator("external_source_parser_name")
+    @classmethod
+    def _parser_name_carries_no_version(cls, value: str | None) -> str | None:
+        if value is not None and embeds_version(value):
+            raise ValueError(
+                f"external_source_parser_name {value!r} embeds a version; the version belongs in "
+                "external_source_parser_version, never in the name"
+            )
+        return value

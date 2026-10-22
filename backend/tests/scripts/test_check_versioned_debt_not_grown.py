@@ -26,7 +26,6 @@ checker = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(checker)
 
 DEBT_REL = checker.DEBT_PATH
-REAL_VERSION_PY = Path(__file__).resolve().parents[3] / checker.VERSION_PATH
 
 
 def _debt_source(
@@ -34,15 +33,11 @@ def _debt_source(
     allowed: tuple[tuple[str, str, str, str], ...] = (),
     new: tuple[tuple[str, str, str], ...] = (),
     extra: str = "",
-    moved: tuple[tuple[str, str, str, str], ...] = (),
-    renames: tuple[tuple[str, str], ...] = (),
 ) -> str:
     body = "".join(f"    {row!r},\n" for row in rows)
     return (
         "COMPLETED_PRS = frozenset()\n"
         f"NEW_ALLOWANCES = {new!r}\n"
-        f"MOVED_DEBT = {moved!r}\n"
-        f"RENAMES = {renames!r}\n"
         f"ALLOWED = {allowed!r}\n"
         f"DEBT: tuple[tuple[str, str, str, int, str], ...] = (\n{body})\n{extra}"
     )
@@ -70,10 +65,6 @@ def _commit(
         path.unlink(missing_ok=True)
     else:
         path.write_text(source if source is not None else _debt_source(rows))
-    # The script reads the "embeds a version" patterns from the merge base's copy of the wire package.
-    patterns = repo / checker.VERSION_PATH
-    patterns.parent.mkdir(parents=True, exist_ok=True)
-    patterns.write_text(REAL_VERSION_PY.read_text(encoding="utf-8"), encoding="utf-8")
     (repo / "marker.txt").write_text(message)
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", message)
@@ -277,8 +268,10 @@ def test_grown_reports_each_problem_by_key() -> None:
 def test_parse_debt_reads_the_real_debt_file_without_importing_it() -> None:
     real = (Path(__file__).resolve().parents[1] / "versioned_names_debt.py").read_text(encoding="utf-8")
     parsed = checker.parse_debt(real)
-    assert len(parsed) > 30
-    assert all(isinstance(count, int) and count >= 1 for count in parsed.values())
+    # The programme is finished: the real list is empty, and the parser still reads a populated one.
+    assert parsed == {}
+    sample = checker.parse_debt(_debt_source(BASE_ROWS))
+    assert sample == {(p, k, t): n for p, k, t, n, _pr in BASE_ROWS}
 
 
 def test_the_repo_gate_runs_the_check_with_the_base_and_head_shas() -> None:
@@ -294,137 +287,3 @@ def test_a_push_is_compared_with_the_commit_it_replaced() -> None:
     step = step[: step.index("--head-ref")]
     assert "github.event.pull_request.base.sha || github.event.before" in step
     assert "github.sha" not in step
-
-
-# --- a row whose text moved with a rename -------------------------------------------------------------
-
-A_MOVE = ("backend/app/a.py", "identifier", "OLD_V1", "OLD")
-A_ROW = ("backend/app/a.py", "identifier", "OLD", 2, "PR-3")
-A_RENAMES = (("OLD_V1", "OLD"),)
-
-
-def _move_branch(repo: Path, rows, moved, renames=A_RENAMES, base_rows=None):
-    return _branch(
-        repo,
-        rows,
-        source=_debt_source(rows, moved=moved, renames=renames),
-        base_source=None if base_rows is None else _debt_source(base_rows),
-    )
-
-
-def test_a_declared_move_of_a_row_passes_and_is_printed(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    base, head = _move_branch(repo, [A_ROW, BASE_ROWS[1]], (A_MOVE,))
-    assert _run(repo, base, head) == 0
-    assert "::warning title=Moved versioned-name debt row::" in capsys.readouterr().out
-
-
-def test_the_same_rename_without_a_declaration_is_still_a_new_row(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    base, head = _branch(repo, [A_ROW, BASE_ROWS[1]])
-    assert _run(repo, base, head) == 1
-    assert "new debt row" in capsys.readouterr().err
-
-
-def test_a_move_that_raises_the_count_is_refused(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    rows = [("backend/app/a.py", "identifier", "OLD", 3, "PR-3"), BASE_ROWS[1]]
-    base, head = _move_branch(repo, rows, (A_MOVE,))
-    assert _run(repo, base, head) == 1
-    assert "grew from x2" in capsys.readouterr().err
-
-
-def test_a_move_whose_old_row_the_base_never_had_is_refused(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ghost = ("backend/app/a.py", "identifier", "NEVER_V9", "OLD")
-    base, head = _move_branch(repo, [A_ROW, BASE_ROWS[1]], (ghost,), renames=(("NEVER_V9", "OLD"),))
-    assert _run(repo, base, head) == 1
-    assert "does not have" in capsys.readouterr().err
-
-
-def test_a_move_that_keeps_the_old_row_too_is_refused(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    base, head = _move_branch(repo, [A_ROW, BASE_ROWS[0], BASE_ROWS[1]], (A_MOVE,))
-    assert _run(repo, base, head) == 1
-    assert "still lists the old row" in capsys.readouterr().err
-
-
-def test_a_move_naming_a_row_that_is_not_in_debt_is_refused(repo: Path) -> None:
-    base, head = _move_branch(repo, BASE_ROWS, (A_MOVE,))
-    assert _run(repo, base, head) == 1
-
-
-# --- the attacks on the move mechanism, each end to end through main() in a two-commit repository -------
-
-
-def test_attack_fan_out_one_old_row_claimed_by_two_moves_is_refused(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """One old row (x2) declared as two moves doubles the debt; the second claim of the old row is refused."""
-    rows = [
-        ("backend/app/a.py", "identifier", "NEW_A", 2, "PR-3"),
-        ("backend/app/a.py", "identifier", "NEW_B", 2, "PR-3"),
-        BASE_ROWS[1],
-    ]
-    moved = (
-        ("backend/app/a.py", "identifier", "OLD_V1", "NEW_A"),
-        ("backend/app/a.py", "identifier", "OLD_V1", "NEW_B"),
-    )
-    base, head = _move_branch(repo, rows, moved, renames=(("OLD_V1", "NEW_A"),))
-    assert _run(repo, base, head) == 1
-    assert "more than once" in capsys.readouterr().err
-
-
-def test_attack_swap_a_move_to_a_totally_different_token_is_refused(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    rows = [("backend/app/a.py", "identifier", "TOTALLY_NEW_V9", 2, "PR-3"), BASE_ROWS[1]]
-    moved = (("backend/app/a.py", "identifier", "OLD_V1", "TOTALLY_NEW_V9"),)
-    base, head = _move_branch(repo, rows, moved)
-    assert _run(repo, base, head) == 1
-    assert "differs beyond RENAMES" in capsys.readouterr().err
-
-
-def test_attack_a_move_whose_text_changes_beyond_the_rename_map_is_refused(
-    repo: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """The identifier is renamed as declared, but the surrounding text also changed."""
-    base_rows = [("backend/app/a.py", "fstring", "f'{OLD_V1.name}@{OLD_V1.version}'", 1, "PR-4"), BASE_ROWS[1]]
-    rows = [("backend/app/a.py", "fstring", "f'{OLD.name}@{OLD.version}-extra'", 1, "PR-4"), BASE_ROWS[1]]
-    moved = (("backend/app/a.py", "fstring", "f'{OLD_V1.name}@{OLD_V1.version}'", "f'{OLD.name}@{OLD.version}-extra'"),)
-    base = _commit(repo, base_rows, "base")
-    _git(repo, "checkout", "-q", "-b", "feature")
-    head = _commit(repo, rows, "feature", _debt_source(rows, moved=moved, renames=A_RENAMES))
-    assert _run(repo, base, head) == 1
-    assert "differs beyond RENAMES" in capsys.readouterr().err
-
-
-def test_attack_a_rename_map_entry_whose_new_name_embeds_a_version_is_refused(
-    repo: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    rows = [("backend/app/a.py", "identifier", "OLD_V2", 2, "PR-3"), BASE_ROWS[1]]
-    moved = (("backend/app/a.py", "identifier", "OLD_V1", "OLD_V2"),)
-    base, head = _move_branch(repo, rows, moved, renames=(("OLD_V1", "OLD_V2"),))
-    assert _run(repo, base, head) == 1
-    assert "embeds a version" in capsys.readouterr().err
-
-
-def test_a_move_cannot_change_the_path_or_the_kind(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """Path and kind are one key with the old token: a move names the same file and kind, or finds no old row."""
-    rows = [("backend/app/elsewhere.py", "identifier", "OLD", 2, "PR-3"), BASE_ROWS[1]]
-    moved = (("backend/app/elsewhere.py", "identifier", "OLD_V1", "OLD"),)
-    base, head = _move_branch(repo, rows, moved)
-    assert _run(repo, base, head) == 1
-    assert "does not have" in capsys.readouterr().err
-
-
-def test_a_move_that_has_already_landed_is_inert_and_silent(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """After merge the base holds the new row. The still-present declaration passes and prints nothing."""
-    rows = [A_ROW, BASE_ROWS[1]]
-    source = _debt_source(rows, moved=(A_MOVE,), renames=A_RENAMES)
-    base, head = _branch(repo, rows, source=source, base_source=source)
-    assert _run(repo, base, head) == 0
-    assert "Moved versioned-name debt row" not in capsys.readouterr().out
-
-
-@pytest.mark.parametrize("broken", ["def (:\n", ""], ids=["syntax-error", "empty"])
-def test_an_unreadable_version_py_at_the_base_exits_2_with_a_message_not_a_traceback(
-    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, broken: str
-) -> None:
-    monkeypatch.setattr(REAL_VERSION_PY.__class__, "read_text", lambda self, *a, **k: broken, raising=False)
-    # _commit copies REAL_VERSION_PY's text into the repo; patch only that read.
-    base, head = _branch(repo, BASE_ROWS)
-    monkeypatch.undo()
-    assert _run(repo, base, head) == 2
-    assert "is unreadable" in capsys.readouterr().err

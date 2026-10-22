@@ -27,7 +27,8 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from tckdb_schemas.fragments.version import VersionRef
 
 
 class MachineReviewStatus(str, Enum):
@@ -134,21 +135,22 @@ class MachineReviewResult(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# v2 provider output contract (machine_review_provider_contract_v2.md)
+# provider output contract (machine_review_provider_contract.md)
 # ---------------------------------------------------------------------------
 #
 # The provider payload speaks the machine-review vocabulary natively: a
 # ``status``, a ``curator_priority``, ``recommended_action`` and the full
-# category set. It is identified by a single root marker (``schema_version``),
-# which the audit adapter requires. See ``machine_review_provider_contract_v2.md``
-# §3/§4/§7.
+# category set. It is identified by a single root marker (``format``: a name and a
+# separate integer version), which the audit adapter requires. See
+# ``machine_review_provider_contract.md`` §3/§4/§7.
 
-#: Root marker value identifying a v2 machine-review provider payload.
-MACHINE_REVIEW_SCHEMA_VERSION = "machine_review_v2"
+#: Root marker value identifying a machine-review provider payload: the format's
+#: name beside its integer version.
+MACHINE_REVIEW_FORMAT: VersionRef = VersionRef(name="machine_review", version=1)
 
 
 class MachineReviewProviderFinding(BaseModel):
-    """One finding in a v2 provider payload, using native machine-review terms.
+    """One finding in a provider payload, using native machine-review terms.
 
     Mirrors :class:`MachineReviewFinding` field-for-field and adds explicit
     record addressing: a provider may cite ``record_ref`` (the mapping key) or
@@ -179,13 +181,13 @@ class MachineReviewProviderResult(BaseModel):
     :class:`MachineReviewCategory` vocabulary on findings. Schema-validated
     before any use; ``extra="forbid"`` rejects mutation payloads and
     ``used_rag`` is constrained to ``False`` (RAG is a non-goal). The root
-    ``schema_version`` marker is required: a payload without it, or with
+    ``format`` marker is required: a payload without it, or with
     another value, is refused.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: Literal["machine_review_v2"]
+    format: VersionRef
     status: MachineReviewStatus
     curator_priority: CuratorPriority | None = None
     summary: str | None = Field(default=None, max_length=2000)
@@ -195,3 +197,13 @@ class MachineReviewProviderResult(BaseModel):
     model: str | None = Field(default=None, max_length=128)
     provider: str | None = Field(default=None, max_length=128)
     used_rag: Literal[False] = False
+
+    @field_validator("format")
+    @classmethod
+    def _format_is_the_one_this_model_reads(cls, value: VersionRef) -> VersionRef:
+        if value != MACHINE_REVIEW_FORMAT:
+            raise ValueError(
+                f"this model reads format {MACHINE_REVIEW_FORMAT.name!r} version {MACHINE_REVIEW_FORMAT.version}, "
+                f"not {value.name!r} version {value.version}"
+            )
+        return value

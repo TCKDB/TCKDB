@@ -5,7 +5,7 @@ Covers the shell-friendly exit-code policy that lets users chain
 business logic — these tests only assert the CLI contract (exit codes,
 key strings printed to stdout) so the manual local-to-hosted flow stays
 predictable. See
-``docs/contribution-bundles/manual-local-to-hosted-v0.md``.
+``docs/contribution-bundles/manual-local-to-hosted.md``.
 """
 
 from __future__ import annotations

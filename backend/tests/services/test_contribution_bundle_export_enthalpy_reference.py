@@ -7,7 +7,7 @@ enthalpy and no declaration (never backfilled -- see
 ``e7b1c9d4a632``/``.claude/rules/migration-rules.md``) round-tripped into a
 bundle that ``persist_thermo_upload`` (``app.workflows.thermo``, via the
 shared ``tckdb_schemas.enthalpy_reference.enthalpy_reference_error`` rule)
-refuses on import. See ``docs/contribution-bundles/v0-format.md`` for the
+refuses on import. See ``docs/contribution-bundles/format.md`` for the
 documented contract these tests pin.
 
 Three record shapes, each exported then re-imported:

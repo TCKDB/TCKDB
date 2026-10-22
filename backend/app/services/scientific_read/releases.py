@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session, aliased
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.app_user import AppUser
 from app.db.models.common import DatasetReleaseStatus, ReleaseSelectionAction
@@ -120,7 +121,7 @@ def _manifest_summary(
     base = f"/api/v1/scientific/releases/{release.tag}/artifacts"
     return ReleaseManifestSummary(
         manifest_ref=manifest.public_ref,
-        manifest_schema=manifest.manifest_schema,
+        manifest_format=VersionRef(name=manifest.manifest_format_name, version=manifest.manifest_format_version),
         profile=manifest.profile,
         content_sha256=manifest.content_sha256,
         generated_at=encode_scalar(manifest.generated_at),
@@ -130,8 +131,10 @@ def _manifest_summary(
             alembic_revision=manifest.alembic_revision,
             backend_version=manifest.backend_version,
             schemas_package_version=manifest.schemas_package_version,
-            review_policy_version=manifest.review_policy_version,
-            recovery_archive_schema=manifest.recovery_archive_schema,
+            review_policy=VersionRef(name=manifest.review_policy_name, version=manifest.review_policy_version),
+            recovery_archive=VersionRef(
+                name=manifest.recovery_archive_format_name, version=manifest.recovery_archive_format_version
+            ),
         ),
         artifacts=[
             ReleaseArtifactSummary(

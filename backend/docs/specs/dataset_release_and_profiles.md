@@ -300,9 +300,11 @@ release containing nothing is not a release.
 ## 4. Three formats, three contracts
 
 This is the distinction the Stage 3 review called out as currently conflated.
-It is stated in naming, in each format's own manifest, and here.
+It is stated in naming, in each format's own manifest, and here. Each document
+carries a top-level `format` object, `{"name": ..., "version": 1}`; the name and
+the integer version are separate fields.
 
-| | `tckdb.dataset_release.v1` | `tckdb.archive.v1` | `tckdb.export.v0` |
+| | `tckdb.dataset_release` | `tckdb.archive` | `tckdb.export` |
 |---|---|---|---|
 | **Purpose** | cite and reproduce a curated scientific dataset | operator disaster recovery | convenience projection (NDJSON / CHEMKIN / ML) |
 | **Audience** | anyone with a citation | database operator | a modelling workflow |
@@ -396,10 +398,15 @@ removing k(T,P) from every PDep release.
 
 - `alembic_revision` — the schema the data was read under;
 - `backend_version`, `schemas_package_version` — the code that produced it;
-- `review_policy_version` — what "approved" meant when it was cut;
+- `review_policy_name` / `review_policy_version` — what "approved" meant when it
+  was cut (`record_review`, version 1);
 - the curation policy's `(name, version)`;
-- `recovery_archive_schema` — recorded so a reader can see it is a *different*
-  contract;
+- `manifest_format_name` / `manifest_format_version` and
+  `recovery_archive_format_name` / `recovery_archive_format_version` — the
+  document's own format and the recovery archive's, recorded so a reader can see
+  they are *different* contracts (the API exposes them as `manifest_format` and,
+  on the version binding, `review_policy` and `recovery_archive`, each
+  `{name, version}`);
 - `data_license` and `code_license`, snapshotted;
 - `profile` — always `curated`, recorded rather than assumed so the document is
   self-describing outside this codebase.
@@ -444,7 +451,7 @@ Two questions are now reported separately, and only one of them can fail:
 divergence. It self-checks the stored bytes against their recorded digest and
 returns 500 only if that fails, which is a storage-integrity fault.
 
-Contract tags (`manifest_schema`, `recovery_archive_schema`) and the artifact
+Contract tags (the `manifest_format_*` and `recovery_archive_format_*` columns) and the artifact
 path list are read from the manifest row rather than from live module
 constants, so bumping a contract or adding an artifact kind cannot retroactively
 change a published digest.
@@ -640,11 +647,14 @@ file would falsify the release's claim that every candidate is retrievable.
 `candidate_records.ndjson` carries a `rights` object: `license`, `basis`,
 `attestation_ref`, `attested_at`, and `attested_by` as the same name/ORCID
 label block used for curators — never a user primary key. The manifest
-document (`tckdb.dataset_release.v2`) carries a `rights` block —
+document (`tckdb.dataset_release`) carries a `rights` block —
 `{data_license, attestation_count, basis_kinds: {kind: count}}` — snapshotted
 onto `release_manifest.rights_summary_json` so the document stays rebuildable
-from the row. The renderer branches on the *stored* `manifest_schema`, so a
-manifest frozen under `v1` keeps reproducing its recorded digest.
+from the row. The renderer branches on the *stored* `(manifest_format_name,
+manifest_format_version)`, so a manifest keeps reproducing its recorded digest.
+The format tag sits inside the checksummed bytes, so changing how a format is
+named or versioned unpublishes the releases frozen under the old tag (see the
+`c7d4a9e2b6f1` section of `backend/docs/deployment/migrations.md`).
 
 **What is deliberately not built:** a license compatibility lattice, a
 refuse-at-upload switch (absence is refused at release, so existing clients

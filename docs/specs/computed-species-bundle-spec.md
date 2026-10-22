@@ -88,7 +88,7 @@ class CalculationInBundle(SchemaBase):
 
     parameters_json: dict | None = None     # incl. tckdb_origin per DR-0026
     parameters: list[CalculationParameterObservation] | None = None
-    parameters_parser_version: str | None = None
+    parameters_parser: {name, version} | None = None   # a parser stamp: name plus version
     parameters_extracted_at: datetime | None = None
 
     # Result blocks (one matching `type`)

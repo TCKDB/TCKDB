@@ -27,7 +27,7 @@ from typing import Any
 import yaml  # type: ignore[import-untyped]
 from tckdb_schemas.network_declarations import NetworkComparisonObjective
 
-from app.chemistry.manifest_attestation import attest
+from app.chemistry.manifest_attestation import attest, require_integer_version, require_manifest_name
 
 MANIFEST_PATH = Path(__file__).with_name("network_rule_candidates.yaml")
 
@@ -45,7 +45,7 @@ class RuleCandidate:
     """One audited candidate rule, as stated in the manifest."""
 
     rule_id: str
-    version: str
+    version: int
     objective: NetworkComparisonObjective
     objective_key: str
     observable: str
@@ -97,7 +97,7 @@ class RuleCandidate:
 class NetworkRuleManifest:
     """The loaded, validated manifest."""
 
-    version: str
+    version: int
     candidates: tuple[RuleCandidate, ...]
     #: Pinned sources (id, citation, sha256 of the bytes read, what each was used for).
     sources: tuple[dict[str, Any], ...] = ()
@@ -150,7 +150,7 @@ def _candidate(raw: dict[str, Any]) -> RuleCandidate:
         _require(bool(needed), f"{rule_id}: not approved for activation and lists nothing that would be needed")
     return RuleCandidate(
         rule_id=rule_id,
-        version=str(raw["version"]),
+        version=require_integer_version(raw.get("version"), where=f"{rule_id}", error=ManifestError),
         objective=objective,
         objective_key=raw["objective_key"],
         observable=raw["observable"],
@@ -191,7 +191,9 @@ def parse_network_rule_manifest(raw: dict[str, Any]) -> NetworkRuleManifest:
     for candidate in candidates:
         unknown = set(candidate.source_ids) - source_ids
         _require(not unknown, f"{candidate.rule_id}: cites sources the manifest does not pin: {sorted(unknown)}")
-    return NetworkRuleManifest(version=str(raw["manifest_version"]), candidates=candidates, sources=sources)
+    require_manifest_name(raw.get("name"), where="network rule manifest", error=ManifestError)
+    version = require_integer_version(raw.get("version"), where="network rule manifest", error=ManifestError)
+    return NetworkRuleManifest(version=version, candidates=candidates, sources=sources)
 
 
 def parse_network_rule_manifest_bytes(data: bytes, *, expected_sha256: str | None) -> NetworkRuleManifest:

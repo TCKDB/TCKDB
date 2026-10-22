@@ -448,7 +448,7 @@ def _manifest(path: Path) -> dict:
 
 def test_manifest_records_the_bound_source_and_never_an_email(built_deposit):
     document = _manifest(built_deposit)
-    assert document["schema"] == "tckdb.deposit.v1"
+    assert document["format"] == {"name": "tckdb.deposit", "version": 1}
     assert len(document["source"]["git_commit"]) == 40
     assert document["source"]["alembic_head"] == alembic_script_head(REPO_ROOT)
     # A relaxed (test) build must be byte-distinguishable from a strict one.

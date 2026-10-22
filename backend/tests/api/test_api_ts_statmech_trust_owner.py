@@ -35,7 +35,7 @@ def test_a_ts_owned_statmech_is_not_hard_failed_for_want_of_a_species_entry(clie
     assert deterministic["grade"] != "hard_failed", deterministic
     assert deterministic.get("hard_fail") is None
     assert deterministic["rubric"] == "computed_ts_statmech"
-    assert deterministic["rubric_version"] == "1"
+    assert deterministic["rubric_version"] == 1
     assert record["trust"]["trust_status"] == deterministic["grade"]
 
 
@@ -45,7 +45,7 @@ def test_assessments_and_trust_agree_on_the_ts_rubric_and_grade(client):
 
     deterministic = record["assessments"]["deterministic_trust"]
     evidence = record["trust"]["evidence"]
-    assert evidence["rubric"] == "computed_ts_statmech_v1"
+    assert evidence["rubric"] == "computed_ts_statmech"
     assert evidence["checks"]["transition_state_entry_present"] == "passed"
     assert "species_entry_present" not in evidence["checks"]
     assert record["trust"]["trust_status"] == deterministic["grade"] == evidence["label"]
@@ -72,7 +72,7 @@ def test_a_species_owned_record_in_the_same_database_keeps_the_species_rubric(cl
     record = _read(client, species_statmech.public_ref, "assessments,trust")
 
     deterministic = record["assessments"]["deterministic_trust"]
-    assert (deterministic["rubric"], deterministic["rubric_version"]) == ("computed_statmech", "2")
-    assert record["trust"]["evidence"]["rubric"] == "computed_statmech_v2"
+    assert (deterministic["rubric"], deterministic["rubric_version"]) == ("computed_statmech", 1)
+    assert record["trust"]["evidence"]["rubric"] == "computed_statmech"
     assert record["trust"]["evidence"]["checks"]["species_entry_present"] == "passed"
     assert "transition_state_entry_present" not in record["trust"]["evidence"]["checks"]

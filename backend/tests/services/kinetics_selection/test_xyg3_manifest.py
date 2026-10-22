@@ -214,9 +214,9 @@ def test_the_degenerate_flag_follows_the_species_and_the_identity_exchanges_say_
     assert flagged == same_species
     # The two complex-to-complex exchanges were once recorded as not degenerate while their species were identical.
     assert {"NHT08", "NHT10"} <= flagged
-    assert manifest.version == "0.4.0" and RAW["manifest_date"] == "2026-10-13"
-    assert [h["version"] for h in RAW["manifest_history"]] == ["0.1.0", "0.2.0", "0.3.0", "0.4.0"]
-    assert RAW["manifest_history"][-1]["date"] == "2026-10-13"
+    assert manifest.version == 1 and RAW["version"] == 1 and RAW["name"] == "xyg3_b3lyp_barrier"
+    assert RAW["manifest_date"] == "2026-10-13"
+    assert "manifest_version" not in RAW and "manifest_history" not in RAW
 
 
 @pytest.mark.parametrize("member_id,flag", [("NHT08", False), ("HT01", True)])

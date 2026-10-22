@@ -71,6 +71,7 @@ from tckdb_schemas.fragments.calculation import composite_arithmetic_tolerance_h
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.chemistry.method_names import method_identity_key
+from app.parser_registry import PARSERS
 from app.services.ess_software_detection import detect_software_from_text
 from app.services.gaussian_composite_parser import (
     GaussianCompositeSummary,
@@ -81,7 +82,7 @@ from app.services.gaussian_composite_parser import (
 #: The version of the composite-log parsing and comparison that draws a conclusion. Bump it when a fix to
 #: :mod:`app.services.gaussian_composite_parser` or to this comparison could change what a log concludes: the
 #: next upload of the same log then records a fresh conclusion (``calc_composite_log_check``), and reads prefer it.
-COMPOSITE_LOG_PARSER_VERSION = 1
+COMPOSITE_LOG_PARSER_VERSION = PARSERS.get("composite_log").version
 
 #: A deposited composite number disagrees with the output log's summary block.
 W_COMPOSITE_ENERGY_LOG_MISMATCH = "composite_energy_log_mismatch"

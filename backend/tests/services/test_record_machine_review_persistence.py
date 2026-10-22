@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import func, select
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import (
     SubmissionActorKind,
@@ -41,11 +42,11 @@ from app.services.submission import create_submission
 _T0 = datetime(2026, 5, 31, 12, 0, 0)
 _HASH_A = "a" * 64
 _HASH_B = "b" * 64
-_PROMPT = "prompt_v3"
-_RUBRICS = {"kinetics": "computed_kinetics_v1"}
+_PROMPT = VersionRef(name="prompt", version=3)
+_RUBRIC = VersionRef(name="computed_kinetics", version=1)
 
 
-def _digest(context_hash: str = _HASH_A, schema_version: str = "v1"):
+def _digest(context_hash: str = _HASH_A, schema_version: int = 1):
     return MachineReviewContextDigest(
         context_hash=context_hash, context_schema_version=schema_version
     )
@@ -98,8 +99,8 @@ def _insert(db_session, **kwargs) -> RecordMachineReviewRow:
         record_id=kwargs.pop("record_id", 9001),
         review=review,
         context_digest=kwargs.pop("context_digest", _digest()),
-        prompt_version=kwargs.pop("prompt_version", _PROMPT),
-        rubric_versions=kwargs.pop("rubric_versions", _RUBRICS),
+        prompt=kwargs.pop("prompt", _PROMPT),
+        rubric=kwargs.pop("rubric", _RUBRIC),
         **kwargs,
     )
 
@@ -121,7 +122,7 @@ def test_record_machine_review_table_can_insert_minimal_row(db_session):
     assert fetched.status is MachineReviewStatus.machine_screened_warning
     assert fetched.findings_json == []  # default empty array
     assert fetched.context_hash == _HASH_A
-    assert fetched.context_schema_version == "v1"
+    assert fetched.context_schema_version == 1
     assert fetched.created_at is not None  # server default now()
 
 
@@ -183,6 +184,31 @@ def test_row_projects_to_stored_currency_projection(db_session):
     assert projection.id == row.id
 
 
+def test_a_row_stored_at_version_zero_projects_and_classifies_stale(db_session):
+    """A pre-reset row (prompt and rubric at version 0, as the migration stores them) is readable and reads stale.
+
+    Kills: the row projection building a ``VersionRef`` (which refuses 0), so a migrated review could not be read at
+    all; and a 0 comparing equal to an active version.
+    """
+    from sqlalchemy import text
+
+    row = _insert(db_session)
+    db_session.flush()
+    db_session.execute(
+        text("UPDATE record_machine_review SET prompt_version = 0, rubric_version = 0 WHERE id = :i"), {"i": row.id}
+    )
+    db_session.expire_all()
+    projection = stored_projection_from_record_machine_review_row(db_session.get(RecordMachineReviewRow, row.id))
+    assert (projection.prompt.version, projection.rubric.version) == (0, 0)
+    result = classify_record_machine_review_currency_from_rows(
+        [db_session.get(RecordMachineReviewRow, row.id)],
+        current_context=_digest(),
+        active_prompt=_PROMPT,
+        active_rubric=_RUBRIC,
+    )
+    assert result.state is MachineReviewCurrencyState.stale
+
+
 def test_projection_preserves_status(db_session):
     row = _insert(
         db_session,
@@ -194,26 +220,28 @@ def test_projection_preserves_status(db_session):
 
 
 def test_projection_preserves_context_hash_and_schema_version(db_session):
-    row = _insert(db_session, context_digest=_digest(_HASH_B, "v2"))
+    row = _insert(db_session, context_digest=_digest(_HASH_B, 2))
     db_session.flush()
     projection = stored_projection_from_record_machine_review_row(row)
     assert projection.context_hash == _HASH_B
-    assert projection.context_schema_version == "v2"
+    assert projection.context_schema_version == 2
 
 
 def test_projection_preserves_prompt_version(db_session):
-    row = _insert(db_session, prompt_version="prompt_v9")
+    row = _insert(db_session, prompt=VersionRef(name="prompt", version=9))
     db_session.flush()
     projection = stored_projection_from_record_machine_review_row(row)
-    assert projection.prompt_version == "prompt_v9"
+    assert projection.prompt == VersionRef(name="prompt", version=9)
+    assert (row.prompt_name, row.prompt_version) == ("prompt", 9)
 
 
 def test_projection_preserves_rubric_versions(db_session):
-    rubrics = {"kinetics": "computed_kinetics_v7", "calc": "computed_calculation_v1"}
-    row = _insert(db_session, rubric_versions=rubrics)
+    rubric = VersionRef(name="computed_kinetics", version=7)
+    row = _insert(db_session, rubric=rubric)
     db_session.flush()
     projection = stored_projection_from_record_machine_review_row(row)
-    assert projection.rubric_versions == rubrics
+    assert projection.rubric == rubric
+    assert (row.rubric_name, row.rubric_version) == ("computed_kinetics", 7)
 
 
 def test_projection_preserves_source_submission_id(db_session, _api_test_user):
@@ -271,8 +299,8 @@ def test_classifier_marks_latest_matching_row_current(db_session):
     result = classify_record_machine_review_currency_from_rows(
         rows,
         current_context=_digest(_HASH_A),
-        active_prompt_version=_PROMPT,
-        active_rubric_versions=_RUBRICS,
+        active_prompt=_PROMPT,
+        active_rubric=_RUBRIC,
     )
     assert result.state is MachineReviewCurrencyState.current
 
@@ -285,8 +313,8 @@ def test_classifier_marks_latest_context_hash_mismatch_stale(db_session):
     result = classify_record_machine_review_currency_from_rows(
         rows,
         current_context=_digest(_HASH_B),  # evidence changed since the review
-        active_prompt_version=_PROMPT,
-        active_rubric_versions=_RUBRICS,
+        active_prompt=_PROMPT,
+        active_rubric=_RUBRIC,
     )
     assert result.state is MachineReviewCurrencyState.stale
 
@@ -305,8 +333,8 @@ def test_classifier_marks_older_matching_row_historical_when_latest_is_stale(db_
     result = classify_record_machine_review_currency_from_rows(
         rows,
         current_context=_digest(_HASH_A),  # matches the OLDER row, not the latest
-        active_prompt_version=_PROMPT,
-        active_rubric_versions=_RUBRICS,
+        active_prompt=_PROMPT,
+        active_rubric=_RUBRIC,
     )
     assert result.state is MachineReviewCurrencyState.stale
     assert result.active_review.id == newer.id
@@ -362,8 +390,8 @@ def test_create_helper_requires_reviewed_at(db_session):
             record_id=9001,
             review=review,
             context_digest=_digest(),
-            prompt_version=_PROMPT,
-            rubric_versions=_RUBRICS,
+            prompt=_PROMPT,
+            rubric=_RUBRIC,
         )
 
 

@@ -1,7 +1,7 @@
 # Local Contribution Bundle Export — v0
 
 Status: implemented (service + CLI; bundle file output only)
-See: [Bundle v0 format](v0-format.md),
+See: [Bundle format](format.md),
 Local bundle export v0 spec,
 Local-offline implementation plan
 
@@ -221,7 +221,7 @@ The v0 schema does not enforce coverage between `local_refs` and
 - `created_at` is set at export time in UTC
 - `manifest.sha256 == null` and `manifest.files == []` (no artifacts in v0)
 - the assembled bundle is validated against `ContributionBundle`
-  *before* the file is written, so a written file is always a valid v0
+  *before* the file is written, so a written file is always a valid
   bundle
 
 ## Validating an exported bundle

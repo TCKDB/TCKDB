@@ -6,7 +6,7 @@ from app.schemas.fragments.execution_environment import ExecutionEnvironmentMani
 
 def _payload() -> dict:
     return {
-        "schema_version": "tckdb.execution-environment.v1",
+        "schema_name": "tckdb.execution-environment", "schema_version": 1,
         "software_release": {"name": "Gaussian", "version": "16"},
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
         "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
@@ -42,7 +42,7 @@ def test_manifest_rejects_mutable_or_secret_bearing_locator(data):
 def _described_payload() -> dict:
     """The ordinary shared-cluster case: named modules, no digests."""
     return {
-        "schema_version": "tckdb.execution-environment.v1",
+        "schema_name": "tckdb.execution-environment", "schema_version": 1,
         "software_release": {"name": "Gaussian", "version": "16"},
         "runtime": {
             "runtime_kind": "described",
@@ -107,3 +107,21 @@ def test_pinned_runtime_still_requires_a_full_closure():
     payload["closure"] = [payload["closure"][0]]
     with pytest.raises(ValidationError):
         ExecutionEnvironmentManifestPayload.model_validate(payload)
+
+
+@pytest.mark.parametrize("bad", [True, 1.0, "1", 2, 0])
+def test_schema_version_must_be_the_integer_one_not_a_bool_or_float(bad):
+    """Kills: ``Literal[1]`` accepting ``true`` and ``1.0`` (pydantic's Literal matches by equality)."""
+    payload = _payload()
+    payload["schema_version"] = bad
+    with pytest.raises(ValidationError):
+        ExecutionEnvironmentManifestPayload.model_validate(payload)
+
+
+@pytest.mark.parametrize("raw", ["true", "1.0"])
+def test_schema_version_json_true_or_float_is_refused_too(raw):
+    import json
+
+    payload = json.dumps(_payload()).replace('"schema_version": 1', f'"schema_version": {raw}')
+    with pytest.raises(ValidationError):
+        ExecutionEnvironmentManifestPayload.model_validate_json(payload)

@@ -1,8 +1,8 @@
-# Contribution Bundle v0 — Format Specification
+# Contribution Bundle - Format Specification
 
 Status: implemented (schema/format only)
 See: DR-0023 Local/Offline and Hosted Submission Model,
-contribution-bundle-v0-format-spec roadmap
+contribution-bundle-format-spec roadmap
 
 ## What this document covers
 
@@ -12,11 +12,11 @@ metadata, submission metadata, bundle-local references, and integrity
 metadata in a format that can later be validated and ingested by a hosted
 TCKDB instance.
 
-This document defines bundle **v0** (`bundle_version == "0.1"`) and the
+This document defines bundle **version 1** (`bundle_version == 1`, an integer) and the
 schemas implemented in
 [`backend/app/schemas/workflows/contribution_bundle.py`](../../backend/app/schemas/workflows/contribution_bundle.py).
 
-## What v0 is
+## What this version is
 
 - A schema/format milestone only.
 - Re-uses existing thermo and kinetics upload schemas as the bundle's
@@ -24,18 +24,18 @@ schemas implemented in
   paths as a normal API upload.
 - Validatable without database access.
 
-## What v0 is not
+## What this version is not
 
-- v0 does **not** export records from any database.
-- v0 does **not** import into any hosted instance.
-- v0 does **not** create submissions, jobs, or moderation events.
-- v0 does **not** support raw database synchronization between instances.
-- v0 does **not** ship artifact packaging — only the manifest *shape*.
-- v0 does **not** support full network bundles, arbitrary graph export, or
+- Version 1 does **not** export records from any database.
+- Version 1 does **not** import into any hosted instance.
+- Version 1 does **not** create submissions, jobs, or moderation events.
+- Version 1 does **not** support raw database synchronization between instances.
+- Version 1 does **not** ship artifact packaging — only the manifest *shape*.
+- Version 1 does **not** support full network bundles, arbitrary graph export, or
   mixed thermo+kinetics bundles.
-- v0 does **not** introduce any FastAPI route, service, or DB write.
+- Version 1 does **not** introduce any FastAPI route, service, or DB write.
 
-## Supported v0 bundle families
+## Supported bundle families
 
 Allowed `bundle_kind` values:
 
@@ -44,7 +44,7 @@ Allowed `bundle_kind` values:
 | `thermo` | Bundle carries thermo upload-equivalent payloads only. |
 | `kinetics` | Bundle carries kinetics upload-equivalent payloads only. |
 
-Future families intentionally **not** allowed in v0 (to avoid shipping
+Future families intentionally **not** allowed in version 1 (to avoid shipping
 bundles no exporter or importer is actually validating yet):
 
 - `statmech`
@@ -58,7 +58,7 @@ bundles no exporter or importer is actually validating yet):
 ```json
 {
   "bundle_format": "tckdb-contribution-bundle",
-  "bundle_version": "0.1",
+  "bundle_version": 1,
   "bundle_kind": "thermo",
   "created_at": "2026-04-25T00:00:00Z",
   "source_instance": { "...": "..." },
@@ -76,7 +76,8 @@ Must be the literal string `tckdb-contribution-bundle`.
 
 ### `bundle_version`
 
-Must be the literal string `0.1` for v0.
+Must be the integer `1`. `bundle_format` names the format and `bundle_version`
+is its integer version; they are separate fields.
 
 ### `bundle_kind`
 
@@ -92,7 +93,7 @@ Identifies the TCKDB instance that produced the bundle.
 
 | Field | Required | Notes |
 |-------|----------|-------|
-| `instance_kind` | yes | `local` or `lab_server`. `hosted` is not allowed in v0. |
+| `instance_kind` | yes | `local` or `lab_server`. `hosted` is not allowed in version 1. |
 | `instance_name` | yes | Free-text label, e.g. `calvin-laptop` or `pi-rmgteam-server`. |
 | `schema_version` | yes | The Alembic revision the local DB is at, e.g. `d861dfd60891`. |
 | `software_version` | no | Optional TCKDB software version label. |
@@ -108,7 +109,7 @@ authentication during the future import milestone.
 | Field | Required | Notes |
 |-------|----------|-------|
 | `local_user_label` | yes | Local label such as `calvin`. |
-| `orcid` | no | ORCID iD if known. Not validated for format in v0. |
+| `orcid` | no | ORCID iD if known. Not validated for format in version 1. |
 | `affiliation` | no | Free-text. |
 | `email` | no | Free-text contact. |
 | `notes` | no | Free-text. |
@@ -122,7 +123,7 @@ Bundle-level submission metadata. The hosted instance maps this to its own
 |-------|----------|-------|
 | `title` | yes | Short title for the contribution. |
 | `summary` | yes | One-paragraph summary. |
-| `source_kind` | yes | Must be `local_bundle` in v0. |
+| `source_kind` | yes | Must be `local_bundle` in version 1. |
 | `rights` | no | Deposit-time license agreement for every record in the bundle; see below. |
 
 #### `submission.rights`
@@ -175,7 +176,7 @@ existing workflow upload schemas directly:
 - `thermo_uploads: list[ThermoUploadRequest]`
 - `kinetics_uploads: list[KineticsUploadRequest]`
 
-Family rules for v0:
+Family rules for version 1:
 
 - A `thermo` bundle **must** contain ≥ 1 `thermo_uploads` entry and
   **must not** contain any `kinetics_uploads`.
@@ -303,22 +304,22 @@ Keys are unique by Python dict semantics — duplicate keys in the source
 JSON collapse to the last value, so the schema validates the *deduped*
 map.
 
-#### Annotation-only in v0
+#### Annotation-only in version 1
 
-In v0, `local_refs` is an **annotation map**, not a cross-reference graph.
+In version 1, `local_refs` is an **annotation map**, not a cross-reference graph.
 It may describe records, labels, or local identities that help a future
-exporter/importer reason about the bundle, but v0 scientific payloads
+exporter/importer reason about the bundle, but version 1 scientific payloads
 (`ThermoUploadRequest`, `KineticsUploadRequest`) do not yet cite local
 refs.
 
-The v0 schema therefore validates only:
+The version 1 schema therefore validates only:
 
 - local-ref key shape (namespaced `<namespace>:<label>`)
 - local-ref `record_type`
 - rejection of purely numeric (raw-DB-PK shape) labels
 - overall map shape
 
-The v0 schema **does not** enforce coverage between `local_refs` and
+The version 1 schema **does not** enforce coverage between `local_refs` and
 `records` — having a `thermo:*` ref does not prove it refers to a
 specific `ThermoUploadRequest`, because nothing in the upload payload
 binds to it yet.
@@ -331,7 +332,7 @@ contract for import preview/diff.
 ### `manifest`
 
 Integrity metadata for any external artifacts shipped alongside the
-bundle. Artifact packaging is **not** implemented in v0; the manifest
+bundle. Artifact packaging is **not** implemented in version 1; the manifest
 just defines the shape so future artifact bundling has a place to land.
 
 | Field | Required | Notes |
@@ -357,10 +358,10 @@ A bundle without external artifacts can use:
 { "sha256": null, "files": [] }
 ```
 
-## Validation rules implemented in v0
+## Validation rules implemented in version 1
 
 1. `bundle_format == "tckdb-contribution-bundle"`.
-2. `bundle_version == "0.1"`.
+2. `bundle_version == 1`.
 3. `bundle_kind` ∈ `{thermo, kinetics}`.
 4. All required top-level metadata is present (`source_instance`,
    `exporter`, `submission`, `records`, `manifest`, `created_at`).
@@ -377,14 +378,13 @@ A bundle without external artifacts can use:
     scientific content, kinetics `a_units` must match molecularity).
 
 DB-backed scientific resolution (species lookup, level-of-theory
-resolution, deduplication, etc.) is **not** done in v0.
+resolution, deduplication, etc.) is **not** done in version 1.
 
 ## Examples
 
-- [Thermo bundle example](../../examples/bundles/thermo-bundle-v0.json)
-- [Kinetics bundle example](../../examples/bundles/kinetics-bundle-v0.json)
+- Thermo and kinetics bundle examples: see `examples/bundles/`.
 
-## Future extension points (not in v0)
+## Future extension points (not in version 1)
 
 - Adding `local_bundle` to the DB `SubmissionSourceKind` enum, when the
   hosted-import milestone needs to persist bundle-origin submissions.

@@ -25,7 +25,7 @@ def _raw() -> dict:
 
 def test_the_shipped_manifest_is_the_approved_38_member_version():
     manifest = load_e1_manifest()
-    assert manifest.version == "1.0.0"
+    assert manifest.version == 1
     assert len(manifest.members) == 38
     assert manifest.curator_acceptance["accepted_by"].startswith("repository owner")
     assert {s["id"] for s in manifest.sources} >= {"G4_2007", "G3_1998", "G297_1997", "G399_2000"}
@@ -112,7 +112,7 @@ def test_editing_one_recipe_fact_fails_the_pinned_load():
     with pytest.raises(ManifestError, match="pinned digest"):
         parse_e1_manifest_bytes(edited, expected_sha256=E1_MANIFEST_SHA256)
     # The edit is otherwise a perfectly valid manifest: only the pin stops it.
-    assert parse_e1_manifest_bytes(edited, expected_sha256=None).version == "1.0.0"
+    assert parse_e1_manifest_bytes(edited, expected_sha256=None).version == 1
 
 
 def test_the_rules_own_load_is_pinned_so_edited_bytes_on_disk_cannot_register_the_rule(tmp_path, monkeypatch):
@@ -133,7 +133,7 @@ def test_the_rules_own_load_is_pinned_so_edited_bytes_on_disk_cannot_register_th
         monkeypatch.undo()
         load_e1_manifest.cache_clear()
         default_rules.cache_clear()
-    assert E1Rule().manifest.version == "1.0.0"
+    assert E1Rule().manifest.version == 1
 
 
 def test_the_manifest_reports_the_digest_of_the_bytes_it_was_loaded_from():

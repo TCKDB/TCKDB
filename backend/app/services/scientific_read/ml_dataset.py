@@ -100,6 +100,7 @@ from app.db.models.species import (
 from app.db.models.thermo import Thermo
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
+from app.services.document_formats import ML_EXPORT, current_header
 from app.services.scientific_read import export as export_core
 from app.services.scientific_read.common import (
     fetch_review_badges,
@@ -117,7 +118,7 @@ from app.services.scientific_read.profile import (
 logger = logging.getLogger(__name__)
 
 #: Schema tag stamped on every ML record so a consumer can branch on format.
-ML_EXPORT_SCHEMA = "tckdb.ml.v0"
+ML_EXPORT_FORMAT = current_header(ML_EXPORT)
 
 #: Hartree → kJ/mol (matches app/importers/cccbdb/normalizers/units.py).
 HARTREE_TO_KJ_MOL = 2625.4996394798254
@@ -438,7 +439,7 @@ class MLSpeciesRecord:
         se = self.species_entry
         return {
             "record_type": "ml_species",
-            "schema": ML_EXPORT_SCHEMA,
+            "format": ML_EXPORT_FORMAT,
             "species_ref": sp.public_ref,
             "species_entry_ref": se.public_ref,
             "review_status": self.review_status.value,
@@ -847,7 +848,7 @@ def _stream_species(
     yield _dumps(
         {
             "record_type": "manifest",
-            "schema": ML_EXPORT_SCHEMA,
+            "format": ML_EXPORT_FORMAT,
             "dataset": "species",
             # The resolved read profile is echoed in every dataset
             # manifest, not only in enveloped JSON responses.
@@ -885,7 +886,7 @@ def _stream_species(
     yield _dumps(
         {
             "record_type": "export_summary",
-            "schema": ML_EXPORT_SCHEMA,
+            "format": ML_EXPORT_FORMAT,
             "dataset": "species",
             "generated_at": generated_at.isoformat(),
             "counts": {
@@ -953,7 +954,7 @@ class MLReactionRecord:
     def to_ndjson(self) -> dict:
         return {
             "record_type": "ml_reaction",
-            "schema": ML_EXPORT_SCHEMA,
+            "format": ML_EXPORT_FORMAT,
             "reaction_ref": self.reaction.public_ref,
             "reaction_entry_ref": self.reaction_entry.public_ref,
             "review_status": self.review_status.value,
@@ -1498,7 +1499,7 @@ def _stream_reactions(
     yield _dumps(
         {
             "record_type": "manifest",
-            "schema": ML_EXPORT_SCHEMA,
+            "format": ML_EXPORT_FORMAT,
             "dataset": "reactions",
             # The resolved read profile is echoed in every dataset
             # manifest, not only in enveloped JSON responses.
@@ -1540,7 +1541,7 @@ def _stream_reactions(
     yield _dumps(
         {
             "record_type": "export_summary",
-            "schema": ML_EXPORT_SCHEMA,
+            "format": ML_EXPORT_FORMAT,
             "dataset": "reactions",
             "generated_at": generated_at.isoformat(),
             "counts": {
@@ -1583,7 +1584,7 @@ __all__ = [
     "DELTA_H298_MIXED_REFERENCE",
     "DELTA_H298_UNRECORDED_REFERENCE",
     "HARTREE_TO_KJ_MOL",
-    "ML_EXPORT_SCHEMA",
+    "ML_EXPORT_FORMAT",
     "MLEnergyRecord",
     "MLFilters",
     "MLReactionRecord",

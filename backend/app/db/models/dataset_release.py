@@ -54,8 +54,8 @@ Three invariants this module exists to protect:
    the citation for it would be both wrong and undiagnosable.
 
 This layer is deliberately **not** the disaster-recovery archive
-(``tckdb.archive.v1``) and **not** a convenience projection
-(``tckdb.export.v0`` NDJSON / CHEMKIN / ML). See
+(``tckdb.archive``) and **not** a convenience projection
+(``tckdb.export`` NDJSON / CHEMKIN / ML). See
 ``backend/docs/specs/dataset_release_and_profiles.md`` §"Three formats, three
 contracts".
 """
@@ -71,6 +71,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     LargeBinary,
     String,
     Text,
@@ -410,7 +411,10 @@ class ReleaseManifest(Base, CreatedByMixin, PublicRefMixin):
         nullable=False,
     )
 
-    manifest_schema: Mapped[str] = mapped_column(String(64), nullable=False)
+    # The document format the frozen manifest was rendered under: a name beside an integer version,
+    # never one string with the version glued on. The renderer dispatches on this pair.
+    manifest_format_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest_format_version: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Always ``curated`` today. Stored rather than assumed so a manifest is
     # self-describing when read outside this codebase.
@@ -425,7 +429,8 @@ class ReleaseManifest(Base, CreatedByMixin, PublicRefMixin):
     alembic_revision: Mapped[str] = mapped_column(String(64), nullable=False)
     backend_version: Mapped[str] = mapped_column(String(64), nullable=False)
     schemas_package_version: Mapped[str] = mapped_column(String(64), nullable=False)
-    review_policy_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    review_policy_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    review_policy_version: Mapped[int] = mapped_column(Integer, nullable=False)
     curation_policy_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("curation_policy.id", deferrable=True, initially="IMMEDIATE"),
@@ -433,7 +438,8 @@ class ReleaseManifest(Base, CreatedByMixin, PublicRefMixin):
     )
     # Recorded so a reader can see *which* recovery-archive contract was
     # current when the release was cut, and see that it is a different thing.
-    recovery_archive_schema: Mapped[str] = mapped_column(String(64), nullable=False)
+    recovery_archive_format_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    recovery_archive_format_version: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # --- release-claim snapshot -------------------------------------------
     # Every field the frozen document asserts about the release is copied
@@ -489,12 +495,12 @@ class ReleaseManifest(Base, CreatedByMixin, PublicRefMixin):
     # mode as re-rendering the document from the live release row.
     contract_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
-    # The ``rights`` block as rendered at publication (``tckdb.dataset_release.v2``
+    # The ``rights`` block as rendered at publication (``tckdb.dataset_release``
     # and later): the data license, how many attestations stood behind the
     # shipped records, and a count per basis kind. Snapshotted for the same
     # reason as ``contract_json`` — the document must be rebuildable from this
     # row alone. ``NULL`` on every manifest frozen under ``v1``, whose document
-    # had no such block; the renderer branches on ``manifest_schema`` so those
+    # had no such block; the renderer branches on the manifest format so those
     # rows keep reproducing their recorded digest.
     rights_summary_json: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSONB, nullable=True
@@ -533,6 +539,10 @@ class ReleaseManifest(Base, CreatedByMixin, PublicRefMixin):
         ),
         CheckConstraint(
             "content_sha256 ~ '^[0-9a-f]{64}$'", name="content_sha256_hex"
+        ),
+        CheckConstraint(
+            "manifest_format_version >= 1 AND review_policy_version >= 1 AND recovery_archive_format_version >= 1",
+            name="versions_positive",
         ),
         CheckConstraint("selected_record_count >= 0", name="selected_count_nonneg"),
         CheckConstraint("candidate_record_count >= 0", name="candidate_count_nonneg"),

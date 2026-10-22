@@ -105,7 +105,7 @@ default:
 - Per-lab admin policy (registration, key rotation, backups) is owned
   by people who actually know the science.
 - Selected records can still be promoted to hosted via the
-  [manual local-to-hosted contribution flow](../contribution-bundles/manual-local-to-hosted-v0.md)
+  [manual local-to-hosted contribution flow](../contribution-bundles/manual-local-to-hosted.md)
   when ready.
 
 If the lab does not (yet) have a shared deployment and the data is
@@ -348,6 +348,6 @@ This document does **not** cover:
 - [Native advanced install](native-advanced.md) — fallback
   infrastructure strategy
 - [Generic client targeting](../clients/generic-client-targeting.md)
-- [Manual local-to-hosted contribution flow](../contribution-bundles/manual-local-to-hosted-v0.md)
+- [Manual local-to-hosted contribution flow](../contribution-bundles/manual-local-to-hosted.md)
 - DR-0022 — Auth and Roles v1
 - DR-0023 — Local/Offline and Hosted Submission Model

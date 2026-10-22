@@ -1,4 +1,4 @@
-"""Structure rule manifest 0.2.0: the one audited manifest, its pin, and what replay refuses.
+"""Structure rule manifest, version 1: the one audited manifest, its pin, and what replay refuses.
 
 A recorded decision names (rule, version, manifest digest) and replay holds all three. Only the current version exists:
 a manifest naming any other rule version, or the current version over other bytes, is refused. The pin is the checksum
@@ -52,7 +52,7 @@ def _rule_entries(manifest: dict) -> list[dict]:
 
 def test_the_live_pin_is_written_out_and_is_the_shipped_bytes():
     """Written out here, so editing the manifest and its pin together cannot hide a change."""
-    assert STRUCTURE_RULE_MANIFEST_SHA256 == "812301928688c9a921b70c8b1195881489b40078564483145a8dcb7d67b84621"
+    assert STRUCTURE_RULE_MANIFEST_SHA256 == "0dc5ff853cec30767a2e38fbabb07f3966efca34d8af7d43624a3246a6639c27"
     # The file on disk hashes to the live pin: editing the manifest without moving the pin fails here.
     assert hashlib.sha256(MANIFEST_PATH.read_bytes()).hexdigest() == STRUCTURE_RULE_MANIFEST_SHA256
     for rule in default_rules():
@@ -69,10 +69,19 @@ def test_the_loader_refuses_bytes_under_the_wrong_pin():
 # -- the registry carries one version; a decision made now replays; anything else is refused ---------------------------
 
 
-def test_the_registry_carries_exactly_0_2_0():
+def test_the_registry_carries_exactly_version_1():
     live = {(r.rule_id, r.version) for r in default_rules()}
-    assert live == {(rule_id, "0.2.0") for rule_id in RULE_IDS}
-    assert {r.describe()["manifest_version"] for r in default_rules()} == {"0.2.0"}
+    assert live == {(rule_id, 1) for rule_id in RULE_IDS}
+    assert {r.describe()["manifest_version"] for r in default_rules()} == {1}
+    # One registry entry per rule id, keyed by (id, integer version); an unknown pair is refused.
+    from app.services.structure_selection.rules import default_rules_registry
+    from app.versioning import UnknownVersion
+
+    registry = default_rules_registry()
+    for rule_id in RULE_IDS:
+        assert registry.get(rule_id, 1).rule_id == rule_id
+        with pytest.raises(UnknownVersion):
+            registry.get(rule_id, 2)
 
 
 def _made_now(db_session) -> dict:
@@ -82,11 +91,11 @@ def _made_now(db_session) -> dict:
     ).manifest
 
 
-def test_a_decision_made_now_carries_0_2_0_and_its_digest_and_replays(db_session):
+def test_a_decision_made_now_carries_version_1_and_its_digest_and_replays(db_session):
     manifest = _made_now(db_session)
     entries = _rule_entries(manifest)
     assert {e["rule_id"] for e in entries} == RULE_IDS
-    assert {e["version"] for e in entries} == {"0.2.0"}
+    assert {e["version"] for e in entries} == {1}
     assert {e["manifest_sha256"] for e in entries} == {STRUCTURE_RULE_MANIFEST_SHA256}
     assert replay_matches(manifest)
     assert replay_structure_decision(manifest) == manifest["decision"]
@@ -100,14 +109,14 @@ def test_an_entry_resting_on_other_bytes_is_refused(db_session):
     assert exc.value.code == "rule_manifest_changed"
 
 
-@pytest.mark.parametrize("version", ["0.1.0", "0.1.9", "0.3.0", "9.9.9", ""])
+@pytest.mark.parametrize("version", [2, 0, 9, "1", "0.1.0", True, 1.0, None])
 def test_a_rule_version_this_release_does_not_carry_is_refused_naming_it(db_session, version):
     """Kills: the retired 0.1.0 dual pin (or any replay-only version) being re-registered."""
     renamed = copy.deepcopy(_made_now(db_session))
     _rule_entries(renamed)[0]["version"] = version
     with pytest.raises(ReplayError, match="rule_unavailable") as exc:
         replay_structure_decision(reseal(renamed))
-    assert exc.value.code == "rule_unavailable" and version in str(exc.value)
+    assert exc.value.code == "rule_unavailable" and str(version) in str(exc.value)
 
 
 # -- nothing is activated -------------------------------------------------------------------------------------------
@@ -125,7 +134,7 @@ def test_no_rule_is_activated_and_no_predicate_is_implemented():
     assert {r["owner_acceptance"] for r in raw["rules"]} == {None}
 
 
-# -- what 0.2.0 says -------------------------------------------------------------------------------------------------------
+# -- what the manifest says -------------------------------------------------------------------------------------------------------
 
 
 def _blockers(rule_id: str) -> dict[str, dict]:
@@ -168,13 +177,13 @@ def test_the_owner_decision_items_are_marked_answered_with_the_decision_and_its_
     assert all("status" not in e for e in rule.describe()["evidence_needed"] if e["source"] != "owner decision")
 
 
-def test_the_history_records_decision_d_and_every_rule_entry_is_0_2_0():
+def test_the_manifest_is_named_versioned_with_an_integer_and_keeps_no_history():
     raw = yaml.safe_load(MANIFEST_PATH.read_bytes())
-    assert raw["manifest_version"] == "0.2.0"
-    assert [h["version"] for h in raw["history"]] == ["0.1.0", "0.2.0"]
-    change = raw["history"][1]["change"]
-    assert "2026-10-13" in change and "named-reference operation" in change
-    assert {r["version"] for r in raw["rules"]} == {"0.2.0"}
+    assert raw["name"] == "structure_rule_candidates" and raw["version"] == 1
+    assert "manifest_version" not in raw and "history" not in raw and "manifest_history" not in raw
+    assert {r["version"] for r in raw["rules"]} == {1}
+    # Owner decision D (relative energies are a named-reference operation) is still recorded where it bites.
+    assert any("named-reference operation" in b["text"] or "2026-10-13" in b["text"] for r in raw["rules"] for b in r["activation_blockers"])
 
 
 def test_the_source_is_corrected_and_recorded_as_given_not_fetched():

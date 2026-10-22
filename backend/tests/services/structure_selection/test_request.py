@@ -115,7 +115,7 @@ def test_rejected_quality_is_never_permitted_unless_the_caller_names_it():
             admin_policy=AdminPolicy.earliest,
             result_mode=ResultMode.first,
             apply_rules=False,
-            bounds=SelectionBounds(version="9", candidates=3, nested_rows=4, dependency_depth=2, manifest_bytes=5),
+            bounds=SelectionBounds(version=9, candidates=3, nested_rows=4, dependency_depth=2, manifest_bytes=5),
         ),
         StructureRequest(Grain.transition_state, Intent.validated_saddle, require_connectivity=True),
         StructureRequest(

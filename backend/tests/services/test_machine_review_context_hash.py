@@ -36,7 +36,7 @@ def _context(**overrides) -> MachineReviewEvidenceContext:
     base = {
         "record_type": "kinetics",
         "record_ref": "kin_aaa",
-        "rubric_name": "computed_kinetics_v1",
+        "rubric_name": "computed_kinetics",
         "rubric_version": 1,
         "passed_checks": ("a_present", "ea_present"),
         "missing_checks": ("uncertainty_present",),
@@ -301,12 +301,12 @@ def test_different_context_schema_version_changes_hash_and_metadata():
     Folding the version into the payload means even a hash-only comparison is
     recipe-safe: a v1 digest never equals a v2 digest of the same inputs.
     """
-    v1 = build_machine_review_context_hash(_context(), context_schema_version="v1")
-    v2 = build_machine_review_context_hash(_context(), context_schema_version="v2")
+    v1 = build_machine_review_context_hash(_context(), context_schema_version=1)
+    v2 = build_machine_review_context_hash(_context(), context_schema_version=2)
 
     assert v1.context_hash != v2.context_hash
-    assert v1.context_schema_version == "v1"
-    assert v2.context_schema_version == "v2"
+    assert v1.context_schema_version == 1
+    assert v2.context_schema_version == 2
 
 
 # --------------------------------------------------------------------------- #

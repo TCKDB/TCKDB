@@ -18,6 +18,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import ProfiledRequestEcho, SelectionPolicy
@@ -173,7 +174,7 @@ PopulationBody = Annotated[
 class StatmechSelectionRequest(_Strict):
     """Qualify a supplied statistical model for a declared use, or compare applicable whole recipes."""
 
-    contract_version: Literal["statmech-selection-v1"] = "statmech-selection-v1"
+    contract_version: Literal[1] = 1
     intent: Intent
     task: Task | DeferredTask
     observable: Observable | None = Field(
@@ -273,7 +274,7 @@ class StatmechSelectionRequestEcho(ProfiledRequestEcho):
 
     model_config = ConfigDict(extra="allow")
 
-    contract_version: str
+    contract_version: int
     task: str
     intent: str
     observable: str | None = None
@@ -350,7 +351,7 @@ class StatmechSelectionConflicts(BaseModel):
 class StatmechSelectionManifestDescriptor(BaseModel):
     """Where the complete decision manifest is, and what it is: a fresh snapshot, not a stored decision."""
 
-    manifest_format_version: int
+    manifest_format: VersionRef
     manifest_sha256: str
     canonical_bytes: int
     path: str
@@ -414,7 +415,7 @@ class StatmechSelectionManifest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    manifest_format_version: int
+    format: VersionRef
     versions: dict[str, Any]
     assessment_semantics: dict[str, Any]
     request: StatmechSelectionManifestRequest

@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import func, select
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import SubmissionActorKind, SubmissionAuditEventKind, SubmissionKind
 from app.db.models.record_machine_review import RecordMachineReviewRow
@@ -39,8 +40,8 @@ from app.services.trust.models import (
 _T0 = datetime(2026, 5, 31, 12, 0, 0)
 _T1 = _T0 + timedelta(hours=1)
 _T2 = _T0 + timedelta(hours=2)
-_PROMPT = "prompt_v3"
-_RUBRICS = {"kinetics": "computed_kinetics_v1"}
+_PROMPT = VersionRef(name="prompt", version=3)
+_RUBRIC = VersionRef(name="computed_kinetics", version=1)
 _RECORD_ID = 9001
 _RECORD_REF = "kin_9001"
 
@@ -76,8 +77,8 @@ def _run(db_session, *, fragment=None, reviewed_at=_T0, record_id=_RECORD_ID, **
         record_id=record_id,
         record_ref=_RECORD_REF,
         trust_fragment=fragment if fragment is not None else _fragment(),
-        active_prompt_version=_PROMPT,
-        active_rubric_versions=_RUBRICS,
+        active_prompt=_PROMPT,
+        active_rubric=_RUBRIC,
         reviewed_at=reviewed_at,
         **kwargs,
     )
@@ -248,8 +249,8 @@ def test_fake_orchestration_failed_to_produce_review_when_no_review_and_no_clock
         record_id=_RECORD_ID,
         record_ref=_RECORD_REF,
         trust_fragment=_fragment(),
-        active_prompt_version=_PROMPT,
-        active_rubric_versions=_RUBRICS,
+        active_prompt=_PROMPT,
+        active_rubric=_RUBRIC,
         fake_review=None,
         reviewed_at=None,
     )
@@ -318,8 +319,8 @@ def test_fake_orchestration_result_forbids_mutation_payload_fields():
             record_type="kinetics",
             record_id=_RECORD_ID,
             context_hash="a" * 64,
-            context_schema_version="v1",
-            prompt_version=_PROMPT,
-            rubric_versions={},
+            context_schema_version=1,
+            prompt=_PROMPT,
+            rubric=_RUBRIC,
             set_review_status="approved",  # type: ignore[call-arg]
         )

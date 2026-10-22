@@ -143,8 +143,13 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     parameters_json: Mapped[Optional[dict]] = mapped_column(
         JSONB, nullable=True, doc="Parsed parameter snapshot from ESS input/output"
     )
+    parameters_parser_name: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True, doc="Name of the parser that extracted parameters"
+    )
     parameters_parser_version: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True, doc="Version tag of the parser that extracted parameters"
+        Text,
+        nullable=True,
+        doc="Version of that parser, as text: a TCKDB parser writes its integer version, a producer's is its own.",
     )
     parameters_extracted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=False), nullable=True, doc="When parameters were extracted"
@@ -1868,10 +1873,15 @@ class CalculationParameter(Base, TimestampMixin):
         server_default=ParameterSource.upload.value,
         doc="Row provenance: parser-extracted, upload-supplied, or curated.",
     )
+    parser_name: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        doc="Name of the parser that produced this row, when source='parser'.",
+    )
     parser_version: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
-        doc="Parser version that produced this row, when source='parser'.",
+        doc="Version of that parser, as text, when source='parser'.",
     )
 
     calculation: Mapped["Calculation"] = relationship(back_populates="parameters")
@@ -2095,6 +2105,7 @@ class CalculationHessian(Base, TimestampMixin, CreatedByMixin):
         SAEnum(HessianSource, name="hessian_source"),
         nullable=False,
     )
+    parser_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     parser_version: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 

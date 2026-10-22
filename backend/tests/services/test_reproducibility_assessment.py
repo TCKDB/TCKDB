@@ -50,7 +50,7 @@ def _append(
         "record_id": record_id,
         "grade": ReproducibilityGrade.described,
         "rubric_name": "computed_reaction_reproducibility",
-        "rubric_version": "v1",
+        "rubric_version": 1,
         "context_json": {
             "target": {"public_ref": "rxn_example"},
             "sources": ["calc_example"],
@@ -97,7 +97,7 @@ def test_append_allows_versioned_history_and_latest_is_deterministic(db_session)
         db_session,
         record_id=target_id,
         grade="rerunnable",
-        rubric_version="v2",
+        rubric_version=2,
         context_json={"inputs": ["job.in"], "environment": {"image": "sha256:abc"}},
         assessed_at=_T0 + timedelta(hours=1),
     )
@@ -283,12 +283,12 @@ def test_database_trigger_rejects_update(db_session):
 
     with pytest.raises(DBAPIError, match="append-only"), db_session.begin_nested():
         db_session.execute(
-            text("UPDATE record_reproducibility_assessment SET rubric_version = 'tampered' WHERE id = :id"),
+            text("UPDATE record_reproducibility_assessment SET rubric_version = 999 WHERE id = :id"),
             {"id": row.id},
         )
 
     db_session.expire_all()
-    assert db_session.get(RecordReproducibilityAssessment, row.id).rubric_version == "v1"
+    assert db_session.get(RecordReproducibilityAssessment, row.id).rubric_version == 1
 
 
 def test_assessment_public_ref_round_trips_through_curator_read_schema(db_session):
@@ -326,3 +326,29 @@ def test_migration_is_direct_child_of_artifact_integrity_revision():
     assert 'down_revision: Union[str, Sequence[str], None] = "a7c9e2f4b6d8"' in migration
     assert "BEFORE UPDATE OR DELETE ON record_reproducibility_assessment" in migration
     assert 'op.drop_table("record_reproducibility_assessment")' in migration
+
+
+def test_an_assessment_stored_before_the_version_reset_reads_stale(db_session):
+    """Every stored assessment is stale after ``c7d4a9e2b6f1``, because the evidence context it was hashed over changed.
+
+    The migration rewrites a stored ``context_json`` (``rubric.version`` ``"v1"`` becomes ``1``, the two ``_v1`` reason
+    tokens lose the suffix) but keeps the ``context_hash`` it was stored with: that hash is of the document as it was.
+    The live context is now written in the new shape, so its hash differs and
+    :func:`is_reproducibility_assessment_context_current` says stale. Stale is the intended reading: a stored grade is
+    reassessed against today's rubric, not carried across a renumbering.
+    """
+    from app.services.reproducibility_rubric import RUBRIC_NAME, RUBRIC_VERSION
+
+    target_id = _make_target(db_session)
+    # What the old code stored: the rubric version as the string 'v1', a reason token ending _v1.
+    old_shape = {"rubric": {"name": RUBRIC_NAME, "version": "v1"}, "note": "no_typed_result_contract_v1"}
+    # (The migration also stores a pre-reset assessment at rubric version 0, which is never current; the append API
+    # writes live versions only, so that stamp is exercised in the migration test.)
+    row = _append(db_session, record_id=target_id, context_json=old_shape)
+    # What the live evaluation writes now: an integer version, the token without a suffix.
+    live = {"rubric": {"name": RUBRIC_NAME, "version": RUBRIC_VERSION}, "note": "no_typed_result_contract"}
+    assert type(RUBRIC_VERSION) is int
+    assert not is_reproducibility_assessment_context_current(row, current_context_json=live)
+    # And an assessment written in the new shape is current against the same live context.
+    fresh = _append(db_session, record_id=target_id, context_json=live, rubric_version=RUBRIC_VERSION)
+    assert is_reproducibility_assessment_context_current(fresh, current_context_json=live)

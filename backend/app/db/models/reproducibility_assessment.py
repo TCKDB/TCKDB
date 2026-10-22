@@ -18,7 +18,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, func, text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -49,7 +49,7 @@ class RecordReproducibilityAssessment(Base, TimestampMixin, PublicRefMixin):
         nullable=False,
     )
     rubric_name: Mapped[str] = mapped_column(String(128), nullable=False)
-    rubric_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    rubric_version: Mapped[int] = mapped_column(Integer, nullable=False)
     context_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     context_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
@@ -112,6 +112,8 @@ class RecordReproducibilityAssessment(Base, TimestampMixin, PublicRefMixin):
             "context_hash ~ '^[0-9a-f]{64}$'",
             name="context_hash_lower_hex",
         ),
+        # 0 is the pre-reset rubric stamp (never current); the live rubric is 1.
+        CheckConstraint("rubric_version >= 0", name="rubric_version_nonneg"),
         CheckConstraint(
             "jsonb_typeof(context_json) = 'object'",
             name="context_json_is_object",

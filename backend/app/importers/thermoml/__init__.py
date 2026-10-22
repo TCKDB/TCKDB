@@ -32,6 +32,8 @@ with the non-ideality flagged (``state_basis``), not rejected.
 
 from __future__ import annotations
 
+from app.parser_registry import PARSERS
+
 #: Human-readable source name, used in ``external_source.name``.
 SOURCE_NAME = "NIST TRC ThermoML Archive"
 
@@ -81,16 +83,19 @@ XSD_SHA256 = (
     "5c9945ce07c2a0c4d7bd249ba4d1f76b4a37eba0b872f1f1f6656b4df247ab89"
 )
 
-#: Version string for this package's XML->dataclass parser
-#: (``parser.py``). Bump on any change to how ThermoML elements are
-#: walked or joined.
-PARSER_VERSION = "thermoml-cp-parser/0.1.0"
+#: Name and version of this package's XML->dataclass parser
+#: (``parser.py``), from the parser registry. Raise the registered version on
+#: any change to how ThermoML elements are walked or joined. Stored as text
+#: beside the name (the same columns hold a producer's version, which is text).
+PARSER_NAME = "thermoml_cp"
+PARSER_VERSION = str(PARSERS.get(PARSER_NAME).version)
 
-#: Version string for this package's dataclass->TCKDB mapping
-#: (``mapping.py``). Bump on any change to the mapping rules
-#: themselves (unit, state-basis, uncertainty precedence, origin
-#: classification), independent of parser changes.
-MAPPING_VERSION = "thermoml-cp-mapping/0.1.0"
+#: Name and version of this package's dataclass->TCKDB mapping
+#: (``mapping.py``). Raise the registered version on any change to the
+#: mapping rules themselves (unit, state-basis, uncertainty precedence,
+#: origin classification), independent of parser changes.
+MAPPING_NAME = "thermoml_cp_mapping"
+MAPPING_VERSION = str(PARSERS.get(MAPPING_NAME).version)
 
 #: Where the NIST open-data license lives. This is the *general* NIST
 #: license, not a ThermoML-specific one -- the ThermoML-specific terms
@@ -152,7 +157,9 @@ __all__ = [
     "ARCHIVE_SHA256",
     "ARCHIVE_SIZE",
     "ARCHIVE_URL",
+    "MAPPING_NAME",
     "MAPPING_VERSION",
+    "PARSER_NAME",
     "PARSER_VERSION",
     "SOURCE_DATABASE_DOI",
     "SOURCE_NAME",

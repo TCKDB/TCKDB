@@ -23,19 +23,19 @@ read and no ``trust.machine_review`` is emitted.
 Trigger policy (this slice detects only; it does not execute). A re-review is
 required exactly when the currency classifier reports the latest review is not
 ``current`` — i.e. no previous review, or any of the four currency dimensions
-mismatched (``context_schema_version`` / ``context_hash`` / ``prompt_version`` /
-``rubric_versions``). ``provider`` / ``model`` are deliberately **not** trigger
+mismatched (``context_schema_version`` / ``context_hash`` / ``prompt`` /
+``rubric``). ``provider`` / ``model`` are deliberately **not** trigger
 dimensions (policy §3.5), and no ``reviewed_at`` age/TTL trigger is introduced
 (not specified in the policy).
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.services.machine_review.context_hash import MachineReviewContextDigest
 from app.services.machine_review.currency import (
@@ -96,9 +96,9 @@ class MachineReviewReReviewPlan(BaseModel):
     active_review_id: int | None = None
     active_source_audit_event_id: int | None = None
     current_context_hash: str
-    context_schema_version: str
-    prompt_version: str
-    rubric_versions: dict[str, str] = Field(default_factory=dict)
+    context_schema_version: int
+    prompt: VersionRef
+    rubric: VersionRef
 
 
 def plan_record_machine_rereview(
@@ -107,8 +107,8 @@ def plan_record_machine_rereview(
     record_type: str,
     record_id: int,
     current_context: MachineReviewContextDigest,
-    active_prompt_version: str,
-    active_rubric_versions: Mapping[str, str],
+    active_prompt: VersionRef,
+    active_rubric: VersionRef,
 ) -> MachineReviewReReviewPlan:
     """Plan whether a record needs a fresh machine review.
 
@@ -131,8 +131,8 @@ def plan_record_machine_rereview(
         record_type=record_type,
         record_id=record_id,
         current_context=current_context,
-        active_prompt_version=active_prompt_version,
-        active_rubric_versions=active_rubric_versions,
+        active_prompt=active_prompt,
+        active_rubric=active_rubric,
     )
 
     active = classification.active_review
@@ -146,8 +146,8 @@ def plan_record_machine_rereview(
         ),
         current_context_hash=current_context.context_hash,
         context_schema_version=current_context.context_schema_version,
-        prompt_version=active_prompt_version,
-        rubric_versions=dict(active_rubric_versions),
+        prompt=active_prompt,
+        rubric=active_rubric,
     )
 
 

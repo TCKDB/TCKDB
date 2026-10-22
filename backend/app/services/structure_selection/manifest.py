@@ -34,7 +34,8 @@ from typing import Any
 
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import default_visible_statuses, status_at_or_above
-from app.services.manifest_formats import new_format_registry, read_manifest_format
+from app.services.manifest_formats import manifest_header, new_format_registry, read_manifest_format
+from app.services.rule_registry import rule_recorded_in, rules_registry
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 from app.services.structure_selection.assessment import assess_unit
 from app.services.structure_selection.bounds import check_manifest_size
@@ -61,10 +62,11 @@ from app.services.structure_selection.rules import (
     StructureRule,
     default_rules,
 )
+from app.versioning import same_value
 
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
 #: reads exactly this format; a manifest in any other is refused.
-MANIFEST_FORMAT_VERSION = 2
+MANIFEST_FORMAT_VERSION = 1
 MANIFEST_FORMAT_NAME = "structure_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "structure_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -161,7 +163,7 @@ def build_manifest(
         request's bound; nothing is returned without its whole manifest.
     """
     body: dict[str, Any] = {
-        "manifest_format_version": MANIFEST_FORMATS.current(MANIFEST_FORMAT_NAME).version,
+        "format": manifest_header(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME),
         "versions": {
             "assessment": ASSESSMENT_VERSION,
             "normalizer": NORMALIZER_VERSION,
@@ -215,7 +217,7 @@ def _check_versions(manifest: dict[str, Any]) -> None:
         "finding_semantics": sorted(SUPPORTED_FINDING_VERSIONS),
     }
     for name, value in running.items():
-        if versions.get(name) != value:
+        if not same_value(versions.get(name), value):
             raise ReplayError(
                 "unsupported_semantic_version",
                 f"manifest was made under {name} version {versions.get(name)!r}; this release replays {value!r}",
@@ -314,15 +316,12 @@ def replay_structure_assessment(manifest: dict[str, Any]) -> list[StructureAsses
 
 def _rules_for(manifest: dict[str, Any], rules: Sequence[StructureRule] | None) -> tuple[StructureRule, ...]:
     # A rule version this release does not carry is refused below.
-    registry = tuple(default_rules() if rules is None else rules)
-    available = {(r.rule_id, r.version): r for r in registry}
+    registry = rules_registry("structure_selection_rules", default_rules() if rules is None else rules)
     protocol = manifest["decision"].get("protocol") or {}
     used: list[StructureRule] = []
     for entry in protocol.get("rules", []):
         key = (entry["rule_id"], entry["version"])
-        if key not in available:
-            raise ReplayError("rule_unavailable", f"rule {key[0]} version {key[1]} is not in the running registry")
-        rule = available[key]
+        rule = rule_recorded_in(registry, entry, lambda message: ReplayError("rule_unavailable", message))
         described = rule.describe()
         if described["status"] != entry["status"]:
             raise ReplayError(

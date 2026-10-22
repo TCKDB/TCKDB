@@ -38,7 +38,7 @@ from app.services.machine_review import (
     MachineReviewStatus,
 )
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_SCHEMA_VERSION,
+    MACHINE_REVIEW_FORMAT,
     MachineReviewProviderFinding,
     MachineReviewProviderResult,
 )
@@ -115,7 +115,7 @@ def _record_mr_event(
     status: MachineReviewStatus = MachineReviewStatus.machine_screened_warning,
 ) -> None:
     result = MachineReviewProviderResult(
-        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+        format=MACHINE_REVIEW_FORMAT,
         status=status,
         summary="advisory",
         findings=findings,

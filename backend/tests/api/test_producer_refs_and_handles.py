@@ -117,7 +117,7 @@ def test_upload_and_job_responses_carry_the_submission_ref(
 
 
 def test_bundle_submit_response_carries_the_submission_ref(client, db_session) -> None:
-    resp = client.post(BUNDLE_ENDPOINT, json=_load_bundle("thermo-bundle-v0.json"))
+    resp = client.post(BUNDLE_ENDPOINT, json=_load_bundle("thermo-bundle.json"))
     assert resp.status_code == 201, resp.text
     body = resp.json()
     assert body["submission_ref"] == _sub_ref_of(db_session, body["submission_id"])

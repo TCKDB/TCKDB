@@ -13,8 +13,7 @@ provider or public exposure.
 **Related specs:** `machine_review_handoff.md`,
 `admin_machine_review_inspection.md`, `admin_machine_review_curator_task_api.md`,
 `machine_review_curator_task_queue.md`, `provisional_machine_review.md`,
-`machine_review_provider_contract_v2.md` (the v2 provider contract designed to
-close the v1 vocabulary gap these examples surfaced).
+`machine_review_provider_contract.md` (the provider contract these payloads follow).
 
 ---
 
@@ -27,7 +26,7 @@ self-contained golden input:
 case                       short id
 description                what it demonstrates
 linked_records             the submission's record links
-audit_event_details_json   the EXACT persisted precheck payload (a fake
+audit_event_details_json   the EXACT persisted machine-review payload (a fake
                            provider's output, stored on a
                            submission_audit_event, event_kind=llm_precheck_recorded)
 expected                   the stable outputs the test asserts
@@ -48,23 +47,14 @@ The test asserts statuses, counts, mapping/parse diagnostics, task workflow
 state, and fingerprint stability — **not** exact timestamps (`reviewed_at` /
 `created_at` are left unasserted, per the stable-output policy).
 
-### Vocabulary caveat
+### Payload format
 
-The persisted **v1** precheck vocabulary (`LLMFindingCategory`) is a **subset**
-of the service-layer `MachineReviewCategory`, and `LLMFinding` carries no
-`recommended_action`. So a payload originating from the v1 precheck path cannot
-emit `transition_state_validation` / `schema_gap` categories or a recommended
-action. The v1 transition-state golden case therefore uses the closest
-available token, `consistency`.
-
-**This gap is now closed by the v2 provider contract** (implemented; see
-`machine_review_provider_contract_v2.md`). A payload with
-`schema_version: "machine_review_v2"` speaks the full machine-review vocabulary
-natively — native `MachineReviewStatus`, `curator_priority`,
-`recommended_action`, and all 11 `MachineReviewCategory` values including
-`transition_state_validation` and `schema_gap`. The `v2_*` fixtures below
-exercise it; v1 payloads (no marker) keep taking the legacy translate path
-unchanged.
+Every payload speaks the machine-review vocabulary natively: a root `format`
+marker (`{"name": "machine_review", "version": 1}`), a `MachineReviewStatus`,
+`curator_priority`, `recommended_action`, and all 11 `MachineReviewCategory`
+values including `transition_state_validation` and `schema_gap`. There is one
+contract; there is no label-to-status translation and no marker-less path (see
+`machine_review_provider_contract.md`).
 
 ---
 
@@ -72,12 +62,12 @@ unchanged.
 
 | Case | Input | Result |
 |---|---|---|
-| `clean_pass_no_tasks` | `label=pass`, no findings | No record summary, no task. The adapter only builds record reviews from findings, so a clean pass yields nothing to triage. |
+| `clean_pass_no_tasks` | `status=machine_screened_pass`, no findings | No record summary, no task. The adapter only builds record reviews from findings, so a clean pass yields nothing to triage. |
 | `kinetics_warning_creates_task` | one `warning` finding on linked kinetics `9001` | One record summary `machine_screened_warning` (highest `warning`); one `needs_curator_review` task. |
-| `transition_state_critical_creates_task` | one `critical` finding (`consistency`) on linked `transition_state_entry` `9002` | One record summary `machine_screened_needs_attention` (highest `critical`); one `needs_curator_review` task; siblings unaffected. |
+| `transition_state_critical_creates_task` | one `critical` finding (`transition_state_validation`, with `recommended_action`) on linked `transition_state_entry` `9002` | One record summary `machine_screened_needs_attention` (highest `critical`); one `needs_curator_review` task; siblings unaffected. |
 | `submission_scoped_finding_no_task` | one `warning` finding with no `record_type` | Diagnostic only: `unmapped_findings_count=1`, **no** mapping warning (submission-scoped is expected), no record summary, no task. |
 | `unlinked_record_finding_diagnostic_only` | one `warning` finding naming unlinked kinetics `7777` | Anti-fan-out: `unmapped_findings_count=1` + one mapping warning ("not linked"); no record summary, no task. |
-| `malformed_payload_parse_warning_only` | `label` outside the precheck enum | Degrades safely: `parse_warnings_count=1`, no record summaries, no tasks, no exception. |
+| `malformed_payload_parse_warning_only` | `status` outside the machine-review enum | Degrades safely: `parse_warnings_count=1`, no record summaries, no tasks, no exception. |
 
 Record-level status is derived from the record's **findings**
 (`derive_machine_review_status`): any `critical` →
@@ -85,24 +75,20 @@ Record-level status is derived from the record's **findings**
 else `machine_screened_pass`. Only `warning`/`critical` exact-mapped findings
 create tasks; `info` findings create none by default.
 
-## v2 cases (`v2_*` fixtures)
+## Contract-edge cases
 
-The v2 provider contract (`schema_version: "machine_review_v2"`) is dispatched
-by the audit adapter and converges on the same internal pipeline. These run
-through the same test helpers as the v1 cases:
+These exercise the payload contract's edges through the same test helpers:
 
 | Case | Input | Result |
 |---|---|---|
-| `v2_transition_state_validation_critical_with_recommended_action` | v2 `critical` finding, category `transition_state_validation`, with `recommended_action` | `machine_screened_needs_attention` summary; one `needs_curator_review` task; `recommended_action` survives and folds into the fingerprint — the v1 gap, closed. |
-| `v2_schema_gap_warning_with_recommended_action` | v2 `warning` finding, category `schema_gap`, with `recommended_action` | `machine_screened_warning` summary; one task; `provider` field reaches the summary. |
-| `v2_unknown_schema_version_parse_warning` | `schema_version: machine_review_v3` | Parse warning; **not** treated as v1; no summaries, no tasks. |
-| `v2_extra_mutation_payload_rejected` | v2 payload with an extra mutation-like field | Rejected by `extra="forbid"` → parse warning; no summaries, no tasks. |
-| `v2_used_rag_true_rejected` | v2 payload with `used_rag: true` | Fails the `Literal[False]` constraint → parse warning; no summaries, no tasks. |
+| transition-state critical with `recommended_action` | `critical` finding, category `transition_state_validation`, with `recommended_action` | `machine_screened_needs_attention` summary; one `needs_curator_review` task; `recommended_action` survives and folds into the fingerprint. |
+| `schema_gap` warning with `recommended_action` | `warning` finding, category `schema_gap`, with `recommended_action` | `machine_screened_warning` summary; one task; `provider` field reaches the summary. |
+| unknown format | a root `format` naming a format the registry does not hold (e.g. a future version) | Parse warning; refused, never read as the current format; no summaries, no tasks. |
+| extra mutation payload | payload with an extra mutation-like field | Rejected by `extra="forbid"` -> parse warning; no summaries, no tasks. |
+| `used_rag: true` | payload with `used_rag: true` | Fails the `Literal[False]` constraint -> parse warning; no summaries, no tasks. |
 
-A v2 payload carries `status`/`curator_priority` natively (no label→status
-translation) and `provider` as a first-class field (it supersedes the sibling
-`provider` key). v1 payloads (no `schema_version`) keep taking the legacy path,
-proven by the same module.
+A payload carries `status`/`curator_priority` natively and `provider` as a
+first-class field.
 
 ---
 

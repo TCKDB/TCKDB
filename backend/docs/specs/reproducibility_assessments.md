@@ -55,13 +55,13 @@ trust projections.
 
 ## System rubric
 
-`tckdb_reproducibility:v1` is deterministic and fail-closed across the record
+The rubric `tckdb_reproducibility` (name; integer version 1) is deterministic and fail-closed across the record
 types supported by the assessment table. It derives every grade and check from
 persisted structured evidence; an API caller supplies only the record address.
 
 TCKDB is pre-release, so there is deliberately **one** rubric implementation
 rather than a chain of versioned ones: the rubric is changed in place and the
-`v1` label is retained. The `rubric_version` column exists so that stored rows
+version stays 1. The integer `rubric_version` column (beside `rubric_name`) exists so that stored rows
 can be attributed after a release, but it is not the staleness mechanism —
 freshness is decided by comparing an assessment's snapshotted `context_json`
 hash against a fresh evaluation, so an evidence change is detected whether or
@@ -71,9 +71,9 @@ depends on the old grades.
 **One owner kind carries its own label (#760).** A statmech record belongs to a
 species entry or to a transition-state entry, never both. The
 `scientific_context` check asks whether the record is attached to its owner. A
-species-owned statmech keeps `tckdb_reproducibility` `v1` byte for byte. A
+species-owned statmech keeps `tckdb_reproducibility` (version 1) byte for byte. A
 transition-state-owned statmech is graded by `tckdb_reproducibility_ts_statmech`
-`v1`: the same code and the same checks, with that one question asking for a
+(version 1): the same code and the same checks, with that one question asking for a
 transition-state entry instead of a species entry. It reaches at most
 `described`, like every product, and no transition-state-specific check is
 added: the saddle evidence is graded on the transition-state entry by the trust
@@ -94,6 +94,14 @@ After deploy, the latest stored assessment of every transition-state-owned
 statmech reads `stale` (its stored rubric name and hash predate the rule); its
 stored grade is still shown, labelled stale. Species-owned and all other records
 keep reading `current`.
+
+The two reason tokens carry no version suffix: `no_typed_result_contract` and
+`selected_collection_requires_scientific_provenance`. The reproducibility rubric
+version in the public assessment block is an integer. After the version-split
+migration (`c7d4a9e2b6f1`, see `backend/docs/deployment/migrations.md`) every
+stored reproducibility assessment reads `stale` until a curator re-assesses it:
+the snapshotted context changed with the rubric identity, which is the stale
+mechanism working as designed.
 
 1. Restore a backup into a **scratch** database (not the live one).
 2. Run the read-only report with the PR's code:

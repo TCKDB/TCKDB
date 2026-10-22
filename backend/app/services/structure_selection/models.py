@@ -30,9 +30,9 @@ from app.db.models.common import CalculationQuality, RecordReviewStatus
 from app.services.selection_kernel import Applicability
 
 #: Version of the eligibility semantics.
-ASSESSMENT_VERSION = "1"
+ASSESSMENT_VERSION = 1
 #: Version of the recipe normaliser (which facts a cohort needs established).
-NORMALIZER_VERSION = "1"
+NORMALIZER_VERSION = 1
 #: The finding semantics this release reads. A finding of a newer version is carried and ignored by the assessor.
 SUPPORTED_FINDING_VERSIONS = frozenset({1})
 
@@ -51,7 +51,7 @@ class SelectionBounds:
     :param manifest_bytes: Canonical normalised manifest payload.
     """
 
-    version: str = "1"
+    version: int = 1
     candidates: int = 500
     nested_rows: int = 5_000
     dependency_depth: int = 8
@@ -503,6 +503,8 @@ class NormalizedCalculation:
     owner_ref: str
     level: LevelFacts
     software: str | None
+    #: The software release the producer ran: someone else's version, kept as text beside the software name.
+    software_version: str | None
     declaration_state: str
     declaration: dict[str, Any] | None
     constraint_rows: int
@@ -532,6 +534,7 @@ class NormalizedCalculation:
             "owner_ref": self.owner_ref,
             "level": self.level.to_dict(),
             "software": self.software,
+            "software_version": self.software_version,
             "declaration_state": self.declaration_state,
             "declaration": self.declaration,
             "constraint_rows": self.constraint_rows,

@@ -236,7 +236,7 @@ def test_ndjson_stream_structure(db_session):
     assert all(line.endswith("\n") for line in lines)
 
     assert parsed[0]["record_type"] == "manifest"
-    assert parsed[0]["schema"] == "tckdb.export.v0"
+    assert parsed[0]["format"] == {"name": "tckdb.export", "version": 1}
     assert parsed[0]["contract"]["kind"] == "selected_scientific_projection"
     assert parsed[0]["contract"]["lossless"] is False
     assert parsed[0]["contract"]["reingestible"] is False

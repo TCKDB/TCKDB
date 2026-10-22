@@ -128,8 +128,7 @@ The manifest holds the normalised request, the snapshot isolation the data was r
 READ snapshot, so one consistent state), every assessed candidate with its normalised inputs, the determinations, the
 rules consulted, each comparison and the administrative order, as public refs only. It is enough to recompute the
 decision with no database. A replay refuses a manifest made under another policy version, or one whose rule version,
-status or audited manifest is not what the running registry carries; it never substitutes another. A rule version that has been superseded stays loadable for replay only, so a decision recorded under it still
-replays; it is never used for a live selection.
+status or audited manifest is not what the running registry carries; it never substitutes another. Rule versions are integers and the running registry carries one version of each rule (all 1), so there are no replay-only legacy versions: a decision recorded under any other version is refused on replay (`UnknownVersion`, surfaced as the engine's `ReplayError`).
 
 ## Depositing so that a record can take part
 

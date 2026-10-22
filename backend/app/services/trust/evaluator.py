@@ -712,7 +712,7 @@ def evaluate_loaded_calculation(
     This entrypoint is pure over the ORM object graph it receives: it
     does not perform a lookup and the check runners must not issue
     their own queries. Callers are responsible for eager-loading the
-    relationships required by ``computed_calculation_v1`` — notably
+    relationships required by ``computed_calculation`` — notably
     ``Calculation.record_review`` (``selectinload(Calculation.record_review)``),
     which ``_check_quality_recorded`` reads to decide whether an
     independent reviewer, not the depositor, approved this calculation.
@@ -777,7 +777,7 @@ def evaluate_loaded_kinetics(
     This entrypoint is pure over the ORM object graph it receives: it
     does not perform a lookup and the check runners must not issue
     their own queries. Callers are responsible for eager-loading the
-    relationships required by ``computed_kinetics_v1``.
+    relationships required by ``computed_kinetics``.
     """
     rubric = RUBRICS.get("computed_kinetics")
     if kinetics is None:
@@ -839,7 +839,7 @@ def evaluate_loaded_thermo(
     This entrypoint is pure over the ORM object graph it receives: it
     does not perform a lookup and the check runners must not issue
     their own queries. Callers are responsible for eager-loading the
-    relationships required by ``computed_thermo_v1``.
+    relationships required by ``computed_thermo``.
     """
     rubric = RUBRICS.get("computed_thermo")
     if thermo is None:

@@ -53,7 +53,7 @@ def test_verify_archive_passes_a_fresh_archive(db_session, tmp_path):
     manifest = write_archive(db_session, path)
     report = verify_archive(path)
     assert report.ok, report.problems
-    assert report.schema == "tckdb.archive.v1"
+    assert (report.format.name, report.format.version) == ("tckdb.archive", 1)
     assert report.database_revisions == manifest["database_revisions"]
     assert report.rows_declared == manifest["rows"]["count"]
     assert report.members_checked == 1 + len(manifest["blobs"])
@@ -92,10 +92,10 @@ def test_verify_archive_rejects_a_foreign_manifest(db_session, tmp_path):
     path = tmp_path / "a.tar"
     write_archive(db_session, path)
     tampered = tmp_path / "tampered.tar"
-    _rebuild(path, tampered, mutate={"manifest.json": b'{"schema": "something.else"}'})
+    _rebuild(path, tampered, mutate={"manifest.json": b'{"format": {"name": "something.else", "version": 1}}'})
     report = verify_archive(tampered)
     assert not report.ok
-    assert any("manifest schema is 'something.else'" in p for p in report.problems)
+    assert any("manifest format is {'name': 'something.else', 'version': 1}" in p for p in report.problems)
 
 
 def _empty_archive_tables(session) -> None:

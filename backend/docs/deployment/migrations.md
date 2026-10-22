@@ -302,7 +302,7 @@ If both counts are zero, `alembic upgrade head` proceeds normally and nothing be
    ```
    Species, calculations, transition states and statmech rows are **not** deleted — they are shared identity/result rows and the re-upload will resolve to the existing ones.
 4. **Migrate.** `alembic upgrade head` now runs to completion.
-5. **Re-upload** each network through `POST /api/v1/uploads/networks/pdep` with a v2 payload regenerated from its source run (for Arkane runs, `backend/scripts/pdep_ingestion` emits one). Each payload must carry per-path `channel_barriers`, an `energy_transfer` block, and, for every channel that is one elementary step, `microreaction_paths`. Since `b6e1d3a9c740` the energy-transfer block may take either form: one `scope: "per_well"` entry per `(state_key, collider_species_key)` pair, or — if the source run declared a single `energyTransferModel` for the network, as Arkane and MESS inputs usually do — one `scope: "network_wide"` entry naming neither. Do **not** duplicate a single value across the wells to make it look per-well; that is the fabrication ADR 0009 exists to stop. A chemically-activated **well-skipping** channel has no elementary step to name and instead declares `mechanism: "well_skipping"` with no paths (see `backend/docs/specs/pdep_upload_contract_v2.md`, "Well-skipping channels"). Omitting the paths *without* that declaration is still rejected.
+5. **Re-upload** each network through `POST /api/v1/uploads/networks/pdep` with a v2 payload regenerated from its source run (for Arkane runs, `backend/scripts/pdep_ingestion` emits one). Each payload must carry per-path `channel_barriers`, an `energy_transfer` block, and, for every channel that is one elementary step, `microreaction_paths`. Since `b6e1d3a9c740` the energy-transfer block may take either form: one `scope: "per_well"` entry per `(state_key, collider_species_key)` pair, or — if the source run declared a single `energyTransferModel` for the network, as Arkane and MESS inputs usually do — one `scope: "network_wide"` entry naming neither. Do **not** duplicate a single value across the wells to make it look per-well; that is the fabrication ADR 0009 exists to stop. A chemically-activated **well-skipping** channel has no elementary step to name and instead declares `mechanism: "well_skipping"` with no paths (see `backend/docs/specs/pdep_upload_contract.md`, "Well-skipping channels"). Omitting the paths *without* that declaration is still rejected.
 6. **Verify** that the re-uploaded network count matches the export, and that `network_channel.channel_key` is non-null everywhere:
    ```sql
    SELECT count(*) FROM network_channel WHERE channel_key IS NULL;  -- expect 0
@@ -395,7 +395,7 @@ an accepted record, and it cannot rewrite a primary key. Both are changes to
 *what* was accepted rather than to how it is spelled, and both need a
 replacement record and a `scientific_record_supersession` edge.
 
-The repair record is **not** carried by `tckdb.archive.v1` — it is keyed on this
+The repair record is **not** carried by the `tckdb.archive` format -- it is keyed on this
 cluster's transaction id. Keep the `pg_dump` from the upgrade if the account of
 the repair matters to you.
 
@@ -718,6 +718,150 @@ holder whose target a merged row already holds (expect none).
 4. No new environment variable. Downgrade restores every hash exactly.
 
 ---
+
+## Names and versions split (revision `c7d4a9e2b6f1`)
+
+Every versioned thing TCKDB owns is now stored as a stable **name** plus a
+separate **integer version**, never one string with the version glued on, and
+every TCKDB-owned version is reset to 1 (stored pre-reset stamps become 0, below). Versions owned
+by others (an ESS release such as Gaussian 16, NIST's ThermoML, QCSchema, a
+producer's own parser) stay text in their own field. The module docstring of
+`backend/alembic/versions/c7d4a9e2b6f1_split_versioned_names.py` is the
+authority on what is rewritten; in short:
+
+- `record_machine_review`: `prompt_version` text becomes `prompt_name` +
+  integer `prompt_version`; `rubric_versions_json` becomes `rubric_name` +
+  integer `rubric_version` (one rubric per review, structurally);
+  `context_schema_version` becomes an integer; the model strings
+  `external_cp_comparison_v1` (scientific-check provider) and
+  `fake_test/machine-review-v2` (the test-only fake provider) lose their
+  version suffix.
+- `record_reproducibility_assessment`: `rubric_version` becomes an integer and
+  the two reason tokens lose their `_v1` suffix (on a word boundary: a token
+  that merely starts the same, such as `..._v10`, is not touched).
+- `submission_audit_event.details_json`: the `schema_version` marker
+  `machine_review_v2` becomes `format: {name: machine_review, version: 1}`.
+- `release_manifest` / `release_artifact` / `dataset_release`: the three fused
+  format columns become `*_name` + `*_version` pairs (`manifest_format_*`,
+  `recovery_archive_format_*`, `review_policy_*`).
+- `execution_environment_manifest`: `schema_name` + integer `schema_version`,
+  with `canonical_json` rewritten and `content_digest` recomputed.
+- Parser stamps on `calculation`, `calculation_parameter` and `calc_hessian`
+  become a `parser_name` beside the version text. **`orca_v1` and `orca_v2`
+  were two different parsers and stay distinguishable:** `orca_v2` is
+  (`orca_parameters`, `1`) and `orca_v1` is (`orca_parameters`, `0`), the
+  predecessor of version 1; the downgrade gives each back exactly.
+- ThermoML source records (`external_source_record`) and CCCBDB observations:
+  only rows that are ThermoML (or CCCBDB) are given those names. Their
+  `raw_payload_json`, which is verbatim upstream data, is never rewritten.
+  `uq_external_source_record_identity` now includes `parser_name` and
+  `mapping_name`, because every TCKDB version is 1 and the versions alone can
+  no longer tell two parsers apart.
+- `conformer_assignment_scheme.version` becomes an integer (the seeded
+  `torsion_basin` is `1`; its content-derived `public_ref` is recomputed).
+- Every integer version the revision introduces has a CHECK constraint (`>= 1`; `>= 0` for a machine-review prompt or rubric and a reproducibility rubric, which can hold the pre-reset 0).
+
+**It splits cleanly or it aborts; nothing is left half-labelled.** Before it
+writes anything the revision inspects every stored shape it is about to touch and
+refuses to run (nothing committed, the message names the rows) on: a fused name
+it does not know (for example a prompt `machine_review.v2`, a rubric key
+`computed_thermo.v2`); a look-alike of a TCKDB parser stamp (`gaussian_v2`,
+`GAUSSIAN_V1`, `orca_v3`, a CCCBDB stamp that is not the known one); a source
+record that is not ThermoML; a conformer scheme whose version is neither the
+seeded `torsion_basin` `v1` nor a plain integer; a review stamped with more than
+one rubric; a deterministic-runner prompt `<name>_v1` that the downgrade could not
+tell from an unversioned `<name>`. After the rewrite it checks that no new
+`*_name` column still ends in a version segment (`.vN`, `_vN`, `-vN`, any case)
+and aborts if one does. Fix or remove the rows it names, then upgrade again.
+
+**It unpublishes every published dataset release.** The format tag sits inside
+the frozen release checksum, so a published manifest cannot be relabelled. The
+revision deletes every `release_manifest` and `release_artifact` row. A
+**published** release goes back to `draft` (its `published_at` is cleared). A
+**withdrawn** release **stays withdrawn**, with its `published_at`,
+`withdrawn_at` and `withdrawn_reason` intact: the curator's record of the
+withdrawal is not this revision's to erase, and a withdrawn release must not
+become re-publishable. Every release keeps its `doi` and its curated
+`release_selection` rows. **A minted DOI therefore points at an unpublished
+release until that release is re-published**; re-publish it as soon as the
+upgrade is done (`cutting_a_dataset_release.md`). **Back up first** (section 2
+above). The deletion cannot be undone by `downgrade()`.
+
+**It bypasses the accepted-science triggers, for this one revision.** The
+relabel rewrites provenance stamps on approved calculations and frozen
+documents; no scientific value (energy, frequency, geometry, correction,
+result) is read or written. Inside its own transaction the revision looks at
+every user trigger on the tables it touches. A trigger that is **enabled** has
+its exact mode recorded (`ENABLE`, `ENABLE ALWAYS` or `ENABLE REPLICA`) and is
+disabled; once the rewrites have run, each one is put back in **that same mode**,
+and the revision **raises** (rolling everything back) if any of them is not. A
+trigger that was **already disabled** before the upgrade is left exactly as it was
+and only logged: the revision did not disable it, so it does not claim to have to
+re-enable it and does not fail on it. It does not use the declared-repair
+mechanism described above.
+
+**Downgrade refuses while a release manifest exists,** and refuses a stored stamp
+the old schema cannot spell (a parser at a version that was never a string, a Cp
+record under another parser): it restores the strings it was given exactly, or it
+stops. A manifest frozen after this revision carries the new format header and
+cannot be reproduced under the old one; remove or accept the loss of those
+manifests before downgrading. **In practice, treat this revision as one-way once
+anyone deposits.** A calculation uploaded by a client such as `tckdb-qcschema`
+carries a parser stamp (`tckdb-qcschema`, ...) that has no pre-revision spelling,
+so the downgrade refuses it, and it will keep refusing for as long as such a row
+exists. The downgrade is for a database nobody has written to since the upgrade.
+
+**Every stored machine review and reproducibility assessment reads stale
+afterwards, by design, and each says why: old versions are stored as 0.** The
+rubric and prompt numbers all restarted at 1, so a stored number can no longer
+say which rubric or prompt a review was made under. The migration therefore
+stores each pre-reset stamp so that it cannot equal an active one unless it truly
+is the same thing:
+
+- a rubric's **latest** old version becomes `1` (the same rubric, unchanged) and
+  **every older version becomes `0`**. The latest versions are a frozen table in
+  the migration, read from main: `computed_calculation`, `computed_kinetics`,
+  `computed_statmech`, `computed_thermo`, `computed_transport` and
+  `external_cp_comparison` at 2; `computed_transition_state` at 5;
+  `computed_ts_statmech` and the six consistency rubrics at 1;
+- **every prompt becomes version `0`**: the LLM prompt `machine_review_v1` changed
+  its wording in this release (the answer format moved to a `format` block) while
+  its version was reset to 1, and a deterministic runner's old stamp carried no
+  version at all;
+- a reproducibility assessment's rubric becomes `0` (its reason tokens were
+  renamed in this release while its version was reset to 1).
+
+Version `0` is never current: `VersionRef` and every registry refuse it, and the
+read side holds it in a `StoredVersionRef`. So every pre-reset review reports
+`prompt_version_mismatch` and, where its rubric was an older version,
+`rubric_versions_mismatch`; every pre-reset assessment reads stale on its
+rubric. The context recipe version stays 1 like every other version; no version is
+exempt from the reset. Nothing is deleted: the stored verdicts remain visible,
+labelled stale, until a re-review or re-assessment is run.
+
+**What the downgrade can and cannot give back for a stored 0.** A 0 stands for
+"an older version, any of them". The downgrade restores it exactly where there was
+one specific older version: `machine_review_v1`, a deterministic runner's
+unversioned name (or `external_cp_comparison_v1`), a rubric's latest old version
+(from 1), and the single older version of a rubric whose latest was 2 (from 0,
+giving version 1). It **refuses**, naming the rubric or prompt, where several older
+versions collapsed into 0 (for example `computed_transition_state`, latest 5, older
+1 to 4), for a rubric main no longer had, and for any LLM prompt other than
+`machine_review` at 0. It also refuses any version of 2 or above that is split
+out of a name (a machine-review rubric, prompt or context schema version, a
+reproducibility rubric version, an execution-environment schema version): such a
+version only exists after the reset, and written back as `<name>_v2` it would name
+a different rubric in the old numbering. The refusal names the kind of row.
+(`orca_v1` is the same kind of case, kept distinct as parser version `0`.)
+
+A prompt version of 0 in a stale reason means "stamped before the 2026-10 version
+reset"; it is true of a deterministic runner's review too, whose own check did not
+change.
+
+The same reset makes selection manifests recorded under any other format refused
+on replay (not reinterpreted), and the SHA-256 pins of the rule manifests move; a
+pin is the owner's approval of reviewed bytes, so pin changes need the owner's
+approval.
 
 ## Self-hosted / Raspberry Pi note
 

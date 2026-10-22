@@ -1,4 +1,4 @@
-"""Create or restore a portable ``tckdb.archive.v1`` scientific archive."""
+"""Create or restore a portable ``tckdb.archive`` scientific archive."""
 
 from __future__ import annotations
 
@@ -101,7 +101,7 @@ def _verify_archive(source: Path) -> int:
     revisions = ",".join(report.database_revisions)
     print(f"Checked {source}")
     print(
-        f"Schema: {report.schema}  Revision: {revisions}  Rows: {report.rows_declared}  "
+        f"Format: {report.format}  Revision: {revisions}  Rows: {report.rows_declared}  "
         f"Blobs: {report.blobs_declared}  Members hashed: {report.members_checked}"
     )
     if report.ok:

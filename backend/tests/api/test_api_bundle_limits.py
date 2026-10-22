@@ -32,7 +32,7 @@ _SMILES = ["C", "CC", "CCC", "CCCC"]
 
 
 def _thermo_bundle(count: int = 1) -> dict:
-    bundle = _example("thermo-bundle-v0.json")
+    bundle = _example("thermo-bundle.json")
     template = bundle["records"]["thermo_uploads"][0]
     records = []
     for smiles in _SMILES[:count]:
@@ -103,7 +103,7 @@ def test_a_negative_cap_is_refused_at_startup() -> None:
 
 def test_the_record_cap_counts_kinetics_records_too(client, monkeypatch) -> None:
     monkeypatch.setattr(settings, "bundle_max_records", 0)  # disabled: control
-    bundle = _example("kinetics-bundle-v0.json")
+    bundle = _example("kinetics-bundle.json")
     assert client.post(DRY_RUN, json=bundle).status_code == 200
     monkeypatch.setattr(settings, "bundle_max_records", 1)
     assert client.post(DRY_RUN, json=bundle).status_code == 200  # one record: at the cap

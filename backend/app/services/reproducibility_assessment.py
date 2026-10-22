@@ -106,7 +106,7 @@ def append_reproducibility_assessment(
     record_id: int,
     grade: str | ReproducibilityGrade,
     rubric_name: str,
-    rubric_version: str,
+    rubric_version: int,
     context_json: dict[str, Any],
     expected_context_hash: str | None = None,
     passed: Sequence[Any] | None = None,

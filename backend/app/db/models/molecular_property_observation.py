@@ -212,6 +212,9 @@ class MolecularPropertyObservation(Base, TimestampMixin, CreatedByMixin, PublicR
     external_source_content_sha256: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True
     )
+    external_source_parser_name: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )
     external_source_parser_version: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True
     )

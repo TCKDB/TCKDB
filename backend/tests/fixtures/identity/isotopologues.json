@@ -224,6 +224,6 @@
       "[2H]OC",
       "[2H]OC"
     ],
-    "reason": "Known limitation, recorded as today's behaviour: the geometry/identity isotope check compares only the multiset of substitutions (one deuterium on either side), never which atom carries it, so this CH2D-OH geometry is ACCEPTED under the CH3-OD identity and lands on the CH3-OD entry. A false acceptance, not a false rejection; closing it needs an atom-level SMILES-to-XYZ correspondence the repository does not have (backend/docs/specs/pdep_upload_contract_v2.md)."
+    "reason": "Known limitation, recorded as today's behaviour: the geometry/identity isotope check compares only the multiset of substitutions (one deuterium on either side), never which atom carries it, so this CH2D-OH geometry is ACCEPTED under the CH3-OD identity and lands on the CH3-OD entry. A false acceptance, not a false rejection; closing it needs an atom-level SMILES-to-XYZ correspondence the repository does not have (backend/docs/specs/pdep_upload_contract.md)."
   }
 ]

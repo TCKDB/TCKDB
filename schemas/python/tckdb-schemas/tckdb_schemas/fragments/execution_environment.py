@@ -28,11 +28,12 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
 
 from tckdb_schemas.common import SchemaBase
+from tckdb_schemas.fragments.version import ExactInt
 from tckdb_schemas.software import normalize_software_name
 from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
 
@@ -258,7 +259,8 @@ class ExecutionEnvironmentManifestPayload(SchemaBase):
     docstring for why both are accepted.
     """
 
-    schema_version: Literal["tckdb.execution-environment.v1"]
+    schema_name: Literal["tckdb.execution-environment"]
+    schema_version: Annotated[Literal[1], ExactInt]
     runtime: DescribedRuntime | ContainerRuntime | CondaRuntime | HPCModuleRuntime = Field(
         discriminator="runtime_kind"
     )
@@ -330,6 +332,7 @@ class ExecutionEnvironmentManifestPayload(SchemaBase):
 
     def canonical_payload(self) -> dict:
         return {
+            "schema_name": self.schema_name,
             "schema_version": self.schema_version,
             "runtime": self.runtime.model_dump(mode="json"),
             "software_release": self.software_release.model_dump(mode="json"),

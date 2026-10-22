@@ -15,8 +15,13 @@ not, two things captured at ``main`` ``0bc86f03`` *before* the extraction:
 
 The expected values are literals, not recomputed by production code, so
 any change to D3's reasons, their order or its hashed inputs goes red here.
-Cantera floats are deliberately not pinned (they are already checked
-analytically, with tolerances, by ``test_phase_d_numerical.py``).
+
+The 42 hashes were re-captured once, in versioning PR-4. The context hash folds in the
+recipe version (``context_schema_version``), which was the string ``"v1"`` on main and is
+the integer ``1`` now: the same recipe, spelled as a number, hashes differently. (Checked by
+dumping the hashed payload on main and here: identical apart from that one value.) The
+reason sequences are byte-identical to the originals (asserted when the literals were
+re-captured); only the hash moved, for that one stated cause.
 """
 import json
 
@@ -226,171 +231,171 @@ def _run(name):
 # isotope_key_* entries were added with the D3 isotope fix and pin its result.
 EXPECTED = {
     "baseline_p1.01325_cm3_mol_s": (
-        "4d63c87175bded4e45570d8c95b42debb087d78bab410c4f4a1569d54cfde5cf",
+        "1a9fb79fb0d18e75aa449ef21ef2c67a32bf78732e53d3f43e66e72c70c55350",
         ["-", "-", "-", "-", None, None, None],
     ),
     "baseline_p1.01325_cm3_molecule_s": (
-        "ccdf3d188ca9e94951f264b3906146b6fb09869d235161f000c6ac42f3f6b1b1",
+        "22aa0291b7487732e4b5feeb959aeece8592b5441babe3459d263bd6ffc5bff4",
         ["-", "-", "-", "-", None, None, None],
     ),
     "baseline_p1.01325_m3_mol_s": (
-        "5cea234fb73e204b7b612fc3b629bd830f95ce571ba9e3865e7df7c6180fd539",
+        "68a6e3edfd26878f07dd05a39381af8e4088314938605da219e943c7ad0a258d",
         ["-", "-", "-", "-", None, None, None],
     ),
     "baseline_p1.0_cm3_mol_s": (
-        "31778643d46bfa655b97de865df90e88211d2ad0a7935158a1d21a869a3dc976",
+        "0ca26bcfd0bc9948618493bf3ff40414cbc8a0aa3058ff57b9c48ec43dc7a4bf",
         ["-", "-", "-", "-", None, None, None],
     ),
     "baseline_p1.0_cm3_molecule_s": (
-        "e3c29f7522e42518a3982407e18d63de9facc8e7b413074d80706b4072543341",
+        "f42f0f10d9bfa0a8030f768697d83e49a41a75fe06a1db19ef96b8a0cf8be072",
         ["-", "-", "-", "-", None, None, None],
     ),
     "baseline_p1.0_m3_mol_s": (
-        "8c5ae050ffc919ac722cf332a6e138e218f365bfe54ad89b0ecb9e2c4bb155e6",
+        "570add9d59fddf53e2de533e87ec35a33413d4ab7d1f68a5db55ec2f4a6acb12",
         ["-", "-", "-", "-", None, None, None],
     ),
     "baseline_p2.5_cm3_mol_s": (
-        "2f87984532aae7757317fb5481e9ba99e087a06061e4747e7fef4be055e84081",
+        "5376551d50e5464f4b12f1bb0e094421ebef5b4c8094b2d191154e0cf634dace",
         ["-", "-", "-", "-", None, None, None],
     ),
     "baseline_p2.5_cm3_molecule_s": (
-        "f42704f0939027338e4f0805d566875c4ca0cb90d53996d433c48dcf1bd46563",
+        "4f81d2f1954099aa05d8da05d0ba8cb177995d0207b5ac25e8367e078686cfbd",
         ["-", "-", "-", "-", None, None, None],
     ),
     "baseline_p2.5_m3_mol_s": (
-        "d6405b6d84aabb5a553306342bfb714d196a399b8bdcfa25d5e552e684cb5a73",
+        "eeca3c48fec49579992aeb9c56f7f43ee5ce224a5a6e6c27573c847ec4af4e6e",
         ["-", "-", "-", "-", None, None, None],
     ),
     "changed_uncertainty": (
-        "6b94b53a3ebd544671c8a59a6ae1b7c790aa96dd8a0ce382caf532816f8245eb",
+        "d8779532a5b492fda3af6bdeec22c4e7e56d7e6c3908b5ab0dfa698dea5954db",
         ["-", "-", "-", "-", None, None],
     ),
     "degeneracy_1": (
-        "95239c8016f24506b48ebab3fa338a484458af9e7cbede60682e747d48322c7b",
+        "77dacd1768ad55dbe5e78dcc591cbf254dd049d2c95ebd010a7d73ac59905165",
         ["-", "-", "-", "-", None],
     ),
     "degeneracy_2": (
-        "bd8500898847bead64f9b052dbfe0163ecef9f0427342cde150436b03cdaff37",
+        "cdd286df602c387081a95b6078cf89567a631c94fa871ccae2be4de215e6ebc4",
         ["-", "-", "-", "-", None],
     ),
     "degeneracy_6": (
-        "168499c5c00d966eaf41cc1005a01144ce6b823ef20c5e109a245d446df935d2",
+        "d868b468cf098fcd27174391a629dfa94be89c23ef71239d310c094e29c3a379",
         ["-", "-", "-", "-", None],
     ),
     "degeneracy_missing": (
-        "6212b8dc1a2f762eb54bc242cb507d09feb870aee8f8c5959150d356c1143926",
+        "9325ef8faf1386ccef445a569c761df7398b238fc42a2d61aa0e5b7c1554914d",
         ["-", "-", "-", "-", "missing_or_invalid_degeneracy"],
     ),
     "field_a_units": (
-        "707ddf5698f879d92a91961bb700308f84d1c80295c484399b0cba6e9b700636",
+        "7b7f91a5a2c89c9155eacd85215030511a0cc65d64d2d4ebec2b11650c6d5928",
         ["-", "-", "-", "-", "incompatible_or_missing_rate_units"],
     ),
     "field_degeneracy_convention": (
-        "6504a18bbdea764f2a882787f9a9cfef5fd74428e529878c686c608793579e49",
+        "b2e56723ea3b6c4f9f3e37c5dcbb7434a1eb8ad4af94b0ab9fd68a5dfe330534",
         ["-", "-", "-", "-", "ambiguous_degeneracy_convention"],
     ),
     "field_direction": (
-        "902b49a3f0e7736c9147d4d5c04db7ef9a256a9ee044e168053df19162e822ce",
+        "c2e9674cffd35245d62c0be220e6a02460d86c1acd8e0f7ef60d21388c7a1eb0",
         ["-", "-", "-", "-", "explicit_opposite_directions_required"],
     ),
     "field_pressure_context": (
-        "0b21a859ac538b6b4ef2cf7dfe039db78df72978284075b584c9ff6c8b7e48a4",
+        "7e8ee074db8df5fb207ce9713daaf1379e8030aef03b821d2cf9cf802aa23226",
         ["-", "-", "-", "-", "non_elementary_or_ambiguous_effective_rate"],
     ),
     "field_third_body": (
-        "7a42ffa20bb6883c881586e20d54dc2b7c67c589b03c4f77fadae31e1b7377fb",
+        "ccd66e3031058e07a96fa6c38248249306dfae60061362cf00bd0bb829c867ca",
         ["-", "-", "-", "-", "non_elementary_or_ambiguous_effective_rate"],
     ),
     "field_tmin": (
-        "f110229cae2d0084e752803847288cdc0360575aa9e403475a63778145a1dac8",
+        "19e78ee344205022d2452f4723fb43acd67afc2208163e992a3caf92feb6b9d6",
         ["-", "-", "-", "-", "missing_or_invalid_rate_domain"],
     ),
     "incompatible_pressure": (
-        "6e95ef848e29e9945ecb794712172a2181f965c0572d1b6c069e4b7330ab4ba0",
+        "70ee964d24b2bd38e2ae7e1a56441480d7dc549e692e9f3f62cf9139a4b532a4",
         ["-", "-", "-", "-", "incompatible_reference_pressures"],
     ),
     "inferred_collider": (
-        "203f094c0b691534cbef9d92f0c5f4d25a2c9ad90bc7e81c0d6902a934f86be6",
+        "8888955f94ad016bc6daff313c6fb0ebad5f4744c6fb85ff725c5594f273053a",
         ["-", "-", "-", "-", "inferred_third_body_unsupported"],
     ),
     "isotope_product": (
-        "4bab215983c7b024d79d3e05901931794797b0d099b2b64eb77546f55186dede",
+        "f44fe59b1f9d6753d32fcb57a59bc825d191721e7909f601d7186c94dee76aa3",
         ["-", "-", "-", "-", "isotope_specific_equilibrium_unsupported"],
     ),
     "isotope_reactant": (
-        "7e0c14014f281917a0818a36259943c9efb85697d33c4fc7331bd061f3b2546c",
+        "4ed7311e8c61f6b98633820fbbb3ecdbcbabe6496db457f1a8c4413510335d7d",
         ["-", "-", "-", "-", "isotope_specific_equilibrium_unsupported"],
     ),
     "isotope_then_unparseable": (
-        "63bb637fb2c2ea125e7bd44599f9614f7bb60c901e40d7e31cb0a22db1ef0c08",
+        "f0cf5c60afdf21b5220f37718b3d5986d39e881cf617890f58f16f2cb9538558",
         ["-", "-", "-", "-", "isotope_specific_equilibrium_unsupported"],
     ),
     "missing_mapping": (
-        "a6eb3f8fcda6c85698ce0567acbf0ff5a5aa33db78a259088dee0bc1a130cf31",
+        "8f86cbbbccfd138e6e84bb243d5567712c44ee5e26b86958967b3a0ba106be02",
         ["-", "-", "-", "incomplete_or_incompatible_thermo_mapping"],
     ),
     "no_products": (
-        "a8adddf18eb91c8f6a0a2144ab2dc3d6b50885099aaee3da8a84ff1425ba31b5",
+        "835b681551a0f27dad64ad2294b3e5c795644a3fb02ef2bc999d8f69e068c1a9",
         ["-", "-", "-", "-", "missing_or_unsupported_participants"],
     ),
     "outside_rate_domain": (
-        "7f45fe84b5ed6c77dfdba25aa87c87ac19fb6c83b4b363c1ee1e61211dd41650",
+        "993a171160bf64748fe3e8d84e7194103391d342fcf04f3956848852990d4c33",
         ["-", "-", "-", "-", "temperature_outside_rate_domain"],
     ),
     "reordered_sets": (
-        "d0a7a14c5b4172bffad0e73b407f8bd177a817230b99c4b15b6362037fdb142b",
+        "a0a4081b85b90191b34b17ea458066c9565455290bd2ad5b2c4f0200799b3cc5",
         ["-", "-", "-", "-", None, None],
     ),
     "reverse_scaled": (
-        "ba7f1f65197df2fd2d69ecbd79977f51f11c5f145967b38548186dd460957a9a",
+        "0d7051d7b29aa0712045bea24b1e90153d6434f46cbb91d9a55928e0c61eb5b0",
         ["-", "-", "-", "-", None],
     ),
     "third_order_cm6": (
-        "31c919bbc55e12d561dbb44924b7db57f912c49d24b87cd846b55b8f984ee554",
+        "7d6630bc3a40a874f41e89c4a0dbd3cde4a82538ca80eab132804b24deb14df5",
         ["-", "-", "-", "-", "-", None, None],
     ),
     "third_order_m6": (
-        "f4c9ba31510ea6fbb0d4a676b78ce1092157ff880d8d2be8afb93b0a306a4c24",
+        "6d558a8f63c514a9376213a69b4c6957c73d611495444dd6a2a9a0fc9cc58670",
         ["-", "-", "-", "-", "-", None, None],
     ),
     "third_order_molecule": (
-        "e260a7e9d1707b89bff5db640bfc49027fc2257efc8268221a0130a9113b66c5",
+        "1e92c02651266b5ed406815f5b6f35c9a712927ed7f6c960b36ee3b34d9dc167",
         ["-", "-", "-", "-", "-", None, None],
     ),
     "unbalanced_charge": (
-        "6bb440b7052df4a197d8c4889bfff998f2262305d82826100d1c1dc944a980cf",
+        "b38bb7fe388504abaf93d0e348c8cc968a419140916951080fbf4216290d85b2",
         ["-", "-", "-", "-", "unbalanced_stoichiometry"],
     ),
     "unbalanced_elements": (
-        "413b851c428084ee40b8a14db23ce9c7a8dd51fce52960933bb1c079b8c53ed6",
+        "64a6c2873b3ec173e53863dea2b484b241ff2dda8bba23dce1b44fad0f9e6272",
         ["-", "-", "-", "-", "unbalanced_stoichiometry"],
     ),
     "unknown_role": (
-        "d94d854fff3f1de0b72e3d0e4c3d279a4f2f1c405dfee3cf43193f84ba3d75bf",
+        "8b403047f039e49fa4c6299b1e8eedc22de0617bb73a0797bff6fb6f05496f31",
         ["-", "-", "-", "-", "missing_or_unsupported_participants"],
     ),
     "unparseable_product": (
-        "728b357641139e3997d1ef9d76c6c60c993922644e1cf77ccb1c8a7da569ec3f",
+        "39365a150771da2c049e9228e080affc7669cadaf13aaed1da77bbc2b96257e2",
         ["-", "-", "-", "-", "unusable_species_composition"],
     ),
     "unparseable_reactant": (
-        "427ed7dd5c313da37d7161a265ff3c77d341c7830a44b2405b7dac89cd370e10",
+        "473fd6f0d341ae58b0f2bccf3fb6c2a076bd69dc5f1edc73915ac72b2a3f8418",
         ["-", "-", "-", "-", "unusable_species_composition"],
     ),
     "unparseable_then_isotope": (
-        "f210453ac5064f571a2be90de5b734c5903cdb0d4e200be7bc50039a2e6d518c",
+        "6053964cf0b292bc3e4865992d65aa941399ab13e8259a3fe131551fce0940c3",
         ["-", "-", "-", "-", "unusable_species_composition"],
     ),
     "unrecorded_pressure": (
-        "347c8efb57522c3c0dfff262a5ae9300115eb0855a5d3a3fc40c64dbfe784ebc",
+        "00cede8a285f4b16ea2421571c9ad1c360b08faa9dad2be3a0a2dc4e8ade15e7",
         ["-", "-", "-", "-", "missing_or_invalid_reference_pressure"],
     ),
     "isotope_key_product": (
-        "5f183b0b41967144f927abd1bd3e0edb43bd02a4f7569b74557a8002fce0a244",
+        "4797ab14ad3ec1f0615f68613623c47f490f7d564d4af2b0a908bd3c8597f609",
         ["-", "-", "-", "-", "isotope_specific_equilibrium_unsupported"],
     ),
     "isotope_key_reactant": (
-        "ded30e63c81d85009ede5a52371820d84b4c32ed9e1d6db67b47958ebf07dd6f",
+        "32eedd326a1b5b6b1dc30d3a2809e3928a1efe6a318cd35b3cc6e779b37bfb33",
         ["-", "-", "-", "-", "isotope_specific_equilibrium_unsupported"],
     ),
 }
@@ -402,11 +407,11 @@ EXPECTED = {
 #: the reasons changed. The other 40 pins are unchanged by the fix.
 ISOTOPE_KEY_BEFORE_FIX = {
     "isotope_key_product": (
-        "5f183b0b41967144f927abd1bd3e0edb43bd02a4f7569b74557a8002fce0a244",
+        "4797ab14ad3ec1f0615f68613623c47f490f7d564d4af2b0a908bd3c8597f609",
         ["-", "-", "-", "-", None],
     ),
     "isotope_key_reactant": (
-        "ded30e63c81d85009ede5a52371820d84b4c32ed9e1d6db67b47958ebf07dd6f",
+        "32eedd326a1b5b6b1dc30d3a2809e3928a1efe6a318cd35b3cc6e779b37bfb33",
         ["-", "-", "-", "-", None],
     ),
 }

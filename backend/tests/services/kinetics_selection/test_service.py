@@ -482,7 +482,7 @@ def test_a_computed_records_evidence_is_evaluated_and_a_hard_fail_blocks_it_but_
     from app.services.trust.models import EvidenceBadge, EvidenceEvaluation, HardFailReason
 
     failed = EvidenceEvaluation(
-        record_type="kinetics", record_id=1, rubric="computed_kinetics_v1", rubric_version="1",
+        record_type="kinetics", record_id=1, rubric="computed_kinetics", rubric_version=1,
         label=EvidenceBadge.hard_failed, checks={}, passed_count=0, possible_count=1, evidence_completeness=0.0,
         is_certified=False, hard_fail_reason=HardFailReason.source_calculation_hard_failed_for_required_role, check_results=(),
     )

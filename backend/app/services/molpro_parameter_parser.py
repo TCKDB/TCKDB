@@ -28,7 +28,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-PARSER_VERSION = "molpro_v1"
+from app.parser_registry import PARSERS
+
+PARSER = PARSERS.get("molpro_parameters")
 
 
 # ---------------------------------------------------------------------------
@@ -538,7 +540,7 @@ def parse_molpro_log(
     :param path: Path to a log file.
     :returns: Dict with the same shape as the ORCA/Gaussian parsers:
         ``parameters``, ``parameters_json``, ``software``,
-        ``charge_multiplicity``, ``method_basis``, ``parser_version``,
+        ``charge_multiplicity``, ``method_basis``, ``parser``,
         plus Molpro's ``sp_electronic_energy_hartree`` and
         ``method_family``.
     """
@@ -568,7 +570,7 @@ def parse_molpro_log(
         "method_basis": parse_method_basis(text),
         "method_family": family,
         "sp_electronic_energy_hartree": parse_sp_energy(text),
-        "parser_version": PARSER_VERSION,
+        "parser": PARSER.stamp().model_dump(),
     }
 
 

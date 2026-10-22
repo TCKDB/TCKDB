@@ -288,7 +288,7 @@ def test_a_population_over_the_candidate_bound_is_refused_before_anything_is_loa
         with pytest.raises(CodedValueError) as exc:
             run(db_session, world, request(bounds=SelectionBounds(candidates=3)))
     assert exc.value.code == "structure_selection_population_too_large"
-    assert exc.value.context == {"bound": "candidates", "visible": 4, "limit": 3, "bounds_version": "1"}
+    assert exc.value.context == {"bound": "candidates", "visible": 4, "limit": 3, "bounds_version": 1}
     # Exactly at the limit is decided: under the curated profile the unreviewed row is not part of the world.
     token = curated()
     try:

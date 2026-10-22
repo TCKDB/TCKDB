@@ -29,6 +29,7 @@ import logging
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.version import ParserStamp
 
 from app.db.models.calculation import (
     Calculation,
@@ -212,7 +213,7 @@ def _parse_gaussian_text(text: str) -> dict:
         "software": g.parse_software_version(text),
         "charge_multiplicity": g.parse_charge_multiplicity(text),
         "method_basis": g.parse_method_basis(route),
-        "parser_version": g.PARSER_VERSION,
+        "parser": g.PARSER.stamp().model_dump(),
     }
 
 
@@ -221,7 +222,7 @@ def extract_and_store_calculation_parameters(
     calculation: Calculation,
     artifact_text: str,
     *,
-    parser_version: str | None = None,
+    parser: ParserStamp | None = None,
     warnings: list[UploadWarning] | None = None,
 ) -> list[CalculationParameter]:
     """Parse calculation input text and persist normalized parameters.
@@ -244,8 +245,8 @@ def extract_and_store_calculation_parameters(
     :param session: Active SQLAlchemy session. Caller owns commit.
     :param calculation: Target calculation row.
     :param artifact_text: Decoded input/log text from the ESS.
-    :param parser_version: Override for the parser version recorded on
-        each row and on ``calculation.parameters_parser_version``.
+    :param parser: Override for the parser stamp (name and version) recorded on
+        each row and on ``calculation.parameters_parser_name`` / ``parameters_parser_version``.
         Defaults to whatever the parser self-reports.
     :param warnings: Optional list to append a depositor-facing warning to
         when DR-0008 reconciliation corrects the calculation's software
@@ -289,17 +290,18 @@ def extract_and_store_calculation_parameters(
         )
 
     observations = [_to_observation(p) for p in parsed.get("parameters", [])]
-    effective_parser_version = parser_version or parsed.get("parser_version")
+    parsed_stamp = parsed.get("parser")
+    effective_parser = parser or (ParserStamp(**parsed_stamp) if isinstance(parsed_stamp, dict) else None)
 
     return persist_calculation_parameters(
         session,
         calculation,
         observations,
         parameters_json=parsed.get("parameters_json"),
-        parameters_parser_version=effective_parser_version,
+        parameters_parser=effective_parser,
         parameters_extracted_at=datetime.now(timezone.utc).replace(tzinfo=None),
         source=ParameterSource.parser,
-        parser_version=effective_parser_version,
+        parser=effective_parser,
     )
 
 

@@ -70,7 +70,8 @@ def manifest_integrity_evidence(
         )
     )
     valid = bool(
-        manifest.schema_version == payload.schema_version
+        manifest.schema_name == payload.schema_name
+        and manifest.schema_version == payload.schema_version
         and manifest.content_digest == payload.content_digest()
         and manifest.runtime_kind == payload.runtime_kind
         and manifest.runtime_locator == payload.runtime_locator
@@ -84,6 +85,7 @@ def manifest_integrity_evidence(
     )
     return valid, {
         "environment_ref": manifest.content_digest,
+        "schema_name": manifest.schema_name,
         "schema_version": manifest.schema_version,
         "content_digest_valid": payload.content_digest() == manifest.content_digest,
         "closure_count": len(canonical["closure"]),

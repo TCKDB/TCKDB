@@ -34,7 +34,7 @@ def reseal(manifest):
 
 def test_a_manifest_is_plain_json_and_replays_to_the_recorded_answer(manifest):
     assert json.loads(canonical(manifest)) == manifest
-    assert manifest["manifest_format"] == "relative_conformer_energy_manifest"
+    assert manifest["format"] == {"name": "relative_conformer_energy_manifest", "version": 1}
     assert replay_matches(manifest) is True
     assert replay_relative_energies(manifest)["outcome"] == "relative_energies"
     assert len(manifest["determinations"]) == 2 and len(manifest["population"]["groups"]) == 3
@@ -75,6 +75,16 @@ def test_a_manifest_of_another_semantic_version_is_refused_not_substituted(manif
     assert raised.value.code == "unsupported_semantic_version"
 
 
+@pytest.mark.parametrize("bad", [True, 1.0])
+def test_a_bool_or_float_semantic_version_is_not_the_integer_it_compares_equal_to(manifest, bad):
+    """Kills: ``versions.get(name) != value`` letting ``true`` pass for version 1."""
+    forged = copy.deepcopy(manifest)
+    forged["versions"]["relative_energy"] = bad
+    with pytest.raises(ReplayError) as raised:
+        replay_relative_energies(reseal(forged))
+    assert raised.value.code == "unsupported_semantic_version"
+
+
 @pytest.mark.parametrize("version", ["1", "2", "4"])
 def test_a_manifest_of_a_retired_or_unwritten_semantic_version_is_refused(manifest, version):
     """Kills: a legacy projection (versions 1 and 2) re-added to replay.
@@ -103,13 +113,10 @@ def test_a_current_version_manifest_missing_the_field_is_refused(manifest):
 
 def test_the_writer_stamps_the_registered_format_and_the_reader_refuses_a_float_bool_or_missing_one(manifest):
     from app.services.relative_conformer_energy.manifest import MANIFEST_FORMAT, MANIFEST_FORMATS
-    from tests.services._format_cases import bad_format_versions
+    from tests.services._format_cases import bad_format_manifests
 
     current = MANIFEST_FORMATS.current(MANIFEST_FORMAT).version
-    assert manifest["manifest_format_version"] == current and type(current) is int
-    for bad in [*bad_format_versions(current), "absent"]:
-        tampered = {k: v for k, v in manifest.items() if k != "manifest_format_version"}
-        if bad != "absent":
-            tampered["manifest_format_version"] = bad
+    assert manifest["format"] == {"name": MANIFEST_FORMAT, "version": current} and type(current) is int
+    for tampered in bad_format_manifests(manifest, current):
         with pytest.raises(ReplayError, match="unknown manifest format"):
             replay_relative_energies(tampered)

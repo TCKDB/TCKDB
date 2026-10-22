@@ -123,7 +123,7 @@ class TestBenzenePilot:
         for payload in result.payloads:
             assert payload.scientific_origin.value == "computed"
             assert payload.method_note == "statistical thermodynamics"
-            assert "origin.smethodname_allowlist.v1" in payload.raw_payload_json["mapping"]["rules"]
+            assert "origin.smethodname_allowlist" in payload.raw_payload_json["mapping"]["rules"]
 
     def test_no_rejections_three_non_cp_properties_unsupported(self):
         result = _map_real_doi(self.DOI)

@@ -20,6 +20,7 @@ from enum import Enum
 from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from tckdb_schemas.fragments.version import VersionRef
 from tckdb_schemas.kinetics_declarations import MOLE_FRACTION_SUM_TOLERANCE, KineticsCoefficientBasis
 
 from app.db.models.common import (
@@ -261,7 +262,7 @@ class KineticsSelectionPolicyInfo(BaseModel):
     """The selection semantics and the rule versions that were consulted."""
 
     name: str
-    version: str
+    version: int
     rules_applied: bool = Field(
         description="False under an administrative policy: no rule was consulted, only the administrative order."
     )
@@ -326,7 +327,7 @@ class KineticsSelectionEdge(BaseModel):
     preferred: str
     dispreferred: str
     rule_id: str = Field(description="The registry key of the rule. Not a database id.")
-    rule_version: str
+    rule_version: int
     label: str = Field(description="Always 'expected-performance inference': a benchmark, not a measurement.")
     objective_key: str
 
@@ -416,10 +417,10 @@ class KineticsSelectionManifest(BaseModel):
     with no database.
     """
 
-    manifest_format_version: int
+    format: VersionRef
     policy: dict[str, Any]
     assessment_semantics: dict[str, Any] | None = None
-    """How each candidate's eligibility was assessed: ``version`` (``2`` today), the evidence rubric and the source-finding
+    """How each candidate's eligibility was assessed: ``version``, the evidence rubric (its ``name`` and ``version``) and the source-finding
     gate. A manifest without a well-formed block is refused on replay. ``policy`` is the decision
     procedure replay re-runs; this is the assessment that produced the recorded ``eligible`` flags, which replay does not rerun."""
     request: KineticsSelectionManifestRequest

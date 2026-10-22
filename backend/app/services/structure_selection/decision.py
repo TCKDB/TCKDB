@@ -80,9 +80,9 @@ from app.services.structure_selection.rules import (
 )
 
 #: Version of the decision semantics (cohorts, repeats, ordering, outcome selection).
-DECISION_VERSION = "1"
+DECISION_VERSION = 1
 #: Version of the administrative key below.
-ADMIN_KEY_VERSION = "1"
+ADMIN_KEY_VERSION = 1
 
 ADMIN_KEY_SPEC: dict[str, Any] = {
     "version": ADMIN_KEY_VERSION,

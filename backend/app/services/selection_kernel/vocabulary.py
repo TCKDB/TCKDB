@@ -60,9 +60,9 @@ class Edge:
     preferred: str
     dispreferred: str
     rule_id: str
-    rule_version: str
+    rule_version: int
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> dict[str, str | int]:
         return {
             "preferred": self.preferred,
             "dispreferred": self.dispreferred,

@@ -1,8 +1,8 @@
-"""Native v2 machine-review provider plumbing (foundation slice).
+"""Native machine-review provider plumbing (foundation slice).
 
-Producer-side plumbing in front of the already-implemented v2 contract +
+Producer-side plumbing in front of the already-implemented contract +
 audit-adapter dispatch. This package contains the provider interface, the
-disabled/off provider, a test-only fake v2 provider, the deployer-facing
+disabled/off provider, a test-only fake provider, the deployer-facing
 factory, and the strict-parse / serialization boundary helpers.
 
 It performs **no** real online or local model calls, no persistence, no

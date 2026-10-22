@@ -107,7 +107,7 @@ class TestBundleAdapterMaterializesModes:
 def _freq_calc_payload(
     *,
     modes: list[dict] | None = None,
-    parameters_parser_version: str | None = None,
+    parameters_parser: dict | None = None,
 ) -> CalculationWithResultsPayload:
     base: dict = {
         "type": "freq",
@@ -120,15 +120,15 @@ def _freq_calc_payload(
     }
     if modes is not None:
         base["freq_result"]["modes"] = modes
-    if parameters_parser_version is not None:
-        base["parameters_parser_version"] = parameters_parser_version
+    if parameters_parser is not None:
+        base["parameters_parser"] = parameters_parser
     return CalculationWithResultsPayload.model_validate(base)
 
 
 class TestFreqParserFidelityWarning:
     def test_warns_when_parser_present_and_modes_missing(self) -> None:
         calc = _freq_calc_payload(
-            modes=None, parameters_parser_version="gaussian-output@1.0"
+            modes=None, parameters_parser={"name": "test-parser", "version": "gaussian-output@1.0"}
         )
         warnings = check_freq_parser_fidelity([calc])
         assert len(warnings) == 1
@@ -140,14 +140,14 @@ class TestFreqParserFidelityWarning:
             modes=[
                 {"mode_index": 1, "frequency_cm1": 1100.0, "is_imaginary": False}
             ],
-            parameters_parser_version="gaussian-output@1.0",
+            parameters_parser={"name": "test-parser", "version": "gaussian-output@1.0"},
         )
         warnings = check_freq_parser_fidelity([calc])
         assert warnings == []
 
     def test_silent_when_no_parser_version_set(self) -> None:
         """Manual / legacy uploads must not be punished for missing modes."""
-        calc = _freq_calc_payload(modes=None, parameters_parser_version=None)
+        calc = _freq_calc_payload(modes=None, parameters_parser=None)
         warnings = check_freq_parser_fidelity([calc])
         assert warnings == []
 
@@ -158,14 +158,14 @@ class TestFreqParserFidelityWarning:
                 "software_release": {"name": "Gaussian", "version": "16"},
                 "level_of_theory": {"method": "wB97X-D", "basis": "def2-TZVP"},
                 "sp_result": {"electronic_energy_hartree": -76.0},
-                "parameters_parser_version": "gaussian-output@1.0",
+                "parameters_parser": {"name": "test-parser", "version": "gaussian-output@1.0"},
             }
         )
         assert check_freq_parser_fidelity([calc]) == []
 
     def test_wired_into_reconcile_species_entry_full(self) -> None:
         primary = _freq_calc_payload(
-            modes=None, parameters_parser_version="gaussian-output@1.0"
+            modes=None, parameters_parser={"name": "test-parser", "version": "gaussian-output@1.0"}
         )
         warnings = reconcile_species_entry_full(
             _identity(), primary_calc=primary, additional_calcs=[]

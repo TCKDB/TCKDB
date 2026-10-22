@@ -59,7 +59,7 @@ demand. Nothing here is public: scientific reads are untouched and expose no
    set-like inputs, folds in `context_schema_version`) and hashes the context
    into a `MachineReviewContextDigest` (`context_hash` +
    `context_schema_version`). The **currency key** is the digest plus the active
-   `prompt_version` and `rubric_versions`. `provider` / `model` are deliberately
+   prompt (name and integer version) and rubric (name and integer version). `provider` / `model` are deliberately
    **not** currency dimensions.
 4. **Re-review planning.** `rereview.plan_record_machine_rereview(...)` loads the
    record's persisted rows (via the query service), classifies their currency,
@@ -153,8 +153,8 @@ MachineReviewEvidenceContext         (context_adapter.py)
   ↓
 context_hash + context_schema_version (context_hash.py)  ──┐
   ↓                                                        │ currency key =
-planner checks persisted row currency (rereview.py +       │ digest + prompt_version
-                                       query.py + currency.py)  + rubric_versions
+planner checks persisted row currency (rereview.py +       │ digest + prompt
+                                       query.py + currency.py)  + rubric
   ↓                                                        ┘
   ├─ skip_current ──────────────► (nothing appended)
   └─ run_not_reviewed / run_stale
@@ -225,12 +225,14 @@ POST /api/v1/admin/machine-review/records/{record_type}/{record_id}/run-fake
   `transition_state_entry`.
 - **Active recipe (shared private module).** Lives in
   `machine_review/recipe.py` (the single source of truth for every consumer):
-  `prompt_version = "machine_review_v1"`; `rubric_versions` is derived from the
-  trust rubric constants (e.g. `{"computed_calculation_v1": "1"}`), so a rubric
-  bump restales reviews without a second source of truth. `recipe.py` also
+  `ACTIVE_MACHINE_REVIEW_PROMPT` is a `VersionRef` (name `machine_review`,
+  version 1); the rubric is a `VersionRef` read from the deployed trust rubrics
+  through `active_rubric(...)` (e.g. `computed_calculation`, 1), so a rubric
+  version change restales reviews without a second source of truth. `recipe.py` also
   exposes `MachineReviewActiveRecipe`. A stored recipe is always the filtered
-  view (the one rubric for the record's type, via
-  `active_rubric_versions_for_record_type`), never the whole table (#553).
+  view: exactly one rubric, the one for the record's type
+  (`active_rubric_for_record_type`) or for the fragment that evaluated it
+  (`active_rubric_for_fragment`), never the whole table.
 - **Producer:** `FakeMachineReviewProducer` only — the appended row carries
   `provider="fake"`, `model="fake-test"`.
 
@@ -247,7 +249,7 @@ missing record          → 404
 Re-running with an unchanged recipe and unchanged evidence is **idempotent**:
 the first run appends, subsequent runs report `skipped_current` and append no
 new row. The response echoes the live `context_hash`, `context_schema_version`,
-`prompt_version`, and `rubric_versions` the run acted on, plus the
+`prompt` (`{name, version}`) and `rubric` (`{name, version}`) the run acted on, plus the
 `appended_review_id` when a row was written.
 
 The response is the admin-only `AdminRunFakeMachineReviewResponse` (mirrors

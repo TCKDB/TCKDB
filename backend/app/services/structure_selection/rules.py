@@ -34,6 +34,7 @@ from app.chemistry.structure_rules.manifest import (
     StructureRuleManifest,
     load_structure_rule_manifest,
 )
+from app.services.rule_registry import rules_registry
 from app.services.selection_kernel import RuleMatch, Tri
 from app.services.structure_selection.models import (
     NormalizedRecipe,
@@ -41,6 +42,7 @@ from app.services.structure_selection.models import (
     StructureRequest,
     StructureSubject,
 )
+from app.versioning import VersionRegistry
 
 RULE_ACTIVE = "active"
 RULE_INACTIVE = "inactive"
@@ -50,7 +52,7 @@ RULE_REVOKED = "revoked"
 EDGE_LABEL = "audited protocol preference"
 
 #: Version of the rule-registry semantics (what a rule must state to be active, how scope is evaluated).
-RULES_VERSION = "1"
+RULES_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -92,7 +94,7 @@ class StructureRule(ABC):
     """
 
     rule_id: str
-    version: str
+    version: int
     observable: str = "structure_energy"
     objective: Objective | None = None
     reference_model: str | None = None
@@ -190,7 +192,7 @@ def validate_rules(rules: Sequence[StructureRule]) -> None:
 #: SHA-256 of ``structure_rule_candidates.yaml`` as shipped (manifest 0.2.0). The registry refuses to load over any
 #: other bytes; a change to an entry, a blocker or a source list is a new manifest version, a new pin and a new rule
 #: version. A manifest handed to a rule must be the one this pins.
-STRUCTURE_RULE_MANIFEST_SHA256 = "812301928688c9a921b70c8b1195881489b40078564483145a8dcb7d67b84621"
+STRUCTURE_RULE_MANIFEST_SHA256 = "0dc5ff853cec30767a2e38fbabb07f3966efca34d8af7d43624a3246a6639c27"
 
 #: Ids of audited rules whose predicates have been written and reviewed. None yet: approval in the manifest alone
 #: applies nothing, and approving one rule never enables another.
@@ -274,6 +276,12 @@ def default_rules() -> tuple[StructureRule, ...]:
     """The rules registered in this release: the audited council examples. **None is active.**"""
     manifest = load_structure_rule_manifest(expected_sha256=STRUCTURE_RULE_MANIFEST_SHA256)
     return tuple(AuditedStructureRule(candidate, manifest) for candidate in manifest.candidates)
+
+
+@lru_cache(maxsize=1)
+def default_rules_registry() -> VersionRegistry[Any]:
+    """The registered rules keyed by ``(rule id, version)``: what a replay asks for the rule a manifest recorded."""
+    return rules_registry("structure_selection_rules", default_rules())
 
 
 def active_rules(rules: Sequence[StructureRule] | None = None) -> tuple[StructureRule, ...]:

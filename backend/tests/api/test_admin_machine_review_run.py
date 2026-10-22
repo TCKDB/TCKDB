@@ -251,7 +251,7 @@ def test_successful_run_returns_the_review_and_records_it(
 
     events = _review_events(db_session, submission.id)
     assert len(events) == 1
-    assert events[0].details_json["schema_version"] == "machine_review_v2"
+    assert events[0].details_json["format"] == {"name": "machine_review", "version": 1}
 
 
 def test_successful_run_does_not_mutate_submission_status(
@@ -334,7 +334,7 @@ def test_provider_failure_still_records_the_attempt(
     events = _review_events(db_session, submission.id)
     assert len(events) == 1
     assert events[0].details_json["status"] == "machine_review_failed"
-    assert events[0].details_json["schema_version"] == "machine_review_v2"
+    assert events[0].details_json["format"] == {"name": "machine_review", "version": 1}
 
 
 def test_provider_failure_does_not_mutate_submission_status(

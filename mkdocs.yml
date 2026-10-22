@@ -95,9 +95,9 @@ nav:
       - Troubleshooting: deployment/troubleshooting.md
   - Clients and Uploads:
       - Generic Client Targeting: clients/generic-client-targeting.md
-      - TCKDB Client Spec: specs/tckdb-client-v0-spec.md
-      - ARC Adapter Spec: specs/arc-tckdb-adapter-v0-spec.md
-      - Contribution Bundle Format: contribution-bundles/v0-format.md
+      - TCKDB Client Spec: specs/tckdb-client-spec.md
+      - ARC Adapter Spec: specs/arc-tckdb-adapter-spec.md
+      - Contribution Bundle Format: contribution-bundles/format.md
   - Project:
       - Documentation Index: README.md
       - Public Read Abuse Controls: specs/public_read_abuse_controls.md

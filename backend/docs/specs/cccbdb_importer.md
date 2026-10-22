@@ -464,8 +464,8 @@ raw snapshot, not HTML specifically) and pairs with a `content_sha256`
 CHECK-constrained to a lowercase hex digest; `parsed_json` was dropped in
 favor of `mapping_report_json` (what the parser/mapping declared
 unsupported or rejected, not the parsed values themselves -- those land
-as typed columns on the observation) plus `mapping_version` alongside
-`parser_version`, so a changed parser **or** a changed mapping both
+as typed columns on the observation) plus `mapping_name` / `mapping_version`
+alongside `parser_name` / `parser_version`, so a changed parser **or** a changed mapping both
 append a new custody row rather than overwriting one; and
 `molecular_property_observation.external_source_record_id` is a real FK,
 not a proposal.
@@ -475,7 +475,9 @@ CCCBDB importer has written keeps its flattened `external_source_*`
 columns on `molecular_property_observation` (`external_source_name`,
 `external_source_release`, `external_source_url`,
 `external_source_record_key`, `external_source_page_kind`,
-`external_source_content_sha256`, `external_source_parser_version`) --
+`external_source_content_sha256`, `external_source_parser_name`,
+`external_source_parser_version`; the parser name is
+`cccbdb_experimental_species`) --
 see that model's module docstring. The new custody tables are additive:
 they exist for new importers (starting with ThermoML, Phase C-E2/E3) to
 attach to, and a future migration could backfill CCCBDB rows into

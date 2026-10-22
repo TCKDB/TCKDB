@@ -243,7 +243,7 @@ def _to_calc_with_results_payload(
         output_geometries=calc_in.output_geometries,
         parameters=calc_in.parameters,
         parameters_json=calc_in.parameters_json,
-        parameters_parser_version=calc_in.parameters_parser_version,
+        parameters_parser=calc_in.parameters_parser,
         parameters_extracted_at=calc_in.parameters_extracted_at,
         constraints=calc_in.constraints,
     )

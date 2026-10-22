@@ -689,16 +689,16 @@ def test_dry_run_stages_nothing_and_commit_appends_one_row(db_conn):
         assert latest_recorded(session, result).id == row.id
 
 
-def test_hess_rubric_restales_nothing_stored(db_conn):
-    """Adding hess_consistency_v1 to the recipe leaves every stored review as it was."""
-    from app.services.machine_review.admin_trigger import active_rubric_versions_for_record_type
-    from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS
+def test_hess_check_does_not_restale_the_reviewer_review(db_conn):
+    """The hess check stamps its own one rubric, so it leaves a stored reviewer-family review current."""
+    from tckdb_schemas.fragments.version import VersionRef
+
+    from app.services.machine_review.admin_trigger import active_rubric_for_record_type
     from app.services.machine_review.rereview import MachineReviewReReviewDecision, plan_record_machine_rereview
     from tests.services.test_phase_d_persistence import _seed_reviewer_review
 
-    assert ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS["hess_consistency_v1"] == "1"
-    # The reviewer family's kinetics recipe is filtered to its own rubric.
-    assert active_rubric_versions_for_record_type("kinetics") == {"computed_kinetics_v2": "2"}
+    # The reviewer family's kinetics recipe is its own rubric, not the hess check's.
+    assert active_rubric_for_record_type("kinetics") == VersionRef(name="computed_kinetics", version=1)
     with uploads(db_conn) as session:
         kinetics, thermo = abstraction(session)
         digest, prompt, rubrics = _seed_reviewer_review(
@@ -707,7 +707,7 @@ def test_hess_rubric_restales_nothing_stored(db_conn):
         def plan():
             return plan_record_machine_rereview(
                 session, record_type="kinetics", record_id=kinetics.id, current_context=digest,
-                active_prompt_version=prompt, active_rubric_versions=rubrics)
+                active_prompt=prompt, active_rubric=rubrics)
 
         assert plan().decision is MachineReviewReReviewDecision.skip_current
         args = request(kinetics, mapping_for(kinetics, thermo))
@@ -716,7 +716,7 @@ def test_hess_rubric_restales_nothing_stored(db_conn):
         assert row is not None
         assert plan().decision is MachineReviewReReviewDecision.skip_current
         assert currency(session, result).state.value == "current"
-        assert result.recipe == {"hess_consistency_v1": "1"}
+        assert result.rubric_ref == VersionRef(name="hess_consistency", version=1)
 
 
 def _material_targets(kinetics, thermo):

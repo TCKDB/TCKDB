@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import re
 
-PARSER_VERSION = "psi4-0.1.0"
+from app.parser_registry import PARSERS
+
+PARSER = PARSERS.get("psi4_parameters")
 
 # ---------------------------------------------------------------------------
 # Charge / multiplicity

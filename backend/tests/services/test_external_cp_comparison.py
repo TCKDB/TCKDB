@@ -22,6 +22,7 @@ from datetime import datetime
 
 import pytest
 from sqlalchemy import select
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.common import (
     ExternalSourceRecordKind,
@@ -45,7 +46,7 @@ from app.services.external_comparison.cp import (
 from app.services.machine_review.context_hash import MachineReviewContextDigest
 from app.services.machine_review.persistence import create_record_machine_review_row
 from app.services.machine_review.read_model import RecordMachineReview
-from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS
+from app.services.machine_review.recipe import active_rubric
 from app.services.machine_review.rereview import (
     MachineReviewReReviewDecision,
     plan_record_machine_rereview,
@@ -146,6 +147,7 @@ def _make_external_source_record(session, *, key: str) -> ExternalSourceRecord:
         raw_uri="artifacts/test",
         parser_name="thermoml_cp_parser",
         parser_version="1.0.0",
+        mapping_name="thermoml_cp_mapping",
         mapping_version="1.0.0",
     )
     session.add(record)
@@ -185,7 +187,7 @@ def test_computed_thermo_with_three_cp_observations_yields_one_row_three_finding
 # app.services.machine_review.query.MachineReviewRecordFamily existed,
 # get_record_machine_review_currency_for_record loaded every persisted row
 # for (record_type, record_id) with no regard for provider. A Cp row's own
-# recipe (model=external_cp_comparison_v1, provider=tckdb.scientific_checks)
+# recipe (model=external_cp_comparison, provider=tckdb.scientific_checks)
 # never matches the reviewer recipe, and run_and_record always stamps a
 # reviewed_at newer than any prior row -- so the Cp row was always read as
 # the latest row, always classified stale, and always demoted the thermo's
@@ -203,9 +205,9 @@ def test_recording_a_cp_comparison_does_not_restale_the_reviewer_familys_current
     attach_thermo_nasa(db_session, thermo=thermo)
     _make_observation(db_session, thermo=thermo, temperature_k=298.15, scalar_value=80.0)
 
-    reviewer_digest = MachineReviewContextDigest(context_hash="c" * 64, context_schema_version="v1")
-    reviewer_prompt = "reviewer_prompt_v9"
-    reviewer_rubrics = {"computed_thermo_v1": "1"}
+    reviewer_digest = MachineReviewContextDigest(context_hash="c" * 64, context_schema_version=1)
+    reviewer_prompt = VersionRef(name="reviewer_prompt", version=9)
+    reviewer_rubric = VersionRef(name="computed_thermo", version=1)
 
     # A fake "current" reviewer-family (LLM) review for this same thermo,
     # recorded before the Cp check ever runs.
@@ -221,8 +223,8 @@ def test_recording_a_cp_comparison_does_not_restale_the_reviewer_familys_current
             record_id=thermo.id,
         ),
         context_digest=reviewer_digest,
-        prompt_version=reviewer_prompt,
-        rubric_versions=reviewer_rubrics,
+        prompt=reviewer_prompt,
+        rubric=reviewer_rubric,
     )
     db_session.flush()
 
@@ -232,8 +234,8 @@ def test_recording_a_cp_comparison_does_not_restale_the_reviewer_familys_current
             record_type="thermo",
             record_id=thermo.id,
             current_context=reviewer_digest,
-            active_prompt_version=reviewer_prompt,
-            active_rubric_versions=reviewer_rubrics,
+            active_prompt=reviewer_prompt,
+            active_rubric=reviewer_rubric,
         )
 
     assert _plan().decision is MachineReviewReReviewDecision.skip_current
@@ -276,9 +278,9 @@ def test_latest_cp_comparison_for_thermo_ignores_a_newer_reviewer_family_row(db_
             reviewed_at=datetime(2099, 1, 1, 0, 0, 0),
             record_id=thermo.id,
         ),
-        context_digest=MachineReviewContextDigest(context_hash="d" * 64, context_schema_version="v1"),
-        prompt_version="reviewer_prompt_v9",
-        rubric_versions={"computed_thermo_v1": "1"},
+        context_digest=MachineReviewContextDigest(context_hash="d" * 64, context_schema_version=1),
+        prompt=VersionRef(name="reviewer_prompt", version=9),
+        rubric=VersionRef(name="computed_thermo", version=1),
     )
     db_session.flush()
 
@@ -537,10 +539,8 @@ def test_record_carries_rubric_version_and_context_hash_changes_with_observation
     row_one = run_and_record(db_session, thermo.id)
     db_session.flush()
 
-    rubric_key = f"{EXTERNAL_CP_COMPARISON.name}_v{EXTERNAL_CP_COMPARISON.version}"
-    assert row_one.rubric_versions_json == {
-        rubric_key: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[rubric_key]
-    }
+    expected = active_rubric(EXTERNAL_CP_COMPARISON)
+    assert (row_one.rubric_name, row_one.rubric_version) == (expected.name, expected.version)
     assert row_one.context_schema_version
 
     _make_observation(db_session, thermo=thermo, temperature_k=400.0, scalar_value=90.0)

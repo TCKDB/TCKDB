@@ -242,7 +242,7 @@ def test_a_manifest_bound_calculation_records_the_banner_and_keeps_its_release(
     binding trigger requires the calculation to cite the same one. The banner
     is recorded, both releases stay as declared, and the upload succeeds."""
     environment = {
-        "schema_version": "tckdb.execution-environment.v1",
+        "schema_name": "tckdb.execution-environment", "schema_version": 1,
         "software_release": {"name": "ORCA"},
         "runtime": {"runtime_kind": "container", "image": "registry.example/orca@sha256:" + "a" * 64},
         "executable": {"locator": "file:///opt/orca/orca", "digest": "sha256:" + "b" * 64},

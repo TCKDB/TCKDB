@@ -9,7 +9,7 @@
     }
   ],
   "audit_event_details_json": {
-    "schema_version": "machine_review_v2",
+    "format": {"name": "machine_review", "version": 1},
     "status": "not-a-real-status",
     "findings": []
   },

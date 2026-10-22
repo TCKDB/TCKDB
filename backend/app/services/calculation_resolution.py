@@ -16,6 +16,7 @@ from tckdb_schemas.fragments.calculation import (
     assert_composite_calculation_shape,
     assert_composite_result_matches_type,
 )
+from tckdb_schemas.fragments.version import ParserStamp
 from tckdb_schemas.sp_energy_components import check_sp_energy_components
 from tckdb_schemas.stationary_point import TauBasis, has_structural_flag
 from tckdb_schemas.structure_declarations import (
@@ -372,7 +373,7 @@ def resolve_execution_environment_manifest(
     insert_error: IntegrityError | None = None
     with session.begin_nested():
         manifest = ExecutionEnvironmentManifest(
-            schema_version=payload.schema_version, content_digest=digest,
+            schema_name=payload.schema_name, schema_version=payload.schema_version, content_digest=digest,
             runtime_kind=payload.runtime_kind, runtime_locator=payload.runtime_locator,
             executable_locator=payload.executable_locator, closure_json=canonical["closure"],
             software_release_id=software_release_id, workflow_tool_release_id=workflow_tool_release_id,
@@ -1536,7 +1537,8 @@ def persist_calculation_result(
                 natoms=hess_geom.natoms,
                 lower_triangle_hartree_bohr2=hess.lower_triangle_hartree_bohr2,
                 source=hess.source,
-                parser_version=hess.parser_version,
+                parser_name=hess.parser.name if hess.parser is not None else None,
+                parser_version=hess.parser.version if hess.parser is not None else None,
                 note=hess.note,
             )
         )
@@ -1589,10 +1591,10 @@ def persist_calculation_parameters(
     observations: Iterable[CalculationParameterObservation] | None,
     *,
     parameters_json: dict | None = None,
-    parameters_parser_version: str | None = None,
+    parameters_parser: ParserStamp | None = None,
     parameters_extracted_at: datetime | None = None,
     source: ParameterSource = ParameterSource.upload,
-    parser_version: str | None = None,
+    parser: ParserStamp | None = None,
 ) -> list[CalculationParameter]:
     """Persist parsed execution-control parameters for a calculation.
 
@@ -1619,21 +1621,22 @@ def persist_calculation_parameters(
         parameters clears any stale parser rows.
     :param parameters_json: Optional JSON snapshot from the parser to mirror
         onto ``calculation.parameters_json``.
-    :param parameters_parser_version: Optional parser version tag mirrored
-        onto ``calculation.parameters_parser_version``. Distinct from
-        ``parser_version`` (per-row) so callers can record both, but most
+    :param parameters_parser: Optional parser stamp mirrored
+        onto ``calculation.parameters_parser_name`` / ``parameters_parser_version``. Distinct from
+        ``parser`` (per-row) so callers can record both, but most
         callers will pass the same string for both.
     :param parameters_extracted_at: Optional extraction timestamp.
     :param source: Provenance applied to every newly inserted row.
-    :param parser_version: Per-row parser version tag, used only when
+    :param parser: Per-row parser stamp, used only when
         ``source=parser``.
     :returns: Newly created parameter rows in the order they were supplied.
     """
 
     if parameters_json is not None:
         calculation.parameters_json = parameters_json
-    if parameters_parser_version is not None:
-        calculation.parameters_parser_version = parameters_parser_version
+    if parameters_parser is not None:
+        calculation.parameters_parser_name = parameters_parser.name
+        calculation.parameters_parser_version = parameters_parser.version
     if parameters_extracted_at is not None:
         calculation.parameters_extracted_at = parameters_extracted_at
 
@@ -1651,7 +1654,7 @@ def persist_calculation_parameters(
     }
     known_keys = _resolve_canonical_keys(session, candidate_keys)
 
-    row_parser_version = parser_version if source is ParameterSource.parser else None
+    row_parser = parser if source is ParameterSource.parser else None
 
     rows: list[CalculationParameter] = []
     for obs in obs_list:
@@ -1673,7 +1676,8 @@ def persist_calculation_parameters(
             unit=obs.unit,
             parameter_index=obs.parameter_index,
             source=source,
-            parser_version=row_parser_version,
+            parser_name=row_parser.name if row_parser is not None else None,
+            parser_version=row_parser.version if row_parser is not None else None,
         )
         session.add(row)
         rows.append(row)
@@ -2372,7 +2376,7 @@ def resolve_and_persist_calculation_with_results(
         calculation,
         calc_upload.parameters,
         parameters_json=calc_upload.parameters_json,
-        parameters_parser_version=calc_upload.parameters_parser_version,
+        parameters_parser=calc_upload.parameters_parser,
         parameters_extracted_at=calc_upload.parameters_extracted_at,
     )
     return calculation

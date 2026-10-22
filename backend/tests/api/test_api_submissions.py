@@ -45,7 +45,7 @@ from app.services.machine_review import (
 from app.services.machine_review.providers.fake import FakeMachineReviewProvider
 from app.services.machine_review.run import run_machine_review_for_submission
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_SCHEMA_VERSION,
+    MACHINE_REVIEW_FORMAT,
     MachineReviewProviderFinding,
     MachineReviewProviderResult,
 )
@@ -767,12 +767,12 @@ class TestAuditEventsVisibility:
         assert precheck["from_status"] is None
         assert precheck["to_status"] is None
         assert precheck["details_json"] == {
-            "schema_version": MACHINE_REVIEW_SCHEMA_VERSION,
+            "format": MACHINE_REVIEW_FORMAT.model_dump(),
             "status": "machine_screened_pass",
             "curator_priority": None,
             "summary": "Fake machine review inspected 1 linked record(s).",
             "findings": [],
-            "model": "fake_test/machine-review-v2",
+            "model": "fake_test/machine-review",
             "provider": "FakeMachineReviewProvider",
             "used_rag": False,
         }
@@ -791,7 +791,7 @@ class TestAuditEventsVisibility:
     ):
         sub = _seed_submission(db_session, created_by=_api_test_user)
         result = MachineReviewProviderResult(
-            schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+            format=MACHINE_REVIEW_FORMAT,
             status=MachineReviewStatus.machine_screened_warning,
             summary="Configured warning",
             findings=(
@@ -824,7 +824,7 @@ class TestAuditEventsVisibility:
         )
         assert precheck["actor_kind"] == "llm"
         assert precheck["details_json"] == {
-            "schema_version": MACHINE_REVIEW_SCHEMA_VERSION,
+            "format": MACHINE_REVIEW_FORMAT.model_dump(),
             "status": "machine_screened_warning",
             "curator_priority": None,
             "summary": "Configured warning",
@@ -852,14 +852,14 @@ class TestAIReviewSummary:
     ):
         sub = _seed_submission(db_session, created_by=_api_test_user)
         older = MachineReviewProviderResult(
-            schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+            format=MACHINE_REVIEW_FORMAT,
             status=MachineReviewStatus.machine_screened_warning,
             summary="Older warning",
             model="fake/old",
             used_rag=False,
         )
         newer = MachineReviewProviderResult(
-            schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+            format=MACHINE_REVIEW_FORMAT,
             status=MachineReviewStatus.machine_screened_needs_attention,
             summary="Newer needs attention",
             model="fake/new",
@@ -895,7 +895,7 @@ class TestAIReviewSummary:
             db_session,
             submission=sub,
             result=MachineReviewProviderResult(
-                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+                format=MACHINE_REVIEW_FORMAT,
                 status=MachineReviewStatus.machine_screened_warning,
                 summary="Lower id",
                 model="fake/low",
@@ -905,7 +905,7 @@ class TestAIReviewSummary:
             db_session,
             submission=sub,
             result=MachineReviewProviderResult(
-                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+                format=MACHINE_REVIEW_FORMAT,
                 status=MachineReviewStatus.machine_screened_warning,
                 summary="Higher id",
                 model="fake/high",
@@ -931,7 +931,7 @@ class TestAIReviewSummary:
             db_session,
             submission=sub,
             result=MachineReviewProviderResult(
-                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+                format=MACHINE_REVIEW_FORMAT,
                 status=MachineReviewStatus.machine_screened_warning,
                 summary="Mixed severities",
                 findings=(
@@ -981,7 +981,7 @@ class TestAIReviewSummary:
             db_session,
             submission=sub,
             result=MachineReviewProviderResult(
-                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+                format=MACHINE_REVIEW_FORMAT,
                 status=MachineReviewStatus.machine_screened_needs_attention,
                 summary="Current event",
                 model="fake/test",
@@ -1015,7 +1015,7 @@ class TestAIReviewSummary:
             actor_kind=SubmissionActorKind.llm,
             summary="No findings key",
             details_json={
-                "schema_version": MACHINE_REVIEW_SCHEMA_VERSION,
+                "format": MACHINE_REVIEW_FORMAT.model_dump(),
                 "status": "machine_screened_warning",
                 "summary": "No findings key",
                 "model": "fake/test",
@@ -1044,7 +1044,7 @@ class TestAIReviewSummary:
             actor_kind=SubmissionActorKind.llm,
             summary="Fallback summary",
             details_json={
-                "schema_version": MACHINE_REVIEW_SCHEMA_VERSION,
+                "format": MACHINE_REVIEW_FORMAT.model_dump(),
                 "status": "machine_screened_warning",
                 "findings": [],
                 "model": "fake/test",
@@ -1081,7 +1081,7 @@ class TestAIReviewSummary:
             db_session,
             submission=sub,
             result=MachineReviewProviderResult(
-                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+                format=MACHINE_REVIEW_FORMAT,
                 status=MachineReviewStatus.machine_screened_warning,
                 summary="Private summary",
             ),
@@ -1108,7 +1108,7 @@ class TestAIReviewSummary:
             db_session,
             submission=sub,
             result=MachineReviewProviderResult(
-                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+                format=MACHINE_REVIEW_FORMAT,
                 status=MachineReviewStatus.machine_screened_warning,
                 summary="Full detail summary",
                 findings=(
@@ -1156,7 +1156,7 @@ class TestAIReviewSummary:
             db_session,
             submission=sub,
             result=MachineReviewProviderResult(
-                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+                format=MACHINE_REVIEW_FORMAT,
                 status=MachineReviewStatus.machine_review_failed,
                 summary="AI Review Assistant could not complete review.",
                 model="fake/test",
@@ -1199,7 +1199,7 @@ class TestAIReviewSummary:
             db_session,
             submission=sub,
             result=MachineReviewProviderResult(
-                schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+                format=MACHINE_REVIEW_FORMAT,
                 status=MachineReviewStatus.machine_screened_warning,
                 summary="Submission advisory warning.",
                 model="fake/test",
@@ -1236,7 +1236,7 @@ class TestBundleSubmissionWiring:
     def test_thermo_bundle_creates_submission_audit_and_links(
         self, client, db_session
     ):
-        bundle = _load_bundle("thermo-bundle-v0.json")
+        bundle = _load_bundle("thermo-bundle.json")
         resp = client.post("/api/v1/bundles/submit", json=bundle)
         assert resp.status_code == 201, resp.text
         submission_id = resp.json()["submission_id"]

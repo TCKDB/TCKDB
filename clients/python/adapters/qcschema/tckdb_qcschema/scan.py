@@ -101,7 +101,7 @@ from .mapping import (
     _level_of_theory,
     _parameter_observations,
     _parameters_extracted_at,
-    _parser_version,
+    _parser_stamp,
     _tckdb_origin_block,
     _tckdb_qcschema_block,
     _unsupported_fields,
@@ -904,7 +904,7 @@ def _map_drive(
         "level_of_theory": level_of_theory.model_dump(mode="json", exclude_none=True),
         "parameters": [p.model_dump(mode="json", exclude_none=True) for p in parameters] or None,
         "parameters_json": parameters_json,
-        "parameters_parser_version": _parser_version(),
+        "parameters_parser": _parser_stamp(),
         "scan_result": scan_result,
         "input_geometries": initial_geometries,
         "depends_on": [

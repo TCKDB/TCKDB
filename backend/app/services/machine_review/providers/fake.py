@@ -1,4 +1,4 @@
-"""Test-only fake machine-review provider emitting native v2 results.
+"""Test-only fake machine-review provider emitting native results.
 
 Developer/test-only. It is **never** selectable through
 ``AI_REVIEW_ASSISTANT_MODE`` (the deployer-facing factory in :mod:`factory`
@@ -10,15 +10,15 @@ one env var.
 It makes no network call and returns deterministic
 :class:`~app.services.machine_review.schemas.MachineReviewProviderResult`
 payloads. The module-level builders cover the four shapes a test needs —
-pass / warning / critical / failed — and exercise native v2 categories the v1
-contract could not express (``transition_state_validation``, ``schema_gap``).
+pass / warning / critical / failed — and exercise the categories only the machine-review vocabulary has
+(``transition_state_validation``, ``schema_gap``).
 """
 
 from __future__ import annotations
 
 from app.services.machine_review.providers.interface import MachineReviewContext
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_SCHEMA_VERSION,
+    MACHINE_REVIEW_FORMAT,
     CuratorPriority,
     MachineReviewCategory,
     MachineReviewProviderFinding,
@@ -27,7 +27,7 @@ from app.services.machine_review.schemas import (
     MachineReviewStatus,
 )
 
-_FAKE_MODEL = "fake_test/machine-review-v2"
+_FAKE_MODEL = "fake_test/machine-review"
 _FAKE_PROVIDER_NAME = "FakeMachineReviewProvider"
 
 
@@ -35,9 +35,9 @@ def make_pass_result(
     *,
     summary: str = "Fake machine review found no advisory concerns.",
 ) -> MachineReviewProviderResult:
-    """Build a clean v2 pass result with no findings."""
+    """Build a clean pass result with no findings."""
     return MachineReviewProviderResult(
-        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+        format=MACHINE_REVIEW_FORMAT,
         status=MachineReviewStatus.machine_screened_pass,
         curator_priority=None,
         summary=summary,
@@ -53,13 +53,12 @@ def make_warning_result(
     record_type: str | None = "calculation",
     record_ref: str | None = "1",
 ) -> MachineReviewProviderResult:
-    """Build a v2 warning result using a native ``schema_gap`` finding.
+    """Build a warning result using a native ``schema_gap`` finding.
 
-    ``schema_gap`` is one of the categories the v1 ``LLMFindingCategory`` subset
-    could not express.
+    ``schema_gap`` is a category native to the machine-review vocabulary.
     """
     return MachineReviewProviderResult(
-        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+        format=MACHINE_REVIEW_FORMAT,
         status=MachineReviewStatus.machine_screened_warning,
         curator_priority=CuratorPriority.medium,
         summary="Fake machine review found one advisory warning.",
@@ -91,14 +90,12 @@ def make_critical_result(
     record_type: str | None = "transition_state_entry",
     record_ref: str | None = "9002",
 ) -> MachineReviewProviderResult:
-    """Build a v2 needs-attention result using a native ``transition_state_validation`` finding.
+    """Build a needs-attention result using a native ``transition_state_validation`` finding.
 
-    ``transition_state_validation`` is the other category the v1 contract could
-    not express; this is the case the golden examples documented as the v1
-    vocabulary gap.
+    ``transition_state_validation`` is the other category native to the machine-review vocabulary.
     """
     return MachineReviewProviderResult(
-        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+        format=MACHINE_REVIEW_FORMAT,
         status=MachineReviewStatus.machine_screened_needs_attention,
         curator_priority=CuratorPriority.high,
         summary="Fake machine review found a critical transition-state contradiction.",
@@ -129,9 +126,9 @@ def make_failed_result(
     *,
     summary: str = "Fake machine review failed to review.",
 ) -> MachineReviewProviderResult:
-    """Build a v2 failed result (the reviewer-failure axis, not a record failure)."""
+    """Build a failed result (the reviewer-failure axis, not a record failure)."""
     return MachineReviewProviderResult(
-        schema_version=MACHINE_REVIEW_SCHEMA_VERSION,
+        format=MACHINE_REVIEW_FORMAT,
         status=MachineReviewStatus.machine_review_failed,
         curator_priority=None,
         summary=summary,
@@ -154,7 +151,7 @@ class FakeMachineReviewProvider:
         self,
         fixed_result: MachineReviewProviderResult | None = None,
     ) -> None:
-        """Create a fake provider with an optional fixed v2 result."""
+        """Create a fake provider with an optional fixed result."""
         self._fixed_result = fixed_result
 
     def review_submission(
@@ -180,7 +177,7 @@ class FakeMachineReviewProvider:
 def build_fake_machine_review_provider(
     fixed_result: MachineReviewProviderResult | None = None,
 ) -> FakeMachineReviewProvider:
-    """Test helper: build the fake v2 provider.
+    """Test helper: build the fake provider.
 
     Deliberately a separate, clearly test-named entry point. The deployer-facing
     :func:`~app.services.machine_review.providers.factory.build_machine_review_provider`

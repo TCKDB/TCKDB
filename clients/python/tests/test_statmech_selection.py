@@ -65,13 +65,13 @@ def test_posts_the_request_untouched_to_the_select_path():
 
 
 def test_the_manifest_method_posts_the_same_request_to_the_manifest_path_with_the_profile():
-    seen, handler = _recorder({"manifest_format_version": 1})
+    seen, handler = _recorder({"format": {"name": "x_manifest", "version": 1}})
     with _client(handler) as client:
         out = client.get_statmech_selection_manifest(BODY, profile="curated")
     (request,) = seen
     assert urlsplit(str(request.url)).path.endswith("/scientific/statmech/select/manifest")
     assert json.loads(request.content) == BODY and parse_qs(urlsplit(str(request.url)).query)["profile"] == ["curated"]
-    assert out == {"manifest_format_version": 1}
+    assert out == {"format": {"name": "x_manifest", "version": 1}}
 
 
 def test_a_transition_state_target_and_explicit_candidates_are_accepted():

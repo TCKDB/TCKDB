@@ -29,8 +29,9 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.services.machine_review.context_hash import MachineReviewContextDigest
 from app.services.machine_review.currency import MachineReviewCurrencyState
@@ -77,9 +78,9 @@ class MachineReviewReReviewExecutionResult(BaseModel):
     record_type: str
     record_id: int
     context_hash: str
-    context_schema_version: str
-    prompt_version: str
-    rubric_versions: dict[str, str] = Field(default_factory=dict)
+    context_schema_version: int
+    prompt: VersionRef
+    rubric: VersionRef
 
 
 def execute_record_machine_rereview_plan(
@@ -103,8 +104,8 @@ def execute_record_machine_rereview_plan(
        If the record is already ``current``, append nothing (``skipped_current``).
     3. Otherwise append exactly one row via
        :func:`create_record_machine_review_row`, stamping the plan's
-       ``current_context_hash`` / ``context_schema_version`` / ``prompt_version``
-       / ``rubric_versions`` as the stored currency key, preserving
+       ``current_context_hash`` / ``context_schema_version`` / ``prompt``
+       / ``rubric`` as the stored currency key, preserving
        ``source_submission_id`` / ``source_audit_event_id`` when supplied.
 
     The supplied ``review`` is persisted as-is; this function does not produce or
@@ -130,8 +131,8 @@ def execute_record_machine_rereview_plan(
             record_id=record_id,
             context_hash=plan.current_context_hash,
             context_schema_version=plan.context_schema_version,
-            prompt_version=plan.prompt_version,
-            rubric_versions=dict(plan.rubric_versions),
+            prompt=plan.prompt,
+            rubric=plan.rubric,
         )
 
     # 1. The plan itself says skip — refuse to append.
@@ -146,8 +147,8 @@ def execute_record_machine_rereview_plan(
         record_type=record_type,
         record_id=record_id,
         current_context=plan_digest,
-        active_prompt_version=plan.prompt_version,
-        active_rubric_versions=plan.rubric_versions,
+        active_prompt=plan.prompt,
+        active_rubric=plan.rubric,
     )
     if classification.state is MachineReviewCurrencyState.current:
         return _result(
@@ -161,8 +162,8 @@ def execute_record_machine_rereview_plan(
         record_id=record_id,
         review=review,
         context_digest=plan_digest,
-        prompt_version=plan.prompt_version,
-        rubric_versions=plan.rubric_versions,
+        prompt=plan.prompt,
+        rubric=plan.rubric,
         source_submission_id=source_submission_id,
         source_audit_event_id=source_audit_event_id,
     )

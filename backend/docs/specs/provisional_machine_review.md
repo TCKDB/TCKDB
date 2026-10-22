@@ -26,10 +26,10 @@ machine-review implementers.
 - `machine_review_curator_task_queue.md` — detailed design of the persisted
   curator task table, including how it compares to a future
   `record_machine_review` table (§6 Option B here).
-- `machine_review_provider_contract_v2.md` — design for a versioned v2 provider
-  output contract that speaks this layer's status/severity/category/priority
-  vocabulary natively, while the adapter stays backward-compatible with v1
-  precheck payloads.
+- `machine_review_provider_contract.md` — the provider output contract (a
+  root `format` marker, `{name: machine_review, version: 1}`) that speaks this
+  layer's status/severity/category/priority vocabulary natively. There is one
+  contract; no earlier precheck payload shape is read.
 - `record_machine_review_policy.md` — the retention, staleness (`context_hash`),
   and re-review policy that must exist before the §9 Option B
   `record_machine_review` table is added. Expands §9, §12, and §15 Q2/Q7 below
@@ -59,7 +59,7 @@ throughout.
 
 1. **Deterministic trust/evidence** — the public scientific read fragments
    (`trust.evidence`, `trust_status`, evidence rubrics like
-   `computed_kinetics_v1`). It has **no LLM dependency** and is the sole owner
+   `computed_kinetics`, version 1). It has **no LLM dependency** and is the sole owner
    of `evidence_completeness`, `checks` (the check-name → outcome map),
    `hard_fail_reason`, and `trust_status`. See `trust_read_api_current.md` and
    `automated_trust_layer.md`.
@@ -189,7 +189,7 @@ the deterministic evidence or the human review status.
 
 | Layer | Question it answers | Who/what produces it | Authoritative for |
 |---|---|---|---|
-| **Deterministic evidence** (rubric) | "Does the record carry expected metadata?" | `computed_*_v1` evaluators | `evidence_completeness`, `checks` (check name → outcome), `hard_fail_reason`, `trust_status` |
+| **Deterministic evidence** (rubric) | "Does the record carry expected metadata?" | `computed_*` rubric evaluators | `evidence_completeness`, `checks` (check name → outcome), `hard_fail_reason`, `trust_status` |
 | **Machine review** (this spec) | "Does anything look inconsistent or under-supported, beyond what the checklist sees?" | LLM / automated reviewer | A *provisional, advisory* `machine_review.status` + `findings`. Authoritative for **nothing** the other two layers own. |
 | **Human review** | "Is this curator-endorsed / certified?" | Human curator | `review_status` (`RecordReviewStatus`), `benchmark_reference`, `is_certified` |
 
@@ -315,7 +315,8 @@ emitted** — see §6/§7 on the gating policy):
       "reviewed_at": "2026-05-30T12:00:00Z"
     },
     "evidence": {
-      "rubric": "computed_kinetics_v1",
+      "rubric": "computed_kinetics",
+      "rubric_version": 1,
       "label": "well_supported",
       "evidence_completeness": 0.82
     },
@@ -344,7 +345,7 @@ and read via `/submissions/{id}/ai-review-summary`. The public scientific
 - **Keep** the existing `llm_precheck` / audit-event / context-builder /
   provider plumbing as the **implementation foundation**. It already does
   the hard parts: provider abstraction, context building, schema-validated
-  structured output, failure→`failed_to_review` conversion, append-only
+  structured output, failure→`machine_review_failed` conversion, append-only
   audit persistence, and admin read surfaces.
 - **Do not** rename `llm_precheck` now. It is an internal/admin
   implementation detail and a stable existing surface.
@@ -601,11 +602,13 @@ disagree.** Context size limits, compaction-before-failure, and
 ## 8. Machine-review output schema
 
 Structured, schema-validated before persistence (malformed →
-`machine_review_failed`, never an upload failure). Extends the
-`optional_llm_precheck.md` §11 result shape with record-level addressing.
+`machine_review_failed`, never an upload failure). The provider payload is
+defined in `machine_review_provider_contract.md` and carries a root `format`
+marker (`{"name": "machine_review", "version": 1}`) beside the fields below.
 
 ```json
 {
+  "format": {"name": "machine_review", "version": 1},
   "status": "machine_screened_warning",
   "curator_priority": "medium",
   "summary": "Core evidence is present, but IRC/path-search support is missing.",
@@ -710,7 +713,8 @@ record_machine_review
   behavior are settled.
 - **Retention/staleness/currency model is specified** in
   `record_machine_review_policy.md`: the precise column set (adding
-  `prompt_version`, `rubric_versions_json`, `context_schema_version`,
+  `prompt_name`, `prompt_version` (integer), `rubric_name`, `rubric_version`
+  (integer; one rubric per review), `context_schema_version` (integer),
   `source_audit_event_id`), the append-only write model, the current/stale/
   historical classification, the `context_hash` input/exclusion list, the
   deterministic latest-selection ordering, and the re-review triggers. That
@@ -747,7 +751,7 @@ Once record-level mapping exists (§6 Option B), machine review may appear
   "trust": {
     "review_status": "not_reviewed",
     "machine_review": { "status": "...", "curator_priority": "...", "...": "..." },
-    "evidence": { "rubric": "computed_kinetics_v1", "label": "...", "...": "..." },
+    "evidence": { "rubric": "computed_kinetics", "rubric_version": 1, "label": "...", "...": "..." },
     "is_certified": false
   }
 }
@@ -922,7 +926,7 @@ No new deterministic rubrics or changes to existing rubric outputs.
 ## 16. Recommended implementation order
 
 1. Keep the existing `llm_precheck` plumbing (providers, context builder,
-   schema-validated output, `failed_to_review` conversion, append-only
+   schema-validated output, `machine_review_failed` conversion, append-only
    `llm_precheck_recorded` audit events) advisory-only and submission-scoped.
 2. Introduce the `MachineReviewStatus` vocabulary and the record-level
    output schema (§3, §8) as **types/contracts only** — no public exposure.

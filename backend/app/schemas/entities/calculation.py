@@ -324,6 +324,7 @@ class CalculationHessianRead(ORMBaseSchema):
     natoms: int
     lower_triangle_hartree_bohr2: list[float]
     source: HessianSource
+    parser_name: str | None = None
     parser_version: str | None = None
     note: str | None = None
 

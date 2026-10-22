@@ -14,13 +14,13 @@
      "dispreferred": "b",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "c",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -76,7 +76,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -122,7 +122,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -144,7 +144,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -158,7 +158,7 @@
      "rule_id": "R2",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": "a"
@@ -177,13 +177,13 @@
      "dispreferred": "b",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "c",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -239,7 +239,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -285,7 +285,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -307,7 +307,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -321,7 +321,7 @@
      "rule_id": "R2",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": "a"
@@ -340,13 +340,13 @@
      "dispreferred": "b",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "c",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -402,7 +402,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -448,7 +448,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -470,7 +470,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -484,7 +484,7 @@
      "rule_id": "R2",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": "a"
@@ -509,19 +509,19 @@
      "dispreferred": "b",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "y",
      "preferred": "z",
      "rule_id": "R3",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -539,8 +539,14 @@
       "b"
      ],
      "rules": [
-      "R1@1",
-      "R2@1"
+      {
+       "rule_id": "R1",
+       "rule_version": 1
+      },
+      {
+       "rule_id": "R2",
+       "rule_version": 1
+      }
      ]
     }
    ],
@@ -596,7 +602,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -653,7 +659,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -710,7 +716,7 @@
       }
      ],
      "rule_id": "R3",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -732,7 +738,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -746,7 +752,7 @@
      "rule_id": "R2",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -760,7 +766,7 @@
      "rule_id": "R3",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -785,19 +791,19 @@
      "dispreferred": "b",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "y",
      "preferred": "z",
      "rule_id": "R3",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -815,8 +821,14 @@
       "b"
      ],
      "rules": [
-      "R1@1",
-      "R2@1"
+      {
+       "rule_id": "R1",
+       "rule_version": 1
+      },
+      {
+       "rule_id": "R2",
+       "rule_version": 1
+      }
      ]
     }
    ],
@@ -872,7 +884,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -929,7 +941,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -986,7 +998,7 @@
       }
      ],
      "rule_id": "R3",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -1008,7 +1020,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -1022,7 +1034,7 @@
      "rule_id": "R2",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -1036,7 +1048,7 @@
      "rule_id": "R3",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -1061,19 +1073,19 @@
      "dispreferred": "b",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "y",
      "preferred": "z",
      "rule_id": "R3",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -1091,8 +1103,14 @@
       "b"
      ],
      "rules": [
-      "R1@1",
-      "R2@1"
+      {
+       "rule_id": "R1",
+       "rule_version": 1
+      },
+      {
+       "rule_id": "R2",
+       "rule_version": 1
+      }
      ]
     }
    ],
@@ -1148,7 +1166,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -1205,7 +1223,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -1262,7 +1280,7 @@
       }
      ],
      "rule_id": "R3",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -1284,7 +1302,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -1298,7 +1316,7 @@
      "rule_id": "R2",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -1312,7 +1330,7 @@
      "rule_id": "R3",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -1337,19 +1355,19 @@
      "dispreferred": "b",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "c",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "a",
      "preferred": "c",
      "rule_id": "R3",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -1401,7 +1419,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -1447,7 +1465,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -1493,7 +1511,7 @@
       }
      ],
      "rule_id": "R3",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -1515,7 +1533,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -1529,7 +1547,7 @@
      "rule_id": "R2",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -1543,7 +1561,7 @@
      "rule_id": "R3",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -1568,19 +1586,19 @@
      "dispreferred": "b",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "c",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "a",
      "preferred": "c",
      "rule_id": "R3",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -1632,7 +1650,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -1678,7 +1696,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -1724,7 +1742,7 @@
       }
      ],
      "rule_id": "R3",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -1746,7 +1764,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -1760,7 +1778,7 @@
      "rule_id": "R2",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -1774,7 +1792,7 @@
      "rule_id": "R3",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -1799,19 +1817,19 @@
      "dispreferred": "b",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "c",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "a",
      "preferred": "c",
      "rule_id": "R3",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -1863,7 +1881,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -1909,7 +1927,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -1955,7 +1973,7 @@
       }
      ],
      "rule_id": "R3",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -1977,7 +1995,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -1991,7 +2009,7 @@
      "rule_id": "R2",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -2005,7 +2023,7 @@
      "rule_id": "R3",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -2027,7 +2045,7 @@
      "dispreferred": "g3",
      "preferred": "g4",
      "rule_id": "E1",
-     "rule_version": "1.0.0"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -2095,7 +2113,7 @@
       }
      ],
      "rule_id": "E1",
-     "rule_version": "1.0.0",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "manifest_member:E1-HC-02",
@@ -2107,7 +2125,7 @@
    ],
    "rules": [
     {
-     "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+     "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
      "benchmark_route": {
       "ensemble_representation": [
        "lowest_conformer"
@@ -2191,9 +2209,9 @@
         "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
        }
       ],
-      "manifest_version": "1.0.0",
+      "manifest_version": 1,
       "member_count": 38,
-      "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "sources": [
        "G4_2007",
        "G4_2007_EPAPS",
@@ -2209,14 +2227,14 @@
        "G399_2000"
       ]
      },
-     "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+     "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
      "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
      "quantity": "formation_enthalpy_298k",
      "rule_id": "E1",
      "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
      "status": "active",
      "supersedes": [],
-     "version": "1.0.0"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -2238,7 +2256,7 @@
      "dispreferred": "g3",
      "preferred": "g4",
      "rule_id": "E1",
-     "rule_version": "1.0.0"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -2306,7 +2324,7 @@
       }
      ],
      "rule_id": "E1",
-     "rule_version": "1.0.0",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "manifest_member:E1-HC-02",
@@ -2318,7 +2336,7 @@
    ],
    "rules": [
     {
-     "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+     "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
      "benchmark_route": {
       "ensemble_representation": [
        "lowest_conformer"
@@ -2402,9 +2420,9 @@
         "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
        }
       ],
-      "manifest_version": "1.0.0",
+      "manifest_version": 1,
       "member_count": 38,
-      "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "sources": [
        "G4_2007",
        "G4_2007_EPAPS",
@@ -2420,14 +2438,14 @@
        "G399_2000"
       ]
      },
-     "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+     "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
      "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
      "quantity": "formation_enthalpy_298k",
      "rule_id": "E1",
      "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
      "status": "active",
      "supersedes": [],
-     "version": "1.0.0"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -2449,7 +2467,7 @@
      "dispreferred": "g3",
      "preferred": "g4",
      "rule_id": "E1",
-     "rule_version": "1.0.0"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -2517,7 +2535,7 @@
       }
      ],
      "rule_id": "E1",
-     "rule_version": "1.0.0",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "manifest_member:E1-HC-02",
@@ -2529,7 +2547,7 @@
    ],
    "rules": [
     {
-     "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+     "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
      "benchmark_route": {
       "ensemble_representation": [
        "lowest_conformer"
@@ -2613,9 +2631,9 @@
         "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
        }
       ],
-      "manifest_version": "1.0.0",
+      "manifest_version": 1,
       "member_count": 38,
-      "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "sources": [
        "G4_2007",
        "G4_2007_EPAPS",
@@ -2631,14 +2649,14 @@
        "G399_2000"
       ]
      },
-     "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+     "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
      "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
      "quantity": "formation_enthalpy_298k",
      "rule_id": "E1",
      "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
      "status": "active",
      "supersedes": [],
-     "version": "1.0.0"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -2656,7 +2674,7 @@
      "dispreferred": "g3",
      "preferred": "g4",
      "rule_id": "E1",
-     "rule_version": "1.0.0"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -2708,7 +2726,7 @@
       }
      ],
      "rule_id": "E1",
-     "rule_version": "1.0.0",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "manifest_member:E1-HC-02",
@@ -2720,7 +2738,7 @@
    ],
    "rules": [
     {
-     "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+     "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
      "benchmark_route": {
       "ensemble_representation": [
        "lowest_conformer"
@@ -2804,9 +2822,9 @@
         "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
        }
       ],
-      "manifest_version": "1.0.0",
+      "manifest_version": 1,
       "member_count": 38,
-      "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "sources": [
        "G4_2007",
        "G4_2007_EPAPS",
@@ -2822,14 +2840,14 @@
        "G399_2000"
       ]
      },
-     "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+     "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
      "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
      "quantity": "formation_enthalpy_298k",
      "rule_id": "E1",
      "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
      "status": "active",
      "supersedes": [],
-     "version": "1.0.0"
+     "version": 1
     }
    ],
    "selected_ref": "g4"
@@ -2847,7 +2865,7 @@
      "dispreferred": "g3",
      "preferred": "g4",
      "rule_id": "E1",
-     "rule_version": "1.0.0"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -2899,7 +2917,7 @@
       }
      ],
      "rule_id": "E1",
-     "rule_version": "1.0.0",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "manifest_member:E1-HC-02",
@@ -2911,7 +2929,7 @@
    ],
    "rules": [
     {
-     "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+     "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
      "benchmark_route": {
       "ensemble_representation": [
        "lowest_conformer"
@@ -2995,9 +3013,9 @@
         "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
        }
       ],
-      "manifest_version": "1.0.0",
+      "manifest_version": 1,
       "member_count": 38,
-      "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "sources": [
        "G4_2007",
        "G4_2007_EPAPS",
@@ -3013,14 +3031,14 @@
        "G399_2000"
       ]
      },
-     "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+     "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
      "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
      "quantity": "formation_enthalpy_298k",
      "rule_id": "E1",
      "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
      "status": "active",
      "supersedes": [],
-     "version": "1.0.0"
+     "version": 1
     }
    ],
    "selected_ref": "g4"
@@ -3038,7 +3056,7 @@
      "dispreferred": "g3",
      "preferred": "g4",
      "rule_id": "E1",
-     "rule_version": "1.0.0"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -3090,7 +3108,7 @@
       }
      ],
      "rule_id": "E1",
-     "rule_version": "1.0.0",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "manifest_member:E1-HC-02",
@@ -3102,7 +3120,7 @@
    ],
    "rules": [
     {
-     "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+     "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
      "benchmark_route": {
       "ensemble_representation": [
        "lowest_conformer"
@@ -3186,9 +3204,9 @@
         "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
        }
       ],
-      "manifest_version": "1.0.0",
+      "manifest_version": 1,
       "member_count": 38,
-      "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "sources": [
        "G4_2007",
        "G4_2007_EPAPS",
@@ -3204,14 +3222,14 @@
        "G399_2000"
       ]
      },
-     "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+     "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
      "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
      "quantity": "formation_enthalpy_298k",
      "rule_id": "E1",
      "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
      "status": "active",
      "supersedes": [],
-     "version": "1.0.0"
+     "version": 1
     }
    ],
    "selected_ref": "g4"
@@ -3229,7 +3247,7 @@
      "dispreferred": "g3",
      "preferred": "g4",
      "rule_id": "E1",
-     "rule_version": "1.0.0"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -3281,7 +3299,7 @@
       }
      ],
      "rule_id": "E1",
-     "rule_version": "1.0.0",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "manifest_member:E1-HC-02",
@@ -3293,7 +3311,7 @@
    ],
    "rules": [
     {
-     "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+     "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
      "benchmark_route": {
       "ensemble_representation": [
        "lowest_conformer"
@@ -3377,9 +3395,9 @@
         "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
        }
       ],
-      "manifest_version": "1.0.0",
+      "manifest_version": 1,
       "member_count": 38,
-      "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "sources": [
        "G4_2007",
        "G4_2007_EPAPS",
@@ -3395,14 +3413,14 @@
        "G399_2000"
       ]
      },
-     "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+     "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
      "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
      "quantity": "formation_enthalpy_298k",
      "rule_id": "E1",
      "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
      "status": "active",
      "supersedes": [],
-     "version": "1.0.0"
+     "version": 1
     }
    ],
    "selected_ref": "g4"
@@ -3420,7 +3438,7 @@
      "dispreferred": "g3",
      "preferred": "g4",
      "rule_id": "E1",
-     "rule_version": "1.0.0"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -3472,7 +3490,7 @@
       }
      ],
      "rule_id": "E1",
-     "rule_version": "1.0.0",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "manifest_member:E1-HC-02",
@@ -3484,7 +3502,7 @@
    ],
    "rules": [
     {
-     "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+     "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
      "benchmark_route": {
       "ensemble_representation": [
        "lowest_conformer"
@@ -3568,9 +3586,9 @@
         "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
        }
       ],
-      "manifest_version": "1.0.0",
+      "manifest_version": 1,
       "member_count": 38,
-      "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "sources": [
        "G4_2007",
        "G4_2007_EPAPS",
@@ -3586,14 +3604,14 @@
        "G399_2000"
       ]
      },
-     "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+     "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
      "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
      "quantity": "formation_enthalpy_298k",
      "rule_id": "E1",
      "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
      "status": "active",
      "supersedes": [],
-     "version": "1.0.0"
+     "version": 1
     }
    ],
    "selected_ref": "g4"
@@ -3611,7 +3629,7 @@
      "dispreferred": "g3",
      "preferred": "g4",
      "rule_id": "E1",
-     "rule_version": "1.0.0"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -3663,7 +3681,7 @@
       }
      ],
      "rule_id": "E1",
-     "rule_version": "1.0.0",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "manifest_member:E1-HC-02",
@@ -3675,7 +3693,7 @@
    ],
    "rules": [
     {
-     "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+     "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
      "benchmark_route": {
       "ensemble_representation": [
        "lowest_conformer"
@@ -3759,9 +3777,9 @@
         "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
        }
       ],
-      "manifest_version": "1.0.0",
+      "manifest_version": 1,
       "member_count": 38,
-      "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "sources": [
        "G4_2007",
        "G4_2007_EPAPS",
@@ -3777,14 +3795,14 @@
        "G399_2000"
       ]
      },
-     "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+     "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
      "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
      "quantity": "formation_enthalpy_298k",
      "rule_id": "E1",
      "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
      "status": "active",
      "supersedes": [],
-     "version": "1.0.0"
+     "version": 1
     }
    ],
    "selected_ref": "g4"
@@ -3804,7 +3822,7 @@
      "applied": true,
      "candidates": [],
      "rule_id": "E1",
-     "rule_version": "1.0.0",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "manifest_member:E1-HC-02",
@@ -3816,7 +3834,7 @@
    ],
    "rules": [
     {
-     "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+     "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
      "benchmark_route": {
       "ensemble_representation": [
        "lowest_conformer"
@@ -3900,9 +3918,9 @@
         "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
        }
       ],
-      "manifest_version": "1.0.0",
+      "manifest_version": 1,
       "member_count": 38,
-      "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "sources": [
        "G4_2007",
        "G4_2007_EPAPS",
@@ -3918,14 +3936,14 @@
        "G399_2000"
       ]
      },
-     "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+     "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
      "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
      "quantity": "formation_enthalpy_298k",
      "rule_id": "E1",
      "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
      "status": "active",
      "supersedes": [],
-     "version": "1.0.0"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -3945,7 +3963,7 @@
      "applied": true,
      "candidates": [],
      "rule_id": "E1",
-     "rule_version": "1.0.0",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "manifest_member:E1-HC-02",
@@ -3957,7 +3975,7 @@
    ],
    "rules": [
     {
-     "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+     "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
      "benchmark_route": {
       "ensemble_representation": [
        "lowest_conformer"
@@ -4041,9 +4059,9 @@
         "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
        }
       ],
-      "manifest_version": "1.0.0",
+      "manifest_version": 1,
       "member_count": 38,
-      "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "sources": [
        "G4_2007",
        "G4_2007_EPAPS",
@@ -4059,14 +4077,14 @@
        "G399_2000"
       ]
      },
-     "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+     "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
      "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
      "quantity": "formation_enthalpy_298k",
      "rule_id": "E1",
      "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
      "status": "active",
      "supersedes": [],
-     "version": "1.0.0"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -4086,7 +4104,7 @@
      "applied": true,
      "candidates": [],
      "rule_id": "E1",
-     "rule_version": "1.0.0",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "manifest_member:E1-HC-02",
@@ -4098,7 +4116,7 @@
    ],
    "rules": [
     {
-     "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+     "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
      "benchmark_route": {
       "ensemble_representation": [
        "lowest_conformer"
@@ -4182,9 +4200,9 @@
         "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
        }
       ],
-      "manifest_version": "1.0.0",
+      "manifest_version": 1,
       "member_count": 38,
-      "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "sources": [
        "G4_2007",
        "G4_2007_EPAPS",
@@ -4200,14 +4218,14 @@
        "G399_2000"
       ]
      },
-     "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+     "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
      "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
      "quantity": "formation_enthalpy_298k",
      "rule_id": "E1",
      "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
      "status": "active",
      "supersedes": [],
-     "version": "1.0.0"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -4237,7 +4255,7 @@
     {
      "applied": false,
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "why": "rule_status_revoked"
     }
    ],
@@ -4254,7 +4272,7 @@
      "rule_id": "R1",
      "status": "revoked",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -4284,7 +4302,7 @@
     {
      "applied": false,
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "why": "rule_status_revoked"
     }
    ],
@@ -4301,7 +4319,7 @@
      "rule_id": "R1",
      "status": "revoked",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -4331,7 +4349,7 @@
     {
      "applied": false,
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "why": "rule_status_revoked"
     }
    ],
@@ -4348,7 +4366,7 @@
      "rule_id": "R1",
      "status": "revoked",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -4452,13 +4470,13 @@
      "dispreferred": "b",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -4474,8 +4492,14 @@
       "b"
      ],
      "rules": [
-      "R1@1",
-      "R2@1"
+      {
+       "rule_id": "R1",
+       "rule_version": 1
+      },
+      {
+       "rule_id": "R2",
+       "rule_version": 1
+      }
      ]
     }
    ],
@@ -4509,7 +4533,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -4544,7 +4568,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -4568,7 +4592,7 @@
      "supersedes": [
       "R2"
      ],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -4584,7 +4608,7 @@
      "supersedes": [
       "R1"
      ],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -4607,13 +4631,13 @@
      "dispreferred": "b",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -4629,8 +4653,14 @@
       "b"
      ],
      "rules": [
-      "R1@1",
-      "R2@1"
+      {
+       "rule_id": "R1",
+       "rule_version": 1
+      },
+      {
+       "rule_id": "R2",
+       "rule_version": 1
+      }
      ]
     }
    ],
@@ -4664,7 +4694,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -4699,7 +4729,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -4723,7 +4753,7 @@
      "supersedes": [
       "R2"
      ],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -4739,7 +4769,7 @@
      "supersedes": [
       "R1"
      ],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -4762,13 +4792,13 @@
      "dispreferred": "b",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -4784,8 +4814,14 @@
       "b"
      ],
      "rules": [
-      "R1@1",
-      "R2@1"
+      {
+       "rule_id": "R1",
+       "rule_version": 1
+      },
+      {
+       "rule_id": "R2",
+       "rule_version": 1
+      }
      ]
     }
    ],
@@ -4819,7 +4855,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -4854,7 +4890,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -4878,7 +4914,7 @@
      "supersedes": [
       "R2"
      ],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -4894,7 +4930,7 @@
      "supersedes": [
       "R1"
      ],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -4912,7 +4948,7 @@
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -4929,10 +4965,10 @@
     {
      "dispreferred": "b",
      "overridden_by_rule_id": "R2",
-     "overridden_by_rule_version": "1",
+     "overridden_by_rule_version": 1,
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "rule_matches": [
@@ -4963,7 +4999,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -4998,7 +5034,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -5020,7 +5056,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -5036,7 +5072,7 @@
      "supersedes": [
       "R1"
      ],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": "b"
@@ -5054,7 +5090,7 @@
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -5071,10 +5107,10 @@
     {
      "dispreferred": "b",
      "overridden_by_rule_id": "R2",
-     "overridden_by_rule_version": "1",
+     "overridden_by_rule_version": 1,
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "rule_matches": [
@@ -5105,7 +5141,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -5140,7 +5176,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -5162,7 +5198,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -5178,7 +5214,7 @@
      "supersedes": [
       "R1"
      ],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": "b"
@@ -5196,7 +5232,7 @@
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -5213,10 +5249,10 @@
     {
      "dispreferred": "b",
      "overridden_by_rule_id": "R2",
-     "overridden_by_rule_version": "1",
+     "overridden_by_rule_version": 1,
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "rule_matches": [
@@ -5247,7 +5283,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -5282,7 +5318,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -5304,7 +5340,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -5320,7 +5356,7 @@
      "supersedes": [
       "R1"
      ],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": "b"
@@ -5343,13 +5379,13 @@
      "dispreferred": "b",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -5365,8 +5401,14 @@
       "b"
      ],
      "rules": [
-      "R1@1",
-      "R2@1"
+      {
+       "rule_id": "R1",
+       "rule_version": 1
+      },
+      {
+       "rule_id": "R2",
+       "rule_version": 1
+      }
      ]
     }
    ],
@@ -5400,7 +5442,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -5435,7 +5477,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -5457,7 +5499,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -5471,7 +5513,7 @@
      "rule_id": "R2",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -5494,13 +5536,13 @@
      "dispreferred": "b",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -5516,8 +5558,14 @@
       "b"
      ],
      "rules": [
-      "R1@1",
-      "R2@1"
+      {
+       "rule_id": "R1",
+       "rule_version": 1
+      },
+      {
+       "rule_id": "R2",
+       "rule_version": 1
+      }
      ]
     }
    ],
@@ -5551,7 +5599,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -5586,7 +5634,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -5608,7 +5656,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -5622,7 +5670,7 @@
      "rule_id": "R2",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -5645,13 +5693,13 @@
      "dispreferred": "b",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -5667,8 +5715,14 @@
       "b"
      ],
      "rules": [
-      "R1@1",
-      "R2@1"
+      {
+       "rule_id": "R1",
+       "rule_version": 1
+      },
+      {
+       "rule_id": "R2",
+       "rule_version": 1
+      }
      ]
     }
    ],
@@ -5702,7 +5756,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -5737,7 +5791,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -5759,7 +5813,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -5773,7 +5827,7 @@
      "rule_id": "R2",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -5803,7 +5857,7 @@
     {
      "applied": false,
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -5826,7 +5880,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -5856,7 +5910,7 @@
     {
      "applied": false,
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -5879,7 +5933,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -5909,7 +5963,7 @@
     {
      "applied": false,
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -5932,7 +5986,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -5955,19 +6009,19 @@
      "dispreferred": "s",
      "preferred": "p",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "s",
      "preferred": "q",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "s",
      "preferred": "r",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -6033,7 +6087,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -6055,7 +6109,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -6078,19 +6132,19 @@
      "dispreferred": "s",
      "preferred": "p",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "s",
      "preferred": "q",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "s",
      "preferred": "r",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -6156,7 +6210,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -6178,7 +6232,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -6201,19 +6255,19 @@
      "dispreferred": "s",
      "preferred": "p",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "s",
      "preferred": "q",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "s",
      "preferred": "r",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -6279,7 +6333,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -6301,7 +6355,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -6408,19 +6462,19 @@
      "dispreferred": "p",
      "preferred": "q",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "r",
      "preferred": "q",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "s",
      "preferred": "q",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -6486,7 +6540,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -6508,7 +6562,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": "q"
@@ -6528,19 +6582,19 @@
      "dispreferred": "p",
      "preferred": "q",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "r",
      "preferred": "q",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "s",
      "preferred": "q",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -6606,7 +6660,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -6628,7 +6682,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": "q"
@@ -6648,19 +6702,19 @@
      "dispreferred": "p",
      "preferred": "q",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "r",
      "preferred": "q",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "s",
      "preferred": "q",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -6726,7 +6780,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -6748,7 +6802,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": "q"
@@ -6791,7 +6845,7 @@
       }
      ],
      "rule_id": "E1",
-     "rule_version": "1.0.0",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "manifest_member:E1-HC-02",
@@ -6803,7 +6857,7 @@
    ],
    "rules": [
     {
-     "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+     "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
      "benchmark_route": {
       "ensemble_representation": [
        "lowest_conformer"
@@ -6887,9 +6941,9 @@
         "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
        }
       ],
-      "manifest_version": "1.0.0",
+      "manifest_version": 1,
       "member_count": 38,
-      "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "sources": [
        "G4_2007",
        "G4_2007_EPAPS",
@@ -6905,14 +6959,14 @@
        "G399_2000"
       ]
      },
-     "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+     "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
      "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
      "quantity": "formation_enthalpy_298k",
      "rule_id": "E1",
      "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
      "status": "active",
      "supersedes": [],
-     "version": "1.0.0"
+     "version": 1
     }
    ],
    "selected_ref": "a"
@@ -6955,7 +7009,7 @@
       }
      ],
      "rule_id": "E1",
-     "rule_version": "1.0.0",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "manifest_member:E1-HC-02",
@@ -6967,7 +7021,7 @@
    ],
    "rules": [
     {
-     "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+     "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
      "benchmark_route": {
       "ensemble_representation": [
        "lowest_conformer"
@@ -7051,9 +7105,9 @@
         "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
        }
       ],
-      "manifest_version": "1.0.0",
+      "manifest_version": 1,
       "member_count": 38,
-      "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "sources": [
        "G4_2007",
        "G4_2007_EPAPS",
@@ -7069,14 +7123,14 @@
        "G399_2000"
       ]
      },
-     "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+     "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
      "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
      "quantity": "formation_enthalpy_298k",
      "rule_id": "E1",
      "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
      "status": "active",
      "supersedes": [],
-     "version": "1.0.0"
+     "version": 1
     }
    ],
    "selected_ref": "a"
@@ -7119,7 +7173,7 @@
       }
      ],
      "rule_id": "E1",
-     "rule_version": "1.0.0",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "manifest_member:E1-HC-02",
@@ -7131,7 +7185,7 @@
    ],
    "rules": [
     {
-     "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+     "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
      "benchmark_route": {
       "ensemble_representation": [
        "lowest_conformer"
@@ -7215,9 +7269,9 @@
         "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
        }
       ],
-      "manifest_version": "1.0.0",
+      "manifest_version": 1,
       "member_count": 38,
-      "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "sources": [
        "G4_2007",
        "G4_2007_EPAPS",
@@ -7233,14 +7287,14 @@
        "G399_2000"
       ]
      },
-     "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+     "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
      "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
      "quantity": "formation_enthalpy_298k",
      "rule_id": "E1",
      "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
      "status": "active",
      "supersedes": [],
-     "version": "1.0.0"
+     "version": 1
     }
    ],
    "selected_ref": "a"
@@ -7258,13 +7312,13 @@
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R4",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -7281,10 +7335,10 @@
     {
      "dispreferred": "b",
      "overridden_by_rule_id": "R2",
-     "overridden_by_rule_version": "1",
+     "overridden_by_rule_version": 1,
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "rule_matches": [
@@ -7315,7 +7369,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -7350,7 +7404,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -7385,7 +7439,7 @@
       }
      ],
      "rule_id": "R4",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -7407,7 +7461,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -7423,7 +7477,7 @@
      "supersedes": [
       "R1"
      ],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -7437,7 +7491,7 @@
      "rule_id": "R4",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": "b"
@@ -7455,13 +7509,13 @@
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R4",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -7478,10 +7532,10 @@
     {
      "dispreferred": "b",
      "overridden_by_rule_id": "R2",
-     "overridden_by_rule_version": "1",
+     "overridden_by_rule_version": 1,
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "rule_matches": [
@@ -7512,7 +7566,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -7547,7 +7601,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -7582,7 +7636,7 @@
       }
      ],
      "rule_id": "R4",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -7604,7 +7658,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -7620,7 +7674,7 @@
      "supersedes": [
       "R1"
      ],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -7634,7 +7688,7 @@
      "rule_id": "R4",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": "b"
@@ -7652,13 +7706,13 @@
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R2",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "a",
      "preferred": "b",
      "rule_id": "R4",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -7675,10 +7729,10 @@
     {
      "dispreferred": "b",
      "overridden_by_rule_id": "R2",
-     "overridden_by_rule_version": "1",
+     "overridden_by_rule_version": 1,
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "rule_matches": [
@@ -7709,7 +7763,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -7744,7 +7798,7 @@
       }
      ],
      "rule_id": "R2",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -7779,7 +7833,7 @@
       }
      ],
      "rule_id": "R4",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -7801,7 +7855,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -7817,7 +7871,7 @@
      "supersedes": [
       "R1"
      ],
-     "version": "1"
+     "version": 1
     },
     {
      "authority": "",
@@ -7831,7 +7885,7 @@
      "rule_id": "R4",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": "b"
@@ -7854,13 +7908,13 @@
      "dispreferred": "c",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "c",
      "preferred": "b",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -7926,7 +7980,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -7948,7 +8002,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -7971,13 +8025,13 @@
      "dispreferred": "c",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "c",
      "preferred": "b",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -8043,7 +8097,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -8065,7 +8119,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -8088,13 +8142,13 @@
      "dispreferred": "c",
      "preferred": "a",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     },
     {
      "dispreferred": "c",
      "preferred": "b",
      "rule_id": "R1",
-     "rule_version": "1"
+     "rule_version": 1
     }
    ],
    "fronts": [
@@ -8160,7 +8214,7 @@
       }
      ],
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -8182,7 +8236,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -8212,7 +8266,7 @@
     {
      "applied": false,
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -8235,7 +8289,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -8265,7 +8319,7 @@
     {
      "applied": false,
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -8288,7 +8342,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -8318,7 +8372,7 @@
     {
      "applied": false,
      "rule_id": "R1",
-     "rule_version": "1",
+     "rule_version": 1,
      "scope": {
       "reasons": [
        "test_scope"
@@ -8341,7 +8395,7 @@
      "rule_id": "R1",
      "status": "active",
      "supersedes": [],
-     "version": "1"
+     "version": 1
     }
    ],
    "selected_ref": null
@@ -8351,9 +8405,16 @@
   "chain": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -8509,13 +8570,13 @@
        "dispreferred": "b",
        "preferred": "a",
        "rule_id": "R1",
-       "rule_version": "1"
+       "rule_version": 1
       },
       {
        "dispreferred": "c",
        "preferred": "b",
        "rule_id": "R2",
-       "rule_version": "1"
+       "rule_version": 1
       }
      ],
      "fronts": [
@@ -8571,7 +8632,7 @@
         }
        ],
        "rule_id": "R1",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -8617,7 +8678,7 @@
         }
        ],
        "rule_id": "R2",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -8639,7 +8700,7 @@
        "rule_id": "R1",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       },
       {
        "authority": "",
@@ -8653,16 +8714,19 @@
        "rule_id": "R2",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       }
      ],
      "selected_ref": "a"
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 3,
@@ -8711,13 +8775,13 @@
       "dispreferred": "b",
       "preferred": "a",
       "rule_id": "R1",
-      "rule_version": "1"
+      "rule_version": 1
      },
      {
       "dispreferred": "c",
       "preferred": "b",
       "rule_id": "R2",
-      "rule_version": "1"
+      "rule_version": 1
      }
     ],
     "fronts": [
@@ -8773,7 +8837,7 @@
        }
       ],
       "rule_id": "R1",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -8819,7 +8883,7 @@
        }
       ],
       "rule_id": "R2",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -8841,7 +8905,7 @@
       "rule_id": "R1",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      },
      {
       "authority": "",
@@ -8855,7 +8919,7 @@
       "rule_id": "R2",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      }
     ],
     "selected_ref": "a"
@@ -8864,9 +8928,16 @@
   "conflict_elsewhere": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -9074,19 +9145,19 @@
        "dispreferred": "b",
        "preferred": "a",
        "rule_id": "R1",
-       "rule_version": "1"
+       "rule_version": 1
       },
       {
        "dispreferred": "a",
        "preferred": "b",
        "rule_id": "R2",
-       "rule_version": "1"
+       "rule_version": 1
       },
       {
        "dispreferred": "y",
        "preferred": "z",
        "rule_id": "R3",
-       "rule_version": "1"
+       "rule_version": 1
       }
      ],
      "fronts": [
@@ -9104,8 +9175,14 @@
         "b"
        ],
        "rules": [
-        "R1@1",
-        "R2@1"
+        {
+         "rule_id": "R1",
+         "rule_version": 1
+        },
+        {
+         "rule_id": "R2",
+         "rule_version": 1
+        }
        ]
       }
      ],
@@ -9161,7 +9238,7 @@
         }
        ],
        "rule_id": "R1",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -9218,7 +9295,7 @@
         }
        ],
        "rule_id": "R2",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -9275,7 +9352,7 @@
         }
        ],
        "rule_id": "R3",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -9297,7 +9374,7 @@
        "rule_id": "R1",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       },
       {
        "authority": "",
@@ -9311,7 +9388,7 @@
        "rule_id": "R2",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       },
       {
        "authority": "",
@@ -9325,16 +9402,19 @@
        "rule_id": "R3",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       }
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 4,
@@ -9389,19 +9469,19 @@
       "dispreferred": "b",
       "preferred": "a",
       "rule_id": "R1",
-      "rule_version": "1"
+      "rule_version": 1
      },
      {
       "dispreferred": "a",
       "preferred": "b",
       "rule_id": "R2",
-      "rule_version": "1"
+      "rule_version": 1
      },
      {
       "dispreferred": "y",
       "preferred": "z",
       "rule_id": "R3",
-      "rule_version": "1"
+      "rule_version": 1
      }
     ],
     "fronts": [
@@ -9419,8 +9499,14 @@
        "b"
       ],
       "rules": [
-       "R1@1",
-       "R2@1"
+       {
+        "rule_id": "R1",
+        "rule_version": 1
+       },
+       {
+        "rule_id": "R2",
+        "rule_version": 1
+       }
       ]
      }
     ],
@@ -9476,7 +9562,7 @@
        }
       ],
       "rule_id": "R1",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -9533,7 +9619,7 @@
        }
       ],
       "rule_id": "R2",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -9590,7 +9676,7 @@
        }
       ],
       "rule_id": "R3",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -9612,7 +9698,7 @@
       "rule_id": "R1",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      },
      {
       "authority": "",
@@ -9626,7 +9712,7 @@
       "rule_id": "R2",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      },
      {
       "authority": "",
@@ -9640,7 +9726,7 @@
       "rule_id": "R3",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      }
     ],
     "selected_ref": null
@@ -9649,9 +9735,16 @@
   "cycle": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -9813,19 +9906,19 @@
        "dispreferred": "b",
        "preferred": "a",
        "rule_id": "R1",
-       "rule_version": "1"
+       "rule_version": 1
       },
       {
        "dispreferred": "c",
        "preferred": "b",
        "rule_id": "R2",
-       "rule_version": "1"
+       "rule_version": 1
       },
       {
        "dispreferred": "a",
        "preferred": "c",
        "rule_id": "R3",
-       "rule_version": "1"
+       "rule_version": 1
       }
      ],
      "fronts": [
@@ -9877,7 +9970,7 @@
         }
        ],
        "rule_id": "R1",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -9923,7 +10016,7 @@
         }
        ],
        "rule_id": "R2",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -9969,7 +10062,7 @@
         }
        ],
        "rule_id": "R3",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -9991,7 +10084,7 @@
        "rule_id": "R1",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       },
       {
        "authority": "",
@@ -10005,7 +10098,7 @@
        "rule_id": "R2",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       },
       {
        "authority": "",
@@ -10019,16 +10112,19 @@
        "rule_id": "R3",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       }
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 3,
@@ -10083,19 +10179,19 @@
       "dispreferred": "b",
       "preferred": "a",
       "rule_id": "R1",
-      "rule_version": "1"
+      "rule_version": 1
      },
      {
       "dispreferred": "c",
       "preferred": "b",
       "rule_id": "R2",
-      "rule_version": "1"
+      "rule_version": 1
      },
      {
       "dispreferred": "a",
       "preferred": "c",
       "rule_id": "R3",
-      "rule_version": "1"
+      "rule_version": 1
      }
     ],
     "fronts": [
@@ -10147,7 +10243,7 @@
        }
       ],
       "rule_id": "R1",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -10193,7 +10289,7 @@
        }
       ],
       "rule_id": "R2",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -10239,7 +10335,7 @@
        }
       ],
       "rule_id": "R3",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -10261,7 +10357,7 @@
       "rule_id": "R1",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      },
      {
       "authority": "",
@@ -10275,7 +10371,7 @@
       "rule_id": "R2",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      },
      {
       "authority": "",
@@ -10289,7 +10385,7 @@
       "rule_id": "R3",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      }
     ],
     "selected_ref": null
@@ -10298,9 +10394,16 @@
   "e1_blank_blocks_unique_winner": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -10442,7 +10545,7 @@
        "dispreferred": "g3",
        "preferred": "g4",
        "rule_id": "E1",
-       "rule_version": "1.0.0"
+       "rule_version": 1
       }
      ],
      "fronts": [
@@ -10510,7 +10613,7 @@
         }
        ],
        "rule_id": "E1",
-       "rule_version": "1.0.0",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "manifest_member:E1-HC-02",
@@ -10522,7 +10625,7 @@
      ],
      "rules": [
       {
-       "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+       "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
        "benchmark_route": {
         "ensemble_representation": [
          "lowest_conformer"
@@ -10606,9 +10709,9 @@
           "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
          }
         ],
-        "manifest_version": "1.0.0",
+        "manifest_version": 1,
         "member_count": 38,
-        "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+        "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
         "sources": [
          "G4_2007",
          "G4_2007_EPAPS",
@@ -10624,23 +10727,26 @@
          "G399_2000"
         ]
        },
-       "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+       "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
        "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
        "quantity": "formation_enthalpy_298k",
        "rule_id": "E1",
        "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
        "status": "active",
        "supersedes": [],
-       "version": "1.0.0"
+       "version": 1
       }
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 3,
@@ -10692,7 +10798,7 @@
       "dispreferred": "g3",
       "preferred": "g4",
       "rule_id": "E1",
-      "rule_version": "1.0.0"
+      "rule_version": 1
      }
     ],
     "fronts": [
@@ -10760,7 +10866,7 @@
        }
       ],
       "rule_id": "E1",
-      "rule_version": "1.0.0",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "manifest_member:E1-HC-02",
@@ -10772,7 +10878,7 @@
     ],
     "rules": [
      {
-      "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+      "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
       "benchmark_route": {
        "ensemble_representation": [
         "lowest_conformer"
@@ -10856,9 +10962,9 @@
          "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
         }
        ],
-       "manifest_version": "1.0.0",
+       "manifest_version": 1,
        "member_count": 38,
-       "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+       "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
        "sources": [
         "G4_2007",
         "G4_2007_EPAPS",
@@ -10874,14 +10980,14 @@
         "G399_2000"
        ]
       },
-      "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
       "quantity": "formation_enthalpy_298k",
       "rule_id": "E1",
       "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
       "status": "active",
       "supersedes": [],
-      "version": "1.0.0"
+      "version": 1
      }
     ],
     "selected_ref": null
@@ -10890,9 +10996,16 @@
   "e1_g4_over_g3": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -10999,7 +11112,7 @@
        "dispreferred": "g3",
        "preferred": "g4",
        "rule_id": "E1",
-       "rule_version": "1.0.0"
+       "rule_version": 1
       }
      ],
      "fronts": [
@@ -11051,7 +11164,7 @@
         }
        ],
        "rule_id": "E1",
-       "rule_version": "1.0.0",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "manifest_member:E1-HC-02",
@@ -11063,7 +11176,7 @@
      ],
      "rules": [
       {
-       "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+       "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
        "benchmark_route": {
         "ensemble_representation": [
          "lowest_conformer"
@@ -11147,9 +11260,9 @@
           "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
          }
         ],
-        "manifest_version": "1.0.0",
+        "manifest_version": 1,
         "member_count": 38,
-        "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+        "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
         "sources": [
          "G4_2007",
          "G4_2007_EPAPS",
@@ -11165,23 +11278,26 @@
          "G399_2000"
         ]
        },
-       "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+       "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
        "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
        "quantity": "formation_enthalpy_298k",
        "rule_id": "E1",
        "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
        "status": "active",
        "supersedes": [],
-       "version": "1.0.0"
+       "version": 1
       }
      ],
      "selected_ref": "g4"
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 2,
@@ -11229,7 +11345,7 @@
       "dispreferred": "g3",
       "preferred": "g4",
       "rule_id": "E1",
-      "rule_version": "1.0.0"
+      "rule_version": 1
      }
     ],
     "fronts": [
@@ -11281,7 +11397,7 @@
        }
       ],
       "rule_id": "E1",
-      "rule_version": "1.0.0",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "manifest_member:E1-HC-02",
@@ -11293,7 +11409,7 @@
     ],
     "rules": [
      {
-      "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+      "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
       "benchmark_route": {
        "ensemble_representation": [
         "lowest_conformer"
@@ -11377,9 +11493,9 @@
          "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
         }
        ],
-       "manifest_version": "1.0.0",
+       "manifest_version": 1,
        "member_count": 38,
-       "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+       "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
        "sources": [
         "G4_2007",
         "G4_2007_EPAPS",
@@ -11395,14 +11511,14 @@
         "G399_2000"
        ]
       },
-      "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
       "quantity": "formation_enthalpy_298k",
       "rule_id": "E1",
       "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
       "status": "active",
       "supersedes": [],
-      "version": "1.0.0"
+      "version": 1
      }
     ],
     "selected_ref": "g4"
@@ -11411,9 +11527,16 @@
   "e1_status_cannot_reverse": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -11520,7 +11643,7 @@
        "dispreferred": "g3",
        "preferred": "g4",
        "rule_id": "E1",
-       "rule_version": "1.0.0"
+       "rule_version": 1
       }
      ],
      "fronts": [
@@ -11572,7 +11695,7 @@
         }
        ],
        "rule_id": "E1",
-       "rule_version": "1.0.0",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "manifest_member:E1-HC-02",
@@ -11584,7 +11707,7 @@
      ],
      "rules": [
       {
-       "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+       "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
        "benchmark_route": {
         "ensemble_representation": [
          "lowest_conformer"
@@ -11668,9 +11791,9 @@
           "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
          }
         ],
-        "manifest_version": "1.0.0",
+        "manifest_version": 1,
         "member_count": 38,
-        "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+        "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
         "sources": [
          "G4_2007",
          "G4_2007_EPAPS",
@@ -11686,23 +11809,26 @@
          "G399_2000"
         ]
        },
-       "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+       "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
        "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
        "quantity": "formation_enthalpy_298k",
        "rule_id": "E1",
        "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
        "status": "active",
        "supersedes": [],
-       "version": "1.0.0"
+       "version": 1
       }
      ],
      "selected_ref": "g4"
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 2,
@@ -11750,7 +11876,7 @@
       "dispreferred": "g3",
       "preferred": "g4",
       "rule_id": "E1",
-      "rule_version": "1.0.0"
+      "rule_version": 1
      }
     ],
     "fronts": [
@@ -11802,7 +11928,7 @@
        }
       ],
       "rule_id": "E1",
-      "rule_version": "1.0.0",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "manifest_member:E1-HC-02",
@@ -11814,7 +11940,7 @@
     ],
     "rules": [
      {
-      "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+      "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
       "benchmark_route": {
        "ensemble_representation": [
         "lowest_conformer"
@@ -11898,9 +12024,9 @@
          "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
         }
        ],
-       "manifest_version": "1.0.0",
+       "manifest_version": 1,
        "member_count": 38,
-       "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+       "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
        "sources": [
         "G4_2007",
         "G4_2007_EPAPS",
@@ -11916,14 +12042,14 @@
         "G399_2000"
        ]
       },
-      "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
       "quantity": "formation_enthalpy_298k",
       "rule_id": "E1",
       "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
       "status": "active",
       "supersedes": [],
-      "version": "1.0.0"
+      "version": 1
      }
     ],
     "selected_ref": "g4"
@@ -11932,9 +12058,16 @@
   "empty": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [],
     "decision": {
@@ -11952,7 +12085,7 @@
        "applied": true,
        "candidates": [],
        "rule_id": "E1",
-       "rule_version": "1.0.0",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "manifest_member:E1-HC-02",
@@ -11964,7 +12097,7 @@
      ],
      "rules": [
       {
-       "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+       "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
        "benchmark_route": {
         "ensemble_representation": [
          "lowest_conformer"
@@ -12048,9 +12181,9 @@
           "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
          }
         ],
-        "manifest_version": "1.0.0",
+        "manifest_version": 1,
         "member_count": 38,
-        "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+        "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
         "sources": [
          "G4_2007",
          "G4_2007_EPAPS",
@@ -12066,23 +12199,26 @@
          "G399_2000"
         ]
        },
-       "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+       "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
        "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
        "quantity": "formation_enthalpy_298k",
        "rule_id": "E1",
        "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
        "status": "active",
        "supersedes": [],
-       "version": "1.0.0"
+       "version": 1
       }
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "no_applicable_candidate",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 0,
@@ -12132,7 +12268,7 @@
       "applied": true,
       "candidates": [],
       "rule_id": "E1",
-      "rule_version": "1.0.0",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "manifest_member:E1-HC-02",
@@ -12144,7 +12280,7 @@
     ],
     "rules": [
      {
-      "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+      "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
       "benchmark_route": {
        "ensemble_representation": [
         "lowest_conformer"
@@ -12228,9 +12364,9 @@
          "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
         }
        ],
-       "manifest_version": "1.0.0",
+       "manifest_version": 1,
        "member_count": 38,
-       "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+       "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
        "sources": [
         "G4_2007",
         "G4_2007_EPAPS",
@@ -12246,14 +12382,14 @@
         "G399_2000"
        ]
       },
-      "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
       "quantity": "formation_enthalpy_298k",
       "rule_id": "E1",
       "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
       "status": "active",
       "supersedes": [],
-      "version": "1.0.0"
+      "version": 1
      }
     ],
     "selected_ref": null
@@ -12262,9 +12398,16 @@
   "inactive_rule": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -12385,7 +12528,7 @@
       {
        "applied": false,
        "rule_id": "R1",
-       "rule_version": "1",
+       "rule_version": 1,
        "why": "rule_status_revoked"
       }
      ],
@@ -12402,16 +12545,19 @@
        "rule_id": "R1",
        "status": "revoked",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       }
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 2,
@@ -12471,7 +12617,7 @@
      {
       "applied": false,
       "rule_id": "R1",
-      "rule_version": "1",
+      "rule_version": 1,
       "why": "rule_status_revoked"
      }
     ],
@@ -12488,7 +12634,7 @@
       "rule_id": "R1",
       "status": "revoked",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      }
     ],
     "selected_ref": null
@@ -12497,9 +12643,16 @@
   "no_rules_incomparable": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -12668,11 +12821,14 @@
      "rules": [],
      "selected_ref": null
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 3,
@@ -12738,9 +12894,16 @@
   "opposing_mutual_supersession": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -12854,13 +13017,13 @@
        "dispreferred": "b",
        "preferred": "a",
        "rule_id": "R1",
-       "rule_version": "1"
+       "rule_version": 1
       },
       {
        "dispreferred": "a",
        "preferred": "b",
        "rule_id": "R2",
-       "rule_version": "1"
+       "rule_version": 1
       }
      ],
      "fronts": [
@@ -12876,8 +13039,14 @@
         "b"
        ],
        "rules": [
-        "R1@1",
-        "R2@1"
+        {
+         "rule_id": "R1",
+         "rule_version": 1
+        },
+        {
+         "rule_id": "R2",
+         "rule_version": 1
+        }
        ]
       }
      ],
@@ -12911,7 +13080,7 @@
         }
        ],
        "rule_id": "R1",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -12946,7 +13115,7 @@
         }
        ],
        "rule_id": "R2",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -12970,7 +13139,7 @@
        "supersedes": [
         "R2"
        ],
-       "version": "1"
+       "version": 1
       },
       {
        "authority": "",
@@ -12986,16 +13155,19 @@
        "supersedes": [
         "R1"
        ],
-       "version": "1"
+       "version": 1
       }
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 2,
@@ -13048,13 +13220,13 @@
       "dispreferred": "b",
       "preferred": "a",
       "rule_id": "R1",
-      "rule_version": "1"
+      "rule_version": 1
      },
      {
       "dispreferred": "a",
       "preferred": "b",
       "rule_id": "R2",
-      "rule_version": "1"
+      "rule_version": 1
      }
     ],
     "fronts": [
@@ -13070,8 +13242,14 @@
        "b"
       ],
       "rules": [
-       "R1@1",
-       "R2@1"
+       {
+        "rule_id": "R1",
+        "rule_version": 1
+       },
+       {
+        "rule_id": "R2",
+        "rule_version": 1
+       }
       ]
      }
     ],
@@ -13105,7 +13283,7 @@
        }
       ],
       "rule_id": "R1",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -13140,7 +13318,7 @@
        }
       ],
       "rule_id": "R2",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -13164,7 +13342,7 @@
       "supersedes": [
        "R2"
       ],
-      "version": "1"
+      "version": 1
      },
      {
       "authority": "",
@@ -13180,7 +13358,7 @@
       "supersedes": [
        "R1"
       ],
-      "version": "1"
+      "version": 1
      }
     ],
     "selected_ref": null
@@ -13189,9 +13367,16 @@
   "opposing_superseded": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -13300,7 +13485,7 @@
        "dispreferred": "a",
        "preferred": "b",
        "rule_id": "R2",
-       "rule_version": "1"
+       "rule_version": 1
       }
      ],
      "fronts": [
@@ -13317,10 +13502,10 @@
       {
        "dispreferred": "b",
        "overridden_by_rule_id": "R2",
-       "overridden_by_rule_version": "1",
+       "overridden_by_rule_version": 1,
        "preferred": "a",
        "rule_id": "R1",
-       "rule_version": "1"
+       "rule_version": 1
       }
      ],
      "rule_matches": [
@@ -13351,7 +13536,7 @@
         }
        ],
        "rule_id": "R1",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -13386,7 +13571,7 @@
         }
        ],
        "rule_id": "R2",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -13408,7 +13593,7 @@
        "rule_id": "R1",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       },
       {
        "authority": "",
@@ -13424,16 +13609,19 @@
        "supersedes": [
         "R1"
        ],
-       "version": "1"
+       "version": 1
       }
      ],
      "selected_ref": "b"
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 2,
@@ -13481,7 +13669,7 @@
       "dispreferred": "a",
       "preferred": "b",
       "rule_id": "R2",
-      "rule_version": "1"
+      "rule_version": 1
      }
     ],
     "fronts": [
@@ -13498,10 +13686,10 @@
      {
       "dispreferred": "b",
       "overridden_by_rule_id": "R2",
-      "overridden_by_rule_version": "1",
+      "overridden_by_rule_version": 1,
       "preferred": "a",
       "rule_id": "R1",
-      "rule_version": "1"
+      "rule_version": 1
      }
     ],
     "rule_matches": [
@@ -13532,7 +13720,7 @@
        }
       ],
       "rule_id": "R1",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -13567,7 +13755,7 @@
        }
       ],
       "rule_id": "R2",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -13589,7 +13777,7 @@
       "rule_id": "R1",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      },
      {
       "authority": "",
@@ -13605,7 +13793,7 @@
       "supersedes": [
        "R1"
       ],
-      "version": "1"
+      "version": 1
      }
     ],
     "selected_ref": "b"
@@ -13614,9 +13802,16 @@
   "opposing_unresolved": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -13730,13 +13925,13 @@
        "dispreferred": "b",
        "preferred": "a",
        "rule_id": "R1",
-       "rule_version": "1"
+       "rule_version": 1
       },
       {
        "dispreferred": "a",
        "preferred": "b",
        "rule_id": "R2",
-       "rule_version": "1"
+       "rule_version": 1
       }
      ],
      "fronts": [
@@ -13752,8 +13947,14 @@
         "b"
        ],
        "rules": [
-        "R1@1",
-        "R2@1"
+        {
+         "rule_id": "R1",
+         "rule_version": 1
+        },
+        {
+         "rule_id": "R2",
+         "rule_version": 1
+        }
        ]
       }
      ],
@@ -13787,7 +13988,7 @@
         }
        ],
        "rule_id": "R1",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -13822,7 +14023,7 @@
         }
        ],
        "rule_id": "R2",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -13844,7 +14045,7 @@
        "rule_id": "R1",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       },
       {
        "authority": "",
@@ -13858,16 +14059,19 @@
        "rule_id": "R2",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       }
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_conflict",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 2,
@@ -13920,13 +14124,13 @@
       "dispreferred": "b",
       "preferred": "a",
       "rule_id": "R1",
-      "rule_version": "1"
+      "rule_version": 1
      },
      {
       "dispreferred": "a",
       "preferred": "b",
       "rule_id": "R2",
-      "rule_version": "1"
+      "rule_version": 1
      }
     ],
     "fronts": [
@@ -13942,8 +14146,14 @@
        "b"
       ],
       "rules": [
-       "R1@1",
-       "R2@1"
+       {
+        "rule_id": "R1",
+        "rule_version": 1
+       },
+       {
+        "rule_id": "R2",
+        "rule_version": 1
+       }
       ]
      }
     ],
@@ -13977,7 +14187,7 @@
        }
       ],
       "rule_id": "R1",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -14012,7 +14222,7 @@
        }
       ],
       "rule_id": "R2",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -14034,7 +14244,7 @@
       "rule_id": "R1",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      },
      {
       "authority": "",
@@ -14048,7 +14258,7 @@
       "rule_id": "R2",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      }
     ],
     "selected_ref": null
@@ -14057,9 +14267,16 @@
   "outside_scope": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -14180,7 +14397,7 @@
       {
        "applied": false,
        "rule_id": "R1",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -14203,16 +14420,19 @@
        "rule_id": "R1",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       }
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 2,
@@ -14272,7 +14492,7 @@
      {
       "applied": false,
       "rule_id": "R1",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -14295,7 +14515,7 @@
       "rule_id": "R1",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      }
     ],
     "selected_ref": null
@@ -14304,9 +14524,16 @@
   "policy_matters_inside_a_front": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -14512,19 +14739,19 @@
        "dispreferred": "s",
        "preferred": "p",
        "rule_id": "R1",
-       "rule_version": "1"
+       "rule_version": 1
       },
       {
        "dispreferred": "s",
        "preferred": "q",
        "rule_id": "R1",
-       "rule_version": "1"
+       "rule_version": 1
       },
       {
        "dispreferred": "s",
        "preferred": "r",
        "rule_id": "R1",
-       "rule_version": "1"
+       "rule_version": 1
       }
      ],
      "fronts": [
@@ -14590,7 +14817,7 @@
         }
        ],
        "rule_id": "R1",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -14612,16 +14839,19 @@
        "rule_id": "R1",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       }
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 4,
@@ -14674,19 +14904,19 @@
       "dispreferred": "s",
       "preferred": "p",
       "rule_id": "R1",
-      "rule_version": "1"
+      "rule_version": 1
      },
      {
       "dispreferred": "s",
       "preferred": "q",
       "rule_id": "R1",
-      "rule_version": "1"
+      "rule_version": 1
      },
      {
       "dispreferred": "s",
       "preferred": "r",
       "rule_id": "R1",
-      "rule_version": "1"
+      "rule_version": 1
      }
     ],
     "fronts": [
@@ -14752,7 +14982,7 @@
        }
       ],
       "rule_id": "R1",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -14774,7 +15004,7 @@
       "rule_id": "R1",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      }
     ],
     "selected_ref": null
@@ -14783,9 +15013,16 @@
   "policy_matters_no_rules": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -15002,11 +15239,14 @@
      "rules": [],
      "selected_ref": null
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 4,
@@ -15074,9 +15314,16 @@
   "policy_matters_with_a_single_winner_chain": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -15279,19 +15526,19 @@
        "dispreferred": "p",
        "preferred": "q",
        "rule_id": "R1",
-       "rule_version": "1"
+       "rule_version": 1
       },
       {
        "dispreferred": "r",
        "preferred": "q",
        "rule_id": "R1",
-       "rule_version": "1"
+       "rule_version": 1
       },
       {
        "dispreferred": "s",
        "preferred": "q",
        "rule_id": "R1",
-       "rule_version": "1"
+       "rule_version": 1
       }
      ],
      "fronts": [
@@ -15357,7 +15604,7 @@
         }
        ],
        "rule_id": "R1",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -15379,16 +15626,19 @@
        "rule_id": "R1",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       }
      ],
      "selected_ref": "q"
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 4,
@@ -15438,19 +15688,19 @@
       "dispreferred": "p",
       "preferred": "q",
       "rule_id": "R1",
-      "rule_version": "1"
+      "rule_version": 1
      },
      {
       "dispreferred": "r",
       "preferred": "q",
       "rule_id": "R1",
-      "rule_version": "1"
+      "rule_version": 1
      },
      {
       "dispreferred": "s",
       "preferred": "q",
       "rule_id": "R1",
-      "rule_version": "1"
+      "rule_version": 1
      }
     ],
     "fronts": [
@@ -15516,7 +15766,7 @@
        }
       ],
       "rule_id": "R1",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -15538,7 +15788,7 @@
       "rule_id": "R1",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      }
     ],
     "selected_ref": "q"
@@ -15547,9 +15797,16 @@
   "single": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -15637,7 +15894,7 @@
         }
        ],
        "rule_id": "E1",
-       "rule_version": "1.0.0",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "manifest_member:E1-HC-02",
@@ -15649,7 +15906,7 @@
      ],
      "rules": [
       {
-       "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+       "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
        "benchmark_route": {
         "ensemble_representation": [
          "lowest_conformer"
@@ -15733,9 +15990,9 @@
           "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
          }
         ],
-        "manifest_version": "1.0.0",
+        "manifest_version": 1,
         "member_count": 38,
-        "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+        "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
         "sources": [
          "G4_2007",
          "G4_2007_EPAPS",
@@ -15751,23 +16008,26 @@
          "G399_2000"
         ]
        },
-       "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+       "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
        "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
        "quantity": "formation_enthalpy_298k",
        "rule_id": "E1",
        "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
        "status": "active",
        "supersedes": [],
-       "version": "1.0.0"
+       "version": 1
       }
      ],
      "selected_ref": "a"
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "sole_eligible_candidate",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 1,
@@ -15840,7 +16100,7 @@
        }
       ],
       "rule_id": "E1",
-      "rule_version": "1.0.0",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "manifest_member:E1-HC-02",
@@ -15852,7 +16112,7 @@
     ],
     "rules": [
      {
-      "authority": "repository owner, acting as curator (manifest 1.0.0, 2026-10-03)",
+      "authority": "repository owner, acting as curator (manifest approved 2026-10-03)",
       "benchmark_route": {
        "ensemble_representation": [
         "lowest_conformer"
@@ -15936,9 +16196,9 @@
          "statement": "Aggregate MADs only; the paper gives no per-molecule claim that G4 beats G3 for each member. Per-member G4 deviations exist (EPAPS Table 11) but per-member G3 deviations on the G3/05 experimental values were not found."
         }
        ],
-       "manifest_version": "1.0.0",
+       "manifest_version": 1,
        "member_count": 38,
-       "sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+       "sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
        "sources": [
         "G4_2007",
         "G4_2007_EPAPS",
@@ -15954,14 +16214,14 @@
         "G399_2000"
        ]
       },
-      "manifest_sha256": "f2265d40e1d314985b7f23c9cba98fe0efaf6327980789071e19a400830d25a0",
+      "manifest_sha256": "f0e9a2676e5778f377c63bea6b6d3511fdd528d25f2da097b9b63607cb0d0926",
       "objective": "expected accuracy of the gas-phase standard enthalpy of formation at 298.15 K, derived by atomization, for the audited hydrocarbon benchmark species",
       "quantity": "formation_enthalpy_298k",
       "rule_id": "E1",
       "statement": "Standard G4 precedes standard G3 for compatible neutral gas-phase hydrocarbon formation-enthalpy (298 K) records, restricted to verified members of the published hydrocarbon benchmark subset.",
       "status": "active",
       "supersedes": [],
-      "version": "1.0.0"
+      "version": 1
      }
     ],
     "selected_ref": "a"
@@ -15970,9 +16230,16 @@
   "superseded_rule_removed_before_conflict": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -16081,13 +16348,13 @@
        "dispreferred": "a",
        "preferred": "b",
        "rule_id": "R2",
-       "rule_version": "1"
+       "rule_version": 1
       },
       {
        "dispreferred": "a",
        "preferred": "b",
        "rule_id": "R4",
-       "rule_version": "1"
+       "rule_version": 1
       }
      ],
      "fronts": [
@@ -16104,10 +16371,10 @@
       {
        "dispreferred": "b",
        "overridden_by_rule_id": "R2",
-       "overridden_by_rule_version": "1",
+       "overridden_by_rule_version": 1,
        "preferred": "a",
        "rule_id": "R1",
-       "rule_version": "1"
+       "rule_version": 1
       }
      ],
      "rule_matches": [
@@ -16138,7 +16405,7 @@
         }
        ],
        "rule_id": "R1",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -16173,7 +16440,7 @@
         }
        ],
        "rule_id": "R2",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -16208,7 +16475,7 @@
         }
        ],
        "rule_id": "R4",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -16230,7 +16497,7 @@
        "rule_id": "R1",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       },
       {
        "authority": "",
@@ -16246,7 +16513,7 @@
        "supersedes": [
         "R1"
        ],
-       "version": "1"
+       "version": 1
       },
       {
        "authority": "",
@@ -16260,16 +16527,19 @@
        "rule_id": "R4",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       }
      ],
      "selected_ref": "b"
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "policy_preferred",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 2,
@@ -16317,13 +16587,13 @@
       "dispreferred": "a",
       "preferred": "b",
       "rule_id": "R2",
-      "rule_version": "1"
+      "rule_version": 1
      },
      {
       "dispreferred": "a",
       "preferred": "b",
       "rule_id": "R4",
-      "rule_version": "1"
+      "rule_version": 1
      }
     ],
     "fronts": [
@@ -16340,10 +16610,10 @@
      {
       "dispreferred": "b",
       "overridden_by_rule_id": "R2",
-      "overridden_by_rule_version": "1",
+      "overridden_by_rule_version": 1,
       "preferred": "a",
       "rule_id": "R1",
-      "rule_version": "1"
+      "rule_version": 1
      }
     ],
     "rule_matches": [
@@ -16374,7 +16644,7 @@
        }
       ],
       "rule_id": "R1",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -16409,7 +16679,7 @@
        }
       ],
       "rule_id": "R2",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -16444,7 +16714,7 @@
        }
       ],
       "rule_id": "R4",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -16466,7 +16736,7 @@
       "rule_id": "R1",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      },
      {
       "authority": "",
@@ -16482,7 +16752,7 @@
       "supersedes": [
        "R1"
       ],
-      "version": "1"
+      "version": 1
      },
      {
       "authority": "",
@@ -16496,7 +16766,7 @@
       "rule_id": "R4",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      }
     ],
     "selected_ref": "b"
@@ -16505,9 +16775,16 @@
   "two_fronts_admin_order": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -16713,13 +16990,13 @@
        "dispreferred": "c",
        "preferred": "a",
        "rule_id": "R1",
-       "rule_version": "1"
+       "rule_version": 1
       },
       {
        "dispreferred": "c",
        "preferred": "b",
        "rule_id": "R1",
-       "rule_version": "1"
+       "rule_version": 1
       }
      ],
      "fronts": [
@@ -16785,7 +17062,7 @@
         }
        ],
        "rule_id": "R1",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -16807,16 +17084,19 @@
        "rule_id": "R1",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       }
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 4,
@@ -16869,13 +17149,13 @@
       "dispreferred": "c",
       "preferred": "a",
       "rule_id": "R1",
-      "rule_version": "1"
+      "rule_version": 1
      },
      {
       "dispreferred": "c",
       "preferred": "b",
       "rule_id": "R1",
-      "rule_version": "1"
+      "rule_version": 1
      }
     ],
     "fronts": [
@@ -16941,7 +17221,7 @@
        }
       ],
       "rule_id": "R1",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -16963,7 +17243,7 @@
       "rule_id": "R1",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      }
     ],
     "selected_ref": null
@@ -16972,9 +17252,16 @@
   "unknown_scope": {
    "manifest": {
     "assessment_semantics": {
-     "evidence_rubric": "computed_thermo@2",
-     "source_findings": "1",
-     "version": "2"
+     "evidence_rubric": {
+      "name": "computed_thermo",
+      "version": 1
+     },
+     "name": "thermo_selection_assessment",
+     "source_findings": {
+      "name": "structure_source_findings",
+      "version": 1
+     },
+     "version": 1
     },
     "candidates": [
      {
@@ -17095,7 +17382,7 @@
       {
        "applied": false,
        "rule_id": "R1",
-       "rule_version": "1",
+       "rule_version": 1,
        "scope": {
         "reasons": [
          "test_scope"
@@ -17118,16 +17405,19 @@
        "rule_id": "R1",
        "status": "active",
        "supersedes": [],
-       "version": "1"
+       "version": 1
       }
      ],
      "selected_ref": null
     },
-    "manifest_format_version": 2,
+    "format": {
+     "name": "thermo_selection_manifest",
+     "version": 1
+    },
     "outcome": "incomparable_alternatives",
     "policy": {
      "name": "h298_method_preferred",
-     "version": "2"
+     "version": 1
     },
     "population": {
      "assessed": 2,
@@ -17187,7 +17477,7 @@
      {
       "applied": false,
       "rule_id": "R1",
-      "rule_version": "1",
+      "rule_version": 1,
       "scope": {
        "reasons": [
         "test_scope"
@@ -17210,7 +17500,7 @@
       "rule_id": "R1",
       "status": "active",
       "supersedes": [],
-      "version": "1"
+      "version": 1
      }
     ],
     "selected_ref": null

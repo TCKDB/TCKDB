@@ -989,7 +989,7 @@ def test_bundle_calculation_parameters_persist_via_shared_seam(db_conn) -> None:
                 },
             ],
             "parameters_json": {"route": "# B3LYP/6-31G(d) opt=tight"},
-            "parameters_parser_version": "bundle-test-1",
+            "parameters_parser": {"name": "test-parser", "version": "bundle-test-1"},
             "parameters_extracted_at": extracted_at.isoformat(),
         }
     )

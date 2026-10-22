@@ -167,7 +167,7 @@ def test_an_unreadable_claim_is_counted_as_unreadable_and_never_as_not_stated(db
 def test_the_report_is_json_and_says_what_it_does_not_claim(db_session, seeded):
     report = network_coverage_inventory(db_session)
     assert json.loads(json.dumps(report, allow_nan=False)) == report
-    assert report["bounds_version"] == "1"
+    assert report["bounds_version"] == 1
     assert any("declared, never as verified" in note for note in report["notes"])
 
 
@@ -198,7 +198,7 @@ def test_the_inventory_report_runs_read_only_and_a_write_in_it_is_refused_by_the
 
     url = db_engine.url.render_as_string(hide_password=False)
     print_read_only_report(url, network_coverage_inventory)
-    assert json.loads(capsys.readouterr().out)["bounds_version"] == "1"
+    assert json.loads(capsys.readouterr().out)["bounds_version"] == 1
 
     def write(session):
         session.execute(text("UPDATE network_solve SET note = note WHERE false"))

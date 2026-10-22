@@ -17,7 +17,7 @@ custody chain a new importer (ThermoML, Phase C-E2/E3) attaches to instead:
   constraint), so a re-import always has a byte-identical or explicitly
   superseding custody trail.
 
-Both tables are included in the ``tckdb.archive.v1`` registry
+Both tables are included in the ``tckdb.archive`` registry
 (``app/services/archive/registry.py``); their columns use only generic
 codec-supported SQL types, so no archive core.py change is needed.
 """
@@ -130,6 +130,7 @@ class ExternalSourceRecord(Base, TimestampMixin):
     schema_valid: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     parser_name: Mapped[str] = mapped_column(Text, nullable=False)
     parser_version: Mapped[str] = mapped_column(Text, nullable=False)
+    mapping_name: Mapped[str] = mapped_column(Text, nullable=False)
     mapping_version: Mapped[str] = mapped_column(Text, nullable=False)
     mapping_report_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
@@ -156,13 +157,15 @@ class ExternalSourceRecord(Base, TimestampMixin):
             "http_status IS NULL OR http_status BETWEEN 100 AND 599",
             name=conv("ck_external_source_record_http_status_range"),
         ),
-        # A changed parser or mapping version appends a new custody row
+        # A changed parser or mapping (its name or its version) appends a new custody row
         # rather than overwriting the old one -- see class docstring.
         UniqueConstraint(
             "external_source_id",
             "source_record_key",
             "content_sha256",
+            "parser_name",
             "parser_version",
+            "mapping_name",
             "mapping_version",
             name="uq_external_source_record_identity",
         ),

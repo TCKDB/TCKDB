@@ -205,8 +205,8 @@ def test_a_refuted_prerequisite_wins_over_an_unknown_one():
 
 def test_the_registry_entry_records_version_evidence_limits_and_exclusions():
     entry = RULE.describe()
-    assert entry["rule_id"] == "E1" and entry["version"] == "1.0.0"
-    assert entry["manifest"]["manifest_version"] == "1.0.0" and entry["manifest"]["member_count"] == 38
+    assert entry["rule_id"] == "E1" and entry["version"] == 1
+    assert entry["manifest"]["manifest_version"] == 1 and entry["manifest"]["member_count"] == 38
     text = " ".join(str(e) for e in entry["evidence_limits"])
     assert "in-sample" in text and "0.69" in text and "0.48" in text
     assert any("radicals" in e for e in entry["exclusions"])

@@ -46,6 +46,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     text,
@@ -89,11 +90,13 @@ class RecordMachineReviewRow(Base, TimestampMixin):
 
     # --- currency key (policy §3.4/§3.5) -------------------------------------
     context_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    context_schema_version: Mapped[str] = mapped_column(String(32), nullable=False)
-    prompt_version: Mapped[str] = mapped_column(String(64), nullable=False)
-    rubric_versions_json: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, nullable=False
-    )
+    context_schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The prompt and the rubric are each a stable name beside an integer version,
+    # never one string with the version glued on.
+    prompt_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    prompt_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    rubric_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    rubric_version: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # --- provenance back to what triggered this review -----------------------
     source_submission_id: Mapped[Optional[int]] = mapped_column(
@@ -157,5 +160,12 @@ class RecordMachineReviewRow(Base, TimestampMixin):
         CheckConstraint(
             "jsonb_typeof(findings_json) = 'array'",
             name="findings_json_is_array",
+        ),
+        CheckConstraint(
+            # 0 is allowed for a prompt or rubric: the 2026-10 reset stored every pre-reset stamp at 0 (or 1 for a
+            # rubric's latest version), and 0 is never current, so such a review reads stale. The recipe version
+            # is never 0.
+            "context_schema_version >= 1 AND prompt_version >= 0 AND rubric_version >= 0",
+            name="versions_in_range",
         ),
     )

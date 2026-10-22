@@ -714,6 +714,7 @@ def test_custody_rows_are_references_too(db_session) -> None:
         "retrieved_at": datetime(2026, 9, 25),
         "parser_name": "thermoml",
         "parser_version": "1",
+        "mapping_name": "thermoml_cp_mapping",
         "mapping_version": "1",
     }
     xml = b"<DataReport/>\n"

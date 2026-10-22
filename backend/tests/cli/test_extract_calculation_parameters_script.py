@@ -18,6 +18,7 @@ import hashlib
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.version import ParserStamp
 from tckdb_schemas.software import normalize_software_name
 
 from app.db.models.calculation import (
@@ -246,7 +247,7 @@ class TestRunBackfill:
                 )
             ],
             source=ParameterSource.parser,
-            parser_version="seed_v0",
+            parser=ParserStamp(name="seed_parser", version="0"),
         )
         db_session.flush()
 
@@ -263,7 +264,7 @@ class TestRunBackfill:
         seed_rows = db_session.scalars(
             select(CalculationParameter).where(
                 CalculationParameter.calculation_id == calc_a,
-                CalculationParameter.parser_version == "seed_v0",
+                CalculationParameter.parser_name == "seed_parser",
             )
         ).all()
         assert len(seed_rows) == 1
@@ -288,7 +289,7 @@ class TestRunBackfill:
                 )
             ],
             source=ParameterSource.parser,
-            parser_version="stale_v0",
+            parser=ParserStamp(name="stale_parser", version="0"),
         )
         db_session.flush()
         assert _parser_count(db_session, calc_id) == 1
@@ -304,7 +305,7 @@ class TestRunBackfill:
         stale = db_session.scalars(
             select(CalculationParameter).where(
                 CalculationParameter.calculation_id == calc_id,
-                CalculationParameter.parser_version == "stale_v0",
+                CalculationParameter.parser_name == "stale_parser",
             )
         ).all()
         assert stale == []
@@ -314,7 +315,7 @@ class TestRunBackfill:
                 CalculationParameter.source == ParameterSource.parser,
             )
         ).all()
-        assert all(r.parser_version != "stale_v0" for r in new_rows)
+        assert all(r.parser_name != "stale_parser" for r in new_rows)
         assert new_rows
 
     def test_dry_run_writes_nothing(

@@ -18,6 +18,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.importers.cccbdb import PARSER_NAME
 from app.importers.cccbdb.models import (
     CCCBDBExperimentalSpeciesRecord,
     CCCBDBValueRef,
@@ -43,6 +44,7 @@ class ExternalSourceMetadata(BaseModel):
     record_key: str
     page_kind: Literal["experimental_species"] = "experimental_species"
     content_sha256: str
+    parser_name: str = PARSER_NAME
     parser_version: str
     per_value_references: dict[str, dict[str, Any]] = Field(
         default_factory=dict

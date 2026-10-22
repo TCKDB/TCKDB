@@ -49,7 +49,7 @@ POST /api/v1/bundles/submit
 
 ## Supported bundle kinds
 
-Submit/import v0 supports the same families as bundle format v0:
+Submit/import v0 supports the same families as the bundle format:
 
 - `thermo`
 - `kinetics`
@@ -174,7 +174,7 @@ X-API-Key: tck_…           // or session cookie
 
 {
   "bundle_format": "tckdb-contribution-bundle",
-  "bundle_version": "0.1",
+  "bundle_version": 1,
   "bundle_kind": "thermo",
   "created_at": "2026-04-25T00:00:00Z",
   "source_instance": { /* … */ },

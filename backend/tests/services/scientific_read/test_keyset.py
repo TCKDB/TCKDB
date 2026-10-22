@@ -117,6 +117,27 @@ def test_cursor_from_a_future_version_is_rejected():
         decode_cursor(token, expected_signature="sig-a")
 
 
+@pytest.mark.parametrize("raw", ["true", "1.0"])
+def test_a_cursor_whose_version_is_a_bool_or_float_is_rejected(raw):
+    """Kills: ``payload.get("v") != CURSOR_VERSION`` accepting ``true`` (``True == 1``) and ``1.0``."""
+    import base64
+    import json
+
+    good = json.dumps(
+        {
+            "v": CURSOR_VERSION,
+            "watermark": _watermark().as_dict(),
+            "last_values": [1],
+            "query_signature": "sig-a",
+        }
+    )
+    payload = good.replace(f'"v": {CURSOR_VERSION}', f'"v": {raw}')
+    assert payload != good
+    token = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+    with pytest.raises(InvalidCursorError, match="cursor version"):
+        decode_cursor(token, expected_signature="sig-a")
+
+
 # ---------------------------------------------------------------------------
 # Query signature
 # ---------------------------------------------------------------------------

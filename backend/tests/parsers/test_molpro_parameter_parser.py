@@ -49,7 +49,7 @@ def test_ch4_closed_shell_full_parse() -> None:
     r = parse_molpro_log(text=_read("ch4_closed_shell"))
 
     assert r["method_family"] == "ccsd_f12"
-    assert r["parser_version"] == "molpro_v1"
+    assert r["parser"] == {"name": "molpro_parameters", "version": "1"}
 
     mb = r["method_basis"]
     assert mb["method"] == "ccsd(t)-f12"

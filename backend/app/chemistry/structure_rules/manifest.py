@@ -29,7 +29,7 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
-from app.chemistry.manifest_attestation import attest
+from app.chemistry.manifest_attestation import attest, require_integer_version, require_manifest_name
 
 MANIFEST_PATH = Path(__file__).with_name("structure_rule_candidates.yaml")
 
@@ -73,7 +73,7 @@ class RuleCandidate:
     """One audited candidate rule, as stated in the manifest."""
 
     rule_id: str
-    version: str
+    version: int
     objective: str
     objective_key: str
     observable: str
@@ -126,7 +126,7 @@ class RuleCandidate:
 class StructureRuleManifest:
     """The loaded, validated manifest."""
 
-    version: str
+    version: int
     candidates: tuple[RuleCandidate, ...]
     #: Pinned sources (id, citation, version read, sha256 of the bytes read, what each was used for).
     sources: tuple[dict[str, Any], ...] = ()
@@ -142,6 +142,11 @@ class StructureRuleManifest:
             if candidate.rule_id == rule_id:
                 return candidate
         raise ManifestError(f"the manifest has no candidate {rule_id!r}")
+
+
+def _manifest_version(raw: dict[str, Any]) -> int:
+    require_manifest_name(raw.get("name"), where="structure rule manifest", error=ManifestError)
+    return require_integer_version(raw.get("version"), where="structure rule manifest", error=ManifestError)
 
 
 def _require(condition: bool, message: str) -> None:
@@ -218,7 +223,7 @@ def _candidate(raw: dict[str, Any]) -> RuleCandidate:
         _require(bool(needed), f"{name}: not approved for activation and lists nothing that would be needed")
     return RuleCandidate(
         rule_id=name,
-        version=str(raw["version"]),
+        version=require_integer_version(raw.get("version"), where=name, error=ManifestError),
         objective=raw["objective"],
         objective_key=raw["objective_key"],
         observable=raw["observable"],
@@ -299,7 +304,7 @@ def parse_structure_rule_manifest(raw: dict[str, Any]) -> StructureRuleManifest:
             f"noted_discrepancies entry {label!r} names a rule that is not an entry",
         )
     return StructureRuleManifest(
-        version=str(raw["manifest_version"]),
+        version=_manifest_version(raw),
         candidates=candidates,
         sources=sources,
         considered_not_rules=declined,

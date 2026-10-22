@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.160.0 - 2026-10-21
+
+Follows `tckdb-schemas` 0.131.0 (review fixes to versioning PR-4). The floor is raised to `tckdb-schemas>=0.131.0`: the client now speaks the
+`ParserStamp` / `{name, version}` wire that older schemas packages do not have, and the old floor (`>=0.116.0`) let a resolver pick one of them.
+
+- The selection manifests the client returns (`RelativeConformerEnergyManifest`, `RelativeConformerEnergyCompareManifest`, and the engines' manifests,
+  which the client passes through untouched) open with a root `format` block, `{"name": ..., "version": ...}`, in place of
+  `manifest_format_version` (and, for the relative-energy manifests, the separate `manifest_format` name string). A manifest's
+  `assessment_semantics` block gains a `name`, and its `source_findings` is a `{name, version}` pair instead of a bare integer.
+- `tckdb-qcschema` 0.9.1: its floors are now `tckdb-client>=0.160.0` and `tckdb-schemas>=0.131.0` (they were unpinned).
+
+## 0.159.0 - 2026-10-20
+
+Follows `tckdb-schemas` 0.130.0 (versioning PR-4: a name and an integer version everywhere, every TCKDB-owned version reset to 1).
+
+- The replay sidecar's `bundle_format_version` is the integer `1` (it was the string `"0"`); `DEFAULT_FORMAT_VERSIONS` is `(1,)`. A sidecar written by an
+  older client holds `"0"` and is marked failed with `unsupported bundle_format_version`; re-export the bundle.
+- `ReproducibilityAssessmentSummary.rubric_version` is `int | None` (was `str | None`).
+- `ExecutionEnvironmentManifestRecord` carries `schema_name` and an integer `schema_version`.
+- `StatmechSelectionRequest`-shaped records carry `contract_version: 1` (was `"statmech-selection-v1"`).
+
 ## 0.158.0 - 2026-10-20
 
 `RejectionCode` gains one member, `unknown_manifest_schema` (409), for a release manifest whose stored format tag this server cannot

@@ -21,6 +21,7 @@ from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import SelectionPolicy
 from app.services.statmech_selection.vocabulary import (
     COMPONENT_OBSERVABLE,
+    CONTRACT_VERSION,
     DEFERRED_TASK_OBSERVABLES,
     OWNER_SCOPES,
     TASK_OBSERVABLES,
@@ -46,10 +47,10 @@ from app.services.statmech_selection.vocabulary import (
     ZpeInclusion,
 )
 
-ASSESSMENT_VERSION = "1"
-NORMALIZER_VERSION = "1"
-DECISION_VERSION = "1"
-ADMIN_KEY_VERSION = "1"
+ASSESSMENT_VERSION = 1
+NORMALIZER_VERSION = 1
+DECISION_VERSION = 1
+ADMIN_KEY_VERSION = 1
 #: The finding semantics this release reads (shared with structure selection).
 SUPPORTED_FINDING_VERSIONS = frozenset({1})
 
@@ -69,7 +70,7 @@ class SelectionBounds:
     :param manifest_bytes: Canonical normalised manifest payload.
     """
 
-    version: str = "1"
+    version: int = 1
     candidates: int = 500
     nested_rows: int = 25_000
     dependency_depth: int = 8
@@ -422,7 +423,7 @@ class StatmechRequest:
     # -- wire ------------------------------------------------------------------------------------------------
     def to_dict(self) -> dict[str, Any]:
         return {
-            "contract_version": "statmech-selection-v1",
+            "contract_version": CONTRACT_VERSION,
             "task": self.task.value,
             "intent": self.intent.value,
             "observable": self.observable.value if self.observable else None,

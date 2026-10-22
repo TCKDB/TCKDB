@@ -3,7 +3,7 @@
 Reads ``TCKDB_BASE_URL`` and ``TCKDB_API_KEY`` from the environment,
 accepts a bundle path, and supports ``--dry-run`` or ``--submit`` modes.
 This is functionally equivalent to the ``curl`` examples in
-``docs/contribution-bundles/manual-local-to-hosted-v0.md`` — it contains
+``docs/contribution-bundles/manual-local-to-hosted.md`` — it contains
 no business logic, only HTTP wiring.
 
 Usage::

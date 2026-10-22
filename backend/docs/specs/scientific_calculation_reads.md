@@ -1260,7 +1260,7 @@ with the include set as the public extension surface.
 # Execution environment include
 
 `include=execution_environment` projects the shared typed
-`tckdb.execution-environment.v1` manifest. It is opt-in and therefore absent
+`tckdb.execution-environment` manifest (`schema_name` plus integer `schema_version`). It is opt-in and therefore absent
 from default record shapes. `available_sections.has_execution_environment` is
 true only when the linked persisted row validates against its canonical content
 digest and all persisted projections; malformed/tampered rows fail closed.

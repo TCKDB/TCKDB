@@ -211,7 +211,7 @@ class TestBlockSectionParsing:
 class TestFullParse:
     def test_parser_version(self):
         result = parse_orca_log(path=SP_LOG)
-        assert result["parser_version"] == "orca_v2"
+        assert result["parser"] == {"name": "orca_parameters", "version": "1"}
 
     def test_total_parameter_count(self):
         result = parse_orca_log(path=SP_LOG)

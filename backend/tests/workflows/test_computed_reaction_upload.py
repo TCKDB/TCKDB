@@ -298,7 +298,7 @@ def _minimal_payload() -> dict:
 
 def _execution_environment() -> dict:
     return {
-        "schema_version": "tckdb.execution-environment.v1", "software_release": {"name": "Gaussian", "version": "16"},
+        "schema_name": "tckdb.execution-environment", "schema_version": 1, "software_release": {"name": "Gaussian", "version": "16"},
         "runtime": {"runtime_kind": "container", "image": "registry.example/arc@sha256:" + "a" * 64},
         "executable": {"locator": "file:///opt/arc/bin/arc", "digest": "sha256:" + "b" * 64},
         "closure": [
@@ -1945,7 +1945,7 @@ def test_bundle_calculation_parameters_persist_via_shared_seam(db_conn) -> None:
                 },
             ],
             "parameters_json": {"route": "# B3LYP/6-31G(d) opt=tight"},
-            "parameters_parser_version": "computed-rxn-test-1",
+            "parameters_parser": {"name": "test-parser", "version": "computed-rxn-test-1"},
             "parameters_extracted_at": extracted_at.isoformat(),
         }
     )

@@ -331,7 +331,7 @@ change a record, its status, or whether it is selected.
 
 If one of these records is later exported as a contribution bundle
 (`scripts/export_contribution_bundle.py`, see
-`docs/contribution-bundles/v0-format.md`), the exporter never re-emits an
+`docs/contribution-bundles/format.md`), the exporter never re-emits an
 undeclared enthalpy next to a declaration of `null` — that shape is exactly
 what this page says the import route refuses. A scalar, point, or Wilhoit
 enthalpy with no declaration is dropped from the export (the rest of the

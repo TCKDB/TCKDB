@@ -188,7 +188,7 @@ class TestHessianHook:
         assert row is not None
         assert row.source is HessianSource.parsed_log
         assert row.natoms == GAUSSIAN_NATOMS
-        assert row.parser_version == "hessian_v1"
+        assert (row.parser_name, row.parser_version) == ("hessian", "1")
         n3 = 3 * GAUSSIAN_NATOMS
         assert len(row.lower_triangle_hartree_bohr2) == n3 * (n3 + 1) // 2
         # Native atomic units, verbatim — no J/m² conversion.

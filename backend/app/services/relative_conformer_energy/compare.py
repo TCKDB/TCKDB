@@ -39,7 +39,7 @@ from app.services.structure_selection.normalizer import (
 )
 
 #: Version of the comparison semantics (pairing, exclusion, statistics, claims).
-COMPARISON_VERSION = "1"
+COMPARISON_VERSION = 1
 
 CODE_IDENTICAL_PROTOCOLS = "relative_conformer_energy_compare_identical_protocols"
 

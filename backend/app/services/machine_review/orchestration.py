@@ -29,12 +29,13 @@ run reports ``failed_to_produce_review`` and appends nothing.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.services.machine_review.context_adapter import (
     build_machine_review_evidence_context_from_trust,
@@ -96,9 +97,9 @@ class MachineReviewOrchestrationResult(BaseModel):
     record_type: str
     record_id: int
     context_hash: str
-    context_schema_version: str
-    prompt_version: str
-    rubric_versions: dict[str, str] = Field(default_factory=dict)
+    context_schema_version: int
+    prompt: VersionRef
+    rubric: VersionRef
     summary: str | None = None
 
 
@@ -109,8 +110,8 @@ def _run_with_produce(
     record_id: int,
     record_ref: str | None,
     trust_fragment: TrustFragment,
-    active_prompt_version: str,
-    active_rubric_versions: Mapping[str, str],
+    active_prompt: VersionRef,
+    active_rubric: VersionRef,
     produce: Callable[[MachineReviewEvidenceContext], RecordMachineReview],
     source_submission_id: int | None = None,
     source_audit_event_id: int | None = None,
@@ -141,8 +142,8 @@ def _run_with_produce(
         record_type=record_type,
         record_id=record_id,
         current_context=digest,
-        active_prompt_version=active_prompt_version,
-        active_rubric_versions=active_rubric_versions,
+        active_prompt=active_prompt,
+        active_rubric=active_rubric,
     )
 
     def _result(
@@ -161,8 +162,8 @@ def _run_with_produce(
             record_id=record_id,
             context_hash=plan.current_context_hash,
             context_schema_version=plan.context_schema_version,
-            prompt_version=plan.prompt_version,
-            rubric_versions=dict(plan.rubric_versions),
+            prompt=plan.prompt,
+            rubric=plan.rubric,
             summary=summary,
         )
 
@@ -218,8 +219,8 @@ def run_record_machine_review_with_producer(
     record_id: int,
     record_ref: str | None,
     trust_fragment: TrustFragment,
-    active_prompt_version: str,
-    active_rubric_versions: Mapping[str, str],
+    active_prompt: VersionRef,
+    active_rubric: VersionRef,
     producer: MachineReviewProducer,
     reviewed_at: datetime,
     source_submission_id: int | None = None,
@@ -241,8 +242,8 @@ def run_record_machine_review_with_producer(
         record_id=record_id,
         record_ref=record_ref,
         trust_fragment=trust_fragment,
-        active_prompt_version=active_prompt_version,
-        active_rubric_versions=active_rubric_versions,
+        active_prompt=active_prompt,
+        active_rubric=active_rubric,
         produce=lambda ctx: producer.review_record(ctx, reviewed_at=reviewed_at),
         source_submission_id=source_submission_id,
         source_audit_event_id=source_audit_event_id,
@@ -256,8 +257,8 @@ def run_fake_record_machine_review(
     record_id: int,
     record_ref: str | None,
     trust_fragment: TrustFragment,
-    active_prompt_version: str,
-    active_rubric_versions: Mapping[str, str],
+    active_prompt: VersionRef,
+    active_rubric: VersionRef,
     fake_review: RecordMachineReview | None = None,
     reviewed_at: datetime | None = None,
     source_submission_id: int | None = None,
@@ -297,8 +298,8 @@ def run_fake_record_machine_review(
         record_id=record_id,
         record_ref=record_ref,
         trust_fragment=trust_fragment,
-        active_prompt_version=active_prompt_version,
-        active_rubric_versions=active_rubric_versions,
+        active_prompt=active_prompt,
+        active_rubric=active_rubric,
         produce=_produce,
         source_submission_id=source_submission_id,
         source_audit_event_id=source_audit_event_id,

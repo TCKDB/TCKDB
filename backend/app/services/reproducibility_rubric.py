@@ -64,6 +64,7 @@ from typing import Any
 
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.db.models.calculation import (
     ArtifactIntegrityEvent,
@@ -117,14 +118,19 @@ class ReproducibilityRubric:
     """The identity a stored assessment is attributed to: which rule graded it."""
 
     name: str
-    version: str
+    version: int
+
+    @property
+    def ref(self) -> VersionRef:
+        """The rubric's identity as a ``VersionRef``: its name and its integer version, apart."""
+        return VersionRef(name=self.name, version=self.version)
 
 
 #: The rubric for every record, and for species-owned statmech byte for byte as before #760.
-SHARED = ReproducibilityRubric("tckdb_reproducibility", "v1")
+SHARED = ReproducibilityRubric("tckdb_reproducibility", 1)
 #: The same rubric with one question changed for a transition-state-owned statmech: "is it attached to a
 #: transition-state entry?" in place of "is it attached to a species entry?". Nothing else differs.
-TS_STATMECH = ReproducibilityRubric("tckdb_reproducibility_ts_statmech", "v1")
+TS_STATMECH = ReproducibilityRubric("tckdb_reproducibility_ts_statmech", 1)
 #: Aliases of the shared identity, kept for importers.
 RUBRIC_NAME = SHARED.name
 RUBRIC_VERSION = SHARED.version
@@ -335,7 +341,7 @@ class ReproducibilityEvaluation:
     warnings: tuple[dict[str, Any], ...]
     #: The rubric that graded this evaluation. Not part of ``context_json`` beyond ``context_json["rubric"]``.
     rubric_name: str = SHARED.name
-    rubric_version: str = SHARED.version
+    rubric_version: int = SHARED.version
 
 
 def _json_value(value: Any) -> Any:
@@ -566,7 +572,7 @@ def _typed_output_snapshot(calculation: Calculation) -> tuple[bool, dict[str, An
     }
     attr = attr_by_type.get(calculation.type)
     if attr is None:
-        return False, {"calculation_type": calculation.type.value, "reason": "no_typed_result_contract_v1"}
+        return False, {"calculation_type": calculation.type.value, "reason": "no_typed_result_contract"}
     result = getattr(calculation, attr)
     if result is None:
         return False, {"calculation_type": calculation.type.value, "result": None}
@@ -973,7 +979,7 @@ def _source_attribution(
         }
     if isinstance(target, (ConformerGroup, Network)):
         return CheckOutcome.missing, {
-            "reason": "selected_collection_requires_scientific_provenance_v1",
+            "reason": "selected_collection_requires_scientific_provenance",
             "created_by_excluded": getattr(target, "created_by", None),
         }
 

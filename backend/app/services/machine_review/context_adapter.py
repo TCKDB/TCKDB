@@ -30,7 +30,9 @@ untouched.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
+
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.services.machine_review.context_hash import (
     GeometryValidationContext,
@@ -110,8 +112,8 @@ def build_machine_review_evidence_context_from_trust(
     return MachineReviewEvidenceContext(
         record_type=record_type,
         record_ref=resolved_ref,
-        # Public rubric name (already carries the _vN suffix) + integer version,
-        # both preserved so a rubric version bump changes the digest (policy §3.2).
+        # Rubric name + integer version, both preserved (as separate fields) so a rubric version bump
+        # changes the digest (policy §3.2).
         rubric_name=evidence.get("rubric"),
         rubric_version=evidence.get("rubric_version"),
         passed_checks=_checks_with_outcome(evidence.get("checks"), "passed"),
@@ -134,8 +136,8 @@ def stored_projection_from_record_machine_review(
     review: RecordMachineReview,
     *,
     context_digest: MachineReviewContextDigest,
-    prompt_version: str,
-    rubric_versions: Mapping[str, str],
+    prompt: VersionRef,
+    rubric: VersionRef,
     id: int | None = None,
     source_audit_event_id: int | None = None,
 ) -> StoredMachineReviewProjection:
@@ -145,7 +147,7 @@ def stored_projection_from_record_machine_review(
     the currency :class:`StoredMachineReviewProjection` the classifier consumes,
     stamping the currency dimensions: the ``context_digest``'s ``context_hash`` /
     ``context_schema_version`` (the evidence currency) plus the supplied
-    ``prompt_version`` / ``rubric_versions`` (the reviewer-recipe currency). The
+    ``prompt`` / ``rubric`` refs (the reviewer-recipe currency). The
     review's ``status`` is carried through as passthrough provenance (the
     classifier does not use it).
 
@@ -179,8 +181,8 @@ def stored_projection_from_record_machine_review(
         reviewed_at=review.reviewed_at,
         context_schema_version=context_digest.context_schema_version,
         context_hash=context_digest.context_hash,
-        prompt_version=prompt_version,
-        rubric_versions=dict(rubric_versions),
+        prompt=prompt,
+        rubric=rubric,
         status=review.status,
         id=id,
         source_audit_event_id=resolved_source_event,

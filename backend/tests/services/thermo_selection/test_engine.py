@@ -25,7 +25,7 @@ class LabelRule(PreferenceRule):
     quantity = "formation_enthalpy_298k"
     objective = "test"
 
-    def __init__(self, rule_id, wins, loses, *, supersedes=(), version="1", scope_state=Tri.true):
+    def __init__(self, rule_id, wins, loses, *, supersedes=(), version=1, scope_state=Tri.true):
         self.rule_id, self.version, self._wins, self._loses = rule_id, version, set(wins), set(loses)
         self.supersedes = tuple(supersedes)
         self._scope = scope_state
@@ -169,7 +169,7 @@ def test_opposing_rules_block_selection_with_no_fallback():
     decision = decide([a, b], rules=(forward, reverse))
     assert decision.outcome is Outcome.policy_conflict
     assert decision.selected_ref is None and decision.administrative_first is None
-    assert decision.opposing_pairs == ({"between": ["a", "b"], "rules": ["R1@1", "R2@1"]},)
+    assert decision.opposing_pairs == ({"between": ["a", "b"], "rules": [{"rule_id": "R1", "rule_version": 1}, {"rule_id": "R2", "rule_version": 1}]},)
     assert set(decision.administrative_order) == {"a", "b"}  # alternatives stay visible
     assert len(decision.edges) == 2  # no edge dropped to make the conflict go away
 
@@ -183,8 +183,8 @@ def test_an_opposing_rule_that_declares_supersession_resolves_the_conflict():
 
 
 def test_newer_alone_never_resolves_opposing_rules():
-    older = LabelRule("R1", {"a"}, {"b"}, version="1")
-    newer = LabelRule("R2", {"b"}, {"a"}, version="9")  # a later version number is not supersession
+    older = LabelRule("R1", {"a"}, {"b"}, version=1)
+    newer = LabelRule("R2", {"b"}, {"a"}, version=9)  # a later version number is not supersession
     assert decide([labelled("a", "a"), labelled("b", "b")], rules=(older, newer)).outcome is Outcome.policy_conflict
 
 

@@ -217,7 +217,8 @@ def test_apply_repoints_only_the_fillable_calculation(db_session, seeded):
 
 def _bind_to_manifest(db_session, calc, release) -> None:
     manifest = ExecutionEnvironmentManifest(
-        schema_version="1",
+        schema_name="tckdb.execution-environment",
+        schema_version=1,
         content_digest="sha256:" + hashlib.sha256(calc.public_ref.encode()).hexdigest(),
         runtime_kind="container",
         runtime_locator="docker://example/orca@sha256:" + "0" * 64,

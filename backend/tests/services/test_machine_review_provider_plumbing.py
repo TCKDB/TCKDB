@@ -38,7 +38,7 @@ from app.services.machine_review.providers import (
     parse_machine_review_payload,
 )
 from app.services.machine_review.schemas import (
-    MACHINE_REVIEW_SCHEMA_VERSION,
+    MACHINE_REVIEW_FORMAT,
     MachineReviewCategory,
     MachineReviewProviderResult,
     MachineReviewSeverity,
@@ -95,7 +95,7 @@ def test_disabled_provider_returns_not_run_v2_result():
     result = provider.review_submission(MachineReviewContext(submission_id=1))
 
     assert isinstance(result, MachineReviewProviderResult)
-    assert result.schema_version == MACHINE_REVIEW_SCHEMA_VERSION
+    assert result.format == MACHINE_REVIEW_FORMAT
     assert result.status is MachineReviewStatus.not_run
     assert result.findings == ()
     assert result.used_rag is False
@@ -114,7 +114,7 @@ def test_fake_v2_provider_returns_valid_machine_review_v2_payload():
     result = provider.review_submission(_context_with_records(2))
 
     assert isinstance(result, MachineReviewProviderResult)
-    assert result.schema_version == MACHINE_REVIEW_SCHEMA_VERSION
+    assert result.format == MACHINE_REVIEW_FORMAT
     assert result.status is MachineReviewStatus.machine_screened_pass
     assert "2 linked record(s)" in (result.summary or "")
     assert result.used_rag is False
@@ -421,7 +421,7 @@ def test_local_mode_real_call_not_implemented_yet():
 def _valid_v2_payload() -> dict:
     """A minimal valid v2 payload dict."""
     return {
-        "schema_version": "machine_review_v2",
+        "format": {"name": "machine_review", "version": 1},
         "status": "machine_screened_warning",
         "summary": "boundary test",
         "findings": [],
@@ -480,7 +480,7 @@ def test_v2_provider_result_flows_through_audit_adapter():
     result = provider.review_submission(MachineReviewContext(submission_id=1))
     details_json = machine_review_result_to_details_json(result)
 
-    assert details_json["schema_version"] == MACHINE_REVIEW_SCHEMA_VERSION
+    assert details_json["format"] == MACHINE_REVIEW_FORMAT.model_dump()
 
     parsed = machine_review_result_from_audit_event(details_json)
 
