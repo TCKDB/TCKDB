@@ -103,12 +103,12 @@ def test_no_declared_recipe_changes_the_outcome(db_session, methane, proto):
 
 def test_an_experimental_record_and_a_record_without_protocol_prevent_a_unique_method_winner(db_session, methane):
     a = g4(db_session, methane, age_days=50)
-    g3(db_session, methane, age_days=10)
+    b = g3(db_session, methane, age_days=10)
     exp = make_thermo(db_session, methane, origin=ScientificOriginKind.experimental, proto=None, age_days=3)
     blank = make_thermo(db_session, methane, proto=None, age_days=2)
     result = run(db_session, methane)
     assert result.outcome is Outcome.incomparable_alternatives and result.selected_ref is None
-    assert set(result.decision.fronts[0]) == {a.public_ref, exp.public_ref, blank.public_ref}
+    assert set(result.decision.fronts[0]) == {a.public_ref, b.public_ref, exp.public_ref, blank.public_ref}
     assert result.decision.administrative_first["basis"].startswith("first in display order")
 
 
