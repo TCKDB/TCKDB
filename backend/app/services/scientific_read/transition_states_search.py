@@ -851,6 +851,8 @@ def _software_index_for_entries(
         .where(Calculation.transition_state_entry_id.in_(entry_ids))
         .distinct()
     )
+    # Owner decision D5: a calculation the active profile hides contributes neither its type nor its software.
+    stmt = where_visible(stmt, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
 
     collected: dict[int, dict[str, dict[int, SoftwareReleaseSummary]]] = {}
     for row in session.execute(stmt):
@@ -866,13 +868,15 @@ def _software_index_for_entries(
             version=row.version,
         )
 
+    # ``SELECT DISTINCT`` without ``ORDER BY`` returns rows in no promised order, so the type keys are emitted in
+    # declaration order (the same order the levels-of-theory map uses), not in the order the rows arrived.
     return {
         owner_id: {
             key: sorted(
-                bucket.values(),
+                per_owner[key].values(),
                 key=lambda s: (s.software, s.version or "", s.software_release_id),
             )
-            for key, bucket in per_owner.items()
+            for key in levels_of_theory.ordered_calculation_types(per_owner)
         }
         for owner_id, per_owner in collected.items()
     }

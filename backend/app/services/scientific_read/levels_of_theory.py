@@ -84,7 +84,8 @@ def _type_key(value: object) -> str:
     return value.value if isinstance(value, CalculationType) else str(value)
 
 
-def _ordered(types: Iterable[str]) -> list[str]:
+def ordered_calculation_types(types: Iterable[str]) -> list[str]:
+    """Calculation-type keys in :class:`CalculationType` declaration order, an unknown type after the known ones."""
     seen = set(types)
     known = [t for t in _TYPE_ORDER if t in seen]
     # A type the enum does not know about still gets emitted, after the
@@ -121,7 +122,7 @@ class LevelsOfTheoryIndex:
         found = self.by_owner.get(owner_id)
         if not found:
             return {}
-        return {key: list(found[key]) for key in _ordered(found)}
+        return {key: list(found[key]) for key in ordered_calculation_types(found)}
 
     def merged(self, owner_ids: Sequence[int]) -> LevelsOfTheoryMap:
         """Return the union of *owner_ids*' maps, deduplicated per type."""
@@ -132,7 +133,7 @@ class LevelsOfTheoryIndex:
                 for summary in summaries:
                     bucket[summary.level_of_theory_id] = summary
         return {
-            key: _sorted_levels(pooled[key].values()) for key in _ordered(pooled)
+            key: _sorted_levels(pooled[key].values()) for key in ordered_calculation_types(pooled)
         }
 
 

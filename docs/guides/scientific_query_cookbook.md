@@ -105,7 +105,7 @@ Common gotchas:
 
 ## Recipe 2 — Thermo search by species
 
-**Q:** Give me the top thermo record for this species, and tell me whether it covers the temperature window I care about.
+**Q:** Give me the first thermo record for this species (in display order), and tell me whether it covers the temperature window I care about.
 
 ```python
 thermo = client.search_thermo(

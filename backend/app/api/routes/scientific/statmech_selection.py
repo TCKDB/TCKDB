@@ -15,9 +15,8 @@ scientific outcome (nothing qualifies, or the evidence conflicts) is HTTP 200.
 
 The session is a read-only REPEATABLE READ snapshot opened **before** the route body runs (``get_snapshot_db``), so
 resolving the target, counting the population and loading every record are one consistent state, and the manifest says
-so. The response is built from public refs only and is returned directly, not through the internal-id stripper (which
-is not needed here); a test asserts instead that no database id appears
-in either document.
+so. The response is built from public refs only and is returned directly, not through the internal-id stripper; a test
+asserts that no database id appears in either document.
 """
 
 from __future__ import annotations

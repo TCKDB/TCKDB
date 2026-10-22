@@ -540,6 +540,18 @@ def _resealed(manifest):
     return {**body, "integrity": {**manifest["integrity"], "manifest_sha256": digest(body)}}
 
 
+def test_a_version_one_comparison_manifest_is_refused_as_an_unknown_format(db_session):
+    """Kills: bumping only the single-run manifest, so a comparison recorded under the old shape still replays."""
+    world, cand_lot, (a, *_) = two_level_world(db_session)
+    manifest = run_service(db_session, world, request_for(world, a, cand_lot, world.lot)).manifest
+    old = copy.deepcopy(manifest)
+    old["format"] = {"name": "relative_conformer_energy_comparison_manifest", "version": 1}
+    with pytest.raises(ReplayError) as raised:
+        replay_comparison(_resealed(old))
+    assert raised.value.code == "unsupported_manifest_format"
+    assert "unknown manifest format" in str(raised.value)
+
+
 def test_replay_recomputes_and_never_trusts_a_recorded_flag(db_session):
     world, cand_lot, (a, *_) = two_level_world(db_session)
     manifest = run_service(db_session, world, request_for(world, a, cand_lot, world.lot)).manifest

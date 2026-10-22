@@ -769,7 +769,8 @@ class OrderEcho(BaseModel):
 
 
 #: Every key any browse order uses: its default direction and what it means. The echo is built only from here, so a
-#: response cannot name a key this table does not explain (``tests/api/test_browse_order_echo.py`` checks every echo against the order actually served).
+#: response cannot name a key this table does not explain (``tests/api/test_browse_order_echo.py`` checks the catalog against every ``browse_order`` call statically, and
+#: three reads against the order they actually served; a check of every list endpoint is still to come).
 ORDER_KEY_CATALOG: dict[str, tuple[OrderDirection, str]] = {
     "review_rank": (
         "asc",

@@ -47,10 +47,10 @@ The response's `request.sort` is the authority for any one read; it names every 
 | Level of theory, frequency scale factor and energy correction scheme lists | Their own keys: method and basis; scale kind and value; scheme kind and name; then `id` ascending | Reference lists, not records with a review state. |
 | Artifact integrity, calculation paths | `last_observed_at` then `sha256`; `point_index` | Ordered by what they list. |
 
-Two reads that choose a single record (`collapse=first` with a `selection_policy`) can use a different order from the
-candidate list. They echo it separately as `request.effective_order`: `latest` drops `review_rank` and orders by
-`created_at` then `id`; `default` and `most_reviewed` use the three keys above. `request.sort` keeps describing the
-candidate list. The per-species thermo, statmech and transport reads all carry `effective_order`.
+The per-species thermo, statmech and transport reads, when they choose a single record (`collapse=first` with a
+`selection_policy`), can use a different order from the candidate list. They echo it separately as
+`request.effective_order`: `latest` drops `review_rank` and orders by `created_at` then `id`; `default` and
+`most_reviewed` use the three keys above. `request.sort` keeps describing the candidate list.
 
 ### What each review status means, and how it ranks
 
@@ -93,7 +93,7 @@ them?". Every one of them reports these three outcomes over the *eligible* recor
 - `no_applicable_candidate`: none is eligible, with the reasons.
 
 The structure and statmech selections have more outcomes, because they also answer questions that are not "which
-record": `no_candidates`, `evidence_conflict` and `unresolved_comparability` (structure only), `energy_unavailable`,
+record": `no_candidates` and `evidence_conflict` (both), `unresolved_comparability` (structure only), `energy_unavailable`,
 `recorded_minimum`, `representative_minimum`, `qualified_evidence` and `validated_corpus_minimum` (structure), and
 `qualified_models`, `unresolved_applicability`, `missing_required_data`, `unsupported_task` and `unsupported_model`
 (statmech). They state what was established and never rank one method above another; their definitions are in

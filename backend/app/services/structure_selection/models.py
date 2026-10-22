@@ -175,13 +175,13 @@ DEFAULT_CLAIM: dict[tuple[Intent, Grain], ValidationClaim] = {
     (Intent.validated_minimum, Grain.conformer): ValidationClaim.local_minimum,
     (Intent.validated_saddle, Grain.transition_state): ValidationClaim.first_order_saddle,
     # Every intent that consumes a structure states the conventional characterization when the caller names none: a
-    # preferred protocol is preferred *for a minimum* (or *for a first-order saddle*), never for any stationary point
-    # that happens to carry an energy.
+    # protocol-coverage request is asked *for a minimum* (or *for a first-order saddle*), never for any stationary
+    # point that happens to carry an energy.
     (Intent.protocol_coverage, Grain.conformer): ValidationClaim.local_minimum,
     (Intent.protocol_coverage, Grain.transition_state): ValidationClaim.first_order_saddle,
 }
 
-#: The claims each intent can state (a recorded minimum states none; protocol preference may name any the grain has).
+#: The claims each intent can state (a recorded minimum states none; protocol coverage may name any the grain has).
 INTENT_CLAIMS: dict[Intent, frozenset[ValidationClaim]] = {
     Intent.recorded_minimum: frozenset(),
     Intent.validated_minimum: frozenset({ValidationClaim.local_minimum}),

@@ -1,4 +1,4 @@
-"""The structure decision: cohorts, repeats, numerical order and protocol preference over assessed units.
+"""The structure decision: cohorts, repeats, numerical order and protocol coverage over assessed units.
 
 Pure. It reads no database, so a recorded decision replays from its manifest alone. Input is every assessed unit
 (with its assessment) and the request; output is a :class:`StructureDecision` over public refs.
@@ -592,7 +592,7 @@ def _numerical(request: StructureRequest, eligible: list[_U], everyone: list[_U]
 
 
 # ---------------------------------------------------------------------------
-# Protocol preference
+# Protocol coverage
 # ---------------------------------------------------------------------------
 
 
