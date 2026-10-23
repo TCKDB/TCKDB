@@ -9,8 +9,7 @@ legacy rows.
 Before the fix, ``get_species_thermo`` fell back to the lowest statmech id of
 the species entry, so an unlinked (say experimental) thermo displayed an
 unrelated statmech's ref, primary calculation and level of theory, and scored
-exactly like a linked computed record (which feeds the default sort and
-``collapse=first``).
+exactly like a linked computed record (which feeds the default sort).
 """
 
 from __future__ import annotations
@@ -26,7 +25,6 @@ from app.db.models.common import (
 )
 from app.db.models.statmech import StatmechSourceCalculation
 from app.db.models.thermo import ThermoSourceCalculation
-from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_thermo import ThermoReadRequest
 from app.services.scientific_read.thermo import get_species_thermo
 from tests.services.scientific_read._factories import (
@@ -121,9 +119,9 @@ def test_unlinked_thermo_evidence_counts_only_its_own_links(db_session):
     assert full.score == 6
 
 
-def test_collapse_first_ignores_the_evidence_score(db_session):
+def test_the_first_record_in_display_order_ignores_the_evidence_score(db_session):
     """#648: the unlinked record has a later ``created_at`` and the same review
-    status, so it wins ``collapse=first`` even though the linked record scores
+    status, so it is first in display order even though the linked record scores
     higher. The checklist is displayed, not ranked."""
     entry, _lot, _stat, _freq, _sp, linked, unlinked = _linked_and_unlinked(db_session)
     unlinked.created_at = linked.created_at + timedelta(days=1)
@@ -132,9 +130,9 @@ def test_collapse_first_ignores_the_evidence_score(db_session):
     response = get_species_thermo(
         db_session,
         species_entry_id=entry.id,
-        request=ThermoReadRequest(collapse=CollapseMode.first),
+        request=ThermoReadRequest(),
     )
-    assert [r.thermo_ref for r in response.records] == [unlinked.public_ref]
+    assert response.records[0].thermo_ref == unlinked.public_ref
 
     scores = {
         r.thermo_ref: r.evidence_completeness.score

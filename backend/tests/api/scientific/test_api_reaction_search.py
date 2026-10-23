@@ -70,7 +70,7 @@ def test_post_accepts_json_body(client, db_session):
     assert body["records"][0]["reactants"][0]["smiles"] == "P1"
 
 
-def test_collapse_first_offset_one_returns_empty(client, db_session):
+def test_collapse_is_refused_and_points_nowhere_without_a_select(client, db_session):
     _setup(db_session, reactant_smiles="ROFF_A", product_smiles="ROFF_B")
 
     response = client.get(
@@ -83,9 +83,10 @@ def test_collapse_first_offset_one_returns_empty(client, db_session):
         },
     )
 
-    assert response.status_code == 200
-    assert response.json()["records"] == []
-    assert response.json()["pagination"]["total"] == 1
+    assert response.status_code == 422
+    body = response.json()
+    assert body["code"] == "browse_parameter_removed"
+    assert body["context"]["parameter"] == "collapse"
 
 
 def test_post_rejects_query_string_filters(client, db_session):

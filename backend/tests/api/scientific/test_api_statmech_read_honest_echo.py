@@ -11,11 +11,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
-from app.schemas.reads.scientific_common import (
-    REVIEW_RANK,
-    SelectionPolicy,
-    simple_selection_sort_key,
-)
 from tests.services.scientific_read._factories import (
     make_species,
     make_species_entry,
@@ -105,76 +100,28 @@ def _older_approved_newer_unreviewed(db_session):
     return entry, older, newer
 
 
-def test_collapse_first_latest_echoes_the_order_that_chose_the_record(client, db_session):
-    """Kills: echo hard-coded to the review order; policy silently not applied."""
+def test_the_species_read_lists_every_record_in_the_echoed_order_and_picks_none(client, db_session):
+    """Kills: a read that still picks one record, or an echo that says something the list does not do."""
     entry, older, newer = _older_approved_newer_unreviewed(db_session)
-    body = client.get(_species_url(entry, collapse="first", selection_policy="latest")).json()
+    body = client.get(_species_url(entry)).json()
 
-    assert [_ref(r) for r in body["records"]] == [newer.public_ref]
-    assert _keys(body["request"]["effective_order"]) == LATEST_ORDER
-    assert body["request"]["selection_policy_applied"] is True
-    # ``sort`` keeps its documented candidate-list meaning, unchanged.
-    assert [k["key"] for k in body["request"]["sort"]["keys"]] == ["review_rank", "created_at", "id"]
-
-
-def test_collapse_first_default_echoes_the_review_order(client, db_session):
-    entry, older, _ = _older_approved_newer_unreviewed(db_session)
-    body = client.get(_species_url(entry, collapse="first")).json()
-    assert [_ref(r) for r in body["records"]] == [older.public_ref]
-    assert _keys(body["request"]["effective_order"]) == REVIEW_ORDER
-    assert body["request"]["selection_policy_applied"] is True
-
-
-def test_collapse_all_latest_keeps_review_order_and_says_policy_not_applied(client, db_session):
-    """Kills: the policy leaking into the ``collapse=all`` order."""
-    entry, older, newer = _older_approved_newer_unreviewed(db_session)
-    body = client.get(_species_url(entry, selection_policy="latest")).json()
-
+    # The approved record is first although it is older; the newer unreviewed one follows. Neither is dropped.
     assert [_ref(r) for r in body["records"]] == [older.public_ref, newer.public_ref]
-    assert body["request"]["selection_policy"] == "latest"
-    assert _keys(body["request"]["effective_order"]) == REVIEW_ORDER
-    assert body["request"]["selection_policy_applied"] is False
+    assert _keys(body["request"]["sort"]) == REVIEW_ORDER
+    for removed in ("collapse", "selection_policy", "selection_policy_applied", "effective_order"):
+        assert removed not in body["request"]
 
 
-def test_echoed_order_agrees_with_the_real_sort_key():
-    """Kills: the echo table drifting from ``simple_selection_sort_key``.
-
-    Sorts the same records by the real key and by a key built from the echoed
-    order, for every policy, and requires the same sequence.
-    """
-    from app.schemas.reads.scientific_common import effective_order_echo
-
-    now = datetime.now(timezone.utc)
-    status = {
-        1: RecordReviewStatus.not_reviewed,
-        2: RecordReviewStatus.approved,
-        3: RecordReviewStatus.approved,
-        4: RecordReviewStatus.under_review,
-    }
-    created = {1: now, 2: now - timedelta(days=3), 3: now - timedelta(days=1), 4: now - timedelta(days=5)}
-    ids = [1, 2, 3, 4]
-    policies = list(SelectionPolicy)
-    assert len(policies) == 3
-
-    def echoed_key(cid, order):
-        values = {"review_rank": REVIEW_RANK[status[cid]], "created_at": created[cid].timestamp(), "id": cid}
-        return tuple(
-            values[k.key] if k.direction == "asc" else -values[k.key] for k in order.keys
-        )
-
-    sequences = set()
-    for policy in policies:
-        real = sorted(
-            ids,
-            key=lambda c: simple_selection_sort_key(
-                c, policy=policy, review_status_by_id=status, created_at_by_id=created
-            ),
-        )
-        order = effective_order_echo(collapse_first=True, policy=policy)
-        assert real == sorted(ids, key=lambda c: echoed_key(c, order))
-        sequences.add(tuple(real))
-    # The policies must actually differ on this data, or the loop proves nothing.
-    assert len(sequences) == 2
+def test_collapse_and_selection_policy_are_refused_and_point_at_the_select_endpoint(client, db_session):
+    """Kills: ``?collapse=first`` quietly ignored (it used to pick one record)."""
+    entry, _older, _newer = _older_approved_newer_unreviewed(db_session)
+    for params in ({"collapse": "first"}, {"selection_policy": "latest"}, {"collapse": "all"}):
+        resp = client.get(_species_url(entry, **params))
+        assert resp.status_code == 422, resp.text
+        body = resp.json()
+        assert body["code"] == "browse_parameter_removed"
+        assert body["context"]["parameter"] == next(iter(params))
+        assert body["context"]["select_endpoint"].endswith("/statmech/select")
 
 
 # --- review visibility ------------------------------------------------------
@@ -215,7 +162,7 @@ def test_default_visibility_excludes_rejected_and_deprecated(client, db_session)
 def test_empty_responses_carry_the_full_echo(client, db_session):
     """Kills: ``_empty_response`` paths left on the old echo."""
     entry = _entry(db_session)
-    empty_entry = client.get(_species_url(entry, collapse="first", selection_policy="latest")).json()
+    empty_entry = client.get(_species_url(entry)).json()
     # Candidates exist but none are visible.
     hidden = _entry(db_session)
     sm = make_statmech(db_session, species_entry=hidden)
@@ -231,24 +178,19 @@ def test_empty_responses_carry_the_full_echo(client, db_session):
     for body in (empty_entry, hidden_page, search_empty, search_unknown_ref):
         assert body["records"] == []
         req = body["request"]
-        assert req["effective_order"]["keys"], req
+        assert _keys(req["sort"]) == REVIEW_ORDER
         assert req["review_visibility"]["visible_statuses"]
         assert "rejected" in req["review_visibility"]["excluded_statuses"]
-    assert _keys(empty_entry["request"]["effective_order"]) == LATEST_ORDER
-    assert empty_entry["request"]["selection_policy_applied"] is True
-    assert search_empty["request"]["selection_policy_applied"] is None
-    assert _keys(search_empty["request"]["effective_order"]) == REVIEW_ORDER
 
 
 # --- ties: the returned order follows the echoed order ---------------------
 
 
-def test_collapse_all_and_search_order_follows_the_echoed_order_on_true_ties(client, db_session):
+def test_the_species_read_and_search_order_follows_the_echoed_order_on_true_ties(client, db_session):
     """Kills: flipping the id tie-break in the species read or in search.
 
-    Three records share one status and one ``created_at`` exactly, so only the
-    ``id`` key can order them. The returned order must equal a sort by the
-    ``effective_order`` the same response echoed.
+    Three records share one status and one ``created_at`` exactly, so only the ``id`` key can order them. The
+    returned order must equal a sort by the ``sort`` the same response echoed.
     """
     entry = _entry(db_session)
     tied = datetime.now(timezone.utc) - timedelta(days=1)
@@ -265,7 +207,7 @@ def test_collapse_all_and_search_order_follows_the_echoed_order_on_true_ties(cli
     ):
         returned = [_ref(r) for r in body["records"]]
         assert sorted(returned) == sorted(id_by_ref)
-        order = body["request"]["effective_order"]["keys"]
+        order = body["request"]["sort"]["keys"]
         assert order[-1]["key"] == "id"
         # Status and created_at tie, so the only live key is id.
         sign = -1 if order[-1]["direction"] == "desc" else 1

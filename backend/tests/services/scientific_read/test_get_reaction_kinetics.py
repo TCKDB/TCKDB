@@ -21,7 +21,6 @@ from app.db.models.kinetics import (
     KineticsSourceCalculation,
     KineticsTunnelingApplication,
 )
-from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_kinetics import KineticsReadRequest
 from app.services.scientific_read.kinetics import get_reaction_kinetics
 from app.services.scientific_read.transition_states import (
@@ -183,22 +182,6 @@ def test_sct_tunneling_evidence_is_returned_not_silently_dropped(db_session):
     assert block.source_calculation_ref == source_calc.public_ref
 
 
-def test_collapse_first_applies_before_offset(db_session):
-    entry = _setup_entry(db_session)
-    make_kinetics(db_session, reaction_entry=entry)
-
-    response = get_reaction_kinetics(
-        db_session,
-        reaction_entry_id=entry.id,
-        request=KineticsReadRequest(collapse=CollapseMode.first, offset=1),
-    )
-
-    assert response.records == []
-    assert response.pagination.total == 1
-    assert response.pagination.post_collapse_total == 1
-    assert response.pagination.returned == 0
-
-
 # ---------------------------------------------------------------------------
 # Temperature coverage reporting (does not order; review status, then newest)
 # ---------------------------------------------------------------------------
@@ -216,7 +199,7 @@ def test_temperature_coverage_metadata_returned(db_session):
     response = get_reaction_kinetics(
         db_session,
         reaction_entry_id=entry.id,
-        request=KineticsReadRequest(temperature_min=300.0, temperature_max=2000.0),
+        request=KineticsReadRequest(coverage_temperature_min_k=300.0, coverage_temperature_max_k=2000.0),
     )
 
     cov = response.records[0].temperature_coverage
@@ -251,7 +234,7 @@ def test_coverage_is_reported_but_does_not_order_full_vs_partial(db_session):
     response = get_reaction_kinetics(
         db_session,
         reaction_entry_id=entry.id,
-        request=KineticsReadRequest(temperature_min=300.0, temperature_max=2000.0),
+        request=KineticsReadRequest(coverage_temperature_min_k=300.0, coverage_temperature_max_k=2000.0),
     )
 
     assert [r.kinetics_id for r in response.records] == [k_partial.id, k_full.id]
@@ -280,7 +263,7 @@ def test_extrapolation_distance_is_reported_but_does_not_order(db_session):
     response = get_reaction_kinetics(
         db_session,
         reaction_entry_id=entry.id,
-        request=KineticsReadRequest(temperature_min=300.0, temperature_max=2000.0),
+        request=KineticsReadRequest(coverage_temperature_min_k=300.0, coverage_temperature_max_k=2000.0),
     )
     assert [r.kinetics_id for r in response.records] == [k_far.id, k_close.id]
     by_id = {r.kinetics_id: r.temperature_coverage for r in response.records}
@@ -716,7 +699,7 @@ def test_temperature_min_greater_than_max_rejected(db_session):
         get_reaction_kinetics(
             db_session,
             reaction_entry_id=entry.id,
-            request=KineticsReadRequest(temperature_min=2000.0, temperature_max=300.0),
+            request=KineticsReadRequest(coverage_temperature_min_k=2000.0, coverage_temperature_max_k=300.0),
         )
 
 

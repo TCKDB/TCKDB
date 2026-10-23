@@ -154,7 +154,7 @@ def test_species_export_shape(db_session):
     parsed = _parse(lines)
 
     assert parsed[0]["record_type"] == "manifest"
-    assert parsed[0]["format"] == {"name": "tckdb.ml", "version": 1}
+    assert parsed[0]["format"] == {"name": "tckdb.ml", "version": 2}
     assert parsed[0]["dataset"] == "species"
     assert parsed[-1]["record_type"] == "export_summary"
     assert parsed[-1]["counts"]["records"] == 1
@@ -222,9 +222,22 @@ def test_species_export_thermo_summary(db_session):
         iter_ml_species_ndjson(db_session, species_refs=[entry.public_ref])
     )
     (record,) = [p for p in _parse(lines) if p["record_type"] == "ml_species"]
-    assert record["thermo"]["h298_kj_mol"] == -241.8
-    assert record["thermo"]["s298_j_mol_k"] == 188.8
-    assert record["thermo"]["review_status"] == "approved"
+    (block,) = record["thermos"]
+    assert block["h298_kj_mol"] == -241.8
+    assert block["s298_j_mol_k"] == 188.8
+    assert block["review_status"] == "approved"
+    assert "thermo" not in record
+
+
+def test_species_export_lists_every_thermo_record_and_picks_none(db_session):
+    entry, *_ = _species_with_structure(db_session)
+    first = make_thermo_scalar(db_session, species_entry=entry)
+    second = make_thermo_scalar(db_session, species_entry=entry)
+    _approve(db_session, SubmissionRecordType.thermo, first.id)
+
+    lines = list(iter_ml_species_ndjson(db_session, species_refs=[entry.public_ref], filters=MLFilters(min_review_status=None)))
+    (record,) = [p for p in _parse(lines) if p["record_type"] == "ml_species"]
+    assert [t["thermo_ref"] for t in record["thermos"]] == [first.public_ref, second.public_ref]
 
 
 # ---------------------------------------------------------------------------

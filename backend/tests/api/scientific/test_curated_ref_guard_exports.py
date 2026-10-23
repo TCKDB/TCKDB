@@ -103,14 +103,13 @@ def test_native_ndjson_names_no_hidden_record_and_keeps_the_visible_ones(client,
     """
     w = world
     hidden = _hidden(w)
-    for collapse in ("first", "all"):
-        curated = _get(client, "/export/ndjson", "curated", _query(w, collapse=collapse))
-        exploratory = _get(client, "/export/ndjson", "exploratory", _query(w, collapse=collapse))
-        for key, ref in hidden.items():
-            assert ref not in curated, f"{collapse}: curated names {key}"
-        # positive control: the world meets the positions
-        for key in ("calc_h_xlin", "sm_h_y", "thm_h_g"):
-            assert hidden[key] in exploratory, f"{collapse}: exploratory does not name {key}: the world is vacuous"
+    curated = _get(client, "/export/ndjson", "curated", _query(w))
+    exploratory = _get(client, "/export/ndjson", "exploratory", _query(w))
+    for key, ref in hidden.items():
+        assert ref not in curated, f"curated names {key}"
+    # positive control: the world meets the positions
+    for key in ("calc_h_xlin", "sm_h_y", "thm_h_g"):
+        assert hidden[key] in exploratory, f"exploratory does not name {key}: the world is vacuous"
 
     first = _lines(_get(client, "/export/ndjson", "curated", _query(w)))
     ex_first = _lines(_get(client, "/export/ndjson", "exploratory", _query(w)))
@@ -138,7 +137,7 @@ def test_native_ndjson_names_no_hidden_record_and_keeps_the_visible_ones(client,
 
     # every candidate: the hidden thermo and kinetics are not among them
     sa = w.extra["species_entry"].public_ref
-    every = _lines(_get(client, "/export/ndjson", "curated", _query(w, collapse="all")))
+    every = _lines(_get(client, "/export/ndjson", "curated", _query(w)))
     shown_thermos = {t["thermo_ref"] for t in _by(every, "species_entry_ref", sa)["thermos"]}
     visible_thermos = {w.visible[k].public_ref for k in ("thm_v", "thm_v2", "thm_vg")}  # thm_vg: guard PR-3's world
     assert shown_thermos and shown_thermos <= visible_thermos
@@ -266,7 +265,7 @@ def test_the_linearity_witness_leaves_out_hidden_records(db_session, world):
 def _all_exports(client, w, profile):
     return {
         "ndjson": _normalise(_lines(_get(client, "/export/ndjson", profile, _query(w)))),
-        "ndjson_all": _normalise(_lines(_get(client, "/export/ndjson", profile, _query(w, collapse="all")))),
+        "ndjson_all": _normalise(_lines(_get(client, "/export/ndjson", profile, _query(w)))),
         "ml_species": _normalise(
             _lines(_get(client, "/export/ml/species.ndjson", profile, {**_query(w), "include_hessian": True}))
         ),
@@ -366,7 +365,6 @@ def test_a_stream_consumed_after_the_request_context_is_gone_keeps_its_profile(d
             db_session,
             seed=export_core.SeedSelection(species_refs=species, all_reactions=True),
             min_review_status=NOT_REVIEWED,
-            collapse=export_core.CollapseMode.all,
         )
 
     def ml_species():
@@ -631,7 +629,7 @@ def test_every_stream_issues_at_most_one_visibility_statement_per_batch(client, 
     w = world
     streams = {
         "ndjson": lambda: _get(client, "/export/ndjson", "curated", _query(w)),
-        "ndjson_all": lambda: _get(client, "/export/ndjson", "curated", _query(w, collapse="all")),
+        "ndjson_all": lambda: _get(client, "/export/ndjson", "curated", _query(w)),
         "ml_species": lambda: _get(
             client, "/export/ml/species.ndjson", "curated", {**_query(w), "include_hessian": True}
         ),

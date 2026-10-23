@@ -13,34 +13,18 @@ from app.services.scientific_read.common import (
 )
 
 
-def test_slice_for_pagination_applies_offset_after_collapse():
-    assert slice_for_pagination(
-        ["first", "second"],
-        offset=1,
-        limit=1,
-        collapse_first=True,
-    ) == []
+def test_slice_for_pagination_applies_offset_and_limit_to_every_record():
+    assert slice_for_pagination(["first", "second", "third"], offset=1, limit=1) == ["second"]
+    assert slice_for_pagination(["first", "second"], offset=2, limit=5) == []
 
 
-@pytest.mark.parametrize(
-    ("total", "collapse_first", "expected_post_collapse_total"),
-    [(4, False, 4), (4, True, 1), (0, True, 0)],
-)
-def test_build_pagination_reports_post_collapse_total(
-    total: int,
-    collapse_first: bool,
-    expected_post_collapse_total: int,
-):
-    pagination = build_pagination(
-        offset=0,
-        limit=50,
-        returned=min(total, 1) if collapse_first else total,
-        total=total,
-        collapse_first=collapse_first,
-    )
+@pytest.mark.parametrize("total", [0, 1, 4])
+def test_build_pagination_reports_a_post_collapse_total_equal_to_total(total: int):
+    """No read collapses to one record, so the field kept for older clients always equals ``total``."""
+    pagination = build_pagination(offset=0, limit=50, returned=total, total=total)
 
     assert pagination.total == total
-    assert pagination.post_collapse_total == expected_post_collapse_total
+    assert pagination.post_collapse_total == total
 
 
 def test_collect_bounded_pages_walks_past_first_page(monkeypatch):

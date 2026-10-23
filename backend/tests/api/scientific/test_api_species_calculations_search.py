@@ -88,14 +88,15 @@ def test_lowest_energy_with_sp_returns_lowest_first(client, db_session):
         "/api/v1/scientific/species-calculations/search"
         f"?species_entry_ref={entry.public_ref}"
         f"&level_of_theory_ref={lot.public_ref}"
-        "&calculation_type=sp&ranking=lowest_energy&collapse=first"
+        "&calculation_type=sp&ranking=lowest_energy"
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert len(body["records"]) == 1
+    # Every candidate is listed, the lowest energy first; the response says the request chose that order.
+    assert len(body["records"]) == 2
     assert body["records"][0]["calculation"]["calculation_ref"] == low.public_ref
-    # pre-collapse total
     assert body["pagination"]["total"] == 2
+    assert body["request"]["sort"]["requested_by"] == "ranking=lowest_energy"
 
 
 def test_lowest_energy_all_null_candidates_returns_coded_error(client, db_session):

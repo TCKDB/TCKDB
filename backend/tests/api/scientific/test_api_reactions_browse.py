@@ -9,6 +9,8 @@ with ``/reactions/search`` (see
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from urllib.parse import urlencode
 
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
@@ -279,16 +281,12 @@ def test_offset_and_limit_page_results(client, db_session):
 # ---------------------------------------------------------------------------
 
 
-def test_default_sort_orders_records_review_rank_then_has_kinetics(client, db_session):
-    """Asserts both the echoed sort label and the actual row order it names.
+def test_default_sort_orders_records_by_review_rank_then_newest_and_not_by_evidence(client, db_session):
+    """Asserts both the echoed sort and the actual row order it names.
 
-    Three entries, distinguished on the sort key's first two axes:
-    ``review_rank`` (approved beats not_reviewed) beats ``has_kinetics``
-    (a not_reviewed entry with kinetics still sorts after an approved
-    entry with none), and among equal review rank, ``has_kinetics``
-    breaks the tie. The echoed string alone (asserted first) is a label a
-    caller can display; it is not proof of the order actually served, so
-    every assertion below checks real row positions.
+    Having kinetics does not lift an entry: ``review_rank`` decides first (approved beats not_reviewed), then
+    deposition time, newest first. The entry WITH kinetics is the older of the two unreviewed ones, so it must come
+    last; an order that still preferred evidence would put it second.
     """
     best = _entry(db_session, reactant_smiles="[2H]", product_smiles="N")
     set_review(
@@ -297,24 +295,19 @@ def test_default_sort_orders_records_review_rank_then_has_kinetics(client, db_se
         record_id=best.id,
         status=RecordReviewStatus.approved,
     )
-    mid = _entry(db_session, reactant_smiles="[3H]", product_smiles="N")
-    make_kinetics(db_session, reaction_entry=mid)
-    worst = _entry(db_session, reactant_smiles="[4H]", product_smiles="N")
+    with_kinetics = _entry(db_session, reactant_smiles="[3H]", product_smiles="N")
+    make_kinetics(db_session, reaction_entry=with_kinetics)
+    newest_without = _entry(db_session, reactant_smiles="[4H]", product_smiles="N")
+    now = datetime.now(timezone.utc)
+    for entry, age in ((best, 30), (with_kinetics, 20), (newest_without, 1)):
+        entry.created_at = now - timedelta(days=age)
+    db_session.flush()
 
     body = client.get(_browse_url(limit=200)).json()
-    assert [k["key"] for k in body["request"]["sort"]["keys"]] == [
-        "review_rank",
-        "has_kinetics",
-        "has_transition_state",
-        "created_at",
-        "id",
-    ]
+    assert [k["key"] for k in body["request"]["sort"]["keys"]] == ["review_rank", "created_at", "id"]
 
     refs = [r["reaction_entry_ref"] for r in body["records"]]
-    positions = {ref: i for i, ref in enumerate(refs)}
-
-    assert positions[best.public_ref] < positions[mid.public_ref]
-    assert positions[mid.public_ref] < positions[worst.public_ref]
+    assert refs == [best.public_ref, newest_without.public_ref, with_kinetics.public_ref]
 
 
 # ---------------------------------------------------------------------------

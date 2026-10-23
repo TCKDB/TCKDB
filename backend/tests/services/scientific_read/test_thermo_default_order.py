@@ -17,7 +17,6 @@ from app.db.models.common import (
     ScientificOriginKind,
     SubmissionRecordType,
 )
-from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
 from app.schemas.reads.scientific_thermo import ThermoReadRequest
 from app.schemas.reads.scientific_thermo_search import ThermoSearchRequest
 from app.services.scientific_read.export import SeedSelection, build_export_record_set
@@ -70,7 +69,7 @@ def _read_first(db_session, entry, **kw):
     resp = get_species_thermo(
         db_session,
         species_entry_id=entry.id,
-        request=ThermoReadRequest(collapse=CollapseMode.first, **kw),
+        request=ThermoReadRequest(**kw),
     )
     return resp.records[0].thermo_id
 
@@ -80,12 +79,10 @@ def _export_first(db_session, entry):
         db_session,
         seed=SeedSelection(species_refs=[entry.public_ref]),
         min_review_status=None,
-        collapse=CollapseMode.first,
-        selection_policy=SelectionPolicy.default,
     )
     (sr,) = rs.species_records
-    (sel,) = sr.thermos
-    return sel.thermo.id
+    # The export lists every record, in the same display order as the read; its first is the read's first.
+    return sr.thermos[0].thermo.id
 
 
 def test_newer_experimental_beats_older_computed_with_same_review(db_session):
@@ -138,7 +135,7 @@ def test_requested_temperature_range_does_not_reorder(db_session):
         db_session,
         species_entry_id=entry.id,
         request=ThermoReadRequest(
-            collapse=CollapseMode.first, temperature_min=300.0, temperature_max=1000.0
+            coverage_temperature_min_k=300.0, coverage_temperature_max_k=1000.0
         ),
     )
     assert resp.records[0].thermo_id == newer.id

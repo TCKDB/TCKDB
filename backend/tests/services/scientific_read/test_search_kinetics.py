@@ -9,7 +9,6 @@ from app.db.models.common import (
     ScientificOriginKind,
     SubmissionRecordType,
 )
-from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_kinetics_search import KineticsSearchRequest
 from app.schemas.reads.scientific_reactions import (
     ReactionDirectionQuery,
@@ -129,48 +128,6 @@ def test_non_ts_backed_kinetics_provenance_is_null(db_session):
 # ---------------------------------------------------------------------------
 
 
-def test_collapse_first_preserves_plural_records_with_pre_collapse_total(db_session):
-    chem, entry, _ = _setup_reaction_with_kinetics(
-        db_session, reactant_smiles="C1", product_smiles="C2"
-    )
-    make_kinetics(db_session, reaction_entry=entry, ea_kj_mol=20.0)
-
-    response = search_kinetics(
-        db_session,
-        KineticsSearchRequest(
-            reactants=["C1"], products=["C2"], collapse=CollapseMode.first
-        ),
-    )
-
-    assert len(response.records) == 1
-    assert response.pagination.total == 2
-    assert response.pagination.post_collapse_total == 1
-    assert response.pagination.returned == 1
-
-
-def test_collapse_first_applies_offset_after_collapse(db_session):
-    _, entry, _ = _setup_reaction_with_kinetics(
-        db_session,
-        reactant_smiles="[SiH3]",
-        product_smiles="[SiH2]",
-    )
-    make_kinetics(db_session, reaction_entry=entry)
-
-    response = search_kinetics(
-        db_session,
-        KineticsSearchRequest(
-            reactants=["[SiH3]"],
-            products=["[SiH2]"],
-            collapse=CollapseMode.first,
-            offset=1,
-        ),
-    )
-
-    assert response.records == []
-    assert response.pagination.total == 2
-    assert response.pagination.returned == 0
-
-
 # ---------------------------------------------------------------------------
 # Review (shallow on the kinetics record)
 # ---------------------------------------------------------------------------
@@ -249,8 +206,8 @@ def test_temperature_min_greater_than_max_rejected(db_session):
             KineticsSearchRequest(
                 reactants=["A"],
                 products=["B"],
-                temperature_min=2000.0,
-                temperature_max=300.0,
+                coverage_temperature_min_k=2000.0,
+                coverage_temperature_max_k=300.0,
             ),
         )
 
