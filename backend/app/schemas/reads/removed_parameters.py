@@ -52,6 +52,8 @@ class RemovedParameters:
     select_endpoint: str | None = None
     renamed: Mapping[str, str] = field(default_factory=dict)
     picking: bool = True
+    #: Overrides the sentence that says where to go instead (an export has no select endpoint to point at).
+    pointer: str | None = None
 
     def check(self, names: Iterable[str]) -> None:
         """Raise the coded 422 when ``names`` contains a removed or renamed parameter."""
@@ -68,15 +70,15 @@ class RemovedParameters:
             return
         for name in PICKING_PARAMETERS:
             if name in present:
-                where = (
+                where = self.pointer or (
                     f"To get one record under a policy you state, use {self.select_endpoint}."
                     if self.select_endpoint
                     else "This record kind has no select endpoint yet; filter the list instead."
                 )
                 raise CodedValidationError(
                     BROWSE_PARAMETER_REMOVED,
-                    f"{name} is not accepted: a browse read returns every matching record in display order and "
-                    f"never picks one. {where}",
+                    f"{name} is not accepted: TCKDB never picks one record for you on a read or an export; it "
+                    f"returns every matching record in display order. {where}",
                     context={"parameter": name, "select_endpoint": self.select_endpoint},
                 )
 

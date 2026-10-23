@@ -99,7 +99,6 @@ from app.db.models.species import (
 )
 from app.db.models.thermo import Thermo
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
-from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
 from app.services.document_formats import ML_EXPORT, current_header
 from app.services.scientific_read import export as export_core
 from app.services.scientific_read.common import (
@@ -432,7 +431,8 @@ class MLSpeciesRecord:
     energies: list[MLEnergyRecord]
     frequencies: dict | None
     hessian: dict | None
-    thermo: dict | None
+    #: Every qualifying thermo record of the species entry, in display order. Nothing is picked.
+    thermos: list[dict]
 
     def to_ndjson(self) -> dict:
         sp = self.species
@@ -453,7 +453,7 @@ class MLSpeciesRecord:
             "energies": [e.to_dict() for e in self.energies],
             "frequencies": self.frequencies,
             "hessian": self.hessian,
-            "thermo": self.thermo,
+            "thermos": list(self.thermos),
         }
 
 
@@ -573,18 +573,17 @@ def _hessian_block(
     }
 
 
-def _species_thermo_block(
+def _species_thermo_blocks(
     session: Session,
     species_entry_id: int,
     *,
     min_review_status: RecordReviewStatus | None,
     profile: ResolvedReadProfile,
-) -> dict | None:
-    """Species-scoped thermo summary, selected with the read-time trust policy.
+) -> list[dict]:
+    """Every qualifying species-scoped thermo summary, in display order (nothing is picked).
 
     Reuses the exact candidacy machinery behind the native/CHEMKIN export so
-    the trust semantics are identical (``collapse=first`` → the single
-    policy-preferred approved-class thermo).
+    the trust semantics are identical.
     """
     chosen, status_by_id = export_core.select_candidate_ids(
         session,
@@ -593,35 +592,36 @@ def _species_thermo_block(
         parent_id=species_entry_id,
         record_type=SubmissionRecordType.thermo,
         min_review_status=min_review_status,
-        collapse=CollapseMode.first,
-        selection_policy=SelectionPolicy.default,
         profile=profile,
     )
-    if not chosen:
-        return None
-    thermo = session.get(Thermo, chosen[0])
-    if thermo is None:  # pragma: no cover - race with delete
-        return None
-    return {
-        "thermo_ref": thermo.public_ref,
-        "review_status": status_by_id[chosen[0]].value,
-        "scientific_origin": thermo.scientific_origin.value,
-        # ``NULL`` here means the reference was never recorded (a legacy
-        # deposit predating the declaration rule), never that it is a
-        # formation quantity by default -- see Thermo.enthalpy_reference_kind
-        # and _delta_h298 below, the one place this repo currently sums
-        # h298 values across records and therefore the one place mixing
-        # bases silently would be wrong.
-        "enthalpy_reference_kind": (
-            thermo.enthalpy_reference_kind.value
-            if thermo.enthalpy_reference_kind is not None
-            else None
-        ),
-        "h298_kj_mol": thermo.h298_kj_mol,
-        "s298_j_mol_k": thermo.s298_j_mol_k,
-        "h298_uncertainty_kj_mol": thermo.h298_uncertainty_kj_mol,
-        "s298_uncertainty_j_mol_k": thermo.s298_uncertainty_j_mol_k,
-    }
+    blocks: list[dict] = []
+    for thermo_id in chosen:
+        thermo = session.get(Thermo, thermo_id)
+        if thermo is None:  # pragma: no cover - race with delete
+            continue
+        blocks.append(
+            {
+                "thermo_ref": thermo.public_ref,
+                "review_status": status_by_id[thermo_id].value,
+                "scientific_origin": thermo.scientific_origin.value,
+                # ``NULL`` here means the reference was never recorded (a legacy
+                # deposit predating the declaration rule), never that it is a
+                # formation quantity by default -- see Thermo.enthalpy_reference_kind
+                # and _delta_h298 below, the one place this repo currently sums
+                # h298 values across records and therefore the one place mixing
+                # bases silently would be wrong.
+                "enthalpy_reference_kind": (
+                    thermo.enthalpy_reference_kind.value
+                    if thermo.enthalpy_reference_kind is not None
+                    else None
+                ),
+                "h298_kj_mol": thermo.h298_kj_mol,
+                "s298_j_mol_k": thermo.s298_j_mol_k,
+                "h298_uncertainty_kj_mol": thermo.h298_uncertainty_kj_mol,
+                "s298_uncertainty_j_mol_k": thermo.s298_uncertainty_j_mol_k,
+            }
+        )
+    return blocks
 
 
 def _conformer_refs(
@@ -698,7 +698,7 @@ def _build_species_records(
             continue
         by_geometry.setdefault(gid, []).append(calc)
 
-    thermo_block = _species_thermo_block(
+    thermo_blocks = _species_thermo_blocks(
         session, species_entry_id, min_review_status=filters.min_review_status, profile=profile
     )
 
@@ -777,7 +777,7 @@ def _build_species_records(
                 energies=energies,
                 frequencies=freq_block,
                 hessian=hessian_block,
-                thermo=thermo_block,
+                thermos=thermo_blocks,
             )
         )
     return records
@@ -1127,8 +1127,6 @@ def _kinetics_blocks(
         parent_id=reaction_entry_id,
         record_type=SubmissionRecordType.kinetics,
         min_review_status=min_review_status,
-        collapse=CollapseMode.all,
-        selection_policy=SelectionPolicy.default,
         profile=profile,
     )
     out: list[dict] = []
@@ -1265,6 +1263,8 @@ def _ts_and_barrier(
 #: ``_delta_h298`` returns verbatim.
 DELTA_H298_UNRECORDED_REFERENCE = ENTHALPY_REFERENCE_UNRECORDED
 DELTA_H298_MIXED_REFERENCE = ENTHALPY_REFERENCE_MIXED
+#: A contributing species has more than one qualifying thermo record, and the export does not pick one to sum.
+DELTA_H298_AMBIGUOUS_THERMO = "ambiguous_thermo"
 
 
 def _delta_h298(
@@ -1302,12 +1302,19 @@ def _delta_h298(
         when contributing terms declare more than one distinct reference.
     """
 
+    ambiguous = False
+
     def _blocks(ids: list[int]) -> list[dict] | None:
+        nonlocal ambiguous
         blocks: list[dict] = []
         for se_id in ids:
-            block = _species_thermo_block(
+            candidates = _species_thermo_blocks(
                 session, se_id, min_review_status=min_review_status, profile=profile
             )
+            if len(candidates) > 1:
+                ambiguous = True
+                return None
+            block = candidates[0] if candidates else None
             if block is None or block.get("h298_kj_mol") is None:
                 return None
             blocks.append(block)
@@ -1316,7 +1323,9 @@ def _delta_h298(
     if not reactant_ids or not product_ids:
         return None, None
     reactant_blocks = _blocks(reactant_ids)
-    product_blocks = _blocks(product_ids)
+    product_blocks = _blocks(product_ids) if not ambiguous else None
+    if ambiguous:
+        return None, DELTA_H298_AMBIGUOUS_THERMO
     if reactant_blocks is None or product_blocks is None:
         return None, None
 
@@ -1516,6 +1525,7 @@ def _stream_reactions(
     n_skipped_untrusted = 0
     n_delta_h298_unrecorded_reference = 0
     n_delta_h298_mixed_reference = 0
+    n_delta_h298_ambiguous_thermo = 0
 
     for re_id in reaction_entry_ids:
         if _reaction_entry_review(session, re_id) not in visible:
@@ -1533,6 +1543,8 @@ def _stream_reactions(
             n_delta_h298_unrecorded_reference += 1
         elif delta_h_decline_reason == DELTA_H298_MIXED_REFERENCE:
             n_delta_h298_mixed_reference += 1
+        elif delta_h_decline_reason == DELTA_H298_AMBIGUOUS_THERMO:
+            n_delta_h298_ambiguous_thermo += 1
         if record is not None:
             n_reactions += 1
             yield from batcher.add(record.to_ndjson())
@@ -1557,6 +1569,8 @@ def _stream_reactions(
                     n_delta_h298_unrecorded_reference
                 ),
                 "delta_h298_declined_mixed_reference": n_delta_h298_mixed_reference,
+                # A contributing species has several qualifying thermo records; the sum is not taken from a pick.
+                "delta_h298_declined_ambiguous_thermo": n_delta_h298_ambiguous_thermo,
             },
         }
     ) + "\n"
@@ -1581,6 +1595,7 @@ def _resolve_lot_ref(session: Session, lot_ref: str | None) -> int | None:
 __all__ = [
     "DEFAULT_ALL_CAP",
     "DEFAULT_MIN_REVIEW_STATUS",
+    "DELTA_H298_AMBIGUOUS_THERMO",
     "DELTA_H298_MIXED_REFERENCE",
     "DELTA_H298_UNRECORDED_REFERENCE",
     "HARTREE_TO_KJ_MOL",
