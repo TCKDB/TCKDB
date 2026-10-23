@@ -41,6 +41,7 @@ from tests.services.scientific_read._factories import (
     make_calculation,
     make_energy_correction_scheme,
     make_frequency_scale_factor,
+    make_literature,
     make_lot,
     make_conformer_group,
     make_network,
@@ -632,6 +633,177 @@ EXTRA_CASES.update(
         "structure-search-similarity": lambda db: seed_structure_search(db, mode="similarity"),
     }
 )
+
+
+def seed_literature_records(db_session) -> Seeded:
+    """Records citing one paper: ordered by kind, then newest, then id. Two kinds, interleaved in creation order, with a
+    same-time pair inside one kind so only the id can separate it."""
+    literature = make_literature(db_session)
+    _species, entry = _entry(db_session, "OL")
+    kinds = ["statmech", "transport", "statmech", "transport", "statmech"]
+    rows = [
+        make_statmech(db_session, species_entry=entry, literature_id=literature.id)
+        if kind == "statmech"
+        else make_transport(db_session, species_entry=entry, literature_id=literature.id)
+        for kind in kinds
+    ]
+    ages = [3, 9, 10, 1, 10]
+    specs = [(RecordReviewStatus.not_reviewed, a) for a in ages]
+    skew(db_session, rows, specs)
+    return Seeded(
+        f"{API}/literature/{literature.public_ref}/records",
+        rows,
+        finder("record_ref"),
+        [(SubmissionRecordType.calculation, 0)] * 5,
+        extra={"record_type": lambda i: kinds[i]},
+        specs=specs,
+    )
+
+
+EXTRA_CASES["literature-records"] = seed_literature_records
+
+
+def _analytics(seed: Callable[..., Seeded], path: str, **kwargs) -> Callable[[Any], Seeded]:
+    """The analytics read lists the same records, over the same keys, behind a keyset cursor."""
+
+    def build(db_session) -> Seeded:
+        seeded = seed(db_session, **kwargs)
+        seeded.url = f"{API}/analytics/{path}"
+        return seeded
+
+    return build
+
+
+EXTRA_CASES.update(
+    {
+        "analytics-thermo": _analytics(seed_thermo, "thermo", search=True),
+        "analytics-kinetics": _analytics(seed_kinetics, "kinetics", search=True),
+        "analytics-statmech": _analytics(seed_statmech, "statmech", search=True),
+        "analytics-calculations": _analytics(seed_calculations, "calculations", route="calculations"),
+    }
+)
+
+
+# --- sub-lists ordered by what they list: path points and integrity records --------------------------------------------
+
+
+def _echoed_point_order_is_served(body: dict, points_key: str = "points") -> None:
+    echoed = _keys(body["request"]["sort"])
+    assert echoed == [("point_index", "asc")], echoed
+    served = [p["point_index"] for p in body[points_key]]
+    assert served == sorted(served, reverse=False)
+    assert len(served) >= 3
+
+
+def test_scan_points_are_served_in_the_echoed_order(client, db_session):
+    """Points are inserted out of order, so only a real ORDER BY on the echoed key can produce the served order."""
+    from tests.api.scientific import test_api_scientific_calculation_paths as paths
+
+    calc = paths._make_scan_calc(db_session)
+    for idx in (3, 1, 2):
+        paths._attach_scan_point(db_session, calculation=calc, point_index=idx, electronic_energy_hartree=-99.0 - idx)
+    body = client.get(paths._scan_url(calc.public_ref)).json()
+    _echoed_point_order_is_served(body)
+
+
+def test_irc_points_are_served_in_the_echoed_order(client, db_session):
+    from tests.api.scientific import test_api_scientific_calculation_paths as paths
+    from app.db.models.common import IRCDirection
+
+    calc = paths._make_irc_calc(db_session, direction=IRCDirection.forward)
+    for idx in (3, 1, 2):
+        paths._attach_irc_point(
+            db_session, calculation=calc, point_index=idx, direction=IRCDirection.forward,
+            electronic_energy_hartree=-99.0 - idx,
+        )
+    body = client.get(paths._irc_url(calc.public_ref)).json()
+    _echoed_point_order_is_served(body)
+
+
+def test_path_search_points_are_served_in_the_echoed_order(client, db_session):
+    from tests.api.scientific import test_api_scientific_calculation_paths as paths
+
+    calc = paths._make_path_search_calc(db_session)
+    for idx, energy in [(2, -99.0), (0, -100.0), (1, -99.5)]:
+        paths._attach_path_search_point(
+            db_session, calculation=calc, point_index=idx, electronic_energy_hartree=energy
+        )
+    body = client.get(paths._path_search_url(calc.public_ref)).json()
+    _echoed_point_order_is_served(body)
+
+
+def test_artifact_integrity_records_are_served_in_the_echoed_order(client, db_session, login_as, _api_curator_user):
+    """Most recently observed first, then digest. Observation times are set so that time, creation order and digest
+    all disagree, with a tied pair that only the digest separates."""
+    from sqlalchemy import update
+
+    from app.db.models.calculation import ArtifactIntegrityEvent
+    from app.db.models.common import ArtifactIntegrityDetectionContext, ArtifactIntegrityFinding
+    from tests.api.scientific import test_api_scientific_artifact_integrity as integrity
+
+    ages = [1, 30, 10, 10, 5]
+    tokens = ["e", "a", "d", "b", "c"]
+    shas = []
+    for token, age in zip(tokens, ages):
+        _calc, artifact, sha = integrity._broken_artifact(db_session, token)
+        integrity._record(
+            db_session, sha, ArtifactIntegrityFinding.digest_mismatch, ArtifactIntegrityDetectionContext.download,
+            artifact_id=artifact.id,
+        )
+        db_session.execute(
+            update(ArtifactIntegrityEvent).where(ArtifactIntegrityEvent.sha256 == sha).values(created_at=_T0 - timedelta(days=age))
+        )
+        shas.append(sha)
+    db_session.flush()
+    login_as(_api_curator_user)
+
+    body = client.get(integrity.LIST_URL).json()
+    echoed = _keys(body["request"]["sort"])
+    assert echoed == [("last_observed_at", "desc"), ("sha256", "asc")]
+    served = [r["sha256"] for r in body["records"] if r["sha256"] in shas]
+    by_age = {sha: age for sha, age in zip(shas, ages)}
+    expected = sorted(shas, key=lambda s: (by_age[s], s))  # newest first (smaller age), then digest ascending
+    assert served == expected
+    # Time alone, with the tied pair left in the WRONG digest order, must not give the served order.
+    assert served != sorted(sorted(shas, reverse=True), key=lambda s: by_age[s])
+    assert served != sorted(shas)
+
+
+# --- an order the request asked for says so --------------------------------------------------------------------------
+
+
+def test_a_substructure_browse_leads_with_size_and_says_the_request_chose_it(client, db_session):
+    """Kills: echoing the review-first order while the query leads with ``heavy_atom_count ASC``."""
+    small = make_species(db_session, smiles="CCO", inchi_key=next_inchi_key("BOE"))  # created first
+    mid = make_species(db_session, smiles="CCCO", inchi_key=next_inchi_key("BOE"))
+    large = make_species(db_session, smiles="CCCCO", inchi_key=next_inchi_key("BOE"))
+    for sp in (small, mid, large):
+        make_species_entry(db_session, sp)
+
+    body = client.get(f"{API}/species/browse?query_smiles=CCO&mode=substructure").json()
+
+    assert [r["species_ref"] for r in body["records"]] == [small.public_ref, mid.public_ref, large.public_ref]
+    assert [k for k, _ in _keys(body["request"]["sort"])] == ["heavy_atom_count", "review_rank", "created_at", "id"]
+    assert body["request"]["sort"]["requested_by"] == "mode=substructure"
+
+
+def test_a_browse_without_a_structure_query_has_no_size_key_and_no_requested_by(client, db_session):
+    make_species_entry(db_session, make_species(db_session, smiles="CCO", inchi_key=next_inchi_key("BOE")))
+    sort = client.get(f"{API}/species/browse").json()["request"]["sort"]
+    assert "heavy_atom_count" not in [k for k, _ in _keys(sort)]
+    assert sort["requested_by"] is None
+
+
+@pytest.mark.parametrize("ranking", ["latest", "earliest", "lowest_energy"])
+def test_a_ranking_the_request_names_is_labelled_in_the_echo(ranking, client, db_session):
+    seeded = seed_calculations(db_session, route="species", ranking=ranking)
+    sort = client.get(seeded.url).json()["request"]["sort"]
+    assert sort["requested_by"] == f"ranking={ranking}"
+
+
+def test_the_default_ranking_is_not_labelled(client, db_session):
+    seeded = seed_calculations(db_session, route="species")
+    assert client.get(seeded.url).json()["request"]["sort"]["requested_by"] is None
 
 
 CASES: dict[str, Callable[[Any], Seeded]] = {
