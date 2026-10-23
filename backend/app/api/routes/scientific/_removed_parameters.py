@@ -11,6 +11,7 @@ The refusal names the select endpoint for the record kind the path is about, whe
 
 from __future__ import annotations
 
+import json
 import re
 
 from fastapi import Request
@@ -41,7 +42,7 @@ async def refuse_picking_parameters(request: Request) -> None:
     if request.method in ("POST", "PUT", "PATCH") and "json" in request.headers.get("content-type", ""):
         try:
             body = await request.json()
-        except ValueError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             body = None  # a body that is not JSON is the route's own 422 to give
         if isinstance(body, dict):
             names |= set(body)
