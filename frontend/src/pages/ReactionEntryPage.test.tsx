@@ -950,3 +950,45 @@ describe("ReactionEntryPage -- evidence checklist: collapsible, and presence-onl
         expect(networkLink).toHaveAttribute("href", "#network-heading")
     })
 })
+
+describe("ReactionEntryPage -- the References disclosure names every kinetics record's provenance", () => {
+    /** The default kinetics record, with its own kinetics ref and its own level / software / workflow-tool refs. */
+    function kineticsWithRefs(n: number) {
+        const base = (mockFull().kinetics as Array<Record<string, any>>)[0]
+        return {
+            ...base,
+            kinetics_ref: `kin_multi${n}`,
+            provenance: {
+                ...base.provenance,
+                primary_level_of_theory: { method: "m", basis: "b", level_of_theory_ref: `lot_multi${n}` },
+                primary_software: { software: "Gaussian", version: "16", software_release_ref: `swr_primary${n}` },
+                software_release: { software: "Arkane", version: null, software_release_ref: `swr_fit${n}` },
+                workflow_tool_release: { workflow_tool: "ARC", version: "1.1.0", workflow_tool_release_ref: `wtr_multi${n}` },
+            },
+        }
+    }
+
+    it("lists the level, software and workflow-tool refs of every record, not only the first", async () => {
+        handleFull(mockFull({ kinetics: [kineticsWithRefs(1), kineticsWithRefs(2)] }))
+        const { container } = page()
+        await screen.findByText("kin_multi1")
+
+        const refs = container.querySelector(".refs-disclosure")?.textContent ?? ""
+        for (const n of [1, 2]) {
+            for (const ref of [`lot_multi${n}`, `swr_primary${n}`, `swr_fit${n}`, `wtr_multi${n}`]) {
+                expect(refs, `${ref} (record ${n}) should be in the References disclosure`).toContain(ref)
+            }
+        }
+    })
+
+    it("names a ref shared by two records once", async () => {
+        const first = kineticsWithRefs(1)
+        const second = { ...kineticsWithRefs(2), provenance: { ...kineticsWithRefs(2).provenance, primary_level_of_theory: first.provenance.primary_level_of_theory } }
+        handleFull(mockFull({ kinetics: [first, second] }))
+        const { container } = page()
+        await screen.findByText("kin_multi1")
+
+        const refs = container.querySelector(".refs-disclosure")?.textContent ?? ""
+        expect(refs.split("lot_multi1").length - 1).toBe(1)
+    })
+})
