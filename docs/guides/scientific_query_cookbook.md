@@ -125,12 +125,12 @@ print("H298 =", rec["thermo"]["h298_kj_mol"], "kJ/mol")
 print("S298 =", rec["thermo"]["s298_j_mol_k"], "J/mol/K")
 ```
 
-The backend's locked display order for thermo (`review_rank ASC, created_at DESC, id DESC`: approved first, `under_review` and `not_reviewed` together, then newest deposited; see [Browse order](../specs/browse_order.md)) decides which record is first for `collapse="first"`. It is the same order the export, CHEMKIN and ML selection use, so the website and an export list the same record first. That is display order, not a scientific preference: TCKDB does not rank one method above another. Origin does not matter: a newer experimental record is listed before an older computed one with the same review status. The client does not re-rank.
+The backend's locked display order for thermo (`review_rank ASC, created_at DESC, id DESC`: approved first, `under_review` and `not_reviewed` together, then newest deposited; see [Browse order](../specs/browse_order.md)) decides which record is listed first. It is the same order the export, CHEMKIN and ML export list records in, so the website and an export list the same record first. No read or export picks one: for that, use `select_species_thermo`. That is display order, not a scientific preference: TCKDB does not rank one method above another. Origin does not matter: a newer experimental record is listed before an older computed one with the same review status. The client does not re-rank.
 
 Useful fields:
 
 - `records[*].thermo.model_kind` — `nasa` (polynomial coefficients in `records[*].thermo.nasa`), `points` (in `records[*].thermo.points`), or `scalar` (just `h298` / `s298`).
-- `records[*].thermo.temperature_coverage` — `covers_requested_range`, `extrapolation_distance_k`. Reported per record. `temperature_min` / `temperature_max` do not filter and do not affect which record is first: selection is review status, then newest. Check this field yourself if you need a record that spans your window (a scalar record has no range and reports `covers_requested_range: false`).
+- `records[*].thermo.temperature_coverage` — `covers_requested_range`, `extrapolation_distance_k`. Reported per record. `coverage_temperature_min_k` / `coverage_temperature_max_k` do not filter and do not affect which record is first: display order is review status, then newest. Check this field yourself if you need a record that spans your window (a scalar record has no range and reports `covers_requested_range: false`).
 - `records[*].thermo.evidence_completeness` — score + per-predicate checklist. Displayed only, not part of the order. Most predicates are calculation traceability, so an experimental record scores low by construction; read it together with `scientific_origin`.
 
 ---

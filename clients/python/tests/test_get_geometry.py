@@ -21,7 +21,7 @@ def _ok(body: dict | None = None) -> httpx.Response:
         200,
         json=body
         or {
-            "request": {"filter": {}, "sort": "", "collapse": "all", "include": []},
+            "request": {"filter": {}, "sort": "", "include": []},
             "geometry_ref": "geom_abc",
             "natoms": 0,
             "geom_hash": "deadbeef" * 8,
@@ -86,7 +86,6 @@ def test_get_geometry_returns_parsed_json_dict():
                 "request": {
                     "filter": {},
                     "sort": "",
-                    "collapse": "all",
                     "include": [],
                 },
                 "geometry_ref": "geom_water",

@@ -100,16 +100,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Product SMILES for the kinetics recipe; pass multiple times.",
     )
     parser.add_argument(
-        "--temperature-min",
+        "--coverage-temperature-min-k",
         type=float,
         default=300.0,
-        help="Lower temperature bound (K) for thermo/kinetics recipes.",
+        help="Lower bound (K) of the coverage window for thermo/kinetics recipes; not a filter.",
     )
     parser.add_argument(
-        "--temperature-max",
+        "--coverage-temperature-max-k",
         type=float,
         default=2000.0,
-        help="Upper temperature bound (K) for thermo/kinetics recipes.",
+        help="Upper bound (K) of the coverage window for thermo/kinetics recipes; not a filter.",
     )
     parser.add_argument(
         "--calculation-type",
@@ -267,12 +267,12 @@ def recipe_thermo_search(
     print(
         f"\n=== Recipe 2: thermo search ===\n"
         f"  smiles={args.smiles!r}"
-        f" T={args.temperature_min:g}..{args.temperature_max:g} K"
+        f" T={args.coverage_temperature_min_k:g}..{args.coverage_temperature_max_k:g} K"
     )
     response = client.search_thermo(
         smiles=args.smiles,
-        coverage_temperature_min_k=args.temperature_min,
-        coverage_temperature_max_k=args.temperature_max,
+        coverage_temperature_min_k=args.coverage_temperature_min_k,
+        coverage_temperature_max_k=args.coverage_temperature_max_k,
         include=_includes(args, "provenance", "review"),
     )
     _dump_json(args, "thermo_search", response)
@@ -316,8 +316,8 @@ def recipe_thermo_provenance(
     print(f"\n=== Recipe 3: thermo provenance inspection ===\n  smiles={args.smiles!r}")
     response = client.search_thermo(
         smiles=args.smiles,
-        coverage_temperature_min_k=args.temperature_min,
-        coverage_temperature_max_k=args.temperature_max,
+        coverage_temperature_min_k=args.coverage_temperature_min_k,
+        coverage_temperature_max_k=args.coverage_temperature_max_k,
         include=_includes(args, "provenance", "review"),
     )
     _dump_json(args, "thermo_provenance", response)
@@ -360,14 +360,14 @@ def recipe_kinetics_search(
         f"\n=== Recipe 4: kinetics search ===\n"
         f"  reactants={args.reactant} products={args.product}"
         f" direction=either"
-        f" T={args.temperature_min:g}..{args.temperature_max:g} K"
+        f" T={args.coverage_temperature_min_k:g}..{args.coverage_temperature_max_k:g} K"
     )
     response = client.search_kinetics(
         reactants=args.reactant,
         products=args.product,
         direction="either",
-        coverage_temperature_min_k=args.temperature_min,
-        coverage_temperature_max_k=args.temperature_max,
+        coverage_temperature_min_k=args.coverage_temperature_min_k,
+        coverage_temperature_max_k=args.coverage_temperature_max_k,
         include=_includes(args, "provenance", "review"),
     )
     _dump_json(args, "kinetics_search", response)
@@ -603,8 +603,8 @@ def recipe_chained_followup(
     print(f"\n=== Recipe 9: chained ref-based follow-up ===\n  smiles={args.smiles!r}")
     summary = client.search_thermo(
         smiles=args.smiles,
-        coverage_temperature_min_k=args.temperature_min,
-        coverage_temperature_max_k=args.temperature_max,
+        coverage_temperature_min_k=args.coverage_temperature_min_k,
+        coverage_temperature_max_k=args.coverage_temperature_max_k,
         include=_includes(args, "provenance", "review"),
     )
     _dump_json(args, "chained_followup_search", summary)
@@ -622,8 +622,8 @@ def recipe_chained_followup(
         return
     detail = client.get_species_thermo(
         species_entry_id=species_entry_ref,
-        coverage_temperature_min_k=args.temperature_min,
-        coverage_temperature_max_k=args.temperature_max,
+        coverage_temperature_min_k=args.coverage_temperature_min_k,
+        coverage_temperature_max_k=args.coverage_temperature_max_k,
         include=_includes(args, "provenance", "review"),
     )
     _dump_json(args, "chained_followup_detail", detail)

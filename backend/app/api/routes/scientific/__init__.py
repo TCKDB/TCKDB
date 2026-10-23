@@ -1,7 +1,7 @@
 """FastAPI route wrappers for the /api/v1/scientific/* read surface.
 
 Thin handlers that translate HTTP requests into Phase 3 service calls and
-back. All business logic (filter, sort, collapse, pagination, evidence,
+back. All business logic (filter, sort, pagination, evidence,
 provenance) lives in ``app/services/scientific_read``.
 
 Sub-routers:

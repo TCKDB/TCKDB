@@ -109,13 +109,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--temperature-min",
+        "--coverage-temperature-min-k",
         type=float,
         default=300.0,
         help="Lower bound of the window used to fill each record's temperature_coverage field (Kelvin); not a filter.",
     )
     parser.add_argument(
-        "--temperature-max",
+        "--coverage-temperature-max-k",
         type=float,
         default=2000.0,
         help="Upper bound of the window used to fill each record's temperature_coverage field (Kelvin); not a filter.",
@@ -515,12 +515,12 @@ def run_thermo_search(
 ) -> dict | None:
     print(
         f"\n[search_thermo] smiles={args.smiles!r}"
-        f" T={args.temperature_min:g}..{args.temperature_max:g} K"
+        f" T={args.coverage_temperature_min_k:g}..{args.coverage_temperature_max_k:g} K"
     )
     response = client.search_thermo(
         smiles=args.smiles,
-        coverage_temperature_min_k=args.temperature_min,
-        coverage_temperature_max_k=args.temperature_max,
+        coverage_temperature_min_k=args.coverage_temperature_min_k,
+        coverage_temperature_max_k=args.coverage_temperature_max_k,
         include=_includes(args, "provenance", "review"),
     )
     _maybe_dump_json(args, "search_thermo", response)
@@ -561,8 +561,8 @@ def run_thermo_detail_followup(
 
     response = client.get_species_thermo(
         species_entry_id=species_entry_handle,
-        coverage_temperature_min_k=args.temperature_min,
-        coverage_temperature_max_k=args.temperature_max,
+        coverage_temperature_min_k=args.coverage_temperature_min_k,
+        coverage_temperature_max_k=args.coverage_temperature_max_k,
         include=_includes(args, "provenance", "review"),
     )
     _maybe_dump_json(args, "get_species_thermo_by_ref", response)
@@ -751,14 +751,14 @@ def run_kinetics_search(
         return None
     print(
         f"\n[search_kinetics] reactants={args.reactant} products={args.product}"
-        f" direction=either T={args.temperature_min:g}..{args.temperature_max:g} K"
+        f" direction=either T={args.coverage_temperature_min_k:g}..{args.coverage_temperature_max_k:g} K"
     )
     response = client.search_kinetics(
         reactants=args.reactant,
         products=args.product,
         direction="either",
-        coverage_temperature_min_k=args.temperature_min,
-        coverage_temperature_max_k=args.temperature_max,
+        coverage_temperature_min_k=args.coverage_temperature_min_k,
+        coverage_temperature_max_k=args.coverage_temperature_max_k,
         include=_includes(args, "provenance", "review"),
     )
     _maybe_dump_json(args, "search_kinetics", response)

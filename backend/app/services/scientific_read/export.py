@@ -1159,7 +1159,7 @@ def _build_reaction_record(
     # third-body children (and collider species) eager-loaded, so the
     # session-less ``SelectedKinetics.to_dict`` never triggers a lazy load
     # (DetachedInstanceError) or an N+1. Re-map by id into the ``kin_ids``
-    # sequence to preserve collapse/selection ordering.
+    # sequence to preserve the display order.
     kinetics: list[SelectedKinetics] = []
     if kin_ids:
         loaded = session.scalars(

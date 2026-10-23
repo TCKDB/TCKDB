@@ -333,7 +333,7 @@ def test_get_reaction_kinetics_uses_reaction_entry_id_in_path():
     )
 
 
-def test_get_reaction_kinetics_serializes_temperature_and_collapse():
+def test_get_reaction_kinetics_serializes_the_coverage_window():
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:

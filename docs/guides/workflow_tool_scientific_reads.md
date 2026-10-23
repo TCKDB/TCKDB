@@ -398,7 +398,7 @@ state, call `select_species_thermo`.
 `temperature_coverage` and `evidence_completeness` are displayed, not ranked.
 Experimental thermo scores low on `evidence_completeness` by construction
 (most predicates are calculation traceability), which is why the thermo and
-kinetics orders ignore the score. `temperature_min` / `temperature_max` are not filters on
+kinetics orders ignore the score. `coverage_temperature_min_k` / `coverage_temperature_max_k` are not filters on
 this read; they only fill each record's `temperature_coverage`.
 
 ## Reaction lookup (discovery-only)

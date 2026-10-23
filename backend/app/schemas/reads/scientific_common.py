@@ -149,7 +149,7 @@ class Pagination(BaseModel):
 
 
 class ReviewStatusSummary(BaseModel):
-    """Counts per review status across a candidate record set (pre-collapse)."""
+    """Counts per review status across a candidate record set."""
 
     approved: int = 0
     under_review: int = 0

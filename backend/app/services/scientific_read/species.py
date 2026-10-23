@@ -636,7 +636,7 @@ def search_species(
         species_entry_ref_id=species_entry_ref_id,
     ).subquery("candidate_species")
 
-    # Pre-collapse total is the number of *species* matched, whether or not
+    # The total is the number of *species* matched, whether or not
     # any of their entries survived the trust gate: a species with none is
     # still a record, with an empty ``entries`` list.
     total = (
@@ -645,7 +645,7 @@ def search_species(
     if total == 0:
         return _empty_response(request, includes, offset, limit)
 
-    # Pre-collapse review summary across every surviving entry, not just the
+    # The review summary covers every surviving entry, not just the
     # page's — one aggregate rather than one badge per candidate.
     summary = summary_from_sql(
         session,
