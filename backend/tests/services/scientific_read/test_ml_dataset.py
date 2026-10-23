@@ -567,7 +567,7 @@ def test_reaction_export_barrier_null_without_shared_lot(db_session):
     # But the TS block is still emitted.
     (ts_block,) = record["transition_states"]
     assert ts_block["energies"][0]["electronic_energy_hartree"] == -114.9
-    summary = [p for p in _parse(lines) if p["record_type"] == "export_summary"][0]
+    (summary,) = [p for p in _parse(lines) if p["record_type"] == "export_summary"]
     assert summary["counts"]["transition_state_entries_without_barrier"] == 1
 
 
