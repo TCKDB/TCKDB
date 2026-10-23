@@ -11089,6 +11089,13 @@
             "title": "Include Transport",
             "type": "boolean"
           },
+          "kinetics_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Kinetics Refs",
+            "type": "array"
+          },
           "min_review_status": {
             "anyOf": [
               {
@@ -11109,9 +11116,19 @@
           "seed": {
             "$ref": "#/components/schemas/_SeedBody"
           },
-          "selection_policy": {
-            "$ref": "#/components/schemas/SelectionPolicy",
-            "default": "default"
+          "thermo_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Thermo Refs",
+            "type": "array"
+          },
+          "transport_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Transport Refs",
+            "type": "array"
           }
         },
         "required": [
@@ -11119,15 +11136,6 @@
         ],
         "title": "ChemkinExportRequest",
         "type": "object"
-      },
-      "CollapseMode": {
-        "description": "Collapse axis values per spec D4 / Phase 2.1.\n\n``all``    return every eligible record after filter/sort/pagination.\n``first``  return at most one record (zero or one) after filter and sort.",
-        "enum": [
-          "all",
-          "first"
-        ],
-        "title": "CollapseMode",
-        "type": "string"
       },
       "ComparisonOutcome": {
         "enum": [
@@ -23108,6 +23116,11 @@
               }
             ]
           },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
           "declaration_unreadable": {
             "default": false,
             "title": "Declaration Unreadable",
@@ -23343,6 +23356,7 @@
         },
         "required": [
           "kinetics_ref",
+          "created_at",
           "scientific_origin",
           "model_kind",
           "review",
@@ -23475,11 +23489,29 @@
         "type": "object"
       },
       "KineticsSearchRequest": {
-        "description": "Service-layer request for chemistry-first kinetics search.\n\nReactants and/or products are required; reaction identity is resolved by\ndelegating to ``search_reactions``, so ``direction`` and ``match`` mean\nexactly what they mean there — ``match`` defaults to ``contains`` (set\ncontainment per role), and ``match=exact`` asks for one whole equation.\n``direction=exact`` is **not** supported in v0.",
+        "description": "Service-layer request for chemistry-first kinetics search.\n\nReactants and/or products are required; reaction identity is resolved by\ndelegating to ``search_reactions``, so ``direction`` and ``match`` mean\nexactly what they mean there — ``match`` defaults to ``contains`` (set\ncontainment per role), and ``match=exact`` asks for one whole equation.\n``direction=exact`` is **not** supported in v0.\n\nEvery matching record is returned in display order; ``collapse`` is refused (422).",
         "properties": {
-          "collapse": {
-            "$ref": "#/components/schemas/CollapseMode",
-            "default": "all"
+          "coverage_temperature_max_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Temperature Max K"
+          },
+          "coverage_temperature_min_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Temperature Min K"
           },
           "direction": {
             "$ref": "#/components/schemas/ReactionDirectionQuery",
@@ -23660,28 +23692,6 @@
               }
             ],
             "title": "Sort"
-          },
-          "temperature_max": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Temperature Max"
-          },
-          "temperature_min": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Temperature Min"
           }
         },
         "title": "KineticsSearchRequest",
@@ -37716,6 +37726,17 @@
             "title": "Kind",
             "type": "string"
           },
+          "requested_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By"
+          },
           "statement": {
             "default": "This is display order. It is deterministic for the same data, filters and read profile, and it is not a scientific preference: the first record is listed first, never recommended or ranked best.",
             "title": "Statement",
@@ -40625,12 +40646,8 @@
         "type": "object"
       },
       "ReactionSearchRequest": {
-        "description": "Service-layer request model for reaction search.",
+        "description": "Service-layer request model for reaction search.\n\nEvery matching record is returned in display order; ``collapse`` and ``selection_policy`` are refused (422).",
         "properties": {
-          "collapse": {
-            "$ref": "#/components/schemas/CollapseMode",
-            "default": "all"
-          },
           "direction": {
             "$ref": "#/components/schemas/ReactionDirectionQuery",
             "default": "either"
@@ -49453,7 +49470,7 @@
         "type": "object"
       },
       "SelectionPolicy": {
-        "description": "Named, read-time *administrative* order used when ``collapse=first``.\n\nA selection policy makes \"show me one product for this species form\" an\n*explicit, named* choice rather than an implicit one. Every policy is an\nadministrative order over review status and deposition time. None is a\nclaim about which method or result is scientifically better, and none\npersists a curator decision.\n\nPolicies that would require a stored choice (``benchmark_reference``,\n``curator_pick``) are intentionally absent: they need the deferred\nproduct-selection persistence layer, not a read knob, and cannot be\nhonestly evaluated from the record data alone. See\n``backend/docs/specs/scientific_product_candidacy.md``.\n\n``default``        the display order of ``docs/specs/browse_order.md``.\n``latest``         most recently deposited first.\n``most_reviewed``  review status first, then most recently deposited.",
+        "description": "Named, read-time *administrative* order a ``.../select`` request states (``policy``).\n\nA selection policy makes \"show me one product for this species form\" an\n*explicit, named* choice rather than an implicit one. Every policy is an\nadministrative order over review status and deposition time. None is a\nclaim about which method or result is scientifically better, and none\npersists a curator decision.\n\nPolicies that would require a stored choice (``benchmark_reference``,\n``curator_pick``) are intentionally absent: they need the deferred\nproduct-selection persistence layer, not a read knob, and cannot be\nhonestly evaluated from the record data alone. See\n``backend/docs/specs/scientific_product_candidacy.md``.\n\n``default``        the display order of ``docs/specs/browse_order.md``.\n``latest``         most recently deposited first.\n``most_reviewed``  review status first, then most recently deposited.",
         "enum": [
           "default",
           "latest",
@@ -49897,7 +49914,7 @@
         "type": "object"
       },
       "SpeciesCalculationsSearchRequest": {
-        "description": "Service-layer request for chemistry-first species calculation search.\n\nAt least one species identifier (chemistry filter or explicit handle)\nis required. Multiple identifiers AND-combine; inconsistent identifiers\nreturn an empty result set. ``species_entry_id`` (when supplied) is a\nhandle path — 404 if the entry does not exist.",
+        "description": "Service-layer request for chemistry-first species calculation search.\n\nAt least one species identifier (chemistry filter or explicit handle)\nis required. Multiple identifiers AND-combine; inconsistent identifiers\nreturn an empty result set. ``species_entry_id`` (when supplied) is a\nhandle path — 404 if the entry does not exist.\n\nEvery matching calculation is returned in display order; ``collapse`` and ``selection_policy`` are refused (422).",
         "properties": {
           "basis": {
             "anyOf": [
@@ -49941,10 +49958,6 @@
               }
             ],
             "title": "Charge"
-          },
-          "collapse": {
-            "$ref": "#/components/schemas/CollapseMode",
-            "default": "all"
           },
           "electronic_state_kind": {
             "anyOf": [
@@ -60013,6 +60026,11 @@
             ],
             "x-tckdb-include-gated": "assessments"
           },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
           "enthalpy_formation_0k_kj_mol": {
             "anyOf": [
               {
@@ -60254,6 +60272,7 @@
         },
         "required": [
           "thermo_ref",
+          "created_at",
           "scientific_origin",
           "model_kind",
           "review",
@@ -60292,7 +60311,7 @@
         "type": "object"
       },
       "ThermoSearchRequest": {
-        "description": "Service-layer request for chemistry-first thermo search.\n\nAt least one species identifier (``smiles`` / ``inchi`` / ``inchi_key`` /\n``formula``) must be supplied; multiple identifiers AND-combine.\nInconsistent identifiers return an empty result set, not a 422.",
+        "description": "Service-layer request for chemistry-first thermo search.\n\nAt least one species identifier (``smiles`` / ``inchi`` / ``inchi_key`` /\n``formula``) must be supplied; multiple identifiers AND-combine.\nInconsistent identifiers return an empty result set, not a 422. Every matching record is returned in display\norder; ``collapse`` and ``selection_policy`` are refused (422).",
         "properties": {
           "charge": {
             "anyOf": [
@@ -60305,9 +60324,27 @@
             ],
             "title": "Charge"
           },
-          "collapse": {
-            "$ref": "#/components/schemas/CollapseMode",
-            "default": "all"
+          "coverage_temperature_max_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Temperature Max K"
+          },
+          "coverage_temperature_min_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Temperature Min K"
           },
           "electronic_state_kind": {
             "anyOf": [
@@ -60504,28 +60541,6 @@
               }
             ],
             "title": "Species Ref"
-          },
-          "temperature_max": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Temperature Max"
-          },
-          "temperature_min": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Temperature Min"
           }
         },
         "title": "ThermoSearchRequest",
@@ -67974,12 +67989,8 @@
         "type": "object"
       },
       "app__schemas__reads__scientific_geometry__RequestEcho": {
-        "description": "Echo of the parsed query for the geometry detail endpoint.\n\nThe endpoint has no scientific filters, so ``filter`` is always\n``{}`` and ``sort`` / ``collapse`` are present only for shape\nconsistency with the other scientific read envelopes (so callers\ncan rely on a stable response top-level).",
+        "description": "Echo of the parsed query for the geometry detail endpoint.\n\nThe endpoint has no scientific filters, so ``filter`` is always\n``{}`` and ``sort`` is present only for shape\nconsistency with the other scientific read envelopes (so callers\ncan rely on a stable response top-level).",
         "properties": {
-          "collapse": {
-            "$ref": "#/components/schemas/CollapseMode",
-            "default": "all"
-          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -68028,9 +68039,6 @@
       "app__schemas__reads__scientific_kinetics__RequestEcho": {
         "description": "Echo of the parsed query.",
         "properties": {
-          "collapse": {
-            "$ref": "#/components/schemas/CollapseMode"
-          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -68069,7 +68077,6 @@
         "required": [
           "filter",
           "sort",
-          "collapse",
           "include"
         ],
         "title": "RequestEcho",
@@ -68078,9 +68085,6 @@
       "app__schemas__reads__scientific_kinetics_search__RequestEcho": {
         "description": "Echo of the parsed query.",
         "properties": {
-          "collapse": {
-            "$ref": "#/components/schemas/CollapseMode"
-          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -68119,7 +68123,6 @@
         "required": [
           "filter",
           "sort",
-          "collapse",
           "include"
         ],
         "title": "RequestEcho",
@@ -68534,9 +68537,6 @@
       "app__schemas__reads__scientific_reactions__RequestEcho": {
         "description": "Echo of the parsed query.",
         "properties": {
-          "collapse": {
-            "$ref": "#/components/schemas/CollapseMode"
-          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -68575,7 +68575,6 @@
         "required": [
           "filter",
           "sort",
-          "collapse",
           "include"
         ],
         "title": "RequestEcho",
@@ -68622,9 +68621,6 @@
       "app__schemas__reads__scientific_species__RequestEcho": {
         "description": "Echo of the parsed query for debuggability and traceability.",
         "properties": {
-          "collapse": {
-            "$ref": "#/components/schemas/CollapseMode"
-          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -68663,7 +68659,6 @@
         "required": [
           "filter",
           "sort",
-          "collapse",
           "include"
         ],
         "title": "RequestEcho",
@@ -68709,9 +68704,6 @@
       "app__schemas__reads__scientific_species_calculations__RequestEcho": {
         "description": "Echo of the parsed query.",
         "properties": {
-          "collapse": {
-            "$ref": "#/components/schemas/CollapseMode"
-          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -68754,7 +68746,6 @@
           "filter",
           "ranking",
           "sort",
-          "collapse",
           "include"
         ],
         "title": "RequestEcho",
@@ -68794,28 +68785,8 @@
         "type": "object"
       },
       "app__schemas__reads__scientific_statmech_search__RequestEcho": {
-        "description": "Echo of the parsed request — surfaced in the response envelope.\n\n``collapse`` / ``selection_policy`` are populated by the per-species\nsubresource read (which supports an explicit named single-record policy)\nand left ``null`` by broad search, which always returns all candidates.",
+        "description": "Echo of the parsed request — surfaced in the response envelope.\n\nBoth the broad search and the per-species read return every matching record in ``sort`` order; neither picks one.",
         "properties": {
-          "collapse": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollapseMode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "effective_order": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/OrderEcho"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -68856,27 +68827,6 @@
                 "type": "null"
               }
             ]
-          },
-          "selection_policy": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SelectionPolicy"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "selection_policy_applied": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Selection Policy Applied"
           },
           "sort": {
             "$ref": "#/components/schemas/OrderEcho"
@@ -68941,19 +68891,6 @@
       "app__schemas__reads__scientific_thermo__RequestEcho": {
         "description": "Echo of the parsed query.",
         "properties": {
-          "collapse": {
-            "$ref": "#/components/schemas/CollapseMode"
-          },
-          "effective_order": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/OrderEcho"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -68985,10 +68922,6 @@
             ],
             "title": "Profile Release Ref"
           },
-          "selection_policy": {
-            "$ref": "#/components/schemas/SelectionPolicy",
-            "default": "default"
-          },
           "sort": {
             "$ref": "#/components/schemas/OrderEcho"
           }
@@ -68996,7 +68929,6 @@
         "required": [
           "filter",
           "sort",
-          "collapse",
           "include"
         ],
         "title": "RequestEcho",
@@ -69005,9 +68937,6 @@
       "app__schemas__reads__scientific_thermo_search__RequestEcho": {
         "description": "Echo of the parsed query.",
         "properties": {
-          "collapse": {
-            "$ref": "#/components/schemas/CollapseMode"
-          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -69046,7 +68975,6 @@
         "required": [
           "filter",
           "sort",
-          "collapse",
           "include"
         ],
         "title": "RequestEcho",
@@ -69164,28 +69092,8 @@
         "type": "object"
       },
       "app__schemas__reads__scientific_transport_search__RequestEcho": {
-        "description": "Echo of the parsed request — surfaced in the response envelope.\n\n``collapse`` / ``selection_policy`` are populated by the per-species\nsubresource read (which supports an explicit named single-record policy)\nand left ``null`` by broad search, which always returns all candidates.",
+        "description": "Echo of the parsed request — surfaced in the response envelope.\n\nBoth the broad search and the per-species read return every matching record in ``sort`` order; neither picks one.",
         "properties": {
-          "collapse": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CollapseMode"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "effective_order": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/OrderEcho"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -69216,16 +69124,6 @@
               }
             ],
             "title": "Profile Release Ref"
-          },
-          "selection_policy": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SelectionPolicy"
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "sort": {
             "$ref": "#/components/schemas/OrderEcho"
@@ -86886,7 +86784,7 @@
     },
     "/api/v1/scientific/export/chemkin": {
       "post": {
-        "description": "Export a CHEMKIN mechanism zip (chem.inp/therm.dat/tran.dat + manifest).\n\nCHEMKIN cannot represent multiple candidates per record, so selection is\nforced to ``collapse=first``. Curator/admin only.\n\n:raises ValueError: 422 for an empty/unresolvable seed or an ``all``\n    request over the export cap.",
+        "description": "Export a CHEMKIN mechanism zip (chem.inp/therm.dat/tran.dat + manifest).\n\nCHEMKIN holds exactly one thermo, transport and kinetics record per\nspecies or reaction, and the exporter never picks one. Where a species or\nreaction has more than one candidate, name the record in ``thermo_refs`` /\n``transport_refs`` / ``kinetics_refs``; otherwise the request is refused\nwith 422 ``export_selection_ambiguous``, which lists every ambiguous\nspecies/reaction with its candidate refs. Curator/admin only.\n\n:raises ValueError: 422 for an empty/unresolvable seed or an ``all``\n    request over the export cap.",
         "operationId": "export_chemkin_api_v1_scientific_export_chemkin_post",
         "parameters": [
           {
@@ -87402,7 +87300,7 @@
     },
     "/api/v1/scientific/export/ndjson": {
       "get": {
-        "description": "Stream a selected scientific NDJSON projection for the seed.\n\nEmits a header ``manifest`` line, then one ``species`` / ``reaction``\nline per record (computed lazily), then a trailing ``export_summary``\nline with the gap list. The manifest explicitly marks the format as\nnon-lossless and non-reingestible. Curator/admin only.\n\n:raises ValueError: 422 for an empty/unresolvable seed or an ``all``\n    request over the export cap.",
+        "description": "Stream a selected scientific NDJSON projection for the seed.\n\nEvery qualifying thermo, transport and kinetics record of each species and\nreaction is exported, in display order; nothing is picked. ``collapse`` and\n``selection_policy`` are refused (422).\n\nEmits a header ``manifest`` line, then one ``species`` / ``reaction``\nline per record (computed lazily), then a trailing ``export_summary``\nline with the gap list. The manifest explicitly marks the format as\nnon-lossless and non-reingestible. Curator/admin only.\n\n:raises ValueError: 422 for an empty/unresolvable seed or an ``all``\n    request over the export cap.",
         "operationId": "export_ndjson_api_v1_scientific_export_ndjson_get",
         "parameters": [
           {
@@ -87490,24 +87388,6 @@
               ],
               "default": "approved",
               "title": "Min Review Status"
-            }
-          },
-          {
-            "in": "query",
-            "name": "collapse",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/CollapseMode",
-              "default": "first"
-            }
-          },
-          {
-            "in": "query",
-            "name": "selection_policy",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/SelectionPolicy",
-              "default": "default"
             }
           },
           {
@@ -88238,7 +88118,7 @@
     },
     "/api/v1/scientific/kinetics/search": {
       "get": {
-        "description": "Chemistry-first kinetics search by reactants/products.\n\nRepeated ``reactants=`` and ``products=`` are accepted on the GET form.\n``match=contains`` (the default) means every queried species must appear\nin that role and an omitted side constrains nothing; ``match=exact``\ndemands the whole equation. For complex reactant/product lists\n(especially with bracket-heavy SMILES), prefer the POST form. Returns\nkinetics records with the resolved reaction/reaction_entry identity\nattached.",
+        "description": "Chemistry-first kinetics search by reactants/products.\n\nRepeated ``reactants=`` and ``products=`` are accepted on the GET form.\n``match=contains`` (the default) means every queried species must appear\nin that role and an omitted side constrains nothing; ``match=exact``\ndemands the whole equation. For complex reactant/product lists\n(especially with bracket-heavy SMILES), prefer the POST form. Returns\nkinetics records with the resolved reaction/reaction_entry identity\nattached. Every matching record is returned, ordered by the record's own\nreview status, then newest deposition, then id. ``collapse`` is refused\n(422); ``POST /reaction-entries/{ref}/kinetics/select`` answers\n\"give me one\".",
         "operationId": "kinetics_search_get_api_v1_scientific_kinetics_search_get",
         "parameters": [
           {
@@ -88347,7 +88227,7 @@
           },
           {
             "in": "query",
-            "name": "temperature_min",
+            "name": "coverage_temperature_min_k",
             "required": false,
             "schema": {
               "anyOf": [
@@ -88358,12 +88238,12 @@
                   "type": "null"
                 }
               ],
-              "title": "Temperature Min"
+              "title": "Coverage Temperature Min K"
             }
           },
           {
             "in": "query",
-            "name": "temperature_max",
+            "name": "coverage_temperature_max_k",
             "required": false,
             "schema": {
               "anyOf": [
@@ -88374,7 +88254,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Temperature Max"
+              "title": "Coverage Temperature Max K"
             }
           },
           {
@@ -88535,15 +88415,6 @@
           },
           {
             "in": "query",
-            "name": "collapse",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/CollapseMode",
-              "default": "all"
-            }
-          },
-          {
-            "in": "query",
             "name": "include",
             "required": false,
             "schema": {
@@ -88642,7 +88513,7 @@
         ]
       },
       "post": {
-        "description": "JSON-body variant for structured reactant/product queries.\n\nAll search fields, filters, includes, collapse, offset, and limit live\nin the body. Query-string parameters are rejected. Body field ``sort``\nis rejected by the service layer (v0 sort policy).",
+        "description": "JSON-body variant for structured reactant/product queries.\n\nAll search fields, filters, includes, offset, and limit live\nin the body. Query-string parameters are rejected. Body field ``sort``\nis rejected by the service layer (v0 sort policy).",
         "operationId": "kinetics_search_post_api_v1_scientific_kinetics_search_post",
         "parameters": [
           {
@@ -93521,7 +93392,7 @@
           },
           {
             "in": "query",
-            "name": "temperature_min",
+            "name": "coverage_temperature_min_k",
             "required": false,
             "schema": {
               "anyOf": [
@@ -93532,12 +93403,12 @@
                   "type": "null"
                 }
               ],
-              "title": "Temperature Min"
+              "title": "Coverage Temperature Min K"
             }
           },
           {
             "in": "query",
-            "name": "temperature_max",
+            "name": "coverage_temperature_max_k",
             "required": false,
             "schema": {
               "anyOf": [
@@ -93548,7 +93419,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Temperature Max"
+              "title": "Coverage Temperature Max K"
             }
           },
           {
@@ -93705,15 +93576,6 @@
                 }
               ],
               "title": "Sort"
-            }
-          },
-          {
-            "in": "query",
-            "name": "collapse",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/CollapseMode",
-              "default": "all"
             }
           },
           {
@@ -94372,15 +94234,6 @@
           },
           {
             "in": "query",
-            "name": "collapse",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/CollapseMode",
-              "default": "all"
-            }
-          },
-          {
-            "in": "query",
             "name": "include",
             "required": false,
             "schema": {
@@ -94479,7 +94332,7 @@
         ]
       },
       "post": {
-        "description": "JSON-body variant of reaction search for complex reactant/product lists.\n\nAll search fields, filters, includes, collapse, offset, and limit live in\nthe body. Query-string parameters are rejected (per Phase 2.1 patch),\nexcept for any infrastructure-level params that may be added later. Body\nfield ``sort`` is rejected by the service layer (v0 sort policy).",
+        "description": "JSON-body variant of reaction search for complex reactant/product lists.\n\nAll search fields, filters, includes, offset, and limit live in\nthe body. Query-string parameters are rejected (per Phase 2.1 patch),\nexcept for any infrastructure-level params that may be added later. Body\nfield ``sort`` is rejected by the service layer (v0 sort policy).",
         "operationId": "reaction_search_post_api_v1_scientific_reactions_search_post",
         "parameters": [
           {
@@ -95406,15 +95259,6 @@
           },
           {
             "in": "query",
-            "name": "collapse",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/CollapseMode",
-              "default": "all"
-            }
-          },
-          {
-            "in": "query",
             "name": "include",
             "required": false,
             "schema": {
@@ -95545,7 +95389,7 @@
         ]
       },
       "post": {
-        "description": "JSON-body variant for structured species-calculation queries.\n\nAll search fields, filters, includes, ranking, collapse, offset, and\nlimit live in the body. Query-string parameters are rejected\n(Phase 4 / Phase 6 POST convention). Body field ``sort`` is rejected\nby the service layer (v0 sort policy).\n\n``record.provenance.submission_ref`` on each result is served only\nto an authenticated caller — see\n``app.services.scientific_read.auth_visibility``.",
+        "description": "JSON-body variant for structured species-calculation queries.\n\nAll search fields, filters, includes, ranking, offset, and\nlimit live in the body. Query-string parameters are rejected\n(Phase 4 / Phase 6 POST convention). Body field ``sort`` is rejected\nby the service layer (v0 sort policy).\n\n``record.provenance.submission_ref`` on each result is served only\nto an authenticated caller — see\n``app.services.scientific_read.auth_visibility``.",
         "operationId": "species_calculations_search_post_api_v1_scientific_species_calculations_search_post",
         "parameters": [
           {
@@ -95834,7 +95678,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_id}/statmech": {
       "get": {
-        "description": "Return statmech records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=assessments`` adds compact\ndeterministic-trust and reproducibility freshness summaries, while\n``include=trust`` adds the\nrecord's computed statmech rubric fragment per record; ``include=all`` does\nnot include trust.\n\nStatmech records are candidate products for the resolved form;\n``collapse=first`` returns the single record selected under the explicit\nnamed ``selection_policy`` (default ``default``). ``collapse=all`` (the\ndefault) returns every candidate. See\n``backend/docs/specs/scientific_product_candidacy.md``.",
+        "description": "Return statmech records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=assessments`` adds compact\ndeterministic-trust and reproducibility freshness summaries, while\n``include=trust`` adds the\nrecord's computed statmech rubric fragment per record; ``include=all`` does\nnot include trust.\n\nEvery statmech record for the entry is returned in display order (review\nstatus, then newest deposition, then id). The read never picks one:\n``collapse`` and ``selection_policy`` are refused (422), and\n``POST /statmech/select`` answers \"give me one\". See\n``backend/docs/specs/scientific_product_candidacy.md``.",
         "operationId": "species_statmech_api_v1_scientific_species_entries__species_entry_id__statmech_get",
         "parameters": [
           {
@@ -95898,24 +95742,6 @@
                 }
               ],
               "title": "Sort"
-            }
-          },
-          {
-            "in": "query",
-            "name": "collapse",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/CollapseMode",
-              "default": "all"
-            }
-          },
-          {
-            "in": "query",
-            "name": "selection_policy",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/SelectionPolicy",
-              "default": "default"
             }
           },
           {
@@ -96020,7 +95846,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_id}/thermo": {
       "get": {
-        "description": "Return thermo records for a species entry, sorted per L3.\n\nPath handle is strictly the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\n``species.id`` (or any other prefix) returns 422 / 404.\n``sort=`` is rejected (v0). See ``docs/specs/browse_order.md``\n§Endpoint 4 and ``docs/specs/public_identifier_policy.md``.",
+        "description": "Return every thermo record for a species entry, in display order.\n\nReview status, then newest deposition, then id (``docs/specs/browse_order.md``). The read never picks one:\n``collapse`` and ``selection_policy`` are refused (422); ``POST .../thermo/select`` answers \"give me one\".\n``coverage_temperature_min_k`` / ``coverage_temperature_max_k`` filter nothing; they set the window each record's\n``temperature_coverage`` is computed against.\n\nPath handle is strictly the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\n``species.id`` (or any other prefix) returns 422 / 404.\n``sort=`` is rejected (v0). See ``docs/specs/browse_order.md``\n§Endpoint 4 and ``docs/specs/public_identifier_policy.md``.",
         "operationId": "species_thermo_api_v1_scientific_species_entries__species_entry_id__thermo_get",
         "parameters": [
           {
@@ -96036,7 +95862,7 @@
           },
           {
             "in": "query",
-            "name": "temperature_min",
+            "name": "coverage_temperature_min_k",
             "required": false,
             "schema": {
               "anyOf": [
@@ -96047,12 +95873,12 @@
                   "type": "null"
                 }
               ],
-              "title": "Temperature Min"
+              "title": "Coverage Temperature Min K"
             }
           },
           {
             "in": "query",
-            "name": "temperature_max",
+            "name": "coverage_temperature_max_k",
             "required": false,
             "schema": {
               "anyOf": [
@@ -96063,7 +95889,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Temperature Max"
+              "title": "Coverage Temperature Max K"
             }
           },
           {
@@ -96184,24 +96010,6 @@
           },
           {
             "in": "query",
-            "name": "collapse",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/CollapseMode",
-              "default": "all"
-            }
-          },
-          {
-            "in": "query",
-            "name": "selection_policy",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/SelectionPolicy",
-              "default": "default"
-            }
-          },
-          {
-            "in": "query",
             "name": "include",
             "required": false,
             "schema": {
@@ -96302,7 +96110,7 @@
     },
     "/api/v1/scientific/species-entries/{species_entry_id}/transport": {
       "get": {
-        "description": "Return transport records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=assessments`` adds compact\ndeterministic-trust and reproducibility freshness summaries, while\n``include=trust`` adds the\n``computed_transport`` fragment per record; ``include=all`` does\nnot include trust.\n\nTransport records are candidate products for the resolved form;\n``collapse=first`` returns the single record selected under the explicit\nnamed ``selection_policy`` (default ``default``). ``collapse=all`` (the\ndefault) returns every candidate. See\n``backend/docs/specs/scientific_product_candidacy.md``.",
+        "description": "Return transport records for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``include=assessments`` adds compact\ndeterministic-trust and reproducibility freshness summaries, while\n``include=trust`` adds the\n``computed_transport`` fragment per record; ``include=all`` does\nnot include trust.\n\nEvery transport record for the entry is returned in display order (review\nstatus, then newest deposition, then id). The read never picks one:\n``collapse`` and ``selection_policy`` are refused (422). There is no\ntransport select endpoint yet. See\n``backend/docs/specs/scientific_product_candidacy.md``.",
         "operationId": "species_transport_api_v1_scientific_species_entries__species_entry_id__transport_get",
         "parameters": [
           {
@@ -96366,24 +96174,6 @@
                 }
               ],
               "title": "Sort"
-            }
-          },
-          {
-            "in": "query",
-            "name": "collapse",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/CollapseMode",
-              "default": "all"
-            }
-          },
-          {
-            "in": "query",
-            "name": "selection_policy",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/SelectionPolicy",
-              "default": "default"
             }
           },
           {
@@ -97701,15 +97491,6 @@
           },
           {
             "in": "query",
-            "name": "collapse",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/CollapseMode",
-              "default": "all"
-            }
-          },
-          {
-            "in": "query",
             "name": "include",
             "required": false,
             "schema": {
@@ -98023,15 +97804,6 @@
                 }
               ],
               "title": "Sort"
-            }
-          },
-          {
-            "in": "query",
-            "name": "collapse",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/CollapseMode",
-              "default": "all"
             }
           },
           {
@@ -99210,7 +98982,7 @@
     },
     "/api/v1/scientific/thermo/search": {
       "get": {
-        "description": "Chemistry-first thermo search by species identifiers.\n\nAt least one of ``smiles`` / ``inchi`` / ``inchi_key`` / ``formula``\nmust be supplied; multiple identifiers AND-combine. Returns thermo\nrecords with the resolved species/species_entry identity attached, so\nworkflow tools never need to know the entry id up front.",
+        "description": "Chemistry-first thermo search by species identifiers.\n\nAt least one of ``smiles`` / ``inchi`` / ``inchi_key`` / ``formula``\nmust be supplied; multiple identifiers AND-combine. Returns thermo\nrecords with the resolved species/species_entry identity attached, so\nworkflow tools never need to know the entry id up front. Every matching\nrecord is returned, ordered by the record's own review status, then\nnewest deposition, then id; ``collapse`` is refused (422) and\n``POST /species-entries/{ref}/thermo/select`` answers \"give me one\".",
         "operationId": "thermo_search_get_api_v1_scientific_thermo_search_get",
         "parameters": [
           {
@@ -99375,7 +99147,7 @@
           },
           {
             "in": "query",
-            "name": "temperature_min",
+            "name": "coverage_temperature_min_k",
             "required": false,
             "schema": {
               "anyOf": [
@@ -99386,12 +99158,12 @@
                   "type": "null"
                 }
               ],
-              "title": "Temperature Min"
+              "title": "Coverage Temperature Min K"
             }
           },
           {
             "in": "query",
-            "name": "temperature_max",
+            "name": "coverage_temperature_max_k",
             "required": false,
             "schema": {
               "anyOf": [
@@ -99402,7 +99174,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Temperature Max"
+              "title": "Coverage Temperature Max K"
             }
           },
           {
@@ -99523,15 +99295,6 @@
           },
           {
             "in": "query",
-            "name": "collapse",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/CollapseMode",
-              "default": "all"
-            }
-          },
-          {
-            "in": "query",
             "name": "include",
             "required": false,
             "schema": {
@@ -99630,7 +99393,7 @@
         ]
       },
       "post": {
-        "description": "JSON-body variant for structured thermo search.\n\nAll search fields, filters, includes, collapse, offset, and limit live\nin the body. Query-string parameters are rejected (per Phase 4 POST\nconvention). ``sort`` in the body is rejected by the service layer.",
+        "description": "JSON-body variant for structured thermo search.\n\nAll search fields, filters, includes, offset, and limit live\nin the body. Query-string parameters are rejected (per Phase 4 POST\nconvention). ``sort`` in the body is rejected by the service layer.",
         "operationId": "thermo_search_post_api_v1_scientific_thermo_search_post",
         "parameters": [
           {
