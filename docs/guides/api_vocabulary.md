@@ -60,11 +60,11 @@ Three things are deliberately absent:
 
 | Kind of token | Count | Read from |
 | --- | --- | --- |
-| Status, badge and query words | 125 | 29 enums, declared in `backend/app/glossary/declarations.py` |
+| Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 330 | `backend/app/api/code_catalogue.py` |
-| **total** | **672** | |
+| Refusal codes a caller can receive | 334 | `backend/app/api/code_catalogue.py` |
+| **total** | **674** | |
 
 ## How a record is named
 
@@ -555,22 +555,11 @@ How the species you listed are compared against a stored reaction's sides.
 | `contains` | The default. Set containment per role: every species you name must appear in that role of the stored reaction, and a side you did not mention constrains nothing. Containment is by **set**, not multiset — naming a species once matches a reaction consuming two of it. **For example:** `reactants=NN` alone means "NN among the reactants, products unconstrained" — which is what a chemist means by "reactions of hydrazine". |
 | `exact` | Multiset equality on both sides: precisely this equation, both sides, counts included. Ask for this when you want one specific reaction rather than a family. |
 
-### Collapse mode
-
-*On the wire:* the `collapse` request parameter, echoed in `request.collapse`.
-
-How many records per subject the response returns.
-
-| Token | What it means |
-| --- | --- |
-| `all` | Every eligible record, after filtering, sorting and pagination. The default. |
-| `first` | At most one record — zero or one — after filtering and sorting. Which one is decided by the selection policy below, and that choice is made at read time; it stores nothing. |
-
 ### Selection policy
 
-*On the wire:* the `selection_policy` request parameter, meaningful when `collapse=first`.
+*On the wire:* the `policy` field of a `.../select` request.
 
-Which record is listed first when the response is collapsed to one. Naming the policy makes "show me one" an explicit choice rather than a silent one. No policy persists a curator decision — for an attributed endorsement, use a dataset release.
+Which record is listed first among the eligible ones a select endpoint reports. Naming the policy makes "show me one" an explicit choice rather than a silent one; a browse read has no such parameter and never picks. No policy persists a curator decision — for an attributed endorsement, use a dataset release.
 
 | Token | What it means |
 | --- | --- |
@@ -817,7 +806,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (266 codes)
+### HTTP 422 (270 codes)
 
 | Code | Names |
 | --- | --- |
@@ -835,6 +824,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `atom_map_participant_not_declared` | a thing |
 | `atom_map_without_transition_state` | a thing |
 | `bac_total_requires_components` | a relationship — read `context` |
+| `browse_parameter_removed` | a relationship — read `context` |
 | `bundle_too_many_records` | a relationship — read `context` |
 | `calculation_geometry_composition_mismatch` | a relationship — read `context` |
 | `calculation_geometry_conformer_mismatch` | a relationship — read `context` |
@@ -886,8 +876,10 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `enthalpy_quantity_not_storable_here` | a relationship — read `context` |
 | `enthalpy_reference_kind_unrecognized` | a relationship — read `context` |
 | `export_all_cap_exceeded` | a relationship — read `context` |
+| `export_ref_unmatched` | a relationship — read `context` |
 | `export_seed_empty` | a thing |
 | `export_seed_unresolved` | a thing |
+| `export_selection_ambiguous` | a relationship — read `context` |
 | `freq_list_exceeds_geometry_degrees_of_freedom` | a relationship — read `context` |
 | `freq_mode_index_not_unique` | a relationship — read `context` |
 | `freq_n_imag_disagrees_with_modes` | a relationship — read `context` |
@@ -958,6 +950,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `observation_identity_hint_conflict` | a relationship — read `context` |
 | `observation_identity_target_not_ground_state_minimum` | a relationship — read `context` |
 | `offset_too_large` | a relationship — read `context` |
+| `parameter_renamed` | a relationship — read `context` |
 | `parameter_value_requires_key` | a thing |
 | `post_search_fields_must_be_in_body` | a thing |
 | `pressure_alias_conflict` | a relationship — read `context` |
