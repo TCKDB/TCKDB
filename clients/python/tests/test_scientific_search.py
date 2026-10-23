@@ -338,7 +338,6 @@ def test_search_species_calculations_defaults_to_post_with_json_body():
         smiles="C[CH2]",
         calculation_type="sp",
         ranking="lowest_energy",
-        collapse="first",
         include=["provenance", "conformers", "review"],
     )
 
@@ -350,7 +349,6 @@ def test_search_species_calculations_defaults_to_post_with_json_body():
     assert payload["smiles"] == "C[CH2]"
     assert payload["calculation_type"] == "sp"
     assert payload["ranking"] == "lowest_energy"
-    assert payload["collapse"] == "first"
     assert payload["include"] == ["provenance", "conformers", "review"]
 
 
