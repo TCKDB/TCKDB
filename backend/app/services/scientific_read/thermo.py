@@ -83,6 +83,7 @@ from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    ids_below_review_floor,
     reject_client_sort,
     review_summary,
     slice_for_pagination,
@@ -311,29 +312,42 @@ def get_species_thermo(
     if not classified:
         return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
-    # Level-of-theory filter: a record matches when ANY of its linked source calculations ran at this level. There
-    # is no "primary" calculation for a filter, so no role priority can decide which link counts.
+    # A source calculation the active profile hides contributes no level and no software to a filter match: hidden
+    # equals unknown equals absent (D6). The record's own link to it stays a fact of the record (the ref guard
+    # withholds the ref); what the calculation ran at or in is a fact about the hidden calculation. One lookup, and
+    # none without a review floor.
+    hidden_source_calc_ids = ids_below_review_floor(
+        session,
+        record_type=SubmissionRecordType.calculation,
+        record_ids={sc.calculation_id for t, _ in classified for sc in sources_by_thermo.get(t.id, [])},
+    )
+
+    def shown(sources: list[ThermoSourceCalculation]) -> list[ThermoSourceCalculation]:
+        return [sc for sc in sources if sc.calculation_id not in hidden_source_calc_ids]
+
+    # Level-of-theory filter: a record matches when ANY of its linked (shown) source calculations ran at this level.
+    # There is no "primary" calculation for a filter, so no role priority can decide which link counts.
     if effective_lot_id is not None:
         classified = [
             (t, kind)
             for t, kind in classified
-            if effective_lot_id in _linked_lot_ids(sources_by_thermo.get(t.id, []))
+            if effective_lot_id in _linked_lot_ids(shown(sources_by_thermo.get(t.id, [])))
         ]
     if not classified:
         return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
-    # Software filter: ANY linked source calculation ran in a software of this name.
+    # Software filter: ANY linked (shown) source calculation ran in a software of this name.
     if request.software is not None:
         software_by_calc = software_names_by_calculation(
             session,
-            {sc.calculation_id for t, _ in classified for sc in sources_by_thermo.get(t.id, [])},
+            {sc.calculation_id for t, _ in classified for sc in shown(sources_by_thermo.get(t.id, []))},
         )
         classified = [
             (t, kind)
             for t, kind in classified
             if any(
                 software_by_calc.get(sc.calculation_id) == request.software
-                for sc in sources_by_thermo.get(t.id, [])
+                for sc in shown(sources_by_thermo.get(t.id, []))
             )
         ]
     if not classified:
