@@ -19,6 +19,7 @@ from tests.services.scientific_read._factories import (
     make_species,
     make_species_entry,
     make_thermo_scalar,
+    make_transport,
     next_inchi_key,
     set_review,
 )
@@ -107,7 +108,7 @@ def test_chemkin_refuses_to_pick_and_names_the_ambiguous_species_with_its_candid
     assert ambiguous["subject_kind"] == "species_entry"
     assert ambiguous["record_kind"] == "thermo"
     assert sorted(ambiguous["candidate_refs"]) == sorted([thermos["a"].public_ref, extra.public_ref])
-    assert body["context"]["resolve_with"] == ["filters", "select_endpoint", "explicit_refs"]
+    assert body["context"]["resolve_with"] == ["select_endpoint", "explicit_refs"]
     # No generated text, no zip: a refusal is the whole response.
     assert resp.headers["content-type"].startswith("application/json")
 
@@ -148,3 +149,60 @@ def test_chemkin_refuses_a_named_ref_that_is_nobodys_candidate(client, db_sessio
     body = resp.json()
     assert body["code"] == "export_ref_unmatched"
     assert body["context"]["unmatched"] == [{"record_kind": "thermo", "ref": "thm_nosuchrecord"}]
+
+
+def _two_transports(db_session, species_entry):
+    rows = [make_transport(db_session, species_entry=species_entry, sigma_angstrom=3.0 + i) for i in range(2)]
+    for row in rows:  # the export's default floor is approved
+        set_review(
+            db_session, record_type=SubmissionRecordType.transport, record_id=row.id, status=RecordReviewStatus.approved
+        )
+    return rows
+
+
+def test_chemkin_without_transport_does_not_refuse_on_transport_candidates(
+    client, db_session, login_as, _api_curator_user
+):
+    """Kills: resolving transport candidates before looking at ``include_transport`` (a species with two transport
+    records made a transport-free export refuse on a file it was not going to write)."""
+    reaction_entry, entries, thermos, extra = _reaction(db_session)
+    _two_transports(db_session, entries["c"])
+    login_as(_api_curator_user)
+    body = {"seed": {"reaction_refs": [reaction_entry.public_ref]}, "thermo_refs": [extra.public_ref]}
+
+    refused = client.post(f"{EXPORT}/chemkin", json={**body, "include_transport": True})
+    assert refused.status_code == 422, refused.text
+    assert refused.json()["context"]["ambiguous"][0]["record_kind"] == "transport"
+
+    ok = client.post(f"{EXPORT}/chemkin", json={**body, "include_transport": False})
+    assert ok.status_code == 200, ok.text
+    assert "tran.dat" not in zipfile.ZipFile(io.BytesIO(ok.content)).namelist()
+
+
+def test_chemkin_reports_unmatched_and_ambiguous_together_and_says_transport_has_no_select(
+    client, db_session, login_as, _api_curator_user
+):
+    """Kills: refusing on the unmatched ref alone, so a caller fixes one problem per round trip."""
+    reaction_entry, entries, thermos, extra = _reaction(db_session)
+    _two_transports(db_session, entries["c"])
+    login_as(_api_curator_user)
+
+    resp = client.post(
+        f"{EXPORT}/chemkin",
+        json={"seed": {"reaction_refs": [reaction_entry.public_ref]}, "kinetics_refs": ["kin_nosuchrecord"]},
+    )
+
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["code"] == "export_selection_ambiguous"
+    context = body["context"]
+    assert {(a["subject_ref"], a["record_kind"]) for a in context["ambiguous"]} == {
+        (entries["a"].public_ref, "thermo"),
+        (entries["c"].public_ref, "transport"),
+    }
+    assert context["unmatched"] == [{"record_kind": "kinetics", "ref": "kin_nosuchrecord"}]
+    assert "filters" not in context["resolve_with"]
+    by_kind = {a["record_kind"]: a for a in context["ambiguous"]}
+    assert by_kind["transport"]["select_endpoint"] is None
+    assert "thermo/select" in by_kind["thermo"]["select_endpoint"]
+    assert "Transport has no select endpoint" in body["detail"]

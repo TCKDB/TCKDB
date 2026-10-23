@@ -1280,29 +1280,38 @@ def build_export_record_set(
     return record_set
 
 
+_SELECT_ENDPOINTS: dict[str, str | None] = {
+    "thermo": "POST /api/v1/scientific/species-entries/{species_entry_ref}/thermo/select",
+    "transport": None,  # there is no transport select endpoint yet
+    "kinetics": "POST /api/v1/scientific/reaction-entries/{reaction_entry_ref}/kinetics/select",
+}
+
+
 def resolve_single_records(
     record_set: ExportRecordSet,
     *,
     thermo_refs: list[str] | None = None,
     transport_refs: list[str] | None = None,
     kinetics_refs: list[str] | None = None,
+    include_transport: bool = True,
 ) -> None:
     """Reduce a record set to at most one thermo, transport and kinetics record per subject, WITHOUT picking.
 
     For a format that holds exactly one record per species or reaction (CHEMKIN). A subject with one candidate keeps
     it. A subject with several keeps the one the request names in ``*_refs``; if none (or more than one) of its
-    candidates is named, the subject is ambiguous. Every ambiguous subject is collected and refused together with a
-    structured 422 (``export_selection_ambiguous``) naming each subject and its candidate refs, so the caller can
-    resolve them all in one round trip: narrow with filters, call the select endpoint, or name the records.
+    candidates is named, the subject is ambiguous. Every ambiguous subject, and every named ref that is a candidate of
+    nothing in the set, is collected and refused together in ONE structured 422, so the caller can resolve all of it in
+    one round trip. A named ref that matches nothing is refused because a typo must not look like a successful pick.
 
-    A named ref that is not a candidate of any subject in the set is refused too (``export_ref_unmatched``): a typo
-    must not look like a successful pick.
+    ``include_transport=False`` leaves transport out entirely: the transport file is not written, so transport
+    candidates are neither resolved nor can they make the export refuse (and named transport refs are not checked).
 
-    :raises CodedValueError: 422 ``export_selection_ambiguous`` or ``export_ref_unmatched``.
+    :raises CodedValueError: 422 ``export_selection_ambiguous`` (also carries any unmatched refs) or, when nothing is
+        ambiguous, ``export_ref_unmatched``.
     """
     named = {
         "thermo": set(thermo_refs or []),
-        "transport": set(transport_refs or []),
+        "transport": set(transport_refs or []) if include_transport else set(),
         "kinetics": set(kinetics_refs or []),
     }
     used: dict[str, set[str]] = {"thermo": set(), "transport": set(), "kinetics": set()}
@@ -1325,6 +1334,7 @@ def resolve_single_records(
                 "record_kind": kind,
                 "candidate_refs": refs,
                 "named_refs": [r for r in refs if r in named[kind]],
+                "select_endpoint": _SELECT_ENDPOINTS[kind],
             }
         )
         return items
@@ -1332,7 +1342,10 @@ def resolve_single_records(
     for sr in record_set.species_records:
         ref = sr.species_entry.public_ref
         sr.thermos = reduce("thermo", ref, "species_entry", sr.thermos, lambda t: t.thermo.public_ref)
-        sr.transports = reduce("transport", ref, "species_entry", sr.transports, lambda t: t.transport.public_ref)
+        if include_transport:
+            sr.transports = reduce(
+                "transport", ref, "species_entry", sr.transports, lambda t: t.transport.public_ref
+            )
     for rr in record_set.reaction_records:
         rr.kinetics = reduce(
             "kinetics", rr.reaction_entry.public_ref, "reaction_entry", rr.kinetics, lambda k: k.kinetics.public_ref
@@ -1341,25 +1354,33 @@ def resolve_single_records(
     unmatched = sorted(
         (kind, ref) for kind, refs in named.items() for ref in refs if ref not in used[kind]
     )
-    if unmatched:
-        raise CodedValueError(
-            "export_ref_unmatched",
-            "named record ref(s) are not candidates of any species or reaction in this export: "
-            + ", ".join(f"{kind} {ref}" for kind, ref in unmatched),
-            context={"unmatched": [{"record_kind": k, "ref": r} for k, r in unmatched]},
-        )
+    unmatched_context = [{"record_kind": k, "ref": r} for k, r in unmatched]
+    unmatched_sentence = (
+        "Named record ref(s) are not candidates of any species or reaction in this export: "
+        + ", ".join(f"{kind} {ref}" for kind, ref in unmatched)
+        + ". "
+        if unmatched
+        else ""
+    )
     if ambiguous:
         raise CodedValueError(
             "export_selection_ambiguous",
-            f"{len(ambiguous)} species/reaction(s) have more than one candidate record and this format holds one. "
-            "Resolve each by narrowing the request with filters, by calling the matching select endpoint "
-            "(POST /api/v1/scientific/species-entries/{ref}/thermo/select, "
-            "POST /api/v1/scientific/reaction-entries/{ref}/kinetics/select), or by naming the record in "
-            "thermo_refs / transport_refs / kinetics_refs. The exporter does not pick one.",
+            f"{len(ambiguous)} species/reaction record kind(s) have more than one candidate and this format holds "
+            "one. Resolve each by calling its select endpoint (thermo and kinetics have one; the context names it "
+            "per subject) or by naming the record in thermo_refs / transport_refs / kinetics_refs. Transport has no "
+            "select endpoint: name transport records in transport_refs. The exporter does not pick one. "
+            + unmatched_sentence.strip(),
             context={
                 "ambiguous": ambiguous,
-                "resolve_with": ["filters", "select_endpoint", "explicit_refs"],
+                "unmatched": unmatched_context,
+                "resolve_with": ["select_endpoint", "explicit_refs"],
             },
+        )
+    if unmatched:
+        raise CodedValueError(
+            "export_ref_unmatched",
+            unmatched_sentence.strip(),
+            context={"ambiguous": [], "unmatched": unmatched_context},
         )
     record_set.records_mode = "named"
 

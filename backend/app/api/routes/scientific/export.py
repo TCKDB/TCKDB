@@ -183,6 +183,7 @@ def export_chemkin(
         thermo_refs=body.thermo_refs,
         transport_refs=body.transport_refs,
         kinetics_refs=body.kinetics_refs,
+        include_transport=body.include_transport,
     )
     options = ChemkinOptions(
         energy_units=body.energy_units,
