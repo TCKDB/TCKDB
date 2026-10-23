@@ -5092,14 +5092,14 @@ class TCKDBClient:
         reaction_family: str | None = None,
         all: bool | None = None,
         min_review_status: str | None = None,
-        selection_policy: str | None = None,
         profile: str | None = None,
     ) -> Iterator[JSONDict]:
         """``GET /scientific/export/ndjson`` — one JSON object per line.
 
-        Streams the composed scientific document for each seed record.
-        Returns an iterator so a large export does not have to be held in
-        memory all at once.
+        Streams the composed scientific document for each seed record: every qualifying thermo, transport and
+        kinetics record of each species and reaction, in display order. Nothing is picked (there is no
+        ``selection_policy``; the server refuses it). Returns an iterator so a large export does not have to be
+        held in memory all at once.
         """
 
         params = {
@@ -5108,7 +5108,6 @@ class TCKDBClient:
             "reaction_family": reaction_family,
             "all": all,
             "min_review_status": min_review_status,
-            "selection_policy": selection_policy,
             "profile": profile,
         }
         return self._export_ndjson("/scientific/export/ndjson", params)
@@ -5178,7 +5177,9 @@ class TCKDBClient:
         seed: Mapping[str, Any],
         *,
         min_review_status: str | None = None,
-        selection_policy: str | None = None,
+        thermo_refs: Sequence[str] | None = None,
+        transport_refs: Sequence[str] | None = None,
+        kinetics_refs: Sequence[str] | None = None,
         energy_units: str | None = None,
         include_transport: bool | None = None,
         naming_policy: str | None = None,
@@ -5189,6 +5190,11 @@ class TCKDBClient:
         ``seed`` selects what goes in the mechanism (explicit refs, a
         family, or everything); the remaining arguments control how it is
         rendered. Returns the archive bytes.
+
+        Chemkin holds exactly one thermo, transport and kinetics record per species or reaction, and the server never
+        picks one. Where a species or reaction has several candidates, name the record in ``thermo_refs`` /
+        ``transport_refs`` / ``kinetics_refs`` (typically taken from the ``select_*`` methods); otherwise the server
+        refuses with 422 ``export_selection_ambiguous``, naming every ambiguous subject and its candidate refs.
         """
 
         if not isinstance(seed, Mapping):
@@ -5199,7 +5205,9 @@ class TCKDBClient:
         body = {
             "seed": dict(seed),
             "min_review_status": min_review_status,
-            "selection_policy": selection_policy,
+            "thermo_refs": list(thermo_refs) if thermo_refs is not None else None,
+            "transport_refs": list(transport_refs) if transport_refs is not None else None,
+            "kinetics_refs": list(kinetics_refs) if kinetics_refs is not None else None,
             "energy_units": energy_units,
             "include_transport": include_transport,
             "naming_policy": naming_policy,
