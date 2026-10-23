@@ -13,11 +13,13 @@ names or refuses (``export_selection_ambiguous``).
   because it carries options (units, transport, naming policy).
 * ``GET  /scientific/export/ml/species.ndjson`` — ML dataset, one record
   per ``(species_entry, geometry)``: identity, Cartesian coordinates,
-  LOT-labelled electronic energies, frequencies, optional Hessian, and
-  the thermo summary.
+  LOT-labelled electronic energies, every frequency result and (optionally)
+  every Hessian keyed by calculation and level, and every thermo summary.
 * ``GET  /scientific/export/ml/reactions.ndjson`` — ML dataset, one record
   per ``reaction_entry``, RDB7-compatible in spirit: reactant/product
-  SMILES, Arrhenius kinetics, electronic forward barrier, TS geometry.
+  SMILES, Arrhenius kinetics, every transition-state entry with its energy
+  and geometry per level, and one electronic forward barrier per entry and
+  level.
 
 All are above the normal read cap, so they are gated on the curator/admin
 role. Thin handlers over
@@ -263,8 +265,9 @@ def export_ml_species(
     """Stream a species/conformer-centric ML dataset as NDJSON (JSONL).
 
     One record per ``(species_entry, geometry)`` carrying species identity,
-    Cartesian geometry, LOT-labelled electronic energies, frequencies,
-    optional Hessian, and the species thermo summary. Curator/admin only.
+    Cartesian geometry, LOT-labelled electronic energies, ``frequency_results``
+    and ``hessians`` (lists: one per calculation, each naming its level), and
+    ``thermos`` (a list). Nothing is picked among them. Curator/admin only.
 
     ``min_review_status`` defaults to ``approved``; on a pre-curation
     corpus (nothing approved yet) that exports zero records — pass
@@ -318,8 +321,13 @@ def export_ml_reactions(
     """Stream a reaction-centric, RDB7-compatible ML dataset as NDJSON.
 
     One record per ``reaction_entry`` carrying reactant/product SMILES,
-    Arrhenius kinetics with LOT labels, a best-effort electronic forward
-    barrier, a reaction enthalpy, and the TS geometry+energy. The RDB7
+    Arrhenius kinetics with LOT labels, every transition-state entry
+    (``transition_states``: energy and geometry per calculation and level), one
+    electronic forward barrier per entry and per level at which the TS and all
+    reactants have an energy (``barriers``; ``barriers_unavailable`` names each
+    entry with none, with the reason), and a reaction enthalpy. No transition
+    state, level or frequency result is chosen, and absolute energies at
+    different levels are never compared. The RDB7
     column mapping is documented on
     ``app.services.scientific_read.ml_dataset.MLReactionRecord``.
     Curator/admin only.

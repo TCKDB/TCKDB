@@ -123,12 +123,18 @@ the kinetics reads is a real filter (a record that does not apply at that pressu
 | Format | What it holds | What it does with several candidates |
 |---|---|---|
 | Native NDJSON (`GET /scientific/export/ndjson`) | many records per species and reaction | exports **all** of them, in display order; its manifest says `records: "all_matching"` |
-| ML species and ML reactions NDJSON | many | all (`thermos` is a list; `delta_h298` is `null`, counted under `delta_h298_declined_ambiguous_thermo`, when a species has several thermo records, because it would otherwise sum a pick) |
+| ML species NDJSON | many | all: `thermos`, `frequency_results` and `hessians` are lists, one entry per record or calculation, each naming its calculation and level of theory |
+| ML reactions NDJSON | many | all: `transition_states` lists every TS entry the profile shows, each with its energy and geometry per calculation and level; `barriers` has one barrier per TS entry and per level at which the TS and every reactant have an energy (`E_TS - sum(E_reactants)` inside that one level); `barriers_unavailable` names each TS entry with none and says why (`no_energies`, `no_reactants`, `no_level_with_all_reactant_energies`); `delta_h298_kj_mol` is `null`, counted under `delta_h298_declined_ambiguous_thermo`, when a species has several thermo records, because it would otherwise sum a pick |
 | CHEMKIN zip (`POST /scientific/export/chemkin`) | **exactly one** thermo, transport and kinetics record per species or reaction | never picks: takes the records the request names in `thermo_refs`, `transport_refs`, `kinetics_refs` (typically from the select endpoints), or refuses |
 
 When a species or reaction has more than one candidate and the request has not named one, CHEMKIN refuses with
-**422 `export_selection_ambiguous`** naming every ambiguous subject and its candidate refs, and says how to resolve it
-(filters, a select endpoint, or explicit refs). A named ref that matches no candidate is **422 `export_ref_unmatched`**.
+**422 `export_selection_ambiguous`** naming every ambiguous subject and its candidate refs, and says how to resolve it:
+call the select endpoint (thermo and kinetics have one; transport has none) or name the record in `thermo_refs` /
+`transport_refs` / `kinetics_refs`. Named refs that match no candidate are reported in the same response
+(`context.unmatched`; alone they are **422 `export_ref_unmatched`**), so one round trip shows every problem.
+`include_transport: false` leaves transport out entirely, so transport candidates cannot make the export refuse.
+The ML export never compares absolute energies across methods: a barrier is computed inside one level, and the levels
+are listed by label, never ordered by energy.
 `collapse` and `selection_policy` are refused on every export. The native export's format is `tckdb.export` version 2 and
 the ML export's is `tckdb.ml` version 2.
 
