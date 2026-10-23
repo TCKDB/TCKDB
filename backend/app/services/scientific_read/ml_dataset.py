@@ -429,8 +429,11 @@ class MLSpeciesRecord:
     conformer_group_refs: list[str]
     conformer_observation_refs: list[str]
     energies: list[MLEnergyRecord]
-    frequencies: dict | None
-    hessian: dict | None
+    #: Every frequency result of every calculation at this geometry, each keyed by its ``calculation_ref`` and
+    #: ``level_of_theory``. Several levels can have one; none is preferred, so none is picked.
+    frequency_results: list[dict]
+    #: Every Cartesian Hessian likewise (only when ``include_hessian``).
+    hessians: list[dict]
     #: Every qualifying thermo record of the species entry, in display order. Nothing is picked.
     thermos: list[dict]
 
@@ -451,8 +454,8 @@ class MLSpeciesRecord:
             "conformer_observation_refs": list(self.conformer_observation_refs),
             "geometry": self.geometry.to_dict(),
             "energies": [e.to_dict() for e in self.energies],
-            "frequencies": self.frequencies,
-            "hessian": self.hessian,
+            "frequency_results": list(self.frequency_results),
+            "hessians": list(self.hessians),
             "thermos": list(self.thermos),
         }
 
@@ -716,8 +719,8 @@ def _build_species_records(
 
         group = by_geometry[geometry_id]
         energies: list[MLEnergyRecord] = []
-        freq_block: dict | None = None
-        hessian_block: dict | None = None
+        frequency_results: list[dict] = []
+        hessians: list[dict] = []
         conformer_obs_ids: set[int] = set()
 
         for calc in group:
@@ -753,10 +756,13 @@ def _build_species_records(
                         level_of_theory=lot_block,
                     )
                 )
-            if freq_block is None:
-                freq_block = _frequencies_block(session, calc, lot_block)
-            if filters.include_hessian and hessian_block is None:
+            freq_block = _frequencies_block(session, calc, lot_block)
+            if freq_block is not None:
+                frequency_results.append(freq_block)
+            if filters.include_hessian:
                 hessian_block = _hessian_block(session, calc, lot_block)
+                if hessian_block is not None:
+                    hessians.append(hessian_block)
 
         # With a LOT filter, a geometry with no surviving energy is dropped.
         if lot_id_filter is not None and not energies:
@@ -775,8 +781,8 @@ def _build_species_records(
                 conformer_group_refs=conformer_group_refs,
                 conformer_observation_refs=conformer_observation_refs,
                 energies=energies,
-                frequencies=freq_block,
-                hessian=hessian_block,
+                frequency_results=frequency_results,
+                hessians=hessians,
                 thermos=thermo_blocks,
             )
         )
@@ -915,11 +921,15 @@ class MLReactionRecord:
     ``idx``                 ``reaction_entry_ref`` (stable public ref, not an int)
     ``rsmi``                ``reactants_smiles`` (join with ``.`` for RDB7's dot form)
     ``psmi``                ``products_smiles``
-    ``ea`` (kcal/mol)       ``barrier.electronic_forward_kj_mol`` (÷ 4.184 for kcal;
-                            electronic ``E_TS − ΣE_reactants`` at a shared LOT — the
-                            true RDB7 barrier analog; ``null`` when a shared-LOT set
-                            is unavailable). ``kinetics[].ea_kj_mol`` is the separate
-                            *Arrhenius* activation energy and is not the same quantity.
+    ``ea`` (kcal/mol)       ``barriers[].electronic_forward_kj_mol`` (÷ 4.184 for kcal;
+                            electronic ``E_TS − ΣE_reactants`` at ONE level of theory,
+                            for every transition-state entry and every level at which
+                            the TS and all reactants have an energy -- the true RDB7
+                            barrier analog; ``barriers_unavailable`` names each entry
+                            with no such level). The export never compares absolute
+                            energies across methods, so it never chooses one level.
+                            ``kinetics[].ea_kj_mol`` is the separate *Arrhenius*
+                            activation energy and is not the same quantity.
     ``dh`` (kcal/mol)       ``delta_h298_kj_mol`` (÷ 4.184 for kcal; ΣH298(products) −
                             ΣH298(reactants) from selected thermo; ``null`` when a
                             participant has no candidate thermo, OR when the
@@ -930,7 +940,8 @@ class MLReactionRecord:
                             ``delta_h298_declined_*`` fields for why, in aggregate.)
     reactant xyz            geometry of each reactant ``species_entry`` (fetch via the
                             species export using ``reactant_refs``; not inlined here)
-    ts xyz                  ``transition_state.geometry`` (elements + coords)
+    ts xyz                  ``transition_states[].energies[].geometry`` (elements + coords),
+                            one per calculation that has an energy, keyed by its level
     product xyz             geometry of each product ``species_entry`` (via ``product_refs``)
     ======================  =====================================================
 
@@ -947,9 +958,13 @@ class MLReactionRecord:
     reactant_smiles: list[str]
     product_smiles: list[str]
     kinetics: list[dict]
-    barrier: dict | None
+    #: Every transition-state entry the profile shows, each with its energies and geometry per calculation and level.
+    transition_states: list[dict]
+    #: One barrier per transition-state entry and per level at which the TS and every reactant has an energy.
+    barriers: list[dict]
+    #: Each transition-state entry with no such level, with the reason (``null`` is never silent).
+    barriers_unavailable: list[dict]
     delta_h298_kj_mol: float | None
-    transition_state: dict | None
 
     def to_ndjson(self) -> dict:
         return {
@@ -965,9 +980,10 @@ class MLReactionRecord:
             "reactants_smiles": list(self.reactant_smiles),
             "products_smiles": list(self.product_smiles),
             "kinetics": list(self.kinetics),
-            "barrier": self.barrier,
+            "transition_states": list(self.transition_states),
+            "barriers": list(self.barriers),
+            "barriers_unavailable": list(self.barriers_unavailable),
             "delta_h298_kj_mol": self.delta_h298_kj_mol,
-            "transition_state": self.transition_state,
         }
 
 
@@ -1033,16 +1049,14 @@ def _species_entry_energy_at_lot(
     return min(values) if values else None
 
 
-def _ts_energy_candidates(
+def _ts_energy_by_level(
     session: Session, ts_entry_id: int, profile: ResolvedReadProfile
-) -> list[tuple[float, int | None, Calculation]]:
-    """Best TS electronic energy per LOT, ordered by energy ascending.
+) -> dict[int | None, tuple[float, str, Calculation]]:
+    """The TS electronic energy at EACH level of theory: ``{lot_id: (energy_hartree, energy_type, calculation)}``.
 
-    Returns one ``(energy_hartree, lot_id, calculation)`` candidate per
-    distinct ``lot_id`` (including ``None``). Within one LOT, single-point
-    energies are preferred over optimisation final energies, and the lowest
-    value wins. Callers walk this list to find a LOT with complete reactant
-    coverage for the electronic barrier.
+    Within one level, a single-point energy is used before an optimisation final energy and the lowest value wins (the
+    lowest-conformer convention, at one level). Energies at different levels are never compared here or anywhere in the
+    export: every level is kept, none is preferred.
     """
     # Hidden calculations are not candidates: their energies would otherwise set the barrier.
     shown = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation, profile=profile)
@@ -1080,34 +1094,39 @@ def _ts_energy_candidates(
         if current is None or energy < current[0]:
             best_opt[calc.lot_id] = (energy, calc)
 
-    candidates: list[tuple[float, int | None, Calculation]] = []
+    out: dict[int | None, tuple[float, str, Calculation]] = {}
     for lot_id in set(best_sp) | set(best_opt):
-        energy, calc = best_sp.get(lot_id) or best_opt[lot_id]
-        candidates.append((energy, lot_id, calc))
-    candidates.sort(key=lambda t: t[0])
-    return candidates
+        if lot_id in best_sp:
+            energy, calc = best_sp[lot_id]
+            out[lot_id] = (energy, "single_point", calc)
+        else:
+            energy, calc = best_opt[lot_id]
+            out[lot_id] = (energy, "optimization", calc)
+    return out
 
 
-def _select_ts_entry(
+def _ts_entries(
     session: Session, reaction_entry_id: int, profile: ResolvedReadProfile
-) -> TransitionStateEntry | None:
-    """Pick a representative TS entry for a reaction entry (lowest id, stable).
+) -> list[TransitionStateEntry]:
+    """EVERY transition-state entry of a reaction entry that the profile shows, by id (a listing order, not a pick).
 
-    Among the entries the profile shows: a hidden entry is not in the population, so it is neither picked nor named.
+    A hidden entry is not in the population, so it is neither listed nor named.
     """
-    return session.scalars(
-        where_visible(
-            select(TransitionStateEntry)
-            .join(
-                TransitionState,
-                TransitionState.id == TransitionStateEntry.transition_state_id,
-            )
-            .where(TransitionState.reaction_entry_id == reaction_entry_id),
-            review_floor_predicate(
-                TransitionStateEntry.id, SubmissionRecordType.transition_state_entry, profile=profile
-            ),
-        ).order_by(TransitionStateEntry.id)
-    ).first()
+    return list(
+        session.scalars(
+            where_visible(
+                select(TransitionStateEntry)
+                .join(
+                    TransitionState,
+                    TransitionState.id == TransitionStateEntry.transition_state_id,
+                )
+                .where(TransitionState.reaction_entry_id == reaction_entry_id),
+                review_floor_predicate(
+                    TransitionStateEntry.id, SubmissionRecordType.transition_state_entry, profile=profile
+                ),
+            ).order_by(TransitionStateEntry.id)
+        ).all()
+    )
 
 
 def _kinetics_blocks(
@@ -1154,104 +1173,113 @@ def _kinetics_blocks(
     return out
 
 
-def _ts_and_barrier(
+BARRIER_DEFINITION = (
+    "E_TS - sum(E_reactants) at ONE level of theory, for this transition-state entry. Within that level each "
+    "energy is the single-point energy when there is one (else the optimisation final energy), lowest over the "
+    "available calculations (lowest-conformer convention). Energies at different levels are never compared."
+)
+
+
+def _level_sort_key(lot_block: dict | None, calculation_ref: str) -> tuple:
+    """A stable listing order for per-level entries: by the level's own label, then the calculation. Not by energy."""
+    if lot_block is None:
+        return (1, "", calculation_ref)
+    return (0, str(lot_block.get("label") or lot_block.get("method") or ""), calculation_ref)
+
+
+def _ts_blocks_and_barriers(
     session: Session,
     reaction_entry_id: int,
     *,
     reactant_ids: list[int],
+    reactant_refs: list[str],
     lot_cache: dict[int, dict | None],
     geom_cache: dict[int, _GeometryPayload],
     profile: ResolvedReadProfile,
-) -> tuple[dict | None, dict | None]:
-    """Build the TS geometry+energy block and the electronic forward barrier.
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """Every TS entry with its per-level energies and geometry, every per-level barrier, and each entry with none.
 
-    LOT selection walks the per-LOT TS energy candidates (lowest TS energy
-    first) and picks the **first LOT for which every reactant has an energy**
-    via :func:`_species_entry_energy_at_lot`, so one LOT lacking reactant
-    coverage does not null the barrier when another LOT is complete. The TS
-    energy block is emitted at that same chosen LOT so the record stays
-    internally consistent. When no LOT completes the reactant set, the TS
-    block falls back to the overall lowest-energy candidate and the barrier
-    is ``null``.
+    Nothing is chosen between transition-state entries or between levels of theory. A barrier is emitted for every
+    (TS entry, level) at which the TS and every reactant have an energy; an entry with no such level is listed in
+    ``barriers_unavailable`` with the reason (``no_level_with_all_reactant_energies``, ``no_reactants``,
+    ``no_energies``) instead of silently getting a ``null``.
     """
-    ts_entry = _select_ts_entry(session, reaction_entry_id, profile)
-    if ts_entry is None:
-        return None, None
+    blocks: list[dict] = []
+    barriers: list[dict] = []
+    unavailable: list[dict] = []
+    reactant_energy_cache: dict[tuple[int, int], float | None] = {}
 
-    candidates = _ts_energy_candidates(session, ts_entry.id, profile)
+    def reactant_energy(se_id: int, lot_id: int) -> float | None:
+        key = (se_id, lot_id)
+        if key not in reactant_energy_cache:
+            reactant_energy_cache[key] = _species_entry_energy_at_lot(session, se_id, lot_id, profile)
+        return reactant_energy_cache[key]
 
-    chosen: tuple[float, int | None, Calculation] | None = None
-    reactant_energies: list[float] | None = None
-    if reactant_ids:
-        for cand_energy, cand_lot_id, cand_calc in candidates:
-            if cand_lot_id is None:
-                continue
-            energies = [
-                _species_entry_energy_at_lot(session, se_id, cand_lot_id, profile)
-                for se_id in reactant_ids
-            ]
-            if all(e is not None for e in energies):
-                chosen = (cand_energy, cand_lot_id, cand_calc)
-                reactant_energies = [e for e in energies if e is not None]
-                break
-    if chosen is None and candidates:
-        # No LOT has full reactant coverage: emit the TS block at the
-        # overall lowest-energy candidate; the barrier stays null.
-        chosen = candidates[0]
-
-    energy_hartree: float | None
-    lot_id: int | None
-    calc: Calculation | None
-    if chosen is not None:
-        energy_hartree, lot_id, calc = chosen
-    else:
-        energy_hartree, lot_id, calc = None, None, None
-    lot_block = _lot_block(session, lot_id, lot_cache)
-
-    ts_geometry: dict | None = None
-    if calc is not None:
-        output_links, input_links = _load_geometry_links(session, [calc.id])
-        gid = _resolved_geometry_id(calc.id, output_links, input_links)
-        if gid is not None:
-            payload = _geometry_payload(session, gid, geom_cache)
-            if payload is not None:
-                ts_geometry = payload.to_dict()
-
-    ts_block = {
-        "transition_state_ref": session.scalar(
-            select(TransitionState.public_ref).where(
-                TransitionState.id == ts_entry.transition_state_id
+    for ts_entry in _ts_entries(session, reaction_entry_id, profile):
+        per_level = _ts_energy_by_level(session, ts_entry.id, profile)
+        energy_blocks: list[dict] = []
+        entry_barriers: list[dict] = []
+        for lot_id, (energy, energy_type, calc) in per_level.items():
+            lot_block = _lot_block(session, lot_id, lot_cache)
+            geometry: dict | None = None
+            output_links, input_links = _load_geometry_links(session, [calc.id])
+            gid = _resolved_geometry_id(calc.id, output_links, input_links)
+            if gid is not None:
+                payload = _geometry_payload(session, gid, geom_cache)
+                if payload is not None:
+                    geometry = payload.to_dict()
+            energy_blocks.append(
+                {
+                    "calculation_ref": calc.public_ref,
+                    "energy_type": energy_type,
+                    "electronic_energy_hartree": energy,
+                    "level_of_theory": lot_block,
+                    "geometry": geometry,
+                }
             )
-        ),
-        "transition_state_entry_ref": ts_entry.public_ref,
-        "charge": ts_entry.charge,
-        "multiplicity": ts_entry.multiplicity,
-        "status": ts_entry.status.value,
-        "energy": (
-            None
-            if energy_hartree is None
-            else {
-                "calculation_ref": calc.public_ref if calc is not None else None,
-                "electronic_energy_hartree": energy_hartree,
-                "level_of_theory": lot_block,
+            if lot_id is None or not reactant_ids:
+                continue
+            reactant_energies = [reactant_energy(se_id, lot_id) for se_id in reactant_ids]
+            if any(e is None for e in reactant_energies):
+                continue
+            entry_barriers.append(
+                {
+                    "transition_state_entry_ref": ts_entry.public_ref,
+                    "ts_calculation_ref": calc.public_ref,
+                    "level_of_theory": lot_block,
+                    "electronic_forward_kj_mol": (energy - sum(e for e in reactant_energies if e is not None))
+                    * HARTREE_TO_KJ_MOL,
+                    "reactant_energies": [
+                        {"species_entry_ref": ref, "electronic_energy_hartree": e}
+                        for ref, e in zip(reactant_refs, reactant_energies, strict=True)
+                    ],
+                    "definition": BARRIER_DEFINITION,
+                }
+            )
+        energy_blocks.sort(key=lambda b: _level_sort_key(b["level_of_theory"], b["calculation_ref"]))
+        entry_barriers.sort(key=lambda b: _level_sort_key(b["level_of_theory"], b["ts_calculation_ref"]))
+        barriers.extend(entry_barriers)
+        if not entry_barriers:
+            if not energy_blocks:
+                reason = "no_energies"
+            elif not reactant_ids:
+                reason = "no_reactants"
+            else:
+                reason = "no_level_with_all_reactant_energies"
+            unavailable.append({"transition_state_entry_ref": ts_entry.public_ref, "reason": reason})
+        blocks.append(
+            {
+                "transition_state_ref": session.scalar(
+                    select(TransitionState.public_ref).where(TransitionState.id == ts_entry.transition_state_id)
+                ),
+                "transition_state_entry_ref": ts_entry.public_ref,
+                "charge": ts_entry.charge,
+                "multiplicity": ts_entry.multiplicity,
+                "status": ts_entry.status.value,
+                "energies": energy_blocks,
             }
-        ),
-        "geometry": ts_geometry,
-    }
-
-    barrier: dict | None = None
-    if energy_hartree is not None and reactant_energies is not None:
-        delta_hartree = energy_hartree - sum(reactant_energies)
-        barrier = {
-            "electronic_forward_kj_mol": delta_hartree * HARTREE_TO_KJ_MOL,
-            "level_of_theory": lot_block,
-            "definition": (
-                "E_TS - sum(E_reactants) at a shared level of theory; "
-                "reactant energies are the minimum over available "
-                "calculations (lowest-conformer convention) at that LOT"
-            ),
-        }
-    return ts_block, barrier
+        )
+    return blocks, barriers, unavailable
 
 
 #: ``_delta_h298`` decline reasons, surfaced only as an ``export_summary``
@@ -1413,10 +1441,11 @@ def _build_reaction_record(
         session, reaction_entry_id, min_review_status=filters.min_review_status, profile=profile
     )
 
-    ts_block, barrier = _ts_and_barrier(
+    ts_blocks, barriers, barriers_unavailable = _ts_blocks_and_barriers(
         session,
         reaction_entry_id,
         reactant_ids=reactant_ids,
+        reactant_refs=reactant_refs,
         lot_cache=lot_cache,
         geom_cache=geom_cache,
         profile=profile,
@@ -1439,9 +1468,10 @@ def _build_reaction_record(
         reactant_smiles=reactant_smiles,
         product_smiles=product_smiles,
         kinetics=kinetics,
-        barrier=barrier,
+        transition_states=ts_blocks,
+        barriers=barriers,
+        barriers_unavailable=barriers_unavailable,
         delta_h298_kj_mol=delta_h,
-        transition_state=ts_block,
     )
     return record, delta_h_decline_reason
 
@@ -1526,6 +1556,8 @@ def _stream_reactions(
     n_delta_h298_unrecorded_reference = 0
     n_delta_h298_mixed_reference = 0
     n_delta_h298_ambiguous_thermo = 0
+    n_barriers = 0
+    n_ts_without_barrier = 0
 
     for re_id in reaction_entry_ids:
         if _reaction_entry_review(session, re_id) not in visible:
@@ -1547,6 +1579,8 @@ def _stream_reactions(
             n_delta_h298_ambiguous_thermo += 1
         if record is not None:
             n_reactions += 1
+            n_barriers += len(record.barriers)
+            n_ts_without_barrier += len(record.barriers_unavailable)
             yield from batcher.add(record.to_ndjson())
 
     yield from batcher.flush()
@@ -1558,6 +1592,10 @@ def _stream_reactions(
             "generated_at": generated_at.isoformat(),
             "counts": {
                 "records": n_reactions,
+                # One barrier per transition-state entry and level at which the TS and every reactant have an energy.
+                "barriers": n_barriers,
+                # Transition-state entries with no such level; each is named, with its reason, on its record.
+                "transition_state_entries_without_barrier": n_ts_without_barrier,
                 "skipped_below_min_review_status": n_skipped_untrusted,
                 # Why delta_h298_kj_mol came back null on some record(s)
                 # beyond the pre-existing "no thermo candidate at all" gap

@@ -184,13 +184,16 @@ def test_species_export_shape(db_session):
     assert by_type["single_point"]["level_of_theory"]["label"] == "ccsd(t)/cc-pvtz"
     assert by_type["single_point"]["level_of_theory"]["lot_hash"] == sp_lot.lot_hash
 
-    # Frequencies (signed convention).
-    assert record["frequencies"]["frequencies_cm1"] == [1600.0, 3700.0, 3800.0]
-    assert record["frequencies"]["n_imag"] == 0
-    assert record["frequencies"]["zpe_hartree"] == 0.021
+    # Frequencies (signed convention), listed per calculation and level.
+    (frequencies,) = record["frequency_results"]
+    assert frequencies["frequencies_cm1"] == [1600.0, 3700.0, 3800.0]
+    assert frequencies["n_imag"] == 0
+    assert frequencies["zpe_hartree"] == 0.021
+    assert frequencies["calculation_ref"] and frequencies["level_of_theory"]["label"]
+    assert "frequencies" not in record and "hessian" not in record
 
     # Hessian is opt-in.
-    assert record["hessian"] is None
+    assert record["hessians"] == []
 
 
 def test_species_export_includes_hessian_when_requested(db_session):
@@ -203,8 +206,7 @@ def test_species_export_includes_hessian_when_requested(db_session):
         )
     )
     (record,) = [p for p in _parse(lines) if p["record_type"] == "ml_species"]
-    hess = record["hessian"]
-    assert hess is not None
+    (hess,) = record["hessians"]
     # 3N(3N+1)/2 for N=3 → 45 packed lower-triangle entries.
     assert len(hess["lower_triangle_hartree_bohr2"]) == 45
     assert hess["units"] == "hartree/bohr^2"
@@ -501,8 +503,8 @@ def test_reaction_export_rdb7_shape_and_barrier(db_session):
     assert record["products_smiles"] == ["CO"]
 
     # RDB7 ea analog: E_TS - (E_a + E_b) = -114.95 - (-115.0) = 0.05 hartree.
-    barrier = record["barrier"]
-    assert barrier is not None
+    (barrier,) = record["barriers"]
+    assert barrier["transition_state_entry_ref"] == tse.public_ref
     assert barrier["electronic_forward_kj_mol"] == pytest.approx(
         0.05 * HARTREE_TO_KJ_MOL
     )
@@ -512,10 +514,13 @@ def test_reaction_export_rdb7_shape_and_barrier(db_session):
     assert record["delta_h298_kj_mol"] == pytest.approx(-201.0 - (-74.6 - 241.8))
 
     # TS geometry + energy.
-    ts_block = record["transition_state"]
+    (ts_block,) = record["transition_states"]
     assert ts_block["transition_state_entry_ref"] == tse.public_ref
-    assert ts_block["geometry"]["symbols"] == ["C", "O"]
-    assert ts_block["energy"]["electronic_energy_hartree"] == -114.95
+    (ts_energy,) = ts_block["energies"]
+    assert ts_energy["geometry"]["symbols"] == ["C", "O"]
+    assert ts_energy["electronic_energy_hartree"] == -114.95
+    assert record["barriers_unavailable"] == []
+    assert "barrier" not in record and "transition_state" not in record
 
     # Kinetics with LOT-agnostic Arrhenius params present.
     assert record["kinetics"] and record["kinetics"][0]["kinetics_ref"] == kin.public_ref
@@ -554,10 +559,16 @@ def test_reaction_export_barrier_null_without_shared_lot(db_session):
         iter_ml_reactions_ndjson(db_session, reaction_refs=[rxn_entry.public_ref])
     )
     (record,) = [p for p in _parse(lines) if p["record_type"] == "ml_reaction"]
-    # No reactant energy exists at the TS's LOT → barrier is null, not wrong.
-    assert record["barrier"] is None
+    # No reactant energy exists at the TS's LOT: no barrier, and the record says why instead of a bare null.
+    assert record["barriers"] == []
+    assert record["barriers_unavailable"] == [
+        {"transition_state_entry_ref": tse.public_ref, "reason": "no_level_with_all_reactant_energies"}
+    ]
     # But the TS block is still emitted.
-    assert record["transition_state"]["energy"]["electronic_energy_hartree"] == -114.9
+    (ts_block,) = record["transition_states"]
+    assert ts_block["energies"][0]["electronic_energy_hartree"] == -114.9
+    summary = [p for p in _parse(lines) if p["record_type"] == "export_summary"][0]
+    assert summary["counts"]["transition_state_entries_without_barrier"] == 1
 
 
 def test_ml_reaction_export_preserves_degeneracy_convention(db_session):
@@ -592,9 +603,10 @@ def test_ml_reaction_export_preserves_degeneracy_convention(db_session):
 
 
 def test_reaction_export_barrier_lot_fallback(db_session):
-    """The barrier LOT walk skips a lower-energy TS LOT without reactant
-    coverage and settles on the first LOT whose reactant set is complete,
-    keeping the emitted TS energy block at that same LOT."""
+    """A level with no reactant coverage gets no barrier; the covered level does, and both TS energies are listed.
+
+    Nothing is chosen between the levels: the lower TS energy at the uncovered level neither wins nor suppresses the
+    covered level's barrier."""
     lot_cov = make_lot(db_session, method="wb97xd", basis="def2tzvp")
     lot_nocov = make_lot(db_session, method="b3lyp", basis="6-31g")
     e_a = _reactant_with_energy(db_session, "C", -115.0, lot_cov)
@@ -641,18 +653,16 @@ def test_reaction_export_barrier_lot_fallback(db_session):
     )
     (record,) = [p for p in _parse(lines) if p["record_type"] == "ml_reaction"]
 
-    # Barrier is computed at the covered LOT, not nulled by the lower-energy
-    # uncovered one: E_TS - E_reactant = -114.95 - (-115.0) = 0.05 hartree.
-    barrier = record["barrier"]
-    assert barrier is not None
-    assert barrier["electronic_forward_kj_mol"] == pytest.approx(
-        0.05 * HARTREE_TO_KJ_MOL
-    )
+    # One barrier, at the covered level: E_TS - E_reactant = -114.95 - (-115.0) = 0.05 hartree.
+    (barrier,) = record["barriers"]
+    assert barrier["electronic_forward_kj_mol"] == pytest.approx(0.05 * HARTREE_TO_KJ_MOL)
     assert barrier["level_of_theory"]["label"] == "wb97xd/def2tzvp"
-    # The TS energy block is internally consistent with the chosen LOT.
-    ts_energy = record["transition_state"]["energy"]
-    assert ts_energy["electronic_energy_hartree"] == -114.95
-    assert ts_energy["level_of_theory"]["label"] == "wb97xd/def2tzvp"
+    # Both TS energies are listed, each at its own level, ordered by level label and never by energy.
+    (ts_block,) = record["transition_states"]
+    by_label = {e["level_of_theory"]["label"]: e for e in ts_block["energies"]}
+    assert by_label["wb97xd/def2tzvp"]["electronic_energy_hartree"] == -114.95
+    assert by_label["b3lyp/6-31g"]["electronic_energy_hartree"] == -115.2
+    assert [e["level_of_theory"]["label"] for e in ts_block["energies"]] == sorted(by_label)
 
 
 def test_reaction_export_duplicate_reactant_counted_twice(db_session):
@@ -708,7 +718,7 @@ def test_reaction_export_duplicate_reactant_counted_twice(db_session):
 
     # Barrier subtracts the duplicated reactant's energy twice:
     # E_TS - 2*E_A = -80.02 - 2*(-40.0) = -0.02 hartree.
-    assert record["barrier"]["electronic_forward_kj_mol"] == pytest.approx(
+    assert record["barriers"][0]["electronic_forward_kj_mol"] == pytest.approx(
         -0.02 * HARTREE_TO_KJ_MOL
     )
 
@@ -799,8 +809,8 @@ def test_reaction_export_delta_h298_null_when_reference_unrecorded(db_session):
 
     # The electronic barrier does not depend on thermo at all and is
     # unaffected by the undeclared reference.
-    assert record["barrier"] is not None
-    assert record["barrier"]["electronic_forward_kj_mol"] == pytest.approx(
+    assert record["barriers"]
+    assert record["barriers"][0]["electronic_forward_kj_mol"] == pytest.approx(
         0.05 * HARTREE_TO_KJ_MOL
     )
 
@@ -841,3 +851,111 @@ def test_reaction_export_delta_h298_computed_when_every_term_declares(db_session
     summary = parsed[-1]
     assert summary["counts"]["delta_h298_declined_unrecorded_reference"] == 0
     assert summary["counts"]["delta_h298_declined_mixed_reference"] == 0
+
+
+# ---------------------------------------------------------------------------
+# The ML export picks nothing: every TS entry, every level, every frequency result
+# ---------------------------------------------------------------------------
+
+
+def _reaction_with_reactant_levels(db_session, lots_and_energies):
+    """A -> B with the reactant (energy per level given) and a product; returns (reaction entry, reactant entry)."""
+    e_a = _reactant_with_energy(db_session, "C", lots_and_energies[0][1], lots_and_energies[0][0])
+    for lot, energy in lots_and_energies[1:]:
+        calc = make_calculation(db_session, type=CalculationType.sp, species_entry_id=e_a.id, lot_id=lot.id)
+        attach_sp_result(db_session, calculation=calc, electronic_energy_hartree=energy)
+    e_c = _reactant_with_energy(db_session, "CO", -115.3, lots_and_energies[0][0])
+    chem = make_chem_reaction(db_session, reactants=[e_a.species], products=[e_c.species])
+    rxn_entry = make_reaction_entry(db_session, reaction=chem, reactant_entries=[e_a], product_entries=[e_c])
+    _approve(db_session, SubmissionRecordType.reaction_entry, rxn_entry.id)
+    return rxn_entry, e_a
+
+
+def _ts_with_energy(db_session, rxn_entry, energies_by_lot, label):
+    ts = make_transition_state(db_session, reaction_entry=rxn_entry, label=label)
+    tse = make_transition_state_entry(db_session, transition_state=ts)
+    for lot, energy in energies_by_lot:
+        calc = make_calculation(
+            db_session, type=CalculationType.sp, transition_state_entry_id=tse.id, lot_id=lot.id
+        )
+        attach_sp_result(db_session, calculation=calc, electronic_energy_hartree=energy)
+    return tse
+
+
+def test_every_transition_state_entry_is_listed_with_its_own_barrier(db_session):
+    """Kills: ``_select_ts_entry`` (the lowest-id entry stood for the reaction; the others vanished)."""
+    lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+    rxn_entry, _ = _reaction_with_reactant_levels(db_session, [(lot, -115.0)])
+    first = _ts_with_energy(db_session, rxn_entry, [(lot, -114.95)], "ts1")
+    second = _ts_with_energy(db_session, rxn_entry, [(lot, -114.80)], "ts2")
+
+    lines = list(iter_ml_reactions_ndjson(db_session, reaction_refs=[rxn_entry.public_ref]))
+    (record,) = [p for p in _parse(lines) if p["record_type"] == "ml_reaction"]
+
+    assert [t["transition_state_entry_ref"] for t in record["transition_states"]] == [
+        first.public_ref,
+        second.public_ref,
+    ]
+    by_entry = {b["transition_state_entry_ref"]: b for b in record["barriers"]}
+    assert by_entry[first.public_ref]["electronic_forward_kj_mol"] == pytest.approx(0.05 * HARTREE_TO_KJ_MOL)
+    assert by_entry[second.public_ref]["electronic_forward_kj_mol"] == pytest.approx(0.20 * HARTREE_TO_KJ_MOL)
+
+
+def test_absolute_energies_at_different_levels_are_never_compared(db_session):
+    """Kills: ordering TS levels by absolute energy (the lowest TS energy chose the level of the barrier).
+
+    The TS is lower at level B than at level A, which on absolute energies means nothing. Both levels have reactant
+    coverage, so both barriers are emitted, each inside its own level.
+    """
+    lot_a = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+    lot_b = make_lot(db_session, method="b3lyp", basis="6-31g")
+    rxn_entry, _ = _reaction_with_reactant_levels(db_session, [(lot_a, -115.0), (lot_b, -116.0)])
+    tse = _ts_with_energy(db_session, rxn_entry, [(lot_a, -114.95), (lot_b, -115.80)], "ts")
+
+    lines = list(iter_ml_reactions_ndjson(db_session, reaction_refs=[rxn_entry.public_ref]))
+    (record,) = [p for p in _parse(lines) if p["record_type"] == "ml_reaction"]
+
+    barriers = {b["level_of_theory"]["label"]: b for b in record["barriers"]}
+    assert set(barriers) == {"wb97xd/def2tzvp", "b3lyp/6-31g"}
+    assert barriers["wb97xd/def2tzvp"]["electronic_forward_kj_mol"] == pytest.approx(0.05 * HARTREE_TO_KJ_MOL)
+    assert barriers["b3lyp/6-31g"]["electronic_forward_kj_mol"] == pytest.approx(0.20 * HARTREE_TO_KJ_MOL)
+    assert all(b["transition_state_entry_ref"] == tse.public_ref for b in record["barriers"])
+    # Listed by level label, not by energy (b3lyp's TS energy is the lowest, and it is listed first only because
+    # "b3lyp/6-31g" sorts before "wb97xd/def2tzvp").
+    assert [b["level_of_theory"]["label"] for b in record["barriers"]] == sorted(barriers)
+
+
+def test_a_transition_state_with_no_energy_says_so(db_session):
+    lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+    rxn_entry, _ = _reaction_with_reactant_levels(db_session, [(lot, -115.0)])
+    tse = _ts_with_energy(db_session, rxn_entry, [], "ts-no-energy")
+
+    lines = list(iter_ml_reactions_ndjson(db_session, reaction_refs=[rxn_entry.public_ref]))
+    (record,) = [p for p in _parse(lines) if p["record_type"] == "ml_reaction"]
+
+    assert record["barriers"] == []
+    assert record["barriers_unavailable"] == [{"transition_state_entry_ref": tse.public_ref, "reason": "no_energies"}]
+
+
+def test_species_export_lists_every_frequency_result_and_hessian_by_level(db_session):
+    """Kills: ``if freq_block is None`` (the first calculation found at a geometry stood for all of them)."""
+    entry, geometry, _sp, opt_lot, _sp_lot = _species_with_structure(db_session)
+    other_lot = make_lot(db_session, method="b3lyp", basis="6-31g")
+    second = make_calculation(db_session, type=CalculationType.freq, species_entry_id=entry.id, lot_id=other_lot.id)
+    attach_input_geometry(db_session, calculation=second, geometry=geometry)
+    attach_freq_result(db_session, calculation=second, frequencies_cm1=[1500.0, 3600.0, 3700.0], zpe_hartree=0.020)
+    attach_hessian(db_session, calculation=second, geometry=geometry, natoms=3)
+
+    lines = list(
+        iter_ml_species_ndjson(
+            db_session, species_refs=[entry.public_ref], filters=MLFilters(include_hessian=True)
+        )
+    )
+    (record,) = [p for p in _parse(lines) if p["record_type"] == "ml_species"]
+
+    by_label = {f["level_of_theory"]["label"]: f for f in record["frequency_results"]}
+    assert set(by_label) == {"wb97xd/def2tzvp", "b3lyp/6-31g"}
+    assert by_label["b3lyp/6-31g"]["frequencies_cm1"] == [1500.0, 3600.0, 3700.0]
+    assert by_label["wb97xd/def2tzvp"]["frequencies_cm1"] == [1600.0, 3700.0, 3800.0]
+    assert {h["level_of_theory"]["label"] for h in record["hessians"]} == {"wb97xd/def2tzvp", "b3lyp/6-31g"}
+    assert {h["calculation_ref"] for h in record["hessians"]} == {f["calculation_ref"] for f in record["frequency_results"]}
