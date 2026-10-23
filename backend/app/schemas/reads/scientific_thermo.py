@@ -19,6 +19,7 @@ from app.db.models.common import (
     ScientificOriginKind,
     ThermoTargetKind,
 )
+from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
@@ -35,7 +36,6 @@ from app.schemas.reads.scientific_common import (
     TemperatureCoverage,
     WorkflowToolReleaseSummary,
 )
-from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
 from app.services.trust.models import TrustFragment
 
 

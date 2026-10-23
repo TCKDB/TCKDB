@@ -110,7 +110,7 @@ def software_names_by_calculation(session: Session, calculation_ids: Iterable[in
         .join(Software, Software.id == SoftwareRelease.software_id)
         .where(Calculation.id.in_(ids))
     ).all()
-    return {calculation_id: name for calculation_id, name in rows}
+    return dict(rows)
 
 
 def validate_pagination(offset: int, limit: int) -> tuple[int, int]:

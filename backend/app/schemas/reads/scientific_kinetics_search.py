@@ -29,6 +29,7 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_SOFTWARE_NAME_LENGTH as _MAX_SOFTWARE_NAME_LENGTH,
 )
+from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_common import (
     OrderEcho,
     Pagination,
@@ -36,7 +37,6 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
 )
-from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_kinetics import KineticsRecord
 from app.schemas.reads.scientific_reactions import (
     ReactionDirectionQuery,

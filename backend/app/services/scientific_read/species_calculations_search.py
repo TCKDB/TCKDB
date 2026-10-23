@@ -81,8 +81,8 @@ from app.schemas.reads.scientific_calculation import (
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     CompositeSchemeSummary,
-    OrderEcho,
     LevelOfTheorySummary,
+    OrderEcho,
     ReviewStatusSummary,
     SCFStabilitySummary,
     SoftwareReleaseSummary,

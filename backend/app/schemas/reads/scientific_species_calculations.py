@@ -53,11 +53,11 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
+from app.schemas.reads.removed_parameters import SPECIES_CALCULATIONS as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_calculation import (
     CalculationFreqModeSummary,
     CalculationFreqResultSummary,
 )
-from app.schemas.reads.removed_parameters import SPECIES_CALCULATIONS as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     OrderEcho,

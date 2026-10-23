@@ -104,7 +104,6 @@ from app.schemas.reads.scientific_kinetics import (
 from app.services.calculation_levels import RoleCalcInfo, derive_levels
 from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.common import (
-    software_names_by_calculation,
     build_pagination,
     fetch_review_badges,
     ids_below_review_floor,
@@ -112,6 +111,7 @@ from app.services.scientific_read.common import (
     review_floor_predicate,
     review_summary,
     slice_for_pagination,
+    software_names_by_calculation,
     temperature_coverage,
     validate_includes,
     validate_pagination,

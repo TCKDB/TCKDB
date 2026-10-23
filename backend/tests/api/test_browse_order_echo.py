@@ -39,26 +39,26 @@ from tests.services.scientific_read._factories import (
     attach_network_state_participant,
     attach_sp_result,
     make_calculation,
+    make_chem_reaction,
+    make_conformer_group,
     make_energy_correction_scheme,
     make_frequency_scale_factor,
+    make_kinetics,
     make_literature,
     make_lot,
-    make_conformer_group,
     make_network,
     make_network_channel,
     make_network_kinetics,
     make_network_solve,
     make_network_state,
     make_observation,
-    make_transition_state,
-    make_transition_state_entry,
-    make_chem_reaction,
-    make_kinetics,
     make_reaction_entry,
     make_species,
     make_species_entry,
     make_statmech,
     make_thermo_scalar,
+    make_transition_state,
+    make_transition_state_entry,
     make_transport,
     next_inchi_key,
     set_review,
@@ -183,7 +183,7 @@ def finder(key: str) -> Callable[[dict], str]:
 
 def skew(db_session, rows, specs, *, set_created: Callable[[Any, datetime], None] | None = None) -> None:
     """Give each row its deposition time (rows in one transaction would otherwise share ``now()``)."""
-    for row, (_status, age_days) in zip(rows, specs):
+    for row, (_status, age_days) in zip(rows, specs, strict=True):
         stamp = _T0 - timedelta(days=age_days)
         if set_created is not None:
             set_created(row, stamp)
@@ -193,7 +193,7 @@ def skew(db_session, rows, specs, *, set_created: Callable[[Any, datetime], None
 
 
 def review(db_session, seeded: Seeded) -> None:
-    for (record_type, record_id), (status, _age) in zip(seeded.review_targets, seeded.specs):
+    for (record_type, record_id), (status, _age) in zip(seeded.review_targets, seeded.specs, strict=True):
         if status is not RecordReviewStatus.not_reviewed:
             set_review(db_session, record_type=record_type, record_id=record_id, status=status)
 
@@ -383,7 +383,7 @@ def seed_calculations(db_session, *, route: str, ranking: str | None = None) -> 
     extra: dict = {}
     if ranking == "lowest_energy":
         energies = [-2.0, -4.0, None, -1.0, -3.0]  # no energy on row 2: it sorts last
-        for calc, energy in zip(calcs, energies):
+        for calc, energy in zip(calcs, energies, strict=True):
             if energy is not None:
                 attach_sp_result(db_session, calculation=calc, electronic_energy_hartree=energy)
         extra["energy_hartree"] = lambda i: energies[i]
@@ -557,7 +557,7 @@ def seed_levels_of_theory(db_session, *, browse: bool) -> Seeded:
         methods = ["m"] * 5  # ``search`` needs a filter, so one method throughout
         solvents = [f"s{i}" for i in range(5)]
     bases = ["def2", "6-31g", "cc", "def2", "6-31g"]
-    lots = [make_lot(db_session, method=m, basis=b, solvent=s) for m, b, s in zip(methods, bases, solvents)]
+    lots = [make_lot(db_session, method=m, basis=b, solvent=s) for m, b, s in zip(methods, bases, solvents, strict=True)]
     for lot in lots:
         _used(db_session, lot)
     url = f"{API}/level-of-theories/browse" if browse else f"{API}/level-of-theories/search?method=m"
@@ -576,7 +576,7 @@ def seed_frequency_scale_factors(db_session) -> Seeded:
              FrequencyScaleKind.fundamental, FrequencyScaleKind.fundamental]
     values = [0.97, 0.99, 0.95, 0.98, 0.99]  # rows 1 and 4: same kind and value; only the id separates them
     rows = []
-    for i, (kind, value) in enumerate(zip(kinds, values)):
+    for i, (kind, value) in enumerate(zip(kinds, values, strict=True)):
         lot = make_lot(db_session, method="fsf", basis=f"b{i}")
         rows.append(make_frequency_scale_factor(db_session, lot=lot, scale_kind=kind, value=value))
     return Seeded(
@@ -595,7 +595,7 @@ def seed_energy_correction_schemes(db_session) -> Seeded:
     names = ["z", "y", "a", "x", "y"]  # rows 1 and 4 share kind and name: only the id separates them
     rows = [
         make_energy_correction_scheme(db_session, name=n, kind=k, lot=make_lot(db_session, method="ecs", basis=f"b{i}"))
-        for i, (n, k) in enumerate(zip(names, kinds))
+        for i, (n, k) in enumerate(zip(names, kinds, strict=True))
     ]
     return Seeded(
         f"{API}/energy-correction-schemes/search?method=ecs",
@@ -707,8 +707,8 @@ def test_scan_points_are_served_in_the_echoed_order(client, db_session):
 
 
 def test_irc_points_are_served_in_the_echoed_order(client, db_session):
-    from tests.api.scientific import test_api_scientific_calculation_paths as paths
     from app.db.models.common import IRCDirection
+    from tests.api.scientific import test_api_scientific_calculation_paths as paths
 
     calc = paths._make_irc_calc(db_session, direction=IRCDirection.forward)
     for idx in (3, 1, 2):
@@ -744,7 +744,7 @@ def test_artifact_integrity_records_are_served_in_the_echoed_order(client, db_se
     ages = [1, 30, 10, 10, 5]
     tokens = ["e", "a", "d", "b", "c"]
     shas = []
-    for token, age in zip(tokens, ages):
+    for token, age in zip(tokens, ages, strict=True):
         _calc, artifact, sha = integrity._broken_artifact(db_session, token)
         integrity._record(
             db_session, sha, ArtifactIntegrityFinding.digest_mismatch, ArtifactIntegrityDetectionContext.download,
@@ -761,7 +761,7 @@ def test_artifact_integrity_records_are_served_in_the_echoed_order(client, db_se
     echoed = _keys(body["request"]["sort"])
     assert echoed == [("last_observed_at", "desc"), ("sha256", "asc")]
     served = [r["sha256"] for r in body["records"] if r["sha256"] in shas]
-    by_age = {sha: age for sha, age in zip(shas, ages)}
+    by_age = dict(zip(shas, ages, strict=True))
     expected = sorted(shas, key=lambda s: (by_age[s], s))  # newest first (smaller age), then digest ascending
     assert served == expected
     # Time alone, with the tied pair left in the WRONG digest order, must not give the served order.

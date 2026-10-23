@@ -1312,7 +1312,7 @@ def resolve_single_records(
         if not items:
             return items
         refs = [ref_of(i) for i in items]
-        picked = [i for i, r in zip(items, refs) if r in named[kind]]
+        picked = [i for i, r in zip(items, refs, strict=True) if r in named[kind]]
         used[kind].update(r for r in refs if r in named[kind])
         if len(items) == 1:
             return items

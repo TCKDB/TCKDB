@@ -27,7 +27,6 @@ from typing import Any
 
 from tckdb_schemas.coded_error import CodedValidationError
 
-
 #: The parameters a browse read used to take in order to return one record instead of the list.
 PICKING_PARAMETERS: tuple[str, ...] = ("collapse", "selection_policy")
 

@@ -35,6 +35,7 @@ from app.db.models.common import (
     RecordReviewStatus,
     ScientificOriginKind,
 )
+from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
 from app.schemas.reads.scientific_common import (
     EvidenceCompletenessBreakdown,
@@ -54,7 +55,6 @@ from app.schemas.reads.scientific_common import (
     ValidationSummary,
     WorkflowToolReleaseSummary,
 )
-from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
 from app.services.trust.models import TrustFragment
 
 # ---------------------------------------------------------------------------
