@@ -74,17 +74,18 @@ _T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
 #   row  status         age   why
 #   0    not_reviewed     1   newest deposit, smallest id: newest-first and id-descending disagree
 #   1    approved        30   oldest deposit: only the review rank can put it first
-#   2    under_review    10   ties with row 3 on time and ranks equal to the unreviewed rows (a curator opening a record
-#                             is not a verdict)
-#   3    not_reviewed    10   same time as row 2: only the id breaks the tie
-#   4    not_reviewed     5   largest id, middle age
+#   2    under_review     3   NEWER than the unreviewed rows 3 and 4. It ranks equal to them (a curator opening a record
+#                             is not a verdict), so it sorts by time among them; an order that ranked under_review
+#                             below not_reviewed would push it last, and that is what this row detects
+#   3    not_reviewed     5   same time as row 4: only the id breaks the tie
+#   4    not_reviewed     5   largest id
 #
-# Display order is review rank, created_at DESC, id DESC: 1, 0, 4, 3, 2.
+# Display order is review rank, created_at DESC, id DESC: 1, 0, 2, 4, 3.
 ROW_SPECS = [
     (RecordReviewStatus.not_reviewed, 1),
     (RecordReviewStatus.approved, 30),
-    (RecordReviewStatus.under_review, 10),
-    (RecordReviewStatus.not_reviewed, 10),
+    (RecordReviewStatus.under_review, 3),
+    (RecordReviewStatus.not_reviewed, 5),
     (RecordReviewStatus.not_reviewed, 5),
 ]
 
