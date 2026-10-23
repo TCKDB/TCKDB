@@ -50,12 +50,14 @@ class OrderEcho(TypedDict):
     kind: Literal["display_order"]
     keys: list[OrderKeyEcho]
     statement: str
+    #: Set when the request itself asked for this order (``ranking=lowest_energy``, ``mode=similarity``); ``None``
+    #: for the default display order.
+    requested_by: NotRequired[str | None]
 
 
 class ScientificRequestEcho(TypedDict, total=False):
     filter: JSONDict
     sort: OrderEcho
-    collapse: str
     ranking: str
     include: list[str]
 
@@ -208,6 +210,8 @@ class ThermoDetailRecord(TypedDict, total=False):
     """
 
     thermo_ref: Required[str]
+    #: Deposition time (when the row was created in TCKDB): the second key of the display order.
+    created_at: Required[str]
     scientific_origin: Required[str]
     model_kind: Required[str]
     review: Required[JSONDict]
@@ -267,6 +271,8 @@ class KineticsDetailRecord(TypedDict, total=False):
     """
 
     kinetics_ref: Required[str]
+    #: Deposition time (when the row was created in TCKDB): the second key of the display order.
+    created_at: Required[str]
     scientific_origin: Required[str]
     model_kind: Required[str]
     review: Required[JSONDict]

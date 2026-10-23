@@ -329,9 +329,8 @@ tools that know identifiers, not entry ids):
 # Thermo by SMILES — one call, entry id and entry ref returned in the response
 thermo = client.search_thermo(
     smiles="C[CH2]",
-    temperature_min=300,
-    temperature_max=3000,
-    collapse="first",
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=3000,
     include=["provenance", "review"],
 )
 
@@ -340,9 +339,8 @@ kinetics = client.search_kinetics(
     reactants=["[CH3]", "c1ccccc1"],
     products=["CH4", "[c]1ccccc1"],
     direction="either",
-    temperature_min=300,
-    temperature_max=2000,
-    collapse="first",
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=2000,
     include=["provenance", "review"],
 )
 ```
@@ -363,10 +361,10 @@ page: NetworkKineticsSearchResponse = client.search_network_kinetics(
 Each supported paginated search also has a lazy ``iter_*`` form. It keeps
 filters and include tokens unchanged, follows returned pagination metadata,
 and raises ``TCKDBPaginationError`` on malformed, changing, or non-advancing
-pages. ``collapse="first"`` yields the one collapsed record and stops because
-hosted responses report both the pre-collapse ``pagination.total`` and the
-post-collapse, pre-page ``pagination.post_collapse_total``. The client retains
-the legacy stop rule for older servers that omit the additive field.
+pages. No read collapses its records to one, so ``pagination.post_collapse_total``
+(kept on the wire for older clients) always equals ``pagination.total``; the
+iterator treats a response where they differ as malformed. "Give me one" is the
+job of the ``select_*`` methods.
 
 ```python
 for record in client.iter_network_kinetics(
@@ -401,13 +399,13 @@ parameter accepts either form.
 
 ```python
 # Thermo detail keyed off a ref returned by search_thermo.
-thermo = client.search_thermo(smiles="CN", collapse="first")
+thermo = client.search_thermo(smiles="CN")
 species_entry_ref = thermo["records"][0]["species"]["species_entry_ref"]
 
 detail = client.get_species_thermo(
     species_entry_id=species_entry_ref,  # public ref accepted here
-    temperature_min=300,
-    temperature_max=2000,
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=2000,
 )
 
 # Composite "/full" keyed off a ref returned by search_kinetics.
@@ -415,7 +413,6 @@ kinetics = client.search_kinetics(
     reactants=["[CH3]", "[CH3]"],
     products=["CC"],
     direction="either",
-    collapse="first",
 )
 reaction_entry_ref = kinetics["records"][0]["reaction"]["reaction_entry_ref"]
 
@@ -431,7 +428,6 @@ same_lot = client.search_species_calculations(
     calculation_type="sp",
     level_of_theory_ref=lot_ref,
     ranking="lowest_energy",
-    collapse="first",
 )
 ```
 
@@ -440,19 +436,18 @@ curation, or chaining off ids you already hold):
 
 ```python
 # Kinetics for a known reaction entry, listed in display order (approved first, then newest deposited; not a preference);
-# temperature_min/max only fill each record's coverage field
+# coverage_temperature_min_k/max_k only fill each record's coverage field (they filter nothing)
 kinetics = client.get_reaction_kinetics(
     reaction_entry_id=51,
-    temperature_min=300,
-    temperature_max=2000,
-    collapse="first",
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=2000,
 )
 
 # Thermo for a known species entry
 thermo = client.get_species_thermo(
     species_entry_id=31,
-    temperature_min=300,
-    temperature_max=3000,
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=3000,
     model_kind="nasa",
 )
 
@@ -476,7 +471,6 @@ calcs = client.search_species_calculations(
     smiles="O",
     calculation_type="sp",
     ranking="lowest_energy",
-    collapse="first",
     include=["provenance", "review"],
 )
 
@@ -526,12 +520,11 @@ Notes:
 
   ```python
   # Refs only (default):
-  thermo = client.search_thermo(smiles="CN", collapse="first")
+  thermo = client.search_thermo(smiles="CN")
 
   # Compatibility / debugging — request internal ids if the server allows them:
   thermo = client.search_thermo(
       smiles="CN",
-      collapse="first",
       include=["provenance", "review", "internal_ids"],
   )
   ```
@@ -650,9 +643,9 @@ python examples/scientific_reads.py \
   --json
 ```
 
-The script never selects a "best" record. It uses the documented
-`collapse="first"` semantics (first record under the backend's
-deterministic ordering) and prints the underlying evidence — review
+The script never selects a "best" record. It lists the records in the backend's
+deterministic display order, reports the first of them (first in display order,
+not a recommendation) and prints the underlying evidence — review
 status, temperature coverage, evidence completeness, provenance — so the
 caller can apply their own reuse policy.
 

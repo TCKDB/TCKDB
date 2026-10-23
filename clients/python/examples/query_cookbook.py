@@ -220,7 +220,6 @@ def recipe_species_search(
     response = client.search_species(
         smiles=args.smiles,
         include=_includes(args, "review"),
-        collapse="all",
     )
     _dump_json(args, "species_search", response)
     if not args.json:
@@ -255,27 +254,25 @@ def recipe_species_search(
 def recipe_thermo_search(
     client: TCKDBClient, args: argparse.Namespace
 ) -> dict | None:
-    """Q: Give me the first thermo record for this species in display
-    order (approved first, then newest) and report whether it covers a
+    """Q: List the thermo records for this species in display order
+    (approved first, then newest) and report whether the first covers a
     temperature window.
 
-    ``collapse="first"`` asks the backend to return the top record
-    under its locked sort order (review status, then newest). The
-    temperature window only fills each record's coverage field; it does
-    not filter or re-rank. Use the returned
+    The search returns every matching record; the first is first in display
+    order, not a recommendation (``select_species_thermo`` is the call that
+    answers "give me one"). The coverage window only fills each record's
+    coverage field; it does not filter or re-rank. Use the returned
     ``species_entry_ref`` for follow-up reads.
     """
     print(
         f"\n=== Recipe 2: thermo search ===\n"
         f"  smiles={args.smiles!r}"
         f" T={args.temperature_min:g}..{args.temperature_max:g} K"
-        f" collapse=first"
     )
     response = client.search_thermo(
         smiles=args.smiles,
-        temperature_min=args.temperature_min,
-        temperature_max=args.temperature_max,
-        collapse="first",
+        coverage_temperature_min_k=args.temperature_min,
+        coverage_temperature_max_k=args.temperature_max,
         include=_includes(args, "provenance", "review"),
     )
     _dump_json(args, "thermo_search", response)
@@ -319,9 +316,8 @@ def recipe_thermo_provenance(
     print(f"\n=== Recipe 3: thermo provenance inspection ===\n  smiles={args.smiles!r}")
     response = client.search_thermo(
         smiles=args.smiles,
-        temperature_min=args.temperature_min,
-        temperature_max=args.temperature_max,
-        collapse="first",
+        coverage_temperature_min_k=args.temperature_min,
+        coverage_temperature_max_k=args.temperature_max,
         include=_includes(args, "provenance", "review"),
     )
     _dump_json(args, "thermo_provenance", response)
@@ -370,9 +366,8 @@ def recipe_kinetics_search(
         reactants=args.reactant,
         products=args.product,
         direction="either",
-        temperature_min=args.temperature_min,
-        temperature_max=args.temperature_max,
-        collapse="first",
+        coverage_temperature_min_k=args.temperature_min,
+        coverage_temperature_max_k=args.temperature_max,
         include=_includes(args, "provenance", "review"),
     )
     _dump_json(args, "kinetics_search", response)
@@ -418,7 +413,6 @@ def recipe_species_calculation_search(
     response = client.search_species_calculations(
         smiles=args.smiles,
         calculation_type=args.calculation_type,
-        collapse="all",
         include=_includes(args, "provenance", "review"),
     )
     _dump_json(args, "species_calculation_search", response)
@@ -450,8 +444,8 @@ def recipe_lowest_sp_energy(
     """Q: For this species, what's the lowest single-point energy at any
     level of theory?
 
-    ``ranking="lowest_energy"`` + ``collapse="first"`` is the
-    documented combination. Requires ``calculation_type=sp`` (the
+    ``ranking="lowest_energy"`` lists the energies lowest first (the response
+    says so in ``request.sort.requested_by``); the first record is the lowest. Requires ``calculation_type=sp`` (the
     backend rejects ``lowest_energy`` for non-energy types).
     """
     print(
@@ -461,7 +455,6 @@ def recipe_lowest_sp_energy(
         smiles=args.smiles,
         calculation_type="sp",
         ranking="lowest_energy",
-        collapse="first",
         include=_includes(args, "provenance", "review"),
     )
     _dump_json(args, "lowest_sp_energy", response)
@@ -501,7 +494,6 @@ def recipe_optimized_geometry(
     response = client.search_species_calculations(
         smiles=args.smiles,
         calculation_type="opt",
-        collapse="first",
         include=_includes(args, "provenance", "review"),
     )
     _dump_json(args, "optimized_geometry", response)
@@ -542,7 +534,6 @@ def recipe_geometry_download(
     opt_response = client.search_species_calculations(
         smiles=args.smiles,
         calculation_type="opt",
-        collapse="first",
     )
     geometry_handle = None
     for rec in opt_response.get("records") or []:
@@ -556,7 +547,6 @@ def recipe_geometry_download(
         sp_response = client.search_species_calculations(
             smiles=args.smiles,
             calculation_type="sp",
-            collapse="first",
         )
         for rec in sp_response.get("records") or []:
             inputs = (rec.get("geometry") or {}).get("input_geometries") or []
@@ -613,9 +603,8 @@ def recipe_chained_followup(
     print(f"\n=== Recipe 9: chained ref-based follow-up ===\n  smiles={args.smiles!r}")
     summary = client.search_thermo(
         smiles=args.smiles,
-        temperature_min=args.temperature_min,
-        temperature_max=args.temperature_max,
-        collapse="first",
+        coverage_temperature_min_k=args.temperature_min,
+        coverage_temperature_max_k=args.temperature_max,
         include=_includes(args, "provenance", "review"),
     )
     _dump_json(args, "chained_followup_search", summary)
@@ -633,9 +622,8 @@ def recipe_chained_followup(
         return
     detail = client.get_species_thermo(
         species_entry_id=species_entry_ref,
-        temperature_min=args.temperature_min,
-        temperature_max=args.temperature_max,
-        collapse="first",
+        coverage_temperature_min_k=args.temperature_min,
+        coverage_temperature_max_k=args.temperature_max,
         include=_includes(args, "provenance", "review"),
     )
     _dump_json(args, "chained_followup_detail", detail)
@@ -663,7 +651,6 @@ def recipe_internal_ids(
     response = client.search_species(
         smiles=args.smiles,
         include=["review", "internal_ids"],  # explicit, ignores --include-internal-ids
-        collapse="all",
     )
     _dump_json(args, "internal_ids", response)
     if not args.json:

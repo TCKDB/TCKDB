@@ -97,6 +97,7 @@ class RejectionCode(str, Enum):
     ATOM_MAP_PARTICIPANT_NOT_DECLARED = "atom_map_participant_not_declared"
     ATOM_MAP_WITHOUT_TRANSITION_STATE = "atom_map_without_transition_state"
     BAC_TOTAL_REQUIRES_COMPONENTS = "bac_total_requires_components"
+    BROWSE_PARAMETER_REMOVED = "browse_parameter_removed"
     BUNDLE_TOO_LARGE = "bundle_too_large"
     BUNDLE_TOO_MANY_RECORDS = "bundle_too_many_records"
     CALCULATION_GEOMETRY_COMPOSITION_MISMATCH = "calculation_geometry_composition_mismatch"
@@ -158,8 +159,10 @@ class RejectionCode(str, Enum):
     ENTHALPY_QUANTITY_NOT_STORABLE_HERE = "enthalpy_quantity_not_storable_here"
     ENTHALPY_REFERENCE_KIND_UNRECOGNIZED = "enthalpy_reference_kind_unrecognized"
     EXPORT_ALL_CAP_EXCEEDED = "export_all_cap_exceeded"
+    EXPORT_REF_UNMATCHED = "export_ref_unmatched"
     EXPORT_SEED_EMPTY = "export_seed_empty"
     EXPORT_SEED_UNRESOLVED = "export_seed_unresolved"
+    EXPORT_SELECTION_AMBIGUOUS = "export_selection_ambiguous"
     FREQ_LIST_EXCEEDS_GEOMETRY_DEGREES_OF_FREEDOM = "freq_list_exceeds_geometry_degrees_of_freedom"
     FREQ_MODE_INDEX_NOT_UNIQUE = "freq_mode_index_not_unique"
     FREQ_N_IMAG_DISAGREES_WITH_MODES = "freq_n_imag_disagrees_with_modes"
@@ -241,6 +244,7 @@ class RejectionCode(str, Enum):
     OBSERVATION_IDENTITY_TARGET_NOT_GROUND_STATE_MINIMUM = "observation_identity_target_not_ground_state_minimum"
     OFFSET_TOO_LARGE = "offset_too_large"
     OWNER_MISSING = "owner_missing"
+    PARAMETER_RENAMED = "parameter_renamed"
     PARAMETER_VALUE_REQUIRES_KEY = "parameter_value_requires_key"
     PATH_SEARCH_RESULT_NOT_FOUND = "path_search_result_not_found"
     POST_SEARCH_FIELDS_MUST_BE_IN_BODY = "post_search_fields_must_be_in_body"
@@ -432,6 +436,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.ATOM_MAP_PARTICIPANT_NOT_DECLARED,
         RejectionCode.ATOM_MAP_WITHOUT_TRANSITION_STATE,
         RejectionCode.BAC_TOTAL_REQUIRES_COMPONENTS,
+        RejectionCode.BROWSE_PARAMETER_REMOVED,
         RejectionCode.BUNDLE_TOO_MANY_RECORDS,
         RejectionCode.CALCULATION_GEOMETRY_COMPOSITION_MISMATCH,
         RejectionCode.CALCULATION_GEOMETRY_CONFORMER_MISMATCH,
@@ -483,8 +488,10 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.ENTHALPY_QUANTITY_NOT_STORABLE_HERE,
         RejectionCode.ENTHALPY_REFERENCE_KIND_UNRECOGNIZED,
         RejectionCode.EXPORT_ALL_CAP_EXCEEDED,
+        RejectionCode.EXPORT_REF_UNMATCHED,
         RejectionCode.EXPORT_SEED_EMPTY,
         RejectionCode.EXPORT_SEED_UNRESOLVED,
+        RejectionCode.EXPORT_SELECTION_AMBIGUOUS,
         RejectionCode.FREQ_LIST_EXCEEDS_GEOMETRY_DEGREES_OF_FREEDOM,
         RejectionCode.FREQ_MODE_INDEX_NOT_UNIQUE,
         RejectionCode.FREQ_N_IMAG_DISAGREES_WITH_MODES,
@@ -555,6 +562,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.OBSERVATION_IDENTITY_HINT_CONFLICT,
         RejectionCode.OBSERVATION_IDENTITY_TARGET_NOT_GROUND_STATE_MINIMUM,
         RejectionCode.OFFSET_TOO_LARGE,
+        RejectionCode.PARAMETER_RENAMED,
         RejectionCode.PARAMETER_VALUE_REQUIRES_KEY,
         RejectionCode.POST_SEARCH_FIELDS_MUST_BE_IN_BODY,
         RejectionCode.PRESSURE_ALIAS_CONFLICT,
@@ -751,6 +759,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.ATOM_MAP_PARTICIPANT_NOT_DECLARED: frozenset({422}),
     RejectionCode.ATOM_MAP_WITHOUT_TRANSITION_STATE: frozenset({422}),
     RejectionCode.BAC_TOTAL_REQUIRES_COMPONENTS: frozenset({422}),
+    RejectionCode.BROWSE_PARAMETER_REMOVED: frozenset({422}),
     RejectionCode.BUNDLE_TOO_LARGE: frozenset({413}),
     RejectionCode.BUNDLE_TOO_MANY_RECORDS: frozenset({422}),
     RejectionCode.CALCULATION_GEOMETRY_COMPOSITION_MISMATCH: frozenset({422}),
@@ -812,8 +821,10 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.ENTHALPY_QUANTITY_NOT_STORABLE_HERE: frozenset({422}),
     RejectionCode.ENTHALPY_REFERENCE_KIND_UNRECOGNIZED: frozenset({422}),
     RejectionCode.EXPORT_ALL_CAP_EXCEEDED: frozenset({422}),
+    RejectionCode.EXPORT_REF_UNMATCHED: frozenset({422}),
     RejectionCode.EXPORT_SEED_EMPTY: frozenset({422}),
     RejectionCode.EXPORT_SEED_UNRESOLVED: frozenset({422}),
+    RejectionCode.EXPORT_SELECTION_AMBIGUOUS: frozenset({422}),
     RejectionCode.FREQ_LIST_EXCEEDS_GEOMETRY_DEGREES_OF_FREEDOM: frozenset({422}),
     RejectionCode.FREQ_MODE_INDEX_NOT_UNIQUE: frozenset({422}),
     RejectionCode.FREQ_N_IMAG_DISAGREES_WITH_MODES: frozenset({422}),
@@ -895,6 +906,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.OBSERVATION_IDENTITY_TARGET_NOT_GROUND_STATE_MINIMUM: frozenset({422}),
     RejectionCode.OFFSET_TOO_LARGE: frozenset({422}),
     RejectionCode.OWNER_MISSING: frozenset({404}),
+    RejectionCode.PARAMETER_RENAMED: frozenset({422}),
     RejectionCode.PARAMETER_VALUE_REQUIRES_KEY: frozenset({422}),
     RejectionCode.PATH_SEARCH_RESULT_NOT_FOUND: frozenset({404}),
     RejectionCode.POST_SEARCH_FIELDS_MUST_BE_IN_BODY: frozenset({422}),

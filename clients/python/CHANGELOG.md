@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.162.0 - 2026-10-23
+
+No read and no export picks a record for you. Browse reads list every match in display order; "give me one" is the `select_*` methods.
+
+- `collapse` is gone from every read method (`search_species`, `browse_species`, `search_reactions`, `browse_reactions`, `get_reaction_kinetics`,
+  `get_species_thermo`, `search_thermo`, `search_kinetics`, `search_species_calculations`, and the other searches that took it). The server refuses
+  `collapse` and `selection_policy` with 422 `browse_parameter_removed`, which names the select endpoint to use.
+- On `get_species_thermo`, `search_thermo`, `get_reaction_kinetics` and `search_kinetics`, `temperature_min` / `temperature_max` are now
+  `coverage_temperature_min_k` / `coverage_temperature_max_k`: they never filtered, they only set the window each record's `temperature_coverage`
+  is computed against. The old names get 422 `parameter_renamed`. `pressure_bar` on the kinetics reads is unchanged (it does filter).
+- A thermo and a kinetics record carry `created_at` (deposition time), the second key of the display order. `OrderEcho` gains `requested_by`
+  (`"ranking=lowest_energy"`, `"mode=substructure"`; `None` for the default order). The statmech and transport `effective_order`,
+  `selection_policy` and `selection_policy_applied` echoes are gone.
+- `iter_paginated_records` no longer reads `collapse`; it follows `pagination.total`, and treats a `post_collapse_total` that differs from `total`
+  as malformed.
+- `RejectionCode` gains `browse_parameter_removed`, `parameter_renamed`, `export_selection_ambiguous` and `export_ref_unmatched`.
+
 ## 0.161.0 - 2026-10-22
 
 The method-preference rules are gone from the selection endpoints, and the browse order is named in every list response.

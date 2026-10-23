@@ -320,12 +320,8 @@ def _print_envelope_summary(label: str, response: dict[str, Any]) -> None:
     pagination = response.get("pagination") or {}
     review = response.get("review_summary") or {}
     total = pagination.get("total", 0)
-    post_collapse_total = pagination.get("post_collapse_total", total)
     returned = pagination.get("returned", len(response.get("records", []) or []))
-    print(
-        f"  {label}: returned={returned}, post-collapse total="
-        f"{post_collapse_total}, pre-collapse total={total}"
-    )
+    print(f"  {label}: returned={returned}, total={total}")
     print(
         "    review counts:",
         f"approved={review.get('approved', 0)},",
@@ -501,7 +497,7 @@ def _maybe_dump_json(args: argparse.Namespace, label: str, payload: Any) -> None
 def run_species_search(client: TCKDBClient, args: argparse.Namespace) -> None:
     print(f"\n[search_species] smiles={args.smiles!r}")
     response = client.search_species(
-        smiles=args.smiles, include=_includes(args, "review"), collapse="all"
+        smiles=args.smiles, include=_includes(args, "review")
     )
     _maybe_dump_json(args, "search_species", response)
     if not args.json:
@@ -520,18 +516,16 @@ def run_thermo_search(
     print(
         f"\n[search_thermo] smiles={args.smiles!r}"
         f" T={args.temperature_min:g}..{args.temperature_max:g} K"
-        f" collapse=first"
     )
     response = client.search_thermo(
         smiles=args.smiles,
-        temperature_min=args.temperature_min,
-        temperature_max=args.temperature_max,
-        collapse="first",
+        coverage_temperature_min_k=args.temperature_min,
+        coverage_temperature_max_k=args.temperature_max,
         include=_includes(args, "provenance", "review"),
     )
     _maybe_dump_json(args, "search_thermo", response)
     if not args.json:
-        _print_envelope_summary("search_thermo (collapse=first)", response)
+        _print_envelope_summary("search_thermo (display order)", response)
         records = response.get("records") or []
         if not records:
             print("  No thermo records found for this species query.")
@@ -567,9 +561,8 @@ def run_thermo_detail_followup(
 
     response = client.get_species_thermo(
         species_entry_id=species_entry_handle,
-        temperature_min=args.temperature_min,
-        temperature_max=args.temperature_max,
-        collapse="first",
+        coverage_temperature_min_k=args.temperature_min,
+        coverage_temperature_max_k=args.temperature_max,
         include=_includes(args, "provenance", "review"),
     )
     _maybe_dump_json(args, "get_species_thermo_by_ref", response)
@@ -593,7 +586,7 @@ def run_species_calculations_search(
     print(
         f"\n[search_species_calculations] smiles={args.smiles!r}"
         f" calculation_type={args.calculation_type} ranking={args.ranking}"
-        f" collapse=first "
+        f" "
         + " ".join(label_extras)
     )
     response = client.search_species_calculations(
@@ -602,13 +595,12 @@ def run_species_calculations_search(
         level_of_theory_id=args.level_of_theory_id,
         level_of_theory_ref=args.level_of_theory_ref,
         ranking=args.ranking,
-        collapse="first",
         include=_includes(args, "provenance", "conformers", "review"),
     )
     _maybe_dump_json(args, "search_species_calculations", response)
     if not args.json:
         _print_envelope_summary(
-            "search_species_calculations (collapse=first)", response
+            "search_species_calculations (display order)", response
         )
         records = response.get("records") or []
         if not records:
@@ -652,7 +644,6 @@ def run_lot_ref_followup(
         calculation_type=args.calculation_type,
         level_of_theory_ref=lot_ref,
         ranking=args.ranking,
-        collapse="first",
         include=_includes(args, "provenance", "conformers", "review"),
     )
     _maybe_dump_json(
@@ -727,7 +718,6 @@ def run_reaction_search(
         products=args.product,
         direction="either",
         include=_includes(args, "review"),
-        collapse="all",
     )
     _maybe_dump_json(args, "search_reactions", response)
     if not args.json:
@@ -762,20 +752,18 @@ def run_kinetics_search(
     print(
         f"\n[search_kinetics] reactants={args.reactant} products={args.product}"
         f" direction=either T={args.temperature_min:g}..{args.temperature_max:g} K"
-        f" collapse=first"
     )
     response = client.search_kinetics(
         reactants=args.reactant,
         products=args.product,
         direction="either",
-        temperature_min=args.temperature_min,
-        temperature_max=args.temperature_max,
-        collapse="first",
+        coverage_temperature_min_k=args.temperature_min,
+        coverage_temperature_max_k=args.temperature_max,
         include=_includes(args, "provenance", "review"),
     )
     _maybe_dump_json(args, "search_kinetics", response)
     if not args.json:
-        _print_envelope_summary("search_kinetics (collapse=first)", response)
+        _print_envelope_summary("search_kinetics (display order)", response)
         records = response.get("records") or []
         if not records:
             print("  No kinetics records found for this reaction query.")
