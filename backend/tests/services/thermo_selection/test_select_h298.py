@@ -23,7 +23,7 @@ from app.db.models.common import (
 )
 from app.db.models.record_review import RecordReview
 from app.db.models.thermo import Thermo
-from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
+from app.schemas.reads.scientific_common import SelectionPolicy
 from app.schemas.reads.scientific_thermo import ThermoReadRequest
 from app.services.scientific_read.thermo import get_species_thermo
 from app.services.thermo_selection import (
@@ -75,7 +75,7 @@ def test_an_older_g4_and_a_newer_g3_are_incomparable_and_listed_in_display_order
     new_g3 = g3(db_session, methane, age_days=1, status=S.approved)
 
     browse = get_species_thermo(
-        db_session, species_entry_id=methane.id, request=ThermoReadRequest(collapse=CollapseMode.first)
+        db_session, species_entry_id=methane.id, request=ThermoReadRequest()
     )
     assert browse.records[0].thermo_id == new_g3.id
 
