@@ -375,6 +375,11 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
         lambda w: {
             "seed": {"all_reactions": True, "species_refs": _export_species_refs(w)},
             "min_review_status": "not_reviewed",
+            # CHEMKIN never picks: the species with several thermo records and the reaction with several kinetics
+            # records are named here, by visible records (a hidden record is never one a caller can name).
+            "thermo_refs": [w.visible["thm_v"].public_ref],
+            "transport_refs": [w.visible["trn_v"].public_ref],
+            "kinetics_refs": [w.visible["kin_v"].public_ref],
         }
     ),
     ("POST", f"{BASE}/reaction-entries/{{reaction_entry_ref}}/kinetics/select"): _KINETICS_SELECT,

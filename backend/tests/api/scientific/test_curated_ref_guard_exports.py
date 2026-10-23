@@ -77,6 +77,16 @@ def _chemkin(client, w, profile: str) -> dict[str, str]:
         "min_review_status": "not_reviewed",
     }
     response = client.post(f"{BASE}/export/chemkin", params={"profile": profile}, json=body)
+    # CHEMKIN never picks: where a species or reaction has several candidates it refuses and lists them, and the caller
+    # names one (here the first listed, as a caller who had just read the refusal would).
+    refs = {"thermo": [], "transport": [], "kinetics": []}
+    for _ in range(3):
+        if response.status_code != 422 or response.json()["code"] != "export_selection_ambiguous":
+            break
+        for subject in response.json()["context"]["ambiguous"]:
+            refs[subject["record_kind"]].append(subject["candidate_refs"][0])
+        named = {"thermo_refs": refs["thermo"], "transport_refs": refs["transport"], "kinetics_refs": refs["kinetics"]}
+        response = client.post(f"{BASE}/export/chemkin", params={"profile": profile}, json={**body, **named})
     assert response.status_code == 200, response.text
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
         return {name: archive.read(name).decode() for name in archive.namelist()}
