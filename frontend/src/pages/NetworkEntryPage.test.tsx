@@ -95,7 +95,7 @@ function thermoListPayload(entryRef: string, count: number) {
         records: Array.from({ length: count }, (_unused, i) => ({
             thermo_ref: `thermo_${entryRef}_${i}`, scientific_origin: "computed", model_kind: "nasa", review: { status: "not_reviewed" },
         })),
-        pagination: { offset: 0, limit: 50, returned: count, total: count, post_collapse_total: count },
+        pagination: { offset: 0, limit: 50, returned: count, total: count },
     }
 }
 

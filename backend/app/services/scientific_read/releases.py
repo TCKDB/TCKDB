@@ -226,7 +226,6 @@ def list_releases(
             limit=limit,
             returned=len(page),
             total=total,
-            post_collapse_total=total,
         ),
     )
 
@@ -515,7 +514,6 @@ def get_release_selections(
             limit=limit,
             returned=len(rows),
             total=total,
-            post_collapse_total=total,
         ),
     )
 

@@ -631,8 +631,6 @@ Important rules:
   `temperature_coverage` is computed against). `collapse` and
   `selection_policy` are refused with 422 `browse_parameter_removed`.
 - `pagination.total` is the post-filter match count.
-- `pagination.post_collapse_total` is kept for older clients and always equals
-  `total`.
 - `pagination.returned` is the actual page length, so it can be smaller than
   either total because of page slicing.
 - `review_summary` counts the filtered candidate set, so callers see the

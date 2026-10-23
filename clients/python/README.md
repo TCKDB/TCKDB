@@ -361,10 +361,8 @@ page: NetworkKineticsSearchResponse = client.search_network_kinetics(
 Each supported paginated search also has a lazy ``iter_*`` form. It keeps
 filters and include tokens unchanged, follows returned pagination metadata,
 and raises ``TCKDBPaginationError`` on malformed, changing, or non-advancing
-pages. No read collapses its records to one, so ``pagination.post_collapse_total``
-(kept on the wire for older clients) always equals ``pagination.total``; the
-iterator treats a response where they differ as malformed. "Give me one" is the
-job of the ``select_*`` methods.
+pages. No read collapses its records to one, so ``pagination.total`` is the only
+total. "Give me one" is the job of the ``select_*`` methods.
 
 ```python
 for record in client.iter_network_kinetics(

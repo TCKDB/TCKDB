@@ -182,7 +182,7 @@ function mockResponse(overrides: { records?: unknown[]; pagination?: Record<stri
         review_summary: { approved: 1, under_review: 0, not_reviewed: 2, deprecated: 0, rejected: 0, total: 3 },
         records,
         pagination: overrides.pagination
-            ?? { offset: 0, limit: 50, returned: records.length, total: records.length, post_collapse_total: records.length },
+            ?? { offset: 0, limit: 50, returned: records.length, total: records.length },
     }
 }
 
@@ -673,7 +673,7 @@ describe("EntryThermoSection", () => {
     it("shows the '(showing M)' honesty note only when returned is short of total, with the real deposit total as the headline count", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
             records: mockRecords().slice(0, 2),
-            pagination: { offset: 0, limit: 2, returned: 2, total: 5, post_collapse_total: 5 },
+            pagination: { offset: 0, limit: 2, returned: 2, total: 5 },
         }))))
         page()
         // "5 records" is the deposit total (`pagination.total`), never

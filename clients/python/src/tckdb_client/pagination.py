@@ -88,12 +88,6 @@ def iter_paginated_records(
         page_limit = _integer_field(pagination, "limit")
         returned = _integer_field(pagination, "returned")
         total = _integer_field(pagination, "total")
-        # No read collapses its records to one any more, so ``post_collapse_total`` (kept on the wire so older
-        # clients keep parsing) always equals ``total``.
-        if "post_collapse_total" in pagination and _integer_field(pagination, "post_collapse_total") != total:
-            raise TCKDBPaginationError(
-                "Malformed pagination: post_collapse_total does not equal total."
-            )
         if page_offset < 0 or page_limit < 1 or returned < 0 or total < 0:
             raise TCKDBPaginationError(
                 "Malformed pagination: offset/returned/total must be non-negative "

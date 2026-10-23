@@ -94,7 +94,6 @@ Read paths return every candidate in display order and never pick one. Picking o
 - **A read never picks.** The per-species reads list every candidate: review rank, then newest deposited, then id.
   `collapse` and `selection_policy` are refused (422 `browse_parameter_removed`), and the refusal names the select
   endpoint that answers "give me one" (`POST .../thermo/select`, `POST /statmech/select`; transport has none yet).
-  `pagination.post_collapse_total` is kept for older clients and always equals `pagination.total`.
 
 ### Named selection policies
 

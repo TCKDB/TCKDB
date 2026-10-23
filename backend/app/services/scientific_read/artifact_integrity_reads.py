@@ -252,7 +252,6 @@ def search_artifact_integrity(
             limit=limit,
             returned=len(records),
             total=total,
-            post_collapse_total=total,
         ),
     )
 
@@ -305,7 +304,6 @@ def artifact_integrity_history(
             limit=limit,
             returned=len(rows),
             total=total,
-            post_collapse_total=total,
         ),
     )
 

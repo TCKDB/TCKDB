@@ -567,19 +567,3 @@ def test_iterator_walks_every_page_of_the_total() -> None:
     assert [r["ordinal"] for r in records] == [0, 1, 2, 3, 4]
     assert calls == 3
 
-
-def test_iterator_accepts_a_post_collapse_total_equal_to_total() -> None:
-    page = _page(limit=5, total=3)
-    page["pagination"]["post_collapse_total"] = 3
-
-    assert len(list(iter_paginated_records(lambda **_kwargs: page, {"limit": 5}))) == 3
-
-
-@pytest.mark.parametrize("post_collapse_total", [-1, 0, 1, 3])
-def test_iterator_rejects_a_post_collapse_total_that_is_not_total(post_collapse_total: int) -> None:
-    """The field survives only so older clients keep parsing; it can no longer differ from ``total``."""
-    page = _page(limit=1, total=2)
-    page["pagination"]["post_collapse_total"] = post_collapse_total
-
-    with pytest.raises(TCKDBPaginationError, match="post_collapse_total"):
-        list(iter_paginated_records(lambda **_kwargs: page, {"limit": 1}))

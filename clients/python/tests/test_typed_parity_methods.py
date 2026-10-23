@@ -29,7 +29,6 @@ def _envelope(records=None) -> dict:
             "limit": 50,
             "returned": len(records or []),
             "total": len(records or []),
-            "post_collapse_total": len(records or []),
         },
     }
 
@@ -110,14 +109,14 @@ class TestStructureSearch:
                 **_envelope([{"species_ref": "sp_a"}]),
                 "pagination": {
                     "offset": 0, "limit": 1, "returned": 1,
-                    "total": 2, "post_collapse_total": 2,
+                    "total": 2,
                 },
             },
             {
                 **_envelope([{"species_ref": "sp_b"}]),
                 "pagination": {
                     "offset": 1, "limit": 1, "returned": 1,
-                    "total": 2, "post_collapse_total": 2,
+                    "total": 2,
                 },
             },
         ]
@@ -873,14 +872,14 @@ class TestLiterature:
                 **_envelope([{"record_ref": "kin_1"}]),
                 "pagination": {
                     "offset": 0, "limit": 1, "returned": 1,
-                    "total": 2, "post_collapse_total": 2,
+                    "total": 2,
                 },
             },
             {
                 **_envelope([{"record_ref": "kin_2"}]),
                 "pagination": {
                     "offset": 1, "limit": 1, "returned": 1,
-                    "total": 2, "post_collapse_total": 2,
+                    "total": 2,
                 },
             },
         ]

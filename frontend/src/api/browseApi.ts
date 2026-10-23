@@ -615,7 +615,7 @@ export function seedFiltersFromUrl(kind: BrowseKind, searchParams: URLSearchPara
 // ---------------------------------------------------------------------------
 
 const paginationSchema = z.object({
-    offset: z.number(), limit: z.number(), returned: z.number(), total: z.number(), post_collapse_total: z.number(),
+    offset: z.number(), limit: z.number(), returned: z.number(), total: z.number(),
 }).passthrough()
 export type BrowsePagination = z.infer<typeof paginationSchema>
 

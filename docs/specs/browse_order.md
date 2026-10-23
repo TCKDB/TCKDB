@@ -102,7 +102,7 @@ transport, kinetics, species calculations, and the thermo and kinetics searches)
 | Calculations and conformers | `POST /scientific/species-entries/{ref}/calculations/select` (structure selection) |
 | Transport, species, reactions | none yet; filter the list |
 
-`pagination.post_collapse_total` is still on the wire so older clients keep parsing; it always equals `total`.
+`pagination` carries `offset`, `limit`, `returned` and `total`; there is no second, post-collapse total because nothing collapses.
 
 ### Filters match any linked calculation
 

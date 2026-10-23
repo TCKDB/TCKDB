@@ -19,12 +19,11 @@ def test_slice_for_pagination_applies_offset_and_limit_to_every_record():
 
 
 @pytest.mark.parametrize("total", [0, 1, 4])
-def test_build_pagination_reports_a_post_collapse_total_equal_to_total(total: int):
-    """No read collapses to one record, so the field kept for older clients always equals ``total``."""
+def test_build_pagination_carries_exactly_the_four_counts(total: int):
+    """No read collapses its records to one, so there is no second total: ``post_collapse_total`` is gone."""
     pagination = build_pagination(offset=0, limit=50, returned=total, total=total)
 
-    assert pagination.total == total
-    assert pagination.post_collapse_total == total
+    assert pagination.model_dump() == {"offset": 0, "limit": 50, "returned": total, "total": total}
 
 
 def test_collect_bounded_pages_walks_past_first_page(monkeypatch):
@@ -42,7 +41,6 @@ def test_collect_bounded_pages_walks_past_first_page(monkeypatch):
                 limit=limit,
                 returned=len(records),
                 total=len(values),
-                post_collapse_total=len(values),
             ),
         )
 
@@ -62,7 +60,6 @@ def test_collect_bounded_pages_rejects_unreachable_total(monkeypatch):
                 limit=limit,
                 returned=2,
                 total=6,
-                post_collapse_total=6,
             ),
         )
 

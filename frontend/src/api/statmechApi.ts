@@ -267,7 +267,6 @@ const paginationSchema = z.object({
     limit: z.number(),
     returned: z.number(),
     total: z.number(),
-    post_collapse_total: z.number(),
 }).passthrough()
 
 const statmechListResponseSchema = z.object({

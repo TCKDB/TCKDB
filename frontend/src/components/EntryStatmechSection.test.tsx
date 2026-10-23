@@ -199,7 +199,7 @@ function mockResponse(records = mockRecords()) {
     return {
         review_summary: { approved: 0, under_review: 0, not_reviewed: 1, deprecated: 0, rejected: 0, total: 2 },
         records,
-        pagination: { offset: 0, limit: 50, returned: records.length, total: records.length, post_collapse_total: records.length },
+        pagination: { offset: 0, limit: 50, returned: records.length, total: records.length },
     }
 }
 

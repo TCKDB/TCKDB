@@ -529,15 +529,13 @@ def build_pagination(
 ) -> Pagination:
     """Construct the response Pagination block.
 
-    ``total`` is the post-filter count, before offset/limit slicing. No read collapses its records to one any more,
-    so ``post_collapse_total`` always equals ``total``; the field is kept only so existing clients keep parsing.
+    ``total`` is the post-filter count, before offset/limit slicing.
     """
     return Pagination(
         offset=offset,
         limit=limit,
         returned=returned,
         total=total,
-        post_collapse_total=total,
     )
 
 

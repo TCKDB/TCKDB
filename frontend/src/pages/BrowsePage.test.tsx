@@ -52,7 +52,7 @@ function speciesEnvelope(offset: number, limit: number, allRecords: ReturnType<t
         request: { profile: "exploratory", profile_recommendation: "none", profile_release_ref: null, filter: {}, sort: { kind: "display_order", keys: [{ key: "review_rank", direction: "asc", meaning: "" }, { key: "created_at", direction: "desc", meaning: "" }, { key: "id", direction: "desc", meaning: "" }], statement: "Display order, not a scientific preference." }, include: [] },
         review_summary: { approved: 0, under_review: 0, not_reviewed: allRecords.length, deprecated: 0, rejected: 0, total: allRecords.length },
         records: page,
-        pagination: { offset, limit, returned: page.length, total: allRecords.length, post_collapse_total: allRecords.length },
+        pagination: { offset, limit, returned: page.length, total: allRecords.length },
     }
 }
 
@@ -102,7 +102,7 @@ function tsEnvelope(offset: number, limit: number, allRecords: ReturnType<typeof
         request: { profile: "exploratory", profile_recommendation: "none", profile_release_ref: null, filter: {}, sort: { kind: "display_order", keys: [{ key: "review_rank", direction: "asc", meaning: "" }, { key: "created_at", direction: "desc", meaning: "" }, { key: "id", direction: "desc", meaning: "" }], statement: "Display order, not a scientific preference." }, include: [] },
         review_summary: { approved: 0, under_review: 0, not_reviewed: allRecords.length, deprecated: 0, rejected: 0, total: allRecords.length },
         records: page,
-        pagination: { offset, limit, returned: page.length, total: allRecords.length, post_collapse_total: allRecords.length },
+        pagination: { offset, limit, returned: page.length, total: allRecords.length },
     }
 }
 
@@ -727,12 +727,12 @@ describe("browse page: the four empty/failure states are distinguishable", () =>
             if (offset === 0) {
                 return HttpResponse.json({
                     ...speciesEnvelope(0, 20, twoSpecies),
-                    pagination: { offset: 0, limit: 20, returned: 2, total: 25, post_collapse_total: 25 },
+                    pagination: { offset: 0, limit: 20, returned: 2, total: 25 },
                 })
             }
             return HttpResponse.json({
                 ...speciesEnvelope(offset, 20, []),
-                pagination: { offset, limit: 20, returned: 0, total: 25, post_collapse_total: 25 },
+                pagination: { offset, limit: 20, returned: 0, total: 25 },
             })
         }), http.get("/api/v1/scientific/transition-states/browse", () => HttpResponse.json(tsEnvelope(0, 20, twoTs))))
         renderAt("/species")
@@ -1119,7 +1119,7 @@ function reactionEnvelope(offset: number, limit: number, allRecords: ReturnType<
         request: { profile: "exploratory", profile_recommendation: "none", profile_release_ref: null, filter: {}, sort: { kind: "display_order", keys: [{ key: "review_rank", direction: "asc", meaning: "" }, { key: "has_kinetics", direction: "desc", meaning: "" }, { key: "has_transition_state", direction: "desc", meaning: "" }, { key: "created_at", direction: "desc", meaning: "" }, { key: "id", direction: "desc", meaning: "" }], statement: "Display order, not a scientific preference." }, include: [] },
         review_summary: { approved: 0, under_review: 0, not_reviewed: allRecords.length, deprecated: 0, rejected: 0, total: allRecords.length },
         records: page,
-        pagination: { offset, limit, returned: page.length, total: allRecords.length, post_collapse_total: allRecords.length },
+        pagination: { offset, limit, returned: page.length, total: allRecords.length },
     }
 }
 
