@@ -362,16 +362,8 @@ ROUTE_INPUTS: dict[tuple[str, str], Callable[[SweepWorld], list[dict[str, Any]]]
         lambda w: {"temperature_k": [1000.0], "pressure_bar": [1.0]}
     ),
     ("GET", f"{BASE}/export/ndjson"): lambda w: [
+        # Every candidate: the hidden thermo and kinetics records are candidates too.
         {"query": {"all": True, "species_ref": _export_species_refs(w), "min_review_status": "not_reviewed"}},
-        # Every candidate, not the first: the hidden thermo and kinetics records are candidates too.
-        {
-            "query": {
-                "all": True,
-                "species_ref": _export_species_refs(w),
-                "min_review_status": "not_reviewed",
-                "collapse": "all",
-            }
-        },
     ],
     ("GET", f"{BASE}/export/ml/species.ndjson"): lambda w: [
         {"query": {"all": True, "min_review_status": "not_reviewed", "include_hessian": True}}

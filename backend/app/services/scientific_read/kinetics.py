@@ -104,6 +104,7 @@ from app.schemas.reads.scientific_kinetics import (
 from app.services.calculation_levels import RoleCalcInfo, derive_levels
 from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.common import (
+    software_names_by_calculation,
     build_pagination,
     fetch_review_badges,
     ids_below_review_floor,
@@ -442,31 +443,19 @@ def get_reaction_kinetics(
     if not kinetics_rows:
         return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
 
-    # Software filter: a record matches when ANY of its linked (shown) source calculations names a release of this
-    # software.
+    # Software filter: a record matches when ANY of its linked (shown) source calculations ran in a software of this
+    # name.
     if request.software is not None:
-        software_name = request.software
-        software_id_by_release = _software_id_by_release_id(
+        software_by_calc = software_names_by_calculation(
             session,
-            {
-                sc.software_release_id
-                for srcs in sources_by_kinetics.values()
-                for sc in srcs
-                if sc.software_release_id is not None
-            },
-        )
-        software_ids = set(software_id_by_release.values())
-        name_by_software_id = (
-            dict(session.execute(select(Software.id, Software.name).where(Software.id.in_(software_ids))).all())
-            if software_ids
-            else {}
+            {sc.calculation_id for k in kinetics_rows for sc in shown(sources_by_kinetics.get(k.id, []))},
         )
         kinetics_rows = [
             k
             for k in kinetics_rows
-            if software_name
-            in _linked_software_names(
-                shown(sources_by_kinetics.get(k.id, [])), software_id_by_release, name_by_software_id
+            if any(
+                software_by_calc.get(sc.calculation_id) == request.software
+                for sc in shown(sources_by_kinetics.get(k.id, []))
             )
         ]
     if not kinetics_rows:
@@ -1711,19 +1700,6 @@ def _third_body_blocks(
     return blocks
 
 
-def _software_id_by_release_id(
-    session: Session, release_ids: set[int]
-) -> dict[int, int]:
-    if not release_ids:
-        return {}
-    rows = session.execute(
-        select(SoftwareRelease.id, SoftwareRelease.software_id).where(
-            SoftwareRelease.id.in_(release_ids)
-        )
-    ).all()
-    return dict(rows)
-
-
 # ---------------------------------------------------------------------------
 # Small inference helpers
 # ---------------------------------------------------------------------------
@@ -1746,23 +1722,6 @@ def _linked_lot_ids(sources: list[KineticsSourceCalculation]) -> set[int]:
         for sc in sources
         if sc.calculation is not None and sc.calculation.lot_id is not None
     }
-
-
-def _linked_software_names(
-    sources: list[KineticsSourceCalculation],
-    software_id_by_release: dict[int, int],
-    name_by_software_id: dict[int, str],
-) -> set[str]:
-    """The software name of EVERY source calculation link that names a release (the software filter's match set)."""
-    names: set[str] = set()
-    for sc in sources:
-        if sc.software_release_id is None:
-            continue
-        software_id = software_id_by_release.get(sc.software_release_id)
-        name = name_by_software_id.get(software_id) if software_id is not None else None
-        if name is not None:
-            names.add(name)
-    return names
 
 
 def _first_calc_with_type(

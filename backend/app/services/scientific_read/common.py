@@ -93,6 +93,26 @@ def reject_client_sort(sort: str | None) -> None:
         )
 
 
+def software_names_by_calculation(session: Session, calculation_ids: Iterable[int]) -> dict[int, str]:
+    """Name of the software that ran each calculation, in one statement (a software filter's match set).
+
+    A calculation with no software release is absent from the result.
+    """
+    from app.db.models.calculation import Calculation
+    from app.db.models.software import Software, SoftwareRelease
+
+    ids = set(calculation_ids)
+    if not ids:
+        return {}
+    rows = session.execute(
+        select(Calculation.id, Software.name)
+        .join(SoftwareRelease, SoftwareRelease.id == Calculation.software_release_id)
+        .join(Software, Software.id == SoftwareRelease.software_id)
+        .where(Calculation.id.in_(ids))
+    ).all()
+    return {calculation_id: name for calculation_id, name in rows}
+
+
 def validate_pagination(offset: int, limit: int) -> tuple[int, int]:
     """Validate offset/limit per L5 and return them coerced to defaults.
 

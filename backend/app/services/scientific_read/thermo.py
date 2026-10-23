@@ -81,6 +81,7 @@ from app.schemas.reads.scientific_thermo import (
 from app.services.calculation_levels import RoleCalcInfo, derive_levels
 from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.common import (
+    software_names_by_calculation,
     build_pagination,
     fetch_review_badges,
     reject_client_sort,
@@ -323,7 +324,7 @@ def get_species_thermo(
 
     # Software filter: ANY linked source calculation ran in a software of this name.
     if request.software is not None:
-        software_by_calc = _software_names_by_calculation(
+        software_by_calc = software_names_by_calculation(
             session,
             {sc.calculation_id for t, _ in classified for sc in sources_by_thermo.get(t.id, [])},
         )
@@ -1212,19 +1213,6 @@ def _linked_lot_ids(sources: list[ThermoSourceCalculation]) -> set[int]:
         for sc in sources
         if sc.calculation is not None and sc.calculation.lot_id is not None
     }
-
-
-def _software_names_by_calculation(session: Session, calculation_ids: set[int]) -> dict[int, str]:
-    """Software name that ran each calculation, in one statement (the software filter's match set)."""
-    if not calculation_ids:
-        return {}
-    rows = session.execute(
-        select(Calculation.id, Software.name)
-        .join(SoftwareRelease, SoftwareRelease.id == Calculation.software_release_id)
-        .join(Software, Software.id == SoftwareRelease.software_id)
-        .where(Calculation.id.in_(calculation_ids))
-    ).all()
-    return {calc_id: name for calc_id, name in rows}
 
 
 def _build_provenance(
