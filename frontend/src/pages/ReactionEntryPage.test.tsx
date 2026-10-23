@@ -954,7 +954,7 @@ describe("ReactionEntryPage -- evidence checklist: collapsible, and presence-onl
 describe("ReactionEntryPage -- the References disclosure names every kinetics record's provenance", () => {
     /** The default kinetics record, with its own kinetics ref and its own level / software / workflow-tool refs. */
     function kineticsWithRefs(n: number) {
-        const base = (mockFull().kinetics as Array<Record<string, any>>)[0]
+        const base = (mockFull().kinetics as Array<{ provenance: Record<string, unknown> } & Record<string, unknown>>)[0]
         return {
             ...base,
             kinetics_ref: `kin_multi${n}`,
