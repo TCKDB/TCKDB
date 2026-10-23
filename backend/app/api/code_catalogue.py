@@ -942,6 +942,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "for a bonded species, so a componentless Melius total "
                 "is left alone on either kind of target."
             )),
+    ApiCode("browse_parameter_removed", 422, Surface.coded_exception,
+            "backend/app/schemas/reads/removed_parameters.py",
+            shape=Shape.relationship,
+            note=(
+                "collapse and selection_policy asked a browse read or an export to pick one record. Neither "
+                "exists: reads list every matching record in display order and the select endpoints answer "
+                "'give me one'. context carries the parameter and the select endpoint, when there is one."
+            )),
     ApiCode("bundle_too_large", 413, Surface.response_literal,
             "backend/app/api/bundle_limits.py",
             shape=Shape.relationship,
@@ -1458,6 +1466,22 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "reaction_entry -- the corpus total -- so it is logged and "
                 "appears in neither context nor detail. See the disclosure "
                 "line on Shape."
+            )),
+    ApiCode("export_ref_unmatched", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/export.py",
+            shape=Shape.relationship,
+            note=(
+                "A CHEMKIN export named a thermo / transport / kinetics ref that is not a candidate of any "
+                "species or reaction in the export. context.unmatched lists each record kind and ref."
+            )),
+    ApiCode("export_selection_ambiguous", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/export.py",
+            shape=Shape.relationship,
+            note=(
+                "A format that holds one record per species or reaction (CHEMKIN) was asked to export subjects "
+                "with several candidate records and was not told which. The exporter never picks. "
+                "context.ambiguous names each subject with its candidate refs; context.resolve_with lists the "
+                "ways out (filters, select endpoint, explicit refs)."
             )),
     ApiCode("export_seed_empty", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/export.py"),
@@ -2097,6 +2121,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("owner_missing", 404, Surface.coded_exception,
             "backend/app/services/scientific_read/calculations.py"),
+    ApiCode("parameter_renamed", 422, Surface.coded_exception,
+            "backend/app/schemas/reads/removed_parameters.py",
+            shape=Shape.relationship,
+            note=(
+                "temperature_min / temperature_max on the thermo and kinetics reads were renamed "
+                "coverage_temperature_min_k / coverage_temperature_max_k: they never filtered. context carries "
+                "the old and the new name."
+            )),
     ApiCode("parameter_value_requires_key", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/calculations_search.py"),
     ApiCode("path_search_result_not_found", 404, Surface.coded_exception,

@@ -64,19 +64,8 @@ class ProfiledRequestEcho(BaseModel):
     profile_release_ref: str | None = None
 
 
-class CollapseMode(str, Enum):
-    """Collapse axis values per spec D4 / Phase 2.1.
-
-    ``all``    return every eligible record after filter/sort/pagination.
-    ``first``  return at most one record (zero or one) after filter and sort.
-    """
-
-    all = "all"
-    first = "first"
-
-
 class SelectionPolicy(str, Enum):
-    """Named, read-time *administrative* order used when ``collapse=first``.
+    """Named, read-time *administrative* order a ``.../select`` request states (``policy``).
 
     A selection policy makes "show me one product for this species form" an
     *explicit, named* choice rather than an implicit one. Every policy is an

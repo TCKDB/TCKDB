@@ -27,8 +27,6 @@ from typing import Any
 
 from tckdb_schemas.coded_error import CodedValidationError
 
-BROWSE_PARAMETER_REMOVED = "browse_parameter_removed"
-PARAMETER_RENAMED = "parameter_renamed"
 
 #: The parameters a browse read used to take in order to return one record instead of the list.
 PICKING_PARAMETERS: tuple[str, ...] = ("collapse", "selection_policy")
@@ -61,7 +59,7 @@ class RemovedParameters:
         for old, new in self.renamed.items():
             if old in present:
                 raise CodedValidationError(
-                    PARAMETER_RENAMED,
+                    "parameter_renamed",
                     f"{old} was renamed {new}. It never filtered the records; it only sets the window the "
                     f"temperature_coverage field of each record is computed against. Use {new}.",
                     context={"parameter": old, "replacement": new},
@@ -76,7 +74,7 @@ class RemovedParameters:
                     else "This record kind has no select endpoint yet; filter the list instead."
                 )
                 raise CodedValidationError(
-                    BROWSE_PARAMETER_REMOVED,
+                    "browse_parameter_removed",
                     f"{name} is not accepted: TCKDB never picks one record for you on a read or an export; it "
                     f"returns every matching record in display order. {where}",
                     context={"parameter": name, "select_endpoint": self.select_endpoint},
