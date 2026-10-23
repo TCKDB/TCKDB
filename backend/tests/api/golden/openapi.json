@@ -43873,7 +43873,7 @@
         "type": "object"
       },
       "ReviewStatusSummary": {
-        "description": "Counts per review status across a candidate record set (pre-collapse).",
+        "description": "Counts per review status across a candidate record set.",
         "properties": {
           "approved": {
             "default": 0,
@@ -86881,7 +86881,7 @@
     },
     "/api/v1/scientific/export/ml/reactions.ndjson": {
       "get": {
-        "description": "Stream a reaction-centric, RDB7-compatible ML dataset as NDJSON.\n\nOne record per ``reaction_entry`` carrying reactant/product SMILES,\nArrhenius kinetics with LOT labels, a best-effort electronic forward\nbarrier, a reaction enthalpy, and the TS geometry+energy. The RDB7\ncolumn mapping is documented on\n``app.services.scientific_read.ml_dataset.MLReactionRecord``.\nCurator/admin only.\n\n``min_review_status`` defaults to ``approved``; on a pre-curation\ncorpus (nothing approved yet) that exports zero records — pass\n``min_review_status=not_reviewed`` (the lowest rank) to export\nuncurated data. ``under_review`` is *not* low enough: since revision\n``c1d8f4a25b30`` a deposited record sits at ``not_reviewed`` until a\ncurator picks it up, so ``under_review`` selects only records someone\nis genuinely working on.\n\n:raises ValueError: 422 for an empty/unresolvable seed or an ``all``\n    request over the export cap.",
+        "description": "Stream a reaction-centric, RDB7-compatible ML dataset as NDJSON.\n\nOne record per ``reaction_entry`` carrying reactant/product SMILES,\nArrhenius kinetics with LOT labels, every transition-state entry\n(``transition_states``: energy and geometry per calculation and level), one\nelectronic forward barrier per entry and per level at which the TS and all\nreactants have an energy (``barriers``; ``barriers_unavailable`` names each\nentry with none, with the reason), and a reaction enthalpy. No transition\nstate, level or frequency result is chosen, and absolute energies at\ndifferent levels are never compared. The RDB7\ncolumn mapping is documented on\n``app.services.scientific_read.ml_dataset.MLReactionRecord``.\nCurator/admin only.\n\n``min_review_status`` defaults to ``approved``; on a pre-curation\ncorpus (nothing approved yet) that exports zero records — pass\n``min_review_status=not_reviewed`` (the lowest rank) to export\nuncurated data. ``under_review`` is *not* low enough: since revision\n``c1d8f4a25b30`` a deposited record sits at ``not_reviewed`` until a\ncurator picks it up, so ``under_review`` selects only records someone\nis genuinely working on.\n\n:raises ValueError: 422 for an empty/unresolvable seed or an ``all``\n    request over the export cap.",
         "operationId": "export_ml_reactions_api_v1_scientific_export_ml_reactions_ndjson_get",
         "parameters": [
           {
@@ -87070,7 +87070,7 @@
     },
     "/api/v1/scientific/export/ml/species.ndjson": {
       "get": {
-        "description": "Stream a species/conformer-centric ML dataset as NDJSON (JSONL).\n\nOne record per ``(species_entry, geometry)`` carrying species identity,\nCartesian geometry, LOT-labelled electronic energies, frequencies,\noptional Hessian, and the species thermo summary. Curator/admin only.\n\n``min_review_status`` defaults to ``approved``; on a pre-curation\ncorpus (nothing approved yet) that exports zero records — pass\n``min_review_status=not_reviewed`` (the lowest rank) to export\nuncurated data. ``under_review`` is *not* low enough: since revision\n``c1d8f4a25b30`` a deposited record sits at ``not_reviewed`` until a\ncurator picks it up, so ``under_review`` selects only records someone\nis genuinely working on.\n\n:raises ValueError: 422 for an empty/unresolvable seed, an unknown\n    ``lot_ref``, or an ``all`` request over the export cap.",
+        "description": "Stream a species/conformer-centric ML dataset as NDJSON (JSONL).\n\nOne record per ``(species_entry, geometry)`` carrying species identity,\nCartesian geometry, LOT-labelled electronic energies, ``frequency_results``\nand ``hessians`` (lists: one per calculation, each naming its level), and\n``thermos`` (a list). Nothing is picked among them. Curator/admin only.\n\n``min_review_status`` defaults to ``approved``; on a pre-curation\ncorpus (nothing approved yet) that exports zero records — pass\n``min_review_status=not_reviewed`` (the lowest rank) to export\nuncurated data. ``under_review`` is *not* low enough: since revision\n``c1d8f4a25b30`` a deposited record sits at ``not_reviewed`` until a\ncurator picks it up, so ``under_review`` selects only records someone\nis genuinely working on.\n\n:raises ValueError: 422 for an empty/unresolvable seed, an unknown\n    ``lot_ref``, or an ``all`` request over the export cap.",
         "operationId": "export_ml_species_api_v1_scientific_export_ml_species_ndjson_get",
         "parameters": [
           {
