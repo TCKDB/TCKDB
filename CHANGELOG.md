@@ -22,6 +22,26 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Browse is a browse: no evidence keys, no silent pick (2026-10-23)
+
+Browse, filter and select are three operations, and a browse read now does only the first (`docs/specs/browse_order.md`).
+
+- **One order.** Every browse list orders by the record's own review rank, then deposition time (`created_at` descending), then id. Evidence is
+  no longer a key: `has_kinetics`, `has_transition_state` (reactions), `has_entries` (species) and the calculation `quality_rank` are gone from the
+  orders and the key catalogue; they stay filters. Thermo and kinetics search order by the record, not its parent entry. A non-default order the
+  request asked for (`ranking=`, `mode=`) is labelled in `request.sort.requested_by`.
+- **No read picks.** `collapse` and `selection_policy` are removed from every browse read, and from the exports; sending either is 422
+  `browse_parameter_removed` naming the select endpoint. `effective_order` and `selection_policy_applied` are gone with them.
+- **Exports never pick.** The native NDJSON and ML exports list every qualifying record (`tckdb.export` and `tckdb.ml` are format version 2; the ML
+  species record carries `thermos`, a list). CHEMKIN takes `thermo_refs` / `transport_refs` / `kinetics_refs` and refuses with 422
+  `export_selection_ambiguous` (every ambiguous species or reaction, with its candidate refs) or `export_ref_unmatched`.
+- **Filters match any linked calculation.** `level_of_theory_*` and `software` on thermo and kinetics no longer read one role-prioritised "primary"
+  calculation. This also fixes the kinetics `software` filter, which raised `AttributeError` on any reaction with a source calculation.
+- **Honest names.** `temperature_min` / `temperature_max` on the thermo and kinetics reads filtered nothing; they are now
+  `coverage_temperature_min_k` / `coverage_temperature_max_k` (the old names are 422 `parameter_renamed`).
+- **Every list endpoint's echo is tested** against the order it served, on rows whose review status, time and id disagree.
+- Packages: `tckdb-schemas` 0.132.0 (four refusal codes), `tckdb-client` 0.162.0, `tckdb-mcp` 0.12.0. No schema or migration change.
+
 ## Method-preference rules removed; one browse order, named (2026-10-22)
 
 TCKDB no longer ranks one method above another, anywhere. The manifest-backed rules (E1 G4 over G3, the XYG3 versus B3LYP barrier,
