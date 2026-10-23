@@ -22,10 +22,35 @@ from typing import Any
 
 import pytest
 
-from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+from app.db.models.common import (
+    CalculationType,
+    EnergyCorrectionSchemeKind,
+    FrequencyScaleKind,
+    NetworkChannelKind,
+    NetworkKineticsModelKind,
+    NetworkStateKind,
+    RecordReviewStatus,
+    SubmissionRecordType,
+)
 from app.schemas.reads import scientific_common
 from app.schemas.reads.scientific_common import ORDER_KEY_CATALOG, REVIEW_RANK
 from tests.services.scientific_read._factories import (
+    attach_artifact,
+    attach_network_state_participant,
+    attach_sp_result,
+    make_calculation,
+    make_energy_correction_scheme,
+    make_frequency_scale_factor,
+    make_lot,
+    make_conformer_group,
+    make_network,
+    make_network_channel,
+    make_network_kinetics,
+    make_network_solve,
+    make_network_state,
+    make_observation,
+    make_transition_state,
+    make_transition_state_entry,
     make_chem_reaction,
     make_kinetics,
     make_reaction_entry,
@@ -122,6 +147,8 @@ class Seeded:
     review_targets: list[tuple[SubmissionRecordType, int]]
     extra: dict[str, Callable[[int], Any]] = field(default_factory=dict)
     post_body: dict | None = None
+    #: Public ref of each row when the row has none of its own (an artifact is named by its calculation).
+    row_refs: list[str] | None = None
     specs: list[tuple[RecordReviewStatus, int]] = field(default_factory=lambda: list(ROW_SPECS))
     #: Rows beyond this count are listed but not part of the comparison (an endpoint that lists a parent as well).
     created_attr: Callable[[Any], datetime] = lambda row: row.created_at
@@ -184,9 +211,16 @@ def _value(seeded: Seeded, index: int, key: str) -> Any:
     raise AssertionError(f"echoed key {key!r} has no value for this case: add it to Seeded.extra")
 
 
-def _order_by(seeded: Seeded, keys: list[tuple[str, str]]) -> list[int]:
-    """Row indexes ordered by ``keys`` (name, direction), the way the echo says. A null sorts last."""
+def _order_by(seeded: Seeded, keys: list[tuple[str, str]], *, ties_wrong_way: str | None = None) -> list[int]:
+    """Row indexes ordered by ``keys`` (name, direction), the way the echo says. A null sorts last.
+
+    ``ties_wrong_way`` is the echo's own ``id`` direction: rows the keys leave tied are then left in the OPPOSITE
+    order, so ordering by one key alone cannot coincide with the served order by luck of the creation order."""
     order = list(range(len(seeded.rows)))
+    if ties_wrong_way == "desc":
+        pass  # index ascending is the id-ascending order: the wrong way for a descending id
+    elif ties_wrong_way == "asc":
+        order.reverse()
     for key, direction in reversed(keys):  # stable sorts, least significant key first
         def sort_key(i, key=key):
             v = _value(seeded, i, key)
@@ -205,7 +239,8 @@ def served_indexes(client, seeded: Seeded) -> tuple[list[int], dict]:
     else:
         body = client.get(seeded.url).json()
     assert "records" in body, body
-    refs = {row.public_ref: i for i, row in enumerate(seeded.rows)}
+    row_refs = seeded.row_refs or [row.public_ref for row in seeded.rows]
+    refs = {ref: i for i, ref in enumerate(row_refs)}
     served = [refs[seeded.ref_of(rec)] for rec in body["records"] if seeded.ref_of(rec) in refs]
     return served, body
 
@@ -220,9 +255,10 @@ def check_echo_matches_served_order(client, seeded: Seeded) -> None:
         f"the response says it is ordered by {echoed}, which orders the rows {expected}; it served {served}"
     )
     # The seed must be able to tell the keys apart: no single echoed key may reproduce the served order on its own.
+    id_direction = dict(echoed).get("id")
     for key, direction in echoed:
         if key in ("review_rank", "created_at", "id"):
-            assert _order_by(seeded, [(key, direction)]) != served, (
+            assert _order_by(seeded, [(key, direction)], ties_wrong_way=id_direction) != served, (
                 f"the seed cannot distinguish {key!r}: ordering by it alone gives the served order"
             )
 
@@ -328,7 +364,274 @@ def seed_species(db_session, *, browse: bool) -> Seeded:
 
 
 
-EXTRA_CASES: dict[str, Callable[[Any], Seeded]] = {}
+def _entry(db_session, prefix):
+    species = make_species(db_session, smiles="C=O", inchi_key=next_inchi_key(prefix))
+    return species, make_species_entry(db_session, species)
+
+
+def seed_calculations(db_session, *, route: str, ranking: str | None = None) -> Seeded:
+    _species, entry = _entry(db_session, "OC")
+    lot = make_lot(db_session) if ranking == "lowest_energy" else None
+    calcs = [
+        make_calculation(
+            db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot.id if lot else None
+        )
+        for _ in range(5)
+    ]
+    skew(db_session, calcs, ROW_SPECS)
+    extra: dict = {}
+    if ranking == "lowest_energy":
+        energies = [-2.0, -4.0, None, -1.0, -3.0]  # no energy on row 2: it sorts last
+        for calc, energy in zip(calcs, energies):
+            if energy is not None:
+                attach_sp_result(db_session, calculation=calc, electronic_energy_hartree=energy)
+        extra["energy_hartree"] = lambda i: energies[i]
+    if route == "calculations":
+        url = f"{API}/calculations/search?species_entry_ref={entry.public_ref}"
+    else:
+        url = f"{API}/species-calculations/search?species_entry_ref={entry.public_ref}"
+        if ranking:
+            url += f"&ranking={ranking}"
+        if ranking == "lowest_energy":
+            url += f"&calculation_type=sp&level_of_theory_ref={lot.public_ref}"
+    return Seeded(
+        url, calcs, finder("calculation_ref"), [(SubmissionRecordType.calculation, c.id) for c in calcs], extra=extra
+    )
+
+
+def seed_conformers(db_session) -> Seeded:
+    _species, entry = _entry(db_session, "OCG")
+    groups = [make_conformer_group(db_session, entry, label=f"g{i}") for i in range(5)]
+    skew(db_session, groups, ROW_SPECS)
+    return Seeded(
+        f"{API}/conformers/search?species_entry_ref={entry.public_ref}",
+        groups,
+        finder("conformer_group_ref"),
+        [(SubmissionRecordType.conformer_group, g.id) for g in groups],
+    )
+
+
+def seed_transition_states(db_session, *, browse: bool) -> Seeded:
+    _chem, reaction_entries = _reaction_entries(db_session, n=1, prefix="OTS")
+    reaction_entry = reaction_entries[0]
+    tses = [
+        make_transition_state_entry(
+            db_session, transition_state=make_transition_state(db_session, reaction_entry=reaction_entry, label=f"t{i}")
+        )
+        for i in range(5)
+    ]
+    skew(db_session, tses, ROW_SPECS)
+    url = (
+        f"{API}/transition-states/browse"
+        if browse
+        else f"{API}/transition-states/search?reaction_entry_ref={reaction_entry.public_ref}"
+    )
+    return Seeded(
+        url,
+        tses,
+        finder("transition_state_entry_ref"),
+        [(SubmissionRecordType.transition_state_entry, t.id) for t in tses],
+    )
+
+
+def seed_networks(db_session, *, browse: bool) -> Seeded:
+    networks = [make_network(db_session, name=f"net-{i}-{next_inchi_key('ON')}") for i in range(5)]
+    skew(db_session, networks, ROW_SPECS)
+    url = f"{API}/networks/browse" if browse else f"{API}/networks/search?has_solves=false"
+    return Seeded(url, networks, finder("network_ref"), [(SubmissionRecordType.network, n.id) for n in networks])
+
+
+def seed_network_solves(db_session) -> Seeded:
+    network = make_network(db_session, name=f"net-{next_inchi_key('ONS')}")
+    solves = [make_network_solve(db_session, network=network) for _ in range(5)]
+    skew(db_session, solves, ROW_SPECS)
+    return Seeded(
+        f"{API}/network-solves/search?network_ref={network.public_ref}",
+        solves,
+        finder("network_solve_ref"),
+        [(SubmissionRecordType.network_solve, s.id) for s in solves],
+    )
+
+
+def seed_network_kinetics(db_session) -> Seeded:
+    """A network kinetics row has no review row of its own: it inherits its solve's. Each row sits under its own solve,
+    so the five solves carry the five statuses."""
+    network = make_network(db_session, name=f"net-{next_inchi_key('ONK')}")
+    species_entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("ONKS")))
+    states = []
+    for label in ("a", "b"):
+        state = make_network_state(
+            db_session, network=network, kind=NetworkStateKind.well, composition_hash=f"{label}{'0' * 63}"
+        )
+        attach_network_state_participant(db_session, state=state, species_entry=species_entry)
+        states.append(state)
+    channel = make_network_channel(
+        db_session, network=network, source_state=states[0], sink_state=states[1], kind=NetworkChannelKind.isomerization
+    )
+    solves = [make_network_solve(db_session, network=network) for _ in range(5)]
+    rows = [
+        make_network_kinetics(db_session, channel=channel, solve=s, model_kind=NetworkKineticsModelKind.plog)
+        for s in solves
+    ]
+    skew(db_session, rows, ROW_SPECS)
+    return Seeded(
+        f"{API}/network-kinetics/search?network_ref={network.public_ref}",
+        rows,
+        finder("network_kinetics_ref"),
+        [(SubmissionRecordType.network_solve, s.id) for s in solves],
+    )
+
+
+def seed_observations(db_session) -> Seeded:
+    _species, entry = _entry(db_session, "OO")
+    rows = [make_observation(db_session, species_entry=entry, scalar_value=1.0 + i) for i in range(5)]
+    skew(db_session, rows, ROW_SPECS)
+    return Seeded(
+        f"{API}/species-entries/{entry.public_ref}/observations",
+        rows,
+        finder("observation_ref"),
+        [(SubmissionRecordType.molecular_property_observation, o.id) for o in rows],
+    )
+
+
+def seed_artifacts(db_session) -> Seeded:
+    """One artifact per calculation. The artifact orders by its calculation's review, its own time and its own id."""
+    _species, entry = _entry(db_session, "OA")
+    calcs = [make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id) for _ in range(5)]
+    artifacts = [
+        attach_artifact(db_session, calculation=c, filename=f"o{i}.log", sha256=f"{i:x}" * 64)
+        for i, c in enumerate(calcs)
+    ]
+    skew(db_session, artifacts, ROW_SPECS)
+    return Seeded(
+        f"{API}/artifacts/search?species_entry_ref={entry.public_ref}",
+        artifacts,
+        finder("calculation_ref"),
+        [(SubmissionRecordType.calculation, c.id) for c in calcs],
+        extra={
+            "artifact_created_at": lambda i: artifacts[i].created_at.timestamp(),
+            "artifact_id": lambda i: artifacts[i].id,
+        },
+        row_refs=[c.public_ref for c in calcs],
+    )
+
+
+EXTRA_CASES: dict[str, Callable[[Any], Seeded]] = {
+    "calculations-search": lambda db: seed_calculations(db, route="calculations"),
+    "species-calculations-default": lambda db: seed_calculations(db, route="species"),
+    "species-calculations-latest": lambda db: seed_calculations(db, route="species", ranking="latest"),
+    "species-calculations-earliest": lambda db: seed_calculations(db, route="species", ranking="earliest"),
+    "species-calculations-lowest-energy": lambda db: seed_calculations(db, route="species", ranking="lowest_energy"),
+    "conformers-search": seed_conformers,
+    "transition-states-search": lambda db: seed_transition_states(db, browse=False),
+    "transition-states-browse": lambda db: seed_transition_states(db, browse=True),
+    "networks-search": lambda db: seed_networks(db, browse=False),
+    "networks-browse": lambda db: seed_networks(db, browse=True),
+    "network-solves-search": seed_network_solves,
+    "network-kinetics-search": seed_network_kinetics,
+    "observations": seed_observations,
+    "artifacts-search": seed_artifacts,
+}
+
+
+# --- reference lists and structure search: keys that are values of the record, not review state ----------------------
+
+
+def _used(db_session, lot) -> None:
+    """A level of theory is listed once a calculation uses it (usage-derived gate)."""
+    _species, entry = _entry(db_session, f"OU{lot.id}")
+    make_calculation(db_session, species_entry_id=entry.id, lot_id=lot.id)
+
+
+#: Reference lists have no review state: every row is not_reviewed and review decides nothing.
+_UNREVIEWED = [(RecordReviewStatus.not_reviewed, 0)] * 5
+
+
+def seed_levels_of_theory(db_session, *, browse: bool) -> Seeded:
+    # Creation order disagrees with (method, basis); ties on both are separated by the id alone.
+    if browse:
+        methods = ["pbe", "b3lyp", "pbe", "b3lyp", "b3lyp"]
+        solvents = [None, None, None, None, "water"]  # row 4 repeats row 1's (method, basis)
+    else:
+        methods = ["m"] * 5  # ``search`` needs a filter, so one method throughout
+        solvents = [f"s{i}" for i in range(5)]
+    bases = ["def2", "6-31g", "cc", "def2", "6-31g"]
+    lots = [make_lot(db_session, method=m, basis=b, solvent=s) for m, b, s in zip(methods, bases, solvents)]
+    for lot in lots:
+        _used(db_session, lot)
+    url = f"{API}/level-of-theories/browse" if browse else f"{API}/level-of-theories/search?method=m"
+    return Seeded(
+        url,
+        lots,
+        finder("level_of_theory_ref"),
+        [(SubmissionRecordType.calculation, 0)] * 5,
+        extra={"method": lambda i: methods[i], "basis": lambda i: bases[i]},
+        specs=_UNREVIEWED,
+    )
+
+
+def seed_frequency_scale_factors(db_session) -> Seeded:
+    kinds = [FrequencyScaleKind.zpe, FrequencyScaleKind.fundamental, FrequencyScaleKind.zpe,
+             FrequencyScaleKind.fundamental, FrequencyScaleKind.fundamental]
+    values = [0.97, 0.99, 0.95, 0.98, 0.99]  # rows 1 and 4: same kind and value; only the id separates them
+    rows = []
+    for i, (kind, value) in enumerate(zip(kinds, values)):
+        lot = make_lot(db_session, method="fsf", basis=f"b{i}")
+        rows.append(make_frequency_scale_factor(db_session, lot=lot, scale_kind=kind, value=value))
+    return Seeded(
+        f"{API}/frequency-scale-factors/search?method=fsf",
+        rows,
+        finder("frequency_scale_factor_ref"),
+        [(SubmissionRecordType.calculation, 0)] * 5,
+        extra={"scale_kind": lambda i: kinds[i].value, "value": lambda i: values[i]},
+        specs=_UNREVIEWED,
+    )
+
+
+def seed_energy_correction_schemes(db_session) -> Seeded:
+    kinds = [EnergyCorrectionSchemeKind.soc, EnergyCorrectionSchemeKind.atom_energy, EnergyCorrectionSchemeKind.soc,
+             EnergyCorrectionSchemeKind.atom_energy, EnergyCorrectionSchemeKind.atom_energy]
+    names = ["z", "y", "a", "x", "y"]  # rows 1 and 4 share kind and name: only the id separates them
+    rows = [
+        make_energy_correction_scheme(db_session, name=n, kind=k, lot=make_lot(db_session, method="ecs", basis=f"b{i}"))
+        for i, (n, k) in enumerate(zip(names, kinds))
+    ]
+    return Seeded(
+        f"{API}/energy-correction-schemes/search?method=ecs",
+        rows,
+        finder("energy_correction_scheme_ref"),
+        [(SubmissionRecordType.calculation, 0)] * 5,
+        extra={"scheme_kind": lambda i: kinds[i].value, "name": lambda i: names[i]},
+        specs=_UNREVIEWED,
+    )
+
+
+def seed_structure_search(db_session, *, mode: str) -> Seeded:
+    """Five entries of one species (all equally similar to the query): the entry id and the review rank decide."""
+    species = make_species(db_session, smiles="CCO", inchi_key="LFQSCWFLJHTTHZ-UHFFFAOYSA-N")  # ethanol's own key: exact matches on it
+    entries = [make_species_entry(db_session, species, stereo_label=f"e{i}") for i in range(5)]
+    query = {"exact": "query_smiles=CCO&mode=exact", "substructure": "query_smiles=CC&mode=substructure",
+             "similarity": "query_smiles=CCO&mode=similarity"}[mode]
+    return Seeded(
+        f"{API}/species/structure-search?{query}",
+        entries,
+        finder("species_entry_ref"),
+        [(SubmissionRecordType.species_entry, e.id) for e in entries],
+        extra={"species_entry_id": lambda i: entries[i].id, "similarity_score": lambda i: 1.0},
+    )
+
+
+EXTRA_CASES.update(
+    {
+        "levels-of-theory-browse": lambda db: seed_levels_of_theory(db, browse=True),
+        "levels-of-theory-search": lambda db: seed_levels_of_theory(db, browse=False),
+        "frequency-scale-factors-search": seed_frequency_scale_factors,
+        "energy-correction-schemes-search": seed_energy_correction_schemes,
+        "structure-search-exact": lambda db: seed_structure_search(db, mode="exact"),
+        "structure-search-substructure": lambda db: seed_structure_search(db, mode="substructure"),
+        "structure-search-similarity": lambda db: seed_structure_search(db, mode="similarity"),
+    }
+)
 
 
 CASES: dict[str, Callable[[Any], Seeded]] = {
