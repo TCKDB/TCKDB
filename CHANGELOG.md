@@ -39,6 +39,15 @@ Browse, filter and select are three operations, and a browse read now does only 
   calculation. This also fixes the kinetics `software` filter, which raised `AttributeError` on any reaction with a source calculation.
 - **Honest names.** `temperature_min` / `temperature_max` on the thermo and kinetics reads filtered nothing; they are now
   `coverage_temperature_min_k` / `coverage_temperature_max_k` (the old names are 422 `parameter_renamed`).
+- **Hidden calculations match no filter.** The thermo level-of-theory and software filters ignore a source calculation the read profile hides
+  (curated), as the kinetics ones already did; a record whose only level-B link is an unreviewed calculation is not found by asking for level B.
+- **The ML export picks nothing either.** The ML reactions record lists every transition-state entry with its energy and geometry per level
+  (`transition_states`), one barrier per entry and per level at which the TS and every reactant have an energy (`barriers`, each inside one level;
+  absolute energies at different levels are never compared), and names each entry with none (`barriers_unavailable`). The ML species record
+  carries `frequency_results` and `hessians` as lists keyed by calculation and level. (`tckdb.ml` version 2.)
+- **CHEMKIN** leaves transport out entirely when `include_transport` is false, and reports unmatched refs and ambiguous subjects in one 422.
+- **`post_collapse_total` is removed** from every pagination block, and `collapse` / `selection_policy` are refused on every scientific operation
+  (a router-level guard), not only where they once worked.
 - **Every list endpoint's echo is tested** against the order it served, on rows whose review status, time and id disagree.
 - Packages: `tckdb-schemas` 0.132.0 (four refusal codes), `tckdb-client` 0.162.0, `tckdb-mcp` 0.12.0. No schema or migration change.
 

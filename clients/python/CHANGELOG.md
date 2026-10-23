@@ -13,8 +13,14 @@ No read and no export picks a record for you. Browse reads list every match in d
 - A thermo and a kinetics record carry `created_at` (deposition time), the second key of the display order. `OrderEcho` gains `requested_by`
   (`"ranking=lowest_energy"`, `"mode=substructure"`; `None` for the default order). The statmech and transport `effective_order`,
   `selection_policy` and `selection_policy_applied` echoes are gone.
-- `iter_paginated_records` no longer reads `collapse`; it follows `pagination.total`, and treats a `post_collapse_total` that differs from `total`
-  as malformed.
+- `pagination.post_collapse_total` is gone (the server no longer sends it and the `Pagination` type drops it); `iter_paginated_records` no longer
+  reads `collapse` and follows `pagination.total`.
+- `export_ndjson` and `export_chemkin` no longer take `selection_policy` (the server refuses it). `export_chemkin` takes `thermo_refs`,
+  `transport_refs` and `kinetics_refs`: Chemkin holds one record per species or reaction and the server never picks, so name the record where a
+  species or reaction has several candidates, or the call fails with 422 `export_selection_ambiguous` (which lists every ambiguous subject).
+- The ML species export's record carries `thermos`, `frequency_results` and `hessians` (lists); the ML reactions record carries
+  `transition_states`, `barriers` and `barriers_unavailable` in place of `transition_state` / `barrier`. Format `tckdb.ml` version 2.
+- Requires `tckdb-schemas>=0.132.0`.
 - `RejectionCode` gains `browse_parameter_removed`, `parameter_renamed`, `export_selection_ambiguous` and `export_ref_unmatched`.
 
 ## 0.161.0 - 2026-10-22
