@@ -9,7 +9,7 @@ Requirement 10 remains ongoing as each surface expands.
 - A declared filter is either enforced or rejected. It must never be accepted and ignored.
 - Public refs are stable identifiers. Integer database IDs are deployment-policy fields and are optional in hosted response schemas.
 - An include-gated section that the caller did not request is **omitted** from the response, not returned as `null`. That is the rule and it now holds on every scientific read surface. A key that *is* present and `null` therefore says something about the data — this record has no NASA-9 polynomial, no Chebyshev fit, no PLOG entries — and never about the request. See [Include-gated sections](#include-gated-sections-absent-means-you-did-not-ask) for the three-state rule and its hard boundary.
-- Pagination metadata reports `total` for the complete filtered candidate set before collapse and `post_collapse_total` after collapse but before page slicing. Collapse is applied first, so `collapse=first&offset=1` returns an empty page while retaining `total >= 1` and `post_collapse_total = 1`.
+- Pagination metadata reports `total` for the complete filtered candidate set. No read collapses its records to one, so `post_collapse_total` (kept so older clients keep parsing) always equals `total`. `collapse` and `selection_policy` are refused with 422 `browse_parameter_removed`; "give me one" is the select endpoints.
 
 ## Include-gated sections: absent means "you did not ask"
 

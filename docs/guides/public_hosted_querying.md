@@ -93,13 +93,13 @@ public examples. See the [Internal IDs](#internal-ids) section below.
 Refs chain naturally:
 
 ```python
-thermo = client.search_thermo(smiles="O", collapse="first")
+thermo = client.search_thermo(smiles="O")
 species_entry_ref = thermo["records"][0]["species"]["species_entry_ref"]
 
 detail = client.get_species_thermo(
     species_entry_ref,                      # ref accepted as the handle
-    temperature_min=300,
-    temperature_max=2000,
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=2000,
 )
 ```
 
@@ -114,9 +114,8 @@ Thermo by species:
 ```python
 client.search_thermo(
     smiles="O",
-    temperature_min=300,
-    temperature_max=2000,
-    collapse="first",
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=2000,
     include=["provenance", "review"],
 )
 ```
@@ -127,8 +126,8 @@ Kinetics by reactants/products:
 client.search_kinetics(
     reactants=["C", "[OH]"],
     products=["[CH3]", "O"],
-    temperature_min=500,
-    temperature_max=2000,
+    coverage_temperature_min_k=500,
+    coverage_temperature_max_k=2000,
     pressure_bar=1.0,
     include=["provenance", "review"],
 )
@@ -149,7 +148,6 @@ client.search_species_calculations(
     level_of_theory_ref="lot_...",
     calculation_type="sp",
     ranking="lowest_energy",
-    collapse="first",
     limit=1,
     include=["provenance"],
 )
@@ -191,9 +189,8 @@ client = TCKDBClient(base_url="http://127.0.0.1:8010/api/v1")
 
 thermo = client.search_thermo(
     smiles="O",
-    temperature_min=300,
-    temperature_max=2000,
-    collapse="first",
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=2000,
     include=["provenance", "review"],
 )
 ```

@@ -22,7 +22,7 @@ a strength, and nothing here changes it.
 
 But a community user asking *"what is the TCKDB heat of formation for
 ethanol?"* was previously answered by `collapse=first` plus a named read-time
-`selection_policy` — a **deterministic read heuristic**, evaluated from record
+`selection_policy` (both since removed from the browse reads) — a **deterministic read heuristic**, evaluated from record
 data alone, persisting nothing. That is not an expert recommendation. Nobody
 signed it, no rationale exists, and re-running it after new data lands can
 silently change the answer with no record that it did.

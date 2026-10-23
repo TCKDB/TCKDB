@@ -34,7 +34,7 @@ In scope:
 - Conformer context surfaced when present (never fabricated)
 - Geometry surfaced as IDs by default; full XYZ deferred to a future include flag
 - Measurable ranking: `latest`, `earliest`, `lowest_energy`, `review_rank`
-- Standard collapse / pagination / review semantics from Phases 2/4/6
+- Standard pagination / review semantics from Phases 2/4/6 (no `collapse`: the search lists every match)
 - Pydantic response models reusing common fragments where possible
 
 Out of scope (v0):
@@ -154,12 +154,12 @@ fetching follow-up calculations after a `search_thermo` call. They are
 | `include_rejected` | bool | `false` | Opts in `review_status=rejected` records. |
 | `include_deprecated` | bool | `false` | Opts in `review_status=deprecated` records. |
 
-### Sort / collapse / pagination
+### Sort / pagination
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | `ranking` | enum | `default` | See [Ranking semantics](#ranking-semantics). |
-| `collapse` | enum | `all` | `all | first` per Phase 2.1 spec. |
+| `collapse` | removed | | Refused with 422 `browse_parameter_removed`. The search lists every matching calculation. |
 | `include` | list[str] | `[]` | See [Include tokens](#include-tokens). |
 | `offset` | int | `0` | L5 pagination. |
 | `limit` | int | `50` | Max 200. |
@@ -457,7 +457,6 @@ Standard scientific envelope:
     "filter": {...},
     "ranking": "lowest_energy",
     "sort": "energy_hartree,review_rank,created_at,id",
-    "collapse": "first",
     "include": ["provenance", "conformers", "review"]
   },
   "review_summary": {
@@ -713,7 +712,7 @@ ranking=lowest_energy without both exact comparability refs → 422 unsafe_lowes
 ranking=latest orders by created_at DESC
 ranking=earliest orders by created_at ASC
 NULLS LAST: a calc with null energy ranks below a calc with populated energy under lowest_energy
-collapse=first preserves plural records array; pagination.total reflects the pre-collapse count and pagination.post_collapse_total reflects the collapsed count
+collapse is refused with 422 browse_parameter_removed; pagination.post_collapse_total always equals pagination.total
 level_of_theory_id filters Calculation.lot_id directly
 method/basis filter via LoT join on the calculation row
 software filter via SoftwareRelease.software join
@@ -739,7 +738,7 @@ sort is deterministic across two identical calls
 GET /scientific/species-calculations/search returns 200 with envelope
 POST /scientific/species-calculations/search returns 200 with body
 POST rejects query-string keys (422 post_search_fields_must_be_in_body)
-GET with smiles + calculation_type=sp + ranking=lowest_energy + collapse=first returns 1 record
+GET with smiles + calculation_type=sp + ranking=lowest_energy lists every record, lowest energy first, and says request.sort.requested_by = ranking=lowest_energy
 404 on unknown species_entry_id
 empty records on unmatched chemistry
 OpenAPI exposes /api/v1/scientific/species-calculations/search with both GET and POST
@@ -749,7 +748,7 @@ endpoint tagged 'scientific'
 ### Client tests (Phase 7 implementation phase)
 
 ```
-client.search_species_calculations(smiles=..., calculation_type='sp', ranking='lowest_energy', collapse='first')
+client.search_species_calculations(smiles=..., calculation_type='sp', ranking='lowest_energy')
 client defaults to POST
 client supports method='GET'
 client serializes ranking and calculation_type

@@ -35,8 +35,9 @@ python examples/query_cookbook.py --recipe all --smiles "O" --json
   reactants/products, level of theory — not table primary keys. The
   backend returns the resolved identity (ref) along with the
   scientific payload, so chaining is "free."
-- **No client-side ranking.** Every method passes `collapse=`,
-  `ranking=`, `min_review_status=`, etc. straight to the backend.
+- **No client-side ranking.** Every method passes `ranking=`,
+  `min_review_status=`, etc. straight to the backend. No read takes `collapse`: a read lists every matching record, and
+  "give me one" is the `select_*` methods.
   The backend's documented sort order is the source of truth.
 
 ## Setup
@@ -74,7 +75,6 @@ Use as a context manager when convenient: `with TCKDBClient(...) as client:` —
 species = client.search_species(
     smiles="O",
     include=["review"],
-    collapse="all",
 )
 
 for record in species["records"]:
@@ -110,9 +110,8 @@ Common gotchas:
 ```python
 thermo = client.search_thermo(
     smiles="O",
-    temperature_min=300,
-    temperature_max=2000,
-    collapse="first",
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=2000,
     include=["provenance", "review"],
 )
 
@@ -173,9 +172,8 @@ kinetics = client.search_kinetics(
     reactants=["[CH3]", "[CH3]"],
     products=["CC"],
     direction="either",
-    temperature_min=300,
-    temperature_max=2000,
-    collapse="first",
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=2000,
     include=["provenance", "review"],
 )
 
@@ -195,7 +193,7 @@ Notes:
 - `direction="exact"` is **not** supported in v0 — the backend returns 422. It is not the same thing as `match="exact"`, which is supported and described below.
 - `match="contains"` (the default) means **set containment per role**: every species you name must appear in that role, and a side you leave out constrains nothing. So `search_kinetics(reactants=["CC"])` on its own is a real query — "kinetics for reactions consuming ethane" — and so is `search_reactions(products=["[OH]"])`. Counts are ignored in this mode: naming one `[OH]` matches a reaction consuming two.
 - `match="exact"` demands the whole equation, both sides, counts included. Use it when you mean one specific reaction and do not hold its `reaction_ref`. Before `match` existed this was the only behaviour, which is why a one-sided query used to come back empty.
-- Which record is first (`collapse="first"`) is decided by review status, then newest, the same order the export uses. `temperature_min` / `temperature_max` do not filter or re-rank; they only fill each record's `temperature_coverage`, and `evidence_completeness` is displayed, not ranked.
+- The first record in the list is first in display order (review status, then newest, then id); it is not a pick, and nothing is dropped. `coverage_temperature_min_k` / `coverage_temperature_max_k` do not filter or re-rank; they only fill each record's `temperature_coverage`, and `evidence_completeness` is displayed, not ranked.
 - Non-TS-backed kinetics (experimental, estimated, network-derived, …) come through with `provenance.transition_state_entry_ref = null` and every `ts_*_calculation_ref = null`. That's not an error — it's how the schema signals "no transition-state chain to follow."
 
 ---
@@ -209,7 +207,6 @@ Notes:
 calcs = client.search_species_calculations(
     smiles="O",
     calculation_type="sp",
-    collapse="all",
     include=["provenance", "review"],
 )
 
@@ -232,7 +229,6 @@ calcs_at_lot = client.search_species_calculations(
     smiles="O",
     calculation_type="sp",
     level_of_theory_ref="lot_…",
-    collapse="all",
 )
 ```
 
@@ -249,7 +245,6 @@ lowest = client.search_species_calculations(
     smiles="O",
     calculation_type="sp",
     ranking="lowest_energy",
-    collapse="first",
     include=["provenance", "review"],
 )
 
@@ -277,7 +272,6 @@ Rules:
 opt = client.search_species_calculations(
     smiles="O",
     calculation_type="opt",
-    collapse="first",
     include=["provenance", "review"],
 )
 
@@ -349,8 +343,7 @@ Concrete example: SMILES → thermo search → species-entry ref → entry-detai
 ```python
 summary = client.search_thermo(
     smiles="O",
-    temperature_min=300, temperature_max=2000,
-    collapse="first",
+    coverage_temperature_min_k=300, coverage_temperature_max_k=2000,
     include=["provenance", "review"],
 )
 
@@ -358,8 +351,7 @@ species_entry_ref = summary["records"][0]["species"]["species_entry_ref"]
 
 detail = client.get_species_thermo(
     species_entry_id=species_entry_ref,   # ref accepted on the path
-    temperature_min=300, temperature_max=2000,
-    collapse="first",
+    coverage_temperature_min_k=300, coverage_temperature_max_k=2000,
     include=["provenance", "review"],
 )
 ```
