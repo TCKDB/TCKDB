@@ -102,12 +102,15 @@ from app.api.routes.scientific import (
     transport,
 )
 from app.api.routes.scientific._profile import resolve_profile_dependency
+from app.api.routes.scientific._removed_parameters import refuse_picking_parameters
 
 # The ``?profile=`` dependency is attached to the whole router, not to
 # individual operations, so that *every* scientific endpoint declares and
 # honours the curated/exploratory contract. A profile that only some
 # endpoints support is worse than none: it teaches consumers to trust it.
-scientific_router = APIRouter(dependencies=[Depends(resolve_profile_dependency)])
+scientific_router = APIRouter(
+    dependencies=[Depends(resolve_profile_dependency), Depends(refuse_picking_parameters)]
+)
 # Register the RDKit-backed structure search router before the
 # identity-search router so that /species/structure-search resolves
 # before any future generic /species/{handle} catch-all that might be

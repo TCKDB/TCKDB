@@ -204,7 +204,7 @@ def search_kinetics(
                     include_rejected=request.include_rejected,
                     include_deprecated=request.include_deprecated,
                     include=inner_includes,
-                        offset=page_offset,
+                    offset=page_offset,
                     limit=page_limit,
                 ),
             )
