@@ -32,7 +32,6 @@ def _stub_response(records: list[dict[str, Any]] | None = None) -> dict[str, Any
         "request": {
             "filter": {},
             "sort": "default",
-            "collapse": "all",
             "include": ["provenance"],
         },
         "species_entry_id": 0,
@@ -134,8 +133,8 @@ def test_rejects_modifier_only_request() -> None:
             client,
             _cfg(),
             {
-                "temperature_min": 298,
-                "temperature_max": 1500,
+                "coverage_temperature_min_k": 298,
+                "coverage_temperature_max_k": 1500,
                 "model_kind": "nasa",
                 "software": "rmg",
                 "min_review_status": "approved",
@@ -401,13 +400,13 @@ def test_temperature_filters_forwarded() -> None:
         _cfg(),
         {
             "smiles": "CCO",
-            "temperature_min": 298.15,
-            "temperature_max": 1500.0,
+            "coverage_temperature_min_k": 298.15,
+            "coverage_temperature_max_k": 1500.0,
         },
     )
     body = captured[0]["body"]
-    assert body["temperature_min"] == 298.15
-    assert body["temperature_max"] == 1500.0
+    assert body["coverage_temperature_min_k"] == 298.15
+    assert body["coverage_temperature_max_k"] == 1500.0
     client.close()
 
 
@@ -415,7 +414,7 @@ def test_rejects_non_numeric_temperature() -> None:
     client = _make_client(_ok_handler([]))
     with pytest.raises(MCPToolError):
         ts_tool.run(
-            client, _cfg(), {"smiles": "CCO", "temperature_min": "hot"}
+            client, _cfg(), {"smiles": "CCO", "coverage_temperature_min_k": "hot"}
         )
     client.close()
 
@@ -424,7 +423,7 @@ def test_rejects_bool_temperature() -> None:
     client = _make_client(_ok_handler([]))
     with pytest.raises(MCPToolError):
         ts_tool.run(
-            client, _cfg(), {"smiles": "CCO", "temperature_min": True}
+            client, _cfg(), {"smiles": "CCO", "coverage_temperature_min_k": True}
         )
     client.close()
 
@@ -432,7 +431,7 @@ def test_rejects_bool_temperature() -> None:
 def test_rejects_zero_temperature_min() -> None:
     client = _make_client(_ok_handler([]))
     with pytest.raises(MCPToolError) as excinfo:
-        ts_tool.run(client, _cfg(), {"smiles": "CCO", "temperature_min": 0})
+        ts_tool.run(client, _cfg(), {"smiles": "CCO", "coverage_temperature_min_k": 0})
     assert "> 0" in excinfo.value.detail
     client.close()
 
@@ -441,7 +440,7 @@ def test_rejects_negative_temperature() -> None:
     client = _make_client(_ok_handler([]))
     with pytest.raises(MCPToolError):
         ts_tool.run(
-            client, _cfg(), {"smiles": "CCO", "temperature_min": -50}
+            client, _cfg(), {"smiles": "CCO", "coverage_temperature_min_k": -50}
         )
     client.close()
 
@@ -454,11 +453,11 @@ def test_rejects_temperature_min_greater_than_max() -> None:
             _cfg(),
             {
                 "smiles": "CCO",
-                "temperature_min": 1500,
-                "temperature_max": 298,
+                "coverage_temperature_min_k": 1500,
+                "coverage_temperature_max_k": 298,
             },
         )
-    assert "<= temperature_max" in excinfo.value.detail
+    assert "<= coverage_temperature_max_k" in excinfo.value.detail
     client.close()
 
 
@@ -468,11 +467,11 @@ def test_temperature_min_equal_to_max_is_allowed() -> None:
     ts_tool.run(
         client,
         _cfg(),
-        {"smiles": "CCO", "temperature_min": 1000, "temperature_max": 1000},
+        {"smiles": "CCO", "coverage_temperature_min_k": 1000, "coverage_temperature_max_k": 1000},
     )
     body = captured[0]["body"]
-    assert body["temperature_min"] == 1000.0
-    assert body["temperature_max"] == 1000.0
+    assert body["coverage_temperature_min_k"] == 1000.0
+    assert body["coverage_temperature_max_k"] == 1000.0
     client.close()
 
 
@@ -531,22 +530,6 @@ def test_offset_forwarded() -> None:
     client = _make_client(_ok_handler(captured))
     ts_tool.run(client, _cfg(), {"smiles": "CCO", "offset": 7})
     assert captured[0]["body"]["offset"] == 7
-    client.close()
-
-
-@pytest.mark.parametrize("collapse", ["all", "first"])
-def test_legal_collapse_values_forwarded(collapse: str) -> None:
-    captured: list[dict[str, Any]] = []
-    client = _make_client(_ok_handler(captured))
-    ts_tool.run(client, _cfg(), {"smiles": "CCO", "collapse": collapse})
-    assert captured[0]["body"]["collapse"] == collapse
-    client.close()
-
-
-def test_rejects_unknown_collapse_value() -> None:
-    client = _make_client(_ok_handler([]))
-    with pytest.raises(MCPToolError):
-        ts_tool.run(client, _cfg(), {"smiles": "CCO", "collapse": "every"})
     client.close()
 
 
