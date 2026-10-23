@@ -48,6 +48,7 @@ from app.schemas.reads._field_bounds import (
 )
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
+    OrderEcho,
     RecordReviewBadge,
     browse_order,
 )
@@ -151,9 +152,14 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 #: should never have handed them in the first place.
 _BROWSE_LEGAL_INCLUDE_TOKENS: set[str] = {"review", "internal_ids", "all"}
 
-_DEFAULT_SORT_ECHO = browse_order("review_rank", "has_entries", "created_at", "id")
-#: A substructure or similarity browse leads with the size of the match (``order_by_size``), so it says so.
-_SIZE_FIRST_SORT_ECHO = browse_order("heavy_atom_count", "review_rank", "has_entries", "created_at", "id")
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
+
+
+def _size_first_sort_echo(mode: StructureSearchMode) -> OrderEcho:
+    """A substructure or similarity browse leads with the size of the match (``order_by_size``): the request chose it."""
+    return browse_order(
+        "heavy_atom_count", "review_rank", "created_at", "id", requested_by=f"mode={mode.value}"
+    )
 
 
 def _browse_orders_by_size(request, structure_query) -> bool:
@@ -556,7 +562,7 @@ def search_species(
 
     Filters multiple identifiers with AND semantics; inconsistent identifiers
     return an empty result set rather than raising. Default sort is the L3
-    ``review_rank ASC, has_entries DESC, created_at DESC, id DESC``. Client-
+    ``review_rank ASC, created_at DESC, id DESC``. Client-
     supplied ``sort=`` is rejected (v0). ``rejected`` and ``deprecated``
     review states are excluded by default.
 
@@ -633,10 +639,10 @@ def search_species(
     # Pre-collapse total is the number of *species* matched, whether or not
     # any of their entries survived the trust gate: a species with none is
     # still a record, with an empty ``entries`` list.
-    pre_collapse_total = (
+    total = (
         session.scalar(select(func.count()).select_from(candidates)) or 0
     )
-    if pre_collapse_total == 0:
+    if total == 0:
         return _empty_response(request, includes, offset, limit)
 
     # Pre-collapse review summary across every surviving entry, not just the
@@ -651,21 +657,15 @@ def search_species(
         ),
     )
 
-    collapse_first = request.collapse.value == "first"
     page_species_ids = _rank_and_slice_species(
         session,
         candidates,
         request,
         visible,
         species_entry_ref_id=species_entry_ref_id,
-        offset=0 if collapse_first else offset,
-        limit=1 if collapse_first else limit,
+        offset=offset,
+        limit=limit,
     )
-    if collapse_first:
-        # ``collapse=first`` keeps the single first record in display order and *then* applies
-        # offset/limit to that one-element list, so any offset past it is
-        # an empty page. Mirrored here rather than folded into the SQL.
-        page_species_ids = page_species_ids[offset : offset + limit]
 
     returned_records = _build_page_records(
         session,
@@ -680,8 +680,7 @@ def search_species(
         offset=offset,
         limit=limit,
         returned=len(returned_records),
-        total=pre_collapse_total,
-        collapse_first=collapse_first,
+        total=total,
     )
 
     request_filter = _filter_echo(request)
@@ -689,7 +688,6 @@ def search_species(
         request=RequestEcho(
             filter=request_filter,
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=summary,
@@ -719,7 +717,7 @@ def browse_species(
     Everything downstream of "which candidate species" is shared with
     ``search_species`` verbatim: the same visibility gate
     (:func:`app.services.scientific_read.common.visible_statuses`), the
-    same ``review_rank ASC, has_entries DESC, created_at DESC, id DESC``
+    same ``review_rank ASC, created_at DESC, id DESC``
     order (:func:`_rank_and_slice_species`, whose ``id DESC`` tiebreak is
     what keeps pagination stable — see its docstring) *unless* a
     substructure/similarity structure filter is active, in which case
@@ -812,10 +810,10 @@ def browse_species(
     # #277 (see the docstring above): always drop a candidate species that
     # has entries but none currently visible, unconditionally -- not just
     # when a specific request field triggered it.
-    pre_collapse_total = _browse_visible_species_total(
+    total = _browse_visible_species_total(
         session, candidates, request, visible
     )
-    if pre_collapse_total == 0:
+    if total == 0:
         return _empty_browse_response(
             request, includes, offset, limit, element_symbols, structure_query
         )
@@ -825,20 +823,17 @@ def browse_species(
         _visible_entry_rows(candidates, request, visible, species_entry_ref_id=None),
     )
 
-    collapse_first = request.collapse.value == "first"
     page_species_ids = _rank_and_slice_species(
         session,
         candidates,
         request,
         visible,
         species_entry_ref_id=None,
-        offset=0 if collapse_first else offset,
-        limit=1 if collapse_first else limit,
+        offset=offset,
+        limit=limit,
         require_visible_entries=True,
         order_by_size=order_by_size,
     )
-    if collapse_first:
-        page_species_ids = page_species_ids[offset : offset + limit]
 
     returned_records = _build_page_records(
         session,
@@ -853,15 +848,13 @@ def browse_species(
         offset=offset,
         limit=limit,
         returned=len(returned_records),
-        total=pre_collapse_total,
-        collapse_first=collapse_first,
+        total=total,
     )
 
     return ScientificSpeciesBrowseResponse(
         request=RequestEcho(
             filter=_browse_filter_echo(request, element_symbols, structure_query),
-            sort=_SIZE_FIRST_SORT_ECHO if _browse_orders_by_size(request, structure_query) else _DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
+            sort=_size_first_sort_echo(request.mode) if _browse_orders_by_size(request, structure_query) else _DEFAULT_SORT_ECHO,
             include=sorted(includes),
         ),
         review_summary=summary,
@@ -1200,7 +1193,7 @@ def _rank_and_slice_species(
 ) -> list[int]:
     """Order the candidate species and return one page of ids.
 
-    ``review_rank ASC, has_entries DESC, created_at DESC, id DESC``, where
+    ``review_rank ASC, created_at DESC, id DESC``, where
     ``review_rank`` is the best rank among a species' *visible* entries and
     :data:`_NO_VISIBLE_ENTRY_RANK` when it has none.
 
@@ -1228,7 +1221,7 @@ def _rank_and_slice_species(
         ``heavy_atom_count`` (:func:`_heavy_atom_count_expr`'s documented
         behaviour) rather than being dropped -- ``NULLS LAST`` sorts it
         after every species with a known size, not out of the listing, and
-        the remaining keys (``best_rank``, ``has_entries``, ``created_at``,
+        the remaining keys (``best_rank``, ``created_at``,
         ``id``) still total-order the unparseable rows among themselves.
 
         ``exact`` mode never sets this: :func:`_apply_structure_filter`
@@ -1239,7 +1232,7 @@ def _rank_and_slice_species(
         than one species row (distinct tautomers/charge/multiplicity/spin
         states that collapse to the same InChIKey). That is handled --
         those rows still page under the existing
-        ``best_rank/has_entries/created_at/id`` order -- but a size sort
+        ``best_rank/created_at/id`` order -- but a size sort
         was not added for them: rows sharing one InChIKey are, chemically,
         the same skeleton, so they are the same heavy-atom count in every
         case this schema can produce, and a sort key that can only ever
@@ -1302,7 +1295,6 @@ def _rank_and_slice_species(
     order_by_cols.extend(
         [
             best_rank.asc(),
-            has_entries.desc(),
             candidates.c.created_at.desc(),
             candidates.c.id.desc(),
         ]
@@ -1719,7 +1711,6 @@ def _empty_response(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=review_summary([]),
@@ -1815,8 +1806,7 @@ def _empty_browse_response(
     return ScientificSpeciesBrowseResponse(
         request=RequestEcho(
             filter=_browse_filter_echo(request, element_symbols, structure_query),
-            sort=_SIZE_FIRST_SORT_ECHO if _browse_orders_by_size(request, structure_query) else _DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
+            sort=_size_first_sort_echo(request.mode) if _browse_orders_by_size(request, structure_query) else _DEFAULT_SORT_ECHO,
             include=sorted(includes),
         ),
         review_summary=review_summary([]),

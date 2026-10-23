@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.db.models.common import (
     RecordReviewStatus,
@@ -45,8 +45,8 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
+from app.schemas.reads.removed_parameters import SPECIES as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
@@ -92,7 +92,14 @@ class SpeciesFilterRequest(BaseModel):
     page, not a lookup they arrived with. Its matching semantics (exact,
     case-sensitive, via the RDKit cartridge) are identical on both
     surfaces — see ``species.py::_formula_expr``.
+
+    Every matching record is returned in display order; ``collapse`` and ``selection_policy`` are refused (422).
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_removed_parameters(cls, data):
+        return _REMOVED_PARAMETERS.guard_body(data)
 
     # Matched via the RDKit cartridge's mol_formula(mol_from_smiles(...))
     # against the species' identity SMILES: Hill notation, e.g. "H2O",
@@ -112,7 +119,6 @@ class SpeciesFilterRequest(BaseModel):
     # v0 forbids client-supplied sort. The service rejects a non-None value.
     sort: str | None = None
 
-    collapse: CollapseMode = CollapseMode.all
     include: list[str] = Field(default_factory=list)
     offset: int = 0
     limit: int = 50
@@ -392,7 +398,6 @@ class RequestEcho(ProfiledRequestEcho):
 
     filter: dict[str, object]
     sort: OrderEcho
-    collapse: CollapseMode
     include: list[str]
 
 

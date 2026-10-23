@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.db.models.common import (
     CalculationGeometryRole,
@@ -57,8 +57,8 @@ from app.schemas.reads.scientific_calculation import (
     CalculationFreqModeSummary,
     CalculationFreqResultSummary,
 )
+from app.schemas.reads.removed_parameters import SPECIES_CALCULATIONS as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
     LevelOfTheorySummary,
     OrderEcho,
     Pagination,
@@ -102,7 +102,14 @@ class SpeciesCalculationsSearchRequest(BaseModel):
     is required. Multiple identifiers AND-combine; inconsistent identifiers
     return an empty result set. ``species_entry_id`` (when supplied) is a
     handle path — 404 if the entry does not exist.
+
+    Every matching calculation is returned in display order; ``collapse`` and ``selection_policy`` are refused (422).
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_removed_parameters(cls, data):
+        return _REMOVED_PARAMETERS.guard_body(data)
 
     # Chemistry-first species identity filters
     smiles: str | None = Field(default=None, max_length=_MAX_SMILES_LENGTH)
@@ -143,10 +150,10 @@ class SpeciesCalculationsSearchRequest(BaseModel):
     # Orthogonal to review's ``rejected`` — opts in CalculationQuality.rejected.
     include_rejected_quality: bool = False
 
-    # Sort / collapse / pagination
+    # Sort / pagination. ``ranking`` is an explicit request for another display order; it is echoed as
+    # ``request.sort.requested_by``.
     ranking: CalculationRanking = CalculationRanking.default
     sort: str | None = None  # rejected non-None per v0 sort policy
-    collapse: CollapseMode = CollapseMode.all
     include: list[str] = Field(default_factory=list)
     offset: int = 0
     limit: int = 50
@@ -419,7 +426,6 @@ class RequestEcho(ProfiledRequestEcho):
     filter: dict[str, object]
     ranking: CalculationRanking
     sort: OrderEcho
-    collapse: CollapseMode
     include: list[str]
 
 

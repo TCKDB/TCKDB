@@ -157,7 +157,7 @@ def get_species_observations(
         )
     )
     page_ids = slice_for_pagination(
-        visible_ids, offset=offset, limit=limit, collapse_first=False
+        visible_ids, offset=offset, limit=limit
     )
     records = _materialize_records(session, page_ids, badges)
 

@@ -9,7 +9,8 @@ from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.db.models.common import RecordReviewStatus
-from app.schemas.reads.scientific_common import CollapseMode
+from app.schemas.reads.removed_parameters import REACTIONS as _REMOVED_PARAMETERS
+from app.schemas.reads.removed_parameters import reject_removed_query_params
 from app.schemas.reads.scientific_reactions import (
     ReactionDirectionQuery,
     ReactionMatchMode,
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/reactions")
 
 @router.get("/search", response_model=ScientificReactionSearchResponse)
 def reaction_search_get(
+    http_request: Request,
     session: Session = Depends(get_db),
     reactants: list[str] | None = Query(None),
     products: list[str] | None = Query(None),
@@ -38,7 +40,6 @@ def reaction_search_get(
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
-    collapse: CollapseMode = Query(CollapseMode.all),
     include: list[str] | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -54,6 +55,7 @@ def reaction_search_get(
     one equation, both sides, counts included. See
     ``docs/specs/browse_order.md`` §Endpoint 2.
     """
+    reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
     request = ReactionSearchRequest(
         reactants=reactants or [],
         products=products or [],
@@ -66,7 +68,6 @@ def reaction_search_get(
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
-        collapse=collapse,
         include=parse_include(include),
         offset=offset,
         limit=limit,
@@ -91,7 +92,7 @@ def reaction_search_post(
 ) -> ScientificReactionSearchResponse:
     """JSON-body variant of reaction search for complex reactant/product lists.
 
-    All search fields, filters, includes, collapse, offset, and limit live in
+    All search fields, filters, includes, offset, and limit live in
     the body. Query-string parameters are rejected (per Phase 2.1 patch),
     except for any infrastructure-level params that may be added later. Body
     field ``sort`` is rejected by the service layer (v0 sort policy).

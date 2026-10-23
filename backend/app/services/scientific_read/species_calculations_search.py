@@ -19,8 +19,9 @@ Composition strategy (additive on top of Phase 6):
    dependencies) keyed by the candidate calculation IDs. Every one of
    them is one statement for the whole page: this is a paginated search,
    so anything issued per record is multiplied by ``limit``.
-4. Apply ranking (default vs latest/earliest/lowest_energy), then
-   collapse and pagination per Phase 2.1 rules.
+4. Apply the display order (``ranking=default``, or the one the request names:
+   latest / earliest / lowest_energy, echoed in ``request.sort.requested_by``),
+   then paginate. Every matching calculation is returned; none is picked.
 
 LoT filtering targets ``Calculation.lot_id`` directly here — different
 from thermo/kinetics search, which target the primary source calc's LoT.
@@ -79,8 +80,8 @@ from app.schemas.reads.scientific_calculation import (
 )
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
-    CollapseMode,
     CompositeSchemeSummary,
+    OrderEcho,
     LevelOfTheorySummary,
     ReviewStatusSummary,
     SCFStabilitySummary,
@@ -422,21 +423,14 @@ def search_species_calculations(
     summary = review_summary(badges[r.calc_id] for r in rows)
     sort_echo = _apply_ranking_sort(records, request)
 
-    pre_collapse_total = len(records)
-    collapse_first = request.collapse.value == "first"
-    returned = slice_for_pagination(
-        records,
-        offset=offset,
-        limit=limit,
-        collapse_first=collapse_first,
-    )
+    total = len(records)
+    returned = slice_for_pagination(records, offset=offset, limit=limit)
 
     return ScientificSpeciesCalculationsSearchResponse(
         request=RequestEcho(
             filter=_filter_echo(request),
             ranking=request.ranking,
             sort=sort_echo,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=summary,
@@ -445,8 +439,7 @@ def search_species_calculations(
             offset=offset,
             limit=limit,
             returned=len(returned),
-            total=pre_collapse_total,
-            collapse_first=collapse_first,
+            total=total,
         ),
     )
 
@@ -555,7 +548,6 @@ def _resolve_species_entry_context(
                 include_deprecated=request.include_deprecated,
                 offset=page_offset,
                 limit=page_limit,
-                collapse=CollapseMode.all,
                 include=[],
             ),
         )
@@ -1309,6 +1301,18 @@ def _workflow_tool_summary_from_row(
 # ---------------------------------------------------------------------------
 
 
+def _ranking_echo(ranking: CalculationRanking) -> OrderEcho:
+    """The display order a ``ranking`` names. A non-default ranking is a request for it, so the echo says so."""
+    requested_by = f"ranking={ranking.value}"
+    if ranking == CalculationRanking.lowest_energy:
+        return browse_order("energy_hartree", "review_rank", "created_at", "id", requested_by=requested_by)
+    if ranking == CalculationRanking.latest:
+        return browse_order("created_at", "id", requested_by=requested_by)
+    if ranking == CalculationRanking.earliest:
+        return browse_order(("created_at", "asc"), ("id", "asc"), requested_by=requested_by)
+    return browse_order("review_rank", "created_at", "id")
+
+
 def _apply_ranking_sort(
     records: list[SpeciesCalculationsSearchRecord],
     request: SpeciesCalculationsSearchRequest,
@@ -1330,19 +1334,19 @@ def _apply_ranking_sort(
             )
 
         records.sort(key=key)
-        return browse_order("energy_hartree", "review_rank", "created_at", "id")
+        return _ranking_echo(ranking)
 
     if ranking == CalculationRanking.latest:
         records.sort(
             key=lambda r: (-r.calculation.created_at.timestamp(), -r.calculation.calculation_id)
         )
-        return browse_order("created_at", "id")
+        return _ranking_echo(ranking)
 
     if ranking == CalculationRanking.earliest:
         records.sort(
             key=lambda r: (r.calculation.created_at.timestamp(), r.calculation.calculation_id)
         )
-        return browse_order(("created_at", "asc"), ("id", "asc"))
+        return _ranking_echo(ranking)
 
     # default and review_rank are equivalent for v0.
     records.sort(
@@ -1410,17 +1414,12 @@ def _empty_response(
     offset: int,
     limit: int,
 ) -> ScientificSpeciesCalculationsSearchResponse:
-    sort_echo = {
-        CalculationRanking.lowest_energy: browse_order("energy_hartree", "review_rank", "created_at", "id"),
-        CalculationRanking.latest: browse_order("created_at", "id"),
-        CalculationRanking.earliest: browse_order(("created_at", "asc"), ("id", "asc")),
-    }.get(request.ranking, browse_order("review_rank", "created_at", "id"))
+    sort_echo = _ranking_echo(request.ranking)
     return ScientificSpeciesCalculationsSearchResponse(
         request=RequestEcho(
             filter=_filter_echo(request),
             ranking=request.ranking,
             sort=sort_echo,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=ReviewStatusSummary(),

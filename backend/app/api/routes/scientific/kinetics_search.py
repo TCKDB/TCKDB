@@ -14,7 +14,8 @@ from app.api.routes.scientific._response import (
     prepare_assessment_response,
 )
 from app.db.models.common import KineticsModelKind, RecordReviewStatus
-from app.schemas.reads.scientific_common import CollapseMode
+from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
+from app.schemas.reads.removed_parameters import reject_removed_query_params
 from app.schemas.reads.scientific_kinetics_search import (
     KineticsSearchRequest,
     ScientificKineticsSearchResponse,
@@ -39,6 +40,7 @@ _POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
 @router.get("/search", response_model=ScientificKineticsSearchResponse)
 def kinetics_search_get(
+    http_request: Request,
     session: Session = Depends(get_db),
     reactants: list[str] | None = Query(None),
     products: list[str] | None = Query(None),
@@ -47,8 +49,8 @@ def kinetics_search_get(
     family: str | None = Query(None),
     reaction_ref: str | None = Query(None),
     reaction_entry_ref: str | None = Query(None),
-    temperature_min: float | None = Query(None),
-    temperature_max: float | None = Query(None),
+    coverage_temperature_min_k: float | None = Query(None),
+    coverage_temperature_max_k: float | None = Query(None),
     pressure_bar: float | None = Query(
         None,
         gt=0,
@@ -70,7 +72,6 @@ def kinetics_search_get(
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
-    collapse: CollapseMode = Query(CollapseMode.all),
     include: list[str] | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -83,8 +84,12 @@ def kinetics_search_get(
     demands the whole equation. For complex reactant/product lists
     (especially with bracket-heavy SMILES), prefer the POST form. Returns
     kinetics records with the resolved reaction/reaction_entry identity
-    attached.
+    attached. Every matching record is returned, ordered by the record's own
+    review status, then newest deposition, then id. ``collapse`` is refused
+    (422); ``POST /reaction-entries/{ref}/kinetics/select`` answers
+    "give me one".
     """
+    reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
     request = KineticsSearchRequest(
         reactants=reactants or [],
         products=products or [],
@@ -93,8 +98,8 @@ def kinetics_search_get(
         family=family,
         reaction_ref=reaction_ref,
         reaction_entry_ref=reaction_entry_ref,
-        temperature_min=temperature_min,
-        temperature_max=temperature_max,
+        coverage_temperature_min_k=coverage_temperature_min_k,
+        coverage_temperature_max_k=coverage_temperature_max_k,
         pressure_bar=pressure_bar,
         pressure=pressure,
         model_kind=model_kind,
@@ -105,7 +110,6 @@ def kinetics_search_get(
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
-        collapse=collapse,
         include=parse_include(include),
         offset=offset,
         limit=limit,
@@ -130,7 +134,7 @@ def kinetics_search_post(
 ) -> ScientificKineticsSearchResponse:
     """JSON-body variant for structured reactant/product queries.
 
-    All search fields, filters, includes, collapse, offset, and limit live
+    All search fields, filters, includes, offset, and limit live
     in the body. Query-string parameters are rejected. Body field ``sort``
     is rejected by the service layer (v0 sort policy).
     """

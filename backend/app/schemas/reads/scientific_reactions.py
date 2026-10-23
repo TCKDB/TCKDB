@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from tckdb_schemas.coded_error import CodedValidationError
 
 from app.db.models.common import RecordReviewStatus
@@ -23,8 +23,8 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_SMILES_LENGTH as _MAX_SMILES_LENGTH,
 )
+from app.schemas.reads.removed_parameters import REACTIONS as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
@@ -80,7 +80,15 @@ class ReactionMatchMode(str, Enum):
 
 
 class ReactionSearchRequest(BaseModel):
-    """Service-layer request model for reaction search."""
+    """Service-layer request model for reaction search.
+
+    Every matching record is returned in display order; ``collapse`` and ``selection_policy`` are refused (422).
+    """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_removed_parameters(cls, data):
+        return _REMOVED_PARAMETERS.guard_body(data)
 
     reactants: list[str] = Field(
         default_factory=list,
@@ -107,7 +115,6 @@ class ReactionSearchRequest(BaseModel):
 
     sort: str | None = None  # rejected non-None per v0 sort policy.
 
-    collapse: CollapseMode = CollapseMode.all
     include: list[str] = Field(default_factory=list)
     offset: int = 0
     limit: int = 50
@@ -358,7 +365,6 @@ class RequestEcho(ProfiledRequestEcho):
 
     filter: dict[str, object]
     sort: OrderEcho
-    collapse: CollapseMode
     include: list[str]
 
 

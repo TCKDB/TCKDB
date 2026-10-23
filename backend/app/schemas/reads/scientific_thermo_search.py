@@ -11,7 +11,7 @@ See docs/specs/browse_order.md and docs/guides/workflow_tool_scientific_reads.md
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.db.models.common import (
     RecordReviewStatus,
@@ -37,13 +37,13 @@ from app.schemas.reads._field_bounds import (
     MAX_SOFTWARE_NAME_LENGTH as _MAX_SOFTWARE_NAME_LENGTH,
 )
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
 )
+from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_thermo import ThermoModelKindQuery, ThermoRecord
 
 # ---------------------------------------------------------------------------
@@ -56,8 +56,14 @@ class ThermoSearchRequest(BaseModel):
 
     At least one species identifier (``smiles`` / ``inchi`` / ``inchi_key`` /
     ``formula``) must be supplied; multiple identifiers AND-combine.
-    Inconsistent identifiers return an empty result set, not a 422.
+    Inconsistent identifiers return an empty result set, not a 422. Every matching record is returned in display
+    order; ``collapse`` and ``selection_policy`` are refused (422).
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_removed_parameters(cls, data):
+        return _REMOVED_PARAMETERS.guard_body(data)
 
     # Species identity filters
     smiles: str | None = Field(default=None, max_length=_MAX_SMILES_LENGTH)
@@ -73,9 +79,11 @@ class ThermoSearchRequest(BaseModel):
     species_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
     species_entry_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
 
-    # Thermo filters
-    temperature_min: float | None = None
-    temperature_max: float | None = None
+    # The window ``temperature_coverage`` is computed against. Not a filter: records outside it are still returned.
+    coverage_temperature_min_k: float | None = None
+    coverage_temperature_max_k: float | None = None
+
+    # Thermo filters. ``level_of_theory_*`` and ``software`` match when ANY linked source calculation matches.
     model_kind: ThermoModelKindQuery | None = None
     level_of_theory_id: int | None = None
     level_of_theory_ref: str | None = Field(
@@ -91,7 +99,6 @@ class ThermoSearchRequest(BaseModel):
     # v0 forbids client-supplied sort.
     sort: str | None = None
 
-    collapse: CollapseMode = CollapseMode.all
     include: list[str] = Field(default_factory=list)
     offset: int = 0
     limit: int = 50
@@ -153,7 +160,6 @@ class RequestEcho(ProfiledRequestEcho):
 
     filter: dict[str, object]
     sort: OrderEcho
-    collapse: CollapseMode
     include: list[str]
 
 

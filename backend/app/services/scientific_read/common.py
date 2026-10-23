@@ -336,9 +336,17 @@ def validate_includes(
 
 
 def validate_temperature_range(
-    temperature_min: float | None, temperature_max: float | None
+    temperature_min: float | None,
+    temperature_max: float | None,
+    *,
+    min_name: str = "temperature_min",
+    max_name: str = "temperature_max",
 ) -> None:
-    """Reject temperature_min > temperature_max with a 422."""
+    """Reject a window whose minimum exceeds its maximum with a 422.
+
+    ``min_name`` / ``max_name`` are the caller-facing parameter names (``coverage_temperature_min_k`` on the thermo
+    and kinetics reads, where the window filters nothing and only sets what coverage is computed against).
+    """
     if (
         temperature_min is not None
         and temperature_max is not None
@@ -360,10 +368,10 @@ def validate_temperature_range(
         # query parameters, so nothing here is a row id.
         raise CodedValueError(
             "invalid_temperature_range",
-            "temperature_min must be <= temperature_max",
+            f"{min_name} must be <= {max_name}",
             context={
-                "temperature_min_k": temperature_min,
-                "temperature_max_k": temperature_max,
+                (min_name if min_name.endswith("_k") else f"{min_name}_k"): temperature_min,
+                (max_name if max_name.endswith("_k") else f"{max_name}_k"): temperature_max,
             },
         )
 
@@ -498,20 +506,18 @@ def build_pagination(
     limit: int,
     returned: int,
     total: int,
-    collapse_first: bool = False,
 ) -> Pagination:
     """Construct the response Pagination block.
 
-    ``total`` is the pre-collapse, post-filter count. The additive
-    ``post_collapse_total`` is the count after collapse and before offset/limit
-    slicing; it equals ``total`` unless ``collapse=first`` was requested.
+    ``total`` is the post-filter count, before offset/limit slicing. No read collapses its records to one any more,
+    so ``post_collapse_total`` always equals ``total``; the field is kept only so existing clients keep parsing.
     """
     return Pagination(
         offset=offset,
         limit=limit,
         returned=returned,
         total=total,
-        post_collapse_total=min(total, 1) if collapse_first else total,
+        post_collapse_total=total,
     )
 
 
@@ -584,15 +590,9 @@ def slice_for_pagination(
     *,
     offset: int,
     limit: int,
-    collapse_first: bool,
 ) -> list:
-    """Apply pagination after sort/collapse.
-
-    Collapse is applied first, then ``offset`` and ``limit`` are applied to
-    the collapsed or complete list.
-    """
-    collapsed = items[:1] if collapse_first else items
-    return collapsed[offset : offset + limit]
+    """Apply ``offset`` and ``limit`` to the ordered list. Every matching record is in the list; none is picked."""
+    return items[offset : offset + limit]
 
 
 # ---------------------------------------------------------------------------

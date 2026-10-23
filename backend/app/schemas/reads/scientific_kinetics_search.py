@@ -30,13 +30,13 @@ from app.schemas.reads._field_bounds import (
     MAX_SOFTWARE_NAME_LENGTH as _MAX_SOFTWARE_NAME_LENGTH,
 )
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
 )
+from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_kinetics import KineticsRecord
 from app.schemas.reads.scientific_reactions import (
     ReactionDirectionQuery,
@@ -57,7 +57,14 @@ class KineticsSearchRequest(BaseModel):
     exactly what they mean there — ``match`` defaults to ``contains`` (set
     containment per role), and ``match=exact`` asks for one whole equation.
     ``direction=exact`` is **not** supported in v0.
+
+    Every matching record is returned in display order; ``collapse`` is refused (422).
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_removed_parameters(cls, data):
+        return _REMOVED_PARAMETERS.guard_body(data)
 
     # Reaction identity filters
     reactants: list[str] = Field(
@@ -76,9 +83,12 @@ class KineticsSearchRequest(BaseModel):
         default=None, max_length=_MAX_PUBLIC_REF_LENGTH
     )
 
-    # Kinetics filters
-    temperature_min: float | None = None
-    temperature_max: float | None = None
+    # The window ``temperature_coverage`` is computed against. Not a filter: records outside it are still returned.
+    coverage_temperature_min_k: float | None = None
+    coverage_temperature_max_k: float | None = None
+
+    # Kinetics filters. ``pressure_bar`` drops records that do not apply at that pressure. ``level_of_theory_*`` and
+    # ``software`` match when ANY linked source calculation matches.
     pressure_bar: float | None = Field(
         default=None,
         gt=0,
@@ -107,7 +117,6 @@ class KineticsSearchRequest(BaseModel):
     # v0 forbids client-supplied sort.
     sort: str | None = None
 
-    collapse: CollapseMode = CollapseMode.all
     include: list[str] = Field(default_factory=list)
     offset: int = 0
     limit: int = 50
@@ -184,7 +193,6 @@ class RequestEcho(ProfiledRequestEcho):
 
     filter: dict[str, object]
     sort: OrderEcho
-    collapse: CollapseMode
     include: list[str]
 
 

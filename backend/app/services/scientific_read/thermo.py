@@ -61,7 +61,6 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
     browse_order,
-    effective_order_echo,
     simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_thermo import (
@@ -200,14 +199,16 @@ THERMO_TRUST_EAGER_LOADS = _TRUST_EAGER_LOADS
 _DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 # Priority order for links that are not a typed composite: sp → composite →
-# freq → opt → any. A calculation of *type* ``composite`` ranks above all of
+# freq → opt → any. It picks the one calculation a record DISPLAYS as its
+# ``primary_calculation``; it decides no filter (``level_of_theory_*`` and
+# ``software`` match any linked calculation). A calculation of *type* ``composite`` ranks above all of
 # these (``_primary_calc_id`` takes it first), which is R1's energy order
 # (``app.services.calculation_levels.derive_levels``: composite > sp > opt,
 # ADR 0021 decision 4); the ``composite`` entry here is only the legacy shape,
 # a calculation of another type linked under that role, which keeps the place it
 # always had. ``freq`` sits before ``opt`` as ever: R1's energy chain has no
 # ``freq`` in it and this picker also chooses the record's software.
-_LOT_FILTER_ROLE_PRIORITY = (
+_PRIMARY_CALC_ROLE_PRIORITY = (
     ThermoCalculationRole.sp,
     ThermoCalculationRole.composite,
     ThermoCalculationRole.freq,
@@ -228,8 +229,9 @@ def get_species_thermo(
     The species_entry_id path parameter is strictly ``species_entry.id``;
     ``species.id`` is rejected with 404. Sort: review_rank ASC, created_at
     DESC, id DESC (#648; the export's ``simple_selection_sort_key``).
-    ``temperature_min`` / ``temperature_max`` do not filter and do not affect
+    ``coverage_temperature_min_k`` / ``coverage_temperature_max_k`` do not filter and do not affect
     the order: they only fill each record's ``temperature_coverage`` field.
+    Every matching record is returned; the read never picks one.
     Client-supplied sort= rejected (v0).
 
     :raises NotFoundError: 404 when species_entry_id is unknown.
@@ -244,7 +246,11 @@ def get_species_thermo(
         internal_tokens=_INTERNAL_INCLUDE_TOKENS | {"trust"},
     )
     includes = filter_internal_ids_from_resolved(includes)
-    validate_temperature_range(request.temperature_min, request.temperature_max)
+    validate_temperature_range(
+        request.coverage_temperature_min_k, request.coverage_temperature_max_k,
+        min_name="coverage_temperature_min_k",
+        max_name="coverage_temperature_max_k",
+    )
 
     species_entry = session.get(SpeciesEntry, species_entry_id)
     if species_entry is None:
@@ -304,27 +310,31 @@ def get_species_thermo(
     if not classified:
         return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
-    # LoT filter applied against primary source calc (per Phase 2.3 spec).
+    # Level-of-theory filter: a record matches when ANY of its linked source calculations ran at this level. There
+    # is no "primary" calculation for a filter, so no role priority can decide which link counts.
     if effective_lot_id is not None:
         classified = [
             (t, kind)
             for t, kind in classified
-            if _primary_lot_id(sources_by_thermo.get(t.id, []))
-            == effective_lot_id
+            if effective_lot_id in _linked_lot_ids(sources_by_thermo.get(t.id, []))
         ]
     if not classified:
         return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
-    # Software filter.
+    # Software filter: ANY linked source calculation ran in a software of this name.
     if request.software is not None:
-        kept = []
-        for t, kind in classified:
-            sw_name = _primary_software_name(
-                session, sources_by_thermo.get(t.id, [])
+        software_by_calc = _software_names_by_calculation(
+            session,
+            {sc.calculation_id for t, _ in classified for sc in sources_by_thermo.get(t.id, [])},
+        )
+        classified = [
+            (t, kind)
+            for t, kind in classified
+            if any(
+                software_by_calc.get(sc.calculation_id) == request.software
+                for sc in sources_by_thermo.get(t.id, [])
             )
-            if sw_name == request.software:
-                kept.append((t, kind))
-        classified = kept
+        ]
     if not classified:
         return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
@@ -499,8 +509,8 @@ def get_species_thermo(
             )
 
         coverage = temperature_coverage(
-            requested_min=request.temperature_min,
-            requested_max=request.temperature_max,
+            requested_min=request.coverage_temperature_min_k,
+            requested_max=request.coverage_temperature_max_k,
             record_min=record_min,
             record_max=record_max,
         )
@@ -583,6 +593,7 @@ def get_species_thermo(
         record = ThermoRecord(
             thermo_id=t.id,
             thermo_ref=t.public_ref,
+            created_at=t.created_at,
             scientific_origin=t.scientific_origin,
             model_kind=model_kind,
             review=badges[t.id],
@@ -665,15 +676,14 @@ def get_species_thermo(
     #   * ``evidence_completeness.score``: six of its eight predicates are
     #     calculation / statmech traceability, so an experimental record can
     #     score at most 2/8. It stays a displayed field, not a ranking input.
-    #   * temperature coverage: ``temperature_min`` / ``temperature_max`` are
+    #   * temperature coverage: ``coverage_temperature_min_k`` / ``coverage_temperature_max_k`` are
     #     not filters; they only fill each record's ``temperature_coverage``
     #     field. Ranking by it was dropped on the owner's decision (review
     #     status, then newest), and because a scalar record (e.g. an
     #     experimental 298 K value) carries no range, it counted as "not
     #     covering" and sank below every fitted record whatever its review
     #     status. Coverage is still reported per record; callers who need a
-    #     record spanning a window should read it from the response
-    #     (``collapse=all``).
+    #     record spanning a window should read it from the response.
     created_at = {t.id: t.created_at for t, _ in classified}
     review_status_by_id = {t.id: badges[t.id].status for t, _ in classified}
 
@@ -686,38 +696,14 @@ def get_species_thermo(
         )
     )
 
-    pre_collapse_total = len(records)
-    collapse_first = request.collapse.value == "first"
-    ordered_records = records
-    if collapse_first and request.selection_policy is not SelectionPolicy.default:
-        # Named policy re-ranks the selected record only; the default candidate
-        # order (collapse=all) is unaffected.
-        ordered_records = sorted(
-            records,
-            key=lambda rec: simple_selection_sort_key(
-                rec.thermo_id,
-                policy=request.selection_policy,
-                review_status_by_id=review_status_by_id,
-                created_at_by_id=created_at,
-            ),
-        )
-    returned = slice_for_pagination(
-        ordered_records,
-        offset=offset,
-        limit=limit,
-        collapse_first=collapse_first,
-    )
+    total = len(records)
+    returned = slice_for_pagination(records, offset=offset, limit=limit)
 
     return ScientificSpeciesThermoResponse(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
-            selection_policy=request.selection_policy,
             include=sorted(includes),
-            effective_order=effective_order_echo(
-                collapse_first=request.collapse.value == "first", policy=request.selection_policy
-            ),
         ),
         species_entry_id=species_entry_id,
         species_entry_ref=species_entry_ref,
@@ -727,8 +713,7 @@ def get_species_thermo(
             offset=offset,
             limit=limit,
             returned=len(returned),
-            total=pre_collapse_total,
-            collapse_first=collapse_first,
+            total=total,
         ),
     )
 
@@ -1213,36 +1198,33 @@ def _primary_calc_id(sources: list[ThermoSourceCalculation]) -> int | None:
     for sc in sources:
         if _is_composite_link(sc):
             return sc.calculation_id
-    for role in _LOT_FILTER_ROLE_PRIORITY:
+    for role in _PRIMARY_CALC_ROLE_PRIORITY:
         for sc in sources:
             if sc.role == role:
                 return sc.calculation_id
     return sources[0].calculation_id if sources else None
 
 
-def _primary_lot_id(sources: list[ThermoSourceCalculation]) -> int | None:
-    primary = _primary_calc_id(sources)
-    if primary is None:
-        return None
-    for sc in sources:
-        if sc.calculation_id == primary and sc.calculation is not None:
-            return sc.calculation.lot_id
-    return None
+def _linked_lot_ids(sources: list[ThermoSourceCalculation]) -> set[int]:
+    """The level of theory of EVERY source calculation linked to the record (the level-of-theory filter's match set)."""
+    return {
+        sc.calculation.lot_id
+        for sc in sources
+        if sc.calculation is not None and sc.calculation.lot_id is not None
+    }
 
 
-def _primary_software_name(
-    session: Session, sources: list[ThermoSourceCalculation]
-) -> str | None:
-    primary = _primary_calc_id(sources)
-    if primary is None:
-        return None
-    name = session.scalar(
-        select(Software.name)
-        .join(SoftwareRelease, SoftwareRelease.software_id == Software.id)
-        .join(Calculation, Calculation.software_release_id == SoftwareRelease.id)
-        .where(Calculation.id == primary)
-    )
-    return name
+def _software_names_by_calculation(session: Session, calculation_ids: set[int]) -> dict[int, str]:
+    """Software name that ran each calculation, in one statement (the software filter's match set)."""
+    if not calculation_ids:
+        return {}
+    rows = session.execute(
+        select(Calculation.id, Software.name)
+        .join(SoftwareRelease, SoftwareRelease.id == Calculation.software_release_id)
+        .join(Software, Software.id == SoftwareRelease.software_id)
+        .where(Calculation.id.in_(calculation_ids))
+    ).all()
+    return {calc_id: name for calc_id, name in rows}
 
 
 def _build_provenance(
@@ -1751,10 +1733,10 @@ def _build_nasa_block(nasa: ThermoNASA) -> ThermoNASABlock:
 
 def _filter_echo(request: ThermoReadRequest) -> dict[str, object]:
     echo: dict[str, object] = {}
-    if request.temperature_min is not None:
-        echo["temperature_min"] = request.temperature_min
-    if request.temperature_max is not None:
-        echo["temperature_max"] = request.temperature_max
+    if request.coverage_temperature_min_k is not None:
+        echo["coverage_temperature_min_k"] = request.coverage_temperature_min_k
+    if request.coverage_temperature_max_k is not None:
+        echo["coverage_temperature_max_k"] = request.coverage_temperature_max_k
     if request.model_kind is not None:
         echo["model_kind"] = request.model_kind.value
     if request.level_of_theory_id is not None:
@@ -1784,12 +1766,7 @@ def _empty_response(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
-            selection_policy=request.selection_policy,
             include=sorted(includes),
-            effective_order=effective_order_echo(
-                collapse_first=request.collapse.value == "first", policy=request.selection_policy
-            ),
         ),
         species_entry_id=species_entry_id,
         species_entry_ref=species_entry_ref,

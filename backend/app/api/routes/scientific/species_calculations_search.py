@@ -22,7 +22,8 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
 )
-from app.schemas.reads.scientific_common import CollapseMode
+from app.schemas.reads.removed_parameters import SPECIES_CALCULATIONS as _REMOVED_PARAMETERS
+from app.schemas.reads.removed_parameters import reject_removed_query_params
 from app.schemas.reads.scientific_species_calculations import (
     CalculationRanking,
     ScientificSpeciesCalculationsSearchResponse,
@@ -48,6 +49,7 @@ _POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
     "/search", response_model=ScientificSpeciesCalculationsSearchResponse
 )
 def species_calculations_search_get(
+    http_request: Request,
     session: Session = Depends(get_db),
     smiles: str | None = Query(None),
     inchi: str | None = Query(None),
@@ -76,7 +78,6 @@ def species_calculations_search_get(
     include_rejected_quality: bool = Query(False),
     ranking: CalculationRanking = Query(CalculationRanking.default),
     sort: str | None = Query(None),
-    collapse: CollapseMode = Query(CollapseMode.all),
     include: list[str] | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -96,6 +97,7 @@ def species_calculations_search_get(
 
     See ``docs/specs/species_calculation_search_api.md``.
     """
+    reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
     request = SpeciesCalculationsSearchRequest(
         smiles=smiles,
         inchi=inchi,
@@ -124,7 +126,6 @@ def species_calculations_search_get(
         include_rejected_quality=include_rejected_quality,
         ranking=ranking,
         sort=sort,
-        collapse=collapse,
         include=parse_include(include),
         offset=offset,
         limit=limit,
@@ -149,7 +150,7 @@ def species_calculations_search_post(
 ) -> ScientificSpeciesCalculationsSearchResponse:
     """JSON-body variant for structured species-calculation queries.
 
-    All search fields, filters, includes, ranking, collapse, offset, and
+    All search fields, filters, includes, ranking, offset, and
     limit live in the body. Query-string parameters are rejected
     (Phase 4 / Phase 6 POST convention). Body field ``sort`` is rejected
     by the service layer (v0 sort policy).

@@ -33,12 +33,10 @@ from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
-    SelectionPolicy,
 )
 from app.schemas.reads.scientific_transport import (
     ScientificTransportRecord,
@@ -108,19 +106,12 @@ class TransportSearchRequest(BaseModel):
 class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request — surfaced in the response envelope.
 
-    ``collapse`` / ``selection_policy`` are populated by the per-species
-    subresource read (which supports an explicit named single-record policy)
-    and left ``null`` by broad search, which always returns all candidates.
+    Both the broad search and the per-species read return every matching record in ``sort`` order; neither picks one.
     """
 
     filter: dict[str, Any]
     sort: OrderEcho
     include: list[str] = Field(default_factory=list)
-    collapse: CollapseMode | None = None
-    selection_policy: SelectionPolicy | None = None
-    #: The display order that actually ordered the returned records, in the same shape as ``sort``. ``sort`` stays the
-    #: candidate-list (``collapse=all``) order; with ``collapse=first&selection_policy=latest`` this drops the review rank.
-    effective_order: OrderEcho | None = None
 
 
 class ScientificTransportSearchResponse(BaseModel):

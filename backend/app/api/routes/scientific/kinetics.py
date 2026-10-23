@@ -8,7 +8,7 @@ compatibility with OpenAPI consumers.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -21,7 +21,8 @@ from app.api.routes.scientific._response import (
     prepare_assessment_response,
 )
 from app.db.models.common import KineticsModelKind, RecordReviewStatus
-from app.schemas.reads.scientific_common import CollapseMode
+from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
+from app.schemas.reads.removed_parameters import reject_removed_query_params
 from app.schemas.reads.scientific_kinetics import (
     KineticsReadRequest,
     ScientificReactionKineticsResponse,
@@ -40,10 +41,11 @@ router = APIRouter(prefix="/reaction-entries")
     response_model=ScientificReactionKineticsResponse,
 )
 def reaction_kinetics(
+    http_request: Request,
     reaction_entry_id: str = Path(..., min_length=1, max_length=64),
     session: Session = Depends(get_db),
-    temperature_min: float | None = Query(None),
-    temperature_max: float | None = Query(None),
+    coverage_temperature_min_k: float | None = Query(None),
+    coverage_temperature_max_k: float | None = Query(None),
     pressure_bar: float | None = Query(
         None,
         gt=0,
@@ -65,7 +67,6 @@ def reaction_kinetics(
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
-    collapse: CollapseMode = Query(CollapseMode.all),
     include: list[str] | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -85,9 +86,10 @@ def reaction_kinetics(
     # the resource handle, so a malformed request is rejected with 422
     # regardless of whether the reaction entry exists (request validation
     # precedes resource lookup).
+    reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
     request = KineticsReadRequest(
-        temperature_min=temperature_min,
-        temperature_max=temperature_max,
+        coverage_temperature_min_k=coverage_temperature_min_k,
+        coverage_temperature_max_k=coverage_temperature_max_k,
         pressure_bar=pressure_bar,
         pressure=pressure,
         model_kind=model_kind,
@@ -98,7 +100,6 @@ def reaction_kinetics(
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
-        collapse=collapse,
         include=parse_include(include),
         offset=offset,
         limit=limit,
