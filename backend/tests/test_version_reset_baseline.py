@@ -62,9 +62,16 @@ EXPECTED: dict[str, int] = {
     "relative_energy_formats": 2,
 }
 
-#: One rubric is above the baseline: the transition-state badge lists its qualifying refs in the structure
-#: administrative key, whose version 2 changed that order.
-EXPECTED_REF: dict[tuple[str, str], int] = {("rubrics", "computed_transition_state"): 2}
+#: Names above the baseline inside a registry whose other names are at it. The transition-state badge lists its
+#: qualifying refs in the structure administrative key, whose version 2 changed that order. The native export and the ML
+#: export are at 2 because no export picks a record any more: the native manifest says ``records`` instead of
+#: ``collapse`` / ``selection_policy``, and the ML species record carries ``thermos``, a list, where it carried the one
+#: thermo it had picked.
+EXPECTED_REF: dict[tuple[str, str], int] = {
+    ("rubrics", "computed_transition_state"): 2,
+    ("document_formats", "tckdb.export"): 2,
+    ("document_formats", "tckdb.ml"): 2,
+}
 
 
 @pytest.mark.parametrize("name", sorted(REGISTRIES))
