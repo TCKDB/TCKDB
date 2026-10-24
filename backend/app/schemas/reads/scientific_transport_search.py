@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.db.models.common import (
     RecordReviewStatus,
@@ -32,6 +32,7 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
+from app.schemas.reads.scientific_assessment import refuse_check_inputs_in_body
 from app.schemas.reads.scientific_common import (
     OrderEcho,
     Pagination,
@@ -57,6 +58,12 @@ class TransportSearchRequest(BaseModel):
     ``model_kind`` filter name to match the spec's vocabulary. The
     public ``ScientificOriginKind`` enum drives the column lookup.
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_check_inputs(cls, data):
+        return refuse_check_inputs_in_body(data)
+
 
     # --- identity filters ------------------------------------------------
     species_ref: str | None = Field(

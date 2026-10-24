@@ -37,6 +37,7 @@ from app.schemas.reads._field_bounds import (
     MAX_SOFTWARE_NAME_LENGTH as _MAX_SOFTWARE_NAME_LENGTH,
 )
 from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
+from app.schemas.reads.scientific_assessment import refuse_check_inputs_in_body
 from app.schemas.reads.scientific_common import (
     OrderEcho,
     Pagination,
@@ -59,6 +60,12 @@ class ThermoSearchRequest(BaseModel):
     Inconsistent identifiers return an empty result set, not a 422. Every matching record is returned in display
     order; ``collapse`` and ``selection_policy`` are refused (422).
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_check_inputs(cls, data):
+        return refuse_check_inputs_in_body(data)
+
 
     @model_validator(mode="before")
     @classmethod

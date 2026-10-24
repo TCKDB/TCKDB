@@ -172,6 +172,16 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
         "rubric_version": None,
         "grade": None,
         "assessed_at": None,
+        "made_under": {
+            "rubric": None,
+            "assessed_version": None,
+            "current_rubric": None,
+            "current_version": None,
+            "state": "unassessed",
+            "stale_reason": None,
+            "inputs_checked": None,
+            "inputs_unchecked_reason": None,
+        },
     }
 
     current_row = evaluate_and_append_reproducibility(
@@ -182,7 +192,15 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
     current = client.get(f"{url}?include=assessments").json()["records"][0][
         "assessments"
     ]["reproducibility"]
+    # The list route does not compare inputs: the rubric is the one in force, nothing more is claimed.
+    assert current["state"] == current["made_under"]["state"] == "inputs_unchecked"
+    assert current["made_under"]["inputs_checked"] is False
+    checked = client.get(f"{url}?include=assessments&check_inputs=true&limit=10")
+    assert checked.status_code == 200, checked.text
+    assert checked.json()["request"]["check_inputs"] is True
+    current = checked.json()["records"][0]["assessments"]["reproducibility"]
     assert current["state"] == "current"
+    assert current["made_under"]["inputs_checked"] is True
     assert current["assessment_ref"] == current_row.public_ref
     assert current["rubric"] == "tckdb_reproducibility"
     assert current["rubric_version"] == 1
@@ -198,7 +216,7 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
         context_json={"outdated": True},
         assessor_kind=ReproducibilityAssessorKind.system,
     )
-    stale = client.get(f"{url}?include=assessments").json()["records"][0][
+    stale = client.get(f"{url}?include=assessments&check_inputs=true&limit=10").json()["records"][0][
         "assessments"
     ]["reproducibility"]
     assert stale["state"] == "stale"

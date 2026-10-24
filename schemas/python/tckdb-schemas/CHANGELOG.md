@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.134.0 - 2026-10-24
+
+Three refusal codes join the contract. No field is added or removed.
+
+- `check_inputs_not_supported` (422): `check_inputs` was sent to a route that does not compare inputs; it is refused, not ignored.
+- `assessment_input_check_limit` (422) and `check_inputs_needs_assessments` (422): the opt-in `check_inputs=true` on the thermo and kinetics lists compares each
+  stored assessment's inputs with today's, so it needs `include=assessments` and at most 10 records.
+
 ## 0.133.0 - 2026-10-24
 
 One refusal code joins the contract. No field is added or removed.

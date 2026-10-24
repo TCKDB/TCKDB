@@ -22,6 +22,22 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The made-under line (2026-10-24)
+
+An assessment now says which rubric judged it, at which version, and whether that is still the version in force.
+
+- **Wire (additive).** `assessments.deterministic_trust` and `assessments.reproducibility` carry `made_under`: `rubric`, `assessed_version`, `current_rubric`,
+  `current_version`, `state`, `stale_reason` (`rubric_version`, `prompt_version` or `inputs_changed`) and `inputs_checked`. `state` is `current`, `stale`,
+  `unassessed` or `inputs_unchecked`; the top-level `reproducibility.state` takes the same values. Version 0 means "stamped before the 2026-10 versioning reset"
+  and is never current. `unassessed` is not `stale`. The ROUTE decides whether a stored assessment's inputs are compared with today's (tens of statements per
+  record): statmech and transport by-ref reads always do; the thermo and kinetics entry-scoped lists only on an explicit `check_inputs=true` with
+  `include=assessments` and `limit` of at most 10 (422 `assessment_input_check_limit` / `check_inputs_needs_assessments`; echoed in `request.check_inputs`);
+  every other route compares the rubric version only and says `inputs_unchecked`, never `current`. A curated read never compares inputs, even when asked (`inputs_unchecked_reason: curated_profile`), so a hidden calculation's edit cannot move a visible verdict. `check_inputs` on any other route is refused (422 `check_inputs_not_supported`). The admin curator-task reads carry `made_under` for the stored
+  machine review the task came from, by the currency rule. `tckdb-client` 0.165.0 types it; `tckdb-schemas` 0.134.0 carries the two new refusal codes.
+- **Website.** One shared line (`MadeUnderLine`) with a Stale badge and a plain explanation ("It has not been re-assessed under the current version"; nothing
+  schedules a re-assessment). On the transition-state entry page (under the Trust fact), on each thermo record (the reproducibility assessment, requested with
+  `include=assessments`) and in the Machine findings queue.
+
 ## The rubric-change guard (2026-10-24)
 
 A rubric's version now has to move when its rules move. `backend/app/services/trust/rubric_pins.json` pins a fingerprint of each current rubric (the trust

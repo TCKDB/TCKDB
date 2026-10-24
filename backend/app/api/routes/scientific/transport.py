@@ -28,6 +28,7 @@ from app.api.routes.scientific._response import (
     omit_trust_unless_requested,
     omit_unrequested_sections,
     prepare_assessment_response,
+    refuse_check_inputs,
 )
 from app.db.models.common import (
     RecordReviewStatus,
@@ -56,7 +57,7 @@ router = APIRouter(prefix="/transport")
 _POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
 
-@router.get("/search", response_model=ScientificTransportSearchResponse)
+@router.get("/search", response_model=ScientificTransportSearchResponse, dependencies=[Depends(refuse_check_inputs)])
 def scientific_transport_search_get(
     session: Session = Depends(get_db),
     species_ref: str | None = Query(None),
@@ -126,7 +127,7 @@ def scientific_transport_search_get(
     )
 
 
-@router.post("/search", response_model=ScientificTransportSearchResponse)
+@router.post("/search", response_model=ScientificTransportSearchResponse, dependencies=[Depends(refuse_check_inputs)])
 def scientific_transport_search_post(
     request: Request,
     body: TransportSearchRequest,
@@ -159,6 +160,7 @@ def scientific_transport_search_post(
 @router.get(
     "/{transport_ref_or_id}",
     response_model=ScientificTransportDetailResponse,
+    dependencies=[Depends(refuse_check_inputs)],
 )
 def scientific_transport_detail(
     transport_ref_or_id: str = Path(..., min_length=1, max_length=64),
@@ -177,7 +179,7 @@ def scientific_transport_detail(
         include=parse_include(include),
     )
     visibility = prepare_assessment_response(
-        session, payload, attach_assessments=attach_transport_assessments
+        session, payload, attach_assessments=attach_transport_assessments, check_inputs=True
     )
     visibility = omit_trust_unless_requested(visibility, payload)
     return omit_unrequested_sections(

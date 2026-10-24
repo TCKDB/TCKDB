@@ -774,6 +774,7 @@ def get_reaction_kinetics(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
             include=sorted(includes),
+            check_inputs=request.check_inputs,
         ),
         reaction_entry_id=reaction_entry_id,
         reaction_entry_ref=reaction_entry_ref,
