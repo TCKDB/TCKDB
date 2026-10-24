@@ -553,6 +553,181 @@ def test_workflow_invokes_every_gate_script(script_rel: str) -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# Slices of a gate
+#
+# A gate may be run as several jobs, each taking a share of the gate's test
+# files (backend/tests/ci_sharding.py). The properties above -- every file is
+# selected by some required job, and that job can be reached -- are about the
+# gate. These are about the slices, and they are what stop "the gate is split
+# in three" from quietly becoming "two thirds of the gate is run".
+# ---------------------------------------------------------------------------
+
+#: gate name used in ``TCKDB_TEST_SHARD`` and the plan -> the gate script that
+#: defines what the gate selects.
+GATE_SCRIPTS = {
+    "api": "backend/scripts/test-api.sh",
+    "scientific": "backend/scripts/test-scientific.sh",
+    "rest": "backend/scripts/test-rest.sh",
+}
+
+#: The environment the workflow must hand to every slice, verbatim.
+EXPECTED_SHARD_ENV = "${{ matrix.gate }}:${{ matrix.slice }}/${{ matrix.slices }}"
+
+ci_sharding = _load_module("ci_sharding_for_gate_coverage", BACKEND_ROOT / "tests" / "ci_sharding.py")
+
+
+def _matrix_slices() -> dict[str, list[dict]]:
+    """``backend-gate``'s matrix entries, grouped by gate."""
+    job = _workflow(".github/workflows/backend-ci.yml")["jobs"]["backend-gate"]
+    grouped: dict[str, list[dict]] = {}
+    for entry in job["strategy"]["matrix"]["include"]:
+        grouped.setdefault(entry["gate"], []).append(entry)
+    return grouped
+
+
+def _gate_selection(gate: str) -> Selection:
+    script = GATE_SCRIPTS[gate]
+    matches = [selection for selection in _workflow_selections() if selection.label.endswith(f" -> {script}")]
+    assert len(matches) == 1, (
+        f"expected exactly one workflow step invoking {script}, found {len(matches)}; a gate that is "
+        "invoked twice is sliced twice"
+    )
+    return matches[0]
+
+
+def _backend_test_files() -> list[str]:
+    """``tests/...py`` paths relative to ``backend/``, the form pytest reports."""
+    return [
+        path.removeprefix("backend/")
+        for path in _test_files()
+        if path.startswith("backend/tests/")
+    ]
+
+
+def test_every_gate_is_split_into_exactly_the_slices_the_plan_was_built_for() -> None:
+    """The matrix holds slices 1..n of each gate, once each, and nothing else.
+
+    A slice deleted from the matrix is the cheapest way to make a gate
+    green: the other slices pass, the files assigned to the missing one are
+    never run, and nothing is red. ``Backend CI`` also checks the *reports*
+    at run time; this is the static half, and it fails on the pull request
+    that edits the workflow.
+    """
+    plan = ci_sharding.load_plan()
+    grouped = _matrix_slices()
+    assert set(grouped) == set(GATE_SCRIPTS) == set(plan), (
+        f"gates in the matrix {sorted(grouped)}, gate scripts {sorted(GATE_SCRIPTS)}, plan {sorted(plan)} "
+        "must all be the same set"
+    )
+    for gate, entries in grouped.items():
+        count = plan[gate]["slices"]
+        assert sorted(entry["slice"] for entry in entries) == list(range(1, count + 1)), (
+            f"{gate}: the matrix must hold slices 1..{count} exactly once each (the plan was built for {count}); "
+            f"it holds {sorted(entry['slice'] for entry in entries)}"
+        )
+        assert {entry["slices"] for entry in entries} == {count}, (
+            f"{gate}: every matrix entry must say slices: {count}, the count the plan was built for"
+        )
+        names = [entry["name"] for entry in entries]
+        assert len(set(names)) == len(names), f"{gate}: two slices share a job name {names}"
+
+
+def test_every_slice_is_told_which_slice_it_is() -> None:
+    """The gate steps must see ``TCKDB_TEST_SHARD`` and the report path."""
+    job = _workflow(".github/workflows/backend-ci.yml")["jobs"]["backend-gate"]
+    assert job["env"]["TCKDB_TEST_SHARD"] == EXPECTED_SHARD_ENV
+    assert job["env"]["TCKDB_TEST_SHARD_REPORT"].endswith("shard-${{ matrix.gate }}-${{ matrix.slice }}.json")
+    # No step may override it: a step that sets its own value could run a
+    # different share than the matrix entry says.
+    for step in job["steps"]:
+        assert "TCKDB_TEST_SHARD" not in (step.get("env") or {}), step.get("name")
+
+
+@pytest.mark.parametrize("gate", sorted(GATE_SCRIPTS))
+def test_every_file_a_gate_selects_is_run_by_exactly_one_slice(gate: str) -> None:
+    """The partition property, evaluated over the files on disk.
+
+    ``shard_of`` is a pure function of the path, so a file cannot be in two
+    slices; what can go wrong is a slice number outside ``1..n`` (a file no
+    job asks for), a slice that is empty (a job that checks nothing), or a
+    plan entry that files a test under the wrong gate.
+    """
+    plan = ci_sharding.load_plan()
+    count = plan[gate]["slices"]
+    selection = _gate_selection(gate)
+    files = [path for path in _backend_test_files() if selection.covers(f"backend/{path}")]
+    assert files, f"{gate}: the gate selects no test files; the selection is being read wrongly"
+
+    slices = ci_sharding.partition(files, gate, count, plan)
+    assert sorted(slices) == list(range(1, count + 1))
+    flat = [path for members in slices.values() for path in members]
+    assert sorted(flat) == sorted(files), f"{gate}: the slices do not add up to the gate's files"
+    assert len(flat) == len(set(flat)), f"{gate}: a file is in two slices"
+    empty = [index for index, members in slices.items() if not members]
+    assert not empty, f"{gate}: slice(s) {empty} would run nothing"
+
+    misfiled = sorted(
+        path
+        for path in plan[gate]["files"]
+        if (REPO_ROOT / "backend" / path).exists() and path not in set(files)
+    )
+    assert not misfiled, (
+        f"the plan files these under {gate!r} but the gate does not select them (regenerate it with "
+        f"backend/scripts/ci_shard_plan.py): {misfiled}"
+    )
+
+
+def test_a_file_the_plan_has_never_seen_still_lands_in_a_slice() -> None:
+    """A new test file needs no plan entry to be run -- that is the safety."""
+    plan = ci_sharding.load_plan()
+    for gate in GATE_SCRIPTS:
+        count = plan[gate]["slices"]
+        seen = {ci_sharding.shard_of(f"tests/brand_new/test_{n}.py", gate, count, plan) for n in range(400)}
+        assert seen <= set(range(1, count + 1))
+        assert seen == set(range(1, count + 1)), "the fallback should spread new files over every slice"
+
+
+def test_backend_ci_checks_the_slices_add_up() -> None:
+    """The aggregate job runs the cross-slice check, after a checkout, on every slice's report."""
+    workflow = _workflow(".github/workflows/backend-ci.yml")
+    job = workflow["jobs"]["backend-ci"]
+    assert set(job["needs"]) == {"quick-checks", "backend-gate"}
+    runs = [step.get("run", "") for step in job["steps"]]
+    assert any("check_gate_shards.py" in run for run in runs)
+    assert any(str(step.get("uses", "")).startswith("actions/checkout@") for step in job["steps"])
+    downloads = [step for step in job["steps"] if str(step.get("uses", "")).startswith("actions/download-artifact@")]
+    assert len(downloads) == 1 and downloads[0]["with"]["pattern"] == "shard-*"
+    # The slice reports are produced by an upload step in every slice.
+    uploads = [
+        step for step in workflow["jobs"]["backend-gate"]["steps"]
+        if str(step.get("uses", "")).startswith("actions/upload-artifact@")
+    ]
+    assert uploads and uploads[0]["with"]["name"].startswith("shard-")
+    assert not any(step.get("if") for step in job["steps"]), (
+        "no step of the aggregate may be conditional: a skipped check is a passed one"
+    )
+    assert not any(step.get("continue-on-error") for step in job["steps"])
+
+
+def test_quick_checks_keep_every_check_that_left_the_api_slice() -> None:
+    """Lint, types, hygiene, migrations, OpenAPI and MCP moved; none was dropped."""
+    steps = {step.get("name") for step in _workflow(".github/workflows/backend-ci.yml")["jobs"]["quick-checks"]["steps"]}
+    required = {
+        "Lint (ruff)",
+        "Lint (non-ASCII in runtime strings)",
+        "Type check (mypy, scoped)",
+        "Hygiene checks",
+        "Alembic upgrade head",
+        "Alembic drift check",
+        "OpenAPI golden snapshot",
+        "MCP integration gate",
+    }
+    assert required <= steps, f"missing from quick-checks: {sorted(required - steps)}"
+    job = _workflow(".github/workflows/backend-ci.yml")["jobs"]["quick-checks"]
+    assert not any(step.get("if") or step.get("continue-on-error") for step in job["steps"])
+
+
 def _required_modules() -> set[tuple[str, str]]:
     """``require_module(name, install=...)`` calls under backend/tests/.
 

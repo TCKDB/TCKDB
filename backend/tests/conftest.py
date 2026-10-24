@@ -26,7 +26,7 @@ from app.api.rate_limit import reset_rate_limit_store
 from app.db.models.api_key import ApiKey
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
-from tests import error_body_observer, error_code_observer
+from tests import ci_sharding, error_body_observer, error_code_observer, route_build_cache
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -34,6 +34,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # session, in the controller and in every xdist worker alike.
 error_code_observer.install()
 error_body_observer.install()
+# Build the route table once per process rather than once per test; see
+# tests/route_build_cache.py for why that cannot change what a test observes.
+route_build_cache.install()
 
 
 class ForeignSchemasPackageError(pytest.UsageError):
@@ -975,6 +978,12 @@ BODY_SWEEP_FLOORS: dict[tuple[str, ...], tuple[int, int]] = {
     ("tests", "!tests/api", "!tests/services/scientific_read"): (1, 1),
     ("tests/api",): (830, 1_080),
     ("tests/api/scientific", "tests/services/scientific_read"): (350, 360),
+    # What CI actually runs for the API gate: ``tests/api`` less the subtree the scientific gate owns and the
+    # OpenAPI snapshot, which the quick-checks job runs. Until this row existed that invocation matched no key
+    # above, so the API gate -- where 96% of the suite's error bodies come from -- ran with no floor at all and
+    # said so only in a log line. Measured on CI 2026-10-24: 1,638 bodies / 3,334 fields unsharded on main
+    # (run 40127869896) and 1,639 / 3,335 summed over the slices; rounded down ~10%.
+    ("tests/api", "!tests/api/scientific", "!tests/api/test_openapi_snapshot.py"): (1_470, 3_000),
 }
 
 
@@ -1031,6 +1040,7 @@ def pytest_sessionfinish(session, exitstatus) -> None:
     workeroutput = getattr(session.config, "workeroutput", None)
     if workeroutput is not None:
         workeroutput["tckdb_body_sweep"] = totals
+        workeroutput["tckdb_shard_counts"] = getattr(session.config, "_tckdb_shard_counts", None)
         return
     if os.environ.get("PYTEST_XDIST_WORKER"):
         return
@@ -1046,6 +1056,9 @@ def pytest_sessionfinish(session, exitstatus) -> None:
     reporter = session.config.pluginmanager.get_plugin("terminalreporter")
     selection = _selection_key(session.config)
     floor = BODY_SWEEP_FLOORS.get(selection) if selection is not None else None
+    shard = ci_sharding.from_environment()
+    if shard is not None:
+        _write_shard_report(session, shard, selection, (bodies, fields, client_errors), reporter)
 
     def say(line: str) -> None:
         if reporter is not None:
@@ -1058,6 +1071,20 @@ def pytest_sessionfinish(session, exitstatus) -> None:
         f"{fields} fields within them; {client_errors} JSON error responses "
         "reached a client."
     )
+    if shard is not None:
+        # One slice of a gate sees a fraction of the gate's error bodies, so the gate's floor cannot be held to
+        # it. The floor is checked on the sum of every slice by backend/scripts/check_gate_shards.py, which
+        # the "Backend CI" job runs; a slice that was skipped or lost fails that check by name.
+        say(f"{tally} Slice {shard}: the floor is checked on the sum of all slices.")
+        counts = _shard_counts(session.config)
+        if counts is not None and counts["total"] and not counts["selected"]:
+            say(
+                f"ERROR: slice {shard} selected none of the {counts['total']} collected tests. A slice that "
+                "runs nothing is a gate that passes having checked nothing; the shard plan "
+                "(tests/ci_shard_plan.json) or the workflow matrix is wrong."
+            )
+            session.exitstatus = pytest.ExitCode.TESTS_FAILED
+        return
     if floor is None:
         say(f"{tally} No floor: this selection is not one of the gate scripts.")
         return
@@ -1076,8 +1103,86 @@ def pytest_sessionfinish(session, exitstatus) -> None:
     session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
+def pytest_collection_modifyitems(config, items) -> None:
+    """Keep only this slice's test files when ``TCKDB_TEST_SHARD`` is set.
+
+    Runs in each xdist worker (the controller does not collect) and in a
+    plain session alike, and deselects with the standard hook so the
+    summary says how many tests the slice left to its siblings. See
+    ``tests/ci_sharding.py`` for why this cannot lose a test.
+    """
+    shard = ci_sharding.from_environment()
+    if shard is None:
+        return
+    total = len(items)
+    kept, dropped = ci_sharding.select(items, shard, ci_sharding.load_plan())
+    # An empty slice is NOT raised from here: inside an xdist worker an exception is reported as an
+    # INTERNALERROR with the reason lost. The slice runs nothing (pytest exits 5), the controller says why
+    # in pytest_sessionfinish and fails the run, and check_gate_shards.py refuses a slice with no tests.
+    items[:] = kept
+    if dropped:
+        config.hook.pytest_deselected(items=dropped)
+    config._tckdb_shard_counts = {"total": total, "selected": len(kept)}  # type: ignore[attr-defined]
+
+
+def _shard_counts(config):
+    """``{"total", "selected"}`` from this process or, under xdist, from a worker."""
+    counts = getattr(config, "_tckdb_shard_counts", None)
+    if counts is None:
+        for node_counts in getattr(config, "_tckdb_worker_shard_counts", []):
+            if node_counts is not None:
+                return node_counts
+    return counts
+
+
+def _write_shard_report(session, shard, selection, sweep, reporter) -> None:
+    """Record what this slice collected and ran, for the cross-slice check.
+
+    Written only when ``TCKDB_TEST_SHARD_REPORT`` names a file; the workflow
+    uploads it and the "Backend CI" job sums the slices. ``ran`` counts test
+    ids with any outcome, once each, so a test that fails and then errors in
+    teardown is one test.
+    """
+    path = os.environ.get("TCKDB_TEST_SHARD_REPORT")
+    if not path:
+        return
+    import json
+
+    counts = _shard_counts(session.config)
+    stats = getattr(reporter, "stats", {}) if reporter is not None else {}
+    outcomes = ("passed", "failed", "error", "skipped", "xfailed", "xpassed")
+    ran = {
+        getattr(report, "nodeid", None)
+        for key in outcomes
+        for report in stats.get(key, [])
+        if getattr(report, "nodeid", None)
+    }
+    document = {
+        "gate": shard.gate,
+        "index": shard.index,
+        "count": shard.count,
+        "total": counts["total"] if counts else None,
+        "selected": counts["selected"] if counts else None,
+        "ran": len(ran),
+        "failed": len(stats.get("failed", [])) + len([r for r in stats.get("error", []) if hasattr(r, "when")]),
+        # A CollectReport has no ``when``; an import error in a test file is one. A file that cannot be
+        # imported contributes no tests, so without this count it would shrink the gate and pass.
+        "collection_errors": len([r for r in stats.get("error", []) if not hasattr(r, "when")]),
+        "body_sweep": {"bodies": sweep[0], "fields": sweep[1]},
+        "selection_key": list(selection) if selection is not None else None,
+    }
+    Path(path).write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def pytest_testnodedown(node, error) -> None:
     """Collect a finished xdist worker's sweep totals on the controller."""
+    shard_counts = getattr(node, "workeroutput", {}).get("tckdb_shard_counts")
+    if shard_counts is not None:
+        node_counts = getattr(node.config, "_tckdb_worker_shard_counts", None)
+        if node_counts is None:
+            node_counts = []
+            node.config._tckdb_worker_shard_counts = node_counts  # type: ignore[attr-defined]
+        node_counts.append(shard_counts)
     totals = getattr(node, "workeroutput", {}).get("tckdb_body_sweep")
     if totals is None:
         return
