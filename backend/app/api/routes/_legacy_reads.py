@@ -273,10 +273,9 @@ def gate_path_record(param: str, record_type: SubmissionRecordType, kind_label: 
         raw = request.path_params.get(param)
         if raw is None:
             return
-        try:
-            record_id = int(raw)
-        except (TypeError, ValueError):
-            return
+        if not str(raw).isdecimal():
+            return  # not a row id: the route's own validation answers it
+        record_id = int(raw)
         ensure_not_below_floor(session, record_type, record_id, kind_label)
 
     dependency.__name__ = f"gate_{param}"
