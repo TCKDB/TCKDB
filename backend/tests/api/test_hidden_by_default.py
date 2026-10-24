@@ -35,7 +35,8 @@ S = RecordReviewStatus
 #: row 0 rejected, row 1 deprecated, the rest visible (one approved).
 HIDING_SPECS = [(S.rejected, 1), (S.deprecated, 2), (S.approved, 3), (S.not_reviewed, 4), (S.under_review, 5)]
 
-HIDING_CASES = sorted(set(CASES) - NO_REVIEW_STATE)
+#: The lookup envelope has its own shape and its own tests (test_lookup_visibility_and_selection.py).
+HIDING_CASES = sorted(c for c in set(CASES) - NO_REVIEW_STATE if not c.startswith("lookup-"))
 
 #: A species list always lists its species (a species has no review state of its own); what the default hides there is
 #: species entries, so the visible rows are counted among the entries.

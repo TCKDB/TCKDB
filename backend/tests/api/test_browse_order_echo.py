@@ -154,6 +154,9 @@ class Seeded:
     specs: list[tuple[RecordReviewStatus, int]] = field(default_factory=lambda: list(ROW_SPECS))
     #: Rows beyond this count are listed but not part of the comparison (an endpoint that lists a parent as well).
     created_attr: Callable[[Any], datetime] = lambda row: row.created_at
+    #: Where the response keeps its records and its order echo (the lookup envelope: ``results`` and ``order``).
+    records_key: str = "records"
+    sort_of: Callable[[dict], dict] = lambda body: body["request"]["sort"]
 
 
 def find(obj: Any, key: str) -> Any:
@@ -240,17 +243,17 @@ def served_indexes(client, seeded: Seeded) -> tuple[list[int], dict]:
         body = client.post(seeded.url, json=seeded.post_body).json()
     else:
         body = client.get(seeded.url).json()
-    assert "records" in body, body
+    assert seeded.records_key in body, body
     row_refs = seeded.row_refs or [row.public_ref for row in seeded.rows]
     refs = {ref: i for i, ref in enumerate(row_refs)}
-    served = [refs[seeded.ref_of(rec)] for rec in body["records"] if seeded.ref_of(rec) in refs]
+    served = [refs[seeded.ref_of(rec)] for rec in body[seeded.records_key] if seeded.ref_of(rec) in refs]
     return served, body
 
 
 def check_echo_matches_served_order(client, seeded: Seeded) -> None:
     served, body = served_indexes(client, seeded)
     assert len(served) == len(seeded.rows), f"endpoint returned {len(served)} of {len(seeded.rows)} seeded rows"
-    sort = body["request"]["sort"]
+    sort = seeded.sort_of(body)
     echoed = _keys(sort)
     expected = _order_by(seeded, echoed)
     assert served == expected, (
@@ -805,6 +808,36 @@ def test_a_ranking_the_request_names_is_labelled_in_the_echo(ranking, client, db
 def test_the_default_ranking_is_not_labelled(client, db_session):
     seeded = seed_calculations(db_session, route="species")
     assert client.get(seeded.url).json()["request"]["sort"]["requested_by"] is None
+
+
+# --- /lookup: results in the display order, echoed in ``order`` ------------------------------------------------------
+
+
+def _lookup(seed: Callable[..., Seeded], path: str, param: str, **kwargs) -> Callable[[Any], Seeded]:
+    """The lookup lists the same records over the same keys; a record is named by its id there."""
+
+    def build(db_session) -> Seeded:
+        seeded = seed(db_session, **kwargs)
+        owner = getattr(seeded.rows[0], param)
+        seeded.url = f"/api/v1/lookup/{path}?{param}={owner}"
+        seeded.ref_of = lambda rec: str(rec["id"])
+        seeded.row_refs = [str(row.id) for row in seeded.rows]
+        seeded.records_key = "results"
+        seeded.sort_of = lambda body: body["order"]
+        return seeded
+
+    return build
+
+
+EXTRA_CASES.update(
+    {
+        "lookup-thermo": _lookup(seed_thermo, "thermo", "species_entry_id", search=False),
+        "lookup-statmech": _lookup(seed_statmech, "statmech", "species_entry_id", search=False),
+        "lookup-transport": _lookup(seed_transport, "transport", "species_entry_id", search=False),
+        "lookup-kinetics": _lookup(seed_kinetics, "kinetics", "reaction_entry_id", search=False),
+        "lookup-calculations": _lookup(seed_calculations, "calculations", "species_entry_id", route="calculations"),
+    }
+)
 
 
 CASES: dict[str, Callable[[Any], Seeded]] = {

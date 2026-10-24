@@ -263,3 +263,68 @@ def test_the_disclosure_costs_one_statement_per_list_and_none_under_curated(clie
     assert len(default) == 3, default
     assert len(curated) == 2, curated
     assert not any("GROUP BY record_review.status" in x for x in curated + both_lifted)
+
+
+# --- structural nets: a route added tomorrow is covered the day it exists ------------------------------------------
+
+LEGACY_PREFIXES = (
+    "/api/v1/lookup",
+    "/api/v1/calculations",
+    "/api/v1/species",
+    "/api/v1/species-entries",
+    "/api/v1/reactions",
+    "/api/v1/reaction-entries",
+    "/api/v1/kinetics",
+    "/api/v1/thermo",
+    "/api/v1/transition-states",
+    "/api/v1/geometries",
+    "/api/v1/levels-of-theory",
+    "/api/v1/software",
+    "/api/v1/software-releases",
+    "/api/v1/literature",
+    "/api/v1/conformer-groups",
+    "/api/v1/conformer-observations",
+    "/api/v1/energy-correction-schemes",
+    "/api/v1/frequency-scale-factors",
+    "/api/v1/applied-energy-corrections",
+    "/api/v1/workflow-tools",
+    "/api/v1/workflow-tool-releases",
+    "/api/v1/statmech",
+    "/api/v1/transport",
+    "/api/v1/networks",
+)
+
+
+def _legacy_get_operations(spec):
+    for path, item in spec["paths"].items():
+        if any(path == p or path.startswith(p + "/") for p in LEGACY_PREFIXES) and "get" in item:
+            yield path, item["get"]
+
+
+def test_every_lookup_and_legacy_read_declares_the_read_profile(client):
+    """Kills: a legacy or lookup router added without the profile dependency (a read the curated profile cannot reach)."""
+    spec = client.get("/openapi.json").json()
+    operations = list(_legacy_get_operations(spec))
+    assert len(operations) > 60, len(operations)  # the scan reached the surface, not an empty prefix
+    missing = [path for path, op in operations if "profile" not in {p["name"] for p in op.get("parameters", [])}]
+    assert not missing, missing
+
+
+def test_every_calculation_sub_route_answers_404_for_a_calculation_below_the_floor(client, db_session):
+    """Every GET under ``/calculations/{calculation_id}/...``, called for a calculation the curated floor hides, answers
+    as an unknown id does. Kills: a sub-route added outside the router-level gate."""
+    species = make_species(db_session, smiles="C=O", inchi_key=next_inchi_key("LSW"))
+    entry = make_species_entry(db_session, species)
+    calc = make_calculation(db_session, species_entry_id=entry.id)  # never reviewed: below the curated floor
+    spec = client.get("/openapi.json").json()
+    paths = [
+        path
+        for path, item in spec["paths"].items()
+        if path.startswith("/api/v1/calculations/{calculation_id}") and "get" in item
+    ]
+    assert len(paths) > 15, paths
+    for path in paths:
+        response = client.get(path.replace("{calculation_id}", str(calc.id)), params={"profile": "curated"})
+        assert response.status_code == 404, (path, response.status_code)
+        unknown = client.get(path.replace("{calculation_id}", "999999999"), params={"profile": "curated"})
+        assert response.json() == unknown.json(), path
