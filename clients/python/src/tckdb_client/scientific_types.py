@@ -12,10 +12,38 @@ from typing import Any, Generic, Literal, NotRequired, Required, TypeAlias, Type
 JSONDict: TypeAlias = dict[str, Any]
 
 
-class ReproducibilityAssessmentSummary(TypedDict):
-    """Compact immutable assessment identity and freshness state."""
+class MadeUnder(TypedDict):
+    """Which rubric judged an assessment, at which version, and whether that is still the current one.
 
-    state: Required[str]
+    ``state`` is ``current`` (the version in force, and the inputs were compared with today's), ``inputs_unchecked``
+    (the version in force, but this route does not compare the inputs: a list or search read never says ``current``),
+    ``stale`` (another version, or the same version over inputs that have changed) or ``unassessed`` (nothing to name).
+    ``assessed_version`` 0 means "stamped before the 2026-10 versioning reset" and is never current.
+    ``stale_reason`` is ``rubric_version``, ``prompt_version`` (a stored machine review) or ``inputs_changed`` when
+    ``state`` is ``stale``. ``inputs_checked`` is true only on a route that compares the inputs, ``None`` when
+    there is nothing to compare. ``inputs_unchecked_reason`` is ``curated_profile`` when a curated read withholds
+    the comparison (a hidden record's edit must not move a visible verdict).
+    """
+
+    state: Literal["current", "stale", "unassessed", "inputs_unchecked"]
+    rubric: str | None
+    assessed_version: int | None
+    current_rubric: str | None
+    current_version: int | None
+    stale_reason: Literal["rubric_version", "prompt_version", "inputs_changed"] | None
+    inputs_checked: bool | None
+    inputs_unchecked_reason: Literal["curated_profile"] | None
+
+
+class ReproducibilityAssessmentSummary(TypedDict):
+    """The latest stored reproducibility assessment: its identity and what it was made under.
+
+    ``state`` mirrors ``made_under.state``. Thermo and kinetics lists compare inputs only when asked
+    (``check_inputs=True``, at most 10 records); statmech and transport by-ref reads always do.
+    """
+
+    state: Required[Literal["current", "stale", "unassessed", "inputs_unchecked"]]
+    made_under: MadeUnder | None
     assessment_ref: str | None
     rubric: str | None
     rubric_version: int | None
@@ -23,9 +51,19 @@ class ReproducibilityAssessmentSummary(TypedDict):
     assessed_at: str | None
 
 
+class DeterministicTrustSummary(TypedDict):
+    """The code-defined evidence assessment, evaluated at read time (so ``made_under.state`` is always ``current``)."""
+
+    rubric: str
+    rubric_version: int
+    grade: str
+    hard_fail: str | None
+    made_under: MadeUnder | None
+
+
 class PublicAssessmentSummary(TypedDict):
-    deterministic_trust: Required[JSONDict]
-    reproducibility: Required[ReproducibilityAssessmentSummary]
+    deterministic_trust: DeterministicTrustSummary
+    reproducibility: ReproducibilityAssessmentSummary
 
 
 class Pagination(TypedDict):
@@ -1748,6 +1786,8 @@ __all__ = [
     "ReactionParticipantRecord",
     "ReactionRecord",
     "ReactionSearchResponse",
+    "DeterministicTrustSummary",
+    "MadeUnder",
     "ReproducibilityAssessmentSummary",
     "ReviewStatusSummary",
     "ScientificDetailResponse",

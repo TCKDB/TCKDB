@@ -109,6 +109,8 @@ class KineticsReadRequest(BaseModel):
     include: list[str] = Field(default_factory=list)
     offset: int = 0
     limit: int = 50
+    #: Whether ``include=assessments`` compares each stored assessment's inputs with today's (opt-in; at most 10 records).
+    check_inputs: bool = False
 
     @model_validator(mode="after")
     def _resolve_pressure_alias(self) -> Self:
@@ -529,6 +531,8 @@ class RequestEcho(ProfiledRequestEcho):
     filter: dict[str, object]
     sort: OrderEcho
     include: list[str]
+    #: Whether this read compared each stored assessment's inputs with today's (``check_inputs=true``).
+    check_inputs: bool = False
 
 
 class ScientificReactionKineticsResponse(BaseModel):

@@ -46,6 +46,7 @@ from app.api.routes.scientific._response import (
     omit_trust_unless_requested,
     omit_unrequested_sections,
     prepare_assessment_response,
+    refuse_check_inputs,
 )
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.removed_parameters import STATMECH as _STATMECH_REMOVED
@@ -80,6 +81,7 @@ router = APIRouter(prefix="/species-entries")
 @router.get(
     "/{species_entry_id}/statmech",
     response_model=ScientificStatmechSearchResponse,
+    dependencies=[Depends(refuse_check_inputs)],
 )
 def species_statmech(
     http_request: Request,
@@ -140,6 +142,7 @@ def species_statmech(
 @router.get(
     "/{species_entry_id}/transport",
     response_model=ScientificTransportSearchResponse,
+    dependencies=[Depends(refuse_check_inputs)],
 )
 def species_transport(
     http_request: Request,

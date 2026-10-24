@@ -176,6 +176,10 @@ const trustSchema = z.object({
     evidence: z.object({
         passed_count: z.number(),
         possible_count: z.number(),
+        // The rubric that judged the entry and its integer version (`EvidenceEvaluation.rubric`/`rubric_version`).
+        // Evaluated at read time, so always the version in force. Optional so an older deployment still renders.
+        rubric: z.string().optional(),
+        rubric_version: z.number().optional(),
         checks: z.record(z.string(), z.string()).optional(),
     }).passthrough(),
     structure_assessment: structureAssessmentSchema.nullable().optional(),

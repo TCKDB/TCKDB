@@ -28,6 +28,7 @@ from app.api.routes.scientific._response import (
     omit_trust_unless_requested,
     omit_unrequested_sections,
     prepare_assessment_response,
+    refuse_check_inputs,
 )
 from app.db.models.common import (
     RecordReviewStatus,
@@ -61,7 +62,8 @@ _GET_ALLOWED_QS_KEYS: set[str] = set(StatmechSearchRequest.model_fields) | set(P
 
 
 @router.get(
-    "/search", response_model=ScientificStatmechSearchResponse
+    "/search", response_model=ScientificStatmechSearchResponse,
+    dependencies=[Depends(refuse_check_inputs)],
 )
 def scientific_statmech_search_get(
     request: Request,
@@ -151,7 +153,8 @@ def scientific_statmech_search_get(
 
 
 @router.post(
-    "/search", response_model=ScientificStatmechSearchResponse
+    "/search", response_model=ScientificStatmechSearchResponse,
+    dependencies=[Depends(refuse_check_inputs)],
 )
 def scientific_statmech_search_post(
     request: Request,
@@ -189,6 +192,7 @@ def scientific_statmech_search_post(
 @router.get(
     "/{statmech_ref_or_id}",
     response_model=ScientificStatmechDetailResponse,
+    dependencies=[Depends(refuse_check_inputs)],
 )
 def scientific_statmech_detail(
     statmech_ref_or_id: str = Path(..., min_length=1, max_length=64),
@@ -207,7 +211,7 @@ def scientific_statmech_detail(
         include=parse_include(include),
     )
     visibility = prepare_assessment_response(
-        session, payload, attach_assessments=attach_statmech_assessments
+        session, payload, attach_assessments=attach_statmech_assessments, check_inputs=True
     )
     visibility = omit_trust_unless_requested(visibility, payload)
     return omit_unrequested_sections(

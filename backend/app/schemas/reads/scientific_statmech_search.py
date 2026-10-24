@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.db.models.common import (
     RecordReviewStatus,
@@ -32,6 +32,7 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
+from app.schemas.reads.scientific_assessment import refuse_check_inputs_in_body
 from app.schemas.reads.scientific_common import (
     OrderEcho,
     Pagination,
@@ -54,6 +55,12 @@ class StatmechSearchRequest(BaseModel):
     A key the model does not declare is a 422 (``extra_forbidden``), never
     ignored: a misspelled filter would otherwise quietly widen the result.
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_check_inputs(cls, data):
+        return refuse_check_inputs_in_body(data)
+
 
     model_config = ConfigDict(extra="forbid")
 

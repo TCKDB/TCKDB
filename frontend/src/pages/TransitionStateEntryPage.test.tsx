@@ -404,6 +404,40 @@ describe("TransitionStateEntryPage", () => {
         expect(screen.getByText(/24\/26/)).toBeVisible()
     })
 
+    it("made under: the trust badge names its rubric and version, as current", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    trust: {
+                        trust_status: "partial",
+                        evidence: { passed_count: 10, possible_count: 20, rubric: "computed_transition_state", rubric_version: 2 },
+                    },
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        const line = document.querySelector('[data-component="made-under"]')
+        expect(line).toHaveAttribute("data-state", "current")
+        expect(line).toHaveTextContent("Assessed under rubric computed transition state, version 2, the current version.")
+        // It sits under the Trust fact it describes, not under the structure assessment beside it.
+        const trustFact = screen.getByText("Trust").closest("div") as HTMLElement
+        expect(trustFact).toContainElement(line as HTMLElement)
+        const structureFact = screen.queryByText("Structure assessment")?.closest("div")
+        if (structureFact) expect(structureFact).not.toContainElement(line as HTMLElement)
+    })
+
+    it("made under: no line when the server does not name the rubric (an older deployment)", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({ trust: { trust_status: "partial", evidence: { passed_count: 10, possible_count: 20 } } }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(document.querySelector('[data-component="made-under"]')).toBeNull()
+    })
+
     function assessmentWith(structure_assessment: Record<string, unknown> | undefined, checks?: Record<string, string>) {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({

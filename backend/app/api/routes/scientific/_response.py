@@ -32,12 +32,14 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
+from fastapi import Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import CodedValueError
 from app.services.scientific_read.internal_ids import apply_internal_ids_visibility
 
-AssessmentAttacher = Callable[[Session, Any], Any]
+AssessmentAttacher = Callable[..., Any]
 
 # Envelope shapes the strip knows how to walk. ``scope`` names *where the
 # records are*, never *which fields to drop* — that is the table's job and
@@ -684,13 +686,52 @@ def omit_unrequested_sections(
     return JSONResponse(data)
 
 
+#: The most records an opt-in ``check_inputs`` read may cover: each one re-evaluates its stored assessment's inputs.
+MAX_CHECKED_ASSESSMENTS = 10
+
+
+def refuse_check_inputs(request: Request) -> None:
+    """Dependency for every route that serves ``include=assessments`` but does not compare inputs: refuse the query
+    parameter rather than ignore it, so a caller never believes a check ran. A search body is refused by its request
+    model (``refuse_check_inputs_in_body``), which judges the parsed object, not the raw text."""
+    present = "check_inputs" in request.query_params
+    if present:
+        raise CodedValueError(
+            "check_inputs_not_supported",
+            "check_inputs is supported only on the thermo and kinetics entry-scoped lists (with include=assessments) and, "
+            "implicitly, on by-ref statmech and transport reads; this route does not compare inputs.",
+        )
+
+
+def require_bounded_input_check(*, request_include: list[str], check_inputs: bool, limit: int) -> None:
+    """Refuse ``check_inputs=true`` without ``include=assessments`` or beyond the bound, so the cost is explicit."""
+    if not check_inputs:
+        return
+    if "assessments" not in set(request_include):
+        raise CodedValueError(
+            "check_inputs_needs_assessments",
+            "check_inputs=true compares the inputs of the assessments returned by include=assessments; "
+            "request include=assessments as well.",
+        )
+    if limit > MAX_CHECKED_ASSESSMENTS:
+        raise CodedValueError(
+            "assessment_input_check_limit",
+            f"check_inputs=true re-evaluates every stored assessment on the page; ask for limit={MAX_CHECKED_ASSESSMENTS} "
+            "or fewer.",
+        )
+
+
 def prepare_assessment_response(
     session: Session,
     payload: Any,
     *,
     attach_assessments: AssessmentAttacher,
+    check_inputs: bool = False,
 ) -> Any:
     """Attach requested assessments, then apply public-field visibility.
+
+    ``check_inputs`` is the ROUTE's decision, never the page size: a by-ref detail read and an explicit, bounded opt-in
+    compare a stored assessment's inputs with today's; every other route compares the rubric version only.
 
     The resolved read profile is stamped inside
     :func:`app.services.scientific_read.internal_ids.apply_internal_ids_visibility`,
@@ -699,7 +740,7 @@ def prepare_assessment_response(
     """
 
     if "assessments" in set(payload.request.include):
-        attach_assessments(session, payload)
+        attach_assessments(session, payload, check_inputs=check_inputs)
     visibility = apply_internal_ids_visibility(payload)
     return omit_assessments_unless_requested(visibility, payload)
 

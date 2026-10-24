@@ -221,9 +221,23 @@ def _currency_mismatches(
         reasons.append(MachineReviewStaleReason.context_schema_version_mismatch)
     if stored.context_hash != active.context_hash:
         reasons.append(MachineReviewStaleReason.context_hash_mismatch)
-    if stored.prompt != active.prompt:
+    reasons.extend(stamp_mismatches(stored.prompt, stored.rubric, active.prompt, active.rubric))
+    return tuple(reasons)
+
+
+def stamp_mismatches(
+    stored_prompt: VersionRef | StoredVersionRef,
+    stored_rubric: VersionRef | StoredVersionRef,
+    active_prompt: VersionRef,
+    active_rubric: VersionRef,
+) -> tuple[MachineReviewStaleReason, ...]:
+    """The prompt and rubric dimensions of currency: the one rule, used by the classifier and by a read that does not
+    have the evidence digest (the curator queue's "made under" line). A different name or a different version of either
+    is a mismatch; a stored version 0 (stamped before the 2026-10 reset) never matches."""
+    reasons: list[MachineReviewStaleReason] = []
+    if stored_prompt != active_prompt:
         reasons.append(MachineReviewStaleReason.prompt_version_mismatch)
-    if stored.rubric != active.rubric:
+    if stored_rubric != active_rubric:
         reasons.append(MachineReviewStaleReason.rubric_versions_mismatch)
     return tuple(reasons)
 

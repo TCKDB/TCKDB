@@ -950,6 +950,29 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "exists: reads list every matching record in display order and the select endpoints answer "
                 "'give me one'. context carries the parameter and the select endpoint, when there is one."
             )),
+    ApiCode("assessment_input_check_limit", 422, Surface.coded_exception,
+            "backend/app/api/routes/scientific/_response.py",
+            shape=Shape.relationship,
+            note=(
+                "check_inputs=true on a thermo or kinetics list re-evaluates every stored assessment on the page, so it is "
+                "allowed for at most 10 records. Ask for limit=10 or fewer, or drop check_inputs: a list then compares the "
+                "rubric version only and reports state inputs_unchecked."
+            )),
+    ApiCode("check_inputs_not_supported", 422, Surface.coded_exception,
+            "backend/app/api/routes/scientific/_response.py",
+            shape=Shape.relationship,
+            note=(
+                "check_inputs was sent to a route that does not compare stored assessments' inputs (a search, or a by-ref "
+                "statmech or transport read, which always compares them). It is refused rather than ignored, so a caller never "
+                "believes a check ran. It is supported on the thermo and kinetics entry-scoped lists with include=assessments."
+            )),
+    ApiCode("check_inputs_needs_assessments", 422, Surface.coded_exception,
+            "backend/app/api/routes/scientific/_response.py",
+            shape=Shape.relationship,
+            note=(
+                "check_inputs=true compares the inputs of the assessments include=assessments returns; it needs "
+                "include=assessments."
+            )),
     ApiCode("bundle_too_large", 413, Surface.response_literal,
             "backend/app/api/bundle_limits.py",
             shape=Shape.relationship,

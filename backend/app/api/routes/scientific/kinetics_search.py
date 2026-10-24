@@ -12,6 +12,7 @@ from app.api.routes.scientific._response import (
     ANYWHERE_SCOPE,
     omit_trust_unless_requested,
     prepare_assessment_response,
+    refuse_check_inputs,
 )
 from app.db.models.common import KineticsModelKind, RecordReviewStatus
 from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
@@ -38,7 +39,7 @@ router = APIRouter(prefix="/kinetics")
 _POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
 
-@router.get("/search", response_model=ScientificKineticsSearchResponse)
+@router.get("/search", response_model=ScientificKineticsSearchResponse, dependencies=[Depends(refuse_check_inputs)])
 def kinetics_search_get(
     http_request: Request,
     session: Session = Depends(get_db),
@@ -126,7 +127,7 @@ def kinetics_search_get(
     return omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
 
 
-@router.post("/search", response_model=ScientificKineticsSearchResponse)
+@router.post("/search", response_model=ScientificKineticsSearchResponse, dependencies=[Depends(refuse_check_inputs)])
 def kinetics_search_post(
     request: Request,
     body: KineticsSearchRequest,

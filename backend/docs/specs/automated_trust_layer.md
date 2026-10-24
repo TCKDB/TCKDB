@@ -1159,3 +1159,76 @@ These are intentionally left for implementation review.
 - **Advisory** — describes any signal (LLM precheck, third-party
   agent label) that surfaces to readers but does not influence the
   evidence completeness ratio or the trust status.
+
+
+## 17. Made under
+
+**Made under.** Every assessment a page shows names the rubric that judged it and its integer version. The wire shape is `MadeUnder`
+(`app/schemas/reads/scientific_assessment.py`): `rubric`, `assessed_version`, `current_rubric`, `current_version`, `state`, `stale_reason`.
+
+- `current`: made under the version in force, and the inputs were compared with today's and match.
+- `inputs_unchecked`: made under the version in force, but the route does not compare the inputs, so nothing is claimed about them. A list or
+  search read says this and never `current`.
+- `stale`: an assessment exists but was made under another version (`stale_reason: rubric_version`) or, with the version unchanged, before its inputs changed
+  (`inputs_changed`: the inputs the assessment was computed from differ now, which can be new evidence or a changed rule under the same version). A page
+  says it has not been re-assessed under the current version; nothing schedules a re-assessment, only a curator action runs one.
+- `unassessed`: no assessment exists, so no rubric is named. Never a kind of stale.
+- Version 0 means "stamped before the 2026-10 versioning reset"; no registry holds 0, so it is never current. Pages word it that way, never as "v0".
+- The deterministic trust badge is computed at read time under the rubric version in force, so it is `current` by construction. Only stored assessments
+  (reproducibility) can be stale. Evidence-completeness checklists on thermo and kinetics are not registered rubrics and carry no version yet.
+- The line never ranks a record: it names the rule that judged it.
+- `inputs_checked`: whether the assessment's inputs were compared with today's. Re-evaluating them costs tens of statements per record, so **the route decides,
+  never the response size**: statmech and transport by-ref reads always compare them; the thermo and kinetics entry-scoped lists compare them only on an explicit
+  `check_inputs=true` with `include=assessments` and `limit` of at most 10 (422 `assessment_input_check_limit` otherwise; echoed as `request.check_inputs`);
+  every other route compares the rubric name and version only and reports `inputs_unchecked`. `null` when there is nothing to compare (`unassessed`).
+  Under a profile that hides records (`curated`) the comparison is never made, even when asked: it would compare today's inputs, hidden calculations included, with
+  the stored snapshot, and a hidden edit would move a visible verdict. The answer is `inputs_unchecked` with `inputs_unchecked_reason: curated_profile`. `check_inputs` sent
+  to a route that does not support it is refused (422 `check_inputs_not_supported`), not ignored; a bad handle is a 404 before `check_inputs` is judged.
+- The admin curator-task reads carry `made_under` for the stored machine review the task came from (the row whose `source_audit_event_id` is the task's; the
+  record's latest reviewer-family review when the task has none), read by the currency rule (`currency.stamp_mismatches`): a different prompt or rubric name or
+  version, or a stored version 0, is `stale` (`stale_reason` `rubric_version` or `prompt_version`); otherwise `inputs_unchecked`, because the evidence hash is
+  not compared for a page of tasks. A task whose source review is not stored has none. The page words it as a review ("Reviewed under ...").
+- Procedures without a version (the evidence-completeness checklists, geometry validation, SCF stability) carry no `made_under`: a version is not invented
+  for them.
+
+## 18. The rubric-change guard, and bumping a rubric
+
+A stored assessment names the rubric version it was made under, and a reader decides *stale* by comparing that number with the current one. That only works
+if the number moves when the rules move. `app/services/trust/rubric_pins.json` holds, for each current `(name, version)`, a fingerprint of what the rubric
+decides; `tests/scripts/test_rubric_pins.py` and `backend/scripts/generate_rubric_pins.py --check` fail when the two disagree. The test runs in the complement
+gate, like the other generator checks.
+
+**What is pinned.** Every trust rubric that declares checks, and both reproducibility rubrics (`tckdb_reproducibility`, `tckdb_reproducibility_ts_statmech`).
+Rubrics declared with `checks=()` (the review-tier ones) are not pinned: their rules live in the services that run them, a pin of an empty list would pass
+whatever those did, and `unguarded_rubric_names()` lists them.
+
+**The fingerprint.** For a trust rubric: its record type; each check's name, kind and weight and the code its runner executes; and the code of the evaluator
+entrypoints in `GRADING_ENTRYPOINTS` (hard-fail detectors, completeness aggregation, label thresholds, and for the transition-state rubric the scoped context
+builders). For a reproducibility rubric: its name and the code of `evaluate_reproducibility` and `reproducibility_rubric_for`. `explain` wording is excluded.
+"Code" is the AST without docstrings or comments, followed across `app` and `tckdb_schemas` through every function named or called (decorators unwrapped,
+`staticmethod`, `property`, `partial`, lambdas), every callable inside a constant container, every module constant read, and every in-scope class referenced as
+a whole (an enum's methods and properties count; an SQLAlchemy model contributes its methods, not its columns).
+
+**It fails closed.** It raises rather than skips: a constant it cannot canonicalise, a callable without readable source, `getattr` with a computed name
+(unless the site is listed in `DYNAMIC_ATTRIBUTE_READS` with the reason it reads a data attribute and never chooses a function), `eval`/`exec`/`globals`, and any read of
+the environment or of `settings` (declare a genuine one in `DECLARED_INPUTS`). The pins record the Python minor version, because `ast.dump` differs between minors.
+
+**Also followed.** Imports inside a function body; the enum columns and relationship targets of every ORM model it reaches (an instance of a model carries
+the behaviour of its enums, e.g. `ArtifactIntegrityFinding.is_break`); ORM `hybrid_property` accessors and `column_property` expressions; module-level SQL
+expressions (as the text they compile to); and the runtime statmech rubric chooser (`evaluate_loaded_statmech`, `statmech_rubric_for`). A test checks that every
+`evaluate_*` the read services call is reached by a pinned rubric. Also refused: `sys.modules` and `__dict__[...]` lookups, and a module constant read from the
+environment at import unless it is listed in `DECLARED_ENVIRONMENT_CONSTANTS` as configuration (the storage endpoint and credentials; they differ between CI and a
+laptop). `DYNAMIC_ATTRIBUTE_READS` keys the exact call, so a second computed `getattr` in an allowed function still fails.
+
+**Left out of the fingerprint, on purpose.** Pydantic `Field` descriptions, titles and examples, and the plain-text message of a `raise` (its `code=` and every
+other argument still count). Docstrings and comments are not in the AST. A renamed local variable or an added type annotation does move it. **Out of scope:**
+DB-side functions and triggers, server defaults and migrations.
+
+**To bump a rubric.** (1) Change the checks. (2) Raise `version` on its `EvidenceRubric` in `app/services/trust/rubrics.py` (or on `SHARED` / `TS_STATMECH` in
+`reproducibility_rubric.py`). (3) Run `conda run -n tckdb_env python backend/scripts/generate_rubric_pins.py` and commit the pin. A new rubric with checks also
+needs an entry in `GRADING_ENTRYPOINTS`. The script refuses to re-pin a changed rubric whose version did not move. `--allow-unbumped NAME --reason TEXT`
+overrides for a change that decides nothing new and records `{name, version, reason}` in `unbumped_overrides` (the test surfaces them);
+`--repin-for-python` re-pins everything after a Python minor upgrade and refuses unless only the Python version moved. A change to the fingerprinting itself
+bumps `ALGORITHM` and re-pins everything, recorded as `algorithm_repin` in `unbumped_overrides`, in a commit that changes nothing else. Pre-release, pins are kept for current versions only.
+
+**Not guarded, candidates:** selection procedures, `RENDERERS`, `PAYLOAD_FORMATS`, `PARSERS`, and the review-tier rubrics above.
