@@ -23,7 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 from pydantic import ValidationError
 from sqlalchemy import Float, func, select
@@ -114,10 +114,7 @@ def apply_filters(session: Session, ids: list[int], filters: NetworkFilters) -> 
                 .distinct()
             )
         )
-    provenance = {
-        k: getattr(filters, k)
-        for k in ("method", "basis", "software", "software_version", "workflow_tool", "workflow_tool_version")
-    }
+    provenance = {k: v for k, v in asdict(filters).items() if k != "model_kind"}
     if keep and any(v is not None for v in provenance.values()):
         links: dict[int, set[int]] = {i: set() for i in keep}
         for solve_id, calculation_id in session.execute(

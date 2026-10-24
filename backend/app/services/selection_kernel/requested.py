@@ -66,11 +66,22 @@ class Eligibility:
         """The settings of a request; a field the request's model does not offer is not lifted."""
         if request is None:
             return cls(offered=offered)
-        return cls(**{f: bool(getattr(request, f, False)) for f in offered}, offered=offered)
+        stated = request.model_dump()
+        return cls(**{f: bool(stated.get(f, False)) for f in offered}, offered=offered)
+
+    def flags(self) -> dict[str, bool]:
+        """Every flag by name (a plain mapping, so no code reads an attribute by a computed name)."""
+        return {
+            "include_rejected": self.include_rejected,
+            "include_deprecated": self.include_deprecated,
+            "include_hard_failed_evidence": self.include_hard_failed_evidence,
+            "include_confirmed_findings": self.include_confirmed_findings,
+        }
 
     def to_record(self) -> dict[str, bool]:
         """What a manifest records: every flag the route offers, so a stored decision never depends on a later default."""
-        return {f: getattr(self, f) for f in self.offered}
+        flags = self.flags()
+        return {f: flags[f] for f in self.offered}
 
     @classmethod
     def from_record(cls, raw: object, offered: tuple[str, ...] = _FIELDS) -> Eligibility:
@@ -81,7 +92,7 @@ class Eligibility:
     def lifts(self, name: str) -> bool:
         """Whether this request lifted the named default. A default with no flag of its own (a calculation quality,
         lifted by naming ``rejected`` among the permitted qualities) is not lifted here."""
-        return bool(getattr(self, OVERRIDE_FIELD[name], False)) if OVERRIDE_FIELD[name] in _FIELDS else False
+        return self.flags().get(OVERRIDE_FIELD[name], False)
 
 
 @dataclass(frozen=True)

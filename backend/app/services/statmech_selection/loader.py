@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Collection
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -167,10 +167,7 @@ def apply_filters(session: Session, ids: list[int], filters: StatmechFilters) ->
                 )
             )
         )
-    provenance = {
-        k: getattr(filters, k)
-        for k in ("method", "basis", "software", "software_version", "workflow_tool", "workflow_tool_version")
-    }
+    provenance = {k: v for k, v in asdict(filters).items() if k != "model_kind"}
     if keep and any(v is not None for v in provenance.values()):
         links: dict[int, set[int]] = {i: set() for i in keep}
         for statmech_id, calculation_id in session.execute(

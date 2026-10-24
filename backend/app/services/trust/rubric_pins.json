@@ -16,7 +16,7 @@
       "1": "28e638f09e687fce82fcc274d372e97cdcc938dad8acbafa2b598c6d803a0c91"
     },
     "computed_transition_state": {
-      "2": "2ff3b930cc30452f33616dea9eaf19f1ee5917c0d8886d2e0344e5510f42ec0e"
+      "2": "001bcb9e65a1d5d1c07c1cdd4c2c905085e9c7492eec57af6c8d74d638a9b709"
     },
     "computed_transport": {
       "1": "1b5a1f833dc867aff540eddc5e123a5d6fa3cb0d320e90b7a931e94f7a158676"
@@ -37,6 +37,11 @@
         "from": 5,
         "to": 6
       }
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "select filters and eligibility defaults: structure selection gains request options that are off by default and the species-entry and conformer-group gating moved; the transition-state grading verdicts under default settings are unchanged (a TS entry still gates its evidence)"
     }
   ]
 }
