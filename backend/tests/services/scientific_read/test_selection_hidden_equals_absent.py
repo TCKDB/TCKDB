@@ -99,6 +99,7 @@ DESCRIBES_THE_READ = frozenset(
         "canonical_bytes",
         "snapshot_isolation",
         "effective_review_statuses",
+        "candidate_review_statuses",
         "excluded_by_review_withheld",
     }
 )
