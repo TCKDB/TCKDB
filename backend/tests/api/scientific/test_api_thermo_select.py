@@ -427,7 +427,7 @@ def test_the_manifest_download_replays_to_the_decision_it_records(client, db_ses
     assert response.headers["content-disposition"].startswith("attachment;")
     manifest = response.json()
     assert manifest["outcome"] == "incomparable_alternatives"
-    assert manifest["format"] == {"name": "thermo_selection_manifest", "version": 2}
+    assert manifest["format"] == {"name": "thermo_selection_manifest", "version": 3}
     assert replay_matches(manifest)
     assert replay_decision(manifest)["fronts"] == manifest["decision"]["fronts"]
     # The response and the download are one decision.
@@ -507,10 +507,23 @@ def _assert_integers_are_pinned(doc, *, is_manifest, curated):
         "decision.overridden_edges[].overridden_by_rule_version",
     ):
         pinned[path] = one
+    pinned["assessment_semantics.version"] = lambda v: set(v) == {2}
+    # Counts of candidates, never ids: the funnel says how many each step removed, and nothing says which.
+    counts = lambda v: all(isinstance(n, int) and n >= 0 for n in v)  # noqa: E731
+    for path in (
+        "funnel.considered", "funnel.removed_by_filters", "funnel.removed_by_eligibility", "funnel.remaining",
+        "filters.removed", "eligibility[].excluded", "eligibility[].admitted_by_override",
+        "population.funnel.considered", "population.funnel.removed_by_filters",
+        "population.funnel.removed_by_eligibility", "population.funnel.remaining",
+    ):
+        pinned[path] = counts
+    for name in ("rejected_review_status", "deprecated_review_status", "evidence_hard_fail", "confirmed_blocking_findings"):
+        for kind in ("excluded_by_default", "admitted_by_override"):
+            pinned[f"population.funnel.{kind}.{name}"] = counts
     if is_manifest:
         population = doc["population"]
         pinned.update({
-            "format.version": lambda v: v == [2],
+            "format.version": lambda v: v == [3],
             "candidates[].id_rank": lambda v: sorted(v) == list(range(1, len(candidates) + 1)),
             "population.visible_candidates": lambda v: v == [len(candidates)],
             "population.assessed": lambda v: v == [len(candidates)],
