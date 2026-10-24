@@ -26,7 +26,7 @@ and provenance summaries.
 - retrieving kinetics for a `reaction_entry` via its public ref
 - inspecting full provenance for a reaction
 - reading and interpreting the review/trust state
-- using the documented filter / sort / collapse vocabulary
+- using the documented filter / sort vocabulary
 - handling kinetics records that are not transition-state-backed
 - handling empty results and HTTP errors
 - where workflow-specific reuse policy belongs (hint: not in `tckdb-client`)
@@ -141,7 +141,7 @@ thermo/kinetics records with the resolved entry-id identity already
 attached:
 
 ```python
-client.search_thermo(smiles="...", temperature_min=..., temperature_max=...)
+client.search_thermo(smiles="...", coverage_temperature_min_k=..., coverage_temperature_max_k=...)
 client.search_kinetics(reactants=[...], products=[...], direction="...")
 ```
 
@@ -186,9 +186,8 @@ chemical identifier, use `search_thermo` directly:
 ```python
 thermo = client.search_thermo(
     smiles="C[CH2]",
-    temperature_min=300,
-    temperature_max=3000,
-    collapse="first",
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=3000,
     include=["provenance", "review"],
 )
 ```
@@ -252,9 +251,8 @@ kinetics = client.search_kinetics(
     reactants=["[CH3]", "c1ccccc1"],
     products=["CH4", "[c]1ccccc1"],
     direction="either",
-    temperature_min=300,
-    temperature_max=2000,
-    collapse="first",
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=2000,
     include=["provenance", "review"],
 )
 ```
@@ -303,7 +301,6 @@ return an empty result set rather than a validation error.
 species = client.search_species(
     smiles="C[CH2]",
     include=["review"],
-    collapse="all",
 )
 ```
 
@@ -311,7 +308,7 @@ The response is a search envelope:
 
 ```python
 {
-    "request": {"filter": {"smiles": "C[CH2]"}, "sort": "...", "collapse": "all", "include": ["review"]},
+    "request": {"filter": {"smiles": "C[CH2]"}, "sort": "...", "include": ["review"]},
     "review_summary": {"approved": 0, "under_review": 0, "not_reviewed": 1, "deprecated": 0, "rejected": 0, "total": 1},
     "records": [
         {
@@ -367,18 +364,16 @@ the public ref (preferred) or the integer id:
 # Ref-first follow-up (preferred):
 thermo = client.get_species_thermo(
     species_entry_id="spe_...",   # public ref accepted as the handle
-    temperature_min=300,
-    temperature_max=3000,
-    collapse="first",
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=3000,
     include=["provenance", "review"],
 )
 
 # Integer-id form (compatibility):
 thermo = client.get_species_thermo(
     species_entry_id=31,
-    temperature_min=300,
-    temperature_max=3000,
-    collapse="first",
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=3000,
 )
 ```
 
@@ -394,16 +389,16 @@ Each record carries:
   calculation references
 - `review` — direct review badge for the thermo record
 
-`collapse="first"` returns at most one record: the first in TCKDB's documented
-deterministic display order (approved first, `under_review` and `not_reviewed`
-together, then newest deposited, then highest id; see
-[Browse order](../specs/browse_order.md)). That is the same order the export
-uses. It is display order, not a scientific preference, and the client does not
-define "best thermo": it only returns what the backend listed first.
+The search returns every matching record in TCKDB's documented deterministic
+display order (approved first, `under_review` and `not_reviewed` together, then
+newest deposited, then highest id; see [Browse order](../specs/browse_order.md)).
+The first record is first in display order, not a scientific preference, and the
+client does not define "best thermo". To get one record under a policy you
+state, call `select_species_thermo`.
 `temperature_coverage` and `evidence_completeness` are displayed, not ranked.
 Experimental thermo scores low on `evidence_completeness` by construction
 (most predicates are calculation traceability), which is why the thermo and
-kinetics orders ignore the score. `temperature_min` / `temperature_max` are not filters on
+kinetics orders ignore the score. `coverage_temperature_min_k` / `coverage_temperature_max_k` are not filters on
 this read; they only fill each record's `temperature_coverage`.
 
 ## Reaction lookup (discovery-only)
@@ -423,7 +418,6 @@ rxns = client.search_reactions(
     products=["CH4", "[c]1ccccc1"],
     direction="either",
     include=["review"],
-    collapse="all",
 )
 ```
 
@@ -468,18 +462,16 @@ Use a `reaction_entry_ref` from `search_kinetics` or `search_reactions`
 # Ref-first follow-up (preferred):
 kinetics = client.get_reaction_kinetics(
     reaction_entry_id="rxe_...",   # public ref accepted as the handle
-    temperature_min=300,
-    temperature_max=2000,
-    collapse="first",
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=2000,
     include=["provenance", "review"],
 )
 
 # Integer-id form (compatibility):
 kinetics = client.get_reaction_kinetics(
     reaction_entry_id=51,
-    temperature_min=300,
-    temperature_max=2000,
-    collapse="first",
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=2000,
 )
 ```
 
@@ -603,7 +595,6 @@ approved. This is "shallow" semantics.
 approved_kinetics = client.get_reaction_kinetics(
     reaction_entry_id=51,
     min_review_status="approved",
-    collapse="all",
 )
 ```
 
@@ -612,18 +603,18 @@ full-provenance endpoint) and apply workflow-specific judgment in the
 adapter. A future server-side `provenance_min_review_status` filter is
 deferred — v0 keeps trust filtering shallow and honest.
 
-## Filter / sort / collapse behavior
+## Filter / sort behavior
 
-There are three orthogonal axes:
+There are two orthogonal axes on a read; picking one record is a third operation with its own endpoints:
 
 ```
-filter:    controls eligibility (review, temperature range,
-           level_of_theory_id, software, model_kind, ...)
+filter:    controls eligibility (review, level_of_theory_id, software,
+           model_kind, ...). level_of_theory_* and software match when ANY
+           linked source calculation matches.
 
 sort:      backend default deterministic ordering only (v0)
 
-collapse:  whether to return all records ("all") or only the first
-           backend-ranked record ("first")
+select:    the select_* methods: one record under a policy the request states
 ```
 
 Important rules:
@@ -631,22 +622,19 @@ Important rules:
 - **Client-supplied `sort=` is not supported in v0.** The methods
   intentionally have no `sort` argument; the backend rejects any
   client-supplied sort value with 422 (`client_sort_not_supported`).
-- **`collapse="first"` is not a "best" selector.** It returns the first
-  record under TCKDB's documented deterministic backend ordering. The
-  ordering rules are spelled out in the spec: for thermo and kinetics,
-  review rank, then `created_at` (newest first), then `id`, matching the
-  export. Temperature coverage and `evidence_completeness` are reported on
-  each record but do not order them, and `temperature_min` /
-  `temperature_max` are not filters.
-- `pagination.total` is the **pre-collapse, post-filter** match count.
-- `pagination.post_collapse_total` is the count **after collapse and before
-  offset/limit slicing**. It equals `total` for `collapse="all"` and is 0 or 1
-  for `collapse="first"`.
+- **There is no `collapse`.** A read returns every matching record in
+  TCKDB's documented deterministic order: for thermo and kinetics, the
+  record's own review rank, then `created_at` (newest first), then `id`.
+  Temperature coverage and `evidence_completeness` are reported on each
+  record but do not order them, and `coverage_temperature_min_k` /
+  `coverage_temperature_max_k` are not filters (they set the window
+  `temperature_coverage` is computed against). `collapse` and
+  `selection_policy` are refused with 422 `browse_parameter_removed`.
+- `pagination.total` is the post-filter match count.
 - `pagination.returned` is the actual page length, so it can be smaller than
   either total because of page slicing.
-- `review_summary` counts the **pre-collapse filtered candidate set**,
-  so callers see the trust posture of every candidate, not only the one
-  record returned.
+- `review_summary` counts the filtered candidate set, so callers see the
+  trust posture of every candidate, not only the page returned.
 
 ## Handling non-TS-backed kinetics
 
@@ -772,9 +760,8 @@ kinetics = client.search_kinetics(
     reactants=["[CH3]", "c1ccccc1"],
     products=["CH4", "[c]1ccccc1"],
     direction="either",
-    temperature_min=300,
-    temperature_max=2000,
-    collapse="first",
+    coverage_temperature_min_k=300,
+    coverage_temperature_max_k=2000,
     include=["provenance", "review"],
 )
 
@@ -803,7 +790,6 @@ rxns = client.search_reactions(
     reactants=["[CH3]", "c1ccccc1"],
     products=["CH4", "[c]1ccccc1"],
     direction="either",
-    collapse="first",
 )
 
 records = rxns.get("records", [])
@@ -815,9 +801,8 @@ if records:
     )
     kinetics = client.get_reaction_kinetics(
         reaction_entry_id=reaction_entry_handle,
-        temperature_min=300,
-        temperature_max=2000,
-        collapse="first",
+        coverage_temperature_min_k=300,
+        coverage_temperature_max_k=2000,
         include=["provenance", "review"],
     )
 ```
@@ -864,7 +849,6 @@ calcs = client.search_species_calculations(
     calculation_type="sp",
     level_of_theory_id=8,
     ranking="lowest_energy",
-    collapse="first",
     include=["provenance", "conformers", "review"],
 )
 ```
@@ -910,11 +894,11 @@ implementation phase).
 5. When using the entry-id detail methods, those ids are strictly
    `species_entry.id` / `reaction_entry.id` — never `species.id` or
    `chem_reaction.id`.
-6. Request thermo / kinetics with explicit `temperature_min` /
-   `temperature_max` when the workflow has a target range.
-7. Use `collapse="first"` only when the documented backend default
-   ordering is acceptable. Otherwise use `collapse="all"` and let the
-   adapter pick.
+6. Request thermo / kinetics with explicit `coverage_temperature_min_k` /
+   `coverage_temperature_max_k` when the workflow has a target range (they
+   report coverage; they do not filter).
+7. For one record, use the `select_*` methods with a policy you state;
+   otherwise take the full list and let the adapter pick.
 8. Inspect `review` (per-record badge) and `provenance` (per-record
    summary) before reusing a record.
 9. Treat non-TS-backed kinetics as **valid but different** — do not

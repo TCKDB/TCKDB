@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.0 - 2026-10-23
+
+List reads no longer pick a record.
+
+- `tckdb_search_species`, `tckdb_search_reactions`, `tckdb_search_thermo`, `tckdb_search_kinetics`, `tckdb_get_species_entry_thermo` and
+  `tckdb_get_reaction_entry_kinetics` lose `collapse`. Every matching record is returned in display order; for one record under a stated
+  policy use the `tckdb_select_*` tools.
+- On the four thermo and kinetics tools, `temperature_min` / `temperature_max` are now `coverage_temperature_min_k` /
+  `coverage_temperature_max_k`: they never filtered, they only set the window `temperature_coverage` is computed against. `pressure` on the
+  kinetics tools is unchanged (it does filter).
+
 ## 0.11.0 - 2026-10-22
 
 The selection tools follow the removal of the method-preference rules.

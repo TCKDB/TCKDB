@@ -314,85 +314,41 @@ def test_wrapper_agrees_with_search_for_pinned_entry(client, db_session):
 # ---------------------------------------------------------------------------
 
 
-def test_collapse_all_is_default_and_returns_all_candidates(client, db_session):
+def test_every_candidate_is_listed_in_display_order(client, db_session):
     _, entry = _entry(db_session)
     make_statmech(db_session, species_entry=entry)
     make_statmech(db_session, species_entry=entry)
     body = client.get(_url(entry.id)).json()
-    # Default is non-canonical: every candidate is returned.
-    assert body["request"]["collapse"] == "all"
-    assert body["request"]["selection_policy"] == "default"
     assert body["pagination"]["total"] == 2
     assert len(body["records"]) == 2
+    for removed in ("collapse", "selection_policy", "effective_order"):
+        assert removed not in body["request"]
 
 
-def test_collapse_first_returns_single_record_with_pre_collapse_total(
-    client, db_session
-):
+def test_the_newest_unreviewed_record_follows_the_older_approved_one_and_nothing_is_dropped(client, db_session):
     _, entry = _entry(db_session)
-    make_statmech(db_session, species_entry=entry)
-    make_statmech(db_session, species_entry=entry)
-    body = client.get(_url(entry.id, collapse="first")).json()
-    assert body["request"]["collapse"] == "first"
-    assert len(body["records"]) == 1
-    # total stays pre-collapse so clients see how many candidates exist.
-    assert body["pagination"]["total"] == 2
-    assert body["pagination"]["post_collapse_total"] == 1
-
-
-def test_collapse_first_offset_one_returns_empty(client, db_session):
-    _, entry = _entry(db_session)
-    make_statmech(db_session, species_entry=entry)
-
-    body = client.get(_url(entry.id, collapse="first", offset=1)).json()
-
-    assert body["records"] == []
-    assert body["pagination"]["total"] == 1
-    assert body["pagination"]["post_collapse_total"] == 1
-
-
-def test_default_policy_selects_best_reviewed(client, db_session):
-    _, entry = _entry(db_session)
-    sm_old_approved = make_statmech(db_session, species_entry=entry)
-    make_statmech(db_session, species_entry=entry)  # newer, not reviewed
+    old_approved = make_statmech(db_session, species_entry=entry)
+    new = make_statmech(db_session, species_entry=entry)
     set_review(
         db_session,
         record_type=SubmissionRecordType.statmech,
-        record_id=sm_old_approved.id,
+        record_id=old_approved.id,
         status=RecordReviewStatus.approved,
     )
-    body = client.get(
-        _url(entry.id, collapse="first", selection_policy="default")
-    ).json()
-    assert body["request"]["selection_policy"] == "default"
-    assert (
-        body["records"][0]["statmech"]["statmech_ref"]
-        == sm_old_approved.public_ref
-    )
+    body = client.get(_url(entry.id)).json()
+    refs = [r["statmech"]["statmech_ref"] for r in body["records"]]
+    assert refs == [old_approved.public_ref, new.public_ref]
 
 
-def test_latest_policy_selects_newest_over_review_status(client, db_session):
-    _, entry = _entry(db_session)
-    sm_old_approved = make_statmech(db_session, species_entry=entry)
-    sm_new = make_statmech(db_session, species_entry=entry)  # newer
-    set_review(
-        db_session,
-        record_type=SubmissionRecordType.statmech,
-        record_id=sm_old_approved.id,
-        status=RecordReviewStatus.approved,
-    )
-    body = client.get(
-        _url(entry.id, collapse="first", selection_policy="latest")
-    ).json()
-    # 'latest' ignores review rank and picks the most recent candidate.
-    assert body["records"][0]["statmech"]["statmech_ref"] == sm_new.public_ref
-
-
-def test_invalid_selection_policy_returns_422(client, db_session):
+def test_collapse_and_selection_policy_are_refused_with_a_pointer(client, db_session):
     _, entry = _entry(db_session)
     make_statmech(db_session, species_entry=entry)
-    resp = client.get(_url(entry.id, collapse="first", selection_policy="bogus"))
-    assert resp.status_code == 422
+    for params in ({"collapse": "first"}, {"selection_policy": "latest"}, {"collapse": "first", "offset": 1}):
+        resp = client.get(_url(entry.id, **params))
+        assert resp.status_code == 422, resp.text
+        body = resp.json()
+        assert body["code"] == "browse_parameter_removed"
+        assert body["context"]["select_endpoint"].endswith("/statmech/select")
 
 
 # ---------------------------------------------------------------------------

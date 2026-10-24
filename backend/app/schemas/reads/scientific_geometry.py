@@ -15,7 +15,6 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
     OrderEcho,
     ProfiledRequestEcho,
 )
@@ -37,14 +36,13 @@ class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed query for the geometry detail endpoint.
 
     The endpoint has no scientific filters, so ``filter`` is always
-    ``{}`` and ``sort`` / ``collapse`` are present only for shape
+    ``{}`` and ``sort`` is present only for shape
     consistency with the other scientific read envelopes (so callers
     can rely on a stable response top-level).
     """
 
     filter: dict[str, object] = Field(default_factory=dict)
     sort: OrderEcho | None = None
-    collapse: CollapseMode = CollapseMode.all
     include: list[str] = Field(default_factory=list)
 
 

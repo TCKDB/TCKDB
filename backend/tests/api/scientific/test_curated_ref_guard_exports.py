@@ -77,6 +77,16 @@ def _chemkin(client, w, profile: str) -> dict[str, str]:
         "min_review_status": "not_reviewed",
     }
     response = client.post(f"{BASE}/export/chemkin", params={"profile": profile}, json=body)
+    # CHEMKIN never picks: where a species or reaction has several candidates it refuses and lists them, and the caller
+    # names one (here the first listed, as a caller who had just read the refusal would).
+    refs = {"thermo": [], "transport": [], "kinetics": []}
+    for _ in range(3):
+        if response.status_code != 422 or response.json()["code"] != "export_selection_ambiguous":
+            break
+        for subject in response.json()["context"]["ambiguous"]:
+            refs[subject["record_kind"]].append(subject["candidate_refs"][0])
+        named = {"thermo_refs": refs["thermo"], "transport_refs": refs["transport"], "kinetics_refs": refs["kinetics"]}
+        response = client.post(f"{BASE}/export/chemkin", params={"profile": profile}, json={**body, **named})
     assert response.status_code == 200, response.text
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
         return {name: archive.read(name).decode() for name in archive.namelist()}
@@ -103,14 +113,13 @@ def test_native_ndjson_names_no_hidden_record_and_keeps_the_visible_ones(client,
     """
     w = world
     hidden = _hidden(w)
-    for collapse in ("first", "all"):
-        curated = _get(client, "/export/ndjson", "curated", _query(w, collapse=collapse))
-        exploratory = _get(client, "/export/ndjson", "exploratory", _query(w, collapse=collapse))
-        for key, ref in hidden.items():
-            assert ref not in curated, f"{collapse}: curated names {key}"
-        # positive control: the world meets the positions
-        for key in ("calc_h_xlin", "sm_h_y", "thm_h_g"):
-            assert hidden[key] in exploratory, f"{collapse}: exploratory does not name {key}: the world is vacuous"
+    curated = _get(client, "/export/ndjson", "curated", _query(w))
+    exploratory = _get(client, "/export/ndjson", "exploratory", _query(w))
+    for key, ref in hidden.items():
+        assert ref not in curated, f"curated names {key}"
+    # positive control: the world meets the positions
+    for key in ("calc_h_xlin", "sm_h_y", "thm_h_g"):
+        assert hidden[key] in exploratory, f"exploratory does not name {key}: the world is vacuous"
 
     first = _lines(_get(client, "/export/ndjson", "curated", _query(w)))
     ex_first = _lines(_get(client, "/export/ndjson", "exploratory", _query(w)))
@@ -138,7 +147,7 @@ def test_native_ndjson_names_no_hidden_record_and_keeps_the_visible_ones(client,
 
     # every candidate: the hidden thermo and kinetics are not among them
     sa = w.extra["species_entry"].public_ref
-    every = _lines(_get(client, "/export/ndjson", "curated", _query(w, collapse="all")))
+    every = _lines(_get(client, "/export/ndjson", "curated", _query(w)))
     shown_thermos = {t["thermo_ref"] for t in _by(every, "species_entry_ref", sa)["thermos"]}
     visible_thermos = {w.visible[k].public_ref for k in ("thm_v", "thm_v2", "thm_vg")}  # thm_vg: guard PR-3's world
     assert shown_thermos and shown_thermos <= visible_thermos
@@ -163,7 +172,7 @@ def test_ml_species_leaves_out_the_hidden_calculations_and_drops_hidden_conforme
     # visible bent geometry (and its energy) is a record of this species.
     assert len(ex_sx) == 2 and len(cu_sx) == 1
     assert [e["calculation_ref"] for e in cu_sx[0]["energies"]] == [w.visible["calc_xv"].public_ref]
-    assert cu_sx[0]["frequencies"] is None and cu_sx[0]["hessian"] is None
+    assert cu_sx[0]["frequency_results"] == [] and cu_sx[0]["hessians"] == []
     # The conformer group arrives as a list of strings: the hidden one is dropped (the list stays, now empty) and the
     # visible observation beside it stays.
     sa = w.extra["species_entry"].public_ref
@@ -189,25 +198,35 @@ def test_ml_reactions_barrier_comes_from_shown_energies_and_a_hidden_owner_is_nu
 
     rx = w.extra["reaction_entry"].public_ref
     cu, ex = (_by(_lines(t), "reaction_entry_ref", rx) for t in (curated, exploratory))
-    # the lowest TS energy is the hidden single point; the barrier moves with it
-    assert ex["transition_state"]["energy"]["calculation_ref"] == hidden["calc_h_xts"]
-    assert cu["transition_state"]["energy"]["calculation_ref"] == w.visible["calc_ts_vsp"].public_ref
-    assert cu["transition_state"]["energy"]["electronic_energy_hartree"] == -89.0
-    assert cu["barrier"]["electronic_forward_kj_mol"] != ex["barrier"]["electronic_forward_kj_mol"]
+    # within the shared level the lowest TS energy is the hidden single point; the barrier moves with it
+    def energies(record):
+        return {e["calculation_ref"]: e for t in record["transition_states"] for e in t["energies"]}
+
+    def barrier_of(record, calculation_ref):
+        return next(b for b in record["barriers"] if b["ts_calculation_ref"] == calculation_ref)
+
+    assert hidden["calc_h_xts"] in energies(ex) and hidden["calc_h_xts"] not in energies(cu)
+    visible_ts = w.visible["calc_ts_vsp"].public_ref
+    assert visible_ts in energies(cu) and energies(cu)[visible_ts]["electronic_energy_hartree"] == -89.0
+    assert (
+        barrier_of(cu, visible_ts)["electronic_forward_kj_mol"]
+        != barrier_of(ex, hidden["calc_h_xts"])["electronic_forward_kj_mol"]
+    )
     assert hidden["kin_h"] not in json.dumps(cu["kinetics"])
 
     # a visible entry of a hidden transition state: the entry stays, its owner is null
     owner = w.extra["reaction_entry_hidden_ts_owner"].public_ref
-    d = _by(_lines(curated), "reaction_entry_ref", owner)["transition_state"]
-    assert d["transition_state_entry_ref"] == w.visible["tse_xd"].public_ref
-    assert d["transition_state_ref"] is None
-    assert (
-        _by(_lines(exploratory), "reaction_entry_ref", owner)["transition_state"]["transition_state_ref"]
-        == (hidden["ts_h_x"])
-    )
-    # a reaction whose transition state and entry are both hidden has no transition state block
+    visible_entry = w.visible["tse_xd"].public_ref
+
+    def entry_block(lines):
+        blocks = _by(lines, "reaction_entry_ref", owner)["transition_states"]
+        return next(t for t in blocks if t["transition_state_entry_ref"] == visible_entry)
+
+    assert entry_block(_lines(curated))["transition_state_ref"] is None
+    assert entry_block(_lines(exploratory))["transition_state_ref"] == hidden["ts_h_x"]
+    # a reaction whose transition state and entry are both hidden lists no transition state at all
     all_hidden = w.extra["reaction_entry_all_hidden"].public_ref
-    assert _by(_lines(curated), "reaction_entry_ref", all_hidden)["transition_state"] is None
+    assert _by(_lines(curated), "reaction_entry_ref", all_hidden)["transition_states"] == []
 
 
 def test_chemkin_files_and_manifest_name_no_hidden_record(client, world):
@@ -266,7 +285,7 @@ def test_the_linearity_witness_leaves_out_hidden_records(db_session, world):
 def _all_exports(client, w, profile):
     return {
         "ndjson": _normalise(_lines(_get(client, "/export/ndjson", profile, _query(w)))),
-        "ndjson_all": _normalise(_lines(_get(client, "/export/ndjson", profile, _query(w, collapse="all")))),
+        "ndjson_all": _normalise(_lines(_get(client, "/export/ndjson", profile, _query(w)))),
         "ml_species": _normalise(
             _lines(_get(client, "/export/ml/species.ndjson", profile, {**_query(w), "include_hessian": True}))
         ),
@@ -366,7 +385,6 @@ def test_a_stream_consumed_after_the_request_context_is_gone_keeps_its_profile(d
             db_session,
             seed=export_core.SeedSelection(species_refs=species, all_reactions=True),
             min_review_status=NOT_REVIEWED,
-            collapse=export_core.CollapseMode.all,
         )
 
     def ml_species():
@@ -566,12 +584,15 @@ def test_the_reactant_energy_floor_moves_the_barrier(client, world):
     w = world
     rx = w.extra["reaction_entry"].public_ref
 
-    def barrier(profile):
+    def barrier(profile, ts_calculation_ref):
         lines = _lines(_get(client, "/export/ml/reactions.ndjson", profile, _query(w)))
-        return _by(lines, "reaction_entry_ref", rx)["barrier"]["electronic_forward_kj_mol"]
+        barriers = _by(lines, "reaction_entry_ref", rx)["barriers"]
+        return next(b for b in barriers if b["ts_calculation_ref"] == ts_calculation_ref)["electronic_forward_kj_mol"]
 
-    assert barrier("curated") == pytest.approx(1.0 * HARTREE_TO_KJ_MOL)
-    assert barrier("exploratory") == pytest.approx((-91.0 - (-60.0 + -40.0)) * HARTREE_TO_KJ_MOL)
+    assert barrier("curated", w.visible["calc_ts_vsp"].public_ref) == pytest.approx(1.0 * HARTREE_TO_KJ_MOL)
+    assert barrier("exploratory", w.hidden["calc_h_xts"].public_ref) == pytest.approx(
+        (-91.0 - (-60.0 + -40.0)) * HARTREE_TO_KJ_MOL
+    )
 
 
 def test_generated_text_that_names_a_hidden_ref_is_refused(db_session, world):
@@ -631,7 +652,7 @@ def test_every_stream_issues_at_most_one_visibility_statement_per_batch(client, 
     w = world
     streams = {
         "ndjson": lambda: _get(client, "/export/ndjson", "curated", _query(w)),
-        "ndjson_all": lambda: _get(client, "/export/ndjson", "curated", _query(w, collapse="all")),
+        "ndjson_all": lambda: _get(client, "/export/ndjson", "curated", _query(w)),
         "ml_species": lambda: _get(
             client, "/export/ml/species.ndjson", "curated", {**_query(w), "include_hessian": True}
         ),

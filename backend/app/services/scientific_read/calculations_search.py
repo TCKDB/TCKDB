@@ -13,7 +13,7 @@ Composition:
    needs so the filter pass stays cheap.
 5. Gate, rank, order and slice **in SQL**, over that query as a
    subquery: LEFT JOIN ``record_review``, apply the visible-statuses
-   gate (default trust posture), order by review rank → quality rank →
+   gate (default trust posture), order by review rank →
    created_at desc → id desc (``evidence_completeness`` is deferred),
    and take one page. The ``review_summary`` comes from a single
    aggregate over the same filtered, pre-pagination set.
@@ -40,7 +40,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import and_, case, exists, or_, select
+from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import (
@@ -151,32 +151,6 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "canonical_parameter_key",
 )
 
-# Quality rank: lower-is-better. ``rejected`` only appears when
-# ``include_rejected_quality=true``; place it last regardless.
-_QUALITY_RANK: dict[CalculationQuality, int] = {
-    CalculationQuality.curated: 0,
-    CalculationQuality.raw: 1,
-    CalculationQuality.rejected: 2,
-}
-
-#: Rank for a quality value the mapping above does not name. Only reachable
-#: if a new ``CalculationQuality`` member is added without being ranked; it
-#: sorts last rather than raising, which is what the Python dict lookup
-#: could not do.
-_UNRANKED_QUALITY = max(_QUALITY_RANK.values()) + 1
-
-
-def _quality_rank_expr(quality_column):
-    """SQL ``quality_rank`` (lower is better) mirroring :data:`_QUALITY_RANK`."""
-    return case(
-        *(
-            (quality_column == quality, rank)
-            for quality, rank in _QUALITY_RANK.items()
-        ),
-        else_=_UNRANKED_QUALITY,
-    )
-
-
 # Per-calc-type primary result table — drives the ``has_result`` filter.
 _PRIMARY_RESULT_TABLE: dict[CalculationType, type] = {
     CalculationType.sp: CalculationSPResult,
@@ -189,7 +163,7 @@ _PRIMARY_RESULT_TABLE: dict[CalculationType, type] = {
 }
 
 
-_DEFAULT_SORT_ECHO = browse_order("review_rank", "quality_rank", "created_at", "id")
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 
 def search_calculations(
@@ -290,10 +264,8 @@ def search_calculations(
     if short_circuit:
         return _empty_response(request, includes, offset, limit)
 
-    # Build the filter query. ``quality`` rides along because the ranking
-    # needs it; carrying it here rather than re-reading it per page keeps
-    # the whole ordering expressible over one subquery.
-    stmt = select(Calculation.id, Calculation.created_at, Calculation.quality)
+    # Build the filter query. ``quality`` is a filter (below), never an ordering key.
+    stmt = select(Calculation.id, Calculation.created_at)
     stmt = _apply_owner_filters(
         stmt,
         species_entry_id=species_entry_id,
@@ -351,7 +323,6 @@ def search_calculations(
         ranked_base.add_columns(
             review_rank_expr(review).label("review_rank"),
             review_status_expr(review).label("review_status"),
-            _quality_rank_expr(candidates.c.quality).label("quality_rank"),
         )
         .where(visible_review_filter(review, visible))
         .subquery("visible_candidates")
@@ -366,14 +337,13 @@ def search_calculations(
         return _empty_response(request, includes, offset, limit)
 
     # ``id`` desc is the tiebreak that makes this a total order — without it
-    # two rows equal on rank, quality and created_at (every row inserted in
+    # two rows equal on rank and created_at (every row inserted in
     # one transaction shares ``created_at``) would page non-deterministically.
     page_ids = list(
         session.scalars(
             select(ranked.c.id)
             .order_by(
                 ranked.c.review_rank.asc(),
-                ranked.c.quality_rank.asc(),
                 ranked.c.created_at.desc(),
                 ranked.c.id.desc(),
             )

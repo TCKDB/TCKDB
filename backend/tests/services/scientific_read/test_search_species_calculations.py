@@ -19,7 +19,6 @@ from app.db.models.common import (
     SubmissionRecordType,
     ValidationStatus,
 )
-from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_species_calculations import (
     CalculationRanking,
     SpeciesCalculationsSearchRequest,
@@ -508,47 +507,6 @@ def test_lowest_energy_with_no_matching_candidates_remains_empty(db_session):
 # ---------------------------------------------------------------------------
 # Collapse + pagination
 # ---------------------------------------------------------------------------
-
-
-def test_collapse_first_preserves_plural_records_with_pre_collapse_total(db_session):
-    _, entry = _entry(db_session, smiles="CO")
-    make_calculation(
-        db_session, type=CalculationType.sp, species_entry_id=entry.id
-    )
-    make_calculation(
-        db_session, type=CalculationType.sp, species_entry_id=entry.id
-    )
-
-    response = search_species_calculations(
-        db_session,
-        SpeciesCalculationsSearchRequest(
-            smiles="CO", collapse=CollapseMode.first
-        ),
-    )
-
-    assert len(response.records) == 1
-    assert response.pagination.total == 2
-    assert response.pagination.post_collapse_total == 1
-    assert response.pagination.returned == 1
-
-
-def test_collapse_first_applies_offset_after_collapse(db_session):
-    _, entry = _entry(db_session, smiles="[GeH4]")
-    make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
-    make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
-
-    response = search_species_calculations(
-        db_session,
-        SpeciesCalculationsSearchRequest(
-            smiles="[GeH4]",
-            collapse=CollapseMode.first,
-            offset=1,
-        ),
-    )
-
-    assert response.records == []
-    assert response.pagination.total == 2
-    assert response.pagination.returned == 0
 
 
 # ---------------------------------------------------------------------------

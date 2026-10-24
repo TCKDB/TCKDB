@@ -321,7 +321,7 @@ function handlers(options: HandlerOptions = {}) {
             species_entry_ref: entryRef,
             review_summary: { approved: 0, under_review: 0, not_reviewed: 3, deprecated: 0, rejected: 0, total: 3 },
             records: thermoRecords(),
-            pagination: { offset: 0, limit: 50, returned: 3, total: 3, post_collapse_total: 3 },
+            pagination: { offset: 0, limit: 50, returned: 3, total: 3 },
         })),
         http.get(`/api/v1/scientific/species-entries/${entryRef}/statmech`, ({ request }) => {
             const includesConformers = new URL(request.url).searchParams.getAll("include").includes("conformers")
@@ -331,13 +331,13 @@ function handlers(options: HandlerOptions = {}) {
             return HttpResponse.json({
                 review_summary: { approved: 0, under_review: 0, not_reviewed: 3, deprecated: 0, rejected: 0, total: 3 },
                 records: statmechRecords(includesConformers),
-                pagination: { offset: 0, limit: 50, returned: 3, total: 3, post_collapse_total: 3 },
+                pagination: { offset: 0, limit: 50, returned: 3, total: 3 },
             })
         }),
         http.get(`/api/v1/scientific/species-entries/${entryRef}/transport`, () => HttpResponse.json({
             review_summary: { approved: 0, under_review: 0, not_reviewed: 0, deprecated: 0, rejected: 0, total: 0 },
             records: [],
-            pagination: { offset: 0, limit: 50, returned: 0, total: 0, post_collapse_total: 0 },
+            pagination: { offset: 0, limit: 50, returned: 0, total: 0 },
         })),
         // Distinct energies per sp calculation ref -- a fixture where every
         // row shares one value cannot prove this page joins by the row's
@@ -1006,18 +1006,18 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
                 species_entry_ref: entryRef,
                 review_summary: { approved: 0, under_review: 0, not_reviewed: 3, deprecated: 0, rejected: 0, total: 3 },
                 records: thermoRecords(),
-                pagination: { offset: 0, limit: 50, returned: 3, total: 3, post_collapse_total: 3 },
+                pagination: { offset: 0, limit: 50, returned: 3, total: 3 },
             })),
             http.get(`/api/v1/scientific/species-entries/${entryRef}/statmech`, () => HttpResponse.json({
                 species_entry_ref: entryRef,
                 review_summary: { approved: 0, under_review: 0, not_reviewed: 3, deprecated: 0, rejected: 0, total: 3 },
                 records: statmechRecords(false),
-                pagination: { offset: 0, limit: 50, returned: 3, total: 3, post_collapse_total: 3 },
+                pagination: { offset: 0, limit: 50, returned: 3, total: 3 },
             })),
             http.get(`/api/v1/scientific/species-entries/${entryRef}/transport`, () => HttpResponse.json({
                 species_entry_ref: entryRef,
                 review_summary: { approved: 0, under_review: 0, not_reviewed: 0, deprecated: 0, rejected: 0, total: 0 },
-                records: [], pagination: { offset: 0, limit: 50, returned: 0, total: 0, post_collapse_total: 0 },
+                records: [], pagination: { offset: 0, limit: 50, returned: 0, total: 0 },
             })),
             http.get("/api/v1/scientific/species-calculations/search", () => HttpResponse.json({ records: [] })),
         ]
@@ -1129,14 +1129,14 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
                     species_entry_ref: entryRef,
                     review_summary: { approved: 0, under_review: 0, not_reviewed: 3, deprecated: 0, rejected: 0, total: 3 },
                     records: thermoRecords(),
-                    pagination: { offset: 0, limit: 50, returned: 3, total: 3, post_collapse_total: 3 },
+                    pagination: { offset: 0, limit: 50, returned: 3, total: 3 },
                 })
             }),
             http.get(`/api/v1/scientific/species-entries/${entryRef}/statmech`, () => HttpResponse.json({
                 species_entry_ref: entryRef,
                 review_summary: { approved: 0, under_review: 0, not_reviewed: 3, deprecated: 0, rejected: 0, total: 3 },
                 records: statmechRecords(false),
-                pagination: { offset: 0, limit: 50, returned: 3, total: 3, post_collapse_total: 3 },
+                pagination: { offset: 0, limit: 50, returned: 3, total: 3 },
             })),
             http.get("/api/v1/scientific/species-calculations/search", () => HttpResponse.json({ records: [] })),
         )

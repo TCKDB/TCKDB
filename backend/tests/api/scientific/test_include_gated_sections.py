@@ -95,7 +95,6 @@ def test_a_null_field_no_table_names_survives_the_detail_strip():
             "record": {
                 "trust": {"grade": "a"},
                 "next_cursor": None,
-                "post_collapse_total": None,
                 "supersession": None,
             },
         }
@@ -107,7 +106,6 @@ def test_a_null_field_no_table_names_survives_the_detail_strip():
 
     assert "trust" not in record
     assert "next_cursor" in record and record["next_cursor"] is None
-    assert "post_collapse_total" in record and record["post_collapse_total"] is None
     assert "supersession" in record and record["supersession"] is None
 
 

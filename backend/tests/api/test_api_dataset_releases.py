@@ -217,7 +217,7 @@ def test_release_states_it_is_not_a_backup(client, login_as, _api_curator_user, 
     assert contract["kind"] == "curated_dataset_release"
     assert contract["lossless_database_backup"] is False
     assert contract["distinct_from"]["recovery_archive"] == {"name": "tckdb.archive", "version": 1}
-    assert contract["distinct_from"]["convenience_projection"] == {"name": "tckdb.export", "version": 1}
+    assert contract["distinct_from"]["convenience_projection"] == {"name": "tckdb.export", "version": 2}
 
 
 def test_release_endpoints_echo_the_read_profile(

@@ -1593,7 +1593,6 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
         profile: str | None = None,
@@ -1620,7 +1619,6 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
             "limit": limit,
             "profile": profile,
@@ -1648,7 +1646,6 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
         profile: str | None = None,
@@ -1704,7 +1701,6 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
             "limit": limit,
             "profile": profile,
@@ -1730,7 +1726,6 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
         profile: str | None = None,
@@ -1767,7 +1762,6 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
             "limit": limit,
         }
@@ -1877,8 +1871,8 @@ class TCKDBClient:
         self,
         reaction_entry_id: int | str,
         *,
-        temperature_min: float | None = None,
-        temperature_max: float | None = None,
+        coverage_temperature_min_k: float | None = None,
+        coverage_temperature_max_k: float | None = None,
         pressure_bar: float | None = None,
         pressure: float | None = None,
         model_kind: str | None = None,
@@ -1889,7 +1883,6 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
         profile: str | None = None,
@@ -1906,8 +1899,8 @@ class TCKDBClient:
         """
         path = f"/scientific/reaction-entries/{reaction_entry_id}/kinetics"
         params = {
-            "temperature_min": temperature_min,
-            "temperature_max": temperature_max,
+            "coverage_temperature_min_k": coverage_temperature_min_k,
+            "coverage_temperature_max_k": coverage_temperature_max_k,
             "pressure_bar": pressure_bar,
             "pressure": pressure,
             "model_kind": model_kind,
@@ -1918,7 +1911,6 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
             "limit": limit,
             "profile": profile,
@@ -1931,8 +1923,8 @@ class TCKDBClient:
         self,
         species_entry_id: int | str,
         *,
-        temperature_min: float | None = None,
-        temperature_max: float | None = None,
+        coverage_temperature_min_k: float | None = None,
+        coverage_temperature_max_k: float | None = None,
         model_kind: str | None = None,
         level_of_theory_id: int | None = None,
         level_of_theory_ref: str | None = None,
@@ -1941,7 +1933,6 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
         profile: str | None = None,
@@ -1956,8 +1947,8 @@ class TCKDBClient:
         """
         path = f"/scientific/species-entries/{species_entry_id}/thermo"
         params = {
-            "temperature_min": temperature_min,
-            "temperature_max": temperature_max,
+            "coverage_temperature_min_k": coverage_temperature_min_k,
+            "coverage_temperature_max_k": coverage_temperature_max_k,
             "model_kind": model_kind,
             "level_of_theory_id": level_of_theory_id,
             "level_of_theory_ref": level_of_theory_ref,
@@ -1966,7 +1957,6 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
             "limit": limit,
             "profile": profile,
@@ -2680,8 +2670,8 @@ class TCKDBClient:
         species_entry_kind: str | None = None,
         species_ref: str | None = None,
         species_entry_ref: str | None = None,
-        temperature_min: float | None = None,
-        temperature_max: float | None = None,
+        coverage_temperature_min_k: float | None = None,
+        coverage_temperature_max_k: float | None = None,
         model_kind: str | None = None,
         level_of_theory_id: int | None = None,
         level_of_theory_ref: str | None = None,
@@ -2690,7 +2680,6 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
         profile: str | None = None,
@@ -2716,8 +2705,8 @@ class TCKDBClient:
             "species_entry_kind": species_entry_kind,
             "species_ref": species_ref,
             "species_entry_ref": species_entry_ref,
-            "temperature_min": temperature_min,
-            "temperature_max": temperature_max,
+            "coverage_temperature_min_k": coverage_temperature_min_k,
+            "coverage_temperature_max_k": coverage_temperature_max_k,
             "model_kind": model_kind,
             "level_of_theory_id": level_of_theory_id,
             "level_of_theory_ref": level_of_theory_ref,
@@ -2726,7 +2715,6 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
             "limit": limit,
         }
@@ -2755,8 +2743,8 @@ class TCKDBClient:
         family: str | None = None,
         reaction_ref: str | None = None,
         reaction_entry_ref: str | None = None,
-        temperature_min: float | None = None,
-        temperature_max: float | None = None,
+        coverage_temperature_min_k: float | None = None,
+        coverage_temperature_max_k: float | None = None,
         pressure_bar: float | None = None,
         pressure: float | None = None,
         model_kind: str | None = None,
@@ -2767,7 +2755,6 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
         profile: str | None = None,
@@ -2793,8 +2780,8 @@ class TCKDBClient:
             "family": family,
             "reaction_ref": reaction_ref,
             "reaction_entry_ref": reaction_entry_ref,
-            "temperature_min": temperature_min,
-            "temperature_max": temperature_max,
+            "coverage_temperature_min_k": coverage_temperature_min_k,
+            "coverage_temperature_max_k": coverage_temperature_max_k,
             "pressure_bar": pressure_bar,
             "pressure": pressure,
             "model_kind": model_kind,
@@ -2805,7 +2792,6 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
             "limit": limit,
         }
@@ -2854,7 +2840,6 @@ class TCKDBClient:
         include_rejected_quality: bool | None = None,
         ranking: str | None = None,
         include: list[str] | None = None,
-        collapse: str | None = None,
         offset: int | None = None,
         limit: int | None = None,
         profile: str | None = None,
@@ -2903,7 +2888,6 @@ class TCKDBClient:
             "include_rejected_quality": include_rejected_quality,
             "ranking": ranking,
             "include": include,
-            "collapse": collapse,
             "offset": offset,
             "limit": limit,
         }
@@ -5108,15 +5092,14 @@ class TCKDBClient:
         reaction_family: str | None = None,
         all: bool | None = None,
         min_review_status: str | None = None,
-        collapse: str | None = None,
-        selection_policy: str | None = None,
         profile: str | None = None,
     ) -> Iterator[JSONDict]:
         """``GET /scientific/export/ndjson`` — one JSON object per line.
 
-        Streams the composed scientific document for each seed record.
-        Returns an iterator so a large export does not have to be held in
-        memory all at once.
+        Streams the composed scientific document for each seed record: every qualifying thermo, transport and
+        kinetics record of each species and reaction, in display order. Nothing is picked (there is no
+        ``selection_policy``; the server refuses it). Returns an iterator so a large export does not have to be
+        held in memory all at once.
         """
 
         params = {
@@ -5125,8 +5108,6 @@ class TCKDBClient:
             "reaction_family": reaction_family,
             "all": all,
             "min_review_status": min_review_status,
-            "collapse": collapse,
-            "selection_policy": selection_policy,
             "profile": profile,
         }
         return self._export_ndjson("/scientific/export/ndjson", params)
@@ -5196,7 +5177,9 @@ class TCKDBClient:
         seed: Mapping[str, Any],
         *,
         min_review_status: str | None = None,
-        selection_policy: str | None = None,
+        thermo_refs: Sequence[str] | None = None,
+        transport_refs: Sequence[str] | None = None,
+        kinetics_refs: Sequence[str] | None = None,
         energy_units: str | None = None,
         include_transport: bool | None = None,
         naming_policy: str | None = None,
@@ -5207,6 +5190,11 @@ class TCKDBClient:
         ``seed`` selects what goes in the mechanism (explicit refs, a
         family, or everything); the remaining arguments control how it is
         rendered. Returns the archive bytes.
+
+        Chemkin holds exactly one thermo, transport and kinetics record per species or reaction, and the server never
+        picks one. Where a species or reaction has several candidates, name the record in ``thermo_refs`` /
+        ``transport_refs`` / ``kinetics_refs`` (typically taken from the ``select_*`` methods); otherwise the server
+        refuses with 422 ``export_selection_ambiguous``, naming every ambiguous subject and its candidate refs.
         """
 
         if not isinstance(seed, Mapping):
@@ -5217,7 +5205,9 @@ class TCKDBClient:
         body = {
             "seed": dict(seed),
             "min_review_status": min_review_status,
-            "selection_policy": selection_policy,
+            "thermo_refs": list(thermo_refs) if thermo_refs is not None else None,
+            "transport_refs": list(transport_refs) if transport_refs is not None else None,
+            "kinetics_refs": list(kinetics_refs) if kinetics_refs is not None else None,
             "energy_units": energy_units,
             "include_transport": include_transport,
             "naming_policy": naming_policy,

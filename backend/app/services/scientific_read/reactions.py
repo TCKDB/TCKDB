@@ -29,7 +29,6 @@ from app.db.models.species import Species, SpeciesEntry
 from app.db.models.transition_state import TransitionState
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
-    CollapseMode,
     RecordReviewBadge,
     browse_order,
 )
@@ -79,7 +78,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
-_DEFAULT_SORT_ECHO = browse_order("review_rank", "has_kinetics", "has_transition_state", "created_at", "id")
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 
 def search_reactions(
@@ -103,9 +102,10 @@ def search_reactions(
     Containment is set-based, not multiset; see
     :class:`~app.schemas.reads.scientific_reactions.ReactionMatchMode`.
 
-    Default sort (per L3): ``review_rank ASC, has_kinetics DESC,
-    has_transition_state DESC, created_at DESC, id DESC``. Client-supplied
-    ``sort=`` is rejected.
+    Display order (``docs/specs/browse_order.md``): ``review_rank ASC,
+    created_at DESC, id DESC``. Whether an entry has kinetics or a transition
+    state is a filter (``has_kinetics``, ``has_transition_state``), never a
+    ranking key. Client-supplied ``sort=`` is rejected.
 
     :param session: SQLAlchemy session.
     :param request: Parsed request model.
@@ -323,20 +323,13 @@ def search_reactions(
 
     summary = review_summary(badges[e.id] for e in entries)
 
-    pre_collapse_total = len(records)
-    collapse_first = request.collapse.value == "first"
-    returned_records = slice_for_pagination(
-        records,
-        offset=offset,
-        limit=limit,
-        collapse_first=collapse_first,
-    )
+    total = len(records)
+    returned_records = slice_for_pagination(records, offset=offset, limit=limit)
 
     return ScientificReactionSearchResponse(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=summary,
@@ -345,8 +338,7 @@ def search_reactions(
             offset=offset,
             limit=limit,
             returned=len(returned_records),
-            total=pre_collapse_total,
-            collapse_first=collapse_first,
+            total=total,
         ),
     )
 
@@ -599,14 +591,13 @@ def browse_reactions(
 
     total = len(records)
     page_records = slice_for_pagination(
-        records, offset=offset, limit=limit, collapse_first=False
+        records, offset=offset, limit=limit
     )
 
     return ScientificReactionSearchResponse(
         request=RequestEcho(
             filter=_browse_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=CollapseMode.all,
             include=[],
         ),
         review_summary=summary,
@@ -1072,9 +1063,8 @@ def _materialize_and_sort_reaction_records(
     search row and a browse row are byte-identical in shape -- only the
     candidate-set construction differs between the two callers; everything
     from "which entries survived the review filter" onward is this one
-    function. Sort order is the D-series default: ``review_rank`` ASC,
-    ``has_kinetics`` DESC, ``has_transition_state`` DESC, ``created_at``
-    DESC, ``id`` DESC.
+    function. Sort order is the display order: ``review_rank`` ASC,
+    ``created_at`` DESC, ``id`` DESC. Evidence availability orders nothing.
     """
     records: list[ReactionScientificRecord] = []
     for e in entries:
@@ -1137,8 +1127,6 @@ def _materialize_and_sort_reaction_records(
     def sort_key(rec: ReactionScientificRecord) -> tuple:
         return (
             REVIEW_RANK[rec.review.status],
-            -int(rec.availability.has_kinetics),
-            -int(rec.availability.has_transition_state),
             -entry_created_at[rec.reaction_entry_id].timestamp(),
             -rec.reaction_entry_id,
         )
@@ -1180,7 +1168,6 @@ def _empty_response(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=review_summary([]),
@@ -1222,7 +1209,6 @@ def _empty_browse_response(
         request=RequestEcho(
             filter=_browse_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=CollapseMode.all,
             include=[],
         ),
         review_summary=review_summary([]),

@@ -9,6 +9,7 @@ for TS-backed computational kinetics and ``null`` for non-TS-backed records
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
@@ -34,9 +35,9 @@ from app.db.models.common import (
     RecordReviewStatus,
     ScientificOriginKind,
 )
+from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
 from app.schemas.reads.scientific_common import (
-    CollapseMode,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
     LiteratureSummary,
@@ -66,10 +67,21 @@ class KineticsReadRequest(BaseModel):
 
     The path-parameter reaction_entry_id is supplied separately to the
     service function (so this model stays useful for both GET and POST shapes).
+
+    A kinetics read lists every matching record in display order; it never picks one (``collapse`` is refused, see
+    :mod:`app.schemas.reads.removed_parameters`). ``pressure_bar`` is a real filter (a record that does not apply at
+    that pressure is dropped); the coverage temperature window below is not, it only sets what each record's
+    ``temperature_coverage`` is computed against.
     """
 
-    temperature_min: float | None = None
-    temperature_max: float | None = None
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_removed_parameters(cls, data):
+        return _REMOVED_PARAMETERS.guard_body(data)
+
+    #: The window ``temperature_coverage`` is computed against. Not a filter: records outside it are still returned.
+    coverage_temperature_min_k: float | None = None
+    coverage_temperature_max_k: float | None = None
     pressure_bar: float | None = Field(
         default=None,
         gt=0,
@@ -94,7 +106,6 @@ class KineticsReadRequest(BaseModel):
     include_deprecated: bool = False
 
     sort: str | None = None  # rejected non-None per v0 sort policy.
-    collapse: CollapseMode = CollapseMode.all
     include: list[str] = Field(default_factory=list)
     offset: int = 0
     limit: int = 50
@@ -414,6 +425,9 @@ class KineticsRecord(BaseModel):
 
     kinetics_id: int
     kinetics_ref: str
+    #: Deposition time: when this row was created in TCKDB. The second key of the display order
+    #: (``docs/specs/browse_order.md``), shown so a client can check the order it was served.
+    created_at: datetime
     scientific_origin: ScientificOriginKind
     model_kind: KineticsModelKind
     direction: KineticsDirection | None = None
@@ -514,7 +528,6 @@ class RequestEcho(ProfiledRequestEcho):
 
     filter: dict[str, object]
     sort: OrderEcho
-    collapse: CollapseMode
     include: list[str]
 
 

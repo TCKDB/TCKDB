@@ -64,19 +64,8 @@ class ProfiledRequestEcho(BaseModel):
     profile_release_ref: str | None = None
 
 
-class CollapseMode(str, Enum):
-    """Collapse axis values per spec D4 / Phase 2.1.
-
-    ``all``    return every eligible record after filter/sort/pagination.
-    ``first``  return at most one record (zero or one) after filter and sort.
-    """
-
-    all = "all"
-    first = "first"
-
-
 class SelectionPolicy(str, Enum):
-    """Named, read-time *administrative* order used when ``collapse=first``.
+    """Named, read-time *administrative* order a ``.../select`` request states (``policy``).
 
     A selection policy makes "show me one product for this species form" an
     *explicit, named* choice rather than an implicit one. Every policy is an
@@ -144,16 +133,14 @@ MAX_LIMIT = 200
 class Pagination(BaseModel):
     """Echoed pagination block per L5.
 
-    ``total``                pre-collapse, post-filter match count.
-    ``post_collapse_total``  count after collapse, before page slicing.
-    ``returned``             actual length of ``records``.
+    ``total``     post-filter match count, before page slicing.
+    ``returned``  actual length of ``records``.
     """
 
     offset: int = Field(ge=0)
     limit: int = Field(ge=1, le=MAX_LIMIT)
     returned: int = Field(ge=0)
     total: int = Field(ge=0)
-    post_collapse_total: int = Field(ge=0)
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +149,7 @@ class Pagination(BaseModel):
 
 
 class ReviewStatusSummary(BaseModel):
-    """Counts per review status across a candidate record set (pre-collapse)."""
+    """Counts per review status across a candidate record set."""
 
     approved: int = 0
     under_review: int = 0
@@ -766,11 +753,15 @@ class OrderEcho(BaseModel):
     kind: Literal["display_order"] = "display_order"
     keys: list[OrderKeyEcho]
     statement: str = DISPLAY_ORDER_STATEMENT
+    #: Set when the request itself asked for this order (``ranking=lowest_energy``, ``mode=similarity``), naming the
+    #: parameter and value. ``null`` means this is the default display order and the request chose nothing.
+    requested_by: str | None = None
 
 
 #: Every key any browse order uses: its default direction and what it means. The echo is built only from here, so a
-#: response cannot name a key this table does not explain (``tests/api/test_browse_order_echo.py`` checks the catalog against every ``browse_order`` call statically, and
-#: three reads against the order they actually served; a check of every list endpoint is still to come).
+#: response cannot name a key this table does not explain. ``tests/api/test_browse_order_echo.py`` checks the catalog
+#: against every ``browse_order`` call statically, and checks every list endpoint that returns an ``OrderEcho``
+#: against the order it actually served, on rows whose review status, deposition time and id disagree.
 ORDER_KEY_CATALOG: dict[str, tuple[OrderDirection, str]] = {
     "review_rank": (
         "asc",
@@ -779,13 +770,6 @@ ORDER_KEY_CATALOG: dict[str, tuple[OrderDirection, str]] = {
     ),
     "created_at": ("desc", "deposition time, the row's created_at: when it was deposited in TCKDB, newest first"),
     "id": ("desc", "unique tie-breaker that makes the order total (the internal row id); no scientific meaning"),
-    "quality_rank": ("asc", "calculation quality flag: curated, then raw, then rejected, then unknown"),
-    "has_entries": ("desc", "species with at least one visible entry first"),
-    "has_kinetics": ("desc", "reactions with at least one visible kinetics record first"),
-    "has_transition_state": ("desc", "reactions with a visible transition state first"),
-    "reaction_entry_review_rank": ("asc", "review rank of the parent reaction entry (see review_rank)"),
-    "reaction_entry_id": ("desc", "parent reaction entry tie-breaker: the newer row first"),
-    "species_review_rank": ("asc", "review rank of the parent species entry (see review_rank)"),
     "species_entry_id": ("desc", "unique tie-breaker: the newer species entry first"),
     "heavy_atom_count": (
         "asc",
@@ -809,8 +793,11 @@ ORDER_KEY_CATALOG: dict[str, tuple[OrderDirection, str]] = {
 }
 
 
-def browse_order(*keys: str | tuple[str, OrderDirection]) -> OrderEcho:
+def browse_order(*keys: str | tuple[str, OrderDirection], requested_by: str | None = None) -> OrderEcho:
     """The structured echo of an order, from the catalog. A key is a name, or ``(name, direction)`` to override.
+
+    ``requested_by`` labels an order the request asked for (``"ranking=lowest_energy"``); leave it ``None`` for the
+    default display order.
 
     :raises KeyError: a key the catalog does not explain.
     """
@@ -819,26 +806,7 @@ def browse_order(*keys: str | tuple[str, OrderDirection]) -> OrderEcho:
         name, override = (item, None) if isinstance(item, str) else item
         default_direction, meaning = ORDER_KEY_CATALOG[name]
         out.append(OrderKeyEcho(key=name, direction=override or default_direction, meaning=meaning))
-    return OrderEcho(keys=out)
-
-
-# The orders ``simple_selection_sort_key`` produces, written once as data so
-# the echo cannot be restated by hand. ``test_echoed_order_agrees_with_the_real_sort_key``
-# sorts by both and requires the same sequence, so the two cannot drift.
-_REVIEW_FIRST_ORDER: tuple[str, ...] = ("review_rank", "created_at", "id")
-_RECENCY_ONLY_ORDER: tuple[str, ...] = ("created_at", "id")
-
-
-def effective_order_echo(*, collapse_first: bool, policy: SelectionPolicy | None) -> OrderEcho:
-    """The display order the review/recency-only reads actually applied.
-
-    ``collapse=all`` (and broad search, which passes ``collapse_first=False``)
-    always lists candidates review-rank first; ``selection_policy`` only
-    reorders when a single record is being chosen, and only ``latest`` drops
-    the review rank.
-    """
-    recency_only = collapse_first and policy is SelectionPolicy.latest
-    return browse_order(*(_RECENCY_ONLY_ORDER if recency_only else _REVIEW_FIRST_ORDER))
+    return OrderEcho(keys=out, requested_by=requested_by)
 
 
 class ReviewVisibilityEcho(BaseModel):

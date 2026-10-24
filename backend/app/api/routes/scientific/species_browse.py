@@ -22,7 +22,7 @@ for the full contract.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -37,7 +37,8 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
 )
-from app.schemas.reads.scientific_common import CollapseMode
+from app.schemas.reads.removed_parameters import SPECIES as _REMOVED_PARAMETERS
+from app.schemas.reads.removed_parameters import reject_removed_query_params
 from app.schemas.reads.scientific_species import (
     ElementMatchMode,
     ScientificSpeciesBrowseResponse,
@@ -54,6 +55,7 @@ router = APIRouter(prefix="/species")
 
 @router.get("/browse", response_model=ScientificSpeciesBrowseResponse)
 def species_browse(
+    http_request: Request,
     session: Session = Depends(get_db),
     formula: str | None = Query(None),
     charge: int | None = Query(None),
@@ -165,7 +167,6 @@ def species_browse(
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
-    collapse: CollapseMode = Query(CollapseMode.all),
     include: list[str] | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -194,6 +195,7 @@ def species_browse(
     rejected with 422 (``client_sort_not_supported``), matching the
     sibling endpoint.
     """
+    reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
     request = SpeciesBrowseRequest(
         formula=formula,
         charge=charge,
@@ -218,7 +220,6 @@ def species_browse(
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
-        collapse=collapse,
         include=parse_include(include),
         offset=offset,
         limit=limit,

@@ -652,13 +652,12 @@ Identical to every other scientific endpoint:
 Default-visible review statuses: `{approved, under_review, not_reviewed}`,
 via `default_visible_statuses()`.
 
-#### 5.3.8 Sort / collapse / include / pagination
+#### 5.3.8 Sort / include / pagination
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | `sort` | str | `None` | non-`None` → 422 `client_sort_not_supported` |
 | `ranking` | enum | `default` | see §5.5 |
-| `collapse` | `CollapseMode` | `all` | `first` returns ≤1 record |
 | `include` | list[str] | `[]` | same legal set as detail endpoint |
 | `offset` | int | `0` | bounded by `settings.public_max_offset` |
 | `limit` | int | `50` | 1 ≤ limit ≤ `min(MAX_LIMIT, settings.public_max_limit)` |

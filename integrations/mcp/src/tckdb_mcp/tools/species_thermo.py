@@ -48,8 +48,8 @@ _DEFAULT_INCLUDE: tuple[str, ...] = ("provenance",)
 _ACCEPTED_FIELDS: frozenset[str] = frozenset(
     {
         "species_entry_ref",
-        "temperature_min",
-        "temperature_max",
+        "coverage_temperature_min_k",
+        "coverage_temperature_max_k",
         "model_kind",
         "level_of_theory_ref",
         "software",
@@ -59,7 +59,6 @@ _ACCEPTED_FIELDS: frozenset[str] = frozenset(
         "offset",
         "limit",
         "include",
-        "collapse",
     }
 )
 
@@ -81,8 +80,8 @@ INPUT_SCHEMA: dict[str, Any] = {
             "minLength": 5,
             "maxLength": PUBLIC_REF_MAX_LENGTH,
         },
-        "temperature_min": {"type": "number"},
-        "temperature_max": {"type": "number"},
+        "coverage_temperature_min_k": {"type": "number"},
+        "coverage_temperature_max_k": {"type": "number"},
         "model_kind": {
             "type": "string",
             "description": (
@@ -117,11 +116,6 @@ INPUT_SCHEMA: dict[str, Any] = {
                 "Subset of legal species-entry-thermo include tokens. "
                 "'internal_ids' is not exposed. Defaults to ['provenance']."
             ),
-        },
-        "collapse": {
-            "type": "string",
-            "enum": ["all", "first"],
-            "default": "all",
         },
     },
     "additionalProperties": False,
@@ -173,10 +167,6 @@ def run(
     except ValueError as exc:
         raise invalid_input(str(exc)) from exc
 
-    collapse = args.get("collapse", "all")
-    if collapse not in ("all", "first"):
-        raise invalid_input(f"collapse must be 'all' or 'first'; got {collapse!r}")
-
     if "include" in args:
         include_raw = args.get("include")
         if not isinstance(include_raw, list) or not all(
@@ -201,12 +191,12 @@ def run(
             f"Legal tokens: {sorted(LEGAL_INCLUDE_TOKENS)!r}"
         )
 
-    _validate_numeric(args.get("temperature_min"), "temperature_min")
-    _validate_numeric(args.get("temperature_max"), "temperature_max")
+    _validate_numeric(args.get("coverage_temperature_min_k"), "coverage_temperature_min_k")
+    _validate_numeric(args.get("coverage_temperature_max_k"), "coverage_temperature_max_k")
 
     params: dict[str, Any] = {
-        "temperature_min": args.get("temperature_min"),
-        "temperature_max": args.get("temperature_max"),
+        "coverage_temperature_min_k": args.get("coverage_temperature_min_k"),
+        "coverage_temperature_max_k": args.get("coverage_temperature_max_k"),
         "model_kind": args.get("model_kind"),
         "level_of_theory_ref": level_of_theory_ref,
         "software": args.get("software"),
@@ -216,7 +206,6 @@ def run(
         "offset": offset,
         "limit": limit,
         "include": include,
-        "collapse": collapse,
     }
 
     quoted_ref = quote(species_entry_ref, safe="")

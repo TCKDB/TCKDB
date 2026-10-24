@@ -194,9 +194,9 @@ None of this mutates the science; it decides *how much to trust it*.
 
 There is no "preferred" flag in the database. When a client reads, e.g.,
 `/scientific/species-entries/{ref}/thermo`, the read service *sorts*
-candidate records and returns the first in display order (`collapse=first`)
-or the full list (`collapse=all`). The first record is display order, never a
-scientific preference ([`browse_order.md`](../specs/browse_order.md)). The thermo
+candidate records and returns the full list in display order; it never picks
+one (the select endpoints answer "give me one"). The first record is display
+order, never a scientific preference ([`browse_order.md`](../specs/browse_order.md)). The thermo
 sort key (`scientific_read/thermo.py`) is, in order: review rank (approved
 first; `under_review` and `not_reviewed` rank equally) → newer deposited → higher id (the same
 `simple_selection_sort_key` the export uses; temperature coverage and the

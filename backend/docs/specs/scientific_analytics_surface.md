@@ -492,8 +492,8 @@ surface exists to have.
   reactant/product SMILES lists are awkward in a query string. Analytics filters
   are scalars and cursors are short opaque tokens, so a body form would add
   surface without answering a question.
-* **No `collapse=`.** Collapse answers "show me one product for this species
-  form"; a dataset query wants all of them.
+* **No `collapse=`.** No scientific read has one any more: a read lists every record and the select endpoints answer "give me
+  one"; a dataset query wants all of them.
 * **No aggregate/group-by endpoint** (histograms, per-level-of-theory means).
   That is a different contract — it returns statistics rather than records, so
   review visibility, the profile echo and citation all mean something different

@@ -1,9 +1,10 @@
 """CHEMKIN mechanism serializer (docs/specs/bulk_export_design.md §5).
 
 The exact inverse of a CHEMKIN importer: takes an :class:`ExportRecordSet`
-produced by :mod:`app.services.scientific_read.export` (with
-``collapse=first`` — CHEMKIN cannot represent multiple candidates per
-record) and emits the three canonical mechanism files:
+produced by :mod:`app.services.scientific_read.export` and reduced to at most
+one record per species or reaction by ``resolve_single_records`` (CHEMKIN cannot
+represent multiple candidates per record, and the exporter never picks one: the
+request names them or is refused) and emits the three canonical mechanism files:
 
 * ``chem.inp``  — ELEMENTS / SPECIES / REACTIONS with Arrhenius, falloff
   (LOW/TROE/SRI), third-body efficiencies, PLOG, and Chebyshev blocks.

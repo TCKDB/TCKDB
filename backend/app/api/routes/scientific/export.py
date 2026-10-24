@@ -1,6 +1,8 @@
 """Bulk-export endpoints (docs/specs/bulk_export_design.md §3).
 
-Four curator-gated, streaming exports over the scientific surface:
+Four curator-gated, streaming exports over the scientific surface. None of them picks a record: the many-record
+formats export every qualifying record, and CHEMKIN (one record per species/reaction) takes the records the request
+names or refuses (``export_selection_ambiguous``).
 
 * ``GET  /scientific/export/ndjson``  — a selected TCKDB scientific
   projection, streamed one record per line via a server-side generator
@@ -11,11 +13,13 @@ Four curator-gated, streaming exports over the scientific surface:
   because it carries options (units, transport, naming policy).
 * ``GET  /scientific/export/ml/species.ndjson`` — ML dataset, one record
   per ``(species_entry, geometry)``: identity, Cartesian coordinates,
-  LOT-labelled electronic energies, frequencies, optional Hessian, and
-  the thermo summary.
+  LOT-labelled electronic energies, every frequency result and (optionally)
+  every Hessian keyed by calculation and level, and every thermo summary.
 * ``GET  /scientific/export/ml/reactions.ndjson`` — ML dataset, one record
   per ``reaction_entry``, RDB7-compatible in spirit: reactant/product
-  SMILES, Arrhenius kinetics, electronic forward barrier, TS geometry.
+  SMILES, Arrhenius kinetics, every transition-state entry with its energy
+  and geometry per level, and one electronic forward barrier per entry and
+  level.
 
 All are above the normal read cap, so they are gated on the curator/admin
 role. Thin handlers over
@@ -28,15 +32,15 @@ import io
 import json
 import zipfile
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_curator_or_admin
 from app.db.models.app_user import AppUser
 from app.db.models.common import RecordReviewStatus
-from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
+from app.schemas.reads.removed_parameters import RemovedParameters
 from app.services.scientific_read import ref_guard
 from app.services.scientific_read.chemkin_serialize import (
     ChemkinOptions,
@@ -46,6 +50,7 @@ from app.services.scientific_read.export import (
     SeedSelection,
     build_export_record_set,
     iter_export_ndjson,
+    resolve_single_records,
 )
 from app.services.scientific_read.ml_dataset import (
     MLFilters,
@@ -55,9 +60,19 @@ from app.services.scientific_read.ml_dataset import (
 
 router = APIRouter(prefix="/export")
 
+#: An export never picks a record. ``collapse`` / ``selection_policy`` asked it to; both are refused by name.
+_NO_PICKING = RemovedParameters(
+    select_endpoint=None,
+    pointer=(
+        "An export contains every qualifying record. For a one-record-per-subject format (CHEMKIN), name the records "
+        "in thermo_refs / transport_refs / kinetics_refs, typically taken from the select endpoints."
+    ),
+)
+
 
 @router.get("/ndjson")
 def export_ndjson(
+    http_request: Request,
     session: Session = Depends(get_db),
     _user: AppUser = Depends(require_curator_or_admin),
     reaction_ref: list[str] | None = Query(
@@ -71,10 +86,12 @@ def export_ndjson(
     min_review_status: RecordReviewStatus | None = Query(
         RecordReviewStatus.approved
     ),
-    collapse: CollapseMode = Query(CollapseMode.first),
-    selection_policy: SelectionPolicy = Query(SelectionPolicy.default),
 ) -> StreamingResponse:
     """Stream a selected scientific NDJSON projection for the seed.
+
+    Every qualifying thermo, transport and kinetics record of each species and
+    reaction is exported, in display order; nothing is picked. ``collapse`` and
+    ``selection_policy`` are refused (422).
 
     Emits a header ``manifest`` line, then one ``species`` / ``reaction``
     line per record (computed lazily), then a trailing ``export_summary``
@@ -84,6 +101,7 @@ def export_ndjson(
     :raises ValueError: 422 for an empty/unresolvable seed or an ``all``
         request over the export cap.
     """
+    _NO_PICKING.check(http_request.query_params.keys())
     seed = SeedSelection(
         reaction_refs=reaction_ref,
         species_refs=species_ref,
@@ -98,8 +116,6 @@ def export_ndjson(
         session,
         seed=seed,
         min_review_status=min_review_status,
-        collapse=collapse,
-        selection_policy=selection_policy,
     )
     return StreamingResponse(line_iter, media_type="application/x-ndjson")
 
@@ -116,13 +132,23 @@ class ChemkinExportRequest(BaseModel):
 
     seed: _SeedBody
     min_review_status: RecordReviewStatus | None = RecordReviewStatus.approved
-    selection_policy: SelectionPolicy = SelectionPolicy.default
+    #: CHEMKIN holds one thermo / transport / kinetics record per species or reaction and the exporter never picks.
+    #: A species or reaction with several candidates needs the record named here (refs typically come from the
+    #: select endpoints); otherwise the export is refused with ``export_selection_ambiguous``.
+    thermo_refs: list[str] = Field(default_factory=list)
+    transport_refs: list[str] = Field(default_factory=list)
+    kinetics_refs: list[str] = Field(default_factory=list)
     energy_units: str = Field(
         "cal/mol",
         description="REACTIONS energy unit: cal/mol|kcal/mol|j/mol|kj/mol|k",
     )
     include_transport: bool = True
     naming_policy: str = Field("formula", description="formula | public_ref")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_picking_parameters(cls, data):
+        return _NO_PICKING.guard_body(data)
 
 
 @router.post("/chemkin")
@@ -133,8 +159,12 @@ def export_chemkin(
 ) -> StreamingResponse:
     """Export a CHEMKIN mechanism zip (chem.inp/therm.dat/tran.dat + manifest).
 
-    CHEMKIN cannot represent multiple candidates per record, so selection is
-    forced to ``collapse=first``. Curator/admin only.
+    CHEMKIN holds exactly one thermo, transport and kinetics record per
+    species or reaction, and the exporter never picks one. Where a species or
+    reaction has more than one candidate, name the record in ``thermo_refs`` /
+    ``transport_refs`` / ``kinetics_refs``; otherwise the request is refused
+    with 422 ``export_selection_ambiguous``, which lists every ambiguous
+    species/reaction with its candidate refs. Curator/admin only.
 
     :raises ValueError: 422 for an empty/unresolvable seed or an ``all``
         request over the export cap.
@@ -149,8 +179,13 @@ def export_chemkin(
         session,
         seed=seed,
         min_review_status=body.min_review_status,
-        collapse=CollapseMode.first,
-        selection_policy=body.selection_policy,
+    )
+    resolve_single_records(
+        record_set,
+        thermo_refs=body.thermo_refs,
+        transport_refs=body.transport_refs,
+        kinetics_refs=body.kinetics_refs,
+        include_transport=body.include_transport,
     )
     options = ChemkinOptions(
         energy_units=body.energy_units,
@@ -230,8 +265,9 @@ def export_ml_species(
     """Stream a species/conformer-centric ML dataset as NDJSON (JSONL).
 
     One record per ``(species_entry, geometry)`` carrying species identity,
-    Cartesian geometry, LOT-labelled electronic energies, frequencies,
-    optional Hessian, and the species thermo summary. Curator/admin only.
+    Cartesian geometry, LOT-labelled electronic energies, ``frequency_results``
+    and ``hessians`` (lists: one per calculation, each naming its level), and
+    ``thermos`` (a list). Nothing is picked among them. Curator/admin only.
 
     ``min_review_status`` defaults to ``approved``; on a pre-curation
     corpus (nothing approved yet) that exports zero records — pass
@@ -285,8 +321,13 @@ def export_ml_reactions(
     """Stream a reaction-centric, RDB7-compatible ML dataset as NDJSON.
 
     One record per ``reaction_entry`` carrying reactant/product SMILES,
-    Arrhenius kinetics with LOT labels, a best-effort electronic forward
-    barrier, a reaction enthalpy, and the TS geometry+energy. The RDB7
+    Arrhenius kinetics with LOT labels, every transition-state entry
+    (``transition_states``: energy and geometry per calculation and level), one
+    electronic forward barrier per entry and per level at which the TS and all
+    reactants have an energy (``barriers``; ``barriers_unavailable`` names each
+    entry with none, with the reason), and a reaction enthalpy. No transition
+    state, level or frequency result is chosen, and absolute energies at
+    different levels are never compared. The RDB7
     column mapping is documented on
     ``app.services.scientific_read.ml_dataset.MLReactionRecord``.
     Curator/admin only.

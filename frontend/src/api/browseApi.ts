@@ -443,10 +443,8 @@ export function buildSpeciesBrowseQuery(
 ): URLSearchParams {
     const query = sharedQueryParams(filters, offset, limit)
     query.set("species_entry_kind", kind === "vdw" ? "vdw_complex" : "minimum")
-    // Sent explicitly rather than relying on the server default (`CollapseMode.all`,
-    // `species_browse.py:69`) so a future server-side default change cannot silently
-    // narrow this catalogue to one record per species without a test noticing.
-    query.set("collapse", "all")
+    // No `collapse`: a browse read lists every matching record and never picks one, and the server refuses
+    // the parameter (422 `browse_parameter_removed`), so sending it would break this page.
     if (filters.formula !== "") query.set("formula", filters.formula)
     if (filters.elements !== "") {
         query.set("elements", filters.elements)
@@ -617,7 +615,7 @@ export function seedFiltersFromUrl(kind: BrowseKind, searchParams: URLSearchPara
 // ---------------------------------------------------------------------------
 
 const paginationSchema = z.object({
-    offset: z.number(), limit: z.number(), returned: z.number(), total: z.number(), post_collapse_total: z.number(),
+    offset: z.number(), limit: z.number(), returned: z.number(), total: z.number(),
 }).passthrough()
 export type BrowsePagination = z.infer<typeof paginationSchema>
 

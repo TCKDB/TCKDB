@@ -83,11 +83,8 @@ class IncludeGatedSections:
     "omit null optionals" pass would turn every completed traversal into a
     restart and silently yield the entire result set twice — duplicated
     records in a chemistry dataset, with no error anywhere. The same rule
-    read from the other side: ``pagination.py`` also tests
-    ``"post_collapse_total" in pagination``, so that field must never
-    start being emitted as an explicit ``null``. Never null a field a
-    client tests for presence, and never omit a field a client tests for
-    nullity.
+    read from the other side: never null a field a client tests for
+    presence, and never omit a field a client tests for nullity.
 
     **The table is per-surface and explicit rather than derived from field
     names, because names collide.** One calculation response carries two

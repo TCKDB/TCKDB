@@ -9,13 +9,14 @@ Composition order (final response ordering):
 1. Resolve reaction/reaction_entry candidates using the same matching
    rules as ``search_reactions`` (``direction`` and ``match`` handling
    included, so ``match`` defaults to containment here too).
-2. For each surviving reaction_entry, fetch kinetics records using the
-   same per-record ordering as ``get_reaction_kinetics`` (review_rank,
-   created_at, id; coverage and evidence are displayed, not ranked).
-3. Group across reaction_entries deterministically: outer key is the
-   reaction_entry's review rank then id; inner order is the kinetics
-   ordering already applied.
-4. Apply collapse and pagination to the flat list.
+2. For each surviving reaction_entry, fetch its kinetics records with
+   ``get_reaction_kinetics``.
+3. Order the flat list of records by the RECORD's own review rank, then its
+   own deposition time (``created_at`` DESC), then its own id DESC. The
+   parent entry's review standing and id order nothing: a record is not
+   ranked by who its parent is, and records of one entry are not kept
+   together (``docs/specs/browse_order.md``).
+4. Paginate the flat list. Every matching record is returned; none is picked.
 
 Non-TS-backed kinetics surface here exactly as in the detail endpoint —
 TS-chain provenance fields are ``null`` and the records are not hidden.
@@ -27,7 +28,6 @@ from sqlalchemy.orm import Session
 
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
-    CollapseMode,
     ReviewStatusSummary,
     browse_order,
 )
@@ -98,9 +98,7 @@ _KINETICS_LEGAL_INCLUDES_PASSTHROUGH = {
     "artifacts",
 }
 
-_DEFAULT_SORT_ECHO = browse_order(
-    "reaction_entry_review_rank", "reaction_entry_id", "review_rank", "created_at", "id"
-)
+_DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 
 def search_kinetics(
@@ -127,7 +125,12 @@ def search_kinetics(
         internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     )
     includes = filter_internal_ids_from_resolved(includes)
-    validate_temperature_range(request.temperature_min, request.temperature_max)
+    validate_temperature_range(
+        request.coverage_temperature_min_k,
+        request.coverage_temperature_max_k,
+        min_name="coverage_temperature_min_k",
+        max_name="coverage_temperature_max_k",
+    )
 
     # 1) Resolve reaction_entries.
     def fetch_reaction_page(page_offset: int, page_limit: int):
@@ -146,7 +149,6 @@ def search_kinetics(
                 include_deprecated=request.include_deprecated,
                 offset=page_offset,
                 limit=page_limit,
-                collapse=CollapseMode.all,
                 include=[],
             ),
         )
@@ -191,8 +193,8 @@ def search_kinetics(
                 session,
                 reaction_entry_id=reaction_entry_id,
                 request=KineticsReadRequest(
-                    temperature_min=request.temperature_min,
-                    temperature_max=request.temperature_max,
+                    coverage_temperature_min_k=request.coverage_temperature_min_k,
+                    coverage_temperature_max_k=request.coverage_temperature_max_k,
                     pressure_bar=request.pressure_bar,
                     model_kind=request.model_kind,
                     level_of_theory_id=request.level_of_theory_id,
@@ -202,7 +204,6 @@ def search_kinetics(
                     include_rejected=request.include_rejected,
                     include_deprecated=request.include_deprecated,
                     include=inner_includes,
-                    collapse=CollapseMode.all,
                     offset=page_offset,
                     limit=page_limit,
                 ),
@@ -220,27 +221,19 @@ def search_kinetics(
     if not flat:
         return _empty_response(request, includes, offset, limit)
 
-    # 3) Group by reaction_entry deterministically. The per-entry kinetics
-    # order (review status, then newest; #648) comes from
-    # ``get_reaction_kinetics`` and is preserved because ``list.sort`` is
-    # stable and this key only compares reaction-level fields.
-    def sort_key(rec: KineticsSearchRecord) -> tuple:
-        return (
-            REVIEW_RANK[rec.reaction.reaction_entry_review.status],
-            -rec.reaction.reaction_entry_id,
+    # 3) Display order over the flat list: the record's own review rank, deposition time and id. Nothing about the
+    # parent entry takes part.
+    flat.sort(
+        key=lambda rec: (
+            REVIEW_RANK[rec.kinetics.review.status],
+            -rec.kinetics.created_at.timestamp(),
+            -rec.kinetics.kinetics_id,
         )
-
-    flat.sort(key=sort_key)
-
-    # 4) Collapse + pagination.
-    pre_collapse_total = len(flat)
-    collapse_first = request.collapse.value == "first"
-    returned = slice_for_pagination(
-        flat,
-        offset=offset,
-        limit=limit,
-        collapse_first=collapse_first,
     )
+
+    # 4) Pagination on the flat list.
+    total = len(flat)
+    returned = slice_for_pagination(flat, offset=offset, limit=limit)
 
     # Trust is resolved for the returned page and for nothing else — see the
     # matching comment in ``thermo_search``. Forwarding the token into
@@ -258,7 +251,6 @@ def search_kinetics(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=summary,
@@ -267,8 +259,7 @@ def search_kinetics(
             offset=offset,
             limit=limit,
             returned=len(returned),
-            total=pre_collapse_total,
-            collapse_first=collapse_first,
+            total=total,
         ),
     )
 
@@ -283,10 +274,10 @@ def _filter_echo(request: KineticsSearchRequest) -> dict[str, object]:
     echo["match"] = request.match.value
     if request.family is not None:
         echo["family"] = request.family
-    if request.temperature_min is not None:
-        echo["temperature_min"] = request.temperature_min
-    if request.temperature_max is not None:
-        echo["temperature_max"] = request.temperature_max
+    if request.coverage_temperature_min_k is not None:
+        echo["coverage_temperature_min_k"] = request.coverage_temperature_min_k
+    if request.coverage_temperature_max_k is not None:
+        echo["coverage_temperature_max_k"] = request.coverage_temperature_max_k
     if request.pressure_bar is not None:
         echo["pressure_bar"] = request.pressure_bar
     if request.model_kind is not None:
@@ -320,7 +311,6 @@ def _empty_response(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         review_summary=ReviewStatusSummary(),

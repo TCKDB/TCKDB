@@ -93,6 +93,26 @@ def reject_client_sort(sort: str | None) -> None:
         )
 
 
+def software_names_by_calculation(session: Session, calculation_ids: Iterable[int]) -> dict[int, str]:
+    """Name of the software that ran each calculation, in one statement (a software filter's match set).
+
+    A calculation with no software release is absent from the result.
+    """
+    from app.db.models.calculation import Calculation
+    from app.db.models.software import Software, SoftwareRelease
+
+    ids = set(calculation_ids)
+    if not ids:
+        return {}
+    rows = session.execute(
+        select(Calculation.id, Software.name)
+        .join(SoftwareRelease, SoftwareRelease.id == Calculation.software_release_id)
+        .join(Software, Software.id == SoftwareRelease.software_id)
+        .where(Calculation.id.in_(ids))
+    ).all()
+    return dict(rows)
+
+
 def validate_pagination(offset: int, limit: int) -> tuple[int, int]:
     """Validate offset/limit per L5 and return them coerced to defaults.
 
@@ -336,9 +356,17 @@ def validate_includes(
 
 
 def validate_temperature_range(
-    temperature_min: float | None, temperature_max: float | None
+    temperature_min: float | None,
+    temperature_max: float | None,
+    *,
+    min_name: str = "temperature_min",
+    max_name: str = "temperature_max",
 ) -> None:
-    """Reject temperature_min > temperature_max with a 422."""
+    """Reject a window whose minimum exceeds its maximum with a 422.
+
+    ``min_name`` / ``max_name`` are the caller-facing parameter names (``coverage_temperature_min_k`` on the thermo
+    and kinetics reads, where the window filters nothing and only sets what coverage is computed against).
+    """
     if (
         temperature_min is not None
         and temperature_max is not None
@@ -360,10 +388,10 @@ def validate_temperature_range(
         # query parameters, so nothing here is a row id.
         raise CodedValueError(
             "invalid_temperature_range",
-            "temperature_min must be <= temperature_max",
+            f"{min_name} must be <= {max_name}",
             context={
-                "temperature_min_k": temperature_min,
-                "temperature_max_k": temperature_max,
+                (min_name if min_name.endswith("_k") else f"{min_name}_k"): temperature_min,
+                (max_name if max_name.endswith("_k") else f"{max_name}_k"): temperature_max,
             },
         )
 
@@ -498,20 +526,16 @@ def build_pagination(
     limit: int,
     returned: int,
     total: int,
-    collapse_first: bool = False,
 ) -> Pagination:
     """Construct the response Pagination block.
 
-    ``total`` is the pre-collapse, post-filter count. The additive
-    ``post_collapse_total`` is the count after collapse and before offset/limit
-    slicing; it equals ``total`` unless ``collapse=first`` was requested.
+    ``total`` is the post-filter count, before offset/limit slicing.
     """
     return Pagination(
         offset=offset,
         limit=limit,
         returned=returned,
         total=total,
-        post_collapse_total=min(total, 1) if collapse_first else total,
     )
 
 
@@ -584,15 +608,9 @@ def slice_for_pagination(
     *,
     offset: int,
     limit: int,
-    collapse_first: bool,
 ) -> list:
-    """Apply pagination after sort/collapse.
-
-    Collapse is applied first, then ``offset`` and ``limit`` are applied to
-    the collapsed or complete list.
-    """
-    collapsed = items[:1] if collapse_first else items
-    return collapsed[offset : offset + limit]
+    """Apply ``offset`` and ``limit`` to the ordered list. Every matching record is in the list; none is picked."""
+    return items[offset : offset + limit]
 
 
 # ---------------------------------------------------------------------------

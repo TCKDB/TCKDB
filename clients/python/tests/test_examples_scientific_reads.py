@@ -92,7 +92,6 @@ def test_geometry_followup_prefers_primary_output_then_input_ref():
                 "request": {
                     "filter": {},
                     "sort": "",
-                    "collapse": "all",
                     "include": include or [],
                 },
                 "geometry_ref": handle,
@@ -763,7 +762,6 @@ def test_calculation_type_and_ranking_flags_thread_through(monkeypatch):
                 "request": {
                     "filter": {},
                     "sort": "",
-                    "collapse": "first",
                     "include": [],
                 },
                 "review_summary": {},

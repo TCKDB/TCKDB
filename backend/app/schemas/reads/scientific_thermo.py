@@ -5,9 +5,10 @@ See docs/specs/browse_order.md.
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from tckdb_schemas.thermo_declarations import StoredThermoProtocolDeclaration
 
 from app.db.models.common import (
@@ -18,10 +19,10 @@ from app.db.models.common import (
     ScientificOriginKind,
     ThermoTargetKind,
 )
+from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
-    CollapseMode,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
     OrderEcho,
@@ -30,7 +31,6 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
     ScientificLevelsSummary,
-    SelectionPolicy,
     SoftwareReleaseSummary,
     SupersessionNotice,
     TemperatureCoverage,
@@ -66,25 +66,32 @@ class ThermoModelKindQuery(str, Enum):
 
 
 class ThermoReadRequest(BaseModel):
-    """Service-layer request for species-entry thermo read."""
+    """Service-layer request for species-entry thermo read.
 
-    temperature_min: float | None = None
-    temperature_max: float | None = None
+    A thermo read lists every matching record in display order; it never picks one (``collapse`` and
+    ``selection_policy`` are refused, see :mod:`app.schemas.reads.removed_parameters`). The coverage window below
+    filters nothing: it sets what each record's ``temperature_coverage`` is computed against.
+    """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_removed_parameters(cls, data):
+        return _REMOVED_PARAMETERS.guard_body(data)
+
+    #: The window ``temperature_coverage`` is computed against. Not a filter: records outside it are still returned.
+    coverage_temperature_min_k: float | None = None
+    coverage_temperature_max_k: float | None = None
     model_kind: ThermoModelKindQuery | None = None
+    # Matches when ANY source calculation linked to the thermo record ran at this level of theory. There is no
+    # "primary" calculation for a filter, and no role priority: a record is kept when any linked calculation matches.
     level_of_theory_id: int | None = None
     # Phase C: LoT may be supplied by ref instead of (or alongside) id.
     level_of_theory_ref: str | None = None
-    # Filters on the PRIMARY CALCULATION's software name (see
-    # `_primary_software_name` in the service) -- i.e. what ran the
-    # electronic structure, matching `ThermoProvenance.primary_calculation
-    # .software`. It does NOT filter on `ThermoProvenance.software_release`
-    # (the thermo's own software, e.g. Arkane). A client that reads
-    # `software_release: "Arkane"` off a record and re-queries
-    # `?software=Arkane` gets zero rows for population-B-shaped records,
-    # which have no calculation named "Arkane" to match. Pre-existing
-    # behavior, unchanged by issue #284's fix -- documented here because the
-    # response-field rename (`software` -> `software_release`) makes the
-    # naming collision between this filter and the old field newly visible.
+    # Matches when ANY source calculation linked to the thermo record ran in a software of this name (what ran the
+    # electronic structure; ``ThermoProvenance.primary_calculation.software`` is one of them). There is no "primary"
+    # calculation for a filter: a record is kept when any of its linked calculations matches. It does NOT filter on
+    # ``ThermoProvenance.software_release`` (the thermo's own software, e.g. Arkane): a record with no linked
+    # calculation named "Arkane" is not matched by ``?software=Arkane``.
     software: str | None = None
 
     min_review_status: RecordReviewStatus | None = None
@@ -92,10 +99,6 @@ class ThermoReadRequest(BaseModel):
     include_deprecated: bool = False
 
     sort: str | None = None  # rejected non-None per v0 sort policy.
-    collapse: CollapseMode = CollapseMode.all
-    # Named, read-time policy governing which single record collapse=first
-    # selects. ``default`` keeps the standard thermo ranking.
-    selection_policy: SelectionPolicy = SelectionPolicy.default
     include: list[str] = Field(default_factory=list)
     offset: int = 0
     limit: int = 50
@@ -266,6 +269,9 @@ class ThermoRecord(BaseModel):
 
     thermo_id: int
     thermo_ref: str
+    #: Deposition time: when this row was created in TCKDB. The second key of the display order
+    #: (``docs/specs/browse_order.md``), shown so a client can check the order it was served.
+    created_at: datetime
     scientific_origin: ScientificOriginKind
     model_kind: ThermoModelKindQuery
     review: RecordReviewBadge
@@ -325,12 +331,7 @@ class RequestEcho(ProfiledRequestEcho):
 
     filter: dict[str, object]
     sort: OrderEcho
-    collapse: CollapseMode
-    selection_policy: SelectionPolicy = SelectionPolicy.default
     include: list[str]
-    #: The display order that actually ordered the returned records, in the same shape as ``sort``. ``sort`` stays the
-    #: candidate-list (``collapse=all``) order; with ``collapse=first&selection_policy=latest`` this drops the review rank.
-    effective_order: OrderEcho | None = None
 
 
 class ScientificSpeciesThermoResponse(BaseModel):

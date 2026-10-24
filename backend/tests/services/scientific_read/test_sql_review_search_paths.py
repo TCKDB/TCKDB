@@ -51,10 +51,7 @@ from app.schemas.reads.scientific_calculation_search import (
 )
 from app.schemas.reads.scientific_common import REVIEW_RANK
 from app.schemas.reads.scientific_species import SpeciesSearchRequest
-from app.services.scientific_read.calculations_search import (
-    _QUALITY_RANK,
-    search_calculations,
-)
+from app.services.scientific_read.calculations_search import search_calculations
 from app.services.scientific_read.common import (
     fetch_review_badges,
     visible_statuses,
@@ -796,7 +793,6 @@ def _reference_calculation_order(
     survivors.sort(
         key=lambda row: (
             REVIEW_RANK[badges[row.id].status],
-            _QUALITY_RANK[row.quality],
             -row.created_at.timestamp(),
             -row.id,
         )

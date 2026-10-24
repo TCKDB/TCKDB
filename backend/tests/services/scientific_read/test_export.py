@@ -21,7 +21,6 @@ from app.db.models.common import (
     ThermoModelKind,
     TunnelingModel,
 )
-from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
 from app.services.scientific_read.chemkin_serialize import (
     ChemkinOptions,
     serialize_chemkin,
@@ -166,19 +165,16 @@ def test_selection_lists_the_approved_thermo_first(db_session):
     attach_thermo_nasa(db_session, thermo=other)
     # `other` stays not_reviewed.
 
-    # min_review_status=None (default posture) keeps both candidates, and the
-    # default policy ranks the approved one first.
+    # min_review_status=None (default posture) keeps both candidates, in display order: approved first.
     rs = build_export_record_set(
         db_session,
         seed=SeedSelection(species_refs=[entry.public_ref]),
         min_review_status=None,
-        collapse=CollapseMode.first,
-        selection_policy=SelectionPolicy.default,
     )
     (sr,) = rs.species_records
-    assert len(sr.thermos) == 1
-    assert sr.thermos[0].thermo.id == approved.id
-    # The choice is visible in the emitted record (manifest/traceability).
+    # Nothing is picked: both records are exported, the approved one first.
+    assert [t.thermo.id for t in sr.thermos] == [approved.id, other.id]
+    # The order is visible in the emitted record.
     ndjson = sr.to_ndjson()
     assert ndjson["thermos"][0]["thermo_ref"] == approved.public_ref
     assert ndjson["thermos"][0]["review_status"] == "approved"
@@ -201,7 +197,7 @@ def test_trust_filter_drops_below_threshold_and_reports_gap(db_session):
     assert thermo_gaps[0].ref == entry.public_ref
 
 
-def test_collapse_all_returns_all_candidates(db_session):
+def test_every_qualifying_record_is_exported(db_session):
     sp = make_species(db_session, smiles="C", inchi_key=next_inchi_key("CA"))
     entry = make_species_entry(db_session, sp)
     for _ in range(2):
@@ -212,7 +208,6 @@ def test_collapse_all_returns_all_candidates(db_session):
     rs = build_export_record_set(
         db_session,
         seed=SeedSelection(species_refs=[entry.public_ref]),
-        collapse=CollapseMode.all,
     )
     (sr,) = rs.species_records
     assert len(sr.thermos) == 2
@@ -236,7 +231,7 @@ def test_ndjson_stream_structure(db_session):
     assert all(line.endswith("\n") for line in lines)
 
     assert parsed[0]["record_type"] == "manifest"
-    assert parsed[0]["format"] == {"name": "tckdb.export", "version": 1}
+    assert parsed[0]["format"] == {"name": "tckdb.export", "version": 2}
     assert parsed[0]["contract"]["kind"] == "selected_scientific_projection"
     assert parsed[0]["contract"]["lossless"] is False
     assert parsed[0]["contract"]["reingestible"] is False

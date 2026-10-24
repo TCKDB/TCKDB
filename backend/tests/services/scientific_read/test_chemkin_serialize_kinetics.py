@@ -42,12 +42,10 @@ from app.services.scientific_read.chemkin_serialize import (
     validate_chemkin_mechanism,
 )
 from app.services.scientific_read.export import (
-    CollapseMode,
     ExportRecordSet,
     ReactionExportRecord,
     SeedSelection,
     SelectedKinetics,
-    SelectionPolicy,
     SpeciesExportRecord,
 )
 from tests._ci_dependency import require_module
@@ -139,8 +137,6 @@ def _record_set(species_records, reaction_records) -> ExportRecordSet:
     return ExportRecordSet(
         seed=SeedSelection(species_refs=[], reaction_refs=[]),
         min_review_status=None,
-        collapse=CollapseMode.first,
-        selection_policy=SelectionPolicy.latest,
         generated_at=datetime.now(timezone.utc),
         species_records=list(species_records),
         reaction_records=list(reaction_records),

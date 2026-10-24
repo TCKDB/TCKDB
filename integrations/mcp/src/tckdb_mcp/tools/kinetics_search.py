@@ -94,8 +94,8 @@ _ACCEPTED_FIELDS: frozenset[str] = frozenset(
         "reaction_ref",
         "reaction_entry_ref",
         # Kinetics-specific filters
-        "temperature_min",
-        "temperature_max",
+        "coverage_temperature_min_k",
+        "coverage_temperature_max_k",
         "pressure",
         "model_kind",
         "level_of_theory_ref",
@@ -108,7 +108,6 @@ _ACCEPTED_FIELDS: frozenset[str] = frozenset(
         "offset",
         "limit",
         "include",
-        "collapse",
     }
 )
 
@@ -168,8 +167,8 @@ INPUT_SCHEMA: dict[str, Any] = {
             "type": "string",
             "description": "Public reaction_entry ref. Must start with 'rxe_'.",
         },
-        "temperature_min": {"type": "number", "exclusiveMinimum": 0},
-        "temperature_max": {"type": "number", "exclusiveMinimum": 0},
+        "coverage_temperature_min_k": {"type": "number", "exclusiveMinimum": 0},
+        "coverage_temperature_max_k": {"type": "number", "exclusiveMinimum": 0},
         "pressure": {"type": "number", "exclusiveMinimum": 0},
         "model_kind": {
             "type": "string",
@@ -202,11 +201,6 @@ INPUT_SCHEMA: dict[str, Any] = {
                 "Subset of legal kinetics-search include tokens. "
                 "'internal_ids' is not exposed. Defaults to ['provenance']."
             ),
-        },
-        "collapse": {
-            "type": "string",
-            "enum": ["all", "first"],
-            "default": "all",
         },
     },
     "additionalProperties": False,
@@ -294,11 +288,11 @@ def run(
             f"model_kind must be one of {sorted(LEGAL_MODEL_KINDS)!r}; got {model_kind!r}"
         )
 
-    tmin = _validate_positive_number(args.get("temperature_min"), "temperature_min")
-    tmax = _validate_positive_number(args.get("temperature_max"), "temperature_max")
+    tmin = _validate_positive_number(args.get("coverage_temperature_min_k"), "coverage_temperature_min_k")
+    tmax = _validate_positive_number(args.get("coverage_temperature_max_k"), "coverage_temperature_max_k")
     if tmin is not None and tmax is not None and tmin > tmax:
         raise invalid_input(
-            f"temperature_min ({tmin}) must be <= temperature_max ({tmax})"
+            f"coverage_temperature_min_k ({tmin}) must be <= coverage_temperature_max_k ({tmax})"
         )
     pressure = _validate_positive_number(args.get("pressure"), "pressure")
 
@@ -310,10 +304,6 @@ def run(
         limit = config.cap_limit(args.get("limit"))
     except ValueError as exc:
         raise invalid_input(str(exc)) from exc
-
-    collapse = args.get("collapse", "all")
-    if collapse not in ("all", "first"):
-        raise invalid_input(f"collapse must be 'all' or 'first'; got {collapse!r}")
 
     if "include" in args:
         include_raw = args.get("include")
@@ -347,8 +337,8 @@ def run(
         "family": args.get("family"),
         "reaction_ref": reaction_ref,
         "reaction_entry_ref": reaction_entry_ref,
-        "temperature_min": tmin,
-        "temperature_max": tmax,
+        "coverage_temperature_min_k": tmin,
+        "coverage_temperature_max_k": tmax,
         "pressure": pressure,
         "model_kind": model_kind,
         "level_of_theory_ref": level_of_theory_ref,
@@ -359,7 +349,6 @@ def run(
         "offset": offset,
         "limit": limit,
         "include": include,
-        "collapse": collapse,
     }
     body = {k: v for k, v in body.items() if v is not None}
 

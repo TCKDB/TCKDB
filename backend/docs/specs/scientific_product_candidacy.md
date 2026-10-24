@@ -79,33 +79,27 @@ always accompanied by the full candidate set it was chosen from.
 
 ## Read contract
 
-Read paths return candidates, and collapse to one only under explicit policy:
+Read paths return every candidate in display order and never pick one. Picking one is the select endpoints' job, under a policy the request states:
 
 | Path | Returns |
 |------|---------|
-| `GET /api/v1/scientific/species-entries/{id}/thermo` | list (paginated); honors `collapse` + `selection_policy` |
-| `GET /api/v1/scientific/species-entries/{id}/statmech` | list (paginated); honors `collapse` + `selection_policy` |
-| `GET /api/v1/scientific/species-entries/{id}/transport` | list (paginated); honors `collapse` + `selection_policy` |
+| `GET /api/v1/scientific/species-entries/{id}/thermo` | list (paginated); every record, display order |
+| `GET /api/v1/scientific/species-entries/{id}/statmech` | list (paginated); every record, display order |
+| `GET /api/v1/scientific/species-entries/{id}/transport` | list (paginated); every record, display order |
 | `GET /api/v1/scientific/{thermo,statmech,transport}/search` | list (paginated); broad search returns all candidates |
 | `GET /api/v1/lookup/{thermo,statmech,transport}` | all matching records |
 | `GET /api/v1/{thermo,statmech,transport}` (primitive) | list (paginated) |
 | `GET /api/v1/{thermo,statmech,transport}/{id}` | single record by explicit id |
 
-- **Default is non-canonical.** All three per-species reads default to
-  `collapse=all` + `selection_policy=default`, returning every candidate.
-- **Single-record collapse is explicit and named.** `collapse=first` returns
-  exactly one record, chosen by an explicit, named `selection_policy`. The
-  chosen `collapse` and `selection_policy` are echoed in the response; the
-  pre-collapse candidate count stays in `pagination.total`, while
-  `pagination.post_collapse_total` reports the count after selection collapse
-  and before offset/limit slicing.
+- **A read never picks.** The per-species reads list every candidate: review rank, then newest deposited, then id.
+  `collapse` and `selection_policy` are refused (422 `browse_parameter_removed`), and the refusal names the select
+  endpoint that answers "give me one" (`POST .../thermo/select`, `POST /statmech/select`; transport has none yet).
 
 ### Named selection policies
 
-`selection_policy` (enum, defined in
-`app/schemas/reads/scientific_common.py::SelectionPolicy`) governs *only* which
-single record `collapse=first` returns — it never reorders the full
-`collapse=all` candidate list, and it never persists a choice:
+`policy` on a select request (enum, defined in
+`app/schemas/reads/scientific_common.py::SelectionPolicy`) names the administrative order the select endpoint lists
+eligible records in; it is not a parameter of any browse read, and it never persists a choice:
 
 | Policy | Selects |
 |--------|---------|
@@ -138,8 +132,8 @@ to: its own `thermo.statmech_id` and its own `ThermoSourceCalculation` rows
   `has_statmech_source` means `thermo.statmech_id` is set, and
   `has_source_calculations` / `has_frequency_evidence` /
   `has_sp_or_energy_evidence` count the record's own sources plus its linked
-  statmech's. The score feeds the default sort and `collapse=first`, so an
-  unlinked (say experimental) value no longer ranks like a linked computed one.
+  statmech's. The score is displayed, not ranked, so an
+  unlinked (say experimental) value is not ordered below a linked computed one.
 - The derived `levels.*` (#636) and `levels.declared_energy` (#633) follow the
   same rule.
 

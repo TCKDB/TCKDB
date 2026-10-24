@@ -18,7 +18,8 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
 )
-from app.schemas.reads.scientific_common import CollapseMode
+from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
+from app.schemas.reads.removed_parameters import reject_removed_query_params
 from app.schemas.reads.scientific_thermo import ThermoModelKindQuery
 from app.schemas.reads.scientific_thermo_search import (
     ScientificThermoSearchResponse,
@@ -40,6 +41,7 @@ _POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
 @router.get("/search", response_model=ScientificThermoSearchResponse)
 def thermo_search_get(
+    http_request: Request,
     session: Session = Depends(get_db),
     smiles: str | None = Query(None),
     inchi: str | None = Query(None),
@@ -51,8 +53,8 @@ def thermo_search_get(
     species_entry_kind: StationaryPointKind | None = Query(None),
     species_ref: str | None = Query(None),
     species_entry_ref: str | None = Query(None),
-    temperature_min: float | None = Query(None),
-    temperature_max: float | None = Query(None),
+    coverage_temperature_min_k: float | None = Query(None),
+    coverage_temperature_max_k: float | None = Query(None),
     model_kind: ThermoModelKindQuery | None = Query(None),
     level_of_theory_id: int | None = Query(None),
     level_of_theory_ref: str | None = Query(None),
@@ -61,7 +63,6 @@ def thermo_search_get(
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
-    collapse: CollapseMode = Query(CollapseMode.all),
     include: list[str] | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -71,8 +72,12 @@ def thermo_search_get(
     At least one of ``smiles`` / ``inchi`` / ``inchi_key`` / ``formula``
     must be supplied; multiple identifiers AND-combine. Returns thermo
     records with the resolved species/species_entry identity attached, so
-    workflow tools never need to know the entry id up front.
+    workflow tools never need to know the entry id up front. Every matching
+    record is returned, ordered by the record's own review status, then
+    newest deposition, then id; ``collapse`` is refused (422) and
+    ``POST /species-entries/{ref}/thermo/select`` answers "give me one".
     """
+    reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
     request = ThermoSearchRequest(
         smiles=smiles,
         inchi=inchi,
@@ -84,8 +89,8 @@ def thermo_search_get(
         species_entry_kind=species_entry_kind,
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,
-        temperature_min=temperature_min,
-        temperature_max=temperature_max,
+        coverage_temperature_min_k=coverage_temperature_min_k,
+        coverage_temperature_max_k=coverage_temperature_max_k,
         model_kind=model_kind,
         level_of_theory_id=level_of_theory_id,
         level_of_theory_ref=level_of_theory_ref,
@@ -94,7 +99,6 @@ def thermo_search_get(
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
-        collapse=collapse,
         include=parse_include(include),
         offset=offset,
         limit=limit,
@@ -123,7 +127,7 @@ def thermo_search_post(
 ) -> ScientificThermoSearchResponse:
     """JSON-body variant for structured thermo search.
 
-    All search fields, filters, includes, collapse, offset, and limit live
+    All search fields, filters, includes, offset, and limit live
     in the body. Query-string parameters are rejected (per Phase 4 POST
     convention). ``sort`` in the body is rejected by the service layer.
     """

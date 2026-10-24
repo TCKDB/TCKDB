@@ -52,7 +52,7 @@ def test_returns_200_for_valid_species_entry_id(client, db_session):
     assert body["records"][0]["model_kind"] == "scalar"
 
 
-def test_collapse_first_offset_one_returns_empty(client, db_session):
+def test_collapse_is_refused_and_names_the_thermo_select_endpoint(client, db_session):
     entry = _entry(db_session)
     make_thermo_scalar(db_session, species_entry=entry)
 
@@ -61,9 +61,11 @@ def test_collapse_first_offset_one_returns_empty(client, db_session):
         params={"collapse": "first", "offset": 1},
     )
 
-    assert response.status_code == 200
-    assert response.json()["records"] == []
-    assert response.json()["pagination"]["total"] == 1
+    assert response.status_code == 422
+    body = response.json()
+    assert body["code"] == "browse_parameter_removed"
+    assert body["context"]["parameter"] == "collapse"
+    assert "thermo/select" in body["context"]["select_endpoint"]
 
 
 def test_returns_404_for_missing_species_entry_id(client, db_session):
@@ -135,7 +137,7 @@ def test_temperature_min_greater_than_max_rejected(client, db_session):
     entry = _entry(db_session)
     resp = client.get(
         f"/api/v1/scientific/species-entries/{entry.id}/thermo"
-        "?temperature_min=3000&temperature_max=300"
+        "?coverage_temperature_min_k=3000&coverage_temperature_max_k=300"
     )
     assert resp.status_code == 422
     assert "invalid_temperature_range" in resp.text

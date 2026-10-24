@@ -61,7 +61,7 @@ def test_returns_200_for_valid_reaction_entry_id(client, db_session):
     assert len(body["records"]) == 1
 
 
-def test_collapse_first_offset_one_returns_empty(client, db_session):
+def test_collapse_is_refused_and_names_the_kinetics_select_endpoint(client, db_session):
     entry = _entry(db_session)
     make_kinetics(db_session, reaction_entry=entry)
 
@@ -70,9 +70,11 @@ def test_collapse_first_offset_one_returns_empty(client, db_session):
         params={"collapse": "first", "offset": 1},
     )
 
-    assert response.status_code == 200
-    assert response.json()["records"] == []
-    assert response.json()["pagination"]["total"] == 1
+    assert response.status_code == 422
+    body = response.json()
+    assert body["code"] == "browse_parameter_removed"
+    assert body["context"]["parameter"] == "collapse"
+    assert "kinetics/select" in body["context"]["select_endpoint"]
 
 
 def test_returns_404_for_missing_reaction_entry_id(client, db_session):
@@ -85,7 +87,7 @@ def test_rejects_temperature_min_greater_than_max(client, db_session):
     entry = _entry(db_session)
     resp = client.get(
         f"/api/v1/scientific/reaction-entries/{entry.id}/kinetics"
-        "?temperature_min=2000&temperature_max=300"
+        "?coverage_temperature_min_k=2000&coverage_temperature_max_k=300"
     )
     assert resp.status_code == 422
     assert "invalid_temperature_range" in resp.text
@@ -137,7 +139,7 @@ def test_temperature_coverage_metadata_present(client, db_session):
 
     resp = client.get(
         f"/api/v1/scientific/reaction-entries/{entry.id}/kinetics"
-        "?temperature_min=300&temperature_max=2000"
+        "?coverage_temperature_min_k=300&coverage_temperature_max_k=2000"
     )
     cov = resp.json()["records"][0]["temperature_coverage"]
     assert cov["covers_requested_range"] is False

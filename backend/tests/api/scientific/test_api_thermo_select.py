@@ -72,7 +72,7 @@ def test_an_older_g4_and_a_newer_g3_are_incomparable_and_listed_in_display_order
     old_g4 = g4(db_session, methane, age_days=500, status=S.approved)
     new_g3 = g3(db_session, methane, age_days=1, status=S.approved)
 
-    browse = client.get(f"/api/v1/scientific/species-entries/{methane.public_ref}/thermo", params={"collapse": "first"})
+    browse = client.get(f"/api/v1/scientific/species-entries/{methane.public_ref}/thermo")
     assert browse.status_code == 200
     assert browse.json()["records"][0]["thermo_ref"] == new_g3.public_ref
 

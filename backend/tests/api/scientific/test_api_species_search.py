@@ -28,7 +28,7 @@ def test_get_returns_200_with_envelope(client, db_session):
     assert len(matching) == 1
 
 
-def test_get_parses_collapse_offset_limit(client, db_session):
+def test_get_parses_offset_limit(client, db_session):
     # Two spin variants (same smiles, different multiplicity) — distinct
     # species under DR-0031 that both match a by-smiles search, giving two
     # pre-collapse candidates.
@@ -42,16 +42,16 @@ def test_get_parses_collapse_offset_limit(client, db_session):
     make_species_entry(db_session, b)
 
     resp = client.get(
-        "/api/v1/scientific/species/search?smiles=X&collapse=first&offset=0&limit=5"
+        "/api/v1/scientific/species/search?smiles=X&offset=0&limit=5"
     )
     assert resp.status_code == 200
     body = resp.json()
     assert body["pagination"]["limit"] == 5
     assert body["pagination"]["total"] == 2
-    assert len(body["records"]) == 1
+    assert len(body["records"]) == 2
 
 
-def test_collapse_first_offset_one_returns_empty(client, db_session):
+def test_collapse_is_refused(client, db_session):
     species = make_species(
         db_session, smiles="X_OFFSET", inchi_key=next_inchi_key("APIOFF")
     )
@@ -62,9 +62,10 @@ def test_collapse_first_offset_one_returns_empty(client, db_session):
         params={"smiles": "X_OFFSET", "collapse": "first", "offset": 1},
     )
 
-    assert response.status_code == 200
-    assert response.json()["records"] == []
-    assert response.json()["pagination"]["total"] == 1
+    assert response.status_code == 422
+    body = response.json()
+    assert body["code"] == "browse_parameter_removed"
+    assert body["context"]["parameter"] == "collapse"
 
 
 def test_get_parses_include_repeated_and_comma_forms(client, db_session):

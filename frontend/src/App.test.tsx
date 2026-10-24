@@ -58,7 +58,7 @@ function emptyVocabHandlers() {
 }
 
 function emptyBrowseEnvelope() {
-    return { records: [], pagination: { offset: 0, limit: 20, returned: 0, total: 0, post_collapse_total: 0 } }
+    return { records: [], pagination: { offset: 0, limit: 20, returned: 0, total: 0 } }
 }
 
 describe("public archive shell", () => {
@@ -349,7 +349,7 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
     it("renders the declared public route deterministically", async () => {
         if (path === "/species") {
             server.use(http.get("/api/v1/scientific/species/browse", () => HttpResponse.json({
-                records: [], pagination: { offset: 0, limit: 20, returned: 0, total: 0, post_collapse_total: 0 },
+                records: [], pagination: { offset: 0, limit: 20, returned: 0, total: 0 },
             })))
         }
         if (path.startsWith("/species/")) {

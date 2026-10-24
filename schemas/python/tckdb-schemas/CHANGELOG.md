@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.132.0 - 2026-10-23
+
+Four refusal codes join the contract. No field is added or removed.
+
+- `browse_parameter_removed` (422): `collapse` or `selection_policy` was sent to a read or an export. Neither exists; the response names the
+  select endpoint that answers "give me one".
+- `parameter_renamed` (422): `temperature_min` / `temperature_max` on the thermo and kinetics reads are now `coverage_temperature_min_k` /
+  `coverage_temperature_max_k`.
+- `export_selection_ambiguous` (422) and `export_ref_unmatched` (422): the CHEMKIN export holds one record per species or reaction and never
+  picks; it refuses with the ambiguous subjects and their candidate refs, or with the named refs that matched nothing.
+
 ## 0.131.0 - 2026-10-21
 
 Review fixes to versioning PR-4. No field is added or removed; a version field is stricter.

@@ -9,6 +9,7 @@ something, and never fails closed on a crawled route (no ``RefGuardUnplaceable``
 from __future__ import annotations
 
 import re
+from collections import Counter
 
 from app.services.scientific_read import internal_ids
 from tests.api.scientific._curated_sweep_analysis import fmt
@@ -44,6 +45,33 @@ def _differences(a, b):
                 )
             )
     return out
+
+
+def _statement_report(wired, removed) -> str:
+    """Both statement lists, side by side, so a failure names its cause instead of only a route.
+
+    A count that differs between two identical requests is either the guard (a statement only one side issued) or
+    noise (a lazy load, a cache that was warm on one side). Printing the statements that one list has more of than the
+    other (counting repeats), plus both full lists and the response status of each side, makes the two
+    distinguishable from the log.
+    """
+    # Multiset differences, not membership: a SELECT that runs twice on one side and once on the other is one extra
+    # statement, and a membership test would call both lists identical.
+    only_wired = list((Counter(wired.statement_texts) - Counter(removed.statement_texts)).elements())
+    only_removed = list((Counter(removed.statement_texts) - Counter(wired.statement_texts)).elements())
+
+    def short(texts):
+        return [" ".join(t.split())[:240] for t in texts]
+
+    lines = [
+        f"    statements: hook wired={wired.statements}, hook removed={removed.statements}",
+        f"    response status: hook wired={wired.status}, hook removed={removed.status}",
+        f"    only with the hook wired ({len(only_wired)}): {short(only_wired)}",
+        f"    only with the hook removed ({len(only_removed)}): {short(only_removed)}",
+        f"    all, hook wired: {short(wired.statement_texts)}",
+        f"    all, hook removed: {short(removed.statement_texts)}",
+    ]
+    return "\n".join(lines)
 
 
 def test_guard_leaves_exploratory_alone_and_costs_at_most_one_statement(client, db_session, login_as, monkeypatch):
@@ -87,7 +115,10 @@ def test_guard_leaves_exploratory_alone_and_costs_at_most_one_statement(client, 
     # Exploratory pays nothing: no extra statement and no withholding.
     for key, r in exploratory_default.items():
         if r.statements != exploratory_no_hook[key].statements:
-            failures.append(f"exploratory statement count changed with the guard wired in: {fmt(key[0], key[1])}")
+            failures.append(
+                f"exploratory statement count changed with the guard wired in: {fmt(key[0], key[1])}\n"
+                + _statement_report(r, exploratory_no_hook[key])
+            )
         if r.applied_sites:
             failures.append(f"exploratory response was withheld from: {fmt(key[0], key[1])}")
 
@@ -102,7 +133,38 @@ def test_guard_leaves_exploratory_alone_and_costs_at_most_one_statement(client, 
         withheld += len(r.applied_sites)
         extra = r.statements - curated_no_hook[key].statements
         if extra > EXPECTED_ENABLED_EXTRA_STATEMENTS:
-            failures.append(f"{fmt(route, label)} cost {extra} extra statements with the guard")
+            failures.append(
+                f"{fmt(route, label)} cost {extra} extra statements with the guard\n"
+                + _statement_report(r, curated_no_hook[key])
+            )
     if not withheld:
         failures.append("the guard withheld nothing anywhere: it may be inert")
     assert not failures, "\n".join(failures)
+
+
+def test_a_statement_count_difference_is_reported_with_the_differing_statements():
+    """The diagnostic itself: a failure of the exploratory statement check must name the statement that differs."""
+    from tests.api.scientific._curated_sweep_crawl import Result
+
+    wired = Result(200, "{}", statements=3, statement_texts=["SELECT 1", "SELECT hidden_ref FROM record_review", "SELECT 2"])
+    removed = Result(200, "{}", statements=2, statement_texts=["SELECT 1", "SELECT 2"])
+
+    report = _statement_report(wired, removed)
+
+    assert "hook wired=3, hook removed=2" in report
+    assert "only with the hook wired (1): ['SELECT hidden_ref FROM record_review']" in report
+    assert "only with the hook removed (0): []" in report
+    assert "response status: hook wired=200, hook removed=200" in report
+
+
+def test_the_report_counts_a_repeated_statement_as_an_extra_one():
+    """A SELECT that runs twice on one side and once on the other is a difference, not an empty diff."""
+    from tests.api.scientific._curated_sweep_crawl import Result
+
+    wired = Result(200, "{}", statements=3, statement_texts=["SELECT 1", "SELECT 2", "SELECT 2"])
+    removed = Result(200, "{}", statements=2, statement_texts=["SELECT 1", "SELECT 2"])
+
+    report = _statement_report(wired, removed)
+
+    assert "only with the hook wired (1): ['SELECT 2']" in report
+    assert "only with the hook removed (0): []" in report

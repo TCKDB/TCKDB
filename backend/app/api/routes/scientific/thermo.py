@@ -9,7 +9,7 @@ compatibility with OpenAPI consumers. See
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -19,7 +19,8 @@ from app.api.routes.scientific._response import (
     prepare_assessment_response,
 )
 from app.db.models.common import RecordReviewStatus
-from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
+from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
+from app.schemas.reads.removed_parameters import reject_removed_query_params
 from app.schemas.reads.scientific_thermo import (
     ScientificSpeciesThermoResponse,
     ThermoModelKindQuery,
@@ -39,10 +40,11 @@ router = APIRouter(prefix="/species-entries")
     response_model=ScientificSpeciesThermoResponse,
 )
 def species_thermo(
+    http_request: Request,
     species_entry_id: str = Path(..., min_length=1, max_length=64),
     session: Session = Depends(get_db),
-    temperature_min: float | None = Query(None),
-    temperature_max: float | None = Query(None),
+    coverage_temperature_min_k: float | None = Query(None),
+    coverage_temperature_max_k: float | None = Query(None),
     model_kind: ThermoModelKindQuery | None = Query(None),
     level_of_theory_id: int | None = Query(None),
     level_of_theory_ref: str | None = Query(None),
@@ -51,13 +53,16 @@ def species_thermo(
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
-    collapse: CollapseMode = Query(CollapseMode.all),
-    selection_policy: SelectionPolicy = Query(SelectionPolicy.default),
     include: list[str] | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
 ) -> ScientificSpeciesThermoResponse:
-    """Return thermo records for a species entry, sorted per L3.
+    """Return every thermo record for a species entry, in display order.
+
+    Review status, then newest deposition, then id (``docs/specs/browse_order.md``). The read never picks one:
+    ``collapse`` and ``selection_policy`` are refused (422); ``POST .../thermo/select`` answers "give me one".
+    ``coverage_temperature_min_k`` / ``coverage_temperature_max_k`` filter nothing; they set the window each record's
+    ``temperature_coverage`` is computed against.
 
     Path handle is strictly the species-entry resource: an integer
     ``species_entry.id`` or a public ref starting with ``spe_``. A
@@ -65,10 +70,11 @@ def species_thermo(
     ``sort=`` is rejected (v0). See ``docs/specs/browse_order.md``
     §Endpoint 4 and ``docs/specs/public_identifier_policy.md``.
     """
+    reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
     resolved_species_entry_id = resolve_species_entry_handle(session, species_entry_id)
     request = ThermoReadRequest(
-        temperature_min=temperature_min,
-        temperature_max=temperature_max,
+        coverage_temperature_min_k=coverage_temperature_min_k,
+        coverage_temperature_max_k=coverage_temperature_max_k,
         model_kind=model_kind,
         level_of_theory_id=level_of_theory_id,
         level_of_theory_ref=level_of_theory_ref,
@@ -77,8 +83,6 @@ def species_thermo(
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
         sort=sort,
-        collapse=collapse,
-        selection_policy=selection_policy,
         include=parse_include(include),
         offset=offset,
         limit=limit,

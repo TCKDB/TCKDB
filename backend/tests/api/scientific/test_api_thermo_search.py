@@ -38,7 +38,7 @@ def test_post_accepts_json_body(client, db_session):
 
     resp = client.post(
         "/api/v1/scientific/thermo/search",
-        json={"smiles": "OCO", "temperature_min": 300, "temperature_max": 3000},
+        json={"smiles": "OCO", "coverage_temperature_min_k": 300, "coverage_temperature_max_k": 3000},
     )
 
     assert resp.status_code == 200
@@ -59,7 +59,7 @@ def test_post_rejects_query_string_filters(client, db_session):
 def test_invalid_temperature_range_returns_422(client, db_session):
     _seed(db_session, smiles="TR")
     resp = client.get(
-        "/api/v1/scientific/thermo/search?smiles=TR&temperature_min=3000&temperature_max=300"
+        "/api/v1/scientific/thermo/search?smiles=TR&coverage_temperature_min_k=3000&coverage_temperature_max_k=300"
     )
     assert resp.status_code == 422
     assert "invalid_temperature_range" in resp.text
@@ -82,17 +82,17 @@ def test_an_inverted_temperature_range_names_both_bounds_in_context(
     _seed(db_session, smiles="TRC")
     resp = client.get(
         "/api/v1/scientific/thermo/search"
-        "?smiles=TRC&temperature_min=3000&temperature_max=300"
+        "?smiles=TRC&coverage_temperature_min_k=3000&coverage_temperature_max_k=300"
     )
 
     assert resp.status_code == 422, resp.text
     body = resp.json()
     assert body["code"] == "invalid_temperature_range", body
-    assert body["context"]["temperature_min_k"] == 3000.0, body["context"]
-    assert body["context"]["temperature_max_k"] == 300.0, body["context"]
+    assert body["context"]["coverage_temperature_min_k"] == 3000.0, body["context"]
+    assert body["context"]["coverage_temperature_max_k"] == 300.0, body["context"]
     # The published prose did not move: only the route into ``code`` did.
     assert body["detail"] == (
-        "invalid_temperature_range: temperature_min must be <= temperature_max"
+        "invalid_temperature_range: coverage_temperature_min_k must be <= coverage_temperature_max_k"
     ), body["detail"]
 
 
@@ -143,3 +143,29 @@ def test_conformers_include_token_rejected_at_thermo_search(client, db_session):
     assert "detail" in body and "error" not in body
     assert body["detail"].startswith("unknown_include_token:")
     assert "conformers" in body["detail"]
+
+
+def test_the_old_temperature_names_are_refused_with_their_new_spelling(client, db_session):
+    _seed(db_session, smiles="OLDN")
+    for old, new in (("temperature_min", "coverage_temperature_min_k"), ("temperature_max", "coverage_temperature_max_k")):
+        resp = client.get(f"/api/v1/scientific/thermo/search?smiles=OLDN&{old}=300")
+        assert resp.status_code == 422, resp.text
+        body = resp.json()
+        assert body["code"] == "parameter_renamed"
+        assert body["context"] == {"parameter": old, "replacement": new}
+        post = client.post("/api/v1/scientific/thermo/search", json={"smiles": "OLDN", old: 300})
+        assert post.status_code == 422, post.text
+        assert post.json()["code"] == "parameter_renamed"
+
+
+def test_collapse_is_refused_on_get_and_post_and_names_the_select_endpoint(client, db_session):
+    _seed(db_session, smiles="COLP")
+    for resp in (
+        client.get("/api/v1/scientific/thermo/search?smiles=COLP&collapse=first"),
+        client.post("/api/v1/scientific/thermo/search", json={"smiles": "COLP", "collapse": "first"}),
+        client.get("/api/v1/scientific/thermo/search?smiles=COLP&selection_policy=latest"),
+    ):
+        assert resp.status_code == 422, resp.text
+        body = resp.json()
+        assert body["code"] == "browse_parameter_removed"
+        assert "thermo/select" in body["context"]["select_endpoint"]

@@ -65,6 +65,8 @@ class Result:
     status: int
     text: str
     statements: int = 0
+    #: The SQL text of those statements, in order, so a count that differs can be explained and not only reported.
+    statement_texts: list[str] = field(default_factory=list)
     reached: bool = False
     #: ``(model, field path, ref prefix)`` when the guard raised ``RefGuardUnplaceable`` for this request.
     unplaceable: tuple[str, str, str] | None = None

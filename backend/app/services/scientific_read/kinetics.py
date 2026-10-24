@@ -111,6 +111,7 @@ from app.services.scientific_read.common import (
     review_floor_predicate,
     review_summary,
     slice_for_pagination,
+    software_names_by_calculation,
     temperature_coverage,
     validate_includes,
     validate_pagination,
@@ -238,8 +239,9 @@ _PDEP_EAGER_LOADS = (
 
 _DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
-# Priority order for resolving the "primary" source calculation per spec.
-_LOT_FILTER_ROLE_PRIORITY = (
+# Priority order for picking the one source calculation a record DISPLAYS as its primary. It decides no filter:
+# ``level_of_theory_*`` and ``software`` match when ANY linked source calculation matches.
+_PRIMARY_CALC_ROLE_PRIORITY = (
     KineticsCalculationRole.ts_energy,
     KineticsCalculationRole.fit_source,
     KineticsCalculationRole.freq,
@@ -337,10 +339,11 @@ def get_reaction_kinetics(
 ) -> ScientificReactionKineticsResponse:
     """Return kinetics records for a reaction entry, sorted by review status, then newest.
 
-    Order: review_rank ASC, created_at DESC, id DESC (the export's
-    ``simple_selection_sort_key``). Coverage and evidence are reported per
-    record but do not order them; ``temperature_min`` / ``temperature_max``
-    do not filter, they only fill ``temperature_coverage``.
+    Order: review_rank ASC, created_at DESC, id DESC (the order the exports
+    list records in). Coverage and evidence are reported per
+    record but do not order them; ``coverage_temperature_min_k`` /
+    ``coverage_temperature_max_k`` do not filter, they only fill ``temperature_coverage``.
+    Every matching record is returned; the read never picks one.
 
     Filters apply shallow per D7. Provenance keys are always present, with
     null TS-chain fields for non-TS-backed records (Phase 2.2). TS-related
@@ -363,7 +366,12 @@ def get_reaction_kinetics(
         internal_tokens=_INTERNAL_INCLUDE_TOKENS | {"trust"},
     )
     includes = filter_internal_ids_from_resolved(includes)
-    validate_temperature_range(request.temperature_min, request.temperature_max)
+    validate_temperature_range(
+        request.coverage_temperature_min_k,
+        request.coverage_temperature_max_k,
+        min_name="coverage_temperature_min_k",
+        max_name="coverage_temperature_max_k",
+    )
 
     entry = session.get(ReactionEntry, reaction_entry_id)
     if entry is None:
@@ -424,38 +432,31 @@ def get_reaction_kinetics(
     def shown(sources: list[KineticsSourceCalculation]) -> list[KineticsSourceCalculation]:
         return [sc for sc in sources if sc.calculation_id not in hidden_source_calc_ids]
 
-    # Apply level_of_theory_id filter (operates on the primary source calc).
+    # Level-of-theory filter: a record matches when ANY of its linked (shown) source calculations ran at this level.
+    # There is no "primary" calculation for a filter, so no role priority decides which link counts.
     if effective_lot_id is not None:
         kinetics_rows = [
             k
             for k in kinetics_rows
-            if _primary_lot_id(shown(sources_by_kinetics.get(k.id, [])))
-            == effective_lot_id
+            if effective_lot_id in _linked_lot_ids(shown(sources_by_kinetics.get(k.id, [])))
         ]
     if not kinetics_rows:
         return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
 
-    # Software filter — match against primary source calc's software release name.
+    # Software filter: a record matches when ANY of its linked (shown) source calculations ran in a software of this
+    # name.
     if request.software is not None:
-        software_name = request.software
-        software_id_by_release = _software_id_by_release_id(
+        software_by_calc = software_names_by_calculation(
             session,
-            {
-                sc.software_release_id
-                for srcs in sources_by_kinetics.values()
-                for sc in srcs
-                if sc.software_release_id is not None
-            },
+            {sc.calculation_id for k in kinetics_rows for sc in shown(sources_by_kinetics.get(k.id, []))},
         )
         kinetics_rows = [
             k
             for k in kinetics_rows
-            if _primary_software_name(
-                shown(sources_by_kinetics.get(k.id, [])),
-                software_id_by_release,
-                session,
+            if any(
+                software_by_calc.get(sc.calculation_id) == request.software
+                for sc in shown(sources_by_kinetics.get(k.id, []))
             )
-            == software_name
         ]
     if not kinetics_rows:
         return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
@@ -616,8 +617,8 @@ def get_reaction_kinetics(
         provenance = provenance_by_kinetics[k.id]
 
         coverage = temperature_coverage(
-            requested_min=request.temperature_min,
-            requested_max=request.temperature_max,
+            requested_min=request.coverage_temperature_min_k,
+            requested_max=request.coverage_temperature_max_k,
             record_min=k.tmin_k,
             record_max=k.tmax_k,
         )
@@ -673,6 +674,7 @@ def get_reaction_kinetics(
             KineticsRecord(
                 kinetics_id=k.id,
                 kinetics_ref=k.public_ref,
+                created_at=k.created_at,
                 scientific_origin=k.scientific_origin,
                 model_kind=k.model_kind,
                 direction=k.direction,
@@ -732,13 +734,13 @@ def get_reaction_kinetics(
     summary = review_summary(badges[k.id] for k in kinetics_rows)
 
     # Sort: review status, then newest (#648 rule, extended to kinetics): review status, then newest,
-    # then id -- the same ``simple_selection_sort_key`` the export uses, so the
-    # read and the export pick the same record. ``evidence_completeness`` and
+    # then id -- the same order the exports list records in, so the read and
+    # an export list the same record first. ``evidence_completeness`` and
     # ``temperature_coverage`` stay on each record as displayed fields but are
     # not ranking inputs: the checklist is mostly TS / calculation
     # traceability (an experimental record scores low by construction), and a
     # record with no range counts as "not covering" whenever a bound is
-    # requested. ``temperature_min`` / ``temperature_max`` are not filters.
+    # requested. ``coverage_temperature_min_k`` / ``coverage_temperature_max_k`` are not filters.
     created_at = {k.id: k.created_at for k in kinetics_rows}
     review_status_by_id = {k.id: badges[k.id].status for k in kinetics_rows}
 
@@ -751,20 +753,13 @@ def get_reaction_kinetics(
         )
     )
 
-    pre_collapse_total = len(records)
-    collapse_first = request.collapse.value == "first"
-    returned = slice_for_pagination(
-        records,
-        offset=offset,
-        limit=limit,
-        collapse_first=collapse_first,
-    )
+    total = len(records)
+    returned = slice_for_pagination(records, offset=offset, limit=limit)
 
     return ScientificReactionKineticsResponse(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         reaction_entry_id=reaction_entry_id,
@@ -775,8 +770,7 @@ def get_reaction_kinetics(
             offset=offset,
             limit=limit,
             returned=len(returned),
-            total=pre_collapse_total,
-            collapse_first=collapse_first,
+            total=total,
         ),
     )
 
@@ -1706,26 +1700,13 @@ def _third_body_blocks(
     return blocks
 
 
-def _software_id_by_release_id(
-    session: Session, release_ids: set[int]
-) -> dict[int, int]:
-    if not release_ids:
-        return {}
-    rows = session.execute(
-        select(SoftwareRelease.id, SoftwareRelease.software_id).where(
-            SoftwareRelease.id.in_(release_ids)
-        )
-    ).all()
-    return dict(rows)
-
-
 # ---------------------------------------------------------------------------
 # Small inference helpers
 # ---------------------------------------------------------------------------
 
 
 def _primary_calc_id(sources: list[KineticsSourceCalculation]) -> int | None:
-    for role in _LOT_FILTER_ROLE_PRIORITY:
+    for role in _PRIMARY_CALC_ROLE_PRIORITY:
         for sc in sources:
             if sc.role == role:
                 return sc.calculation_id
@@ -1734,31 +1715,13 @@ def _primary_calc_id(sources: list[KineticsSourceCalculation]) -> int | None:
     return None
 
 
-def _primary_lot_id(sources: list[KineticsSourceCalculation]) -> int | None:
-    """Return the LoT id the primary source calculation points at, if any."""
-    primary = _primary_calc_id(sources)
-    if primary is None:
-        return None
-    return next(
-        (sc.calculation.lot_id for sc in sources if sc.calculation_id == primary and sc.calculation is not None),
-        None,
-    )
-
-
-def _primary_software_name(
-    sources: list[KineticsSourceCalculation],
-    software_id_by_release: dict[int, int],
-    session: Session,
-) -> str | None:
-    """Return the software name for the primary source calc, if any."""
-    for sc in sources:
-        if sc.software_release_id is not None:
-            sw_id = software_id_by_release.get(sc.software_release_id)
-            if sw_id is not None:
-                name = session.scalar(select(Software.name).where(Software.id == sw_id))
-                if name is not None:
-                    return name
-    return None
+def _linked_lot_ids(sources: list[KineticsSourceCalculation]) -> set[int]:
+    """The level of theory of EVERY source calculation linked to the record (the level-of-theory filter's match set)."""
+    return {
+        sc.calculation.lot_id
+        for sc in sources
+        if sc.calculation is not None and sc.calculation.lot_id is not None
+    }
 
 
 def _first_calc_with_type(
@@ -2041,10 +2004,10 @@ def _extract_path_method(meta: _CalcMeta) -> str | None:
 
 def _filter_echo(request: KineticsReadRequest) -> dict[str, object]:
     echo: dict[str, object] = {}
-    if request.temperature_min is not None:
-        echo["temperature_min"] = request.temperature_min
-    if request.temperature_max is not None:
-        echo["temperature_max"] = request.temperature_max
+    if request.coverage_temperature_min_k is not None:
+        echo["coverage_temperature_min_k"] = request.coverage_temperature_min_k
+    if request.coverage_temperature_max_k is not None:
+        echo["coverage_temperature_max_k"] = request.coverage_temperature_max_k
     if request.pressure_bar is not None:
         echo["pressure_bar"] = request.pressure_bar
     if request.model_kind is not None:
@@ -2076,7 +2039,6 @@ def _empty_response(
         request=RequestEcho(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
-            collapse=request.collapse,
             include=sorted(includes),
         ),
         reaction_entry_id=reaction_entry_id,

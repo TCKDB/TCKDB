@@ -10,7 +10,6 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     SubmissionRecordType,
 )
-from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_species import SpeciesSearchRequest
 from app.services.scientific_read.species import search_species
 from tests.services.scientific_read._factories import (
@@ -472,52 +471,6 @@ def test_include_thermo_populates_thermo_summary_with_ids(db_session):
 # ---------------------------------------------------------------------------
 # Collapse / pagination total semantics
 # ---------------------------------------------------------------------------
-
-
-def test_collapse_first_returns_at_most_one_with_pre_collapse_total(db_session):
-    # Two spin variants of the same structure: same smiles, different
-    # multiplicity. Under DR-0031 these are distinct species (identity =
-    # smiles + charge + multiplicity) that both match a by-smiles search,
-    # so the search yields two pre-collapse candidates.
-    species_a = make_species(
-        db_session, smiles="C1", inchi_key=next_inchi_key("CO1"), multiplicity=1
-    )
-    make_species_entry(db_session, species_a)
-    species_b = make_species(
-        db_session, smiles="C1", inchi_key=next_inchi_key("CO2"), multiplicity=3
-    )
-    make_species_entry(db_session, species_b)
-
-    response = search_species(
-        db_session,
-        SpeciesSearchRequest(smiles="C1", collapse=CollapseMode.first),
-    )
-
-    assert len(response.records) == 1
-    # Pre-collapse total should reflect both candidates.
-    assert response.pagination.total == 2
-    assert response.pagination.post_collapse_total == 1
-    assert response.pagination.returned == 1
-
-
-def test_collapse_first_applies_before_offset(db_session):
-    species = make_species(
-        db_session, smiles="C_OFFSET", inchi_key=next_inchi_key("COFF")
-    )
-    make_species_entry(db_session, species)
-
-    response = search_species(
-        db_session,
-        SpeciesSearchRequest(
-            smiles="C_OFFSET",
-            collapse=CollapseMode.first,
-            offset=1,
-        ),
-    )
-
-    assert response.records == []
-    assert response.pagination.total == 1
-    assert response.pagination.returned == 0
 
 
 def test_a_smiles_search_matches_every_charge_and_multiplicity_and_the_generator_skips_taken_smiles(

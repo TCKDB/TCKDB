@@ -56,7 +56,6 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     SelectionPolicy,
     browse_order,
-    effective_order_echo,
     simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_statmech import (
@@ -224,8 +223,7 @@ def search_statmech(
 
     summary = review_summary(badges[cid] for cid in visible_ids)
 
-    # Same key function as the species read, so ``effective_order`` is derived
-    # from one table. Search has no selection policy: always ``default``.
+    # Same key function as the species read: review rank, then newest, then id.
     review_status_by_id = {cid: badges[cid].status for cid in visible_ids}
     visible_ids.sort(
         key=lambda cid: simple_selection_sort_key(
@@ -536,12 +534,10 @@ def _request_echo(
 ) -> RequestEcho:
     # ``filter`` keeps what was *requested*; ``review_visibility`` is what was
     # effective (a read-profile floor can override ``include_rejected``).
-    # Search has no selection policy, so ``selection_policy_applied`` stays null.
     return RequestEcho(
         filter=_request_filter_echo(request),
         sort=_DEFAULT_SORT_ECHO,
         include=sorted(includes),
-        effective_order=effective_order_echo(collapse_first=False, policy=None),
         review_visibility=review_visibility_echo(visible),
     )
 

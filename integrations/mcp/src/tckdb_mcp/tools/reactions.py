@@ -77,7 +77,6 @@ _ACCEPTED_FIELDS: frozenset[str] = frozenset(
         "offset",
         "limit",
         "include",
-        "collapse",
     }
 )
 
@@ -150,11 +149,6 @@ INPUT_SCHEMA: dict[str, Any] = {
                 "Subset of legal reactions-search include tokens. "
                 "'internal_ids' is not exposed."
             ),
-        },
-        "collapse": {
-            "type": "string",
-            "enum": ["all", "first"],
-            "default": "all",
         },
     },
     "additionalProperties": False,
@@ -236,10 +230,6 @@ def run(
     except ValueError as exc:
         raise invalid_input(str(exc)) from exc
 
-    collapse = args.get("collapse", "all")
-    if collapse not in ("all", "first"):
-        raise invalid_input(f"collapse must be 'all' or 'first'; got {collapse!r}")
-
     include_raw = args.get("include")
     if include_raw is None:
         include: list[str] = []
@@ -278,7 +268,6 @@ def run(
         "offset": offset,
         "limit": limit,
         "include": include,
-        "collapse": collapse,
     }
     body = {k: v for k, v in body.items() if v is not None}
 

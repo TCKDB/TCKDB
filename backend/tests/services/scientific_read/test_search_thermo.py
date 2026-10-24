@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
-from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_thermo import ThermoModelKindQuery
 from app.schemas.reads.scientific_thermo_search import ThermoSearchRequest
 from app.services.scientific_read.thermo_search import search_thermo
@@ -95,46 +94,6 @@ def test_nasa_thermo_classified_correctly(db_session):
 # ---------------------------------------------------------------------------
 
 
-def test_collapse_first_preserves_plural_records_with_pre_collapse_total(db_session):
-    species = make_species(db_session, smiles="P", inchi_key=next_inchi_key("CT1"))
-    entry = make_species_entry(db_session, species)
-    make_thermo_scalar(db_session, species_entry=entry)
-    make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=-99.0)
-
-    response = search_thermo(
-        db_session, ThermoSearchRequest(smiles="P", collapse=CollapseMode.first)
-    )
-
-    assert len(response.records) == 1
-    assert response.pagination.total == 2
-    assert response.pagination.post_collapse_total == 1
-    assert response.pagination.returned == 1
-
-
-def test_collapse_first_applies_offset_after_collapse(db_session):
-    species = make_species(
-        db_session,
-        smiles="[SiH4]",
-        inchi_key=next_inchi_key("CTO"),
-    )
-    entry = make_species_entry(db_session, species)
-    make_thermo_scalar(db_session, species_entry=entry)
-    make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=-99.0)
-
-    response = search_thermo(
-        db_session,
-        ThermoSearchRequest(
-            smiles="[SiH4]",
-            collapse=CollapseMode.first,
-            offset=1,
-        ),
-    )
-
-    assert response.records == []
-    assert response.pagination.total == 2
-    assert response.pagination.returned == 0
-
-
 # ---------------------------------------------------------------------------
 # Review behavior (shallow on the thermo record)
 # ---------------------------------------------------------------------------
@@ -195,7 +154,7 @@ def test_temperature_min_greater_than_max_rejected(db_session):
         search_thermo(
             db_session,
             ThermoSearchRequest(
-                smiles="K2", temperature_min=3000, temperature_max=300
+                smiles="K2", coverage_temperature_min_k=3000, coverage_temperature_max_k=300
             ),
         )
 
