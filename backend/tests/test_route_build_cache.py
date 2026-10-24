@@ -7,10 +7,13 @@ breaks one fails here rather than as a mystery in some unrelated API file.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import pytest
 from fastapi import Depends, FastAPI
+from fastapi._compat import ModelField
+from fastapi.dependencies.models import Dependant
 from fastapi.testclient import TestClient
 
 from app.api.app import create_app
@@ -21,9 +24,11 @@ from tests import route_build_cache
 def cache_on():
     """Run with the cache installed whatever the environment says."""
     was_installed = route_build_cache.enabled()
-    route_build_cache.install()
+    # force: the nightly sets TCKDB_TEST_ROUTE_CACHE=0 so its suite builds
+    # fresh apps, and these tests are exactly what should still run there.
+    route_build_cache.install(force=True)
     if not route_build_cache.enabled():
-        pytest.skip("route cache disabled by TCKDB_TEST_ROUTE_CACHE=0 or an unfamiliar FastAPI")
+        pytest.skip("an unfamiliar FastAPI: the cache declined to install")
     route_build_cache.clear()
     yield
     if not was_installed:
@@ -42,7 +47,7 @@ def test_a_warm_cache_builds_the_same_contract_as_no_cache(cache_on) -> None:
     try:
         cold = _openapi(create_app())
     finally:
-        route_build_cache.install()
+        route_build_cache.install(force=True)
 
     assert warm == cold
 
@@ -59,20 +64,60 @@ def _name(call) -> str:
     return f"{getattr(call, '__module__', '?')}.{getattr(call, '__qualname__', repr(call))}"
 
 
-def _dependant_shape(dependant) -> tuple:
-    """The whole dependency tree of a route, by callable name."""
+def _deep(value, depth: int = 0):
+    """Everything comparable about a dependant, recursively and by value.
+
+    Walks every dataclass field of ``Dependant`` (so a field FastAPI adds
+    later is compared without anyone remembering to list it), turns
+    callables into names and ``ModelField`` into what defines it.
+    """
+    assert depth < 40, "dependant tree is implausibly deep"
+    if isinstance(value, Dependant):
+        shape = {f.name: _deep(getattr(value, f.name), depth + 1) for f in dataclasses.fields(Dependant)}
+        # Derived but load-bearing; computed lazily on the dependant.
+        shape["computed_scope"] = value.computed_scope
+        return ("Dependant", tuple(sorted(shape.items())))
+    if isinstance(value, ModelField):
+        return (
+            "ModelField",
+            value.name,
+            getattr(value, "alias", None),
+            repr(value.field_info.annotation),
+            value.field_info.is_required(),
+            repr(value.field_info.default),
+        )
+    if isinstance(value, list | tuple):
+        return tuple(_deep(item, depth + 1) for item in value)
+    if callable(value):
+        return _name(value)
+    return value
+
+
+def _route_shape(route) -> tuple:
     return (
-        _name(dependant.call),
-        dependant.name,
-        tuple(param.name for param in dependant.query_params),
-        tuple(param.name for param in dependant.path_params),
-        tuple(param.name for param in dependant.body_params),
-        tuple(_dependant_shape(sub) for sub in dependant.dependencies),
+        route.path,
+        tuple(sorted(route.methods or ())),
+        _deep(route.dependant),
+        _deep(route._flat_dependant),
+        _deep(route.body_field) if route.body_field is not None else None,
+        route._embed_body_fields,
     )
 
 
 def _route_shapes(app) -> list[tuple]:
-    return [_dependant_shape(route.dependant) for route in app.routes if hasattr(route, "dependant")]
+    return [_route_shape(route) for route in app.routes if hasattr(route, "dependant")]
+
+
+def _flatten(shape) -> list:
+    out: list = []
+    stack = [shape]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, tuple):
+            stack.extend(node)
+        else:
+            out.append(node)
+    return out
 
 
 def test_building_the_app_again_never_adds_dependencies_to_a_route(cache_on) -> None:
@@ -88,12 +133,16 @@ def test_building_the_app_again_never_adds_dependencies_to_a_route(cache_on) -> 
     try:
         cold = _route_shapes(create_app())
     finally:
-        route_build_cache.install()
+        route_build_cache.install(force=True)
         route_build_cache.clear()
 
     builds = [_route_shapes(create_app()) for _ in range(4)]
     assert cold, "no routes with dependants were found; the comparison is vacuous"
-    assert any(shape[5] for shape in cold), "no route has a dependency; the comparison is vacuous"
+    # Non-vacuity: the comparison must be looking at the things it claims to.
+    assert any(shape[2][1] and dict(shape[2][1])["dependencies"] for shape in cold), "no route has a dependency"
+    assert any(dict(shape[2][1])["header_params"] for shape in cold), "no route reads a header; header_params unchecked"
+    assert any(dict(shape[2][1])["query_params"] for shape in cold), "no route reads a query parameter"
+    assert any(shape[4] is not None for shape in cold), "no route has a body field"
     for number, shape in enumerate(builds, start=1):
         assert shape == cold, f"build {number} through the cache differs from an uncached build"
 
@@ -128,19 +177,25 @@ def _dependency() -> str:
     return "real"
 
 
+# Module level on purpose: a function defined inside the builder is a new
+# object per call, so its cache key would never repeat and the override test
+# below would pass without ever touching a cached dependant.
+def _probe(value: str = Depends(_dependency)) -> dict[str, str]:
+    return {"value": value}
+
+
 def _build_app() -> FastAPI:
     app = FastAPI()
-
-    @app.get("/probe")
-    def probe(value: str = Depends(_dependency)) -> dict[str, str]:
-        return {"value": value}
-
+    app.add_api_route("/probe", _probe, methods=["GET"])
     return app
 
 
 def test_a_dependency_override_on_one_app_does_not_reach_another(cache_on) -> None:
+    _build_app()  # warm: the apps below must be built from cache hits
+    hits_before, _ = route_build_cache.counters()
     first = _build_app()
     second = _build_app()
+    assert route_build_cache.counters()[0] > hits_before, "the apps were not built from the cache"
     first.dependency_overrides[_dependency] = lambda: "overridden"
 
     with TestClient(first) as one, TestClient(second) as two:
@@ -151,3 +206,22 @@ def test_a_dependency_override_on_one_app_does_not_reach_another(cache_on) -> No
     third = _build_app()
     with TestClient(third) as three:
         assert three.get("/probe").json() == {"value": "real"}
+
+
+def test_sub_dependants_are_not_mutated_after_construction(cache_on) -> None:
+    """Why sharing sub-dependants between apps is safe on this FastAPI.
+
+    Only the top dependant of a route is copied by the cache; the
+    dependants nested in it are shared by every app. That is safe while
+    nothing writes to a nested dependant after ``get_dependant`` returns. If
+    a FastAPI upgrade starts to (as ``APIRoute.__init__`` already does to the
+    top one), the deep state of the nested dependants will drift between
+    builds and this fails.
+    """
+    create_app()
+    first = create_app()
+    snapshot = [_deep(route.dependant) for route in first.routes if hasattr(route, "dependant")]
+    for _ in range(3):
+        create_app()
+    after = [_deep(route.dependant) for route in first.routes if hasattr(route, "dependant")]
+    assert after == snapshot, "building more apps changed an existing app's dependants"

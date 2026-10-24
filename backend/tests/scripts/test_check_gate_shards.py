@@ -33,6 +33,7 @@ def _report(index: int, *, selected: int = 10, ran: int | None = None, total: in
         "selected": selected,
         "ran": selected if ran is None else ran,
         "failed": 0,
+        "collection_errors": 0,
         "body_sweep": {"bodies": bodies, "fields": fields},
         "selection_key": list(KEY),
     }
@@ -92,7 +93,44 @@ def test_selected_tests_that_never_reported_an_outcome_are_refused() -> None:
     reports = _good()
     reports[0]["ran"] = 4  # the slice stopped early
     problems, _ = check_gate_shards.check(reports, PLAN, FLOORS)
-    assert any("only 24 reported an outcome" in problem for problem in problems)
+    assert any("24 reported an outcome (some never ran)" in problem for problem in problems)
+
+
+def test_a_test_file_that_cannot_be_imported_is_refused() -> None:
+    """The shape of a broken test file: it contributes no tests, so every count still adds up."""
+    reports = _good()
+    reports[1]["collection_errors"] = 1
+    problems, _ = check_gate_shards.check(reports, PLAN, FLOORS)
+    assert any("collection errors" in problem for problem in problems)
+
+
+def test_a_report_that_does_not_say_how_many_collection_errors_is_refused() -> None:
+    reports = _good()
+    del reports[0]["collection_errors"]
+    problems, _ = check_gate_shards.check(reports, PLAN, FLOORS)
+    assert any("collection errors" in problem for problem in problems)
+
+
+def test_a_failed_test_is_refused_even_if_the_job_was_somehow_green() -> None:
+    reports = _good()
+    reports[2]["failed"] = 1
+    problems, _ = check_gate_shards.check(reports, PLAN, FLOORS)
+    assert any("failed or errored" in problem for problem in problems)
+
+
+def test_an_empty_slice_is_refused() -> None:
+    reports = _good()
+    reports[0].update(selected=0, ran=0)
+    reports[1].update(selected=20, ran=20)
+    problems, _ = check_gate_shards.check(reports, PLAN, FLOORS)
+    assert any("selected no tests" in problem for problem in problems)
+
+
+def test_more_outcomes_than_selected_tests_is_worded_as_such() -> None:
+    reports = _good()
+    reports[0]["ran"] = 12
+    problems, _ = check_gate_shards.check(reports, PLAN, FLOORS)
+    assert any("more outcomes than tests selected" in problem for problem in problems)
 
 
 def test_the_body_sweep_floor_is_held_to_the_sum_not_the_slice() -> None:
@@ -124,7 +162,7 @@ def test_the_floors_in_conftest_are_readable_and_cover_every_planned_gate() -> N
     assert ("tests", "!tests/api", "!tests/services/scientific_read") in table
 
 
-@pytest.mark.parametrize("field", ["gate", "index", "count", "total", "selected", "ran", "body_sweep", "selection_key"])
+@pytest.mark.parametrize("field", ["gate", "index", "count", "total", "selected", "ran", "collection_errors", "body_sweep", "selection_key"])
 def test_the_report_the_conftest_writes_has_every_field_the_check_reads(field: str) -> None:
     import ast
 

@@ -30,7 +30,9 @@ jobs:
   full-suite:
     name: Full test suite
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # Was 120. The last seven nightlies took 82-94 minutes of job time, a 22%
+    # margin that the growing suite was eating; 150 leaves room for it.
+    timeout-minutes: 150
 
     services:
       postgres:
@@ -190,6 +192,12 @@ jobs:
       # pytest-randomly prints the seed it drew, so anything this finds is
       # reproducible with TCKDB_TEST_SEED=<that value>.
       TCKDB_TEST_SEED: random
+      # The PR gates share one route table across the per-test apps
+      # (backend/tests/route_build_cache.py) to be fast. The nightly is the job
+      # that can afford the slow, literal version -- a genuinely fresh app per
+      # test -- so it keeps exercising that, and would catch the cache hiding
+      # something the gates cannot see.
+      TCKDB_TEST_ROUTE_CACHE: "0"
       AUTH_ALLOW_OPEN_REGISTRATION: "true"
       DEPLOYMENT_MODE: local
       EXPOSE_API_DOCS: "true"

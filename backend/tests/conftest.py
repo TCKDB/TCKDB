@@ -981,8 +981,9 @@ BODY_SWEEP_FLOORS: dict[tuple[str, ...], tuple[int, int]] = {
     # What CI actually runs for the API gate: ``tests/api`` less the subtree the scientific gate owns and the
     # OpenAPI snapshot, which the quick-checks job runs. Until this row existed that invocation matched no key
     # above, so the API gate -- where 96% of the suite's error bodies come from -- ran with no floor at all and
-    # said so only in a log line. Measured on CI 2026-10-24: 1,420 bodies / 3,102 fields; rounded down ~10%.
-    ("tests/api", "!tests/api/scientific", "!tests/api/test_openapi_snapshot.py"): (1_270, 2_790),
+    # said so only in a log line. Measured on CI 2026-10-24: 1,638 bodies / 3,334 fields unsharded on main
+    # (run 40127869896) and 1,639 / 3,335 summed over the slices; rounded down ~10%.
+    ("tests/api", "!tests/api/scientific", "!tests/api/test_openapi_snapshot.py"): (1_470, 3_000),
 }
 
 
@@ -1075,6 +1076,14 @@ def pytest_sessionfinish(session, exitstatus) -> None:
         # it. The floor is checked on the sum of every slice by backend/scripts/check_gate_shards.py, which
         # the "Backend CI" job runs; a slice that was skipped or lost fails that check by name.
         say(f"{tally} Slice {shard}: the floor is checked on the sum of all slices.")
+        counts = _shard_counts(session.config)
+        if counts is not None and counts["total"] and not counts["selected"]:
+            say(
+                f"ERROR: slice {shard} selected none of the {counts['total']} collected tests. A slice that "
+                "runs nothing is a gate that passes having checked nothing; the shard plan "
+                "(tests/ci_shard_plan.json) or the workflow matrix is wrong."
+            )
+            session.exitstatus = pytest.ExitCode.TESTS_FAILED
         return
     if floor is None:
         say(f"{tally} No floor: this selection is not one of the gate scripts.")
@@ -1107,15 +1116,23 @@ def pytest_collection_modifyitems(config, items) -> None:
         return
     total = len(items)
     kept, dropped = ci_sharding.select(items, shard, ci_sharding.load_plan())
-    if total and not kept:
-        raise pytest.UsageError(
-            f"slice {shard} selected none of the {total} collected tests. A slice that runs nothing is a "
-            "gate that passes having checked nothing; the plan or the matrix is wrong."
-        )
+    # An empty slice is NOT raised from here: inside an xdist worker an exception is reported as an
+    # INTERNALERROR with the reason lost. The slice runs nothing (pytest exits 5), the controller says why
+    # in pytest_sessionfinish and fails the run, and check_gate_shards.py refuses a slice with no tests.
     items[:] = kept
     if dropped:
         config.hook.pytest_deselected(items=dropped)
     config._tckdb_shard_counts = {"total": total, "selected": len(kept)}  # type: ignore[attr-defined]
+
+
+def _shard_counts(config):
+    """``{"total", "selected"}`` from this process or, under xdist, from a worker."""
+    counts = getattr(config, "_tckdb_shard_counts", None)
+    if counts is None:
+        for node_counts in getattr(config, "_tckdb_worker_shard_counts", []):
+            if node_counts is not None:
+                return node_counts
+    return counts
 
 
 def _write_shard_report(session, shard, selection, sweep, reporter) -> None:
@@ -1131,12 +1148,7 @@ def _write_shard_report(session, shard, selection, sweep, reporter) -> None:
         return
     import json
 
-    counts = getattr(session.config, "_tckdb_shard_counts", None)
-    if counts is None:
-        for node_counts in getattr(session.config, "_tckdb_worker_shard_counts", []):
-            if node_counts is not None:
-                counts = node_counts
-                break
+    counts = _shard_counts(session.config)
     stats = getattr(reporter, "stats", {}) if reporter is not None else {}
     outcomes = ("passed", "failed", "error", "skipped", "xfailed", "xpassed")
     ran = {
@@ -1152,7 +1164,10 @@ def _write_shard_report(session, shard, selection, sweep, reporter) -> None:
         "total": counts["total"] if counts else None,
         "selected": counts["selected"] if counts else None,
         "ran": len(ran),
-        "failed": len(stats.get("failed", [])) + len(stats.get("error", [])),
+        "failed": len(stats.get("failed", [])) + len([r for r in stats.get("error", []) if hasattr(r, "when")]),
+        # A CollectReport has no ``when``; an import error in a test file is one. A file that cannot be
+        # imported contributes no tests, so without this count it would shrink the gate and pass.
+        "collection_errors": len([r for r in stats.get("error", []) if not hasattr(r, "when")]),
         "body_sweep": {"bodies": sweep[0], "fields": sweep[1]},
         "selection_key": list(selection) if selection is not None else None,
     }

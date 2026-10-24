@@ -16,7 +16,9 @@ separate way for a slice to go missing without any job going red:
 3. the slices' ``selected`` counts add up to that total -- no test is in two
    slices and none is in zero;
 4. every selected test reported an outcome (``ran``) -- a slice that exited
-   early did not run its share;
+   early did not run its share -- and no slice is empty, failed, or had a
+   collection error (a test file that cannot be imported contributes no
+   tests, so it would otherwise shrink the gate unnoticed);
 5. the DR-0028 error-body sweep, summed over the slices, reaches the gate's
    floor (``BODY_SWEEP_FLOORS`` in ``tests/conftest.py``). The floor cannot
    be held per slice -- a slice sees a fraction of the bodies -- so it is held
@@ -76,10 +78,25 @@ def check(reports: list[dict], plan: dict, floor_table: dict) -> tuple[list[str]
         total = totals.pop()
         selected = sum(report["selected"] for report in slices)
         ran = sum(report["ran"] for report in slices)
+        empty = [report["index"] for report in slices if not report["selected"]]
+        if empty:
+            problems.append(f"{gate}: slice(s) {empty} selected no tests, so they checked nothing")
+        broken = {report["index"]: report.get("collection_errors") for report in slices if report.get("collection_errors") != 0}
+        if broken:
+            problems.append(
+                f"{gate}: collection errors (or a report without the count) in slice(s) {broken}; a test file that "
+                "cannot be imported contributes no tests and would shrink the gate"
+            )
+        failed = {report["index"]: report.get("failed") for report in slices if report.get("failed") != 0}
+        if failed:
+            problems.append(f"{gate}: failed or errored tests in slice(s) {failed}")
         if selected != total:
             problems.append(f"{gate}: slices selected {selected} tests between them but the gate collects {total}")
         if ran != selected:
-            problems.append(f"{gate}: {selected} tests selected but only {ran} reported an outcome")
+            problems.append(
+                f"{gate}: {selected} tests selected but {ran} reported an outcome "
+                f"({'some never ran' if ran < selected else 'more outcomes than tests selected'})"
+            )
         keys = {tuple(report["selection_key"] or ()) for report in slices}
         bodies = sum(report["body_sweep"]["bodies"] for report in slices)
         fields = sum(report["body_sweep"]["fields"] for report in slices)

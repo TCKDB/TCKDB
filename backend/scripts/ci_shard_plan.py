@@ -36,9 +36,19 @@ PLAN = BACKEND_ROOT / "tests" / "ci_shard_plan.json"
 
 
 def file_of(classname: str) -> str:
-    """``tests.api.test_x.TestY`` -> ``tests/api/test_x.py``."""
+    """``tests.api.test_x.TestY`` -> ``tests/api/test_x.py``.
+
+    The module is the longest dotted prefix that is a file on disk, so a
+    capitalised directory or module name does not end the path early; a
+    class name is what is left over. If no prefix is a file (a deleted test),
+    fall back to cutting at the first capitalised segment.
+    """
+    parts = classname.split(".")
+    for end in range(1, len(parts) + 1):
+        if (BACKEND_ROOT / "/".join(parts[:end])).with_suffix(".py").is_file():
+            return "/".join(parts[:end]) + ".py"
     module = []
-    for part in classname.split("."):
+    for part in parts:
         if part[:1].isupper():
             break
         module.append(part)
@@ -82,6 +92,12 @@ def main() -> int:
             f"{name}: {len(weights)} files, {total:,.0f}s of test time -> "
             + ", ".join(f"slice {i + 1} {w / total:.1%}" for i, w in enumerate(load))
         )
+    if args.write and PLAN.is_file():
+        # A subset of gates updates those gates and keeps the rest, so
+        # re-profiling one gate cannot silently delete the others' plans.
+        merged = json.loads(PLAN.read_text(encoding="utf-8"))
+        merged.update(plan)
+        plan = merged
     document = json.dumps(plan, indent=1, sort_keys=True) + "\n"
     if args.write:
         PLAN.write_text(document, encoding="utf-8")

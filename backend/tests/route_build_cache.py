@@ -79,6 +79,16 @@ def _key(kwargs: dict[str, Any]) -> tuple[Any, ...] | None:
     return key
 
 
+def _is_throwaway(call: Any) -> bool:
+    """A closure or lambda is a new object per definition, so it can never hit.
+
+    Caching it would only pin it (and everything it closes over) in the
+    cache for the life of the process, so it is built uncached.
+    """
+    qualname = getattr(call, "__qualname__", "")
+    return "<locals>" in qualname or "<lambda>" in qualname
+
+
 def enabled() -> bool:
     return _INSTALLED
 
@@ -92,10 +102,15 @@ def counters() -> tuple[int, int]:
     return _HITS, _MISSES
 
 
-def install() -> None:
-    """Memoise ``get_dependant`` in the modules that call it. Idempotent."""
+def install(*, force: bool = False) -> None:
+    """Memoise ``get_dependant`` in the modules that call it. Idempotent.
+
+    ``TCKDB_TEST_ROUTE_CACHE=0`` declines (the nightly sets it, so its suite
+    still builds a genuinely fresh app per test); ``force`` is for
+    ``tests/test_route_build_cache.py``, which must exercise the cache either way.
+    """
     global _INSTALLED, _ORIGINAL
-    if _INSTALLED or os.environ.get("TCKDB_TEST_ROUTE_CACHE", "1") == "0":
+    if _INSTALLED or (not force and os.environ.get("TCKDB_TEST_ROUTE_CACHE", "1") == "0"):
         return
 
     import fastapi.dependencies.utils as dependency_utils
@@ -109,7 +124,7 @@ def install() -> None:
 
     def cached_get_dependant(**kwargs: Any) -> Any:
         key = _key(kwargs)
-        if key is None:
+        if key is None or _is_throwaway(kwargs.get("call")):
             return original(**kwargs)
         global _HITS, _MISSES
         try:
@@ -129,6 +144,13 @@ def install() -> None:
         # OpenAPI document does not show duplicates, which is why no
         # contract check noticed.) The list is the only thing routing
         # mutates, so it is the only thing copied.
+        #
+        # Nested sub-dependants are NOT copied: every app shares them. That is
+        # safe because on the pinned FastAPI nothing writes to a dependant
+        # once ``get_dependant`` has returned it, except that one list on a
+        # route's top dependant. ``tests/test_route_build_cache.py``
+        # (``test_sub_dependants_are_not_mutated_after_construction``) fails
+        # if an upgrade changes that.
         clone = copy.copy(pristine)
         clone.dependencies = list(pristine.dependencies)
         return clone

@@ -855,9 +855,12 @@ The gate runs:
 
 The API gate ignores both `tests/api/scientific/` (covered by the scientific
 job) and `tests/api/test_openapi_snapshot.py` (run once by its dedicated
-golden-snapshot step). The final `Backend CI` job is a stable aggregate status
-check: it runs even after an upstream failure or cancellation and fails unless
-the matrix result is `success`, while leaving every detailed gate check visible.
+golden-snapshot step, which now lives in the `quick-checks` job). The final
+`Backend CI` job is a stable aggregate status check: it runs even after an
+upstream failure or cancellation and fails unless both `quick-checks` and every
+slice of the matrix are `success`, and then runs
+`scripts/check_gate_shards.py` over the slices' reports (see "Slices of a
+gate" below), while leaving every detailed gate check visible.
 
 ### The ambient database is never migrated
 
@@ -877,10 +880,12 @@ nights, attached to no PR and explained by nothing in the file. Both workflows
 now present the same empty database, so that class of coupling fails the pull
 request that introduces it.
 
-Each CI job owns an isolated Postgres service and SeaweedFS service (MinIO
-until #541). Its
-`DB_TEST_NAME` and `S3_BUCKET` include both the GitHub run id/attempt and the
-job role, so concurrent jobs and workflow runs do not share test resources.
+Each CI test job owns an isolated Postgres service and SeaweedFS service
+(MinIO until #541); `quick-checks` has Postgres only (nothing it runs touches
+the object store). `DB_TEST_NAME` includes the gate, the slice number and the
+GitHub run id/attempt; `S3_BUCKET` includes the gate and the run id/attempt
+(the slice is not needed there: every job has its own SeaweedFS), so
+concurrent jobs and workflow runs do not share test resources.
 The run token now makes the `DB_TEST_NAME` half of that redundant for
 isolation — it stays because it makes a job's databases identifiable.
 
@@ -937,6 +942,13 @@ nightly) deselects nothing.
   Changing the *number* of slices means editing the matrix `slices:` and
   regenerating the plan in the same change (the coverage test refuses a plan
   built for another count).
+- **Reproducing a red slice locally.** Run the gate script the slice runs,
+  with the slice set, and the same seed: for example
+  `TCKDB_TEST_SHARD=rest:3/4 bash backend/scripts/test-rest.sh --maxfail=5`
+  from the repo root (add `--ignore=...` exactly as the workflow step does for
+  the API gate). Or skip the slicing and run the one failing file
+  (`backend/scripts/test-fast.sh tests/path/test_x.py`); the file's slice only
+  decides *which job* runs it, never *how*.
 - **Quick checks.** Lint, mypy, the runtime-ASCII scan, hygiene, the Alembic
   upgrade/drift checks, the OpenAPI snapshot and the MCP gate are one job
   (`quick-checks`) that runs beside the slices, so a lint error is a red check

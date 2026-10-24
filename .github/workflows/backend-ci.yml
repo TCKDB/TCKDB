@@ -47,6 +47,14 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request supersedes the run it started, so cancel that
+# one rather than spend eight runners on a commit nobody will merge. Never on
+# main: every push there must run to completion (the group includes the sha
+# for pushes, so nothing on main can cancel anything).
+concurrency:
+  group: backend-ci-${{ github.event_name == 'pull_request' && github.head_ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # Everything that is not a slice of the test suite: lint, types, hygiene,
   # migrations, the OpenAPI snapshot and the MCP integration. These used to run
@@ -638,6 +646,9 @@ jobs:
           path: shard-${{ matrix.gate }}-${{ matrix.slice }}.json
           if-no-files-found: error
           retention-days: 7
+          # "Re-run all jobs" repeats the run id with a new attempt; without
+          # this the second upload of the same artifact name is a 409.
+          overwrite: true
 
   backend-ci:
     name: Backend CI
