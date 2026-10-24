@@ -172,6 +172,15 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
         "rubric_version": None,
         "grade": None,
         "assessed_at": None,
+        "made_under": {
+            "rubric": None,
+            "assessed_version": None,
+            "current_rubric": None,
+            "current_version": None,
+            "state": "unassessed",
+            "stale_reason": None,
+            "inputs_checked": True,
+        },
     }
 
     current_row = evaluate_and_append_reproducibility(

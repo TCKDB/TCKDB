@@ -1354,3 +1354,34 @@ describe("when the archive says something this build does not understand", () =>
         expect(screen.queryByText(/Nothing is waiting/i)).not.toBeInTheDocument()
     })
 })
+
+describe("the rubric a finding's review was made under", () => {
+    const rubric = { rubric: "computed_kinetics", current_rubric: "computed_kinetics", inputs_checked: false }
+
+    it("states current, stale and version 0 per row, and nothing for a row with no stored review", async () => {
+        meIs(admin)
+        queueIs([
+            task({ id: 41, made_under: { ...rubric, assessed_version: 1, current_version: 1, state: "current" } }),
+            otherTask({
+                id: 42,
+                made_under: { ...rubric, assessed_version: 0, current_version: 1, state: "stale", stale_reason: "rubric_version" },
+            }),
+            task({ id: 43, record_public_ref: "spc_3rdrow3rdrow3rdrow3rdrow3r", made_under: null }),
+        ])
+        renderPage()
+        const table = await screen.findByRole("table")
+        const lines = Array.from(table.querySelectorAll('[data-component="made-under"]'))
+        expect(lines.map((l) => l.getAttribute("data-state"))).toEqual(["current", "stale"])
+        expect(lines[0]).toHaveTextContent("Assessed under rubric computed kinetics, version 1, the current version.")
+        expect(lines[1]).toHaveTextContent("stamped before the 2026-10 versioning reset")
+        expect(within(table).getAllByText("Stale")).toHaveLength(1)
+    })
+
+    it("still reads a queue from a server that does not send made_under", async () => {
+        meIs(admin)
+        queueIs([task()])
+        renderPage()
+        const table = await screen.findByRole("table")
+        expect(table.querySelector('[data-component="made-under"]')).toBeNull()
+    })
+})

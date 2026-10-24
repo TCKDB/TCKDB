@@ -12,6 +12,8 @@ import { SectionHeading } from "../components/PageSections"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { RefsDisclosure } from "../components/RefsDisclosure"
+import { MadeUnderLine } from "../components/MadeUnderLine"
+import { liveMadeUnder } from "../domain/madeUnder"
 import { formatEnergyForDisplay } from "../domain/energyUnits"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import type { TransitionStateIdentity } from "../domain/recordIdentity"
@@ -344,7 +346,14 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             {trust && (
                                 <div>
                                     <dt>Trust</dt>
-                                    <dd>{statusLabel(trust.trust_status)} · {trust.evidence.passed_count}/{trust.evidence.possible_count}</dd>
+                                    <dd>
+                                        {statusLabel(trust.trust_status)} · {trust.evidence.passed_count}/{trust.evidence.possible_count}
+                                        {/* Under the Trust fact it describes, not under all four facts: the structure
+                                            assessment beside it is a different procedure and is not covered by this line. */}
+                                        {trust.evidence.rubric && trust.evidence.rubric_version != null && (
+                                            <MadeUnderLine madeUnder={liveMadeUnder(trust.evidence.rubric, trust.evidence.rubric_version)} />
+                                        )}
+                                    </dd>
                                 </div>
                             )}
                             {trust?.structure_assessment && (

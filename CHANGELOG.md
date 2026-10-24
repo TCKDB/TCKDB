@@ -22,6 +22,20 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The made-under line (2026-10-24)
+
+An assessment now says which rubric judged it, at which version, and whether that is still the version in force.
+
+- **Wire (additive).** `assessments.deterministic_trust` and `assessments.reproducibility` carry `made_under`: `rubric`, `assessed_version`, `current_rubric`,
+  `current_version`, `state` (`current`, `stale`, `unassessed`), `stale_reason` (`rubric_version`, or `inputs_changed` when the version is unchanged but the
+  inputs the assessment was computed from differ now) and `inputs_checked`. Version 0 means "stamped before the 2026-10 versioning reset" and is never
+  current. `unassessed` is not `stale`. A response holding more than one record compares only the rubric name and version (`inputs_checked: false`), because
+  re-evaluating every stored assessment's inputs is tens of statements per record. The admin curator-task reads carry `made_under` for the latest stored
+  machine review of the record. `tckdb-client` 0.165.0 types it.
+- **Website.** One shared line (`MadeUnderLine`) with a Stale badge and a plain explanation ("It has not been re-assessed under the current version"; nothing
+  schedules a re-assessment). On the transition-state entry page (under the Trust fact), on each thermo record (the reproducibility assessment, requested with
+  `include=assessments`) and in the Machine findings queue.
+
 ## Lookup and the legacy entity lists obey the visibility rules (2026-10-24)
 
 `/lookup/*` and the raw entity lists (`/thermo`, `/kinetics`, `/calculations`, ...) used to ignore every visibility rule the scientific reads

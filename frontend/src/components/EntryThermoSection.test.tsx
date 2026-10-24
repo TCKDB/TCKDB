@@ -772,6 +772,57 @@ describe("EntryThermoSection", () => {
 // same card -- a ref is a ref regardless of whether this page happens to
 // link it.
 // ---------------------------------------------------------------------------
+describe("EntryThermoSection: the reproducibility assessment states what it was made under", () => {
+    function renderWithAssessments(reproducibility: Record<string, unknown> | undefined) {
+        const [alpha] = mockRecords()
+        const record = reproducibility === undefined ? alpha : { ...alpha, assessments: { reproducibility } }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [record] }))))
+        page()
+    }
+    const rubric = { rubric: "tckdb_reproducibility", current_rubric: "tckdb_reproducibility" }
+
+    it("current: the grade and a current made-under line", async () => {
+        renderWithAssessments({
+            state: "current", grade: "rerunnable",
+            made_under: { ...rubric, assessed_version: 1, current_version: 1, state: "current" },
+        })
+        await screen.findByRole("heading", { name: "Reproducibility assessment: rerunnable" })
+        expect(document.querySelector('[data-component="made-under"]')).toHaveAttribute("data-state", "current")
+    })
+
+    it("stale under an older rubric version: a Stale badge and the current version", async () => {
+        renderWithAssessments({
+            state: "stale", grade: "described",
+            made_under: { ...rubric, assessed_version: 1, current_version: 2, state: "stale", stale_reason: "rubric_version" },
+        })
+        await screen.findByRole("heading", { name: "Reproducibility assessment: described" })
+        expect(screen.getByText("Stale")).toBeVisible()
+        expect(screen.getByText(/The current version is 2\. It has not been re-assessed under the current version\./)).toBeVisible()
+    })
+
+    it("version 0: stale, worded as stamped before the versioning reset", async () => {
+        renderWithAssessments({
+            state: "stale", grade: "described",
+            made_under: { ...rubric, assessed_version: 0, current_version: 1, state: "stale", stale_reason: "rubric_version" },
+        })
+        await screen.findByRole("heading", { name: "Reproducibility assessment: described" })
+        expect(screen.getByText(/stamped before the 2026-10 versioning reset/)).toBeVisible()
+    })
+
+    it("unassessed: Not assessed, with no grade and no Stale badge", async () => {
+        renderWithAssessments({ state: "unassessed", grade: null, made_under: { state: "unassessed" } })
+        await screen.findByRole("heading", { name: "Reproducibility assessment" })
+        expect(screen.getByText("Not assessed")).toBeVisible()
+        expect(screen.queryByText("Stale")).toBeNull()
+    })
+
+    it("renders no assessment section when the API served none", async () => {
+        renderWithAssessments(undefined)
+        await screen.findByText("thm_alpha")
+        expect(screen.queryByRole("heading", { name: /Reproducibility assessment/ })).toBeNull()
+    })
+})
+
 describe("EntryThermoSection: provenance refs render as .data, like every other ref on the card", () => {
     it("Level of theory ref and Statmech ref are wrapped in .data when present", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
