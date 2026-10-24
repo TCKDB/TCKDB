@@ -91,6 +91,18 @@ class ReviewEligibilityIn(BaseModel):
     )
 
 
+class FindingsEligibilityIn(ReviewEligibilityIn):
+    """The defaults a statmech candidate can lift: its review status, and a confirmed finding about a source.
+
+    A statmech candidate has no evidence rubric of its own, so ``include_hard_failed_evidence`` is not offered here.
+    """
+
+    include_confirmed_findings: bool = Field(
+        default=False,
+        description=SelectionEligibilityIn.model_fields["include_confirmed_findings"].description,
+    )
+
+
 class EligibilitySource(str, Enum):
     """Who decided whether a default was applied."""
 
@@ -163,7 +175,8 @@ class CandidateEligibility(BaseModel):
     )
     passed_only_by_override: list[str] = Field(
         default_factory=list,
-        description="Eligibility defaults this candidate would fail but the request lifted: it competes because of that.",
+        description="Eligibility defaults this candidate would fail but the request lifted. It competes because of that "
+        "only if it is also applicable and fails no applied default.",
     )
 
 

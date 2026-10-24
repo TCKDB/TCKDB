@@ -326,9 +326,16 @@ def request_support(request: StatmechRequest) -> tuple[str, ...]:
 class _World:
     """What this assessment may read: the loaded calculations, and which of them the request can use."""
 
-    def __init__(self, calculations: Mapping[str, NormalizedCalculation], effective: frozenset[RecordReviewStatus]) -> None:
+    def __init__(
+        self,
+        calculations: Mapping[str, NormalizedCalculation],
+        effective: frozenset[RecordReviewStatus],
+        lift_findings: bool = False,
+    ) -> None:
         self.calculations = calculations
         self.effective = effective
+        #: The request lifted ``confirmed_blocking_findings``: a finding is disclosed (``finding_overridden``), not applied.
+        self.lift_findings = lift_findings
 
     def usable(self, ref: str | None) -> NormalizedCalculation | None:
         """The calculation if it is loaded, at an effective status and not rejected; otherwise ``None`` (one answer)."""
@@ -366,7 +373,7 @@ def _structure_subject(subject: SubjectFacts) -> StructureSubject:
     )
 
 
-def _apply_findings(calc: NormalizedCalculation, roles: frozenset[str], f: Collector) -> None:
+def _apply_findings(calc: NormalizedCalculation, roles: frozenset[str], f: Collector, *, lift: bool = False) -> None:
     """Apply a calculation's live findings at the roles this candidate uses it for.
 
     A role invalidation bites only the roles it names; a contradictory characterization is about curvature, so it bites the
@@ -379,7 +386,11 @@ def _apply_findings(calc: NormalizedCalculation, roles: frozenset[str], f: Colle
         scoped = _Findings()
         _apply_finding(scoped, finding, blocks=bites, role_needed=role_needed)
         for label in scoped.blocking:
-            f.add(label)  # ``finding_invalidates:<kind>:<authority>`` or ``role_invalidated:<role>:<authority>``
+            if lift:
+                # The request lifted the default: the finding stays on the record as an advisory and excludes nothing.
+                f.note(f"finding_overridden:{label}")
+            else:
+                f.add(label)  # ``finding_invalidates:<kind>:<authority>`` or ``role_invalidated:<role>:<authority>``
         for reason in scoped.reasons:
             f.add(reason.code)  # ``finding_unresolved:<kind>``
         for note in scoped.advisory:
@@ -498,6 +509,7 @@ def _judge_curvature(
     f: Collector,
     *,
     roles_used: frozenset[str],
+    lift_findings: bool = False,
 ) -> tuple[str, ...]:
     """The curvature witnesses on the pinned geometry, judged by the shared stationary-point owner. Returns their refs."""
     claim = _curvature_claim(request)
@@ -537,7 +549,7 @@ def _judge_curvature(
             pending.append("required_evidence_unavailable:" + (notes[0].split(":")[0] if notes else "curvature"))
         _ = how
     for calc in (*supports, *contradicts):
-        _apply_findings(calc, roles_used, f)
+        _apply_findings(calc, roles_used, f, lift=lift_findings)
     refs = tuple(sorted(c.calculation_ref for c in (*supports, *contradicts)))
     if supports and contradicts:
         f.add("curvature_witnesses_disagree")
@@ -891,11 +903,20 @@ def assess_candidate(
     subject: SubjectFacts,
     calculations: Mapping[str, NormalizedCalculation],
     effective_statuses: frozenset[RecordReviewStatus],
+    candidate_statuses: frozenset[RecordReviewStatus] | None = None,
 ) -> StatmechAssessment:
-    """Assess one candidate against a supported request. Pure."""
+    """Assess one candidate against a supported request. Pure.
+
+    :param effective_statuses: What every source, member and determination must have: the caller's floor over the read
+        profile's, with the terminal statuses out. A request never lifts this; a parent's approval never approves a source.
+    :param candidate_statuses: What the candidate's own review status may be: ``effective_statuses`` plus the terminal
+        statuses the request lifted (``eligibility``). ``None``: the same as ``effective_statuses``.
+    """
     assert isinstance(request.task, Task)
     profile = profile_of(request)
-    world = _World(calculations, effective_statuses)
+    own_statuses = effective_statuses if candidate_statuses is None else candidate_statuses
+    lift_findings = request.eligibility.include_confirmed_findings
+    world = _World(calculations, effective_statuses, lift_findings)
     f = Collector()
     decl = candidate.declaration
 
@@ -907,7 +928,7 @@ def assess_candidate(
     if candidate.supersession is not None:
         f.note("superseded_record")
     # 3. the owner record at its own floor
-    if candidate.review_status not in effective_statuses:
+    if candidate.review_status not in own_statuses:
         f.add("required_evidence_unavailable:record")
     needs_geometry = subject.is_atom is not True
     needs_curvature = profile in _NEEDS_CURVATURE and request.target.scope.kind is not ScopeKind.atom
@@ -945,11 +966,13 @@ def assess_candidate(
         # character they were computed at is the source's own statement, and is disclosed as such.
         f.note("imported_parameters_not_revalidated:curvature")
     elif needs_curvature:
-        evidence["curvature"] = _judge_curvature(ev, pinned, request, subject, f, roles_used=roles_used)
+        evidence["curvature"] = _judge_curvature(
+            ev, pinned, request, subject, f, roles_used=roles_used, lift_findings=lift_findings
+        )
     for calc_ref in ev.geometry_sources:
         calc = world.calculations.get(calc_ref)
         if calc is not None:
-            _apply_findings(calc, frozenset({"geometry_optimization"}), f)
+            _apply_findings(calc, frozenset({"geometry_optimization"}), f, lift=lift_findings)
     if ev.geometry_sources:
         evidence["geometry"] = tuple(sorted(ev.geometry_sources))
     if ev.energy:

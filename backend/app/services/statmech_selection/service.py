@@ -12,7 +12,8 @@ substituted.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.db.models.common import RecordReviewStatus
 from app.db.models.statmech import Statmech
 from app.db.models.statmech_declaration import StatmechModelDeclaration
+from app.schemas.reads.scientific_selection_common import ELIGIBILITY_CONFIRMED_FINDINGS
 from app.services.read_snapshot import begin_read_snapshot
 from app.services.scientific_read.ref_guard import withhold_selection_facts
 from app.services.statmech_selection.assessment import (
@@ -37,7 +39,30 @@ from app.services.statmech_selection.loader import (
     scan_population,
 )
 from app.services.statmech_selection.models import StatmechRequest
+from app.services.selection_kernel.requested import Verdict, funnel, judge
 from app.services.structure_selection.models import NormalizedCalculation
+
+#: Reason codes that are a confirmed finding about a source (the ``confirmed_blocking_findings`` default).
+FINDING_REASON_PREFIXES = ("finding_invalidates", "role_invalidated")
+FINDING_OVERRIDDEN_PREFIX = "finding_overridden"
+
+
+def verdict_of(assessment: StatmechAssessment, facts: CandidateFacts, request: StatmechRequest) -> Verdict:
+    """Whether a candidate competes under the request's eligibility settings, and which defaults it failed or passed by override.
+
+    A confirmed finding that excluded the candidate is a ``finding_invalidates`` / ``role_invalidated`` reason; one the
+    request lifted is a ``finding_overridden`` advisory. Both are read from the assessment, so a replay that recomputes
+    the assessment recomputes this.
+    """
+    blocking = [r.code for r in assessment.reasons if r.code.startswith(FINDING_REASON_PREFIXES)]
+    lifted = [code for code in assessment.advisory if code.startswith(FINDING_OVERRIDDEN_PREFIX)]
+    return judge(
+        applicable=assessment.eligible,
+        review_status=facts.review_status,
+        blocking=blocking,
+        eligibility=request.eligibility,
+        extra_defaults=(ELIGIBILITY_CONFIRMED_FINDINGS,) if lifted else (),
+    )
 
 
 @dataclass(frozen=True)
@@ -57,6 +82,12 @@ class StatmechQualification:
     calculations: tuple[NormalizedCalculation, ...]
     assessments: tuple[StatmechAssessment, ...]
     summary: QualificationSummary
+    #: What a candidate's own review status may be (the effective statuses plus the terminal ones the request lifted).
+    candidate_statuses: tuple[RecordReviewStatus, ...] = ()
+    #: Each candidate's verdict under the request's eligibility settings, by candidate ref.
+    verdicts: dict[str, Verdict] = field(default_factory=dict)
+    #: The recorded funnel (``selection_kernel.requested.funnel``).
+    funnel: dict[str, Any] = field(default_factory=dict)
 
 
 def _excluded(session: Session, scan_excluded: tuple[tuple[int, RecordReviewStatus | None, str], ...]) -> tuple[dict[str, str], ...]:
@@ -117,10 +148,12 @@ def qualify_target(
         by_ref = loaded.calculations_by_ref
         assessments = tuple(
             assess_candidate(
-                c, request=request, subject=subject, calculations=by_ref, effective_statuses=scan.effective_statuses
+                c, request=request, subject=subject, calculations=by_ref,
+                effective_statuses=scan.effective_statuses, candidate_statuses=scan.candidate_statuses,
             )
             for c in candidates
         )
+    verdicts = {a.candidate_ref: verdict_of(a, facts, request) for a, facts in zip(assessments, candidates, strict=True)}
     return StatmechQualification(
         request=request,
         subject=subject,
@@ -135,4 +168,12 @@ def qualify_target(
         calculations=calculations,
         assessments=assessments,
         summary=summarize(request, assessments),
+        candidate_statuses=tuple(sorted(scan.candidate_statuses, key=lambda s: s.value)),
+        verdicts=verdicts,
+        funnel=funnel(
+            considered=scan.considered,
+            removed_by_filters=scan.removed_by_filters,
+            terminal_excluded=scan.terminal_excluded,
+            verdicts=list(verdicts.values()),
+        ),
     )
