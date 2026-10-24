@@ -93,10 +93,10 @@ class TestListWorkflowTools:
         db_session.flush()
 
         resp = client.get("/api/v1/workflow-tools")
-        names = [item["name"] for item in resp.json()["items"]]
-        # name ASC then id ASC; PostgreSQL default text sort is case-sensitive
-        # (uppercase first), so this is stable and deterministic.
-        assert names == sorted(names)
+        items = resp.json()["items"]
+        # The list is an administrative listing: id ascending, as its ``order`` echo says (not by name).
+        assert [item["name"] for item in items] == ["zeta", "alpha", "Mu", "beta"]
+        assert [item["id"] for item in items] == sorted(item["id"] for item in items)
 
 
 # ---------------------------------------------------------------------------
@@ -258,8 +258,9 @@ class TestListWorkflowToolReleases:
 
         resp = client.get("/api/v1/workflow-tool-releases")
         versions = [item["version"] for item in resp.json()["items"]]
-        # newest release_date first, NULLs last
-        assert versions == ["3.0", "2.0", "1.0", "dev"]
+        # The list is an administrative listing: id ascending (creation order here), as its ``order`` echo says.
+        # The release date orders only the releases inside one tool's detail.
+        assert versions == ["1.0", "3.0", "2.0", "dev"]
 
 
 # ---------------------------------------------------------------------------
