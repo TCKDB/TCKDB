@@ -25,6 +25,13 @@ from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 
 from app.db.models.common import CalculationQuality, RecordReviewStatus
 from app.schemas.reads.scientific_common import ProfiledRequestEcho
+from app.schemas.reads.scientific_selection_common import (
+    CalculationProvenanceFilters,
+    CandidateEligibility,
+    FindingsEligibilityIn,
+    SelectionStepsAnswer,
+)
+from app.services.selection_kernel.requested import Eligibility
 from app.services.structure_selection.models import (
     DEFERRED_QUANTITIES,
     AdminPolicy,
@@ -34,6 +41,7 @@ from app.services.structure_selection.models import (
     Quantity,
     RepeatPolicy,
     ResultMode,
+    StructureFilters,
     StructureOutcome,
     StructureRequest,
     ValidationClaim,
@@ -43,6 +51,15 @@ from app.services.structure_selection.models import (
 _QUANTITY_NAMES = frozenset({q.value for q in Quantity} | DEFERRED_QUANTITIES)
 
 _REF = Field(min_length=1, max_length=64)
+
+
+class StructureSelectionFilters(CalculationProvenanceFilters):
+    """The filters the calculation, conformer and transition-state searches offer, with their meaning.
+
+    A unit is kept when at least one of the calculations it rests on that the read profile shows matches every supplied
+    field: the calculation itself at the calculation grain, the calculations a determination pins as its sources at the
+    conformer and transition-state grains. Applied before eligibility; a filter excludes on a fact and ranks nothing.
+    """
 
 
 class _StrictRequest(BaseModel):
@@ -95,6 +112,16 @@ class _StrictRequest(BaseModel):
     )
     result_mode: ResultMode = ResultMode.all
     repeat_policy: RepeatPolicy = RepeatPolicy.retain_alternates
+    filters: StructureSelectionFilters = Field(
+        default_factory=StructureSelectionFilters,
+        description="Narrow the units by facts before eligibility, with the searches' own provenance filters.",
+    )
+    eligibility: FindingsEligibilityIn = Field(
+        default_factory=FindingsEligibilityIn,
+        description="Lift named eligibility defaults: a unit's rejected or deprecated review status, a confirmed finding "
+        "about a source. A rejected calculation quality is lifted by listing `rejected` in `permitted_quality`. Every "
+        "default is applied unless lifted; the answer lists each.",
+    )
 
     @field_validator("quantity")
     @classmethod
@@ -135,6 +162,8 @@ def _build(body: _StrictRequest, grain: Grain, intent: Intent, *, claim: Validat
         admin_policy=body.administrative_policy,
         result_mode=body.result_mode,
         repeat_policy=body.repeat_policy,
+        filters=StructureFilters(**body.filters.model_dump(exclude_none=True)),
+        eligibility=Eligibility.from_request(body.eligibility),
     )
 
 
@@ -251,7 +280,14 @@ class StructureSelectionRequestEcho(ProfiledRequestEcho):
 
 class StructureSelectionReview(BaseModel):
     effective_floor: RecordReviewStatus
-    effective_statuses: list[RecordReviewStatus]
+    effective_statuses: list[RecordReviewStatus] = Field(
+        description="What every source calculation must have. A request never lifts this."
+    )
+    candidate_statuses: list[RecordReviewStatus] = Field(
+        default_factory=list,
+        description="What a unit's own review status may be: the effective statuses plus the terminal ones the request "
+        "lifted (never under a read profile with a review floor).",
+    )
 
 
 class StructureSelectionReason(BaseModel):
@@ -259,7 +295,7 @@ class StructureSelectionReason(BaseModel):
     applicability: str
 
 
-class StructureSelectionUnit(BaseModel):
+class StructureSelectionUnit(CandidateEligibility):
     """One assessed unit (a calculation, or a basin or saddle determination) with every finding that fed its verdict."""
 
     unit_ref: str
@@ -292,7 +328,7 @@ class StructureSelectionIntegrity(BaseModel):
     note: str
 
 
-class StructureSelectionResponse(BaseModel):
+class StructureSelectionResponse(SelectionStepsAnswer):
     """The outcome of a structure selection and everything it rests on, public refs only.
 
     ``outcome`` is the selection basis (13 values; see the spec). ``selected_refs`` holds every tied minimum, the
@@ -352,6 +388,8 @@ class StructureSelectionManifest(BaseModel):
     versions: dict[str, Any]
     request: StructureSelectionManifestRequest
     effective_review_statuses: list[RecordReviewStatus]
+    candidate_review_statuses: list[RecordReviewStatus] = Field(default_factory=list)
+    verdicts: dict[str, Any] = Field(default_factory=dict)
     read_profile: dict[str, Any]
     snapshot_isolation: str
     subject: dict[str, Any]

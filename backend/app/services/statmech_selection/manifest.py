@@ -60,7 +60,7 @@ from app.services.statmech_selection.decision import (
     decide_statmech,
 )
 from app.services.statmech_selection.facts import CandidateFacts, SubjectFacts
-from app.services.selection_kernel.requested import Eligibility
+from app.services.selection_kernel.requested import expected_candidate_statuses
 from app.services.statmech_selection.models import (
     ASSESSMENT_VERSION,
     NORMALIZER_VERSION,
@@ -127,23 +127,6 @@ def expected_effective_statuses(
 ) -> frozenset[RecordReviewStatus]:
     """The review statuses a request may see, as a pure function of the two floors (terminal statuses out; floors only narrow)."""
     base = default_visible_statuses(include_rejected=False, include_deprecated=False)
-    for floor in (profile_floor, request_floor):
-        if floor is not None:
-            base = base & status_at_or_above(floor)
-    return frozenset(base)
-
-
-def expected_candidate_statuses(
-    profile_floor: RecordReviewStatus | None, request_floor: RecordReviewStatus | None, eligibility: Eligibility
-) -> frozenset[RecordReviewStatus]:
-    """The review statuses a candidate itself may have: the effective ones plus the terminal statuses the request lifted.
-
-    A read profile with a review floor ignores the lift (``curated`` cannot be overridden).
-    """
-    base = default_visible_statuses(
-        include_rejected=eligibility.include_rejected and profile_floor is None,
-        include_deprecated=eligibility.include_deprecated and profile_floor is None,
-    )
     for floor in (profile_floor, request_floor):
         if floor is not None:
             base = base & status_at_or_above(floor)

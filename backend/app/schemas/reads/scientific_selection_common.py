@@ -36,6 +36,11 @@ ELIGIBILITY_DEPRECATED: Final = "deprecated_review_status"
 ELIGIBILITY_HARD_FAILED_EVIDENCE: Final = "evidence_hard_fail"
 ELIGIBILITY_CONFIRMED_FINDINGS: Final = "confirmed_blocking_findings"
 ELIGIBILITY_REJECTED_QUALITY: Final = "rejected_calculation_quality"
+#: Not a default a request can lift. A transition-state entry is a gated kind: the evidence selection still excludes a
+#: determination whose TS entry is rejected, deprecated or below the caller's floor (it hides with its parent), as the
+#: transition-state trust fragment and evidence box do. A species or reaction entry is a scoping parent and never excludes.
+#: It is echoed so the answer lists every exclusion it applies.
+ELIGIBILITY_ENTRY_STATUS: Final = "entry_review_status"
 
 #: The request field that lifts each default (``eligibility.<field>``), named like the browse ``include_rejected``.
 OVERRIDE_FIELD: Final[dict[str, str]] = {
@@ -115,7 +120,9 @@ class EligibilityDefaultEcho(BaseModel):
     """One named eligibility default, as it was applied to this answer."""
 
     name: str = Field(description="Stable machine name of the exclusion.")
-    override_field: str = Field(description="The request field under `eligibility` that lifts it.")
+    override_field: str | None = Field(
+        description="The request field that lifts it, or null for an exclusion no request can lift."
+    )
     applied: bool = Field(description="True when records failing it were kept out of the competition.")
     source: EligibilitySource = Field(
         description="`default`: nobody asked. `request`: the caller lifted it. `read_profile`: the caller asked to lift "

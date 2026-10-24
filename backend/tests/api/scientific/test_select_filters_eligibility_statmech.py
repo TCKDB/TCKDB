@@ -201,3 +201,13 @@ def test_replay_refuses_a_manifest_whose_overrides_were_edited_even_with_every_c
     del stripped["request"]["eligibility"]
     with pytest.raises(Exception):
         manifest_module.replay_statmech_decision(retamper(stripped, lambda b: None))
+
+
+def test_an_approved_candidate_on_an_unreviewed_species_entry_is_a_candidate_under_curated(client, db_session):
+    scene = build(db_session, host_status=S.approved)
+    set_review(db_session, record_type=SubmissionRecordType.conformer_group, record_id=scene.group.id, status=S.approved)
+    restatus(db_session, SubmissionRecordType.species_entry, scene.world.entry.id, S.not_reviewed)
+    resp = post(client, scene, profile="curated")
+    assert resp.status_code == 200, resp.text
+    (candidate,) = resp.json()["candidates"]
+    assert candidate["review_status"] == "approved" and candidate["eligible"] is True

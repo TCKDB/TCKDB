@@ -38,10 +38,11 @@ def test_a_deprecated_observation_is_terminal_too(db_session):
     assert b.absent_reason == "determination_terminal_review_status"
 
 
-def test_a_rejected_species_entry_makes_every_member_terminal_not_below_a_floor(db_session):
+def test_a_rejected_species_entry_does_not_hold_its_members_out(db_session):
+    """The species entry is a scoping parent: its own review status never holds a determination out."""
     world = make_world(db_session, entry_status=R.rejected)
     ref, _ = conformer(world, -76.400)
     conformer(world, -76.410)
     run_ = run(db_session, world, req(world, ref))
-    assert {m.absent_reason for m in run_.result.members} == {"determination_terminal_review_status"}
-    assert run_.population.determination_refs == ()
+    assert "determination_terminal_review_status" not in {m.absent_reason for m in run_.result.members}
+    assert len(run_.population.determination_refs) == 2

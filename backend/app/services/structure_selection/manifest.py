@@ -36,6 +36,7 @@ from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import default_visible_statuses, status_at_or_above
 from app.services.manifest_formats import manifest_header, new_format_registry, read_manifest_format
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
+from app.services.selection_kernel.requested import Eligibility, UnreadableEligibility, expected_candidate_statuses
 from app.services.structure_selection.assessment import assess_unit
 from app.services.structure_selection.bounds import check_manifest_size
 from app.services.structure_selection.decision import (
@@ -56,13 +57,16 @@ from app.services.structure_selection.models import (
     StructureRequest,
     StructureSubject,
 )
+from app.services.structure_selection.service import verdict_of, verdict_record
 from app.versioning import same_value
 
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
 #: reads exactly this format; a manifest in any other is refused. Version 2: the decision no longer holds rules, rule
 #: matches, pair checks, edges, overridden edges, opposing pairs or cycles, and the request no longer holds
-#: ``apply_rules``, an objective or a reference model.
-MANIFEST_FORMAT_VERSION = 2
+#: ``apply_rules``, an objective or a reference model. Version 3: the request records its filters and its eligibility
+#: settings, the manifest records which review statuses a unit itself may have and each unit's verdict under those
+#: settings (with the status it was judged by), and the population records the funnel.
+MANIFEST_FORMAT_VERSION = 3
 MANIFEST_FORMAT_NAME = "structure_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "structure_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -124,6 +128,7 @@ def _without_digest(raw: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
 
 
 def _population(result: StructureAssessmentResult, *, withhold_excluded: bool) -> dict[str, Any]:
+    funnel_record = result.funnel
     """The population block. Under a read profile that imposes a floor the records below it are not listed or counted.
 
     Under ``curated`` the floor is ``approved``: a record below it is one the caller could not have reached through any
@@ -138,6 +143,7 @@ def _population(result: StructureAssessmentResult, *, withhold_excluded: bool) -
         "excluded_count": 0 if withhold_excluded else result.excluded_count,
         "excluded_by_review": [] if withhold_excluded else [dict(e) for e in result.excluded_by_review],
         "excluded_by_review_withheld": withhold_excluded,
+        "funnel": dict(funnel_record),
     }
 
 
@@ -168,6 +174,8 @@ def build_manifest(
         },
         "request": result.request.to_dict(),
         "effective_review_statuses": sorted(s.value for s in result.effective_statuses),
+        "candidate_review_statuses": sorted(s.value for s in result.candidate_statuses),
+        "verdicts": {ref: dict(v) for ref, v in sorted(result.verdicts.items())},
         "read_profile": dict(profile),
         "snapshot_isolation": result.snapshot_isolation,
         "subject": result.subject.to_dict(),
@@ -256,12 +264,33 @@ def _check_consistency(
     # ``expected_effective_statuses``.
     if name == "curated" and recorded != frozenset({RecordReviewStatus.approved}):
         raise ReplayError("inconsistent_manifest", "a curated profile admits approved records only")
+    try:
+        eligibility = Eligibility.from_record(request_eligibility(manifest))
+    except UnreadableEligibility as exc:
+        raise ReplayError("inconsistent_manifest", str(exc)) from exc
+    recorded_candidate = frozenset(RecordReviewStatus(s) for s in manifest.get("candidate_review_statuses") or ())
+    if recorded_candidate != expected_candidate_statuses(floor, request.min_review_status, eligibility):
+        raise ReplayError(
+            "inconsistent_manifest",
+            "the review statuses a unit may have are not what the recorded profile, request floor and eligibility settings allow",
+        )
     # Every recorded input, not only the units: a determination's source calculations carry their own status, and a
-    # manifest relabelled curated (or a curated one with a source quietly flipped) must not pass on its units alone.
+    # manifest relabelled curated (or a curated one with a source quietly flipped) must not pass on its units alone. A
+    # unit is judged against what a unit may have; a source calculation, by the effective statuses. A determination's
+    # verdict also records the status a request can lift (its observation's).
+    unit_refs = {getattr(u, "calculation_ref", None) or u.determination_ref for u in units}
     for item in recorded_inputs:
-        if item.review_status not in recorded:
-            ref = getattr(item, "calculation_ref", None) or item.determination_ref
+        ref = getattr(item, "calculation_ref", None) or item.determination_ref
+        allowed = recorded_candidate if ref in unit_refs else recorded
+        if item.review_status not in allowed:
             raise ReplayError("inconsistent_manifest", f"{ref} has a review status its own request cannot see")
+    verdicts = manifest.get("verdicts")
+    if not isinstance(verdicts, dict) or set(verdicts) != unit_refs:
+        raise ReplayError("verdict_mismatch", "the recorded verdicts do not cover exactly the recorded units")
+    for ref, record in verdicts.items():
+        gate = record.get("gate_review_status") if isinstance(record, dict) else None
+        if gate is not None and RecordReviewStatus(gate) not in recorded_candidate:
+            raise ReplayError("inconsistent_manifest", f"{ref} was judged by a review status its own request cannot see")
     if manifest.get("population", {}).get("visible_units") != len(units):
         raise ReplayError("inconsistent_manifest", "the recorded visible-unit count is not the number of recorded units")
 
@@ -281,6 +310,30 @@ def _parse(
     if request.grain is Grain.calculation and dets:
         raise ReplayError("inconsistent_manifest", "a calculation-grain manifest carries determinations")
     return request, subject, units, by_ref, [*calcs, *dets]
+
+
+def request_eligibility(manifest: dict[str, Any]) -> Any:
+    request = manifest.get("request")
+    return request.get("eligibility") if isinstance(request, dict) else None
+
+
+def _check_verdicts(
+    manifest: dict[str, Any], request: StructureRequest, units: Sequence[Any], assessments: Sequence[StructureAssessment]
+) -> None:
+    """Each unit's recorded verdict must be what its assessment gives under the recorded eligibility settings."""
+    for unit, assessment in zip(units, assessments, strict=True):
+        record = manifest["verdicts"][assessment.unit_ref]
+        gate_raw = record.get("gate_review_status")
+        gate = RecordReviewStatus(gate_raw) if gate_raw is not None else None
+        if request.grain is Grain.calculation and gate != unit.review_status:
+            raise ReplayError("verdict_mismatch", f"{assessment.unit_ref} was judged by a status that is not its own")
+        quality = unit.quality if request.grain is Grain.calculation else None
+        expected = verdict_record(verdict_of(assessment, gate, quality, request), gate)
+        if _canon(record) != _canon(expected):
+            raise ReplayError(
+                "verdict_mismatch",
+                f"the recorded verdict of {assessment.unit_ref} is not what its assessment gives under the recorded eligibility settings",
+            )
 
 
 def replay_structure_assessment(manifest: dict[str, Any]) -> list[StructureAssessment]:
@@ -304,6 +357,7 @@ def replay_structure_assessment(manifest: dict[str, Any]) -> list[StructureAsses
     for a in recomputed:
         if _canon(a.to_dict()) != _canon(recorded[a.unit_ref]):
             raise ReplayError("assessment_mismatch", f"the recorded assessment of {a.unit_ref} is not what its inputs give")
+    _check_verdicts(manifest, request, units, recomputed)
     return recomputed
 
 

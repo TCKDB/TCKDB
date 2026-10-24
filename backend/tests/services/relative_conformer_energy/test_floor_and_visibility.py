@@ -33,13 +33,13 @@ def test_a_determination_held_out_by_the_callers_floor_is_not_reported_as_missin
     assert len(run_.population.determination_refs) == 1  # only the reference's own is assessed
 
 
-def test_every_member_says_the_floor_when_the_species_entry_is_below_it(db_session):
+def test_a_species_entry_below_the_floor_does_not_hold_its_members_out(db_session):
     world = make_world(db_session, entry_status=R.under_review)
     ref, _ = conformer(world, -76.400, approve=True)
     conformer(world, -76.410, approve=True)
     run_ = run(db_session, world, req(world, ref, min_review_status=R.approved))
-    assert {m.absent_reason for m in run_.result.members} == {"determination_below_review_floor"}
-    assert run_.population.determination_refs == ()
+    assert "determination_below_review_floor" not in {m.absent_reason for m in run_.result.members}
+    assert len(run_.population.determination_refs) == 2
 
 
 def test_a_terminal_group_is_reported_terminal_not_below_a_floor(db_session):

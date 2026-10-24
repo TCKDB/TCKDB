@@ -63,6 +63,7 @@ from app.services.statmech_selection.facts import (
     TorsionFacts,
 )
 from app.services.statmech_selection.inventory import load_legacy_facts
+from app.schemas.reads.scientific_selection_common import ELIGIBILITY_ENTRY_STATUS
 from app.services.selection_filters import filter_by_provenance
 from app.services.selection_kernel.requested import review_default
 from app.services.statmech_selection.models import StatmechFilters, StatmechRequest
@@ -90,6 +91,7 @@ CODE_UNKNOWN_CANDIDATE = "unknown_statmech_candidate_ref"
 MAX_EXCLUDED_LISTED = 100
 REASON_TERMINAL = "terminal_review_status"
 REASON_BELOW_FLOOR = "below_review_floor"
+REASON_OWNER_BELOW_FLOOR = "owner_below_review_floor"
 
 _TERMINAL = frozenset({RecordReviewStatus.rejected, RecordReviewStatus.deprecated})
 
@@ -196,6 +198,8 @@ def entry_visible(session: Session, kind: OwnerKind, owner_id: int, *, profile: 
     """Whether the read profile shows this entry (an entry that does not exist is not shown)."""
     if session.get(_owner_model(kind), owner_id) is None:
         return False
+    if kind is OwnerKind.species_entry:
+        return True  # a scoping parent: its own review status never hides what is under it
     return fetch_review_badges(session, record_type=_owner_record_type(kind), record_ids=[owner_id])[owner_id].status in profile
 
 
@@ -305,6 +309,9 @@ def scan_population(session: Session, *, request: StatmechRequest, owner_id: int
     effective, profile = _statuses(request)
     own = candidate_statuses(request)
     assert_subject_visible(session, kind, owner_id, profile=profile, ref=request.target.owner_ref)
+    # A species entry is a scoping parent and never excludes; a transition-state entry is a gated kind and still does.
+    entry_gates = kind is OwnerKind.transition_state_entry
+    owner_status = fetch_review_badges(session, record_type=_owner_record_type(kind), record_ids=[owner_id])[owner_id].status
     if request.population.kind is PopulationKind.release:
         raise unsupported("release_population", "a pinned release population is not evaluated by this release")
 
@@ -340,7 +347,6 @@ def scan_population(session: Session, *, request: StatmechRequest, owner_id: int
         ids = [i for i in ids if i in chosen]
 
     status = {i: badges[i].status for i in ids}
-    # The entry is a scoping parent: its own review status never excludes a candidate (the target must be visible, above).
     kept = apply_filters(session, ids, request.filters)
     population: list[int] = []
     excluded: list[tuple[int, RecordReviewStatus | None, str]] = []
@@ -354,6 +360,9 @@ def scan_population(session: Session, *, request: StatmechRequest, owner_id: int
         elif status[i] not in own:
             excluded.append((i, status[i], REASON_BELOW_FLOOR))
             below_floor += 1
+        elif entry_gates and (owner_status in _TERMINAL or owner_status not in effective):
+            excluded.append((i, owner_status, REASON_OWNER_BELOW_FLOOR))
+            terminal_excluded[ELIGIBILITY_ENTRY_STATUS] = terminal_excluded.get(ELIGIBILITY_ENTRY_STATUS, 0) + 1
         else:
             population.append(i)
     check_candidates(request.bounds, len(population))

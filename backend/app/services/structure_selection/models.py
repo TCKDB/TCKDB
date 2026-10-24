@@ -28,8 +28,13 @@ from typing import Any
 
 from app.db.models.common import CalculationQuality, RecordReviewStatus
 from app.services.selection_kernel import Applicability
+from app.services.selection_kernel.requested import Eligibility
 
-#: Version of the eligibility semantics.
+#: Version of the eligibility semantics. It is deliberately unchanged by the named eligibility defaults
+#: (``selection_kernel.requested``): under the default settings every unit is assessed exactly as before, and a lifted
+#: default only moves a confirmed finding from ``blocking`` to an advisory, which the request records. What a stored
+#: decision now means is carried by the manifest format (version 3) and its ``verdicts``, not by this number; this one also
+#: keys the transition-state evidence rubric, which this change does not touch.
 ASSESSMENT_VERSION = 1
 #: Version of the recipe normaliser (which facts a cohort needs established).
 NORMALIZER_VERSION = 1
@@ -208,6 +213,34 @@ DEFAULT_PERMITTED_QUALITY = frozenset({CalculationQuality.raw, CalculationQualit
 
 
 @dataclass(frozen=True)
+class StructureFilters:
+    """The caller's filters, with the calculation, conformer and transition-state searches' vocabulary and meaning.
+
+    The method, basis, software and workflow-tool filters keep a unit when at least one of the calculations it rests on
+    that the read profile shows matches every one supplied: the calculation itself at the calculation grain, the
+    calculations a determination pins as its sources at the conformer and transition-state grains.
+    """
+
+    method: str | None = None
+    basis: str | None = None
+    software: str | None = None
+    software_version: str | None = None
+    workflow_tool: str | None = None
+    workflow_tool_version: str | None = None
+
+    def to_record(self) -> dict[str, Any]:
+        return {k: v for k, v in self.__dict__.items() if v is not None}
+
+    @classmethod
+    def from_record(cls, raw: dict[str, Any]) -> StructureFilters:
+        return cls(**raw)
+
+    @property
+    def active(self) -> bool:
+        return any(v is not None for v in self.__dict__.values())
+
+
+@dataclass(frozen=True)
 class StructureRequest:
     """The normalised request.
 
@@ -247,6 +280,8 @@ class StructureRequest:
     result_mode: ResultMode = ResultMode.all
     repeat_policy: RepeatPolicy = RepeatPolicy.retain_alternates
     bounds: SelectionBounds = field(default_factory=SelectionBounds)
+    filters: StructureFilters = field(default_factory=StructureFilters)
+    eligibility: Eligibility = field(default_factory=Eligibility)
 
     def __post_init__(self) -> None:
         if self.intent not in INTENTS_BY_GRAIN[self.grain]:
@@ -306,6 +341,8 @@ class StructureRequest:
             "result_mode": self.result_mode.value,
             "repeat_policy": self.repeat_policy.value,
             "bounds": self.bounds.to_dict(),
+            "filters": self.filters.to_record(),
+            "eligibility": self.eligibility.to_record(),
         }
 
     @classmethod
@@ -328,6 +365,8 @@ class StructureRequest:
             result_mode=ResultMode(raw["result_mode"]),
             repeat_policy=RepeatPolicy(raw["repeat_policy"]),
             bounds=SelectionBounds.from_dict(raw["bounds"]),
+            filters=StructureFilters.from_record(raw["filters"]),
+            eligibility=Eligibility.from_record(raw["eligibility"]),
         )
 
 
@@ -809,6 +848,12 @@ class StructureAssessmentResult:
     unresolved_refs: tuple[str, ...] = ()
     unsupported_refs: tuple[str, ...] = ()
     notes: tuple[str, ...] = ()
+    #: What a unit's own review status may be: the effective statuses plus the terminal ones the request lifted.
+    candidate_statuses: tuple[RecordReviewStatus, ...] = ()
+    #: Each unit's verdict record under the request's eligibility settings, by unit ref (JSON-ready).
+    verdicts: dict[str, dict[str, Any]] = field(default_factory=dict)
+    #: The recorded funnel (``selection_kernel.requested.funnel``).
+    funnel: dict[str, Any] = field(default_factory=dict)
 
 
 def finite(value: float | None) -> bool:

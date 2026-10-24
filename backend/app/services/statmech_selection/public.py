@@ -38,6 +38,7 @@ from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
 from app.schemas.reads.scientific_selection_common import (
     ELIGIBILITY_CONFIRMED_FINDINGS,
     ELIGIBILITY_DEPRECATED,
+    ELIGIBILITY_ENTRY_STATUS,
     ELIGIBILITY_REJECTED,
 )
 from app.schemas.reads.scientific_statmech_selection import (
@@ -200,6 +201,11 @@ def run_selection(session: Session, *, body: StatmechSelectionRequest) -> Statme
 STATMECH_DEFAULTS = (ELIGIBILITY_REJECTED, ELIGIBILITY_DEPRECATED, ELIGIBILITY_CONFIRMED_FINDINGS)
 
 
+def statmech_defaults(owner_kind: str) -> tuple[str, ...]:
+    """A species entry is a scoping parent; a transition-state entry still gates its candidates."""
+    return (*STATMECH_DEFAULTS, ELIGIBILITY_ENTRY_STATUS) if owner_kind == OwnerKind.transition_state_entry.value else STATMECH_DEFAULTS
+
+
 def _candidate(facts: dict[str, Any], assessment: dict[str, Any], verdict: dict[str, Any]) -> StatmechSelectionCandidate:
     return StatmechSelectionCandidate(
         blocked_by=verdict["blocked_by"],
@@ -246,7 +252,7 @@ def build_response(selection: StatmechSelection) -> StatmechSelectionResponse:
             ),
             eligibility_record=manifest["request"]["eligibility"],
             funnel_record=population["funnel"],
-            names=STATMECH_DEFAULTS,
+            names=statmech_defaults(manifest["request"]["target"]["kind"]),
             profile_floor=manifest["read_profile"]["review_floor"] is not None,
         ),
         versions=manifest["versions"],
