@@ -25,6 +25,7 @@ from app.api.error_contract import CodedValueError
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import SelectionPolicy
 from app.services.selection_kernel import Applicability
+from app.services.selection_kernel.requested import Eligibility
 
 QUANTITY = "rate_coefficient"
 PHASE = "gas"
@@ -165,6 +166,34 @@ class OutputRequest:
 
 
 @dataclass(frozen=True)
+class NetworkFilters:
+    """The caller's filters, with the network-kinetics search's vocabulary and meaning (public values only).
+
+    ``model_kind`` keeps the fits of that form (a solve with none is out). The provenance fields keep a solve when at
+    least one of its source calculations the read profile shows matches every one supplied.
+    """
+
+    model_kind: str | None = None
+    method: str | None = None
+    basis: str | None = None
+    software: str | None = None
+    software_version: str | None = None
+    workflow_tool: str | None = None
+    workflow_tool_version: str | None = None
+
+    def to_record(self) -> dict[str, Any]:
+        return {k: v for k, v in self.__dict__.items() if v is not None}
+
+    @classmethod
+    def from_record(cls, raw: dict[str, Any]) -> NetworkFilters:
+        return cls(**raw)
+
+    @property
+    def active(self) -> bool:
+        return any(v is not None for v in self.__dict__.values())
+
+
+@dataclass(frozen=True)
 class NetworkRequest:
     """The normalised request: a gas-phase, finite-pressure rate coefficient of one network.
 
@@ -200,6 +229,8 @@ class NetworkRequest:
     admin_policy: SelectionPolicy = SelectionPolicy.default
     first_only: bool = False
     bounds: SelectionBounds = field(default=DEFAULT_BOUNDS)
+    filters: NetworkFilters = field(default_factory=NetworkFilters)
+    eligibility: Eligibility = field(default_factory=Eligibility)
 
     def __post_init__(self) -> None:
         if self.coefficient_basis not in {"kernel", "composition_effective"}:
@@ -273,6 +304,8 @@ class NetworkRequest:
             "administrative_policy": self.admin_policy.value,
             "result_mode": "first" if self.first_only else "all",
             "bounds": self.bounds.to_dict(),
+            "filters": self.filters.to_record(),
+            "eligibility": self.eligibility.to_record(),
         }
 
     @classmethod
@@ -302,6 +335,8 @@ class NetworkRequest:
             admin_policy=SelectionPolicy(raw["administrative_policy"]),
             first_only=raw["result_mode"] == "first",
             bounds=SelectionBounds.from_dict(raw["bounds"]),
+            filters=NetworkFilters.from_record(raw["filters"]),
+            eligibility=Eligibility.from_record(raw["eligibility"]),
         )
 
 
@@ -683,3 +718,5 @@ class NetworkAssessmentResult:
     unresolved_refs: tuple[str, ...] = ()
     unsupported_refs: tuple[str, ...] = ()
     notes: tuple[str, ...] = ()
+    #: The recorded funnel, counted in solves (``selection_kernel.requested.funnel``).
+    funnel: dict[str, Any] = field(default_factory=dict)

@@ -210,22 +210,18 @@ def test_counts_cover_the_rows_the_caller_can_see_and_nothing_else(db_session):
 # ---------------------------------------------------------------------------
 
 
-def test_the_entrys_review_floor_applies_to_a_calculation_as_it_does_to_a_determination(db_session):
+def test_a_species_entrys_review_status_never_excludes_a_calculation_or_a_basin(db_session):
+    """A species entry is a scoping parent (owner decision 2026-10-24): the unit's own review decides, not its entry's."""
     world = make_world(db_session, entry_status=None)  # the entry itself is not reviewed
-    c = world.sp("c", -76.4, declared=declaration())
+    world.sp("c", -76.4, declared=declaration(), status=RecordReviewStatus.approved)
+    world.settle()
     floor = RecordReviewStatus.approved
     result = run(db_session, world, request(min_review_status=floor))
-    assert result.assessments == ()
-    assert [(e["unit_ref"], e["reason"]) for e in result.excluded_by_review] == [(c.public_ref, "owner_below_review_floor")]
-    # The same entry's determination is excluded for the same reason.
+    assert len(result.assessments) == 1 and result.excluded_by_review == ()
     d_world = make_world(db_session, entry_status=None)
     d, *_ = build_basin(d_world)
     d_result = run(db_session, d_world, minimum_request(min_review_status=floor))
-    assert [(e["unit_ref"], e["reason"]) for e in d_result.excluded_by_review] == [(d.public_ref, "owner_below_review_floor")]
-    # An approved entry lets the calculation through.
-    ok_world = make_world(db_session)
-    ok_world.sp("c", -76.4, declared=declaration())
-    assert len(run(db_session, ok_world, request(min_review_status=floor)).assessments) == 1
+    assert d.public_ref in {a.unit_ref for a in d_result.assessments} and d_result.excluded_by_review == ()
 
 
 # ---------------------------------------------------------------------------

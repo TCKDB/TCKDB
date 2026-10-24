@@ -169,24 +169,29 @@ def test_an_unapproved_record_is_hidden_without_trace_under_the_curated_profile(
     assert open_.total_units == 2
 
 
-def test_a_hidden_entry_behaves_exactly_like_a_missing_one(db_session):
-    hidden = make_world(db_session, entry_status=RecordReviewStatus.under_review)
+def test_a_hidden_transition_state_entry_behaves_exactly_like_a_missing_one_and_a_species_entry_is_never_hidden(db_session):
+    from app.services.structure_selection.loader import assert_subject_visible
+    from app.services.structure_selection.models import Grain
+    from tests.services.structure_selection._support import make_ts_world
+
+    hidden = make_ts_world(db_session, entry_status=RecordReviewStatus.under_review)
     hidden.settle()
+    species = make_world(db_session, entry_status=RecordReviewStatus.under_review)
+    species.settle()
     token = curated()
     try:
+        profile = frozenset({RecordReviewStatus.approved})
         with pytest.raises(NotFoundError) as exc_hidden:
-            run(db_session, hidden, request())
+            assert_subject_visible(db_session, Grain.transition_state, hidden.entry.id, profile=profile)
         with pytest.raises(NotFoundError) as exc_missing:
-            assess_entry_structures(
-                db_session, entry_id=hidden.entry.id + 10_000_000, request=request(), require_snapshot=False
-            )
+            assert_subject_visible(db_session, Grain.transition_state, hidden.entry.id + 10_000_000, profile=profile)
+        # a species entry is a scoping parent: it is a visible target under every profile
+        assert_subject_visible(db_session, Grain.conformer, species.entry.id, profile=profile)
     finally:
         reset_current_read_profile(token)
-    # The same code and the same words, the one difference being the ref the caller supplied, which an unknown ref's 404
-    # echoes too when the route resolves it (the route-level test compares the whole bodies). No row id is named.
     assert exc_hidden.value.code == exc_missing.value.code == "handle_not_found"
-    assert str(exc_hidden.value) == f"species_entry not found (species_entry_ref={hidden.entry.public_ref!r})"
-    assert str(exc_missing.value) == "species_entry not found"
+    assert str(exc_hidden.value) == f"transition_state_entry not found (transition_state_entry_ref={hidden.entry.public_ref!r})"
+    assert str(exc_missing.value) == "transition_state_entry not found"
     assert not id_in_text(hidden.entry.id, str(exc_hidden.value))
 
 
@@ -478,7 +483,7 @@ def test_the_owning_observation_is_judged_at_its_own_grain_not_through_its_group
     assert d.public_ref in by_ref(open_)
     floor = run(db_session, world, minimum_request(min_review_status=RecordReviewStatus.approved))
     # The group is approved; the observation is not, and group approval does not approve it.
-    assert floor.assessments == () and [e["reason"] for e in floor.excluded_by_review] == ["owner_below_review_floor"]
+    assert floor.assessments == () and [e["reason"] for e in floor.excluded_by_review] == ["below_review_floor"]
     set_review(db_session, record_type=SubmissionRecordType.conformer_observation, record_id=obs.id, status=RecordReviewStatus.approved)
     again = run(db_session, world, minimum_request(min_review_status=RecordReviewStatus.approved))
     assert d.public_ref in by_ref(again)

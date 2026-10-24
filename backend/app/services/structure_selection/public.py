@@ -29,6 +29,13 @@ from app.db.models.geometry import Geometry
 from app.db.models.species import SpeciesEntry
 from app.db.models.transition_state import TransitionStateEntry
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
+from app.schemas.reads.scientific_selection_common import (
+    ELIGIBILITY_CONFIRMED_FINDINGS,
+    ELIGIBILITY_DEPRECATED,
+    ELIGIBILITY_ENTRY_STATUS,
+    ELIGIBILITY_REJECTED,
+    ELIGIBILITY_REJECTED_QUALITY,
+)
 from app.schemas.reads.scientific_structure_selection import (
     CalculationSelectionRequest,
     ConformerSelectionRequest,
@@ -41,8 +48,9 @@ from app.schemas.reads.scientific_structure_selection import (
     TransitionStateEvidenceSelectionRequest,
 )
 from app.services.scientific_read.handles import is_ref_handle, resolve_path_handle
+from app.services.selection_kernel.requested import answer_steps
 from app.services.structure_selection.bounds import parse_quantity
-from app.services.structure_selection.models import Quantity, StructureOutcome, StructureRequest
+from app.services.structure_selection.models import Grain, Quantity, StructureOutcome, StructureRequest
 from app.services.structure_selection.selection import StructureSelection, select_entry_structures
 
 #: ``Session.info`` key a TEST harness sets, explicitly, to be read under whatever isolation it already has.
@@ -102,6 +110,15 @@ def run_selection(session: Session, *, entry_id: int, body: SelectionBody) -> St
     )
 
 
+def structure_defaults(grain: str) -> tuple[str, ...]:
+    """The eligibility defaults a structure selection applies at a grain, in the order the answer lists them."""
+    names = (ELIGIBILITY_REJECTED, ELIGIBILITY_DEPRECATED, ELIGIBILITY_CONFIRMED_FINDINGS)
+    if grain == Grain.calculation.value:
+        return (*names, ELIGIBILITY_REJECTED_QUALITY)
+    # A species entry is a scoping parent and never excludes; a transition-state entry still gates its evidence.
+    return (*names, ELIGIBILITY_ENTRY_STATUS) if grain == Grain.transition_state.value else names
+
+
 def _echo(manifest: dict[str, Any], entry_ref: str) -> StructureSelectionRequestEcho:
     request = manifest["request"]
     return StructureSelectionRequestEcho(
@@ -122,6 +139,8 @@ def _echo(manifest: dict[str, Any], entry_ref: str) -> StructureSelectionRequest
         result_mode=request["result_mode"],
         repeat_policy=request["repeat_policy"],
         bounds=request["bounds"],
+        filters=request["filters"],
+        eligibility=request["eligibility"],
     )
 
 
@@ -140,8 +159,11 @@ def build_response(selection: StructureSelection, *, entry_ref: str) -> Structur
     units = []
     for unit_ref, assessment in by_unit.items():
         row = rows[unit_ref]
+        verdict = manifest["verdicts"][unit_ref]
         units.append(
             StructureSelectionUnit(
+                blocked_by=verdict["blocked_by"],
+                passed_only_by_override=verdict["passed_only_by_override"],
                 unit_ref=unit_ref,
                 review_status=row["review_status"],
                 created_at=row["created_at"],
@@ -153,12 +175,29 @@ def build_response(selection: StructureSelection, *, entry_ref: str) -> Structur
                 energy=assessment["energy"],
                 recipe=assessment["recipe"],
                 claim=assessment["claim"],
-                eligible=assessment["physically_eligible"],
+                eligible=verdict["competes"],
             )
         )
     return StructureSelectionResponse(
         request=_echo(manifest, entry_ref),
-        review=StructureSelectionReview(effective_floor=floor, effective_statuses=statuses),
+        review=StructureSelectionReview(
+            effective_floor=floor,
+            effective_statuses=statuses,
+            candidate_statuses=sorted(
+                (RecordReviewStatus(v) for v in manifest["candidate_review_statuses"]), key=lambda s: REVIEW_FLOOR_ORDER[s]
+            ),
+        ),
+        **answer_steps(
+            request_filters=manifest["request"]["filters"],
+            min_review_status=(
+                RecordReviewStatus(manifest["request"]["min_review_status"]) if manifest["request"]["min_review_status"] else None
+            ),
+            eligibility_record=manifest["request"]["eligibility"],
+            funnel_record=population["funnel"],
+            names=structure_defaults(manifest["request"]["grain"]),
+            profile_floor=manifest["read_profile"]["review_floor"] is not None,
+            extra_lifts=("rejected_calculation_quality",) if "rejected" in manifest["request"]["permitted_quality"] else (),
+        ),
         outcome=StructureOutcome(manifest["outcome"]),
         basis=decision["basis"],
         selected_refs=decision["selected_refs"],

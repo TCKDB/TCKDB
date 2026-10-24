@@ -23,7 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pydantic import ValidationError
 from sqlalchemy import Float, func, select
@@ -37,7 +37,7 @@ from tckdb_schemas.network_declarations import (
 )
 
 from app.api.errors import not_found
-from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+from app.db.models.common import NetworkKineticsModelKind, RecordReviewStatus, SubmissionRecordType
 from app.db.models.network import Network
 from app.db.models.network_pdep import (
     NetworkChannel,
@@ -48,6 +48,7 @@ from app.db.models.network_pdep import (
     NetworkKineticsPoint,
     NetworkSolve,
     NetworkSolveBathGas,
+    NetworkSolveSourceCalculation,
     NetworkState,
     NetworkStateParticipant,
 )
@@ -58,6 +59,7 @@ from app.services.network_selection.models import (
     DeterminationFacts,
     FitFacts,
     NetworkFacts,
+    NetworkFilters,
     NetworkRequest,
     Scope,
     SolveFacts,
@@ -65,6 +67,8 @@ from app.services.network_selection.models import (
 )
 from app.services.scientific_read.common import fetch_review_badges, visible_statuses
 from app.services.scientific_read.network_declarations import solve_ref_is_visible
+from app.services.selection_filters import filter_by_provenance
+from app.services.selection_kernel.requested import review_default
 
 #: The exclusion listing is bounded; the total is always reported.
 MAX_EXCLUDED_LISTED = 100
@@ -86,11 +90,43 @@ class PopulationScan:
     excluded: tuple[tuple[int, RecordReviewStatus, str], ...]
     total_rows: int
     counts: dict[str, int]
+    considered: int = 0
+    removed_by_filters: int = 0
+    terminal_excluded: dict[str, int] = field(default_factory=dict)
 
 
 def _profile_visible() -> frozenset[RecordReviewStatus]:
     """Statuses the read profile itself allows a caller to know exist (rejected and deprecated included)."""
     return frozenset(visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True))
+
+
+def apply_filters(session: Session, ids: list[int], filters: NetworkFilters) -> list[int]:
+    """The solve ids the caller's filters keep: the network-kinetics search's matching, through each solve's source calculations."""
+    if not ids or not filters.active:
+        return ids
+    keep = set(ids)
+    if filters.model_kind is not None:
+        keep = set(
+            session.scalars(
+                select(NetworkKinetics.solve_id)
+                .where(NetworkKinetics.solve_id.in_(keep), NetworkKinetics.model_kind == NetworkKineticsModelKind(filters.model_kind))
+                .distinct()
+            )
+        )
+    provenance = {
+        k: getattr(filters, k)
+        for k in ("method", "basis", "software", "software_version", "workflow_tool", "workflow_tool_version")
+    }
+    if keep and any(v is not None for v in provenance.values()):
+        links: dict[int, set[int]] = {i: set() for i in keep}
+        for solve_id, calculation_id in session.execute(
+            select(NetworkSolveSourceCalculation.solve_id, NetworkSolveSourceCalculation.calculation_id).where(
+                NetworkSolveSourceCalculation.solve_id.in_(keep)
+            )
+        ):
+            links[solve_id].add(calculation_id)
+        keep = filter_by_provenance(session, links, **provenance)
+    return [i for i in ids if i in keep]
 
 
 def scan_population(session: Session, *, request: NetworkRequest) -> PopulationScan:
@@ -120,22 +156,38 @@ def scan_population(session: Session, *, request: NetworkRequest) -> PopulationS
     check_bound(bounds, "channels", counts["channels"])
     check_bound(bounds, "required_outputs", counts["required_outputs"])
 
+    elig = request.eligibility
     effective = frozenset(
-        visible_statuses(min_review_status=request.min_review_status, include_rejected=False, include_deprecated=False)
+        visible_statuses(
+            min_review_status=request.min_review_status,
+            include_rejected=elig.include_rejected,
+            include_deprecated=elig.include_deprecated,
+        )
     )
-    ids = list(session.scalars(select(NetworkSolve.id).where(NetworkSolve.network_id == network.id).order_by(NetworkSolve.id)))
-    badges = fetch_review_badges(session, record_type=SubmissionRecordType.network_solve, record_ids=ids)
+    all_ids = list(session.scalars(select(NetworkSolve.id).where(NetworkSolve.network_id == network.id).order_by(NetworkSolve.id)))
+    badges = fetch_review_badges(session, record_type=SubmissionRecordType.network_solve, record_ids=all_ids)
     visible = _profile_visible()
-    ids = [i for i in ids if badges[i].status in visible]
+    ids = [i for i in all_ids if badges[i].status in visible]
     status = {i: badges[i].status for i in ids}
-    population = tuple(i for i in ids if status[i] in effective)
+    kept = apply_filters(session, ids, request.filters)
+    population_list: list[int] = []
+    excluded_list: list[tuple[int, RecordReviewStatus, str]] = []
+    terminal_excluded: dict[str, int] = {}
+    below_floor = 0
+    for i in kept:
+        default = review_default(status[i])
+        if default is not None and not elig.lifts(default):
+            excluded_list.append((i, status[i], REASON_TERMINAL))
+            terminal_excluded[default] = terminal_excluded.get(default, 0) + 1
+        elif status[i] not in effective:
+            excluded_list.append((i, status[i], REASON_BELOW_FLOOR))
+            below_floor += 1
+        else:
+            population_list.append(i)
+    population = tuple(population_list)
     counts["solves"] = len(population)
     check_bound(bounds, "solves", counts["solves"])
-    excluded = tuple(
-        (i, status[i], REASON_TERMINAL if status[i] in _TERMINAL else REASON_BELOW_FLOOR)
-        for i in ids
-        if status[i] not in effective
-    )
+    excluded = tuple(excluded_list)
 
     if population:
         counts["kinetics_parents"] = (
@@ -233,6 +285,9 @@ def scan_population(session: Session, *, request: NetworkRequest) -> PopulationS
         excluded=excluded,
         total_rows=len(ids),
         counts=counts,
+        considered=len(ids),
+        removed_by_filters=(len(ids) - len(kept)) + below_floor,
+        terminal_excluded=terminal_excluded,
     )
 
 
@@ -367,11 +422,11 @@ def load_population(session: Session, scan: PopulationScan, request: NetworkRequ
     )
     det_rank = {d.id: n for n, d in enumerate(determinations, start=1)}
     det_ref = {d.id: d.public_ref for d in determinations}
-    fits = list(
-        session.scalars(
-            select(NetworkKinetics).where(NetworkKinetics.solve_id.in_(scan.solve_ids)).order_by(NetworkKinetics.id)
-        )
-    )
+    fit_query = select(NetworkKinetics).where(NetworkKinetics.solve_id.in_(scan.solve_ids))
+    if request.filters.model_kind is not None:
+        # The model-form filter keeps the fits of that form; a fit of another form is not a candidate representation.
+        fit_query = fit_query.where(NetworkKinetics.model_kind == NetworkKineticsModelKind(request.filters.model_kind))
+    fits = list(session.scalars(fit_query.order_by(NetworkKinetics.id)))
     fit_ids = [f.id for f in fits]
     cheb = {
         c.network_kinetics_id: c

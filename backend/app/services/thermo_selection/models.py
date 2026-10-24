@@ -16,6 +16,7 @@ from app.db.models.common import RecordReviewStatus, ThermoTargetKind
 from app.schemas.reads.scientific_common import SelectionPolicy
 from app.services.manifest_formats import new_current_only_registry, new_format_registry
 from app.services.selection_kernel import Applicability, Outcome
+from app.services.selection_kernel.requested import Eligibility
 
 #: The one quantity this selector answers.
 QUANTITY = "formation_enthalpy_298k"
@@ -35,21 +36,50 @@ POLICY_NAME = "h298_selection"
 #: The name changed with the removal of the method-preference rules (it was ``h298_method_preferred``).
 POLICY_VERSION = 1
 #: Version of how eligibility is assessed: an automated geometry-validation fail is advisory and a live confirmed
-#: finding about a source calculation excludes the record (``structure_selection.source_findings``). A manifest with no
+#: finding about a source calculation excludes the record (``structure_selection.source_findings``). Version 2: each of
+#: those exclusions, and the rejected and deprecated review statuses, is a named default the request may lift, and the
+#: recorded ``eligible`` flag is the verdict under the request's own settings (``selection_kernel.requested``). A manifest with no
 #: block, or one recording a version the registry does not hold, is refused on replay.
-ASSESSMENT_SEMANTICS_VERSION = 1
+ASSESSMENT_SEMANTICS_VERSION = 2
 ASSESSMENT_SEMANTICS_NAME = "thermo_selection_assessment"
 ASSESSMENT_SEMANTICS = new_current_only_registry(
     "thermo_selection_assessment_semantics", ASSESSMENT_SEMANTICS_NAME, ASSESSMENT_SEMANTICS_VERSION
 )
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
 #: reads exactly this format; a manifest in any other is refused. Version 2: the decision no longer holds rules,
-#: rule matches, edges, overridden edges, opposing pairs or cycles.
-MANIFEST_FORMAT_VERSION = 2
+#: rule matches, edges, overridden edges, opposing pairs or cycles. Version 3: the request records its filters and its
+#: eligibility settings, each candidate records which defaults it failed or passed only by override, and the population
+#: records the funnel.
+MANIFEST_FORMAT_VERSION = 3
 MANIFEST_FORMAT_NAME = "thermo_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "thermo_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
 )
+
+
+@dataclass(frozen=True)
+class ThermoFilters:
+    """The caller's filters, with the per-entry thermo browse's vocabulary and meaning (public refs only).
+
+    :param model_kind: The stored model form (``scalar``, ``nasa``, ``nasa9``, ``wilhoit``, ``points``).
+    :param level_of_theory_ref: ANY shown source calculation ran at this level of theory.
+    :param software: ANY shown source calculation ran in a software of this name.
+    """
+
+    model_kind: str | None = None
+    level_of_theory_ref: str | None = None
+    software: str | None = None
+
+    def to_record(self) -> dict[str, Any]:
+        return {k: v for k, v in self.__dict__.items() if v is not None}
+
+    @classmethod
+    def from_record(cls, raw: dict[str, Any]) -> ThermoFilters:
+        return cls(**raw)
+
+    @property
+    def active(self) -> bool:
+        return any(v is not None for v in self.__dict__.values())
 
 
 @dataclass(frozen=True)
@@ -62,6 +92,8 @@ class H298Request:
     :param min_review_status: Optional caller floor; the read-profile floor is applied on top.
     :param admin_policy: Administrative order of the eligible candidates. Display order, never a method preference.
     :param max_candidates: Population cap; the endpoint contract is 500.
+    :param filters: The caller's filters, applied before eligibility.
+    :param eligibility: The eligibility defaults the caller lifted.
     """
 
     target_kind: ThermoTargetKind
@@ -69,6 +101,8 @@ class H298Request:
     min_review_status: RecordReviewStatus | None = None
     admin_policy: SelectionPolicy = SelectionPolicy.default
     max_candidates: int = MAX_CANDIDATES
+    filters: ThermoFilters = field(default_factory=ThermoFilters)
+    eligibility: Eligibility = field(default_factory=Eligibility)
 
     def __post_init__(self) -> None:
         if self.target_kind is ThermoTargetKind.single_conformer and self.conformer_group_id is None:

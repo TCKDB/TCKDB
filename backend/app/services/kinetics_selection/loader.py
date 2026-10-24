@@ -27,8 +27,14 @@ from tckdb_schemas.kinetics_declarations import (
 from app.api.error_contract import CodedValueError
 from app.api.errors import not_found
 from app.db.models.calculation import Calculation
-from app.db.models.common import KineticsCalculationRole, ReactionRole, RecordReviewStatus, SubmissionRecordType
-from app.db.models.kinetics import Kinetics, KineticsDetermination
+from app.db.models.common import (
+    KineticsCalculationRole,
+    KineticsModelKind,
+    ReactionRole,
+    RecordReviewStatus,
+    SubmissionRecordType,
+)
+from app.db.models.kinetics import Kinetics, KineticsDetermination, KineticsSourceCalculation
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.network import Network
 from app.db.models.network_pdep import NetworkChannel, NetworkKinetics
@@ -37,6 +43,7 @@ from app.db.models.species import Species, SpeciesEntry
 from app.db.models.transition_state import TransitionStateEntry
 from app.services.kinetics_selection.models import (
     DeterminationFacts,
+    KineticsFilters,
     KineticsRequest,
     KineticsSubject,
     NormalizedKinetics,
@@ -46,6 +53,8 @@ from app.services.scientific_read.common import fetch_review_badges, visible_sta
 from app.services.scientific_read.handles import canonical_level_of_theory_id
 from app.services.scientific_read.kinetics import KINETICS_TRUST_EAGER_LOADS
 from app.services.scientific_read.ref_guard import unavailable_refs
+from app.services.selection_filters import filter_by_level_and_software
+from app.services.selection_kernel.requested import review_default
 
 CODE_POPULATION_TOO_LARGE = "kinetics_selection_population_too_large"
 #: The exclusion listing is bounded: under a strict floor nearly every row of a large population can be excluded,
@@ -68,7 +77,11 @@ _LOAD_OPTIONS = (
 
 @dataclass(frozen=True)
 class PopulationScan:
-    """Ids and review states of one reaction entry's kinetics rows, partitioned before anything is loaded."""
+    """Ids and review states of one reaction entry's kinetics rows, partitioned before anything is loaded.
+
+    ``considered`` counts the rows the read profile shows; ``removed_by_filters`` those the caller's filters (and own
+    review floor) removed; ``terminal_excluded`` those a not-lifted review default removed, by default name.
+    """
 
     reaction_entry_id: int
     effective_statuses: frozenset[RecordReviewStatus]
@@ -77,6 +90,9 @@ class PopulationScan:
     excluded: tuple[tuple[int, RecordReviewStatus, str], ...]
     total_rows: int
     cap: int
+    considered: int = 0
+    removed_by_filters: int = 0
+    terminal_excluded: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -95,38 +111,80 @@ class LoadedPopulation:
         return {c.kinetics_ref: c for c in self.candidates.values()}
 
 
-def scan_population(session: Session, *, reaction_entry_id: int, request: KineticsRequest) -> PopulationScan:
-    """Partition the entry's kinetics rows by review state; load nothing else.
+def apply_filters(session: Session, ids: list[int], filters: KineticsFilters) -> list[int]:
+    """The ids the caller's filters keep: the per-entry kinetics browse's matching, applied to the profile-visible rows."""
+    if not ids or not filters.active:
+        return ids
+    keep = set(ids)
+    if filters.model_kind is not None:
+        keep = set(
+            session.scalars(
+                select(Kinetics.id).where(Kinetics.id.in_(keep), Kinetics.model_kind == KineticsModelKind(filters.model_kind))
+            )
+        )
+    if keep and (filters.level_of_theory_ref is not None or filters.software is not None):
+        links: dict[int, set[int]] = {i: set() for i in keep}
+        for kinetics_id, calculation_id in session.execute(
+            select(KineticsSourceCalculation.kinetics_id, KineticsSourceCalculation.calculation_id).where(
+                KineticsSourceCalculation.kinetics_id.in_(keep)
+            )
+        ):
+            links[kinetics_id].add(calculation_id)
+        keep = filter_by_level_and_software(
+            session, links, level_of_theory_ref=filters.level_of_theory_ref, software=filters.software
+        )
+    return [i for i in ids if i in keep]
 
-    The population is every row whose review status passes the effective floor (the caller's
-    ``min_review_status`` combined with the read profile's floor) and is not rejected or
-    deprecated. Rows the caller's own floor or the terminal states exclude are listed with why; rows
-    the *profile* hides are dropped without trace, so no count or ref reveals them.
+
+def scan_population(session: Session, *, reaction_entry_id: int, request: KineticsRequest) -> PopulationScan:
+    """Partition the entry's kinetics rows by the caller's filters and review state; load nothing else.
+
+    In order: rows the read profile hides are not part of this request's world (never counted, never listed, never
+    named in a refusal); the caller's filters narrow the rest; a rejected or deprecated row is kept out unless the
+    request lifted that default; a row below the caller's own review floor is kept out; the remainder is the
+    population. Rows kept out by review are listed with why.
 
     :raises NotFoundError: if the reaction entry does not exist.
-    :raises CodedValueError: ``kinetics_selection_population_too_large`` when the visible
-        population exceeds ``request.max_candidates``. Nothing is assessed, nothing is chosen from
-        a prefix, and the count named is of visible rows only.
+    :raises CodedValueError: ``kinetics_selection_population_too_large`` when the population exceeds
+        ``request.max_candidates``. Nothing is assessed, nothing is chosen from a prefix, and the count named is of
+        rows that passed the filters and the review defaults.
     """
     if session.get(ReactionEntry, reaction_entry_id) is None:
         raise not_found("reaction_entry", row_id=reaction_entry_id)
+    elig = request.eligibility
     effective = frozenset(
         visible_statuses(
-            min_review_status=request.min_review_status, include_rejected=False, include_deprecated=False
+            min_review_status=request.min_review_status,
+            include_rejected=elig.include_rejected,
+            include_deprecated=elig.include_deprecated,
         )
     )
-    ids = list(
+    all_ids = list(
         session.scalars(select(Kinetics.id).where(Kinetics.reaction_entry_id == reaction_entry_id).order_by(Kinetics.id))
     )
-    badges = fetch_review_badges(session, record_type=SubmissionRecordType.kinetics, record_ids=ids)
+    badges = fetch_review_badges(session, record_type=SubmissionRecordType.kinetics, record_ids=all_ids)
     # Rows the read profile itself hides (under ``curated``: everything below ``approved``) are not part of
     # this request's world at all: never counted, never listed, never named in a refusal.
     profile_visible = frozenset(
         visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
     )
-    ids = [i for i in ids if badges[i].status in profile_visible]
+    ids = [i for i in all_ids if badges[i].status in profile_visible]
     status = {i: badges[i].status for i in ids}
-    population = tuple(i for i in ids if status[i] in effective)
+    kept = apply_filters(session, ids, request.filters)
+    population: list[int] = []
+    excluded: list[tuple[int, RecordReviewStatus, str]] = []
+    terminal_excluded: dict[str, int] = {}
+    below_floor = 0
+    for i in kept:
+        default = review_default(status[i])
+        if default is not None and not elig.lifts(default):
+            excluded.append((i, status[i], REASON_TERMINAL))
+            terminal_excluded[default] = terminal_excluded.get(default, 0) + 1
+        elif status[i] not in effective:
+            excluded.append((i, status[i], REASON_BELOW_FLOOR))
+            below_floor += 1
+        else:
+            population.append(i)
     if len(population) > request.max_candidates:
         raise CodedValueError(
             CODE_POPULATION_TOO_LARGE,
@@ -135,19 +193,17 @@ def scan_population(session: Session, *, reaction_entry_id: int, request: Kineti
             context={"visible_candidates": len(population), "limit": request.max_candidates},
             message_prefix=False,
         )
-    excluded = tuple(
-        (i, status[i], REASON_TERMINAL if status[i] in _TERMINAL else REASON_BELOW_FLOOR)
-        for i in ids
-        if status[i] not in effective
-    )
     return PopulationScan(
         reaction_entry_id=reaction_entry_id,
         effective_statuses=effective,
-        population_ids=population,
+        population_ids=tuple(population),
         review_status=status,
-        excluded=excluded,
+        excluded=tuple(excluded),
         total_rows=len(ids),
         cap=request.max_candidates,
+        considered=len(ids),
+        removed_by_filters=(len(ids) - len(kept)) + below_floor,
+        terminal_excluded=terminal_excluded,
     )
 
 

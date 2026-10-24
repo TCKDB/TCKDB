@@ -28,6 +28,7 @@ from app.services.scientific_read.profile import (
     set_current_read_profile,
 )
 from app.services.selection_kernel import Outcome
+from tests.services._select_steps import MANIFEST_STEP_COUNT_PATHS
 from tests.services.kinetics_selection.test_service import (
     REQUEST,
     declared,
@@ -178,6 +179,7 @@ ALLOWED_INTEGER_PATHS = {
     "candidates[].id_rank", "candidates[].arrhenius_terms", "candidates[].reactant_stoichiometries[]",
     "candidates[].product_stoichiometries[]", "candidates[].applicability.version", "candidates[].protocol.version",
     "candidates[].applicability.reaction_order", "determinations[].representation_count",
+    *MANIFEST_STEP_COUNT_PATHS,
 }
 
 

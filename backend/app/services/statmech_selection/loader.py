@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.error_contract import CodedValueError
 from app.api.errors import NotFoundError, not_found
 from app.db.models.calculation import Calculation
-from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+from app.db.models.common import RecordReviewStatus, StatmechTreatmentKind, SubmissionRecordType
 from app.db.models.energy_correction import FrequencyScaleFactor
 from app.db.models.geometry import Geometry
 from app.db.models.literature import Literature
@@ -41,10 +41,13 @@ from app.db.models.statmech import Statmech, StatmechElectronicLevel, StatmechSo
 from app.db.models.statmech_declaration import StatmechModelDeclaration, StatmechModelMember, StatmechModelSource
 from app.db.models.structure_determination import StructureDetermination, StructureDeterminationSource
 from app.db.models.transition_state import TransitionStateEntry
+from app.schemas.reads.scientific_selection_common import ELIGIBILITY_ENTRY_STATUS
 from app.services.monatomic import subject_atom_count
 from app.services.scientific_read.common import fetch_review_badges, visible_statuses
 from app.services.scientific_read.ref_guard import unavailable_refs
 from app.services.scientific_read.supersession import fetch_supersession_notices
+from app.services.selection_filters import filter_by_provenance
+from app.services.selection_kernel.requested import review_default
 from app.services.statmech_selection.bounds import (
     check_candidates,
     check_nested_rows,
@@ -63,7 +66,7 @@ from app.services.statmech_selection.facts import (
     TorsionFacts,
 )
 from app.services.statmech_selection.inventory import load_legacy_facts
-from app.services.statmech_selection.models import StatmechRequest
+from app.services.statmech_selection.models import StatmechFilters, StatmechRequest
 from app.services.statmech_selection.vocabulary import CandidateKind, OwnerKind, PopulationKind
 from app.services.structure_selection.bounds import CODE_TRAVERSAL_TOO_DEEP as STRUCTURE_TRAVERSAL_TOO_DEEP
 from app.services.structure_selection.loader import (
@@ -106,6 +109,13 @@ class PopulationScan:
     excluded: tuple[tuple[int, RecordReviewStatus | None, str], ...]
     total: int
     nested_rows: int
+    #: What a candidate's own review status may be: ``effective_statuses`` plus the terminal statuses the request lifted.
+    candidate_statuses: frozenset[RecordReviewStatus] = frozenset()
+    #: Rows the read profile shows, before any step; those the explicit population and the filters removed; and those a
+    #: not-lifted review default kept out, by default name.
+    considered: int = 0
+    removed_by_filters: int = 0
+    terminal_excluded: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -128,6 +138,50 @@ def _statuses(request: StatmechRequest) -> tuple[frozenset[RecordReviewStatus], 
     return effective, profile
 
 
+def candidate_statuses(request: StatmechRequest) -> frozenset[RecordReviewStatus]:
+    """What a candidate's own review status may be: the caller's floor over the profile's, plus the lifted terminal statuses.
+
+    Under a read profile with a review floor ``visible_statuses`` ignores the lift: ``curated`` cannot be overridden.
+    """
+    e = request.eligibility
+    return frozenset(
+        visible_statuses(
+            min_review_status=request.min_review_status,
+            include_rejected=e.include_rejected,
+            include_deprecated=e.include_deprecated,
+        )
+    )
+
+
+def apply_filters(session: Session, ids: list[int], filters: StatmechFilters) -> list[int]:
+    """The ids the caller's filters keep: the statmech search's matching, through each record's source calculations."""
+    if not ids or not filters.active:
+        return ids
+    keep = set(ids)
+    if filters.model_kind is not None:
+        keep = set(
+            session.scalars(
+                select(Statmech.id).where(
+                    Statmech.id.in_(keep), Statmech.statmech_treatment == StatmechTreatmentKind(filters.model_kind)
+                )
+            )
+        )
+    provenance = {
+        k: getattr(filters, k)
+        for k in ("method", "basis", "software", "software_version", "workflow_tool", "workflow_tool_version")
+    }
+    if keep and any(v is not None for v in provenance.values()):
+        links: dict[int, set[int]] = {i: set() for i in keep}
+        for statmech_id, calculation_id in session.execute(
+            select(StatmechSourceCalculation.statmech_id, StatmechSourceCalculation.calculation_id).where(
+                StatmechSourceCalculation.statmech_id.in_(keep)
+            )
+        ):
+            links[statmech_id].add(calculation_id)
+        keep = filter_by_provenance(session, links, **provenance)
+    return [i for i in ids if i in keep]
+
+
 def _owner_model(kind: OwnerKind) -> type:
     return TransitionStateEntry if kind is OwnerKind.transition_state_entry else SpeciesEntry
 
@@ -144,6 +198,8 @@ def entry_visible(session: Session, kind: OwnerKind, owner_id: int, *, profile: 
     """Whether the read profile shows this entry (an entry that does not exist is not shown)."""
     if session.get(_owner_model(kind), owner_id) is None:
         return False
+    if kind is OwnerKind.species_entry:
+        return True  # a scoping parent: its own review status never hides what is under it
     return fetch_review_badges(session, record_type=_owner_record_type(kind), record_ids=[owner_id])[owner_id].status in profile
 
 
@@ -251,7 +307,10 @@ def scan_population(session: Session, *, request: StatmechRequest, owner_id: int
     """
     kind = request.target.owner_kind
     effective, profile = _statuses(request)
+    own = candidate_statuses(request)
     assert_subject_visible(session, kind, owner_id, profile=profile, ref=request.target.owner_ref)
+    # A species entry is a scoping parent and never excludes; a transition-state entry is a gated kind and still does.
+    entry_gates = kind is OwnerKind.transition_state_entry
     owner_status = fetch_review_badges(session, record_type=_owner_record_type(kind), record_ids=[owner_id])[owner_id].status
     if request.population.kind is PopulationKind.release:
         raise unsupported("release_population", "a pinned release population is not evaluated by this release")
@@ -270,6 +329,7 @@ def scan_population(session: Session, *, request: StatmechRequest, owner_id: int
     ) if ids else {}
     badges = fetch_review_badges(session, record_type=SubmissionRecordType.statmech, record_ids=ids)
     ids = [i for i in ids if badges[i].status in profile]
+    considered = len(ids)
 
     if request.population.kind is PopulationKind.model_revisions:
         by_candidate = {declaration_ref.get(i, refs[i]): i for i in ids}
@@ -287,16 +347,22 @@ def scan_population(session: Session, *, request: StatmechRequest, owner_id: int
         ids = [i for i in ids if i in chosen]
 
     status = {i: badges[i].status for i in ids}
+    kept = apply_filters(session, ids, request.filters)
     population: list[int] = []
     excluded: list[tuple[int, RecordReviewStatus | None, str]] = []
-    for i in ids:
-        if status[i] in _TERMINAL:
+    terminal_excluded: dict[str, int] = {}
+    below_floor = 0
+    for i in kept:
+        default = review_default(status[i])
+        if default is not None and not request.eligibility.lifts(default):
             excluded.append((i, status[i], REASON_TERMINAL))
-        elif status[i] not in effective:
+            terminal_excluded[default] = terminal_excluded.get(default, 0) + 1
+        elif status[i] not in own:
             excluded.append((i, status[i], REASON_BELOW_FLOOR))
-        elif owner_status in _TERMINAL or owner_status not in effective:
-            # The entry's floor applies at every grain: a record does not outrank the entry it belongs to.
+            below_floor += 1
+        elif entry_gates and (owner_status in _TERMINAL or owner_status not in effective):
             excluded.append((i, owner_status, REASON_OWNER_BELOW_FLOOR))
+            terminal_excluded[ELIGIBILITY_ENTRY_STATUS] = terminal_excluded.get(ELIGIBILITY_ENTRY_STATUS, 0) + 1
         else:
             population.append(i)
     check_candidates(request.bounds, len(population))
@@ -312,6 +378,10 @@ def scan_population(session: Session, *, request: StatmechRequest, owner_id: int
         excluded=tuple(excluded),
         total=len(ids),
         nested_rows=nested,
+        candidate_statuses=own,
+        considered=considered,
+        removed_by_filters=(considered - len(kept)) + below_floor,
+        terminal_excluded=terminal_excluded,
     )
 
 

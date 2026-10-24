@@ -12,6 +12,7 @@ the eligible ones by determination.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
 
 from sqlalchemy import select
@@ -38,6 +39,7 @@ from app.services.read_snapshot import begin_read_snapshot
 from app.services.scientific_read.ref_guard import withhold_selection_facts
 from app.services.selection_kernel import Applicability
 from app.services.selection_kernel.evidence_view import evidence_subject
+from app.services.selection_kernel.requested import Verdict, funnel, judge
 from app.services.structure_selection.source_findings import assess_source_findings, kinetics_uses
 from app.services.trust import evaluate_loaded_kinetics
 
@@ -61,7 +63,9 @@ SOLVE_REASON = "determination_spans_network_solves"
 
 
 def _separate_solves(
-    candidates: dict[str, NormalizedKinetics], assessments: list[KineticsAssessment]
+    candidates: dict[str, NormalizedKinetics],
+    assessments: list[KineticsAssessment],
+    competing: Mapping[str, Verdict],
 ) -> list[KineticsAssessment]:
     """A determination whose eligible records come from different network solves is not one determination.
 
@@ -72,7 +76,7 @@ def _separate_solves(
     solves: dict[str, set[str]] = {}
     for a in assessments:
         c = candidates[a.kinetics_ref]
-        if a.physically_eligible and c.determination is not None and c.network_solve_ref is not None:
+        if competing[a.kinetics_ref].competes and c.determination is not None and c.network_solve_ref is not None:
             solves.setdefault(c.determination.determination_ref, set()).add(c.network_solve_ref)
     mixed = {det for det, refs in solves.items() if len(refs) > 1}
     if not mixed:
@@ -80,7 +84,7 @@ def _separate_solves(
     out = []
     for a in assessments:
         c = candidates[a.kinetics_ref]
-        if a.physically_eligible and c.determination is not None and c.determination.determination_ref in mixed:
+        if competing[a.kinetics_ref].competes and c.determination is not None and c.determination.determination_ref in mixed:
             a = replace(
                 a,
                 applicability=Applicability.incompatible,
@@ -112,7 +116,7 @@ def assess_reaction_entry_kinetics(
     loaded.subject, loaded.candidates = withhold_selection_facts(session, (loaded.subject, loaded.candidates))
 
     assessments: list[KineticsAssessment] = []
-    eligible = []
+    elig = request.eligibility
     source_findings = assess_source_findings(session, {k.id: kinetics_uses(k, loaded.unavailable) for k in loaded.rows})
     for kinetics in loaded.rows:
         evidence = (
@@ -123,11 +127,18 @@ def assess_reaction_entry_kinetics(
             normalized, request=request, evidence=evidence, source_findings=source_findings[kinetics.id]
         )
         assessments.append(assessment)
-        if assessment.physically_eligible:
-            eligible.append(normalized)
 
-    assessments = _separate_solves(loaded.candidates_by_ref, assessments)
-    eligible = [loaded.candidates_by_ref[a.kinetics_ref] for a in assessments if a.physically_eligible]
+    def verdict_of(a: KineticsAssessment) -> Verdict:
+        return judge(
+            applicable=a.applicability is Applicability.applicable,
+            review_status=loaded.candidates_by_ref[a.kinetics_ref].review_status,
+            blocking=a.blocking,
+            eligibility=elig,
+        )
+
+    assessments = _separate_solves(loaded.candidates_by_ref, assessments, {a.kinetics_ref: verdict_of(a) for a in assessments})
+    verdicts = {a.kinetics_ref: verdict_of(a) for a in assessments}
+    eligible = [loaded.candidates_by_ref[a.kinetics_ref] for a in assessments if verdicts[a.kinetics_ref].competes]
     groups = group_by_determination(eligible, admin_policy=request.admin_policy)
     unresolved = tuple(a.kinetics_ref for a in assessments if a.applicability is Applicability.unresolved)
     unsupported = tuple(a.kinetics_ref for a in assessments if a.applicability is Applicability.unsupported)
@@ -154,4 +165,11 @@ def assess_reaction_entry_kinetics(
         unresolved_refs=unresolved,
         unsupported_refs=unsupported,
         notes=tuple(notes),
+        verdicts=verdicts,
+        funnel=funnel(
+            considered=scan.considered,
+            removed_by_filters=scan.removed_by_filters,
+            terminal_excluded=scan.terminal_excluded,
+            verdicts=list(verdicts.values()),
+        ),
     )

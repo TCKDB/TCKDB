@@ -38,6 +38,7 @@ from app.db.models.calculation import (
     CalculationOutputGeometry,
 )
 from app.db.models.common import (
+    CalculationQuality,
     CalculationType,
     RecordReviewStatus,
     SubmissionRecordType,
@@ -52,9 +53,12 @@ from app.db.models.structure_determination import (
 )
 from app.db.models.transition_state import TransitionStateEntry, TransitionStateValidationEvidence
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
+from app.schemas.reads.scientific_selection_common import ELIGIBILITY_ENTRY_STATUS, ELIGIBILITY_REJECTED_QUALITY
 from app.services.scientific_read.common import fetch_review_badges, visible_statuses
 from app.services.scientific_read.composite_binding import composite_scheme_summaries
 from app.services.scientific_read.handles import canonical_level_of_theory_id
+from app.services.selection_filters import filter_by_provenance
+from app.services.selection_kernel.requested import review_default
 from app.services.structure_selection.bounds import check_candidates, check_nested_rows, traversal_too_deep
 from app.services.structure_selection.models import (
     CurvatureFacts,
@@ -66,6 +70,7 @@ from app.services.structure_selection.models import (
     NormalizedCalculation,
     NormalizedDetermination,
     NormalizedSource,
+    StructureFilters,
     StructureRequest,
     StructureSubject,
 )
@@ -76,8 +81,8 @@ CODE_UNKNOWN_MEMBER = "unknown_structure_member_ref"
 MAX_EXCLUDED_LISTED = 100
 REASON_TERMINAL = "terminal_review_status"
 REASON_BELOW_FLOOR = "below_review_floor"
-REASON_QUALITY = "quality_not_permitted"
 REASON_OWNER_BELOW_FLOOR = "owner_below_review_floor"
+REASON_QUALITY = "quality_not_permitted"
 #: The one reason a hidden, absent or unusable pinned calculation reads as: it names no record.
 REASON_EVIDENCE_UNAVAILABLE = "required_evidence_unavailable"
 REASON_SOURCE_BELOW_FLOOR = "source_below_review_floor"
@@ -106,6 +111,16 @@ class PopulationScan:
     nested_rows: int
     #: determination id -> the ids of its observation, for a basin (None otherwise).
     observation_of: dict[int, int | None] = field(default_factory=dict)
+    #: What a unit's own review status may be: ``effective_statuses`` plus the terminal statuses the request lifted.
+    candidate_statuses: frozenset[RecordReviewStatus] = frozenset()
+    #: The status the review defaults judge a unit by: a calculation's own, or a determination's conformer observation's
+    #: (``None`` for one without an observation: its entry is a scoping parent and never gates it).
+    gate_status: dict[int, RecordReviewStatus | None] = field(default_factory=dict)
+    #: Rows the read profile shows, before any step; those the filters (and the caller's own floor and permitted
+    #: qualities) removed; and those a not-lifted default removed, by default name.
+    considered: int = 0
+    removed_by_filters: int = 0
+    terminal_excluded: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -136,6 +151,37 @@ def _statuses(request: StructureRequest) -> tuple[frozenset[RecordReviewStatus],
     return effective, profile
 
 
+def candidate_statuses(request: StructureRequest) -> frozenset[RecordReviewStatus]:
+    """What a unit's own review status may be: the caller's floor over the profile's, plus the lifted terminal statuses.
+
+    Under a read profile with a review floor ``visible_statuses`` ignores the lift: ``curated`` cannot be overridden.
+    """
+    e = request.eligibility
+    return frozenset(
+        visible_statuses(
+            min_review_status=request.min_review_status,
+            include_rejected=e.include_rejected,
+            include_deprecated=e.include_deprecated,
+        )
+    )
+
+
+def apply_filters(session: Session, calculations_of: dict[int, set[int]], filters: StructureFilters) -> set[int]:
+    """The unit ids the caller's provenance filters keep: the searches' matching, over each unit's own calculations."""
+    if not filters.active:
+        return set(calculations_of)
+    return filter_by_provenance(
+        session,
+        calculations_of,
+        method=filters.method,
+        basis=filters.basis,
+        software=filters.software,
+        software_version=filters.software_version,
+        workflow_tool=filters.workflow_tool,
+        workflow_tool_version=filters.workflow_tool_version,
+    )
+
+
 def _entry_record_type(grain: Grain) -> SubmissionRecordType:
     return (
         SubmissionRecordType.transition_state_entry
@@ -155,6 +201,8 @@ def assert_subject_visible(session: Session, grain: Grain, entry_id: int, *, pro
     row: Any = session.get(model, entry_id)
     if row is None:
         raise not_found(label, row_id=entry_id, code="handle_not_found")
+    if grain is not Grain.transition_state:
+        return  # a species entry is a scoping parent: its own review status never hides what is under it
     status = fetch_review_badges(session, record_type=_entry_record_type(grain), record_ids=[entry_id])[entry_id].status
     if status not in profile:
         raise not_found(label, ref=row.public_ref, code="handle_not_found", row_id=entry_id)
@@ -252,8 +300,8 @@ def _scan_calculations(
     refs = {r.id: r.public_ref for r in rows}
     quality = {r.id: r.quality for r in rows}
     badges = fetch_review_badges(session, record_type=SubmissionRecordType.calculation, record_ids=ids)
-    owner_status = fetch_review_badges(session, record_type=SubmissionRecordType.species_entry, record_ids=[entry_id])[entry_id].status
     ids = [i for i in ids if badges[i].status in profile]
+    considered = len(ids)
     if request.member_refs is not None:
         wanted = set(request.member_refs)
         by_ref = {refs[i]: i for i in ids}
@@ -268,18 +316,29 @@ def _scan_calculations(
             )
         ids = [i for i in ids if refs[i] in wanted]
     status = {i: badges[i].status for i in ids}
+    kept = apply_filters(session, {i: {i} for i in ids}, request.filters)
+    own = candidate_statuses(request)
+    elig = request.eligibility
     population: list[int] = []
     excluded: list[tuple[int, RecordReviewStatus | None, str]] = []
+    terminal_excluded: dict[str, int] = {}
+    removed_by_filters = considered - len(kept)
     for i in ids:
-        if status[i] in _TERMINAL:
+        if i not in kept:
+            continue
+        default = review_default(status[i])
+        if default is not None and not elig.lifts(default):
             excluded.append((i, status[i], REASON_TERMINAL))
-        elif status[i] not in effective:
+            terminal_excluded[default] = terminal_excluded.get(default, 0) + 1
+        elif status[i] not in own:
             excluded.append((i, status[i], REASON_BELOW_FLOOR))
-        elif owner_status in _TERMINAL or owner_status not in effective:
-            # The entry's floor applies at every grain: a calculation does not outrank the entry it belongs to.
-            excluded.append((i, owner_status, REASON_OWNER_BELOW_FLOOR))
+            removed_by_filters += 1
         elif quality[i] not in request.quality_set:
             excluded.append((i, status[i], REASON_QUALITY))
+            if quality[i] is CalculationQuality.rejected:
+                terminal_excluded[ELIGIBILITY_REJECTED_QUALITY] = terminal_excluded.get(ELIGIBILITY_REJECTED_QUALITY, 0) + 1
+            else:
+                removed_by_filters += 1  # a quality the caller did not permit is the caller's own narrowing
         else:
             population.append(i)
     check_candidates(request.bounds, len(population))
@@ -295,6 +354,11 @@ def _scan_calculations(
         excluded=tuple(excluded),
         total_units=len(ids),
         nested_rows=nested,
+        candidate_statuses=own,
+        gate_status=dict(status),
+        considered=considered,
+        removed_by_filters=removed_by_filters,
+        terminal_excluded=terminal_excluded,
     )
 
 
@@ -334,6 +398,7 @@ def _scan_determinations(
     )
     # A determination whose own observation the profile hides is not part of this request's world.
     ids = [i for i in ids if observation_of[i] is None or observation_badges[observation_of[i]].status in profile]
+    considered = len(ids)
     if request.member_refs is not None:
         wanted = set(request.member_refs)
         by_ref = {refs[i]: i for i in ids}
@@ -346,19 +411,53 @@ def _scan_determinations(
             )
         ids = [i for i in ids if refs[i] in wanted]
 
+    # The caller's provenance filters, over the calculations each determination pins as a source.
+    pinned_by: dict[int, set[int]] = {i: set() for i in ids}
+    if ids:
+        for determination_id, calculation_id in session.execute(
+            select(StructureDeterminationSource.determination_id, StructureDeterminationSource.calculation_id).where(
+                StructureDeterminationSource.determination_id.in_(ids)
+            )
+        ):
+            pinned_by[determination_id].add(calculation_id)
+    kept = apply_filters(session, pinned_by, request.filters)
+    own = candidate_statuses(request)
+    elig = request.eligibility
     population: list[int] = []
     excluded: list[tuple[int, RecordReviewStatus | None, str]] = []
     unit_status: dict[int, RecordReviewStatus] = {}
+    gate_status: dict[int, RecordReviewStatus | None] = {}
+    terminal_excluded: dict[str, int] = {}
+    removed_by_filters = considered - len(kept)
     for i in ids:
+        # A determination has no review of its own: its owners' are, the weakest of its entry's and its conformer
+        # observation's. The observation's is the one a request can lift; the entry's floor applies as before.
         owners = [owner_badge.status]
-        if observation_of[i] is not None:
-            owners.append(observation_badges[observation_of[i]].status)
-        weakest = max(owners, key=lambda s: REVIEW_FLOOR_ORDER[s])
-        unit_status[i] = weakest
-        if weakest in _TERMINAL:
-            excluded.append((i, weakest, REASON_TERMINAL))
-        elif weakest not in effective:
-            excluded.append((i, weakest, REASON_OWNER_BELOW_FLOOR))
+        gate = observation_badges[observation_of[i]].status if observation_of[i] is not None else None
+        if gate is not None:
+            owners.append(gate)
+        gate_status[i] = gate
+        # A species entry is a scoping parent: only a transition-state entry gates (and weakens) its determinations.
+        entry_gates = request.grain is Grain.transition_state
+        if entry_gates:
+            unit_status[i] = max(owners, key=lambda s: REVIEW_FLOOR_ORDER[s])
+        else:
+            unit_status[i] = gate if gate is not None else owner_badge.status
+        if i not in kept:
+            continue
+        default = review_default(gate) if gate is not None else None
+        if default is not None and not elig.lifts(default):
+            excluded.append((i, gate, REASON_TERMINAL))
+            terminal_excluded[default] = terminal_excluded.get(default, 0) + 1
+        elif gate is not None and gate not in own:
+            excluded.append((i, gate, REASON_BELOW_FLOOR))
+            removed_by_filters += 1
+        elif entry_gates and owner_badge.status in _TERMINAL:
+            excluded.append((i, owner_badge.status, REASON_TERMINAL))
+            terminal_excluded[ELIGIBILITY_ENTRY_STATUS] = terminal_excluded.get(ELIGIBILITY_ENTRY_STATUS, 0) + 1
+        elif entry_gates and owner_badge.status not in effective:
+            excluded.append((i, owner_badge.status, REASON_OWNER_BELOW_FLOOR))
+            terminal_excluded[ELIGIBILITY_ENTRY_STATUS] = terminal_excluded.get(ELIGIBILITY_ENTRY_STATUS, 0) + 1
         else:
             population.append(i)
     check_candidates(request.bounds, len(population))
@@ -382,6 +481,11 @@ def _scan_determinations(
         profile_statuses=profile,
         unit_ids=tuple(population),
         unit_status=unit_status,
+        gate_status=gate_status,
+        candidate_statuses=own,
+        considered=considered,
+        removed_by_filters=removed_by_filters,
+        terminal_excluded=terminal_excluded,
         excluded=tuple(excluded),
         total_units=len(ids),
         nested_rows=nested,

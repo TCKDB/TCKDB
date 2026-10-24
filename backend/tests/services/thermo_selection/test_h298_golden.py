@@ -21,6 +21,7 @@ import pytest
 from app.db.models.common import RecordReviewStatus as S
 from app.db.models.common import ThermoTargetKind
 from app.schemas.reads.scientific_common import SelectionPolicy
+from app.services.selection_kernel.requested import Verdict, funnel
 from app.services.thermo_selection import engine
 from app.services.thermo_selection.manifest import ReplayError, build_manifest, replay_decision
 from app.services.thermo_selection.models import (
@@ -106,7 +107,7 @@ def _generate():
                     value_kj_mol=-74.6,
                     representations=({"representation": "h298", "value_kj_mol": -74.6},),
                 ),
-                True,
+                Verdict(competes=True),
             )
             for c in candidates
         ]
@@ -122,6 +123,7 @@ def _generate():
             candidates=rows,
             decision=decision,
             outcome=decision.outcome,
+            funnel=funnel(considered=len(candidates), removed_by_filters=0, terminal_excluded={}, verdicts=[v for _, _, v in rows]),
         )
         entry = {"manifest": manifest}
         try:
@@ -166,7 +168,7 @@ def test_a_manifest_made_under_the_old_format_or_policy_is_refused_not_re_answer
 
     golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
     manifest = golden["manifests"]["e1_g4_over_g3"]["manifest"]
-    assert manifest["format"] == {"name": "thermo_selection_manifest", "version": 2}
+    assert manifest["format"] == {"name": "thermo_selection_manifest", "version": 3}
     assert manifest["policy"] == {"name": POLICY_NAME, "version": POLICY_VERSION}
     old_format = json.loads(json.dumps(manifest))
     old_format["format"]["version"] = 1

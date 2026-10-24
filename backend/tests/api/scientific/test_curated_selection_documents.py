@@ -388,12 +388,12 @@ def test_the_current_format_version_of_every_engine_is_written(client, world):
         manifest = _post(client, route.path, route.body, "exploratory")
         versions[route.name] = ((manifest.get("format") or {}).get("version"), (manifest.get("versions") or {}).get("relative_energy"))
     assert versions == {
-        "thermo": (2, None),
-        "kinetics": (2, None),
-        "network": (2, None),
-        "structure": (2, None),
-        "statmech": (2, None),
-        "relative_energy": (2, 1),
+        "thermo": (3, None),
+        "kinetics": (3, None),
+        "network": (3, None),
+        "structure": (3, None),
+        "statmech": (3, None),
+        "relative_energy": (3, 1),
     }
 
 

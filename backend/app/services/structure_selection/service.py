@@ -11,14 +11,20 @@ every unit.
 
 from __future__ import annotations
 
+from dataclasses import replace
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
+from app.db.models.common import CalculationQuality, RecordReviewStatus
 from app.db.models.structure_determination import StructureDetermination
+from app.schemas.reads.scientific_selection_common import ELIGIBILITY_CONFIRMED_FINDINGS, ELIGIBILITY_REJECTED_QUALITY
 from app.services.read_snapshot import begin_read_snapshot
 from app.services.scientific_read.ref_guard import withhold_selection_facts
 from app.services.selection_kernel import Applicability
+from app.services.selection_kernel.requested import Verdict, funnel, judge
 from app.services.structure_selection.assessment import assess_unit
 from app.services.structure_selection.loader import (
     MAX_EXCLUDED_LISTED,
@@ -47,6 +53,45 @@ def _excluded_refs(session: Session, scan: PopulationScan) -> tuple[dict[str, st
         {"unit_ref": refs[i], "review_status": status.value if status is not None else "", "reason": reason}
         for i, status, reason in listed
     )
+
+
+#: Blocking codes that are a confirmed finding about a source (the ``confirmed_blocking_findings`` default). The other
+#: blocking codes are failures of the claim the request makes (a contradicted curvature, an unconverged optimisation, ...)
+#: and no eligibility setting lifts them.
+FINDING_BLOCK_PREFIXES = ("finding_invalidates", "role_invalidated")
+
+
+def verdict_of(assessment: StructureAssessment, gate: RecordReviewStatus | None, quality: str | None, request: StructureRequest) -> Verdict:
+    """Whether a unit competes under the request's eligibility settings, and which defaults it failed or passed by override.
+
+    ``gate`` is the review status the review defaults judge the unit by (a calculation's own, a conformer observation's,
+    or ``None``). A unit in the population with a rejected calculation quality is there only because the request
+    permitted it, so that default is always one it passed by override. A confirmed finding the request lifted is a
+    ``finding_overridden`` advisory; both are read from the assessment, so a replay that recomputes it recomputes this.
+    """
+    findings = [b for b in assessment.blocking if b.startswith(FINDING_BLOCK_PREFIXES)]
+    other = [b for b in assessment.blocking if not b.startswith(FINDING_BLOCK_PREFIXES)]
+    lifted = any(a.startswith("finding_overridden") for a in assessment.advisory)
+    verdict = judge(
+        applicable=assessment.applicability is Applicability.applicable and not other,
+        review_status=gate if gate is not None else RecordReviewStatus.approved,
+        blocking=findings,
+        eligibility=request.eligibility,
+        extra_defaults=(ELIGIBILITY_CONFIRMED_FINDINGS,) if lifted else (),
+    )
+    if quality == CalculationQuality.rejected.value:
+        verdict = replace(verdict, passed_only_by_override=(*verdict.passed_only_by_override, ELIGIBILITY_REJECTED_QUALITY))
+    return verdict
+
+
+def verdict_record(verdict: Verdict, gate: RecordReviewStatus | None) -> dict:
+    """What a manifest records for one unit: the status it was judged by, and the verdict."""
+    return {
+        "gate_review_status": gate.value if gate is not None else None,
+        "blocked_by": list(verdict.blocked_by),
+        "passed_only_by_override": list(verdict.passed_only_by_override),
+        "competes": verdict.competes,
+    }
 
 
 def assess_entry_structures(
@@ -92,6 +137,23 @@ def assess_entry_structures(
             f"{len(unresolved)} unit(s) are unresolved and {len(unsupported)} unsupported; they do not compete in this "
             "result and may be applicable if their missing facts were recorded or their form evaluated"
         )
+    unit_by_ref: dict[str, Any] = {
+        **{c.calculation_ref: c for c in loaded.calculations.values()},
+        **{d.determination_ref: d for d in loaded.determinations.values()},
+    }
+    gate_by_ref: dict[str, RecordReviewStatus | None] = {}
+    if request.grain is Grain.calculation:
+        gate_by_ref = {ref: unit.review_status for ref, unit in unit_by_ref.items()}
+    else:
+        ref_by_id = {i: d.determination_ref for i, d in loaded.determinations.items()}
+        gate_by_ref = {ref_by_id[i]: scan.gate_status.get(i) for i in ref_by_id}
+    verdicts = {}
+    verdict_objects = []
+    for a in assessments:
+        unit = unit_by_ref[a.unit_ref]
+        v = verdict_of(a, gate_by_ref[a.unit_ref], unit.quality if request.grain is Grain.calculation else None, request)
+        verdict_objects.append(v)
+        verdicts[a.unit_ref] = verdict_record(v, gate_by_ref[a.unit_ref])
     return StructureAssessmentResult(
         request=request,
         subject=loaded.subject,
@@ -108,4 +170,12 @@ def assess_entry_structures(
         unresolved_refs=unresolved,
         unsupported_refs=unsupported,
         notes=tuple(notes),
+        candidate_statuses=tuple(sorted(scan.candidate_statuses, key=lambda s: s.value)),
+        verdicts=verdicts,
+        funnel=funnel(
+            considered=scan.considered,
+            removed_by_filters=scan.removed_by_filters,
+            terminal_excluded=scan.terminal_excluded,
+            verdicts=verdict_objects,
+        ),
     )
