@@ -41,10 +41,13 @@ from app.db.models.statmech import Statmech, StatmechElectronicLevel, StatmechSo
 from app.db.models.statmech_declaration import StatmechModelDeclaration, StatmechModelMember, StatmechModelSource
 from app.db.models.structure_determination import StructureDetermination, StructureDeterminationSource
 from app.db.models.transition_state import TransitionStateEntry
+from app.schemas.reads.scientific_selection_common import ELIGIBILITY_ENTRY_STATUS
 from app.services.monatomic import subject_atom_count
 from app.services.scientific_read.common import fetch_review_badges, visible_statuses
 from app.services.scientific_read.ref_guard import unavailable_refs
 from app.services.scientific_read.supersession import fetch_supersession_notices
+from app.services.selection_filters import filter_by_provenance
+from app.services.selection_kernel.requested import review_default
 from app.services.statmech_selection.bounds import (
     check_candidates,
     check_nested_rows,
@@ -63,9 +66,6 @@ from app.services.statmech_selection.facts import (
     TorsionFacts,
 )
 from app.services.statmech_selection.inventory import load_legacy_facts
-from app.schemas.reads.scientific_selection_common import ELIGIBILITY_ENTRY_STATUS
-from app.services.selection_filters import filter_by_provenance
-from app.services.selection_kernel.requested import review_default
 from app.services.statmech_selection.models import StatmechFilters, StatmechRequest
 from app.services.statmech_selection.vocabulary import CandidateKind, OwnerKind, PopulationKind
 from app.services.structure_selection.bounds import CODE_TRAVERSAL_TOO_DEEP as STRUCTURE_TRAVERSAL_TOO_DEEP

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.db.models.common import RecordReviewStatus
 from app.services.kinetics_selection.engine import KineticsDecision, build_candidates, decide
 from app.services.kinetics_selection.models import (
     ASSESSMENT_SEMANTICS,
@@ -29,14 +30,13 @@ from app.services.kinetics_selection.models import (
     NormalizedKinetics,
 )
 from app.services.manifest_formats import manifest_header, new_format_registry, read_manifest_format
-from app.db.models.common import RecordReviewStatus
 from app.services.selection_kernel import Applicability
-from app.services.selection_kernel.requested import Eligibility, UnreadableEligibility, judge
 from app.services.selection_kernel.assessment_semantics import (
     UnsupportedAssessmentSemantics,
     check_supported,
     semantics_block,
 )
+from app.services.selection_kernel.requested import Eligibility, UnreadableEligibility, judge
 from app.services.trust.rubrics import COMPUTED_KINETICS
 from app.versioning import same_value
 

@@ -15,6 +15,7 @@ import pytest
 
 from app.api.error_contract import CodedValueError
 from app.db.models.common import RecordReviewStatus
+from app.services.selection_kernel.requested import funnel
 from app.services.statmech_selection import manifest as manifest_module
 from app.services.statmech_selection.assessment import summarize
 from app.services.statmech_selection.decision import decide_statmech
@@ -29,7 +30,6 @@ from app.services.statmech_selection.manifest import (
     reproduce_statmech_ordering,
 )
 from app.services.statmech_selection.models import SelectionBounds
-from app.services.selection_kernel.requested import funnel
 from app.services.statmech_selection.service import StatmechQualification, verdict_of
 from tests.services.statmech_selection._population import _PREFERRED, candidate, population, ref
 from tests.services.statmech_selection._support import EFFECTIVE, approved_calcs, assess, req, subject

@@ -25,8 +25,8 @@ from tckdb_schemas.fragments.version import VersionRef
 from app.db.models.common import PhaseKind, RecordReviewStatus, ThermoTargetKind
 from app.schemas.reads.scientific_common import ProfiledRequestEcho
 from app.schemas.reads.scientific_selection_common import (
-    LevelAndSoftwareFilters,
     CandidateEligibility,
+    LevelAndSoftwareFilters,
     SelectionEligibilityIn,
     SelectionStepsAnswer,
 )

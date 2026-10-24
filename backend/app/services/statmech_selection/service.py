@@ -24,6 +24,7 @@ from app.db.models.statmech_declaration import StatmechModelDeclaration
 from app.schemas.reads.scientific_selection_common import ELIGIBILITY_CONFIRMED_FINDINGS
 from app.services.read_snapshot import begin_read_snapshot
 from app.services.scientific_read.ref_guard import withhold_selection_facts
+from app.services.selection_kernel.requested import Verdict, funnel, judge
 from app.services.statmech_selection.assessment import (
     QualificationSummary,
     StatmechAssessment,
@@ -39,7 +40,6 @@ from app.services.statmech_selection.loader import (
     scan_population,
 )
 from app.services.statmech_selection.models import StatmechRequest
-from app.services.selection_kernel.requested import Verdict, funnel, judge
 from app.services.structure_selection.models import NormalizedCalculation
 
 #: Reason codes that are a confirmed finding about a source (the ``confirmed_blocking_findings`` default).

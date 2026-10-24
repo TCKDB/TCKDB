@@ -30,9 +30,7 @@ from app.db.models.common import RecordReviewStatus
 from app.db.models.network import Network
 from app.db.models.species import SpeciesEntry
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER, SelectionPolicy
-from app.schemas.reads.scientific_selection_common import ELIGIBILITY_DEPRECATED, ELIGIBILITY_REJECTED
 from app.schemas.reads.scientific_network_selection import (
-    NetworkSelectionSolve,
     NetworkSelectionDisclosures,
     NetworkSelectionMember,
     NetworkSelectionMode,
@@ -45,7 +43,9 @@ from app.schemas.reads.scientific_network_selection import (
     NetworkSelectionResponse,
     NetworkSelectionReview,
     NetworkSelectionScope,
+    NetworkSelectionSolve,
 )
+from app.schemas.reads.scientific_selection_common import ELIGIBILITY_DEPRECATED, ELIGIBILITY_REJECTED
 from app.services.network_selection.manifest import manifest_digest
 from app.services.network_selection.models import (
     BathRequest,

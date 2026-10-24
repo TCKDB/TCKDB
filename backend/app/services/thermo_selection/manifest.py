@@ -22,12 +22,12 @@ from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER, SelectionPolicy
 from app.services.manifest_formats import manifest_header, read_manifest_format
 from app.services.selection_kernel import Applicability
-from app.services.selection_kernel.requested import Eligibility, UnreadableEligibility, Verdict, judge
 from app.services.selection_kernel.assessment_semantics import (
     UnsupportedAssessmentSemantics,
     check_supported,
     semantics_block,
 )
+from app.services.selection_kernel.requested import Eligibility, UnreadableEligibility, Verdict, judge
 from app.services.thermo_selection.engine import decide
 from app.services.thermo_selection.models import (
     ASSESSMENT_SEMANTICS,

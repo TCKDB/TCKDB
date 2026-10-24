@@ -101,8 +101,8 @@ class H298Request:
     min_review_status: RecordReviewStatus | None = None
     admin_policy: SelectionPolicy = SelectionPolicy.default
     max_candidates: int = MAX_CANDIDATES
-    filters: ThermoFilters = ThermoFilters()
-    eligibility: Eligibility = Eligibility()
+    filters: ThermoFilters = field(default_factory=ThermoFilters)
+    eligibility: Eligibility = field(default_factory=Eligibility)
 
     def __post_init__(self) -> None:
         if self.target_kind is ThermoTargetKind.single_conformer and self.conformer_group_id is None:

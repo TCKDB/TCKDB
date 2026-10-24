@@ -51,6 +51,7 @@ from app.services.manifest_formats import (
 )
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 from app.services.selection_kernel import assessment_semantics as semantics
+from app.services.selection_kernel.requested import expected_candidate_statuses
 from app.services.statmech_selection.assessment import StatmechAssessment, assess_candidate
 from app.services.statmech_selection.bounds import check_manifest_size
 from app.services.statmech_selection.decision import (
@@ -60,7 +61,6 @@ from app.services.statmech_selection.decision import (
     decide_statmech,
 )
 from app.services.statmech_selection.facts import CandidateFacts, SubjectFacts
-from app.services.selection_kernel.requested import expected_candidate_statuses
 from app.services.statmech_selection.models import (
     ASSESSMENT_VERSION,
     NORMALIZER_VERSION,

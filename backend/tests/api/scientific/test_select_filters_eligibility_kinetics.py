@@ -87,7 +87,7 @@ def test_a_software_filter_narrows_the_pool(client, db_session, world):
     assert [c["kinetics_ref"] for c in body["candidates"]] == [in_orca.public_ref]
     assert body["outcome"] == "incomparable_alternatives" or body["outcome"] == "sole_eligible_candidate"
     assert body["filters"]["applied"] == {"software": "orca"} and body["filters"]["removed"] == 2
-    assert body["funnel"] == {"considered": 3, "removed_by_filters": 2, "removed_by_eligibility": 0, "remaining": 1}
+    assert body["funnel"] == {"unit": "candidates", "considered": 3, "removed_by_filters": 2, "removed_by_eligibility": 0, "remaining": 1}
     assert body["request"]["filters"] == {"software": "orca"}
 
 
@@ -161,12 +161,12 @@ def test_include_hard_failed_evidence_admits_a_hard_failed_record_and_still_disc
 
 def test_an_override_never_makes_an_inapplicable_record_applicable(client, db_session, world):
     # no applicability declaration: unresolved, not blocked, and no flag turns it into an answer
-    from tests.services.scientific_read._factories import make_kinetics
     from app.db.models.common import KineticsDirection
+    from tests.services.scientific_read._factories import make_kinetics
 
     legacy = make_kinetics(db_session, reaction_entry=world.entry, direction=KineticsDirection.forward)
     set_review(db_session, record_type=SubmissionRecordType.kinetics, record_id=legacy.id, status=S.rejected)
-    lift_all = {k: True for k in ("include_rejected", "include_deprecated", "include_hard_failed_evidence", "include_confirmed_findings")}
+    lift_all = dict.fromkeys(("include_rejected", "include_deprecated", "include_hard_failed_evidence", "include_confirmed_findings"), True)
     body = post(client, world, {"eligibility": lift_all}).json()
     c = candidate(body, legacy)
     assert c["applicability"] == "unresolved" and c["eligible"] is False
@@ -178,7 +178,7 @@ def test_curated_cannot_be_overridden(client, db_session, world):
     approved, _ = record(db_session, world, "a", status=S.approved)
     for key, status in (("r", S.rejected), ("d", S.deprecated), ("u", S.under_review), ("n", S.not_reviewed)):
         record(db_session, world, key, status=status)
-    lift_all = {k: True for k in ("include_rejected", "include_deprecated", "include_hard_failed_evidence", "include_confirmed_findings")}
+    lift_all = dict.fromkeys(("include_rejected", "include_deprecated", "include_hard_failed_evidence", "include_confirmed_findings"), True)
     resp = post(client, world, {"eligibility": lift_all}, profile="curated")
     body = resp.json()
     assert [c["kinetics_ref"] for c in body["candidates"]] == [approved.public_ref]

@@ -111,7 +111,7 @@ def test_a_software_filter_narrows_the_pool_with_the_browse_matching(client, db_
     assert body["outcome"] == "sole_eligible_candidate"
     assert body["filters"]["applied"] == {"software": "orca"}
     assert body["filters"]["removed"] == 2
-    assert body["funnel"] == {"considered": 3, "removed_by_filters": 2, "removed_by_eligibility": 0, "remaining": 1}
+    assert body["funnel"] == {"unit": "candidates", "considered": 3, "removed_by_filters": 2, "removed_by_eligibility": 0, "remaining": 1}
 
 
 def test_a_level_of_theory_filter_takes_a_public_ref_and_keeps_any_matching_source(client, db_session, methane):
@@ -290,7 +290,7 @@ def test_curated_cannot_be_overridden_by_any_eligibility_flag(client, db_session
     rejected = g4(db_session, methane, status=S.rejected, age_days=1)
     deprecated = g4(db_session, methane, status=S.deprecated, age_days=2)
     pending = g4(db_session, methane, status=S.under_review, age_days=3)
-    lift_all = {k: True for k in ("include_rejected", "include_deprecated", "include_hard_failed_evidence", "include_confirmed_findings")}
+    lift_all = dict.fromkeys(("include_rejected", "include_deprecated", "include_hard_failed_evidence", "include_confirmed_findings"), True)
     resp = post(client, methane, {"eligibility": lift_all}, profile="curated")
     assert resp.status_code == 200
     body = resp.json()

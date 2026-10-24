@@ -34,12 +34,6 @@ from app.db.models.reaction import ReactionEntry
 from app.db.models.species import Species
 from app.db.models.transition_state import TransitionStateEntry
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER, SelectionPolicy
-from app.schemas.reads.scientific_selection_common import (
-    ELIGIBILITY_CONFIRMED_FINDINGS,
-    ELIGIBILITY_DEPRECATED,
-    ELIGIBILITY_HARD_FAILED_EVIDENCE,
-    ELIGIBILITY_REJECTED,
-)
 from app.schemas.reads.scientific_kinetics_selection import (
     KineticsSelectionCandidate,
     KineticsSelectionColliderComponent,
@@ -60,6 +54,12 @@ from app.schemas.reads.scientific_kinetics_selection import (
     KineticsSelectionReview,
     KineticsSelectionTargetEcho,
 )
+from app.schemas.reads.scientific_selection_common import (
+    ELIGIBILITY_CONFIRMED_FINDINGS,
+    ELIGIBILITY_DEPRECATED,
+    ELIGIBILITY_HARD_FAILED_EVIDENCE,
+    ELIGIBILITY_REJECTED,
+)
 from app.services.kinetics_selection.models import (
     MAX_CANDIDATES,
     ColliderRequest,
@@ -74,7 +74,6 @@ from app.services.scientific_read.handles import is_ref_handle, resolve_path_han
 from app.services.scientific_read.profile import current_read_profile
 from app.services.selection_kernel import Outcome
 from app.services.selection_kernel.requested import Eligibility, answer_steps
-
 
 #: The eligibility defaults a kinetics selection applies, in the order the answer lists them.
 KINETICS_DEFAULTS = (

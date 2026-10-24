@@ -209,8 +209,8 @@ class KineticsRequest:
     min_review_status: RecordReviewStatus | None = None
     admin_policy: SelectionPolicy = SelectionPolicy.default
     max_candidates: int = MAX_CANDIDATES
-    filters: KineticsFilters = KineticsFilters()
-    eligibility: Eligibility = Eligibility()
+    filters: KineticsFilters = field(default_factory=KineticsFilters)
+    eligibility: Eligibility = field(default_factory=Eligibility)
 
     def __post_init__(self) -> None:
         if self.direction not in (KineticsDirection.forward, KineticsDirection.reverse):
