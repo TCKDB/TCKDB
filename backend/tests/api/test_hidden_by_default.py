@@ -213,3 +213,22 @@ def test_a_curated_lowest_energy_read_refuses_without_naming_hidden_rows(client,
     body = response.json()
     context = body.get("context") or body.get("error", {}).get("context") or body["detail"]["context"]
     assert context["candidate_count"] == 1  # the approved row alone: hidden rows are not in the count
+
+
+def test_a_review_of_another_kind_of_record_with_the_same_id_is_not_counted(client, db_session):
+    """Kills: counting review rows without checking which kind of record they review (ids repeat across kinds)."""
+    from tests.services.scientific_read._factories import (
+        make_calculation,
+        make_species,
+        make_species_entry,
+        next_inchi_key,
+    )
+
+    species = make_species(db_session, smiles="C=O", inchi_key=next_inchi_key("HK"))
+    entry = make_species_entry(db_session, species)
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    # A statmech with the same numeric id is rejected; the calculation itself is not.
+    set_review(db_session, record_type=SubmissionRecordType.statmech, record_id=calc.id, status=S.rejected)
+    body = client.get(f"/api/v1/scientific/calculations/search?species_entry_ref={entry.public_ref}").json()
+    assert body["request"]["hidden_by_default"]["counts"] == {"rejected": 0, "deprecated": 0}
+    assert len(body["records"]) == 1
