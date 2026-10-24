@@ -20,7 +20,6 @@ import pytest
 from app.db.models.common import CalculationType, RecordReviewStatus, SubmissionRecordType
 from tests.services.scientific_read._factories import (
     attach_opt_result,
-    attach_sp_result,
     make_calculation,
     make_chem_reaction,
     make_kinetics,
@@ -303,7 +302,7 @@ def test_identity_counts_follow_the_visibility_of_the_records_they_count(client,
 
     def count(**extra):
         body = client.get(f"{LOOKUP}/species", params={**params, **extra}).json()
-        return [r for r in body["results"] if r["resource_type"] == "species_entry"][0]["summary"]["thermo_count"]
+        return next(r for r in body["results"] if r["resource_type"] == "species_entry")["summary"]["thermo_count"]
 
     assert count() == 2
     assert count(include_rejected="true") == 3

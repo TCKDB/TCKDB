@@ -179,8 +179,14 @@ def test_the_curated_page_counts_only_what_it_shows(case, client, db_session):
 
 
 def test_the_literature_records_list_reports_what_the_default_hid(client, db_session):
-    from tests.services.scientific_read._factories import make_literature, make_species, make_species_entry
-    from tests.services.scientific_read._factories import make_statmech, make_transport, next_inchi_key
+    from tests.services.scientific_read._factories import (
+        make_literature,
+        make_species,
+        make_species_entry,
+        make_statmech,
+        make_transport,
+        next_inchi_key,
+    )
 
     literature = make_literature(db_session)
     species = make_species(db_session, smiles="C=O", inchi_key=next_inchi_key("HL"))

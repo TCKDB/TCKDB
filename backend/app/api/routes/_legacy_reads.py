@@ -286,8 +286,8 @@ def gate_path_record(param: str, record_type: SubmissionRecordType, kind_label: 
 __all__ = [
     "ADMIN_LISTING_ORDER",
     "EntityListResponse",
-    "LegacyVisibility",
     "LegacyReadRoute",
+    "LegacyVisibility",
     "disclose_in_header",
     "ensure_not_below_floor",
     "entity_page",
