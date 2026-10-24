@@ -13,7 +13,12 @@ import json
 
 import pytest
 
-from app.db.models.common import RecordReviewStatus, SubmissionRecordType, ThermoTargetKind
+from app.db.models.common import (
+    EnergyCorrectionApplicationRole,
+    RecordReviewStatus,
+    SubmissionRecordType,
+    ThermoTargetKind,
+)
 from tests.api.test_legacy_reads_visibility import CASES, LEGACY, _seed
 from tests.services.scientific_read._factories import (
     make_calculation,
@@ -203,3 +208,186 @@ def test_a_hidden_solve_filter_answers_as_a_missing_one(client, db_session):
     missing = _curated(client, path, solve_id=999999999)
     assert hidden.status_code == missing.status_code == 404
     assert hidden.json() == missing.json()
+
+
+# --- entries: the visibility the scientific reads apply to species and reaction entries ---------------------------------
+
+
+def test_lookup_species_lists_the_entries_the_request_shows_and_counts_the_rest(client, db_session):
+    species = make_species(db_session, smiles="C=O", inchi_key="WSFSSNUMVMOOMR-UHFFFAOYSA-N")
+    entries = [make_species_entry(db_session, species, stereo_label=label) for label in "abc"]
+    set_review(db_session, record_type=T.species_entry, record_id=entries[0].id, status=S.rejected)
+    set_review(db_session, record_type=T.species_entry, record_id=entries[1].id, status=S.approved)
+    params = {"smiles": "C=O", "charge": 0, "multiplicity": 1}
+
+    def listed(**extra):
+        body = client.get("/api/v1/lookup/species", params={**params, **extra}).json()
+        return [r["id"] for r in body["results"] if r["resource_type"] == "species_entry"], body
+
+    ids, body = listed()
+    assert sorted(ids) == sorted([entries[1].id, entries[2].id])
+    assert body["hidden_by_default"]["counts"] == {"rejected": 1, "deprecated": 0}
+    assert body["hidden_by_default"]["counted"] == "species_entries"
+    assert sorted(listed(include_rejected="true")[0]) == sorted(e.id for e in entries)
+    ids, body = listed(profile="curated", include_rejected="true")
+    assert ids == [entries[1].id]  # approved only
+    assert body["hidden_by_default"] is None and body["entries_hidden_by_default"] is None
+    # The species row itself is identity, not reviewable: it is always there.
+    assert any(r["resource_type"] == "species" for r in body["results"])
+
+
+def test_the_entry_detail_routes_answer_a_hidden_entry_as_an_unknown_id(client, db_session):
+    w = _world(db_session)  # its species entry is approved; make a second, unreviewed one and a reaction entry
+    other = make_species_entry(db_session, w["entry"].species, stereo_label="other")
+    assert client.get(f"{LEGACY}/species-entries/{other.id}").status_code == 200
+    curated = client.get(f"{LEGACY}/species-entries/{other.id}", params={"profile": "curated"})
+    assert curated.status_code == 404
+    assert curated.json() == client.get(f"{LEGACY}/species-entries/999999999", params={"profile": "curated"}).json()
+    assert client.get(f"{LEGACY}/species-entries/{w['entry'].id}", params={"profile": "curated"}).status_code == 200
+    # the reaction entry of the world is unreviewed
+    assert client.get(f"{LEGACY}/reaction-entries/{w['reaction_entry'].id}").status_code == 200
+    hidden = client.get(f"{LEGACY}/reaction-entries/{w['reaction_entry'].id}", params={"profile": "curated"})
+    assert hidden.status_code == 404
+    assert hidden.json() == client.get(f"{LEGACY}/reaction-entries/999999999", params={"profile": "curated"}).json()
+
+
+def test_lookup_reaction_lists_the_reaction_entries_the_request_shows(client, db_session):
+    rs = make_species(db_session, smiles="CC", inchi_key="OTMSDBZUPAUEDD-UHFFFAOYSA-N")
+    ps = make_species(db_session, smiles="CCC", inchi_key="ATUOYWHBWRKTHZ-UHFFFAOYSA-N")
+    chem = make_chem_reaction(db_session, reactants=[rs], products=[ps])
+    reaction_entry = make_reaction_entry(
+        db_session,
+        reaction=chem,
+        reactant_entries=[make_species_entry(db_session, rs)],
+        product_entries=[make_species_entry(db_session, ps)],
+    )
+    w = {"reaction_entry": reaction_entry}
+    body = client.get(
+        f"{LEGACY}/lookup/reaction", params={"reactants": ["CC"], "products": ["CCC"]}
+    ).json()
+    entries = [r for r in body["results"] if r["resource_type"] == "reaction_entry"]
+    assert [e["id"] for e in entries] == [w["reaction_entry"].id]
+    curated = client.get(
+        f"{LEGACY}/lookup/reaction", params={"reactants": ["CC"], "products": ["CCC"], "profile": "curated"}
+    ).json()
+    assert [r for r in curated["results"] if r["resource_type"] == "reaction_entry"] == []
+    assert curated["hidden_by_default"] is None
+
+
+# --- applied energy corrections are reviewable records -----------------------------------------------------------------
+
+
+def test_applied_energy_corrections_obey_the_default_visibility_and_the_floor(client, db_session):
+    from tests.services.scientific_read._factories import (
+        make_applied_energy_correction,
+        make_energy_correction_scheme,
+        make_lot,
+    )
+
+    w = _world(db_session)
+    scheme = make_energy_correction_scheme(db_session, name="ac", lot=make_lot(db_session, method="ac", basis="b"))
+    rows = [
+        make_applied_energy_correction(
+            db_session, target_species_entry=w["entry"], scheme=scheme, application_role=role
+        )
+        for role in (
+            EnergyCorrectionApplicationRole.bac_total,
+            EnergyCorrectionApplicationRole.aec_total,
+            EnergyCorrectionApplicationRole.soc_total,
+        )
+    ]
+    set_review(db_session, record_type=T.applied_energy_correction, record_id=rows[0].id, status=S.rejected)
+    set_review(db_session, record_type=T.applied_energy_correction, record_id=rows[1].id, status=S.approved)
+    url = f"{LEGACY}/applied-energy-corrections"
+    first = client.get(url)
+    assert first.status_code == 200, first.text
+    body = first.json()
+    assert [i["id"] for i in body["items"]] == [rows[1].id, rows[2].id]
+    assert body["hidden_by_default"]["counts"] == {"rejected": 1, "deprecated": 0}
+    curated = client.get(url, params={"profile": "curated"}).json()
+    assert [i["id"] for i in curated["items"]] == [rows[1].id] and curated["total"] == 1
+    assert curated["hidden_by_default"] is None
+    assert client.get(f"{url}/{rows[2].id}").status_code == 200
+    assert client.get(f"{url}/{rows[2].id}", params={"profile": "curated"}).status_code == 404
+
+
+# --- counts equal lists, also without a floor ---------------------------------------------------------------------------
+
+
+def test_exploratory_counts_follow_the_default_visibility_like_the_lists(client, db_session):
+    w = _world(db_session)
+    group = w["group"]
+    obs = [make_conformer_observation(db_session, conformer_group=group) for _ in range(2)]
+    set_review(db_session, record_type=T.conformer_observation, record_id=obs[0].id, status=S.rejected)
+    # the group's own detail: the rejected observation is not listed or counted by default
+    detail = client.get(f"{LEGACY}/conformer-groups/{group.id}").json()
+    listed = {o["id"] for o in detail["observations"]}
+    assert obs[0].id not in listed and obs[1].id in listed
+    assert detail["observation_count"] == len(detail["observations"])
+    detail = client.get(f"{LEGACY}/conformer-groups/{group.id}", params={"include_rejected": "true"}).json()
+    assert obs[0].id in {o["id"] for o in detail["observations"]}
+    assert detail["observation_count"] == len(detail["observations"])
+    # the entry summary counts what its lists show
+    summary = client.get(f"{LEGACY}/species-entries/{w['entry'].id}").json()["conformer_summary"]
+    shown = client.get(f"{LEGACY}/species-entries/{w['entry'].id}/conformers").json()
+    assert summary["conformer_observation_count"] == len(shown)
+    # a rejected transition-state entry is not embedded by default
+    set_review(db_session, record_type=T.transition_state_entry, record_id=w["ts_entry"].id, status=S.rejected)
+    assert client.get(f"{LEGACY}/transition-states/{w['ts'].id}").json()["entries"] == []
+    assert len(client.get(f"{LEGACY}/transition-states/{w['ts'].id}", params={"include_rejected": "true"}).json()["entries"]) == 1
+
+
+# --- selection and the channel header -------------------------------------------------------------------------------------
+
+
+def test_lowest_energy_counts_the_candidates_it_could_not_compare(client, db_session):
+    from tests.services.scientific_read._factories import attach_opt_result, make_lot
+
+    w = _world(db_session)
+    lot = make_lot(db_session)
+    a = make_calculation(db_session, species_entry_id=w["entry"].id, lot_id=lot.id)
+    b = make_calculation(db_session, species_entry_id=w["entry"].id, lot_id=lot.id)
+    c = make_calculation(db_session, species_entry_id=w["entry"].id, lot_id=lot.id)  # no energy recorded
+    attach_opt_result(db_session, calculation=a, final_energy_hartree=-10.0)
+    attach_opt_result(db_session, calculation=b, final_energy_hartree=-11.0)
+    body = client.get(
+        f"{LEGACY}/lookup/calculations",
+        params={"species_entry_id": w["entry"].id, "selection": "lowest_energy", "method": lot.method, "basis": lot.basis},
+    ).json()
+    group = body["selected_by"]["groups"][0]
+    assert group["candidates"] == 3 and group["not_compared"] == 1 and group["chosen"] == 1
+    assert [r["id"] for r in body["results"] if r["resource_type"] == "calculation"] == [b.id]
+    del c
+
+
+def test_merged_levels_are_one_level_for_the_lowest_energy_refusal(db_session):
+    from types import SimpleNamespace
+
+    from app.api.routes.lookup import _refuse_mixed_levels
+    from app.db.models.level_of_theory import LevelOfTheoryMerge
+    from tests.services.scientific_read._factories import make_lot
+
+    kept = make_lot(db_session, method="kept", basis="b")
+    merged = make_lot(db_session, method="merged-spelling", basis="b")
+    db_session.add(LevelOfTheoryMerge(merged_lot_id=merged.id, into_lot_id=kept.id))
+    db_session.flush()
+    _refuse_mixed_levels(db_session, [SimpleNamespace(lot_id=kept.id), SimpleNamespace(lot_id=merged.id)], None)
+
+
+def test_a_channels_kinetics_discloses_what_the_default_hid_in_a_header(client, db_session):
+    from sqlalchemy import select
+
+    from app.db.models.network_pdep import NetworkChannel, NetworkKinetics
+    from tests.api.test_browse_order_echo import seed_network_kinetics
+    from tests.services.scientific_read._factories import attach_network_kinetics_plog
+
+    seeded = seed_network_kinetics(db_session)
+    for row in db_session.scalars(select(NetworkKinetics)).all():
+        attach_network_kinetics_plog(db_session, kinetics=row)
+    network_id = db_session.scalar(select(NetworkChannel.network_id))
+    channel_id = db_session.scalar(select(NetworkChannel.id))
+    set_review(db_session, record_type=T.network_solve, record_id=seeded.review_targets[0][1], status=S.rejected)
+    response = client.get(f"{LEGACY}/networks/{network_id}/channels/{channel_id}/kinetics")
+    assert response.headers["X-TCKDB-Hidden-By-Default"] == "deprecated=0; rejected=1"
+    curated = client.get(f"{LEGACY}/networks/{network_id}/channels/{channel_id}/kinetics", params={"profile": "curated"})
+    assert "X-TCKDB-Hidden-By-Default" not in curated.headers
