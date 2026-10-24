@@ -227,7 +227,7 @@ def test_allow_unbumped_needs_a_reason_and_is_recorded(tmp_path, monkeypatch) ->
     assert generator.main(["--allow-unbumped", name]) == 1  # a reason is required
     assert generator.main(["--allow-unbumped", name, "--reason", "wording only in a message"]) == 0
     recorded = json.loads(work.read_text())["unbumped_overrides"]
-    assert recorded == [{"name": name, "version": int(version), "reason": "wording only in a message"}]
+    assert recorded[-1] == {"name": name, "version": int(version), "reason": "wording only in a message"}
     assert generator.main(["--check"]) == 0
 
 
@@ -468,3 +468,265 @@ def test_a_rule_change_in_the_reproducibility_grading_moves_its_fingerprint(monk
 def test_every_computed_getattr_site_is_declared() -> None:
     """The sites the guard permits are exactly the ones in the walked code; a stale declaration is a defect too."""
     assert rubric_pins.discover_dynamic_attribute_sites() == sorted(rubric_pins.DYNAMIC_ATTRIBUTE_READS)
+
+
+# --- round 2: imports inside a function body, enum columns, the statmech chooser, determinism --------------------------
+
+
+def _moved_by(monkeypatch, module_name: str, function_name: str, old: str, new: str) -> set[str]:
+    """The rubrics whose fingerprint changes when one fragment of one repository function is edited."""
+    module = importlib.import_module(module_name)
+    before = rubric_pins.current_fingerprints()
+    original = getattr(module, function_name)
+    changed = _recompiled(module_name, function_name, old, new)
+    # A real edit changes the function wherever it is bound: every module that imported it by name sees the new one.
+    for holder in list(sys.modules.values()):
+        for attribute, value in list(vars(holder).items()) if hasattr(holder, "__dict__") else []:
+            if value is original:
+                monkeypatch.setattr(holder, attribute, changed)
+    after = rubric_pins.current_fingerprints()
+    return {name for name in before if before[name] != after[name]}
+
+
+def test_a_local_import_is_followed_status_hidden_under_profile(monkeypatch) -> None:
+    """``>`` to ``>=`` in handles.py, reached through ``from ... import`` inside ``_hidden_calculation_ids``' callees."""
+    moved = _moved_by(
+        monkeypatch,
+        "app.services.scientific_read.handles",
+        "status_hidden_under_profile",
+        "REVIEW_FLOOR_ORDER[status] > REVIEW_FLOOR_ORDER[floor]",
+        "REVIEW_FLOOR_ORDER[status] >= REVIEW_FLOOR_ORDER[floor]",
+    )
+    assert {"computed_transition_state", "computed_kinetics"} <= moved
+
+
+def test_a_local_import_is_followed_visible_statuses(monkeypatch) -> None:
+    """Dropping the profile floor from ``visible_statuses``, reached through the import in ``declared_curvature_pins``."""
+    moved = _moved_by(
+        monkeypatch,
+        "app.services.scientific_read.common",
+        "visible_statuses",
+        "include_rejected=include_rejected and profile_floor is None,",
+        "include_rejected=include_rejected,",
+    )
+    assert "computed_transition_state" in moved
+
+
+def test_the_structure_selection_chain_in_the_scoped_context_is_walked() -> None:
+    code, _ = rubric_pins.reachable("computed_transition_state")
+    assert "app.services.structure_selection.selection:select_entry_structures" in code
+
+
+def test_the_trust_rubrics_reach_the_enum_methods_behind_orm_instances() -> None:
+    """``artifact.integrity_events[-1].finding.is_break`` reaches the enum only through ORM columns."""
+    code, _ = rubric_pins.reachable("computed_calculation")
+    assert "class app.db.models.common:ArtifactIntegrityFinding" in code
+
+
+def test_the_runtime_statmech_chooser_is_pinned(monkeypatch) -> None:
+    moved = _moved_by(
+        monkeypatch,
+        "app.services.trust.rubrics",
+        "statmech_rubric_for",
+        "if statmech.species_entry_id is None and statmech.transition_state_entry_id is not None:",
+        "if False:",
+    )
+    assert {"computed_statmech", "computed_ts_statmech"} <= moved
+
+
+def test_every_evaluator_the_read_paths_call_is_pinned() -> None:
+    """Each ``evaluate_*`` the read services and ``public_assessments`` pass or call is reached by a pinned rubric."""
+    import ast
+    import pkgutil
+
+    import app.services.scientific_read as read_package
+    from app.services import scientific_read as _  # noqa: F401
+
+    reached: set[str] = set()
+    for name in rubric_pins.GRADING_ENTRYPOINTS:
+        reached |= rubric_pins.reachable(name)[0]
+    reached |= rubric_pins.reachable("tckdb_reproducibility")[0]
+    called: dict[str, str] = {}
+    for info in pkgutil.iter_modules(read_package.__path__):
+        module = importlib.import_module(f"{read_package.__name__}.{info.name}")
+        for node in ast.walk(ast.parse(inspect.getsource(module))):
+            name = node.id if isinstance(node, ast.Name) else (node.attr if isinstance(node, ast.Attribute) else None)
+            if name and name.startswith(("evaluate_loaded_", "evaluate_shown_", "evaluate_reproducibility")):
+                target = getattr(module, name, None)
+                if inspect.isfunction(target):
+                    called[f"{target.__module__}:{target.__qualname__}"] = info.name
+    assert called, "no evaluator found in the read services: the scan is vacuous"
+    missing = sorted(key for key in called if key not in reached)
+    assert not missing, f"evaluators the read paths use that no pinned rubric reaches: {missing}"
+
+
+def test_fingerprints_are_identical_across_processes() -> None:
+    """No object address, hash seed or absolute path may reach a fingerprint."""
+    code = (
+        "from app.services.trust import rubric_pins as r\n"
+        "print(sorted((k, v[0], v[1]) for k, v in r.current_fingerprints().items()))\n"
+    )
+    outputs = []
+    for seed in ("1", "2"):
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT / "backend",
+            env={**__import__("os").environ, "PYTHONHASHSEED": seed},
+        )
+        assert result.returncode == 0, result.stderr
+        outputs.append(result.stdout)
+    assert outputs[0] == outputs[1]
+
+
+def test_no_object_address_reaches_the_walk() -> None:
+    for name in rubric_pins.GRADING_ENTRYPOINTS:
+        _, constants = rubric_pins.reachable(name)
+        assert not any(" at 0x" in label for label in constants)
+    assert " at 0x" not in rubric_pins.stable_dump_for_tests("tckdb_reproducibility")
+
+
+def test_an_algorithm_bump_is_recorded_not_silent(tmp_path, monkeypatch) -> None:
+    import json
+
+    work = tmp_path / "pins.json"
+    document = rubric_pins.load_document()
+    document["algorithm"] = rubric_pins.ALGORITHM - 1
+    first = next(iter(document["pins"]))
+    document["pins"][first] = {next(iter(document["pins"][first])): "0" * 64}
+    work.write_text(json.dumps(document), encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("_gen3", GENERATOR)
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    monkeypatch.setattr(generator.rubric_pins, "PINS_PATH", work)
+    assert generator.main(["--check"]) == 1
+    assert generator.main([]) == 0
+    recorded = json.loads(work.read_text())["unbumped_overrides"]
+    assert {"algorithm_repin": {"from": rubric_pins.ALGORITHM - 1, "to": rubric_pins.ALGORITHM}} in recorded
+
+
+def test_module_level_sql_is_fingerprinted_not_skipped(tmp_path, monkeypatch) -> None:
+    template = """
+        from sqlalchemy import column, select, table
+        STMT = select(column("a")).select_from(table("t", column("a"))).where(column("a") > {T})
+        def runner(record): return STMT
+    """
+    _differs_or_refused(tmp_path, monkeypatch, textwrap.dedent(template))
+
+
+def test_a_sys_modules_or_dict_lookup_is_refused(tmp_path, monkeypatch) -> None:
+    for body in (
+        "import sys\ndef runner(record): return sys.modules['os'].sep\n",
+        "def runner(record): return runner.__globals__['x'] if False else record.__dict__['x']\n",
+    ):
+        with pytest.raises(Exception) as excinfo:
+            _fingerprint(tmp_path, monkeypatch, {"app._pinmod": body})
+        assert type(excinfo.value).__name__ == "Unfingerprintable"
+
+
+def test_a_hybrid_property_on_a_visited_model_is_followed(tmp_path, monkeypatch) -> None:
+    template = """
+        from sqlalchemy import Integer
+        from sqlalchemy.ext.hybrid import hybrid_property
+        from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+        class B(DeclarativeBase): pass
+        class Row(B):
+            __tablename__ = "row"
+            id: Mapped[int] = mapped_column(Integer, primary_key=True)
+            @hybrid_property
+            def big(self): return self.id > {T}
+        def runner(record): return Row
+    """
+    _differs_or_refused(tmp_path, monkeypatch, textwrap.dedent(template))
+
+
+def test_the_getattr_allowlist_is_per_call_not_per_function() -> None:
+    assert all("::" in key for key in rubric_pins.DYNAMIC_ATTRIBUTE_READS), "key each allowance by function and call"
+
+
+def test_a_second_computed_getattr_in_an_allowed_function_is_refused(tmp_path, monkeypatch) -> None:
+    body = """
+        def runner(record):
+            a = getattr(record, "x" + record.k)
+            b = getattr(record, "y" + record.k)
+            return a, b
+    """
+    key = "app._pinmod:runner :: getattr(record, 'x' + record.k)"
+    monkeypatch.setitem(rubric_pins.DYNAMIC_ATTRIBUTE_READS, key, "test")
+    with pytest.raises(Exception) as excinfo:
+        _fingerprint(tmp_path, monkeypatch, {"app._pinmod": textwrap.dedent(body)})
+    assert type(excinfo.value).__name__ == "Unfingerprintable"
+    assert "'y' + record.k" in str(excinfo.value)
+
+
+# --- false positives: what does not change a verdict must not move the fingerprint ----------------------------------
+
+
+_HARMLESS = {
+    "reworded_raise_message": (
+        "def runner(record):\n    if record.value < 0:\n        raise ValueError('{T} is negative')\n    return True\n"
+    ),
+    "reworded_fstring_raise": (
+        "def runner(record):\n    if record.value < 0:\n        raise ValueError(f'bad value {record.value} ({T})')\n"
+        "    return True\n"
+    ),
+    "pydantic_field_description": (
+        "from pydantic import BaseModel, Field\nclass M(BaseModel):\n"
+        "    x: int = Field(default=1, description='{T}', title='t{T}', examples=['{T}'])\n"
+        "def runner(record): return M()\n"
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(_HARMLESS))
+def test_harmless_wording_does_not_move_the_fingerprint(name, tmp_path, monkeypatch) -> None:
+    a = _fingerprint(tmp_path, monkeypatch, {"app._pinmod": _HARMLESS[name].replace("{T}", "five")})
+    b = _fingerprint(tmp_path, monkeypatch, {"app._pinmod": _HARMLESS[name].replace("{T}", "six")})
+    assert a == b
+
+
+def test_what_can_change_a_verdict_in_those_places_still_moves_it(tmp_path, monkeypatch) -> None:
+    raise_code = "def runner(record):\n    if record.value < {T}:\n        raise ValueError('x')\n    return True\n"
+    assert _fingerprint(tmp_path, monkeypatch, {"app._pinmod": raise_code.replace("{T}", "1")}) != _fingerprint(
+        tmp_path, monkeypatch, {"app._pinmod": raise_code.replace("{T}", "2")}
+    )
+    default = (
+        "from pydantic import BaseModel, Field\nclass M(BaseModel):\n    x: int = Field(default={T}, description='d')\n"
+        "def runner(record): return M()\n"
+    )
+    assert _fingerprint(tmp_path, monkeypatch, {"app._pinmod": default.replace("{T}", "1")}) != _fingerprint(
+        tmp_path, monkeypatch, {"app._pinmod": default.replace("{T}", "2")}
+    )
+    coded = "def runner(record):\n    raise CodedValueError('x', code='{T}')\n"
+    assert _fingerprint(tmp_path, monkeypatch, {"app._pinmod": coded.replace("{T}", "a")}) != _fingerprint(
+        tmp_path, monkeypatch, {"app._pinmod": coded.replace("{T}", "b")}
+    )
+
+
+def test_every_environment_derived_constant_is_declared() -> None:
+    """Constants read from the environment at import are listed (and only those): a stale declaration is a defect too."""
+    assert rubric_pins.discover_environment_constants() == sorted(rubric_pins.DECLARED_ENVIRONMENT_CONSTANTS)
+
+
+def test_fingerprints_do_not_depend_on_the_deployment_environment() -> None:
+    """CI sets storage endpoints and credentials; a laptop does not. The fingerprints must be the same."""
+    import os
+
+    code = (
+        "from app.services.trust import rubric_pins as r\n"
+        "print(sorted((k, v[0], v[1]) for k, v in r.current_fingerprints().items()))\n"
+    )
+    base_env = {k: v for k, v in os.environ.items() if not k.startswith("S3_")}
+    outputs = []
+    for extra in ({}, {"S3_ENDPOINT_URL": "http://ci.invalid:9000", "S3_BUCKET": "ci-bucket", "S3_SECRET_KEY": "x"}):
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT / "backend",
+            env={**base_env, **extra},
+        )
+        assert result.returncode == 0, result.stderr
+        outputs.append(result.stdout)
+    assert outputs[0] == outputs[1]

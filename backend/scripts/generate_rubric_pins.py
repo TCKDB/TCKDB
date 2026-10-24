@@ -90,8 +90,11 @@ def main(argv: list[str] | None = None) -> int:
 
     unbumped = rubric_pins.unbumped_changes(fingerprints, existing)
     if document.get("algorithm") != rubric_pins.ALGORITHM:
-        # The fingerprinting changed (not a rubric), so every fingerprint moved. Re-pin all, changing nothing else.
+        # The fingerprinting changed (not a rubric), so every fingerprint moved. Re-pin all, changing nothing else, and
+        # say so in the pins file: a rule change landing in the same commit would otherwise hide in this re-pin.
         unbumped = []
+        if "algorithm" in document:  # a first pin has nothing to re-pin from
+            overrides.append({"algorithm_repin": {"from": document["algorithm"], "to": rubric_pins.ALGORITHM}})
     refused = [n for n in unbumped if n not in args.allow_unbumped]
     if refused:
         for name in refused:

@@ -39,6 +39,10 @@ callable without readable source, ``getattr`` with a computed name, ``eval``/``e
 read of the environment or of ``settings`` (an input to a verdict that the fingerprint cannot see). A genuinely needed
 read can be declared in :data:`DECLARED_INPUTS` with the reason.
 
+**Out of scope.** Anything that runs outside Python is not fingerprinted: DB-side functions and triggers, server defaults,
+column defaults that are SQL, and migrations. Python code runs in this process; SQL a rubric reads is fingerprinted as
+text when it is a module-level expression, but what the database does with it is not.
+
 The fingerprint comes from ``ast.dump`` and the pins record the Python minor version they were made under.
 """
 
@@ -48,6 +52,7 @@ import ast
 import dataclasses
 import enum
 import hashlib
+import importlib
 import inspect
 import json
 import os
@@ -56,9 +61,14 @@ import sys
 import textwrap
 from collections.abc import Callable
 from functools import partial
-from pathlib import Path
+from pathlib import Path, PurePath
 from types import FunctionType, ModuleType
 from typing import Any
+
+from sqlalchemy import Column
+from sqlalchemy.ext.hybrid import hybrid_method, hybrid_property
+from sqlalchemy.orm import configure_mappers
+from sqlalchemy.sql import ClauseElement
 
 from app.services.trust.models import EvidenceRubric
 from app.services.trust.rubrics import RUBRICS
@@ -66,7 +76,7 @@ from app.services.trust.rubrics import RUBRICS
 #: Bumped when the fingerprinting itself changes (what it follows), which moves every fingerprint without any rubric
 #: changing. The generator then re-pins all of them; a rubric change in the same commit would hide in that re-pin, so a
 #: commit that changes the algorithm should change nothing else.
-ALGORITHM = 3
+ALGORITHM = 5
 
 PINS_PATH = Path(__file__).with_name("rubric_pins.json")
 
@@ -83,8 +93,18 @@ GRADING_ENTRYPOINTS: dict[str, tuple[str, ...]] = {
         "app.services.scientific_read.trust_floor:evaluate_shown_kinetics",
     ),
     "computed_thermo": ("app.services.trust.evaluator:evaluate_loaded_thermo",),
-    "computed_statmech": ("app.services.trust.evaluator:evaluate_loaded_statmech_under",),
-    "computed_ts_statmech": ("app.services.trust.evaluator:evaluate_loaded_statmech_under",),
+    # The read paths call ``evaluate_loaded_statmech``, which picks the rubric by owner (``statmech_rubric_for``) and then
+    # grades under it: the chooser is part of what decides which rubric judged a record.
+    "computed_statmech": (
+        "app.services.trust.evaluator:evaluate_loaded_statmech",
+        "app.services.trust.evaluator:evaluate_loaded_statmech_under",
+        "app.services.trust.rubrics:statmech_rubric_for",
+    ),
+    "computed_ts_statmech": (
+        "app.services.trust.evaluator:evaluate_loaded_statmech",
+        "app.services.trust.evaluator:evaluate_loaded_statmech_under",
+        "app.services.trust.rubrics:statmech_rubric_for",
+    ),
     "computed_transport": ("app.services.trust.evaluator:evaluate_loaded_transport",),
     "computed_transition_state": (
         "app.services.trust.evaluator:evaluate_loaded_transition_state_entry",
@@ -102,24 +122,115 @@ REPRODUCIBILITY_ENTRYPOINTS: tuple[str, ...] = (
     "app.services.reproducibility_rubric:reproducibility_rubric_for",
 )
 
-#: Functions that call ``getattr`` with a computed attribute name, each reviewed to read a *data* attribute of the record
-#: being graded (a column or relationship), never to choose which function runs. ``module:qualname`` -> why that is
-#: safe. A computed ``getattr`` anywhere else in the walked code fails the guard: what it dispatches to cannot be followed.
+#: Calls to ``getattr``/``setattr`` with a computed attribute name, each reviewed to read or write a *data* attribute
+#: (a column, a relationship, a model field), never to choose which function runs. The key is ``module:qualname :: call``,
+#: the exact call as ``ast.unparse`` prints it, so a second computed call in the same function still fails the guard.
 DYNAMIC_ATTRIBUTE_READS: dict[str, str] = {
-    "app.services.reproducibility_rubric:_mapped_columns": "reads each mapped column of a row; the names come from the table",
-    "app.services.reproducibility_rubric:_target_snapshot": "reads relationship names from fixed per-record-type tuples",
-    "app.services.reproducibility_rubric:_typed_output_snapshot": "reads the result relationship named by a fixed table",
-    "app.services.scientific_read.trust_floor:_swapped": "swaps loaded collections named by the callers' literal tuples",
-    "app.services.trust.evaluator:_thermo_has_representation": "reads NASA coefficient columns from a fixed tuple",
-    "app.services.trust.rubrics:_check_result_block_present": "reads one result attribute; each caller binds a literal name",
-    "app.services.trust.rubrics:_thermo_has_nasa_representation": "reads NASA coefficient columns from a fixed tuple",
+    "app.services.reproducibility_rubric:_mapped_columns :: getattr(row, column.key)":
+        "reads each mapped column of a row; the names come from the table",
+    "app.services.reproducibility_rubric:_target_snapshot :: getattr(target, name)":
+        "reads relationship names from fixed per-record-type tuples",
+    "app.services.reproducibility_rubric:_typed_output_snapshot :: getattr(calculation, attr)":
+        "reads the result relationship named by a fixed table",
+    "app.services.scientific_read.ref_guard:_apply :: setattr(action.container, action.key, value)":
+        "writes a withheld ref into the response tree being walked; a data edit, never a function choice",
+    "app.services.scientific_read.ref_guard:_children :: getattr(node, name, None)":
+        "walks a response model's fields generically (data traversal)",
+    "app.services.scientific_read.ref_guard:_transform :: getattr(node, f.name)":
+        "reads each declared field of a response dataclass (data traversal)",
+    "app.services.scientific_read.ref_guard:_transform :: getattr(node, name)":
+        "reads each field of a response model (data traversal)",
+    "app.services.scientific_read.ref_guard:hidden_refs :: getattr(model, gated.parent_fk)":
+        "reads the foreign-key column a fixed declaration names",
+    "app.services.scientific_read.trust_floor:_swapped :: getattr(obj, attr)":
+        "swaps loaded collections named by the callers' literal tuples",
+    "app.services.trust.evaluator:_thermo_has_representation :: getattr(thermo.nasa, field)":
+        "reads NASA coefficient columns from a fixed tuple",
+    "app.services.trust.rubrics:_check_result_block_present :: getattr(calc, attr_name)":
+        "reads one result attribute; each caller binds a literal name",
+    "app.services.trust.rubrics:_thermo_has_nasa_representation :: getattr(nasa, field)":
+        "reads NASA coefficient columns from a fixed tuple",
+    "tckdb_schemas.structure_declarations:ActualProtocolDeclaration :: getattr(self, name)":
+        "reads the declaration's own fields by the names of a fixed tuple",
+    "tckdb_schemas.structure_declarations:ActualProtocolDeclaration.validate_content :: getattr(self, name)":
+        "reads the declaration's own fields by the names of a fixed tuple",
 }
 
 #: Filled by :func:`discover_dynamic_attribute_sites` only; ``None`` in normal operation.
 _DISCOVERED: list[str] | None = None
+_DISCOVERED_ENV: list[str] | None = None
 
 #: Environment or settings reads a verdict is allowed to depend on, each with the reason. Empty: none does.
 DECLARED_INPUTS: dict[str, str] = {}
+
+#: Module-level constants that are read from the environment or settings at import (a storage endpoint, a bucket). Each
+#: differs between machines and is configuration, not a rule, so it is declared here with the reason rather than
+#: fingerprinted. A module constant derived from the environment and absent from this table fails the guard.
+DECLARED_ENVIRONMENT_CONSTANTS: dict[str, str] = {
+    "app.services.artifact_storage.S3_ACCESS_KEY": "storage credential, deployment configuration",
+    "app.services.artifact_storage.S3_BUCKET": "storage bucket name, deployment configuration",
+    "app.services.artifact_storage.S3_ENDPOINT_URL": "storage endpoint, deployment configuration",
+    "app.services.artifact_storage.S3_REGION": "storage region, deployment configuration",
+    "app.services.artifact_storage.S3_SECRET_KEY": "storage credential, deployment configuration",
+}
+
+_ENV_NAMES = {"environ", "getenv", "environb", "settings"}
+_ENV_CACHE: dict[str, tuple[set[str], dict[str, tuple[str, str]]]] = {}
+
+
+def _module_env_facts(module_name: str) -> tuple[set[str], dict[str, tuple[str, str]]]:
+    """``(names assigned from the environment/settings at module level, {imported name: (module, original name)})``."""
+    cached = _ENV_CACHE.get(module_name)
+    if cached is not None:
+        return cached
+    env: set[str] = set()
+    imported: dict[str, tuple[str, str]] = {}
+    module = sys.modules.get(module_name)
+    try:
+        tree = ast.parse(inspect.getsource(module)) if module is not None else None  # type: ignore[arg-type]
+    except (OSError, TypeError, SyntaxError):
+        tree = None
+    body = tree.body if tree is not None else []
+
+    def mentions_env(node: ast.AST) -> bool:
+        return any(
+            (isinstance(n, ast.Attribute) and n.attr in _ENV_NAMES) or (isinstance(n, ast.Name) and n.id in _ENV_NAMES)
+            for n in ast.walk(node)
+        )
+
+    # A module-level helper that reads the environment (``_env("S3_ENDPOINT_URL", default)``) makes what it feeds env-derived.
+    env_functions = {n.name for n in body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and mentions_env(n)}
+    for node in body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
+            uses_env = mentions_env(node.value) or any(
+                isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in env_functions
+                for n in ast.walk(node.value)
+            )
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if uses_env:
+                env.update(t.id for t in targets if isinstance(t, ast.Name))
+        elif isinstance(node, ast.ImportFrom) and node.module and _in_scope(node.module) and not node.level:
+            for alias in node.names:
+                imported[alias.asname or alias.name] = (node.module, alias.name)
+    _ENV_CACHE[module_name] = (env, imported)
+    return env, imported
+
+
+def _env_origin(module_name: str, name: str, seen: set[tuple[str, str]] | None = None) -> str | None:
+    """The ``module.name`` of the environment-derived constant *name* of *module_name* is, or ``None``."""
+    seen = seen if seen is not None else set()
+    if (module_name, name) in seen:
+        return None
+    seen.add((module_name, name))
+    env, imported = _module_env_facts(module_name)
+    if name in env:
+        return f"{module_name}.{name}"
+    if name in imported:
+        origin_module, origin_name = imported[name]
+        importlib.import_module(origin_module)
+        return _env_origin(origin_module, origin_name, seen)
+    return None
+
 
 _SCALARS = (int, float, str, bool, bytes, type(None))
 _FORBIDDEN_CALLS = {"eval", "exec", "globals", "locals", "__import__", "vars", "compile"}
@@ -148,6 +259,37 @@ def _strip_docstrings(tree: ast.AST) -> None:
                 and isinstance(body[0].value.value, str)
             ):
                 node.body = body[1:] or [ast.Pass()]
+
+
+_FIELD_DOCUMENTATION = {"description", "title", "examples", "json_schema_extra"}
+_MESSAGE_KEYWORDS = {"detail", "message", "msg"}
+
+
+def _is_text(node: ast.AST) -> bool:
+    return isinstance(node, ast.JoinedStr) or (isinstance(node, ast.Constant) and isinstance(node.value, str))
+
+
+class _Normalise(ast.NodeTransformer):
+    """Remove wording that cannot change a verdict: documentation keywords of pydantic ``Field`` and the plain-text
+    message of a ``raise``. Everything else, including an error ``code=`` and every non-text argument, stays."""
+
+    def visit_Call(self, node: ast.Call) -> ast.AST:
+        self.generic_visit(node)
+        func = node.func
+        if (isinstance(func, ast.Name) and func.id == "Field") or (isinstance(func, ast.Attribute) and func.attr == "Field"):
+            node.keywords = [k for k in node.keywords if k.arg not in _FIELD_DOCUMENTATION]
+        return node
+
+    def visit_Raise(self, node: ast.Raise) -> ast.AST:
+        exc = node.exc
+        if isinstance(exc, ast.Call):
+            exc.args = [ast.Constant("<message>") if _is_text(a) else self.visit(a) for a in exc.args]
+            for keyword in exc.keywords:
+                if keyword.arg in _MESSAGE_KEYWORDS and _is_text(keyword.value):
+                    keyword.value = ast.Constant("<message>")
+                else:
+                    keyword.value = self.visit(keyword.value)
+        return node
 
 
 def _is_orm_model(cls: type) -> bool:
@@ -219,12 +361,12 @@ class _Walker:
             # Synthesised (dataclass ``__init__``/``__setattr__``): it is generated from declarations that the class
             # source, fingerprinted with the class, already holds.
             return
+        names, text, imports = self._function_text(fn)
         key = f"{fn.__module__}:{fn.__qualname__}"
         if fn.__name__ == "<lambda>":
-            key += f"@{fn.__code__.co_firstlineno}:{fn.__code__.co_filename}"
+            key += "#" + hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
         if key in self.code:
             return
-        names, text = self._function_text(fn)
         self.code[key] = text
         scope: dict[str, Any] = dict(fn.__globals__)
         if fn.__closure__:
@@ -233,13 +375,48 @@ class _Walker:
                     scope[name] = cell.cell_contents
                 except ValueError:
                     continue
+        self._bind_local_imports(imports, scope, fn)
         for default in (*(fn.__defaults__ or ()), *(fn.__kwdefaults__ or {}).values()):
             self.constants[f"{key}#default"] = self._canon(default, f"default of {key}")
         for chain in names:
             self._resolve_chain(chain, scope, key)
 
-    def _function_text(self, fn: FunctionType) -> tuple[list[tuple[str, ...]], str]:
-        """The normalised code of *fn* and the dotted names it uses (each as a tuple of parts)."""
+    @staticmethod
+    def _bind_local_imports(imports: list[ast.stmt], scope: dict[str, Any], fn: FunctionType) -> None:
+        """Make the names a function imports in its body resolvable, as module globals are. Out-of-scope modules are
+        left out; an in-scope module that cannot be imported is refused."""
+        for node in imports:
+            try:
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if _in_scope(alias.name):
+                            top = importlib.import_module(alias.name.split(".")[0])
+                            scope[alias.asname or alias.name.split(".")[0]] = (
+                                importlib.import_module(alias.name) if alias.asname else top
+                            )
+                elif isinstance(node, ast.ImportFrom):
+                    if node.level:
+                        package = fn.__module__.rsplit(".", node.level)[0] if node.level else fn.__module__
+                        module_name = f"{package}.{node.module}" if node.module else package
+                    else:
+                        module_name = node.module or ""
+                    if not _in_scope(module_name):
+                        continue
+                    module = importlib.import_module(module_name)
+                    for alias in node.names:
+                        if alias.name == "*":
+                            raise Unfingerprintable(f"{fn.__module__}:{fn.__qualname__} uses `from {module_name} import *`")
+                        if hasattr(module, alias.name):
+                            scope[alias.asname or alias.name] = getattr(module, alias.name)
+                        else:
+                            scope[alias.asname or alias.name] = importlib.import_module(f"{module_name}.{alias.name}")
+            except ImportError as exc:
+                raise Unfingerprintable(
+                    f"{fn.__module__}:{fn.__qualname__} imports {ast.unparse(node)!r}, which cannot be imported: {exc}"
+                ) from exc
+
+    def _function_text(self, fn: FunctionType) -> tuple[list[tuple[str, ...]], str, list[ast.stmt]]:
+        """The normalised code of *fn*, the dotted names it uses (each a tuple of parts) and its local imports."""
         tree = None
         if fn.__name__ != "<lambda>":
             try:
@@ -248,19 +425,24 @@ class _Walker:
                 tree = None
         if tree is None:
             # A lambda (or source the parser cannot take on its own): read the code object instead.
-            return self._code_object_names(fn.__code__), self._code_object_text(fn.__code__, fn.__doc__)
+            return self._code_object_names(fn.__code__), self._code_object_text(fn.__code__, fn.__doc__), []
         _strip_docstrings(tree)
+        tree = ast.fix_missing_locations(_Normalise().visit(tree))
         chains: list[tuple[str, ...]] = []
+        imports: list[ast.stmt] = []
         for node in ast.walk(tree):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                imports.append(node)
             if isinstance(node, ast.Call):
                 self._check_call(node, fn)
+            self._check_lookup(node, fn)
             if isinstance(node, ast.Attribute):
                 parts = self._attr_parts(node)
                 if parts:
                     chains.append(parts)
             elif isinstance(node, ast.Name):
                 chains.append((node.id,))
-        return chains, ast.dump(tree, annotate_fields=False, include_attributes=False)
+        return chains, ast.dump(tree, annotate_fields=False, include_attributes=False), imports
 
     @staticmethod
     def _attr_parts(node: ast.Attribute) -> tuple[str, ...] | None:
@@ -284,17 +466,40 @@ class _Walker:
         if name in {"getattr", "setattr", "hasattr"} and isinstance(func, ast.Name):
             second = node.args[1] if len(node.args) > 1 else None
             if not (isinstance(second, ast.Constant) and isinstance(second.value, str)):
+                call_key = f"{where} :: {ast.unparse(node)}"
                 if _DISCOVERED is not None:
-                    _DISCOVERED.append(where)
+                    _DISCOVERED.append(call_key)
                     return
-                if where in DYNAMIC_ATTRIBUTE_READS:
+                if call_key in DYNAMIC_ATTRIBUTE_READS:
                     return
                 raise Unfingerprintable(
-                    f"{where} calls {name}() with a computed attribute name: what it dispatches to cannot be "
-                    "followed statically. Use a literal name or an explicit table."
+                    f"{where} calls {name}() with a computed attribute name ({ast.unparse(node)}): what it dispatches "
+                    "to cannot be followed statically. Use a literal name or an explicit table, or list this exact call "
+                    "in DYNAMIC_ATTRIBUTE_READS."
                 )
         if name in {"import_module", "attrgetter", "methodcaller"}:
             raise Unfingerprintable(f"{where} calls {name}(): dynamic dispatch the fingerprint cannot follow")
+
+    @staticmethod
+    def _check_lookup(node: ast.AST, fn: FunctionType) -> None:
+        """Refuse reaching code through ``sys.modules`` or an object's ``__dict__``: what it finds cannot be followed."""
+        where = f"{fn.__module__}:{fn.__qualname__}"
+
+        def is_dict(value: ast.AST) -> bool:
+            return isinstance(value, ast.Attribute) and value.attr == "__dict__"
+
+        by_name = (
+            (isinstance(node, ast.Subscript) and is_dict(node.value))
+            or (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in {"get", "pop", "setdefault", "__getitem__"}
+                and is_dict(node.func.value)
+            )
+            or (isinstance(node, ast.Attribute) and node.attr == "modules" and isinstance(node.value, ast.Name) and node.value.id == "sys")
+        )
+        if by_name:
+            raise Unfingerprintable(f"{where} reads {ast.unparse(node)}: a lookup by name the fingerprint cannot follow")
 
     @staticmethod
     def _code_object_names(code: Any) -> list[tuple[str, ...]]:
@@ -318,7 +523,22 @@ class _Walker:
         if base_name not in scope:
             return
         value = scope[base_name]
-        label = f"{where.split(':')[0]}.{base_name}"
+        module_name = where.split(":")[0]
+        label = f"{module_name}.{base_name}"
+        origin = _env_origin(module_name, base_name) if isinstance(value, _SCALARS) else None
+        if origin is not None:
+            if _DISCOVERED_ENV is not None:
+                _DISCOVERED_ENV.append(origin)
+            if origin not in DECLARED_ENVIRONMENT_CONSTANTS:
+                if _DISCOVERED_ENV is not None:
+                    return
+                raise Unfingerprintable(
+                    f"{where} reads {origin}, a module constant taken from the environment or settings at import: it "
+                    "differs between machines and the fingerprint cannot see what it is. Declare it in "
+                    "DECLARED_ENVIRONMENT_CONSTANTS with the reason it is configuration and not a rule."
+                )
+            self.constants[f"{origin}#environment"] = DECLARED_ENVIRONMENT_CONSTANTS[origin]
+            return
         self._reference(label, value, where)
         # Follow module attributes: ``module.helper`` or ``module.CONSTANT``.
         for part in chain[1:]:
@@ -388,14 +608,25 @@ class _Walker:
             except (OSError, TypeError, SyntaxError) as exc:
                 raise Unfingerprintable(f"no readable source for class {key}: {exc}") from exc
             _strip_docstrings(tree)
+            tree = ast.fix_missing_locations(_Normalise().visit(tree))
             for node in ast.walk(tree):
                 if isinstance(node, ast.Call):
                     self._check_call(node, _Stub(cls))  # type: ignore[arg-type]
+                self._check_lookup(node, _Stub(cls))  # type: ignore[arg-type]
             self.code[f"class {key}"] = ast.dump(tree, annotate_fields=False, include_attributes=False)
+        if orm:
+            self._visit_orm_graph(cls, key)
         for member_name, member in vars(cls).items():
-            if isinstance(member, (FunctionType, staticmethod, classmethod, property)):
+            if isinstance(member, (hybrid_property, hybrid_method)):
+                for accessor in (member.func if isinstance(member, hybrid_method) else member.fget,
+                                 getattr(member, "fset", None), getattr(member, "expr", None)):
+                    if isinstance(accessor, FunctionType):
+                        self.visit(accessor)
+            elif isinstance(member, (FunctionType, staticmethod, classmethod, property)):
                 self.visit(member)
-            elif not orm and not member_name.startswith("__"):
+            elif not orm and not member_name.startswith("__") and not (
+                issubclass(cls, enum.Enum) and member_name.startswith("_") and member_name.endswith("_")
+            ):
                 canon = self._canon(member, f"{key}.{member_name}")
                 if canon is not _IGNORED and callable(member) is False:
                     self.constants[f"{key}.{member_name}"] = canon
@@ -403,24 +634,44 @@ class _Walker:
             if base is not object and _in_scope(base.__module__):
                 self._visit_class(base)
 
+    def _visit_orm_graph(self, cls: type, key: str) -> None:
+        """An ORM instance carries behaviour in its enum columns and in the models it relates to: follow both, and
+        fingerprint any SQL-expression column (``column_property``)."""
+        configure_mappers()
+        mapper = cls.__mapper__  # type: ignore[attr-defined]
+        for column in mapper.columns:
+            enum_class = getattr(column.type, "enum_class", None)
+            if enum_class is not None:
+                self._visit_class(enum_class)
+        for prop in mapper.column_attrs:
+            if any(not isinstance(c, Column) for c in prop.columns):
+                for c in prop.columns:
+                    if not isinstance(c, Column):
+                        self.constants[f"{key}.{prop.key}#column_property"] = str(c)
+        for relationship in mapper.relationships:
+            self._visit_class(relationship.mapper.class_)
+
     # ---- constants -------------------------------------------------------------------------------------------
 
-    def _canon(self, value: Any, label: str) -> Any:
+    def _canon(self, value: Any, label: str, top: bool = True) -> Any:
         """A JSON-stable form of *value*, visiting any callable inside it; ``_IGNORED`` for out-of-scope objects."""
         if isinstance(value, enum.Enum):
             self._visit_class(type(value))
-            return {"enum": f"{type(value).__name__}.{value.name}", "value": self._canon(value.value, label)}
+            return {"enum": f"{type(value).__name__}.{value.name}", "value": self._canon(value.value, label, False)}
         if isinstance(value, _SCALARS):
             return value.hex() if isinstance(value, bytes) else value
         if isinstance(value, re.Pattern):
             return {"re": value.pattern, "flags": value.flags}
         if isinstance(value, (tuple, list)):
-            return [self._canon(v, label) for v in value]
+            return [self._canon(v, label, False) for v in value]
         if isinstance(value, (set, frozenset)):
-            parts = [self._canon(v, label) for v in value]
+            parts = [self._canon(v, label, False) for v in value]
             return sorted(parts, key=lambda p: json.dumps(p, sort_keys=True, default=str))
         if isinstance(value, dict):
-            items = {json.dumps(self._canon(k, label), sort_keys=True, default=str): self._canon(v, label) for k, v in value.items()}
+            items = {
+                json.dumps(self._canon(k, label, False), sort_keys=True, default=str): self._canon(v, label, False)
+                for k, v in value.items()
+            }
             return dict(sorted(items.items()))
         if isinstance(value, (FunctionType, partial, staticmethod, classmethod, property)) or inspect.isclass(value):
             self._reference(label, value, label)
@@ -428,16 +679,27 @@ class _Walker:
         if callable(value) and getattr(value, "__wrapped__", None) is not None:
             self._reference(label, value, label)
             return f"callable:{getattr(value, '__qualname__', type(value).__name__)}"
+        if isinstance(value, ClauseElement):
+            try:
+                return {"sql": str(value.compile(compile_kwargs={"literal_binds": True}))}
+            except Exception:
+                return {"sql": str(value)}
         module = type(value).__module__
         if not _in_scope(module):
-            return _IGNORED
+            if top:
+                return _IGNORED
+            text = repr(value)
+            return {
+                "out_of_scope": f"{module}.{type(value).__qualname__}",
+                "repr": None if (" at 0x" in text or len(text) > 200 or isinstance(value, PurePath)) else text,
+            }
         if _is_opaque(value):
             return {"opaque": type(value).__name__}
         self._visit_class(type(value))
         if dataclasses.is_dataclass(value):
-            return {"dataclass": type(value).__name__, "fields": self._canon(dataclasses.asdict(value), label)}
+            return {"dataclass": type(value).__name__, "fields": self._canon(dataclasses.asdict(value), label, False)}
         if hasattr(value, "model_dump"):
-            return {"model": type(value).__name__, "fields": self._canon(value.model_dump(mode="python"), label)}
+            return {"model": type(value).__name__, "fields": self._canon(value.model_dump(mode="python"), label, False)}
         raise Unfingerprintable(
             f"{label} is an instance of {type(value).__module__}.{type(value).__name__} that the guard cannot "
             "canonicalise. Make it a dataclass, an enum, a pydantic model or a plain constant."
@@ -535,6 +797,14 @@ def unguarded_rubric_names() -> tuple[str, ...]:
     )
 
 
+def stable_dump_for_tests(rubric_name: str) -> str:
+    """The JSON the fingerprint of a reproducibility rubric is hashed from (a test asserts it holds no object address)."""
+    walker = _Walker()
+    for dotted in REPRODUCIBILITY_ENTRYPOINTS:
+        walker.visit(_resolve(dotted))
+    return json.dumps({"name": rubric_name, "code": walker.code, "constants": walker.constants}, sort_keys=True, default=str)
+
+
 def reachable(rubric_name: str) -> tuple[set[str], set[str]]:
     """``(code keys, constant labels)`` the guard follows for a pinned rubric (what a regression test asserts on)."""
     walker = _Walker()
@@ -547,6 +817,17 @@ def reachable(rubric_name: str) -> tuple[set[str], set[str]]:
     for dotted in entrypoints:
         walker.visit(_resolve(dotted))
     return set(walker.code), set(walker.constants)
+
+
+def discover_environment_constants() -> list[str]:
+    """Every environment-derived module constant reachable from the pinned entrypoints (a maintenance aid)."""
+    global _DISCOVERED_ENV
+    _DISCOVERED_ENV = []
+    try:
+        current_fingerprints()
+        return sorted(set(_DISCOVERED_ENV))
+    finally:
+        _DISCOVERED_ENV = None
 
 
 def discover_dynamic_attribute_sites() -> list[str]:

@@ -1182,11 +1182,22 @@ a whole (an enum's methods and properties count; an SQLAlchemy model contributes
 (unless the site is listed in `DYNAMIC_ATTRIBUTE_READS` with the reason it reads a data attribute and never chooses a function), `eval`/`exec`/`globals`, and any read of
 the environment or of `settings` (declare a genuine one in `DECLARED_INPUTS`). The pins record the Python minor version, because `ast.dump` differs between minors.
 
+**Also followed.** Imports inside a function body; the enum columns and relationship targets of every ORM model it reaches (an instance of a model carries
+the behaviour of its enums, e.g. `ArtifactIntegrityFinding.is_break`); ORM `hybrid_property` accessors and `column_property` expressions; module-level SQL
+expressions (as the text they compile to); and the runtime statmech rubric chooser (`evaluate_loaded_statmech`, `statmech_rubric_for`). A test checks that every
+`evaluate_*` the read services call is reached by a pinned rubric. Also refused: `sys.modules` and `__dict__[...]` lookups, and a module constant read from the
+environment at import unless it is listed in `DECLARED_ENVIRONMENT_CONSTANTS` as configuration (the storage endpoint and credentials; they differ between CI and a
+laptop). `DYNAMIC_ATTRIBUTE_READS` keys the exact call, so a second computed `getattr` in an allowed function still fails.
+
+**Left out of the fingerprint, on purpose.** Pydantic `Field` descriptions, titles and examples, and the plain-text message of a `raise` (its `code=` and every
+other argument still count). Docstrings and comments are not in the AST. A renamed local variable or an added type annotation does move it. **Out of scope:**
+DB-side functions and triggers, server defaults and migrations.
+
 **To bump a rubric.** (1) Change the checks. (2) Raise `version` on its `EvidenceRubric` in `app/services/trust/rubrics.py` (or on `SHARED` / `TS_STATMECH` in
 `reproducibility_rubric.py`). (3) Run `conda run -n tckdb_env python backend/scripts/generate_rubric_pins.py` and commit the pin. A new rubric with checks also
 needs an entry in `GRADING_ENTRYPOINTS`. The script refuses to re-pin a changed rubric whose version did not move. `--allow-unbumped NAME --reason TEXT`
 overrides for a change that decides nothing new and records `{name, version, reason}` in `unbumped_overrides` (the test surfaces them);
 `--repin-for-python` re-pins everything after a Python minor upgrade and refuses unless only the Python version moved. A change to the fingerprinting itself
-bumps `ALGORITHM` and re-pins everything in a commit that changes nothing else. Pre-release, pins are kept for current versions only.
+bumps `ALGORITHM` and re-pins everything, recorded as `algorithm_repin` in `unbumped_overrides`, in a commit that changes nothing else. Pre-release, pins are kept for current versions only.
 
 **Not guarded, candidates:** selection procedures, `RENDERERS`, `PAYLOAD_FORMATS`, `PARSERS`, and the review-tier rubrics above.
