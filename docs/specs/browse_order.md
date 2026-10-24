@@ -197,8 +197,9 @@ and the other entity routes under `backend/app/api/routes/`) are the **raw entit
   Which columns count is a registry (`POINTER_KINDS` in `app/api/routes/_legacy_reads.py`), not a naming rule; a registry test fails for
   an id column in a returned model that is in neither it nor the list of ungated columns with their reasons. A child is hidden with its
   parent (an observation in a hidden conformer group; an entry of a hidden transition state), and an id-typed query filter that names a
-  hidden record answers as an id that names nothing. In `hidden_by_default`, a child hidden through its parent is counted under the
-  *parent's* excluding status (its own status first, if that excludes it), once, so the count equals what `include_rejected` restores. A path id is judged as the id FastAPI bound, so `+5`, `5.0` and ` 5` are the same
+  hidden record answers as an id that names nothing. In `hidden_by_default`, a child is counted under every excluding status that applies to it, its
+  own and its parent's (once per status). Each count is therefore the number of matching records that exclusion hides, not the number a
+  single switch restores: a child that is itself deprecated in a rejected group is in both counts and needs both switches. A path id is judged as the id FastAPI bound, so `+5`, `5.0` and ` 5` are the same
   id as `5`. The lists under a species entry or reaction entry (thermo, statmech, transport, conformers, kinetics, transition states) and a
   network's solves apply the same rules; the entry summary counts only what the curated list would show. Write routes take no profile.
 - **Disclosure.** A list under the exploratory profile reports `hidden_by_default` (see below). A bare-array sub-list has no envelope, so it

@@ -127,10 +127,12 @@ class LegacyVisibility:
     def hidden_child(self, session: Session, record_type: SubmissionRecordType, ids: Any) -> HiddenByDefault | None:
         """What the default hid among ``ids`` for a record that is shown only with its parent (:data:`PARENT_OF`).
 
-        A child is excluded by its own status or, failing that, by its parent's, and is counted once under the status that
-        excluded it, so the count equals what the ``include_*`` switch restores. One statement, or none.
+        A child is hidden by its own status and by its parent's. It is counted under EVERY excluding status that applies
+        to it (once per status), so each count is the number of matching records that exclusion hides. A child hidden by
+        two exclusions (itself deprecated, its group rejected) is in both counts and needs both switches. One statement,
+        or none.
         """
-        from sqlalchemy import and_, case, func
+        from sqlalchemy import and_, func, or_
         from sqlalchemy.orm import aliased
 
         from app.services.scientific_read.hidden_by_default import excluded_by_default, hidden_by_default_from_counts
@@ -141,17 +143,17 @@ class LegacyVisibility:
             return None
         own = aliased(RecordReview)
         parent = aliased(RecordReview)
-        effective = case((own.status.in_(excluded), own.status), (parent.status.in_(excluded), parent.status))
-        rows = session.execute(
-            select(effective, func.count())
+        row = session.execute(
+            select(*(func.count().filter(or_(own.status == status, parent.status == status)) for status in excluded))
             .select_from(model)
             .outerjoin(own, and_(own.record_type == record_type, own.record_id == model.id))
             .outerjoin(parent, and_(parent.record_type == parent_type, parent.record_id == getattr(model, fk)))
-            .where(model.id.in_(ids), effective.is_not(None))
-            .group_by(effective)
-        ).all()
+            .where(model.id.in_(ids))
+        ).one()
         return hidden_by_default_from_counts(
-            dict(rows), include_rejected=self.include_rejected, include_deprecated=self.include_deprecated
+            dict(zip(excluded, row, strict=True)),
+            include_rejected=self.include_rejected,
+            include_deprecated=self.include_deprecated,
         )
 
 

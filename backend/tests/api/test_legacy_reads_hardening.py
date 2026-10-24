@@ -550,3 +550,27 @@ def test_the_disclosure_counts_children_hidden_through_a_rejected_parent(client,
         f"{LEGACY}/conformer-observations", params={"conformer_group_id": group.id, "profile": "curated"}
     ).json()
     assert curated["hidden_by_default"] is None
+
+
+def test_a_child_hidden_by_two_exclusions_is_counted_under_both(client, db_session):
+    """Itself deprecated, in a rejected group: in both counts, and restored only when both switches are on."""
+    species = make_species(db_session, smiles="C=O", inchi_key=next_inchi_key("DD"))
+    entry = make_species_entry(db_session, species)
+    group = make_conformer_group(db_session, entry, label="rejected-group")
+    set_review(db_session, record_type=T.conformer_group, record_id=group.id, status=S.rejected)
+    child = make_conformer_observation(db_session, conformer_group=group)
+    set_review(db_session, record_type=T.conformer_observation, record_id=child.id, status=S.deprecated)
+    url = f"{LEGACY}/conformer-observations"
+    base = {"conformer_group_id": group.id}
+    body = client.get(url, params=base).json()
+    assert body["items"] == []
+    assert body["hidden_by_default"]["counts"] == {"rejected": 1, "deprecated": 1}
+    only_deprecated = client.get(url, params={**base, "include_deprecated": "true"}).json()
+    assert only_deprecated["items"] == []  # the rejected group still hides it
+    assert only_deprecated["hidden_by_default"]["counts"] == {"rejected": 1}
+    only_rejected = client.get(url, params={**base, "include_rejected": "true"}).json()
+    assert only_rejected["items"] == []  # its own deprecated status still hides it
+    assert only_rejected["hidden_by_default"]["counts"] == {"deprecated": 1}
+    both = client.get(url, params={**base, "include_rejected": "true", "include_deprecated": "true"}).json()
+    assert [i["id"] for i in both["items"]] == [child.id]
+    assert both["hidden_by_default"] is None

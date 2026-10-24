@@ -46,13 +46,17 @@ class HiddenByDefaultHolder:
     def value(self) -> HiddenByDefault | None:
         if not self.blocks:
             return None
+        counted = {block.counted for block in self.blocks.values()}
+        if len(counted) > 1:
+            # Entries and records are different things to count: summing them would report a number of nothing.
+            raise ValueError(f"cannot merge hidden-by-default blocks that count different things: {sorted(counted)}")
         counts: dict[str, int] = {}
         include_with: dict[str, str] = {}
         for block in self.blocks.values():
             for key, n in block.counts.items():
                 counts[key] = counts.get(key, 0) + n
             include_with.update(block.include_with)
-        return HiddenByDefault(counts=counts, include_with=include_with)
+        return HiddenByDefault(counts=counts, include_with=include_with, counted=counted.pop())
 
 
 _HOLDER: ContextVar[HiddenByDefaultHolder | None] = ContextVar("tckdb_hidden_by_default", default=None)

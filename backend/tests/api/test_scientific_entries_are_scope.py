@@ -101,3 +101,36 @@ def test_the_species_search_entry_listing_still_follows_the_entry_visibility(cli
     assert entry.public_ref not in [e["species_entry_ref"] for e in entries]
     body = client.get(f"{API}/species/search?smiles=C=O&include_rejected=true").json()
     assert entry.public_ref in [e["species_entry_ref"] for r in body["records"] for e in r["entries"]]
+
+
+def test_a_record_below_the_floor_stays_hidden_when_its_entry_is_skipped(client, db_session):
+    """Skipping the entry's review does not skip the record's own: curated drops the unreviewed thermo, the default drops
+    the rejected one, and the switch brings it back."""
+    species = make_species(db_session, smiles="C=O", inchi_key=next_inchi_key("BF"))
+    entry = make_species_entry(db_session, species)  # unreviewed entry
+    approved = make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=-1.0)
+    unreviewed = make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=-2.0)
+    rejected = make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=-3.0)
+    set_review(db_session, record_type=T.thermo, record_id=approved.id, status=S.approved)
+    set_review(db_session, record_type=T.thermo, record_id=rejected.id, status=S.rejected)
+
+    def refs(**params):
+        query = "&".join(f"{k}={v}" for k, v in params.items())
+        body = client.get(f"{API}/thermo/search?species_entry_ref={entry.public_ref}&{query}").json()
+        return {r["thermo"]["thermo_ref"] for r in body["records"]}
+
+    assert refs(profile="curated") == {approved.public_ref}
+    assert refs(profile="curated", include_rejected="true") == {approved.public_ref}  # the floor overrides the opt-in
+    assert refs() == {approved.public_ref, unreviewed.public_ref}  # exploratory: the rejected one is excluded by default
+    assert refs(include_rejected="true") == {approved.public_ref, unreviewed.public_ref, rejected.public_ref}
+
+
+def test_the_species_and_structure_searches_say_they_count_species_entries(client, db_session):
+    """The entry counts of the species-level searches are counts of entries, and the block says so."""
+    species = make_species(db_session, smiles="CCO", inchi_key="LFQSCWFLJHTTHZ-UHFFFAOYSA-N")
+    entry = make_species_entry(db_session, species)
+    set_review(db_session, record_type=T.species_entry, record_id=entry.id, status=S.rejected)
+    for url in (f"{API}/species/search?smiles=CCO", f"{API}/species/structure-search?query_smiles=CCO&mode=exact"):
+        block = client.get(url).json()["request"]["hidden_by_default"]
+        assert block["counted"] == "species_entries", (url, block)
+        assert block["counts"] == {"rejected": 1, "deprecated": 0}, (url, block)
