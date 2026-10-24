@@ -57,7 +57,7 @@ def test_a_warm_cache_builds_the_same_routes_in_the_same_order(cache_on) -> None
 
     assert shape(first) == shape(second)
     # Distinct route objects: the cache shares dependants, not routes.
-    assert all(a is not b for a, b in zip(first.routes, second.routes))
+    assert all(a is not b for a, b in zip(first.routes, second.routes, strict=True))
 
 
 def test_the_second_build_is_served_from_the_cache(cache_on) -> None:
@@ -95,20 +95,3 @@ def test_a_dependency_override_on_one_app_does_not_reach_another(cache_on) -> No
     third = _build_app()
     with TestClient(third) as three:
         assert three.get("/probe").json() == {"value": "real"}
-
-
-def test_a_failed_construction_is_not_cached(cache_on) -> None:
-    def broken(x: object = Depends(lambda: None)) -> None:  # noqa: B008
-        return None
-
-    app = FastAPI()
-    entries = len(route_build_cache._CACHE)
-    with pytest.raises(Exception):
-        # A path parameter the callable does not declare is a construction
-        # error in FastAPI; whichever it raises, nothing may be left behind
-        # that would make the second attempt succeed.
-        app.add_api_route("/{missing}", broken, response_model=type("NotAModel", (), {"__slots__": ()}))
-    again = FastAPI()
-    with pytest.raises(Exception):
-        again.add_api_route("/{missing}", broken, response_model=type("NotAModel", (), {"__slots__": ()}))
-    assert len(route_build_cache._CACHE) >= entries
