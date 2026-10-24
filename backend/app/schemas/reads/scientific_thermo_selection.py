@@ -25,11 +25,10 @@ from tckdb_schemas.fragments.version import VersionRef
 from app.db.models.common import PhaseKind, RecordReviewStatus, ThermoTargetKind
 from app.schemas.reads.scientific_common import ProfiledRequestEcho
 from app.schemas.reads.scientific_selection_common import (
-    EligibilityDefaultEcho,
     LevelAndSoftwareFilters,
+    CandidateEligibility,
     SelectionEligibilityIn,
-    SelectionFilterAnswer,
-    SelectionFunnel,
+    SelectionStepsAnswer,
 )
 from app.schemas.reads.scientific_thermo import ThermoModelKindQuery
 
@@ -222,7 +221,7 @@ class ThermoSelectionReason(BaseModel):
     applicability: str
 
 
-class ThermoSelectionCandidate(BaseModel):
+class ThermoSelectionCandidate(CandidateEligibility):
     """One assessed record: its declared claims, its H298 applicability, and whether it competed."""
 
     thermo_ref: str
@@ -245,13 +244,6 @@ class ThermoSelectionCandidate(BaseModel):
     advisory: list[str] = Field(default_factory=list)
     eligible: bool = Field(
         description="Applicable, and no applied eligibility default excludes it: it competes in the ordering."
-    )
-    blocked_by: list[str] = Field(
-        default_factory=list, description="Applied eligibility defaults this candidate fails (why it does not compete)."
-    )
-    passed_only_by_override: list[str] = Field(
-        default_factory=list,
-        description="Eligibility defaults this candidate would fail but the request lifted: it competes because of that.",
     )
 
 
@@ -276,7 +268,7 @@ class ThermoSelectionDisclosures(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
-class ThermoSelectionResponse(BaseModel):
+class ThermoSelectionResponse(SelectionStepsAnswer):
     """The decision, its basis, and everything it rests on, as public refs only."""
 
     request: ThermoSelectionRequestEcho
@@ -292,13 +284,6 @@ class ThermoSelectionResponse(BaseModel):
     )
     administrative_order: list[str] = Field(default_factory=list)
     candidates: list[ThermoSelectionCandidate] = Field(default_factory=list)
-    filters: SelectionFilterAnswer = Field(
-        default_factory=SelectionFilterAnswer, description="Step 1: the filters as normalised, and how many candidates they removed."
-    )
-    eligibility: list[EligibilityDefaultEcho] = Field(
-        default_factory=list, description="Step 2: every named eligibility default, whether applied, and by whose choice."
-    )
-    funnel: SelectionFunnel
     disclosures: ThermoSelectionDisclosures
 
 

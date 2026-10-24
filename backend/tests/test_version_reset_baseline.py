@@ -58,7 +58,8 @@ REGISTRIES: dict[str, Callable[[], VersionRegistry]] = {
 EXPECTED: dict[str, int] = {
     "thermo_formats": 3,
     "thermo_semantics": 2,
-    "kinetics_formats": 2,
+    "kinetics_formats": 3,
+    "kinetics_semantics": 2,
     "statmech_formats": 2,
     "structure_formats": 2,
     "network_formats": 2,

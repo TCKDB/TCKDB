@@ -119,6 +119,32 @@ class SelectionFilterAnswer(BaseModel):
     removed: int = Field(default=0, description="Candidates the filters removed.")
 
 
+class SelectionStepsAnswer(BaseModel):
+    """Steps 1 and 2 of a select call as the answer states them. Every select response inherits these fields."""
+
+    filters: SelectionFilterAnswer = Field(
+        default_factory=SelectionFilterAnswer,
+        description="Step 1: the filters as normalised, and how many candidates they removed.",
+    )
+    eligibility: list[EligibilityDefaultEcho] = Field(
+        default_factory=list,
+        description="Step 2: every named eligibility default, whether applied, and by whose choice.",
+    )
+    funnel: SelectionFunnel
+
+
+class CandidateEligibility(BaseModel):
+    """What the eligibility defaults did to one candidate. Every select candidate inherits these fields."""
+
+    blocked_by: list[str] = Field(
+        default_factory=list, description="Applied eligibility defaults this candidate fails (why it does not compete)."
+    )
+    passed_only_by_override: list[str] = Field(
+        default_factory=list,
+        description="Eligibility defaults this candidate would fail but the request lifted: it competes because of that.",
+    )
+
+
 def filters_echo(filters: BaseModel | None) -> dict[str, Any]:
     """The supplied (non-null) filters of a request, as plain JSON."""
     if filters is None:

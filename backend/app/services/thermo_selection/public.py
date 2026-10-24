@@ -38,8 +38,6 @@ from app.schemas.reads.scientific_selection_common import (
     ELIGIBILITY_DEPRECATED,
     ELIGIBILITY_HARD_FAILED_EVIDENCE,
     ELIGIBILITY_REJECTED,
-    SelectionFilterAnswer,
-    SelectionFunnel,
 )
 from app.schemas.reads.scientific_thermo_selection import (
     QUANTITY_H298,
@@ -68,8 +66,7 @@ from app.services.scientific_read.handles import (
     resolve_species_entry_handle,
 )
 from app.services.scientific_read.profile import current_read_profile
-from app.services.selection_kernel.requested import Eligibility
-from app.services.selection_kernel.requested import echo as eligibility_echo
+from app.services.selection_kernel.requested import Eligibility, answer_steps
 from app.services.thermo_selection.models import MAX_CANDIDATES, H298Request, H298Selection, Outcome, ThermoFilters
 from app.services.thermo_selection.service import select_h298
 
@@ -80,7 +77,6 @@ THERMO_DEFAULTS = (
     ELIGIBILITY_HARD_FAILED_EVIDENCE,
     ELIGIBILITY_CONFIRMED_FINDINGS,
 )
-_FUNNEL_KEYS = ("considered", "removed_by_filters", "removed_by_eligibility", "remaining")
 
 #: ``Session.info`` key a TEST harness sets, explicitly, to be read under whatever isolation it already has.
 SNAPSHOT_OPT_OUT = "tckdb_read_snapshot_opt_out"
@@ -279,21 +275,14 @@ def build_response(
         fronts=[] if decision is None else decision["fronts"],
         administrative_order=[] if decision is None else decision["administrative_order"],
         candidates=candidates,
-        filters=SelectionFilterAnswer(
-            applied={
-                **manifest["request"]["filters"],
-                **({"min_review_status": body.min_review_status.value} if body.min_review_status else {}),
-            },
-            removed=population["funnel"]["removed_by_filters"]
-        ),
-        eligibility=eligibility_echo(
-            Eligibility.from_record(manifest["request"]["eligibility"]),
-            profile_floor=profile_has_floor(),
+        **answer_steps(
+            request_filters=manifest["request"]["filters"],
+            min_review_status=body.min_review_status,
+            eligibility_record=manifest["request"]["eligibility"],
+            funnel_record=population["funnel"],
             names=THERMO_DEFAULTS,
-            excluded=population["funnel"]["excluded_by_default"],
-            admitted=population["funnel"]["admitted_by_override"],
+            profile_floor=profile_has_floor(),
         ),
-        funnel=SelectionFunnel(**{k: population["funnel"][k] for k in _FUNNEL_KEYS}),
         disclosures=ThermoSelectionDisclosures(
             unresolved_refs=disclosures.get("unresolved_refs", []),
             unsupported_refs=disclosures.get("unsupported_refs", []),
