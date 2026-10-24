@@ -446,7 +446,12 @@ def _calculation_energies(session: Session, calc_ids: list[int]) -> dict[int, fl
     return energies
 
 
-def _refuse_mixed_levels(session: Session, calcs: list[Calculation], entry_id: int | None) -> None:
+def _entry_ref(session: Session, entry_id: int | None) -> str | None:
+    entry = session.get(SpeciesEntry, entry_id) if entry_id is not None else None
+    return entry.public_ref if entry is not None else None
+
+
+def _refuse_mixed_levels(session: Session, calcs: list[Calculation], entry_ref: str | None) -> None:
     """``lowest_energy`` compares absolute energies, which are comparable only within one level of theory."""
     lot_ids = {c.lot_id for c in calcs}
     if len(lot_ids) <= 1:
@@ -469,7 +474,7 @@ def _refuse_mixed_levels(session: Session, calcs: list[Calculation], entry_id: i
         "(POST /api/v1/scientific/species-entries/{species_entry_ref}/calculations/select).",
         context={
             "selection": "lowest_energy",
-            "species_entry_id": entry_id,
+            "species_entry_ref": entry_ref,
             "candidate_count": len(calcs),
             "levels": levels,
         },
@@ -508,9 +513,9 @@ def _apply_selection(
             raise CodedValueError(
                 "lowest_energy_unavailable",
                 "No lowest energy is available because none of the matching calculations has a recorded energy.",
-                context={"candidate_count": len(calcs), "species_entry_id": species_entry_id},
+                context={"candidate_count": len(calcs), "species_entry_ref": _entry_ref(session, species_entry_id)},
             )
-        _refuse_mixed_levels(session, comparable, species_entry_id)
+        _refuse_mixed_levels(session, comparable, _entry_ref(session, species_entry_id))
         best = min(energies[c.id] for c in comparable)
         chosen = [c for c in comparable if energies[c.id] == best]
     elif selection == "latest":
