@@ -22,6 +22,24 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Lookup and the legacy entity lists obey the visibility rules (2026-10-24)
+
+`/lookup/*` and the raw entity lists (`/thermo`, `/kinetics`, `/calculations`, ...) used to ignore every visibility rule the scientific reads
+obey: no review filter, no read profile, id order. They now follow `docs/specs/browse_order.md`.
+
+- **Visibility and profile.** Rejected and deprecated records are hidden unless `include_rejected` / `include_deprecated` is set. Every
+  legacy and lookup read takes `?profile=`; `curated` withholds records below the `approved` floor from lists, totals, counts and detail
+  routes (a hidden record answers as an unknown id), and drops mentions of hidden calculations from the records it does show. A curated
+  reader could previously reach below-floor records through the legacy lists: that is closed.
+- **Order.** Lookup lists use the display order (`order` echoes it). Legacy lists stay `id` ascending and now say so (`order`, described as
+  an administrative listing order).
+- **Selection modes.** `/lookup` `selection=lowest_energy|latest|earliest` labels what it did (`selected_by`); `lowest_energy` across more
+  than one level of theory is refused (422 `lowest_energy_across_levels`) instead of warning; an exact tie returns every tied record;
+  `/lookup/species-calculation` searches every entry instead of the first by id.
+- **Disclosure.** Lists report what the default visibility hid (`hidden_by_default`: counts and how to include them), under the exploratory
+  profile only; under `curated` nothing about records below the floor is counted or named.
+- Packages: `tckdb-schemas` 0.133.0 and `tckdb-client` 0.163.0 (a new refusal code). No schema or migration change.
+
 ## Browse is a browse: no evidence keys, no silent pick (2026-10-23)
 
 Browse, filter and select are three operations, and a browse read now does only the first (`docs/specs/browse_order.md`).
