@@ -59,7 +59,9 @@ from app.services.network_selection.models import (
     Scope,
     SolveFacts,
 )
+from app.db.models.common import RecordReviewStatus
 from app.services.scientific_read.profile import current_read_profile
+from app.services.selection_kernel.requested import Eligibility, UnreadableEligibility, review_default
 from app.versioning import same_value
 
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. The
@@ -67,8 +69,9 @@ from app.versioning import same_value
 #: as unavailable (``reference_solve_ref`` null, ``reference_withheld`` true), as on a reference to nothing; no token
 #: stands there today. Replay reads exactly this format; a manifest in any other is refused. Version 2: the decision no
 #: longer holds rules, rule matches, pair checks, edges, overridden or unused edges, opposing pairs or cycles, and the
-#: request no longer holds an objective, a reference model or reference outputs.
-MANIFEST_FORMAT_VERSION = 2
+#: request no longer holds an objective, a reference model or reference outputs. Version 3: the request records its
+#: filters and its eligibility settings, and the population records the funnel (counted in solves).
+MANIFEST_FORMAT_VERSION = 3
 MANIFEST_FORMAT_NAME = "network_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "network_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -119,6 +122,7 @@ def build_manifest(result: NetworkAssessmentResult, decision: NetworkDecision) -
             "counts": dict(sorted(result.counts.items())),
             "excluded_count": result.excluded_count,
             "excluded_by_review": [dict(e) for e in result.excluded_by_review],
+            "funnel": dict(result.funnel),
         },
         "solves": [s.to_dict() for s in sorted(result.solves, key=lambda s: s.id_rank)],
         "assessments": {
@@ -198,6 +202,17 @@ def _check_consistency(manifest: dict[str, Any]) -> None:
         raise ReplayError(
             f"a captured solve has a review status ({outside}) outside the recorded effective review statuses"
         )
+    try:
+        eligibility = Eligibility.from_record(manifest["request"].get("eligibility"))
+    except UnreadableEligibility as exc:
+        raise ReplayError(str(exc)) from exc
+    for solve in manifest["solves"]:
+        default = review_default(RecordReviewStatus(solve["review_status"]))
+        if default is not None and not eligibility.lifts(default):
+            raise ReplayError(
+                f"solve {solve['solve_ref']} has review status {solve['review_status']}, which the recorded eligibility "
+                f"settings keep out ({default}); they do not lift it"
+            )
     profile = manifest["visibility"]["read_profile"]
     if profile == "curated" and effective != {"approved"}:
         raise ReplayError("a curated manifest's effective review statuses are approved only")

@@ -237,7 +237,7 @@ def test_the_manifest_replays_with_no_database_and_its_digest_verifies(client, d
     db_session.rollback()
     assert replay_network(manifest) == manifest["decision"]
     assert manifest["snapshot_isolation"] and manifest["outcome"] == "incomparable_alternatives"
-    assert manifest["format"] == {"name": "network_selection_manifest", "version": 2}
+    assert manifest["format"] == {"name": "network_selection_manifest", "version": 3}
     forged = copy.deepcopy(manifest)
     forged["decision"]["basis"] = "edited"
     with pytest.raises(ReplayError, match="recorded digest"):
