@@ -26,7 +26,7 @@ from app.api.rate_limit import reset_rate_limit_store
 from app.db.models.api_key import ApiKey
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
-from tests import error_body_observer, error_code_observer
+from tests import error_body_observer, error_code_observer, route_build_cache
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -34,6 +34,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # session, in the controller and in every xdist worker alike.
 error_code_observer.install()
 error_body_observer.install()
+# Build the route table once per process rather than once per test; see
+# tests/route_build_cache.py for why that cannot change what a test observes.
+route_build_cache.install()
 
 
 class ForeignSchemasPackageError(pytest.UsageError):
