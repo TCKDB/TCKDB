@@ -9595,6 +9595,14 @@
             "default": "known_values",
             "description": "known_values orders what is known, conditional on it; all_requested_members is a complete claim."
           },
+          "eligibility": {
+            "$ref": "#/components/schemas/FindingsEligibilityIn",
+            "description": "Lift named eligibility defaults: a unit's rejected or deprecated review status, a confirmed finding about a source. A rejected calculation quality is lifted by listing `rejected` in `permitted_quality`. Every default is applied unless lifted; the answer lists each."
+          },
+          "filters": {
+            "$ref": "#/components/schemas/StructureSelectionFilters",
+            "description": "Narrow the units by facts before eligibility, with the searches' own provenance filters."
+          },
           "geometry_ref": {
             "anyOf": [
               {
@@ -14575,6 +14583,14 @@
             "default": "known_values",
             "description": "known_values orders what is known, conditional on it; all_requested_members is a complete claim."
           },
+          "eligibility": {
+            "$ref": "#/components/schemas/FindingsEligibilityIn",
+            "description": "Lift named eligibility defaults: a unit's rejected or deprecated review status, a confirmed finding about a source. A rejected calculation quality is lifted by listing `rejected` in `permitted_quality`. Every default is applied unless lifted; the answer lists each."
+          },
+          "filters": {
+            "$ref": "#/components/schemas/StructureSelectionFilters",
+            "description": "Narrow the units by facts before eligibility, with the searches' own provenance filters."
+          },
           "geometry_ref": {
             "anyOf": [
               {
@@ -17002,6 +17018,67 @@
           "any"
         ],
         "title": "ElementMatchMode",
+        "type": "string"
+      },
+      "EligibilityDefaultEcho": {
+        "description": "One named eligibility default, as it was applied to this answer.",
+        "properties": {
+          "admitted_by_override": {
+            "default": 0,
+            "description": "How many candidates compete only because the caller lifted it.",
+            "title": "Admitted By Override",
+            "type": "integer"
+          },
+          "applied": {
+            "description": "True when records failing it were kept out of the competition.",
+            "title": "Applied",
+            "type": "boolean"
+          },
+          "excluded": {
+            "description": "How many of the candidates that passed the filters it kept out. Only records the read profile shows are counted, so the number cannot reveal a hidden one.",
+            "title": "Excluded",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Stable machine name of the exclusion.",
+            "title": "Name",
+            "type": "string"
+          },
+          "override_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The request field that lifts it, or null for an exclusion no request can lift.",
+            "title": "Override Field"
+          },
+          "source": {
+            "$ref": "#/components/schemas/EligibilitySource",
+            "description": "`default`: nobody asked. `request`: the caller lifted it. `read_profile`: the caller asked to lift it but the read profile's review floor keeps it applied."
+          }
+        },
+        "required": [
+          "name",
+          "override_field",
+          "applied",
+          "source",
+          "excluded"
+        ],
+        "title": "EligibilityDefaultEcho",
+        "type": "object"
+      },
+      "EligibilitySource": {
+        "description": "Who decided whether a default was applied.",
+        "enum": [
+          "default",
+          "request",
+          "read_profile"
+        ],
+        "title": "EligibilitySource",
         "type": "string"
       },
       "EnergyComponentKind": {
@@ -20019,6 +20096,32 @@
           "low_a"
         ],
         "title": "FalloffUpload",
+        "type": "object"
+      },
+      "FindingsEligibilityIn": {
+        "additionalProperties": false,
+        "description": "The defaults a statmech candidate can lift: its review status, and a confirmed finding about a source.\n\nA statmech candidate has no evidence rubric of its own, so ``include_hard_failed_evidence`` is not offered here.",
+        "properties": {
+          "include_confirmed_findings": {
+            "default": false,
+            "description": "Let a record compete although a live, confirmed structure finding invalidates one of its sources. The finding is still disclosed on the candidate.",
+            "title": "Include Confirmed Findings",
+            "type": "boolean"
+          },
+          "include_deprecated": {
+            "default": false,
+            "description": "Let a record whose review status is deprecated compete (never under a profile floor).",
+            "title": "Include Deprecated",
+            "type": "boolean"
+          },
+          "include_rejected": {
+            "default": false,
+            "description": "Let a record whose review status is rejected compete (never under a profile floor).",
+            "title": "Include Rejected",
+            "type": "boolean"
+          }
+        },
+        "title": "FindingsEligibilityIn",
         "type": "object"
       },
       "FreqResultPayload": {
@@ -25112,6 +25215,14 @@
             "title": "Applicability State",
             "type": "string"
           },
+          "blocked_by": {
+            "description": "Applied eligibility defaults this candidate fails (why it does not compete).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocked By",
+            "type": "array"
+          },
           "blocking": {
             "items": {
               "type": "string"
@@ -25147,7 +25258,7 @@
             "title": "Direction"
           },
           "eligible": {
-            "description": "Applicable, with no blocking finding: it competes in the ordering.",
+            "description": "Applicable, and no applied eligibility default excludes it: it competes in the ordering.",
             "title": "Eligible",
             "type": "boolean"
           },
@@ -25158,6 +25269,14 @@
           "model_kind": {
             "title": "Model Kind",
             "type": "string"
+          },
+          "passed_only_by_override": {
+            "description": "Eligibility defaults this candidate would fail but the request lifted. It competes because of that only if it is also applicable and fails no applied default.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Passed Only By Override",
+            "type": "array"
           },
           "protocol": {
             "anyOf": [
@@ -25397,6 +25516,48 @@
           "reason"
         ],
         "title": "KineticsSelectionExcluded",
+        "type": "object"
+      },
+      "KineticsSelectionFilters": {
+        "additionalProperties": false,
+        "description": "The filters the kinetics browse and search offer, with their meaning: rate-law form, level of theory, software.\n\nApplied before eligibility. A filter excludes on a fact and ranks nothing.",
+        "properties": {
+          "level_of_theory_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level Of Theory Ref"
+          },
+          "model_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KineticsModelKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "software": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software"
+          }
+        },
+        "title": "KineticsSelectionFilters",
         "type": "object"
       },
       "KineticsSelectionManifest": {
@@ -25811,6 +25972,14 @@
           "direction": {
             "$ref": "#/components/schemas/KineticsSelectionDirection"
           },
+          "eligibility": {
+            "$ref": "#/components/schemas/SelectionEligibilityIn",
+            "description": "Lift named eligibility defaults. Every default is applied unless lifted here; the answer lists each."
+          },
+          "filters": {
+            "$ref": "#/components/schemas/KineticsSelectionFilters",
+            "description": "Narrow the candidates by facts before eligibility, with the kinetics search's own filters."
+          },
           "min_review_status": {
             "anyOf": [
               {
@@ -25893,6 +26062,15 @@
           },
           "direction": {
             "$ref": "#/components/schemas/KineticsSelectionDirection"
+          },
+          "eligibility": {
+            "$ref": "#/components/schemas/SelectionEligibilityIn"
+          },
+          "filters": {
+            "additionalProperties": true,
+            "description": "The filters as supplied, normalised.",
+            "title": "Filters",
+            "type": "object"
           },
           "hidden_by_default": {
             "anyOf": [
@@ -26016,6 +26194,18 @@
           "disclosures": {
             "$ref": "#/components/schemas/KineticsSelectionDisclosures"
           },
+          "eligibility": {
+            "description": "Step 2: every named eligibility default, whether applied, and by whose choice.",
+            "items": {
+              "$ref": "#/components/schemas/EligibilityDefaultEcho"
+            },
+            "title": "Eligibility",
+            "type": "array"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/SelectionFilterAnswer",
+            "description": "Step 1: the filters as normalised, and how many candidates they removed."
+          },
           "fronts": {
             "description": "The eligible determinations that tie, in display order. With no ranking between methods there is exactly one front (none when nothing is eligible); its order is not a preference.",
             "items": {
@@ -26026,6 +26216,9 @@
             },
             "title": "Fronts",
             "type": "array"
+          },
+          "funnel": {
+            "$ref": "#/components/schemas/SelectionFunnel"
           },
           "outcome": {
             "$ref": "#/components/schemas/KineticsSelectionOutcome"
@@ -26051,6 +26244,7 @@
           }
         },
         "required": [
+          "funnel",
           "request",
           "review",
           "policy",
@@ -34780,6 +34974,96 @@
         "title": "NetworkSelectionDisclosures",
         "type": "object"
       },
+      "NetworkSelectionFilters": {
+        "additionalProperties": false,
+        "description": "The filters the network-kinetics search offers, with their meaning.\n\n``model_kind`` keeps the fits of that form (a solve with none is out). The provenance fields keep a solve when at\nleast one of its source calculations that the read profile shows matches every supplied field. Applied before\neligibility; a filter excludes on a fact and ranks nothing.",
+        "properties": {
+          "basis": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "model_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkKineticsModelKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "software": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software"
+          },
+          "software_version": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Version"
+          },
+          "workflow_tool": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool"
+          },
+          "workflow_tool_version": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool Version"
+          }
+        },
+        "title": "NetworkSelectionFilters",
+        "type": "object"
+      },
       "NetworkSelectionManifest": {
         "additionalProperties": true,
         "description": "The replayable decision manifest of ``POST .../kinetics/select/manifest``.\n\nPublic refs only: the normalised request, the snapshot isolation, every captured solve with its normalised facts,\nevery assessment and the administrative order. Enough to recompute the\ndecision at both levels with no database.",
@@ -35133,6 +35417,14 @@
             ],
             "title": "Degeneracy Applied"
           },
+          "eligibility": {
+            "$ref": "#/components/schemas/ReviewEligibilityIn",
+            "description": "Lift named eligibility defaults: a solve's rejected or deprecated review status. Every default is applied unless lifted here; the answer lists each."
+          },
+          "filters": {
+            "$ref": "#/components/schemas/NetworkSelectionFilters",
+            "description": "Narrow the solves by facts before eligibility, with the network-kinetics search's own filters."
+          },
           "min_review_status": {
             "anyOf": [
               {
@@ -35432,6 +35724,18 @@
           "disclosures": {
             "$ref": "#/components/schemas/NetworkSelectionDisclosures"
           },
+          "eligibility": {
+            "description": "Step 2: every named eligibility default, whether applied, and by whose choice.",
+            "items": {
+              "$ref": "#/components/schemas/EligibilityDefaultEcho"
+            },
+            "title": "Eligibility",
+            "type": "array"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/SelectionFilterAnswer",
+            "description": "Step 1: the filters as normalised, and how many candidates they removed."
+          },
           "fronts": {
             "description": "The eligible nodes that tie, in display order. With no ranking between methods there is exactly one front (none when nothing is eligible); its order is not a preference.",
             "items": {
@@ -35442,6 +35746,9 @@
             },
             "title": "Fronts",
             "type": "array"
+          },
+          "funnel": {
+            "$ref": "#/components/schemas/SelectionFunnel"
           },
           "outcome": {
             "$ref": "#/components/schemas/NetworkSelectionOutcome"
@@ -35473,9 +35780,18 @@
                 "type": "null"
               }
             ]
+          },
+          "solves": {
+            "description": "Every solve that competed (passed the filters and the applied defaults), with the default it passed only by override, if any.",
+            "items": {
+              "$ref": "#/components/schemas/NetworkSelectionSolve"
+            },
+            "title": "Solves",
+            "type": "array"
           }
         },
         "required": [
+          "funnel",
           "request",
           "review",
           "policy",
@@ -35515,6 +35831,32 @@
         ],
         "title": "NetworkSelectionScope",
         "type": "string"
+      },
+      "NetworkSelectionSolve": {
+        "description": "One solve that competed: its review status, and the default it passed only because the request lifted it.\n\nReview and provenance belong to the solve, so this is where the eligibility defaults act; every determination\nand bundle in the answer belongs to one of these.",
+        "properties": {
+          "passed_only_by_override": {
+            "description": "Eligibility defaults this solve would fail but the request lifted: it competes because of that.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Passed Only By Override",
+            "type": "array"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/RecordReviewStatus"
+          },
+          "solve_ref": {
+            "title": "Solve Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "solve_ref",
+          "review_status"
+        ],
+        "title": "NetworkSelectionSolve",
+        "type": "object"
       },
       "NetworkSolveBathGasRead": {
         "description": "Bath gas entry for one solve, with the linked species entry embedded.",
@@ -44347,6 +44689,26 @@
         "title": "ReviewDetail",
         "type": "string"
       },
+      "ReviewEligibilityIn": {
+        "additionalProperties": false,
+        "description": "The defaults a record whose review and provenance belong to a parent (a network solve) can lift: its review status.\n\nA solve has no evidence rubric and no source findings of its own, so those two defaults are not offered here and a\nrequest naming them is refused rather than silently ignored.",
+        "properties": {
+          "include_deprecated": {
+            "default": false,
+            "description": "Let a record whose review status is deprecated compete (never under a profile floor).",
+            "title": "Include Deprecated",
+            "type": "boolean"
+          },
+          "include_rejected": {
+            "default": false,
+            "description": "Let a record whose review status is rejected compete (never under a profile floor).",
+            "title": "Include Rejected",
+            "type": "boolean"
+          }
+        },
+        "title": "ReviewEligibilityIn",
+        "type": "object"
+      },
       "ReviewQueuePageRead": {
         "additionalProperties": false,
         "description": "One page of the subject-grouped review queue.\n\n``offset``/``limit`` count SUBJECTS. ``subject_total`` and\n``record_total`` are computed over every row matching the filter, not\njust this page -- both are honest counts, never estimates, because\nbuilding this page required reading every matching row to know where\nthe subject boundaries fall. See :func:`app.services.review_queue.\nlist_review_queue`.",
@@ -50301,6 +50663,96 @@
         "title": "SelectedBy",
         "type": "object"
       },
+      "SelectionEligibilityIn": {
+        "additionalProperties": false,
+        "description": "The eligibility defaults a request may lift. Every field defaults to ``false``: the default is applied.\n\n``include_rejected`` and ``include_deprecated`` are the browse flags of the same names. Under a read profile with a\nreview floor (``curated``) they lift nothing: the floor is the profile's, not an eligibility default, and the answer\nsays so (``source: read_profile``).",
+        "properties": {
+          "include_confirmed_findings": {
+            "default": false,
+            "description": "Let a record compete although a live, confirmed structure finding invalidates one of its sources. The finding is still disclosed on the candidate.",
+            "title": "Include Confirmed Findings",
+            "type": "boolean"
+          },
+          "include_deprecated": {
+            "default": false,
+            "description": "Let a record whose review status is deprecated compete (never under a profile floor).",
+            "title": "Include Deprecated",
+            "type": "boolean"
+          },
+          "include_hard_failed_evidence": {
+            "default": false,
+            "description": "Let a computed record whose evidence rubric hard-fails compete. The failure is still disclosed on the candidate.",
+            "title": "Include Hard Failed Evidence",
+            "type": "boolean"
+          },
+          "include_rejected": {
+            "default": false,
+            "description": "Let a record whose review status is rejected compete (never under a profile floor).",
+            "title": "Include Rejected",
+            "type": "boolean"
+          }
+        },
+        "title": "SelectionEligibilityIn",
+        "type": "object"
+      },
+      "SelectionFilterAnswer": {
+        "description": "The filters as normalised, and what they did.",
+        "properties": {
+          "applied": {
+            "additionalProperties": true,
+            "description": "Only the filters the request supplied, with their normalised values.",
+            "title": "Applied",
+            "type": "object"
+          },
+          "removed": {
+            "default": 0,
+            "description": "Candidates the filters removed.",
+            "title": "Removed",
+            "type": "integer"
+          }
+        },
+        "title": "SelectionFilterAnswer",
+        "type": "object"
+      },
+      "SelectionFunnel": {
+        "description": "How many candidates each step removed, so a small answer is not mistaken for a small population.",
+        "properties": {
+          "considered": {
+            "description": "Candidates the read profile shows, before any step.",
+            "title": "Considered",
+            "type": "integer"
+          },
+          "remaining": {
+            "description": "Candidates that were assessed for the question.",
+            "title": "Remaining",
+            "type": "integer"
+          },
+          "removed_by_eligibility": {
+            "description": "Removed by eligibility defaults that were applied.",
+            "title": "Removed By Eligibility",
+            "type": "integer"
+          },
+          "removed_by_filters": {
+            "description": "Removed by the caller's filters.",
+            "title": "Removed By Filters",
+            "type": "integer"
+          },
+          "unit": {
+            "default": "candidates",
+            "description": "What is counted: the records the question picks among (`candidates`), or, where review and provenance belong to a parent record, those parents (`solves`).",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "considered",
+          "removed_by_filters",
+          "removed_by_eligibility",
+          "remaining"
+        ],
+        "title": "SelectionFunnel",
+        "type": "object"
+      },
       "SelectionGroup": {
         "description": "What a selection mode did within one group of candidates (one species entry).",
         "properties": {
@@ -53815,6 +54267,14 @@
             "title": "Applicability",
             "type": "string"
           },
+          "blocked_by": {
+            "description": "Applied eligibility defaults this candidate fails (why it does not compete).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocked By",
+            "type": "array"
+          },
           "candidate_ref": {
             "title": "Candidate Ref",
             "type": "string"
@@ -53852,6 +54312,14 @@
           "owner_ref": {
             "title": "Owner Ref",
             "type": "string"
+          },
+          "passed_only_by_override": {
+            "description": "Eligibility defaults this candidate would fail but the request lifted. It competes because of that only if it is also applicable and fails no applied default.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Passed Only By Override",
+            "type": "array"
           },
           "reasons": {
             "items": {
@@ -53904,6 +54372,96 @@
         "title": "StatmechSelectionCandidate",
         "type": "object"
       },
+      "StatmechSelectionFilters": {
+        "additionalProperties": false,
+        "description": "The filters the statmech search offers, with their meaning.\n\n``model_kind`` is the stored partition-function treatment. The provenance fields keep a candidate when at least one\nof its source calculations that the read profile shows matches every supplied field. Applied before eligibility; a\nfilter excludes on a fact and ranks nothing.",
+        "properties": {
+          "basis": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "model_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatmechTreatmentKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "software": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software"
+          },
+          "software_version": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Version"
+          },
+          "workflow_tool": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool"
+          },
+          "workflow_tool_version": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool Version"
+          }
+        },
+        "title": "StatmechSelectionFilters",
+        "type": "object"
+      },
       "StatmechSelectionIntegrity": {
         "properties": {
           "algorithm": {
@@ -53950,6 +54508,13 @@
               "type": "object"
             },
             "title": "Calculations",
+            "type": "array"
+          },
+          "candidate_review_statuses": {
+            "items": {
+              "$ref": "#/components/schemas/RecordReviewStatus"
+            },
+            "title": "Candidate Review Statuses",
             "type": "array"
           },
           "candidates": {
@@ -54001,6 +54566,11 @@
           "subject": {
             "additionalProperties": true,
             "title": "Subject",
+            "type": "object"
+          },
+          "verdicts": {
+            "additionalProperties": true,
+            "title": "Verdicts",
             "type": "object"
           },
           "versions": {
@@ -54181,6 +54751,14 @@
           "coverage_requirement": {
             "$ref": "#/components/schemas/app__services__statmech_selection__vocabulary__CoverageRequirement",
             "default": "entire_requested_domain"
+          },
+          "eligibility": {
+            "$ref": "#/components/schemas/FindingsEligibilityIn",
+            "description": "Lift named eligibility defaults: a candidate's rejected or deprecated status, a confirmed finding about a source. Every default is applied unless lifted here; the answer lists each."
+          },
+          "filters": {
+            "$ref": "#/components/schemas/StatmechSelectionFilters",
+            "description": "Narrow the candidates by facts before eligibility, with the statmech search's own filters."
           },
           "intent": {
             "$ref": "#/components/schemas/Intent"
@@ -54428,6 +55006,18 @@
             "title": "Coverage",
             "type": "object"
           },
+          "eligibility": {
+            "description": "Step 2: every named eligibility default, whether applied, and by whose choice.",
+            "items": {
+              "$ref": "#/components/schemas/EligibilityDefaultEcho"
+            },
+            "title": "Eligibility",
+            "type": "array"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/SelectionFilterAnswer",
+            "description": "Step 1: the filters as normalised, and how many candidates they removed."
+          },
           "fronts": {
             "description": "The qualified models that tie, in display order: one front, or none when nothing is listed. Its order is not a preference.",
             "items": {
@@ -54438,6 +55028,9 @@
             },
             "title": "Fronts",
             "type": "array"
+          },
+          "funnel": {
+            "$ref": "#/components/schemas/SelectionFunnel"
           },
           "integrity": {
             "$ref": "#/components/schemas/StatmechSelectionIntegrity"
@@ -54490,6 +55083,7 @@
           }
         },
         "required": [
+          "funnel",
           "request",
           "review",
           "versions",
@@ -54513,10 +55107,19 @@
       },
       "StatmechSelectionReview": {
         "properties": {
+          "candidate_statuses": {
+            "description": "What a candidate's own review status may be: the effective statuses plus the terminal ones the request lifted (never under a read profile with a review floor).",
+            "items": {
+              "$ref": "#/components/schemas/RecordReviewStatus"
+            },
+            "title": "Candidate Statuses",
+            "type": "array"
+          },
           "effective_floor": {
             "$ref": "#/components/schemas/RecordReviewStatus"
           },
           "effective_statuses": {
+            "description": "What every source, member and determination must have. A request never lifts this.",
             "items": {
               "$ref": "#/components/schemas/RecordReviewStatus"
             },
@@ -56985,6 +57588,86 @@
         "title": "StructureSelectionDisclosures",
         "type": "object"
       },
+      "StructureSelectionFilters": {
+        "additionalProperties": false,
+        "description": "The filters the calculation, conformer and transition-state searches offer, with their meaning.\n\nA unit is kept when at least one of the calculations it rests on that the read profile shows matches every supplied\nfield: the calculation itself at the calculation grain, the calculations a determination pins as its sources at the\nconformer and transition-state grains. Applied before eligibility; a filter excludes on a fact and ranks nothing.",
+        "properties": {
+          "basis": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "software": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software"
+          },
+          "software_version": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Version"
+          },
+          "workflow_tool": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool"
+          },
+          "workflow_tool_version": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool Version"
+          }
+        },
+        "title": "StructureSelectionFilters",
+        "type": "object"
+      },
       "StructureSelectionIntegrity": {
         "properties": {
           "algorithm": {
@@ -57026,6 +57709,13 @@
               "type": "object"
             },
             "title": "Calculations",
+            "type": "array"
+          },
+          "candidate_review_statuses": {
+            "items": {
+              "$ref": "#/components/schemas/RecordReviewStatus"
+            },
+            "title": "Candidate Review Statuses",
             "type": "array"
           },
           "decision": {
@@ -57082,6 +57772,11 @@
           "subject": {
             "additionalProperties": true,
             "title": "Subject",
+            "type": "object"
+          },
+          "verdicts": {
+            "additionalProperties": true,
+            "title": "Verdicts",
             "type": "object"
           },
           "versions": {
@@ -57396,6 +58091,21 @@
           "disclosures": {
             "$ref": "#/components/schemas/StructureSelectionDisclosures"
           },
+          "eligibility": {
+            "description": "Step 2: every named eligibility default, whether applied, and by whose choice.",
+            "items": {
+              "$ref": "#/components/schemas/EligibilityDefaultEcho"
+            },
+            "title": "Eligibility",
+            "type": "array"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/SelectionFilterAnswer",
+            "description": "Step 1: the filters as normalised, and how many candidates they removed."
+          },
+          "funnel": {
+            "$ref": "#/components/schemas/SelectionFunnel"
+          },
           "integrity": {
             "$ref": "#/components/schemas/StructureSelectionIntegrity"
           },
@@ -57476,6 +58186,7 @@
           }
         },
         "required": [
+          "funnel",
           "request",
           "review",
           "outcome",
@@ -57499,10 +58210,19 @@
       },
       "StructureSelectionReview": {
         "properties": {
+          "candidate_statuses": {
+            "description": "What a unit's own review status may be: the effective statuses plus the terminal ones the request lifted (never under a read profile with a review floor).",
+            "items": {
+              "$ref": "#/components/schemas/RecordReviewStatus"
+            },
+            "title": "Candidate Statuses",
+            "type": "array"
+          },
           "effective_floor": {
             "$ref": "#/components/schemas/RecordReviewStatus"
           },
           "effective_statuses": {
+            "description": "What every source calculation must have. A request never lifts this.",
             "items": {
               "$ref": "#/components/schemas/RecordReviewStatus"
             },
@@ -57530,6 +58250,14 @@
           "applicability": {
             "title": "Applicability",
             "type": "string"
+          },
+          "blocked_by": {
+            "description": "Applied eligibility defaults this candidate fails (why it does not compete).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocked By",
+            "type": "array"
           },
           "blocking": {
             "items": {
@@ -57577,6 +58305,14 @@
               }
             ],
             "title": "Energy"
+          },
+          "passed_only_by_override": {
+            "description": "Eligibility defaults this candidate would fail but the request lifted. It competes because of that only if it is also applicable and fails no applied default.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Passed Only By Override",
+            "type": "array"
           },
           "reasons": {
             "items": {
@@ -61581,6 +62317,14 @@
             "title": "Applicability",
             "type": "string"
           },
+          "blocked_by": {
+            "description": "Applied eligibility defaults this candidate fails (why it does not compete).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocked By",
+            "type": "array"
+          },
           "blocking": {
             "items": {
               "type": "string"
@@ -61594,7 +62338,7 @@
             "type": "string"
           },
           "eligible": {
-            "description": "Applicable, with no blocking finding: it competes in the ordering.",
+            "description": "Applicable, and no applied eligibility default excludes it: it competes in the ordering.",
             "title": "Eligible",
             "type": "boolean"
           },
@@ -61614,6 +62358,14 @@
               "type": "string"
             },
             "title": "Linked Recipe Keys",
+            "type": "array"
+          },
+          "passed_only_by_override": {
+            "description": "Eligibility defaults this candidate would fail but the request lifted. It competes because of that only if it is also applicable and fails no applied default.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Passed Only By Override",
             "type": "array"
           },
           "phase": {
@@ -61785,6 +62537,48 @@
           "reason"
         ],
         "title": "ThermoSelectionExcluded",
+        "type": "object"
+      },
+      "ThermoSelectionFilters": {
+        "additionalProperties": false,
+        "description": "The filters the thermo browse and search offer, with their meaning: model form, level of theory, software.\n\nApplied before eligibility. A filter excludes on a fact and ranks nothing.",
+        "properties": {
+          "level_of_theory_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level Of Theory Ref"
+          },
+          "model_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoModelKindQuery"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "software": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software"
+          }
+        },
+        "title": "ThermoSelectionFilters",
         "type": "object"
       },
       "ThermoSelectionManifest": {
@@ -62045,6 +62839,14 @@
         "additionalProperties": false,
         "description": "Request body. ``quantity``, ``temperature_k`` and ``phase`` may be omitted; if given they must agree.",
         "properties": {
+          "eligibility": {
+            "$ref": "#/components/schemas/SelectionEligibilityIn",
+            "description": "Lift named eligibility defaults. Every default is applied unless lifted here; the answer lists each."
+          },
+          "filters": {
+            "$ref": "#/components/schemas/ThermoSelectionFilters",
+            "description": "Narrow the candidates by facts before eligibility, with the thermo search's own filters."
+          },
           "min_review_status": {
             "anyOf": [
               {
@@ -62106,6 +62908,15 @@
       "ThermoSelectionRequestEcho": {
         "description": "The normalised request, as the server understood it.",
         "properties": {
+          "eligibility": {
+            "$ref": "#/components/schemas/SelectionEligibilityIn"
+          },
+          "filters": {
+            "additionalProperties": true,
+            "description": "The filters as supplied, normalised.",
+            "title": "Filters",
+            "type": "object"
+          },
           "hidden_by_default": {
             "anyOf": [
               {
@@ -62210,6 +63021,18 @@
           "disclosures": {
             "$ref": "#/components/schemas/ThermoSelectionDisclosures"
           },
+          "eligibility": {
+            "description": "Step 2: every named eligibility default, whether applied, and by whose choice.",
+            "items": {
+              "$ref": "#/components/schemas/EligibilityDefaultEcho"
+            },
+            "title": "Eligibility",
+            "type": "array"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/SelectionFilterAnswer",
+            "description": "Step 1: the filters as normalised, and how many candidates they removed."
+          },
           "fronts": {
             "description": "The eligible records that tie, in display order. With no ranking between methods there is exactly one front (none when nothing is eligible); its order is not a preference.",
             "items": {
@@ -62220,6 +63043,9 @@
             },
             "title": "Fronts",
             "type": "array"
+          },
+          "funnel": {
+            "$ref": "#/components/schemas/SelectionFunnel"
           },
           "outcome": {
             "$ref": "#/components/schemas/ThermoSelectionOutcome"
@@ -62245,6 +63071,7 @@
           }
         },
         "required": [
+          "funnel",
           "request",
           "review",
           "policy",
@@ -64255,6 +65082,14 @@
             "$ref": "#/components/schemas/app__services__structure_selection__models__CoverageRequirement",
             "default": "known_values",
             "description": "known_values orders what is known, conditional on it; all_requested_members is a complete claim."
+          },
+          "eligibility": {
+            "$ref": "#/components/schemas/FindingsEligibilityIn",
+            "description": "Lift named eligibility defaults: a unit's rejected or deprecated review status, a confirmed finding about a source. A rejected calculation quality is lifted by listing `rejected` in `permitted_quality`. Every default is applied unless lifted; the answer lists each."
+          },
+          "filters": {
+            "$ref": "#/components/schemas/StructureSelectionFilters",
+            "description": "Narrow the units by facts before eligibility, with the searches' own provenance filters."
           },
           "geometry_ref": {
             "anyOf": [
