@@ -35,10 +35,6 @@ from app.schemas.reads.scientific_transport_search import (
     ScientificTransportSearchResponse,
     TransportSearchRequest,
 )
-from app.services.scientific_read.hidden_by_default import (
-    hidden_by_default_from_statuses,
-    record_hidden_by_default,
-)
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -49,6 +45,10 @@ from app.services.scientific_read.common import (
     visible_statuses,
 )
 from app.services.scientific_read.handles import resolve_filter_ref
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )

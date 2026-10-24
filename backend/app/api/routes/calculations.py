@@ -21,7 +21,13 @@ from app.api.deps import (
 )
 from app.api.errors import NotFoundError, not_found
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
-from app.api.routes._pagination import PaginatedResponse
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    LegacyReadRoute,
+    LegacyVisibility,
+    entity_page,
+    gate_path_record,
+)
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import (
     Calculation,
@@ -113,7 +119,13 @@ from app.services.sp_energy_extraction import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(
+    route_class=LegacyReadRoute,
+    dependencies=[Depends(gate_path_record("calculation_id", SubmissionRecordType.calculation, "Calculation"))]
+)
+
+#: The write routes of the calculations path: no read profile applies to them.
+write_router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
@@ -157,10 +169,11 @@ def _get_calculation_or_404(
 # ---------------------------------------------------------------------------
 
 
-@router.get("", response_model=PaginatedResponse[CalculationRead])
+@router.get("", response_model=EntityListResponse[CalculationRead])
 def list_calculations(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
+    visibility: LegacyVisibility = Depends(),
     # MVP filters (parent-table columns)
     type: CalculationType | None = Query(None),
     quality: CalculationQuality | None = Query(None),
@@ -222,6 +235,9 @@ def list_calculations(
         ).join(Software, SoftwareRelease.software_id == Software.id)
         base = base.where(Software.name == software_name)
 
+    hidden = visibility.hidden(session, SubmissionRecordType.calculation, base)
+    base = visibility.restrict(base, Calculation.id, SubmissionRecordType.calculation)
+
     if needs_join:
         # Two-query pattern: count distinct parent IDs, then fetch.
         id_subquery = base.distinct().subquery()
@@ -247,11 +263,12 @@ def list_calculations(
             .limit(pagination.limit)
         ).all()
 
-    return PaginatedResponse(
-        items=[CalculationRead.model_validate(r) for r in rows],
+    return entity_page(
+        [CalculationRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
+        hidden=hidden,
     )
 
 
@@ -661,7 +678,7 @@ class ArtifactsUploadResult(BaseModel):
     warnings: list[UploadWarning] = []
 
 
-@router.post(
+@write_router.post(
     "/{calculation_ref}/artifacts",
     response_model=ArtifactsUploadResult,
     status_code=201,

@@ -108,10 +108,6 @@ from app.schemas.reads.scientific_species_calculations import (
     SupportingCalculationRef,
     ValidationBlock,
 )
-from app.services.scientific_read.hidden_by_default import (
-    hidden_by_default_from_statuses,
-    record_hidden_by_default,
-)
 from app.services.scientific_read.calculations import (
     _count_at_or_above_tau,
 )
@@ -134,6 +130,10 @@ from app.services.scientific_read.handles import (
     reconcile_level_of_theory_pair,
     reconcile_species_entry_pair,
     reconcile_species_pair,
+)
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
 )
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,

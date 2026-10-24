@@ -8,18 +8,28 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.routes._pagination import PaginatedResponse
-from app.db.models.common import KineticsModelKind, ScientificOriginKind
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    LegacyReadRoute,
+    LegacyVisibility,
+    entity_page,
+    gate_path_record,
+)
+from app.db.models.common import KineticsModelKind, ScientificOriginKind, SubmissionRecordType
 from app.db.models.kinetics import Kinetics
 from app.schemas.entities.kinetics import KineticsRead
 
-router = APIRouter()
+router = APIRouter(
+    route_class=LegacyReadRoute,
+    dependencies=[Depends(gate_path_record("kinetics_id", SubmissionRecordType.kinetics, "Kinetics"))]
+)
 
 
-@router.get("", response_model=PaginatedResponse[KineticsRead])
+@router.get("", response_model=EntityListResponse[KineticsRead])
 def list_kinetics(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
+    visibility: LegacyVisibility = Depends(),
     reaction_entry_id: int | None = Query(None),
     scientific_origin: ScientificOriginKind | None = Query(None),
     model_kind: KineticsModelKind | None = Query(None),
@@ -38,6 +48,9 @@ def list_kinetics(
     if literature_id is not None:
         base = base.where(Kinetics.literature_id == literature_id)
 
+    hidden = visibility.hidden(session, SubmissionRecordType.kinetics, base)
+    base = visibility.restrict(base, Kinetics.id, SubmissionRecordType.kinetics)
+
     total = session.scalar(
         select(func.count()).select_from(base.subquery())
     ) or 0
@@ -48,11 +61,12 @@ def list_kinetics(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[KineticsRead.model_validate(r) for r in rows],
+    return entity_page(
+        [KineticsRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
+        hidden=hidden,
     )
 
 

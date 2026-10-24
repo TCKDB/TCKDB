@@ -8,18 +8,28 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.routes._pagination import PaginatedResponse
-from app.db.models.common import ScientificOriginKind
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    LegacyReadRoute,
+    LegacyVisibility,
+    entity_page,
+    gate_path_record,
+)
+from app.db.models.common import ScientificOriginKind, SubmissionRecordType
 from app.db.models.thermo import Thermo
 from app.schemas.entities.thermo import ThermoRead
 
-router = APIRouter()
+router = APIRouter(
+    route_class=LegacyReadRoute,
+    dependencies=[Depends(gate_path_record("thermo_id", SubmissionRecordType.thermo, "Thermo"))]
+)
 
 
-@router.get("", response_model=PaginatedResponse[ThermoRead])
+@router.get("", response_model=EntityListResponse[ThermoRead])
 def list_thermo(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
+    visibility: LegacyVisibility = Depends(),
     species_entry_id: int | None = Query(None),
     scientific_origin: ScientificOriginKind | None = Query(None),
     software_release_id: int | None = Query(None),
@@ -35,6 +45,9 @@ def list_thermo(
     if literature_id is not None:
         base = base.where(Thermo.literature_id == literature_id)
 
+    hidden = visibility.hidden(session, SubmissionRecordType.thermo, base)
+    base = visibility.restrict(base, Thermo.id, SubmissionRecordType.thermo)
+
     total = session.scalar(
         select(func.count()).select_from(base.subquery())
     ) or 0
@@ -45,11 +58,12 @@ def list_thermo(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[ThermoRead.model_validate(r) for r in rows],
+    return entity_page(
+        [ThermoRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
+        hidden=hidden,
     )
 
 

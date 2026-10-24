@@ -70,11 +70,6 @@ from app.schemas.reads.scientific_structure_search import (
     StructureQueryKind,
     StructureSearchMode,
 )
-from app.services.scientific_read.hidden_by_default import (
-    excluded_by_default,
-    hidden_by_default_from_counts,
-    record_hidden_by_default,
-)
 from app.services.scientific_read.calculation_provenance_filters import (
     apply_calculation_provenance_filter,
 )
@@ -94,6 +89,11 @@ from app.services.scientific_read.handles import (
     NO_MATCH,
     reconcile_species_entry_pair,
     reconcile_species_pair,
+)
+from app.services.scientific_read.hidden_by_default import (
+    excluded_by_default,
+    hidden_by_default_from_counts,
+    record_hidden_by_default,
 )
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,

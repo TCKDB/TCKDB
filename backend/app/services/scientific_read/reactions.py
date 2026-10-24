@@ -43,10 +43,6 @@ from app.schemas.reads.scientific_reactions import (
     RequestEcho,
     ScientificReactionSearchResponse,
 )
-from app.services.scientific_read.hidden_by_default import (
-    hidden_by_default_from_statuses,
-    record_hidden_by_default,
-)
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -64,6 +60,10 @@ from app.services.scientific_read.handles import (
     NO_MATCH,
     reconcile_reaction_entry_pair,
     reconcile_reaction_pair,
+)
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
 )
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,

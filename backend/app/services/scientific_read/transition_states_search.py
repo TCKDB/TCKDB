@@ -69,10 +69,6 @@ from app.schemas.reads.scientific_transition_state_search import (
     TransitionStatesBrowseRequest,
     TransitionStatesSearchRequest,
 )
-from app.services.scientific_read.hidden_by_default import (
-    hidden_by_default_from_statuses,
-    record_hidden_by_default,
-)
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.calculation_provenance_filters import (
     apply_calculation_provenance_filter,
@@ -90,6 +86,10 @@ from app.services.scientific_read.common import (
 )
 from app.services.scientific_read.handles import (
     resolve_filter_ref,
+)
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
 )
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,

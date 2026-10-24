@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.routes._pagination import PaginatedResponse
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    LegacyReadRoute,
+    LegacyVisibility,
+    disclose_in_header,
+    entity_page,
+)
+from app.db.models.common import SubmissionRecordType
 from app.db.models.kinetics import Kinetics
 from app.db.models.reaction import ChemReaction, ReactionEntry
 from app.db.models.transition_state import TransitionState
@@ -16,7 +23,7 @@ from app.schemas.entities.kinetics import KineticsRead
 from app.schemas.entities.reaction import ChemReactionRead, ReactionEntryRead
 from app.schemas.entities.transition_state import TransitionStateRead
 
-router = APIRouter()
+router = APIRouter(route_class=LegacyReadRoute)
 
 
 # ---------------------------------------------------------------------------
@@ -24,7 +31,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-@router.get("", response_model=PaginatedResponse[ChemReactionRead])
+@router.get("", response_model=EntityListResponse[ChemReactionRead])
 def list_reactions(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
@@ -50,8 +57,8 @@ def list_reactions(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[ChemReactionRead.model_validate(r) for r in rows],
+    return entity_page(
+        [ChemReactionRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -70,7 +77,7 @@ def get_reaction(reaction_id: int, session: Session = Depends(get_db)):
 # Reaction entries (mounted under /reaction-entries in router.py)
 # ---------------------------------------------------------------------------
 
-entries_router = APIRouter()
+entries_router = APIRouter(route_class=LegacyReadRoute)
 
 
 @entries_router.get("/{entry_id}", response_model=ReactionEntryRead)
@@ -86,15 +93,26 @@ def get_reaction_entry(entry_id: int, session: Session = Depends(get_db)):
     response_model=list[KineticsRead],
 )
 def list_kinetics_for_entry(
-    entry_id: int, session: Session = Depends(get_db)
+    entry_id: int,
+    response: Response,
+    session: Session = Depends(get_db),
+    visibility: LegacyVisibility = Depends(),
 ):
     entry = session.get(ReactionEntry, entry_id)
     if entry is None:
         raise NotFoundError("ReactionEntry not found")
+    disclose_in_header(
+        response,
+        visibility.hidden(
+            session, SubmissionRecordType.kinetics, select(Kinetics.id).where(Kinetics.reaction_entry_id == entry_id)
+        ),
+    )
     rows = session.scalars(
-        select(Kinetics)
-        .where(Kinetics.reaction_entry_id == entry_id)
-        .order_by(Kinetics.id)
+        visibility.restrict(
+            select(Kinetics).where(Kinetics.reaction_entry_id == entry_id),
+            Kinetics.id,
+            SubmissionRecordType.kinetics,
+        ).order_by(Kinetics.id)
     ).all()
     return [KineticsRead.model_validate(r) for r in rows]
 
@@ -104,14 +122,27 @@ def list_kinetics_for_entry(
     response_model=list[TransitionStateRead],
 )
 def list_transition_states_for_entry(
-    entry_id: int, session: Session = Depends(get_db)
+    entry_id: int,
+    response: Response,
+    session: Session = Depends(get_db),
+    visibility: LegacyVisibility = Depends(),
 ):
     entry = session.get(ReactionEntry, entry_id)
     if entry is None:
         raise NotFoundError("ReactionEntry not found")
+    disclose_in_header(
+        response,
+        visibility.hidden(
+            session,
+            SubmissionRecordType.transition_state,
+            select(TransitionState.id).where(TransitionState.reaction_entry_id == entry_id),
+        ),
+    )
     rows = session.scalars(
-        select(TransitionState)
-        .where(TransitionState.reaction_entry_id == entry_id)
-        .order_by(TransitionState.id)
+        visibility.restrict(
+            select(TransitionState).where(TransitionState.reaction_entry_id == entry_id),
+            TransitionState.id,
+            SubmissionRecordType.transition_state,
+        ).order_by(TransitionState.id)
     ).all()
     return [TransitionStateRead.model_validate(r) for r in rows]

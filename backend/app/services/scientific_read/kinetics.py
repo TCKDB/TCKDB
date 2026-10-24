@@ -103,10 +103,6 @@ from app.schemas.reads.scientific_kinetics import (
 )
 from app.services.calculation_levels import RoleCalcInfo, derive_levels
 from app.services.composite_verification import verify_composite_calculations
-from app.services.scientific_read.hidden_by_default import (
-    hidden_by_default_from_statuses,
-    record_hidden_by_default,
-)
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -134,6 +130,10 @@ from app.services.scientific_read.declared_levels import load_declared_energy_su
 from app.services.scientific_read.handles import (
     NO_MATCH,
     reconcile_level_of_theory_pair,
+)
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
 )
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,

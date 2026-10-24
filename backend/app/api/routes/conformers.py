@@ -15,9 +15,15 @@ from app.api.deps import (
     require_curator_or_admin,
 )
 from app.api.errors import NotFoundError
-from app.api.routes._pagination import PaginatedResponse
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    LegacyReadRoute,
+    LegacyVisibility,
+    entity_page,
+    gate_path_record,
+)
 from app.db.models.app_user import AppUser
-from app.db.models.common import ConformerSelectionKind, ScientificOriginKind
+from app.db.models.common import ConformerSelectionKind, ScientificOriginKind, SubmissionRecordType
 from app.db.models.species import ConformerGroup, ConformerObservation
 from app.schemas.entities.conformer import (
     ConformerGroupDetailRead,
@@ -25,10 +31,21 @@ from app.schemas.entities.conformer import (
     ConformerObservationRead,
     ConformerSelectionRead,
 )
+from app.services.scientific_read.common import ids_below_review_floor
 from app.services.selection import create_conformer_selection
 
-groups_router = APIRouter()
-observations_router = APIRouter()
+groups_router = APIRouter(
+    route_class=LegacyReadRoute,
+    dependencies=[Depends(gate_path_record("group_id", SubmissionRecordType.conformer_group, "ConformerGroup"))]
+)
+#: The write route of the conformer groups path: no read profile applies to it.
+groups_write_router = APIRouter()
+observations_router = APIRouter(
+    route_class=LegacyReadRoute,
+    dependencies=[
+        Depends(gate_path_record("observation_id", SubmissionRecordType.conformer_observation, "ConformerObservation"))
+    ]
+)
 
 
 class ConformerSelectionCreateBody(BaseModel):
@@ -46,10 +63,11 @@ class ConformerSelectionCreateBody(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-@groups_router.get("", response_model=PaginatedResponse[ConformerGroupRead])
+@groups_router.get("", response_model=EntityListResponse[ConformerGroupRead])
 def list_conformer_groups(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
+    visibility: LegacyVisibility = Depends(),
     species_entry_id: int | None = Query(None),
     label: str | None = Query(None),
 ):
@@ -58,6 +76,9 @@ def list_conformer_groups(
         base = base.where(ConformerGroup.species_entry_id == species_entry_id)
     if label is not None:
         base = base.where(ConformerGroup.label == label)
+
+    hidden = visibility.hidden(session, SubmissionRecordType.conformer_group, base)
+    base = visibility.restrict(base, ConformerGroup.id, SubmissionRecordType.conformer_group)
 
     total = session.scalar(
         select(func.count()).select_from(base.subquery())
@@ -69,11 +90,12 @@ def list_conformer_groups(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[ConformerGroupRead.model_validate(r) for r in rows],
+    return entity_page(
+        [ConformerGroupRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
+        hidden=hidden,
     )
 
 
@@ -95,12 +117,16 @@ def get_conformer_group(group_id: int, session: Session = Depends(get_db)):
     )
     if row is None:
         raise NotFoundError("ConformerGroup not found")
+    below_floor = ids_below_review_floor(
+        session,
+        record_type=SubmissionRecordType.conformer_observation,
+        record_ids=[obs.id for obs in row.observations],
+    )
+    observations = [obs for obs in row.observations if obs.id not in below_floor]
     return ConformerGroupDetailRead(
         **ConformerGroupRead.model_validate(row).model_dump(),
-        observation_count=len(row.observations),
-        observations=[
-            ConformerObservationRead.model_validate(obs) for obs in row.observations
-        ],
+        observation_count=len(observations),
+        observations=[ConformerObservationRead.model_validate(obs) for obs in observations],
     )
 
 
@@ -119,7 +145,7 @@ def list_conformer_group_selections(
     return [ConformerSelectionRead.model_validate(s) for s in group.selections]
 
 
-@groups_router.post(
+@groups_write_router.post(
     "/{conformer_group_id}/selections",
     response_model=ConformerSelectionRead,
     status_code=201,
@@ -154,11 +180,12 @@ def create_conformer_group_selection(
 
 
 @observations_router.get(
-    "", response_model=PaginatedResponse[ConformerObservationRead]
+    "", response_model=EntityListResponse[ConformerObservationRead]
 )
 def list_conformer_observations(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
+    visibility: LegacyVisibility = Depends(),
     conformer_group_id: int | None = Query(None),
     assignment_scheme_id: int | None = Query(None),
     scientific_origin: ScientificOriginKind | None = Query(None),
@@ -177,6 +204,9 @@ def list_conformer_observations(
             ConformerObservation.scientific_origin == scientific_origin
         )
 
+    hidden = visibility.hidden(session, SubmissionRecordType.conformer_observation, base)
+    base = visibility.restrict(base, ConformerObservation.id, SubmissionRecordType.conformer_observation)
+
     total = session.scalar(
         select(func.count()).select_from(base.subquery())
     ) or 0
@@ -187,11 +217,12 @@ def list_conformer_observations(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[ConformerObservationRead.model_validate(r) for r in rows],
+    return entity_page(
+        [ConformerObservationRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
+        hidden=hidden,
     )
 
 

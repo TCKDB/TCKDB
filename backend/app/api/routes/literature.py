@@ -8,16 +8,20 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.routes._pagination import PaginatedResponse
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    LegacyReadRoute,
+    entity_page,
+)
 from app.db.models.common import LiteratureKind
 from app.db.models.literature import Literature
 from app.schemas.entities.literature import LiteratureRead
 from app.services.literature_metadata import normalize_doi, normalize_isbn
 
-router = APIRouter()
+router = APIRouter(route_class=LegacyReadRoute)
 
 
-@router.get("", response_model=PaginatedResponse[LiteratureRead])
+@router.get("", response_model=EntityListResponse[LiteratureRead])
 def list_literature(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
@@ -59,8 +63,8 @@ def list_literature(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[LiteratureRead.model_validate(r) for r in rows],
+    return entity_page(
+        [LiteratureRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,

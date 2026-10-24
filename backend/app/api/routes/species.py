@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -14,13 +14,20 @@ from app.api.deps import (
     require_curator_or_admin,
 )
 from app.api.errors import NotFoundError
-from app.api.routes._pagination import PaginatedResponse
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    LegacyReadRoute,
+    LegacyVisibility,
+    disclose_in_header,
+    entity_page,
+)
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import Calculation, CalculationSPResult
 from app.db.models.common import (
     CalculationQuality,
     CalculationType,
     MoleculeKind,
+    SubmissionRecordType,
 )
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.species import (
@@ -52,13 +59,14 @@ from app.schemas.entities.species_entry_review import (
 from app.schemas.entities.statmech import StatmechRead
 from app.schemas.entities.thermo import ThermoRead
 from app.schemas.entities.transport import TransportRead
+from app.services.scientific_read.common import review_floor_predicate, where_visible
 from app.services.scientific_read.handles import canonical_level_of_theory_id
 from app.services.species_entry_review import (
     create_species_entry_review,
     list_species_entry_reviews,
 )
 
-router = APIRouter()
+router = APIRouter(route_class=LegacyReadRoute)
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +74,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-@router.get("", response_model=PaginatedResponse[SpeciesRead])
+@router.get("", response_model=EntityListResponse[SpeciesRead])
 def list_species(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
@@ -98,8 +106,8 @@ def list_species(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[SpeciesRead.model_validate(r) for r in rows],
+    return entity_page(
+        [SpeciesRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -118,7 +126,9 @@ def get_species(species_id: int, session: Session = Depends(get_db)):
 # Species entries (mounted under /species-entries in router.py)
 # ---------------------------------------------------------------------------
 
-entries_router = APIRouter()
+entries_router = APIRouter(route_class=LegacyReadRoute)
+#: The write route of the species-entries path: no read profile applies to it.
+entries_write_router = APIRouter()
 
 
 def _species_entry_conformer_summary(
@@ -129,15 +139,28 @@ def _species_entry_conformer_summary(
     Uses two scalar aggregates so the top-level species-entry read stays cheap
     and does not trigger per-row lazy loads through the conformer collection.
     """
+    # Under the curated profile a count answers what the list endpoint would show (decision D5): groups and
+    # observations below the review floor are not in it. Without a floor nothing is added.
+    group_visible = review_floor_predicate(ConformerGroup.id, SubmissionRecordType.conformer_group)
+    observation_visible = review_floor_predicate(
+        ConformerObservation.id, SubmissionRecordType.conformer_observation
+    )
     group_count = session.scalar(
-        select(func.count(ConformerGroup.id)).where(
-            ConformerGroup.species_entry_id == entry_id
+        where_visible(
+            select(func.count(ConformerGroup.id)).where(ConformerGroup.species_entry_id == entry_id),
+            group_visible,
         )
     ) or 0
     observation_count = session.scalar(
-        select(func.count(ConformerObservation.id))
-        .join(ConformerGroup)
-        .where(ConformerGroup.species_entry_id == entry_id)
+        where_visible(
+            where_visible(
+                select(func.count(ConformerObservation.id))
+                .join(ConformerGroup)
+                .where(ConformerGroup.species_entry_id == entry_id),
+                observation_visible,
+            ),
+            group_visible,
+        )
     ) or 0
     return SpeciesEntryConformerSummaryRead(
         conformer_group_count=group_count,
@@ -165,7 +188,10 @@ def get_species_entry(entry_id: int, session: Session = Depends(get_db)):
     response_model=SpeciesEntryConformerGroupsRead,
 )
 def list_conformer_groups_for_entry(
-    entry_id: int, session: Session = Depends(get_db)
+    entry_id: int,
+    response: Response,
+    session: Session = Depends(get_db),
+    visibility: LegacyVisibility = Depends(),
 ):
     """List conformer groups (basins) for a species entry, basin-first.
 
@@ -177,21 +203,33 @@ def list_conformer_groups_for_entry(
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
 
-    obs_count_sq = (
+    obs_count_sq = visibility.restrict(
         select(
             ConformerObservation.conformer_group_id.label("group_id"),
             func.count(ConformerObservation.id).label("obs_count"),
-        )
-        .group_by(ConformerObservation.conformer_group_id)
-        .subquery()
+        ),
+        ConformerObservation.id,
+        SubmissionRecordType.conformer_observation,
     )
+    obs_count_sq = obs_count_sq.group_by(ConformerObservation.conformer_group_id).subquery()
 
+    disclose_in_header(
+        response,
+        visibility.hidden(
+            session,
+            SubmissionRecordType.conformer_group,
+            select(ConformerGroup.id).where(ConformerGroup.species_entry_id == entry_id),
+        ),
+    )
     rows = session.execute(
-        select(ConformerGroup, func.coalesce(obs_count_sq.c.obs_count, 0))
-        .outerjoin(obs_count_sq, obs_count_sq.c.group_id == ConformerGroup.id)
-        .where(ConformerGroup.species_entry_id == entry_id)
-        .options(selectinload(ConformerGroup.selections))
-        .order_by(ConformerGroup.id)
+        visibility.restrict(
+            select(ConformerGroup, func.coalesce(obs_count_sq.c.obs_count, 0))
+            .outerjoin(obs_count_sq, obs_count_sq.c.group_id == ConformerGroup.id)
+            .where(ConformerGroup.species_entry_id == entry_id)
+            .options(selectinload(ConformerGroup.selections)),
+            ConformerGroup.id,
+            SubmissionRecordType.conformer_group,
+        ).order_by(ConformerGroup.id)
     ).all()
 
     groups: list[ConformerGroupSummaryRead] = [
@@ -215,16 +253,30 @@ def list_conformer_groups_for_entry(
     response_model=list[ConformerObservationRead],
 )
 def list_conformers_for_entry(
-    entry_id: int, session: Session = Depends(get_db)
+    entry_id: int,
+    response: Response,
+    session: Session = Depends(get_db),
+    visibility: LegacyVisibility = Depends(),
 ):
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
-    observations = session.scalars(
-        select(ConformerObservation)
+    matched = (
+        select(ConformerObservation.id)
         .join(ConformerGroup)
         .where(ConformerGroup.species_entry_id == entry_id)
-        .order_by(ConformerObservation.id)
+    )
+    disclose_in_header(
+        response, visibility.hidden(session, SubmissionRecordType.conformer_observation, matched)
+    )
+    observations = session.scalars(
+        visibility.restrict(
+            select(ConformerObservation)
+            .join(ConformerGroup)
+            .where(ConformerGroup.species_entry_id == entry_id),
+            ConformerObservation.id,
+            SubmissionRecordType.conformer_observation,
+        ).order_by(ConformerObservation.id)
     ).all()
     return [ConformerObservationRead.model_validate(o) for o in observations]
 
@@ -302,6 +354,8 @@ def _resolve_lowest_sp_conformer_observation(
     )
     if calculation_quality is not None:
         base = base.where(Calculation.quality == calculation_quality)
+    # Records the active profile hides are not candidates (hidden == absent).
+    base = where_visible(base, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
 
     base_sq = base.subquery()
 
@@ -408,15 +462,26 @@ def get_lowest_sp_conformer_observation_for_entry(
     response_model=list[ThermoRead],
 )
 def list_thermo_for_entry(
-    entry_id: int, session: Session = Depends(get_db)
+    entry_id: int,
+    response: Response,
+    session: Session = Depends(get_db),
+    visibility: LegacyVisibility = Depends(),
 ):
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
+    disclose_in_header(
+        response,
+        visibility.hidden(
+            session, SubmissionRecordType.thermo, select(Thermo.id).where(Thermo.species_entry_id == entry_id)
+        ),
+    )
     rows = session.scalars(
-        select(Thermo)
-        .where(Thermo.species_entry_id == entry_id)
-        .order_by(Thermo.id)
+        visibility.restrict(
+            select(Thermo).where(Thermo.species_entry_id == entry_id),
+            Thermo.id,
+            SubmissionRecordType.thermo,
+        ).order_by(Thermo.id)
     ).all()
     return [ThermoRead.model_validate(r) for r in rows]
 
@@ -426,15 +491,26 @@ def list_thermo_for_entry(
     response_model=list[StatmechRead],
 )
 def list_statmech_for_entry(
-    entry_id: int, session: Session = Depends(get_db)
+    entry_id: int,
+    response: Response,
+    session: Session = Depends(get_db),
+    visibility: LegacyVisibility = Depends(),
 ):
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
+    disclose_in_header(
+        response,
+        visibility.hidden(
+            session, SubmissionRecordType.statmech, select(Statmech.id).where(Statmech.species_entry_id == entry_id)
+        ),
+    )
     rows = session.scalars(
-        select(Statmech)
-        .where(Statmech.species_entry_id == entry_id)
-        .order_by(Statmech.id)
+        visibility.restrict(
+            select(Statmech).where(Statmech.species_entry_id == entry_id),
+            Statmech.id,
+            SubmissionRecordType.statmech,
+        ).order_by(Statmech.id)
     ).all()
     return [StatmechRead.model_validate(r) for r in rows]
 
@@ -444,16 +520,27 @@ def list_statmech_for_entry(
     response_model=list[TransportRead],
 )
 def list_transport_for_entry(
-    entry_id: int, session: Session = Depends(get_db)
+    entry_id: int,
+    response: Response,
+    session: Session = Depends(get_db),
+    visibility: LegacyVisibility = Depends(),
 ):
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
+    disclose_in_header(
+        response,
+        visibility.hidden(
+            session, SubmissionRecordType.transport, select(Transport.id).where(Transport.species_entry_id == entry_id)
+        ),
+    )
     rows = session.scalars(
-        select(Transport)
-        .where(Transport.species_entry_id == entry_id)
-        .options(selectinload(Transport.source_calculations))
-        .order_by(Transport.id)
+        visibility.restrict(
+            select(Transport).where(Transport.species_entry_id == entry_id)
+            .options(selectinload(Transport.source_calculations)),
+            Transport.id,
+            SubmissionRecordType.transport,
+        ).order_by(Transport.id)
     ).all()
     return [TransportRead.model_validate(r) for r in rows]
 
@@ -463,7 +550,7 @@ def list_transport_for_entry(
 # ---------------------------------------------------------------------------
 
 
-@entries_router.post(
+@entries_write_router.post(
     "/{species_entry_id}/reviews",
     response_model=SpeciesEntryReviewRead,
     status_code=201,

@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.routes._pagination import PaginatedResponse
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    LegacyReadRoute,
+    entity_page,
+)
 from app.db.models.common import (
     EnergyCorrectionApplicationRole,
     EnergyCorrectionSchemeKind,
@@ -26,9 +30,9 @@ from app.schemas.entities.energy_correction import (
 )
 from app.services.scientific_read.handles import canonical_level_of_theory_id
 
-schemes_router = APIRouter()
-scale_factors_router = APIRouter()
-applied_router = APIRouter()
+schemes_router = APIRouter(route_class=LegacyReadRoute)
+scale_factors_router = APIRouter(route_class=LegacyReadRoute)
+applied_router = APIRouter(route_class=LegacyReadRoute)
 
 
 # ---------------------------------------------------------------------------
@@ -36,7 +40,7 @@ applied_router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-@schemes_router.get("", response_model=PaginatedResponse[EnergyCorrectionSchemeRead])
+@schemes_router.get("", response_model=EntityListResponse[EnergyCorrectionSchemeRead])
 def list_energy_correction_schemes(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
@@ -76,8 +80,8 @@ def list_energy_correction_schemes(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[EnergyCorrectionSchemeRead.model_validate(r) for r in rows],
+    return entity_page(
+        [EnergyCorrectionSchemeRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -108,7 +112,7 @@ def get_energy_correction_scheme(
 
 
 @scale_factors_router.get(
-    "", response_model=PaginatedResponse[FrequencyScaleFactorRead]
+    "", response_model=EntityListResponse[FrequencyScaleFactorRead]
 )
 def list_frequency_scale_factors(
     session: Session = Depends(get_db),
@@ -151,8 +155,8 @@ def list_frequency_scale_factors(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[FrequencyScaleFactorRead.model_validate(r) for r in rows],
+    return entity_page(
+        [FrequencyScaleFactorRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -175,7 +179,7 @@ def get_frequency_scale_factor(
 
 
 @applied_router.get(
-    "", response_model=PaginatedResponse[AppliedEnergyCorrectionRead]
+    "", response_model=EntityListResponse[AppliedEnergyCorrectionRead]
 )
 def list_applied_energy_corrections(
     session: Session = Depends(get_db),
@@ -220,8 +224,8 @@ def list_applied_energy_corrections(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[AppliedEnergyCorrectionRead.model_validate(r) for r in rows],
+    return entity_page(
+        [AppliedEnergyCorrectionRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,

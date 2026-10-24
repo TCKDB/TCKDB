@@ -64,7 +64,6 @@ from app.schemas.reads.scientific_structure_search import (
     StructureQueryKind,
     StructureSearchMode,
 )
-from app.services.scientific_read.hidden_by_default import hidden_by_default_from_counts, record_hidden_by_default
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -73,6 +72,7 @@ from app.services.scientific_read.common import (
     validate_pagination,
     visible_statuses,
 )
+from app.services.scientific_read.hidden_by_default import hidden_by_default_from_counts, record_hidden_by_default
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )

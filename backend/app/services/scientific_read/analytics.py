@@ -99,7 +99,6 @@ from app.schemas.reads.scientific_analytics import (
     WatermarkEcho,
 )
 from app.schemas.reads.scientific_common import ReviewStatusSummary, browse_order
-from app.services.scientific_read.hidden_by_default import hidden_by_default_block, record_hidden_by_default
 from app.services.scientific_read.common import (
     build_pagination,
     reject_client_sort,
@@ -111,6 +110,7 @@ from app.services.scientific_read.common import (
     where_visible,
 )
 from app.services.scientific_read.handles import level_of_theory_ref_clause
+from app.services.scientific_read.hidden_by_default import hidden_by_default_block, record_hidden_by_default
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
