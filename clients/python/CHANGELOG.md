@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.163.0 - 2026-10-24
+
+- `RejectionCode` gains `lowest_energy_across_levels` (the `/lookup` refusal above). No method changes.
+- Requires `tckdb-schemas>=0.133.0`.
+
 ## 0.162.0 - 2026-10-23
 
 No read and no export picks a record for you. Browse reads list every match in display order; "give me one" is the `select_*` methods.

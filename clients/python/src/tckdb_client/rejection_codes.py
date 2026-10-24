@@ -199,6 +199,7 @@ class RejectionCode(str, Enum):
     LEVEL_OF_THEORY_METHOD_WITH_COMPOSITE_SCHEME = "level_of_theory_method_with_composite_scheme"
     LEVEL_OF_THEORY_REQUIRES_METHOD_OR_COMPOSITE_SCHEME = "level_of_theory_requires_method_or_composite_scheme"
     LIMIT_TOO_LARGE = "limit_too_large"
+    LOWEST_ENERGY_ACROSS_LEVELS = "lowest_energy_across_levels"
     LOWEST_ENERGY_UNAVAILABLE = "lowest_energy_unavailable"
     MANIFEST_ALREADY_FROZEN = "manifest_already_frozen"
     MANIFEST_NOT_FROZEN = "manifest_not_frozen"
@@ -522,6 +523,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.LEVEL_OF_THEORY_METHOD_WITH_COMPOSITE_SCHEME,
         RejectionCode.LEVEL_OF_THEORY_REQUIRES_METHOD_OR_COMPOSITE_SCHEME,
         RejectionCode.LIMIT_TOO_LARGE,
+        RejectionCode.LOWEST_ENERGY_ACROSS_LEVELS,
         RejectionCode.LOWEST_ENERGY_UNAVAILABLE,
         RejectionCode.MICRO_REACTION_KEY_UNDECLARED,
         RejectionCode.MISSING_FILTER,
@@ -861,6 +863,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.LEVEL_OF_THEORY_METHOD_WITH_COMPOSITE_SCHEME: frozenset({422}),
     RejectionCode.LEVEL_OF_THEORY_REQUIRES_METHOD_OR_COMPOSITE_SCHEME: frozenset({422}),
     RejectionCode.LIMIT_TOO_LARGE: frozenset({422}),
+    RejectionCode.LOWEST_ENERGY_ACROSS_LEVELS: frozenset({422}),
     RejectionCode.LOWEST_ENERGY_UNAVAILABLE: frozenset({422}),
     RejectionCode.MANIFEST_ALREADY_FROZEN: frozenset({409}),
     RejectionCode.MANIFEST_NOT_FROZEN: frozenset({404}),
