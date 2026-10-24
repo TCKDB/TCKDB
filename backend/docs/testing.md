@@ -904,6 +904,54 @@ gate means a regression rather than an unlucky draw, and the nightly draws
 somewhere. `make test-full` locally remains the cheapest way to get both at
 once before pushing.
 
+## Slices of a gate, and the quick-checks job
+
+Each of the three gates runs in CI as several jobs ("slices"), each taking a
+share of the gate's test **files**, so a pull request waits for the slowest
+slice rather than the slowest gate. A job named `Backend API gate (2/2)` is
+`TCKDB_TEST_SHARD=api:2/2`; the gate script and its arguments are the same
+ones you run locally, and an unset variable (every local run, and the
+nightly) deselects nothing.
+
+- **Assignment.** A file listed in
+  [`../tests/ci_shard_plan.json`](../tests/ci_shard_plan.json) goes to the
+  slice the plan gives it (a duration-balanced assignment); any other file
+  goes to `crc32(path) % n + 1`. A new test file therefore runs from the day
+  it exists with no plan entry; a stale plan makes a slice slower, never a
+  test unrun. See [`../tests/ci_sharding.py`](../tests/ci_sharding.py).
+- **Why no test can be dropped.** `tests/scripts/test_gate_coverage.py`
+  requires the workflow matrix to hold exactly slices `1..n` of each gate and
+  every file a gate selects to land in one of them; and each slice writes a
+  report (`TCKDB_TEST_SHARD_REPORT`) that the `Backend CI` job sums with
+  [`../scripts/check_gate_shards.py`](../scripts/check_gate_shards.py): all
+  slices present, same collected total, shares add up to it, every selected
+  test reported, and the DR-0028 body-sweep floor held on the **sum** (one
+  slice sees a fraction of the bodies, so the per-run floor is skipped in a
+  slice).
+- **Rebalancing.** When one slice's job time drifts from its siblings,
+  add `--junitxml=junit-<gate>-<k>.xml` to the gate step on a scratch branch
+  (a sliced run is the right profile: it has the contention a slice really
+  has), then pass every slice's file for a gate, comma-separated, with the
+  slice count after the colon:
+  `python backend/scripts/ci_shard_plan.py --write --gate api=junit-api-1.xml,junit-api-2.xml:2 --gate ...`.
+  Changing the *number* of slices means editing the matrix `slices:` and
+  regenerating the plan in the same change (the coverage test refuses a plan
+  built for another count).
+- **Quick checks.** Lint, mypy, the runtime-ASCII scan, hygiene, the Alembic
+  upgrade/drift checks, the OpenAPI snapshot and the MCP gate are one job
+  (`quick-checks`) that runs beside the slices, so a lint error is a red check
+  minutes in, not at the end of a half-hour job. `Backend CI` requires it and
+  every slice.
+
+### Why a test's setup is cheap
+
+`client` builds a fresh app per test (settings are read at construction and
+many tests change one first). `tests/route_build_cache.py` memoises FastAPI's
+`get_dependant` for the test process, which was ~0.5-1 s of every API test;
+a dependency override lives on the app, not in the cached value, and
+`tests/test_route_build_cache.py` pins that and the OpenAPI equality.
+`TCKDB_TEST_ROUTE_CACHE=0` turns it off when bisecting.
+
 ## OpenAPI golden snapshot
 
 [`tests/api/test_openapi_snapshot.py`](../tests/api/test_openapi_snapshot.py)

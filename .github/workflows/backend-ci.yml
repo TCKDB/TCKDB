@@ -48,6 +48,270 @@ permissions:
   contents: read
 
 jobs:
+  # Everything that is not a slice of the test suite: lint, types, hygiene,
+  # migrations, the OpenAPI snapshot and the MCP integration. These used to run
+  # inside the API gate's job, after minutes of setup and before 20+ minutes of
+  # tests, so a lint error was reported by a job that then went on to run
+  # the whole suite. Here they run beside the test slices rather than ahead of
+  # them (`needs:` would put their ~4 minutes in front of every green run), so a
+  # lint error is a red check about four minutes in instead of about thirty.
+  #
+  # Required all the same: the `Backend CI` job at the bottom needs this job as
+  # well as every slice.
+  quick-checks:
+    name: Quick checks (lint, types, migrations, OpenAPI, MCP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: informaticsmatters/rdkit-cartridge-debian:Release_2025_03_3
+        # Authenticated pull. On 2026-09-24 Docker Hub began refusing this
+        # public image to GitHub-hosted runners with "unauthorized: access to
+        # the requested resource is not authorized", mid-download, while it
+        # stayed pullable from anywhere else. That is Docker Hub throttling
+        # anonymous pulls from GitHub's shared address pool, and it failed
+        # "Initialize containers" on every backend gate before checkout, so
+        # every pull request went red at once with no test output -- the
+        # same failure class as the MinIO outage of 2026-09-12 (see the
+        # object store service below). The
+        # vendor publishes this image only on Docker Hub, so the fix is to
+        # authenticate rather than move registries. These are the same
+        # secrets build-api-image.yml already uses to push.
+        credentials:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        env:
+          POSTGRES_USER: tckdb
+          POSTGRES_PASSWORD: tckdb
+          POSTGRES_DB: tckdb_quick_ci
+          # Same pin as docker-compose.yml, for the same reason. This image
+          # sets no locale, so initdb falls back to SQL_ASCII -- which is what
+          # CI has silently been running on. A cluster that validates nothing
+          # cannot fail on a byte it should reject, so the entire suite was
+          # structurally incapable of catching an encoding bug, and every test
+          # databases the harness creates inherits the cluster's encoding.
+          LANG: C.UTF-8
+          POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tckdb -d tckdb_quick_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_USER: tckdb
+      DB_PASSWORD: tckdb
+      # The *ambient* database: it exists and is deliberately never migrated,
+      # which is exactly the condition backend-nightly.yml presents. Until
+      # #124, five /status tests reached this database through an engine bound
+      # at import to `settings.database_url` rather than through any fixture,
+      # and CI ran `alembic upgrade head` against this name in a step before
+      # the gates while the nightly did not. So the same five tests passed here
+      # and failed every night, and the divergence -- not the coupling -- is
+      # what made that invisible for eleven nights. The migration now runs
+      # against its own scratch database (see "Alembic upgrade head" below),
+      # leaving this one empty in both workflows: a test that acquires a
+      # dependency on a migrated ambient database now fails the pull request
+      # that introduces it.
+      DB_NAME: tckdb_quick_ci
+      DB_CLIENT_ENCODING: utf8
+      # Must match the isolated-test-database pattern enforced in
+      # backend/tests/conftest.py, which permits destructive fixture setup
+      # only for names beginning ``tckdb_test``. Keeping CI inside that
+      # pattern preserves the guard rather than widening it.
+      DB_TEST_NAME: tckdb_test_quick_${{ github.run_id }}_${{ github.run_attempt }}
+      # The gate scripts default to 8 xdist workers, which suits a 20-core
+      # workstation. A GitHub standard runner has 4 vCPUs and one Postgres
+      # container, so 8 workers would pay 8 per-worker `alembic upgrade head`
+      # costs to contend over 4 cores. Each worker still gets its own database
+      # (DB_TEST_NAME above gains a `_gw<n>` suffix).
+      TCKDB_TEST_WORKERS: "4"
+      AUTH_ALLOW_OPEN_REGISTRATION: "true"
+      DEPLOYMENT_MODE: local
+      EXPOSE_API_DOCS: "true"
+      LEGACY_READS_REQUIRE_AUTH: "false"
+      SESSION_COOKIE_SECURE: "false"
+      RATE_LIMIT_ENABLED: "false"
+      S3_ENDPOINT_URL: http://127.0.0.1:9000
+      S3_ACCESS_KEY: tckdb
+      S3_SECRET_KEY: tckdb_secret
+      # The SeaweedFS master, asked for free space after an InternalError
+      # write refusal and by the /status headroom warning (#545). The live
+      # tests fail rather than skip on CI if it is unset.
+      S3_SEAWEEDFS_MASTER_URL: http://127.0.0.1:9333
+      S3_BUCKET: tckdb-quick-${{ github.run_id }}-${{ github.run_attempt }}
+      S3_REGION: us-east-1
+
+    defaults:
+      run:
+        shell: bash -el {0}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up conda environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          use-mamba: true
+          environment-file: backend/environment.yml
+          activate-environment: tckdb_env
+          auto-activate-base: false
+
+      - name: Install backend packages
+        run: |
+          conda run -n tckdb_env python -m pip install --upgrade pip
+          conda run -n tckdb_env python -m pip install -e schemas/python/tckdb-schemas
+          conda run -n tckdb_env python -m pip install -e "backend[dev]"
+          # tests/client_builder_contract/ validates tckdb-client builder
+          # payloads against the backend's upload schemas, so it needs both
+          # packages in one interpreter and lives here, not in the client
+          # job (which has no backend). Until #575 this line was missing
+          # and all nine builder contract modules skipped on every run
+          # while the gate reported green. They now fail on CI rather than
+          # skip if the import breaks (tests/_ci_dependency.py). Installed
+          # after the schemas package so the editable one satisfies the
+          # client's tckdb-schemas requirement.
+          conda run -n tckdb_env python -m pip install -e clients/python
+
+      - name: Lint (ruff)
+        working-directory: backend
+        run: conda run -n tckdb_env ruff check app tests scripts
+
+      - name: Lint (non-ASCII in runtime strings)
+        working-directory: backend
+        # Narrower than ruff's RUF001-003, which this repo disables on
+        # purpose because scientific notation is legitimate prose. This one
+        # looks only at strings that leave the process -- raises, log calls,
+        # message=/detail=/reason= -- and covers app/, scripts/, the wire
+        # package, the Python client, the CHEMKIN adapter and the MCP
+        # integration, but not tests/, where non-ASCII data is the point. See
+        # the script's header.
+        #
+        # No arguments on purpose: the target list lives in the script, so a
+        # local run and this one scan the same tree. Four of the six targets
+        # sit outside `working-directory: backend`, and the script resolves
+        # them relative to its own location rather than the current
+        # directory. It refuses a target that expands to no files, so a moved
+        # package fails the gate instead of silently emptying it.
+        #
+        # `--audit` runs first so the log opens with the coverage account:
+        # what is scanned, and what is deliberately not scanned and why. Five
+        # encoding misses in one week were all the same shape -- a correct
+        # check aimed at fewer places than it should have been -- and none of
+        # them was visible in a CI log until someone went looking. It fails
+        # on any source file that is in neither list.
+        run: |
+          conda run -n tckdb_env python scripts/check_runtime_ascii.py --audit
+          conda run -n tckdb_env python scripts/check_runtime_ascii.py
+
+      - name: Type check (mypy, scoped)
+        working-directory: backend
+        run: conda run -n tckdb_env mypy
+
+      - name: Hygiene checks
+        # The `bash -n` list used to be enumerated, and an enumerated list is
+        # a list somebody forgets to extend: `dev_login.sh` and
+        # `tckdb_auth.sh` -- the two scripts that mint a credential -- were
+        # never on it, so a syntax error in either shipped green. Same defect
+        # and same fix as the complement gate (scripts/test-rest.sh): derive
+        # the set instead of writing it down, and a script added tomorrow is
+        # checked by the pull request that adds it.
+        run: |
+          git diff --check
+          checked=0
+          while IFS= read -r script; do
+            bash -n "$script"
+            checked=$((checked + 1))
+          done < <(git ls-files '*.sh')
+          echo "bash -n: $checked shell script(s)"
+          # Guard the guard: an empty or truncated file list would make the
+          # loop above a no-op that prints "0" and passes.
+          test "$checked" -ge 15
+          make help
+
+      - name: Alembic upgrade head
+        working-directory: backend
+        # Runs against its own scratch database, not the ambient DB_NAME.
+        #
+        # These two steps are migration checks -- does the revision graph have
+        # one head, does it apply, do the models and the migrations describe
+        # the same schema. None of that is a property of the ambient database;
+        # it needs *a* migrated database, and it should not be the one the test
+        # process can see. Pointing them at DB_NAME made "CI happens to migrate
+        # the database the tests inherit" a load-bearing and undeclared part of
+        # the environment, which is the difference that let five /status tests
+        # pass here and fail nightly (#64 cause 2, #92).
+        #
+        # Runs once, in this job, for the same reason the lint and mypy steps do:
+        # the answer cannot differ between test slices, so paying for it in every
+        # slice only buys more chances to flake.
+        env:
+          DB_NAME: tckdb_test_migrations_${{ github.run_id }}_${{ github.run_attempt }}
+        run: |
+          # Written to a file and run by path, NOT piped as `conda run python -
+          # <<'PY'`. `conda run` does not forward this shell's stdin to the
+          # process it spawns, so `python -` reads EOF, does nothing, and exits
+          # 0 -- a provisioning step that silently provisions nothing. The
+          # "Initialize artifact bucket" step below did exactly that on every
+          # green run until this commit. `cat` is a shell builtin path with no
+          # conda in it, so the heredoc lands intact.
+          cat > "${RUNNER_TEMP}/create_scratch_db.py" <<'PY'
+          import os
+
+          import psycopg
+
+          name = os.environ["DB_NAME"]
+          dsn = (
+              f"host={os.environ['DB_HOST']} port={os.environ['DB_PORT']} "
+              f"user={os.environ['DB_USER']} password={os.environ['DB_PASSWORD']} "
+              "dbname=postgres"
+          )
+          with psycopg.connect(dsn, autocommit=True) as conn:
+              conn.execute(f'CREATE DATABASE "{name}"')
+          print(f"created scratch migration database {name}")
+          PY
+          conda run -n tckdb_env python "${RUNNER_TEMP}/create_scratch_db.py"
+          conda run -n tckdb_env alembic upgrade head
+          heads_output="$(conda run -n tckdb_env alembic heads)"
+          printf '%s\n' "$heads_output"
+          test "$(printf '%s\n' "$heads_output" | grep -c '(head)')" -eq 1
+          conda run -n tckdb_env alembic current
+
+      - name: Alembic drift check
+        working-directory: backend
+        env:
+          DB_NAME: tckdb_test_migrations_${{ github.run_id }}_${{ github.run_attempt }}
+        # The models and the migrations must describe the same schema. Until
+        # now this could not be a gate: two migration-only RDKit indexes
+        # (ix_species_entry_mol_gist, ix_species_formula_lookup) are absent
+        # from Base.metadata by design and autogenerate reported each as a
+        # phantom removal on every run, so `alembic check` never returned
+        # clean and a real drift would have been indistinguishable from the
+        # standing noise. alembic/env.py now excludes exactly those two when
+        # reflected, so this fails only on drift someone introduced.
+        run: conda run -n tckdb_env alembic check
+
+      - name: OpenAPI golden snapshot
+        working-directory: backend
+        run: conda run -n tckdb_env pytest tests/api/test_openapi_snapshot.py -q
+
+      # The MCP integration is a consumer of the backend's error contract
+      # and had no CI job at all, so nothing stopped a change here from
+      # silently flattening every scientific refusal back into one code.
+      # It needs no database and no extra install -- httpx and pytest are
+      # already in the environment, and `pythonpath = ["src"]` in the
+      # package's own pyproject puts the sources on the path.
+      - name: MCP integration gate
+        working-directory: integrations/mcp
+        run: conda run -n tckdb_env pytest -q
+
   backend-gate:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
@@ -55,22 +319,55 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Each gate is run as `slices` jobs, each taking a share of the gate's
+        # test *files* (backend/tests/ci_sharding.py; the assignment is
+        # backend/tests/ci_shard_plan.json). The three gates still cover
+        # backend/tests/ between them, and now so do their slices:
+        #
+        #   * tests/scripts/test_gate_coverage.py requires the matrix to hold
+        #     exactly slices 1..slices of each gate, the plan to have been built
+        #     for that count, and every file a gate selects to land in one of
+        #     them;
+        #   * the `Backend CI` job below sums what every slice collected and
+        #     ran (backend/scripts/check_gate_shards.py) and fails unless the
+        #     slices add up to the gate.
+        #
+        # The gate itself is unchanged: same script, same arguments, same
+        # `--maxfail`. Changing `slices` means regenerating the plan with
+        # backend/scripts/ci_shard_plan.py.
         include:
           - gate: api
-            name: Backend API gate
+            slice: 1
+            slices: 2
+            name: Backend API gate (1/2)
+          - gate: api
+            slice: 2
+            slices: 2
+            name: Backend API gate (2/2)
           - gate: scientific
-            name: Scientific read and service gate
-          # The three gates cover backend/tests/ between them, not three
-          # samples of it. `rest` is defined as the complement of the other
-          # two (see scripts/test-rest.sh), so a directory added to tests/
-          # gates the pull request that adds it. Before this entry existed,
-          # 3,806 tests -- over half the suite -- ran on no PR at all, and
-          # `test-api.sh` read as "the API gate" while being "some of the
-          # API". The gate runs in parallel with the other two and finishes
-          # inside the scientific gate's wall clock, so it costs a runner,
-          # not PR latency.
+            slice: 1
+            slices: 2
+            name: Scientific read and service gate (1/2)
+          - gate: scientific
+            slice: 2
+            slices: 2
+            name: Scientific read and service gate (2/2)
           - gate: rest
-            name: Backend complement gate
+            slice: 1
+            slices: 4
+            name: Backend complement gate (1/4)
+          - gate: rest
+            slice: 2
+            slices: 4
+            name: Backend complement gate (2/4)
+          - gate: rest
+            slice: 3
+            slices: 4
+            name: Backend complement gate (3/4)
+          - gate: rest
+            slice: 4
+            slices: 4
+            name: Backend complement gate (4/4)
 
     services:
       postgres:
@@ -209,7 +506,7 @@ jobs:
       # backend/tests/conftest.py, which permits destructive fixture setup
       # only for names beginning ``tckdb_test``. Keeping CI inside that
       # pattern preserves the guard rather than widening it.
-      DB_TEST_NAME: tckdb_test_${{ matrix.gate }}_${{ github.run_id }}_${{ github.run_attempt }}
+      DB_TEST_NAME: tckdb_test_${{ matrix.gate }}_${{ matrix.slice }}_${{ github.run_id }}_${{ github.run_attempt }}
       # The gate scripts default to 8 xdist workers, which suits a 20-core
       # workstation. A GitHub standard runner has 4 vCPUs and one Postgres
       # container, so 8 workers would pay 8 per-worker `alembic upgrade head`
@@ -231,6 +528,10 @@ jobs:
       S3_SEAWEEDFS_MASTER_URL: http://127.0.0.1:9333
       S3_BUCKET: tckdb-${{ matrix.gate }}-${{ github.run_id }}-${{ github.run_attempt }}
       S3_REGION: us-east-1
+      # Which share of the gate this job runs. Read by tests/conftest.py; see
+      # backend/tests/ci_sharding.py.
+      TCKDB_TEST_SHARD: ${{ matrix.gate }}:${{ matrix.slice }}/${{ matrix.slices }}
+      TCKDB_TEST_SHARD_REPORT: ${{ github.workspace }}/shard-${{ matrix.gate }}-${{ matrix.slice }}.json
 
     defaults:
       run:
@@ -264,130 +565,6 @@ jobs:
           # after the schemas package so the editable one satisfies the
           # client's tckdb-schemas requirement.
           conda run -n tckdb_env python -m pip install -e clients/python
-
-      - name: Lint (ruff)
-        if: matrix.gate == 'api'
-        working-directory: backend
-        run: conda run -n tckdb_env ruff check app tests scripts
-
-      - name: Lint (non-ASCII in runtime strings)
-        if: matrix.gate == 'api'
-        working-directory: backend
-        # Narrower than ruff's RUF001-003, which this repo disables on
-        # purpose because scientific notation is legitimate prose. This one
-        # looks only at strings that leave the process -- raises, log calls,
-        # message=/detail=/reason= -- and covers app/, scripts/, the wire
-        # package, the Python client, the CHEMKIN adapter and the MCP
-        # integration, but not tests/, where non-ASCII data is the point. See
-        # the script's header.
-        #
-        # No arguments on purpose: the target list lives in the script, so a
-        # local run and this one scan the same tree. Four of the six targets
-        # sit outside `working-directory: backend`, and the script resolves
-        # them relative to its own location rather than the current
-        # directory. It refuses a target that expands to no files, so a moved
-        # package fails the gate instead of silently emptying it.
-        #
-        # `--audit` runs first so the log opens with the coverage account:
-        # what is scanned, and what is deliberately not scanned and why. Five
-        # encoding misses in one week were all the same shape -- a correct
-        # check aimed at fewer places than it should have been -- and none of
-        # them was visible in a CI log until someone went looking. It fails
-        # on any source file that is in neither list.
-        run: |
-          conda run -n tckdb_env python scripts/check_runtime_ascii.py --audit
-          conda run -n tckdb_env python scripts/check_runtime_ascii.py
-
-      - name: Type check (mypy, scoped)
-        if: matrix.gate == 'api'
-        working-directory: backend
-        run: conda run -n tckdb_env mypy
-
-      - name: Hygiene checks
-        if: matrix.gate == 'api'
-        # The `bash -n` list used to be enumerated, and an enumerated list is
-        # a list somebody forgets to extend: `dev_login.sh` and
-        # `tckdb_auth.sh` -- the two scripts that mint a credential -- were
-        # never on it, so a syntax error in either shipped green. Same defect
-        # and same fix as the complement gate (scripts/test-rest.sh): derive
-        # the set instead of writing it down, and a script added tomorrow is
-        # checked by the pull request that adds it.
-        run: |
-          git diff --check
-          checked=0
-          while IFS= read -r script; do
-            bash -n "$script"
-            checked=$((checked + 1))
-          done < <(git ls-files '*.sh')
-          echo "bash -n: $checked shell script(s)"
-          # Guard the guard: an empty or truncated file list would make the
-          # loop above a no-op that prints "0" and passes.
-          test "$checked" -ge 15
-          make help
-
-      - name: Alembic upgrade head
-        if: matrix.gate == 'api'
-        working-directory: backend
-        # Runs against its own scratch database, not the ambient DB_NAME.
-        #
-        # These two steps are migration checks -- does the revision graph have
-        # one head, does it apply, do the models and the migrations describe
-        # the same schema. None of that is a property of the ambient database;
-        # it needs *a* migrated database, and it should not be the one the test
-        # process can see. Pointing them at DB_NAME made "CI happens to migrate
-        # the database the tests inherit" a load-bearing and undeclared part of
-        # the environment, which is the difference that let five /status tests
-        # pass here and fail nightly (#64 cause 2, #92).
-        #
-        # Scoped to one gate for the same reason the lint and mypy steps are:
-        # the answer cannot differ between matrix legs, so paying for it three
-        # times only buys three chances to flake.
-        env:
-          DB_NAME: tckdb_test_migrations_${{ github.run_id }}_${{ github.run_attempt }}
-        run: |
-          # Written to a file and run by path, NOT piped as `conda run python -
-          # <<'PY'`. `conda run` does not forward this shell's stdin to the
-          # process it spawns, so `python -` reads EOF, does nothing, and exits
-          # 0 -- a provisioning step that silently provisions nothing. The
-          # "Initialize artifact bucket" step below did exactly that on every
-          # green run until this commit. `cat` is a shell builtin path with no
-          # conda in it, so the heredoc lands intact.
-          cat > "${RUNNER_TEMP}/create_scratch_db.py" <<'PY'
-          import os
-
-          import psycopg
-
-          name = os.environ["DB_NAME"]
-          dsn = (
-              f"host={os.environ['DB_HOST']} port={os.environ['DB_PORT']} "
-              f"user={os.environ['DB_USER']} password={os.environ['DB_PASSWORD']} "
-              "dbname=postgres"
-          )
-          with psycopg.connect(dsn, autocommit=True) as conn:
-              conn.execute(f'CREATE DATABASE "{name}"')
-          print(f"created scratch migration database {name}")
-          PY
-          conda run -n tckdb_env python "${RUNNER_TEMP}/create_scratch_db.py"
-          conda run -n tckdb_env alembic upgrade head
-          heads_output="$(conda run -n tckdb_env alembic heads)"
-          printf '%s\n' "$heads_output"
-          test "$(printf '%s\n' "$heads_output" | grep -c '(head)')" -eq 1
-          conda run -n tckdb_env alembic current
-
-      - name: Alembic drift check
-        if: matrix.gate == 'api'
-        working-directory: backend
-        env:
-          DB_NAME: tckdb_test_migrations_${{ github.run_id }}_${{ github.run_attempt }}
-        # The models and the migrations must describe the same schema. Until
-        # now this could not be a gate: two migration-only RDKit indexes
-        # (ix_species_entry_mol_gist, ix_species_formula_lookup) are absent
-        # from Base.metadata by design and autogenerate reported each as a
-        # phantom removal on every run, so `alembic check` never returned
-        # clean and a real drift would have been indistinguishable from the
-        # standing noise. alembic/env.py now excludes exactly those two when
-        # reflected, so this fails only on drift someone introduced.
-        run: conda run -n tckdb_env alembic check
 
       - name: Initialize artifact bucket
         # This step had never run. As `conda run -n tckdb_env python - <<'PY'`
@@ -424,11 +601,6 @@ jobs:
           PY
           conda run -n tckdb_env python "${RUNNER_TEMP}/init_artifact_bucket.py"
 
-      - name: OpenAPI golden snapshot
-        if: matrix.gate == 'api'
-        working-directory: backend
-        run: conda run -n tckdb_env pytest tests/api/test_openapi_snapshot.py -q
-
       # The "Ops and repo-check gate" step that used to sit here ran
       # tests/ops/ and tests/scripts/test_check_runtime_ascii.py as their own
       # invocation, because neither lives under tests/api/ and nothing else on
@@ -456,24 +628,45 @@ jobs:
         if: matrix.gate == 'rest'
         run: conda run -n tckdb_env bash backend/scripts/test-rest.sh --maxfail=5
 
-      # The MCP integration is a consumer of the backend's error contract
-      # and had no CI job at all, so nothing stopped a change here from
-      # silently flattening every scientific refusal back into one code.
-      # It needs no database and no extra install -- httpx and pytest are
-      # already in the environment, and `pythonpath = ["src"]` in the
-      # package's own pyproject puts the sources on the path.
-      - name: MCP integration gate
-        if: matrix.gate == 'api'
-        working-directory: integrations/mcp
-        run: conda run -n tckdb_env pytest -q
+      # What this slice collected and ran, for the `Backend CI` job's check that
+      # the slices add up to the gate. Only on success: a red slice already
+      # fails the workflow, and a missing report would only bury that.
+      - name: Upload slice report
+        uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.gate }}-${{ matrix.slice }}
+          path: shard-${{ matrix.gate }}-${{ matrix.slice }}.json
+          if-no-files-found: error
+          retention-days: 7
 
   backend-ci:
     name: Backend CI
-    needs: backend-gate
+    needs: [quick-checks, backend-gate]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
       - name: Require all backend gates to succeed
         env:
           GATE_RESULT: ${{ needs.backend-gate.result }}
-        run: test "$GATE_RESULT" = success
+          QUICK_RESULT: ${{ needs.quick-checks.result }}
+        run: |
+          test "$GATE_RESULT" = success
+          test "$QUICK_RESULT" = success
+
+      # Green slices are not enough: a slice dropped from the matrix is a
+      # green workflow that ran fewer tests. This sums the slice reports and
+      # fails unless every slice of every gate is present, they all collected
+      # the same tests, their shares add up to that total, every selected
+      # test reported, and the DR-0028 body sweep reaches its floor on the sum.
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download slice reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: shard-*
+          path: slice-reports
+          merge-multiple: true
+
+      - name: Slices add up to the gates
+        run: python3 backend/scripts/check_gate_shards.py slice-reports
