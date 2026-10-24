@@ -62,7 +62,7 @@ def list_workflow_tools(
     rows = session.scalars(
         select(WorkflowTool)
         .where(WorkflowTool.id.in_(base))
-        .order_by(WorkflowTool.name.asc(), WorkflowTool.id.asc())
+        .order_by(WorkflowTool.id.asc())
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
@@ -138,7 +138,7 @@ def list_workflow_tool_releases(
         select(WorkflowToolRelease)
         .where(WorkflowToolRelease.id.in_(base))
         .options(selectinload(WorkflowToolRelease.workflow_tool))
-        .order_by(*_release_ordering())
+        .order_by(WorkflowToolRelease.id.asc())
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()

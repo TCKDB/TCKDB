@@ -17,10 +17,10 @@ from app.api.deps import (
 from app.api.errors import NotFoundError
 from app.api.routes._legacy_reads import (
     EntityListResponse,
-    LegacyReadRoute,
+    Gate,
     LegacyVisibility,
     entity_page,
-    gate_path_record,
+    legacy_route_class,
 )
 from app.db.models.app_user import AppUser
 from app.db.models.common import ConformerSelectionKind, ScientificOriginKind, SubmissionRecordType
@@ -31,20 +31,28 @@ from app.schemas.entities.conformer import (
     ConformerObservationRead,
     ConformerSelectionRead,
 )
-from app.services.scientific_read.common import ids_below_review_floor
+from app.services.scientific_read.common import review_floor_predicate, where_visible
 from app.services.selection import create_conformer_selection
 
 groups_router = APIRouter(
-    route_class=LegacyReadRoute,
-    dependencies=[Depends(gate_path_record("group_id", SubmissionRecordType.conformer_group, "ConformerGroup"))]
+    route_class=legacy_route_class(
+        {
+            "group_id": Gate(SubmissionRecordType.conformer_group, "ConformerGroup"),
+        }
+    )
 )
 #: The write route of the conformer groups path: no read profile applies to it.
 groups_write_router = APIRouter()
 observations_router = APIRouter(
-    route_class=LegacyReadRoute,
-    dependencies=[
-        Depends(gate_path_record("observation_id", SubmissionRecordType.conformer_observation, "ConformerObservation"))
-    ]
+    route_class=legacy_route_class(
+        {
+            "observation_id": Gate(
+                SubmissionRecordType.conformer_observation,
+                "ConformerObservation",
+                parent=(ConformerObservation, "conformer_group_id", SubmissionRecordType.conformer_group),
+            ),
+        }
+    )
 )
 
 
@@ -100,7 +108,9 @@ def list_conformer_groups(
 
 
 @groups_router.get("/{group_id}", response_model=ConformerGroupDetailRead)
-def get_conformer_group(group_id: int, session: Session = Depends(get_db)):
+def get_conformer_group(
+    group_id: int, session: Session = Depends(get_db), visibility: LegacyVisibility = Depends()
+):
     """Return one conformer group (basin) with its nested observations and selections.
 
     This is the basin-first drill-down read: clients list groups for a species
@@ -117,12 +127,17 @@ def get_conformer_group(group_id: int, session: Session = Depends(get_db)):
     )
     if row is None:
         raise NotFoundError("ConformerGroup not found")
-    below_floor = ids_below_review_floor(
-        session,
-        record_type=SubmissionRecordType.conformer_observation,
-        record_ids=[obs.id for obs in row.observations],
+    # The observations the request shows (the default exclusions and the profile's floor); the count equals the list.
+    shown = set(
+        session.scalars(
+            visibility.restrict(
+                select(ConformerObservation.id).where(ConformerObservation.conformer_group_id == group_id),
+                ConformerObservation.id,
+                SubmissionRecordType.conformer_observation,
+            )
+        )
     )
-    observations = [obs for obs in row.observations if obs.id not in below_floor]
+    observations = [obs for obs in row.observations if obs.id in shown]
     return ConformerGroupDetailRead(
         **ConformerGroupRead.model_validate(row).model_dump(),
         observation_count=len(observations),
@@ -206,6 +221,10 @@ def list_conformer_observations(
 
     hidden = visibility.hidden(session, SubmissionRecordType.conformer_observation, base)
     base = visibility.restrict(base, ConformerObservation.id, SubmissionRecordType.conformer_observation)
+    # An observation is shown only with its group (the floor applies to the parent).
+    base = where_visible(
+        base, review_floor_predicate(ConformerObservation.conformer_group_id, SubmissionRecordType.conformer_group)
+    )
 
     total = session.scalar(
         select(func.count()).select_from(base.subquery())

@@ -23,10 +23,10 @@ from app.api.errors import NotFoundError, not_found
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
 from app.api.routes._legacy_reads import (
     EntityListResponse,
-    LegacyReadRoute,
+    Gate,
     LegacyVisibility,
     entity_page,
-    gate_path_record,
+    legacy_route_class,
 )
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import (
@@ -120,8 +120,11 @@ from app.services.sp_energy_extraction import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
-    route_class=LegacyReadRoute,
-    dependencies=[Depends(gate_path_record("calculation_id", SubmissionRecordType.calculation, "Calculation"))]
+    route_class=legacy_route_class(
+        {
+        "calculation_id": Gate(SubmissionRecordType.calculation, "Calculation"),
+        }
+    )
 )
 
 #: The write routes of the calculations path: no read profile applies to them.

@@ -10,18 +10,21 @@ from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
 from app.api.routes._legacy_reads import (
     EntityListResponse,
-    LegacyReadRoute,
+    Gate,
     LegacyVisibility,
     entity_page,
-    gate_path_record,
+    legacy_route_class,
 )
 from app.db.models.common import KineticsModelKind, ScientificOriginKind, SubmissionRecordType
 from app.db.models.kinetics import Kinetics
 from app.schemas.entities.kinetics import KineticsRead
 
 router = APIRouter(
-    route_class=LegacyReadRoute,
-    dependencies=[Depends(gate_path_record("kinetics_id", SubmissionRecordType.kinetics, "Kinetics"))]
+    route_class=legacy_route_class(
+        {
+        "kinetics_id": Gate(SubmissionRecordType.kinetics, "Kinetics"),
+        }
+    )
 )
 
 

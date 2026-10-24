@@ -13,6 +13,7 @@ from app.api.routes._legacy_reads import (
     LegacyReadRoute,
     LegacyVisibility,
     disclose_in_header,
+    ensure_not_below_floor,
     entity_page,
 )
 from app.db.models.common import SubmissionRecordType
@@ -85,6 +86,8 @@ def get_reaction_entry(entry_id: int, session: Session = Depends(get_db)):
     entry = session.get(ReactionEntry, entry_id)
     if entry is None:
         raise NotFoundError("ReactionEntry not found")
+    # The route that returns the entry itself; the routes under it only scope by it (as on the scientific reads).
+    ensure_not_below_floor(session, SubmissionRecordType.reaction_entry, entry_id, "ReactionEntry")
     return ReactionEntryRead.model_validate(entry)
 
 

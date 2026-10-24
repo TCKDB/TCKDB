@@ -85,6 +85,7 @@ from app.db.models.transport import Transport
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.reads.scientific_common import HiddenByDefault, OrderEcho, browse_order
 from app.services.reaction_resolution import reaction_stoichiometry_hash
+from app.services.scientific_read.handles import canonical_level_of_theory_id
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 from app.services.scientific_read.profile import current_read_profile
 from app.services.scientific_read.sql_review import join_review, review_rank_expr
@@ -198,6 +199,8 @@ class SelectionGroup(BaseModel):
     species_entry_id: int | None = None
     candidates: int
     chosen: int
+    #: ``lowest_energy`` only: candidates with no recorded energy, which cannot be compared and took no part.
+    not_compared: int = 0
     #: ``True`` when more than one candidate satisfied the criterion exactly, so all of them are returned.
     tied: bool = False
 
@@ -225,6 +228,9 @@ class LookupResponse(BaseModel):
     #: Exploratory only: how many records the default visibility hid and how to include them. Never present under
     #: ``curated`` (no count of records below the floor).
     hidden_by_default: HiddenByDefault | None = None
+    #: Exploratory only: the species or reaction entries the default visibility hid (a lookup that lists both entries
+    #: and records reports the records in ``hidden_by_default`` and the entries here). Never present under ``curated``.
+    entries_hidden_by_default: HiddenByDefault | None = None
     #: Present when the request named a ``selection`` mode: what the mode did.
     selected_by: SelectedBy | None = None
 
@@ -238,6 +244,7 @@ def _respond(
     results: list[LookupResultItem] | None = None,
     *,
     hidden: HiddenByDefault | None = None,
+    entries_hidden: HiddenByDefault | None = None,
     selected_by: SelectedBy | None = None,
 ) -> LookupResponse:
     """Build the envelope, stamped with the request's read profile."""
@@ -249,6 +256,7 @@ def _respond(
         profile=resolved.profile,
         profile_recommendation=resolved.recommendation,
         hidden_by_default=hidden,
+        entries_hidden_by_default=entries_hidden,
         selected_by=selected_by,
     )
 
@@ -453,7 +461,8 @@ def _entry_ref(session: Session, entry_id: int | None) -> str | None:
 
 def _refuse_mixed_levels(session: Session, calcs: list[Calculation], entry_ref: str | None) -> None:
     """``lowest_energy`` compares absolute energies, which are comparable only within one level of theory."""
-    lot_ids = {c.lot_id for c in calcs}
+    # Levels are compared as the rows they stand for: a level merged into another is that other level.
+    lot_ids = {canonical_level_of_theory_id(session, c.lot_id) if c.lot_id is not None else None for c in calcs}
     if len(lot_ids) <= 1:
         return
     levels = []
@@ -506,6 +515,7 @@ def _apply_selection(
             species_entry_id=species_entry_id, candidates=len(calcs), chosen=len(calcs), tied=False
         )
 
+    not_compared = 0
     if selection == "lowest_energy":
         energies = _calculation_energies(session, [c.id for c in calcs])
         comparable = [c for c in calcs if c.id in energies]
@@ -516,8 +526,9 @@ def _apply_selection(
                 context={"candidate_count": len(calcs), "species_entry_ref": _entry_ref(session, species_entry_id)},
             )
         _refuse_mixed_levels(session, comparable, _entry_ref(session, species_entry_id))
-        best = min(energies[c.id] for c in comparable)
-        chosen = [c for c in comparable if energies[c.id] == best]
+        lowest = min(energies[c.id] for c in comparable)
+        chosen = [c for c in comparable if energies[c.id] == lowest]
+        not_compared = len(calcs) - len(comparable)
     elif selection == "latest":
         extreme = max(c.created_at for c in calcs)
         chosen = [c for c in calcs if c.created_at == extreme]
@@ -533,7 +544,11 @@ def _apply_selection(
         + (f"is tied between {len(chosen)} calculations: {refs}" if tied else f"chose calculation {refs}"),
     )
     return chosen, SelectionGroup(
-        species_entry_id=species_entry_id, candidates=len(calcs), chosen=len(chosen), tied=tied
+        species_entry_id=species_entry_id,
+        candidates=len(calcs),
+        chosen=len(chosen),
+        not_compared=not_compared,
+        tied=tied,
     )
 
 
@@ -849,12 +864,15 @@ def lookup_species(
 
     mb.add(SPECIES_IDENTITY_EXACT, "species identity matched exactly by InChI key")
 
+    entries_stmt = select(SpeciesEntry).where(SpeciesEntry.species_id == species.id)
+    entries_hidden = visibility.hidden(
+        session,
+        SubmissionRecordType.species_entry,
+        entries_stmt.with_only_columns(SpeciesEntry.id),
+        counted="species_entries",
+    )
     entries = session.scalars(
-        _display_ordered(
-            select(SpeciesEntry).where(SpeciesEntry.species_id == species.id),
-            SpeciesEntry,
-            SubmissionRecordType.species_entry,
-        )
+        _display_ordered(entries_stmt, SpeciesEntry, SubmissionRecordType.species_entry, visibility)
     ).all()
 
     results: list[LookupResultItem] = []
@@ -903,7 +921,7 @@ def lookup_species(
             },
         ))
 
-    return _respond(query, mb, results)
+    return _respond(query, mb, results, hidden=entries_hidden)
 
 
 # ---------------------------------------------------------------------------
@@ -1144,16 +1162,19 @@ def lookup_species_calculation(
     ))
 
     # Step 2: every entry of the species. None is picked: the calculations of all of them are searched.
+    entries_stmt = select(SpeciesEntry).where(SpeciesEntry.species_id == species.id)
+    entries_hidden = visibility.hidden(
+        session,
+        SubmissionRecordType.species_entry,
+        entries_stmt.with_only_columns(SpeciesEntry.id),
+        counted="species_entries",
+    )
     entries = session.scalars(
-        _display_ordered(
-            select(SpeciesEntry).where(SpeciesEntry.species_id == species.id),
-            SpeciesEntry,
-            SubmissionRecordType.species_entry,
-        )
+        _display_ordered(entries_stmt, SpeciesEntry, SubmissionRecordType.species_entry, visibility)
     ).all()
     if not entries:
         mb.add(SPECIES_ENTRY_NONE, "no species entries found")
-        return _respond(query_echo, mb, results)
+        return _respond(query_echo, mb, results, hidden=entries_hidden)
 
     mb.add(SPECIES_ENTRY_EXISTS, f"{len(entries)} species entry(ies) exist")
     for entry in entries:
@@ -1217,7 +1238,9 @@ def lookup_species_calculation(
                 ),
             ))
 
-    return _respond(query_echo, mb, results, hidden=hidden, selected_by=_selected_by(selection, groups))
+    return _respond(
+        query_echo, mb, results, hidden=hidden, entries_hidden=entries_hidden, selected_by=_selected_by(selection, groups)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1263,12 +1286,15 @@ def lookup_reaction(
     if chem_rxn is None:
         return _respond(query_echo, mb)
 
+    entries_stmt = select(ReactionEntry).where(ReactionEntry.reaction_id == chem_rxn.id)
+    entries_hidden = visibility.hidden(
+        session,
+        SubmissionRecordType.reaction_entry,
+        entries_stmt.with_only_columns(ReactionEntry.id),
+        counted="reaction_entries",
+    )
     entries = session.scalars(
-        _display_ordered(
-            select(ReactionEntry).where(ReactionEntry.reaction_id == chem_rxn.id),
-            ReactionEntry,
-            SubmissionRecordType.reaction_entry,
-        )
+        _display_ordered(entries_stmt, ReactionEntry, SubmissionRecordType.reaction_entry, visibility)
     ).all()
 
     if not entries:
@@ -1279,7 +1305,7 @@ def lookup_reaction(
     for entry in entries:
         results.append(_reaction_entry_result(entry, chem_rxn.id, session, visibility))
 
-    return _respond(query_echo, mb, results)
+    return _respond(query_echo, mb, results, hidden=entries_hidden)
 
 
 # ---------------------------------------------------------------------------
@@ -1374,17 +1400,20 @@ def lookup_reaction_kinetics(
     if chem_rxn is None:
         return _respond(query_echo, mb)
 
+    entries_stmt = select(ReactionEntry).where(ReactionEntry.reaction_id == chem_rxn.id)
+    entries_hidden = visibility.hidden(
+        session,
+        SubmissionRecordType.reaction_entry,
+        entries_stmt.with_only_columns(ReactionEntry.id),
+        counted="reaction_entries",
+    )
     entries = session.scalars(
-        _display_ordered(
-            select(ReactionEntry).where(ReactionEntry.reaction_id == chem_rxn.id),
-            ReactionEntry,
-            SubmissionRecordType.reaction_entry,
-        )
+        _display_ordered(entries_stmt, ReactionEntry, SubmissionRecordType.reaction_entry, visibility)
     ).all()
 
     if not entries:
         mb.add(REACTION_ENTRY_NONE, "reaction exists but no entries")
-        return _respond(query_echo, mb, results)
+        return _respond(query_echo, mb, results, hidden=entries_hidden)
 
     mb.add(REACTION_ENTRY_EXISTS, f"{len(entries)} reaction entry(ies)")
 
@@ -1414,7 +1443,7 @@ def lookup_reaction_kinetics(
                 summary=_kinetics_summary(kin),
             ))
 
-    return _respond(query_echo, mb, results, hidden=hidden)
+    return _respond(query_echo, mb, results, hidden=hidden, entries_hidden=entries_hidden)
 
 
 # ---------------------------------------------------------------------------

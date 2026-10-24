@@ -10,18 +10,21 @@ from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
 from app.api.routes._legacy_reads import (
     EntityListResponse,
-    LegacyReadRoute,
+    Gate,
     LegacyVisibility,
     entity_page,
-    gate_path_record,
+    legacy_route_class,
 )
 from app.db.models.common import ScientificOriginKind, SubmissionRecordType
 from app.db.models.thermo import Thermo
 from app.schemas.entities.thermo import ThermoRead
 
 router = APIRouter(
-    route_class=LegacyReadRoute,
-    dependencies=[Depends(gate_path_record("thermo_id", SubmissionRecordType.thermo, "Thermo"))]
+    route_class=legacy_route_class(
+        {
+        "thermo_id": Gate(SubmissionRecordType.thermo, "Thermo"),
+        }
+    )
 )
 
 

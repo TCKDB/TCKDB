@@ -215,7 +215,6 @@ Deliberately reachable only through the generic request helpers. Each group stat
 | `GET /api/v1/species` | yes | — | — | — | — |
 | `GET /api/v1/species-entries/{entry_id}` | yes | — | — | — | — |
 | `GET /api/v1/species-entries/{entry_id}/conformer-groups` | yes | — | — | — | — |
-| `GET /api/v1/species-entries/{entry_id}/conformer-observations/lowest-sp` | yes | — | — | — | — |
 | `GET /api/v1/species-entries/{entry_id}/conformers` | yes | — | — | — | — |
 | `GET /api/v1/species-entries/{entry_id}/statmech` | yes | — | — | — | — |
 | `GET /api/v1/species-entries/{entry_id}/thermo` | yes | — | — | — | — |

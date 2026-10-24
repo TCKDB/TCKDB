@@ -146,15 +146,6 @@ def test_a_merged_level_ref_is_answered_under_the_level_it_was_merged_into(clien
     assert {m["conformer_ref"]: m["status"] for m in out["members"]}[other.public_ref] == "present"
 
 
-def test_the_legacy_lowest_sp_route_is_deprecated_in_openapi_and_points_to_the_new_operation(client):
-    spec = client.get("/openapi.json").json()
-    operation = spec["paths"]["/api/v1/species-entries/{entry_id}/conformer-observations/lowest-sp"]["get"]
-    assert operation["deprecated"] is True
-    assert "conformers/relative-energies" in operation["description"]
-    new = spec["paths"]["/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies"]["post"]
-    assert not new.get("deprecated")
-
-
 # ---------------------------------------------------------------------------
 # A strict request
 # ---------------------------------------------------------------------------

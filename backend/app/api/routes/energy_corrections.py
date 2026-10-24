@@ -10,13 +10,17 @@ from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
 from app.api.routes._legacy_reads import (
     EntityListResponse,
+    Gate,
     LegacyReadRoute,
+    LegacyVisibility,
     entity_page,
+    legacy_route_class,
 )
 from app.db.models.common import (
     EnergyCorrectionApplicationRole,
     EnergyCorrectionSchemeKind,
     FrequencyScaleKind,
+    SubmissionRecordType,
 )
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
@@ -32,7 +36,11 @@ from app.services.scientific_read.handles import canonical_level_of_theory_id
 
 schemes_router = APIRouter(route_class=LegacyReadRoute)
 scale_factors_router = APIRouter(route_class=LegacyReadRoute)
-applied_router = APIRouter(route_class=LegacyReadRoute)
+applied_router = APIRouter(
+    route_class=legacy_route_class(
+        {"correction_id": Gate(SubmissionRecordType.applied_energy_correction, "AppliedEnergyCorrection")}
+    )
+)
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +197,7 @@ def list_applied_energy_corrections(
     scheme_id: int | None = Query(None),
     frequency_scale_factor_id: int | None = Query(None),
     application_role: EnergyCorrectionApplicationRole | None = Query(None),
+    visibility: LegacyVisibility = Depends(),
 ):
     base = select(AppliedEnergyCorrection.id)
     if target_species_entry_id is not None:
@@ -213,6 +222,8 @@ def list_applied_energy_corrections(
             AppliedEnergyCorrection.application_role == application_role
         )
 
+    hidden = visibility.hidden(session, SubmissionRecordType.applied_energy_correction, base)
+    base = visibility.restrict(base, AppliedEnergyCorrection.id, SubmissionRecordType.applied_energy_correction)
     total = session.scalar(
         select(func.count()).select_from(base.subquery())
     ) or 0
@@ -229,6 +240,7 @@ def list_applied_energy_corrections(
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
+        hidden=hidden,
     )
 
 

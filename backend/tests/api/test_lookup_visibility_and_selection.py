@@ -211,7 +211,7 @@ def test_lowest_energy_within_one_level_is_labelled_as_the_requests_mode(client,
     assert selected_by["mode"] == "lowest_energy"
     assert "not by a scientific preference" in selected_by["statement"]
     assert selected_by["groups"] == [
-        {"species_entry_id": entry.id, "candidates": 2, "chosen": 1, "tied": False}
+        {"species_entry_id": entry.id, "candidates": 2, "chosen": 1, "not_compared": 0, "tied": False}
     ]
     assert "selected_by" in client.get(f"{LOOKUP}/calculations", params={"species_entry_id": entry.id}).json()
     assert client.get(f"{LOOKUP}/calculations", params={"species_entry_id": entry.id}).json()["selected_by"] is None
@@ -298,6 +298,7 @@ def test_identity_counts_follow_the_visibility_of_the_records_they_count(client,
     thermos = [make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=-1.0 - i) for i in range(3)]
     set_review(db_session, record_type=SubmissionRecordType.thermo, record_id=thermos[0].id, status=S.rejected)
     set_review(db_session, record_type=SubmissionRecordType.thermo, record_id=thermos[1].id, status=S.approved)
+    set_review(db_session, record_type=SubmissionRecordType.species_entry, record_id=entry.id, status=S.approved)
     params = {"smiles": "C=O", "charge": 0, "multiplicity": 1}
 
     def count(**extra):

@@ -10,10 +10,10 @@ from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
 from app.api.routes._legacy_reads import (
     EntityListResponse,
-    LegacyReadRoute,
+    Gate,
     LegacyVisibility,
     entity_page,
-    gate_path_record,
+    legacy_route_class,
 )
 from app.db.models.common import (
     RigidRotorKind,
@@ -25,8 +25,11 @@ from app.db.models.statmech import Statmech, StatmechTorsion
 from app.schemas.entities.statmech import StatmechRead
 
 router = APIRouter(
-    route_class=LegacyReadRoute,
-    dependencies=[Depends(gate_path_record("statmech_id", SubmissionRecordType.statmech, "Statmech"))]
+    route_class=legacy_route_class(
+        {
+        "statmech_id": Gate(SubmissionRecordType.statmech, "Statmech"),
+        }
+    )
 )
 
 

@@ -182,22 +182,6 @@ def test_the_energy_correction_scheme_list_resolves_a_merged_lot_id(
     assert [i["id"] for i in resp.json()["items"]] == [scheme.id]
 
 
-def test_lowest_sp_resolves_a_merged_lot_id(client, db_session, merged):
-    """The comparison context is the kept row: that is where the SPs moved."""
-    from tests.services.scientific_read._factories import make_species, make_species_entry
-
-    entry = make_species_entry(
-        db_session,
-        make_species(db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("MREF")),
-    )
-    resp = client.get(
-        f"/api/v1/species-entries/{entry.id}/conformer-observations/lowest-sp",
-        params={"lot_id": merged["duplicate"].id},
-    )
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["lot_id"] == merged["holder"].id
-
-
 def test_an_upload_that_hashes_to_a_merged_row_lands_on_the_kept_row(db_session, merged):
     """The database refuses a calculation on a merged row, so the upload path must not try."""
     from tckdb_schemas.fragments.refs import LevelOfTheoryRef

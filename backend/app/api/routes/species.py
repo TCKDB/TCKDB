@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Response
-from sqlalchemy import case, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.client_version import require_supported_tckdb_client
@@ -19,17 +19,14 @@ from app.api.routes._legacy_reads import (
     LegacyReadRoute,
     LegacyVisibility,
     disclose_in_header,
+    ensure_not_below_floor,
     entity_page,
 )
 from app.db.models.app_user import AppUser
-from app.db.models.calculation import Calculation, CalculationSPResult
 from app.db.models.common import (
-    CalculationQuality,
-    CalculationType,
     MoleculeKind,
     SubmissionRecordType,
 )
-from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.species import (
     ConformerGroup,
     ConformerObservation,
@@ -43,8 +40,6 @@ from app.schemas.entities.conformer import (
     ConformerGroupRead,
     ConformerGroupSummaryRead,
     ConformerObservationRead,
-    LowestSPConformerObservationRead,
-    LowestSPConformerObservationResultRead,
     SpeciesEntryConformerGroupsRead,
 )
 from app.schemas.entities.species import SpeciesRead
@@ -60,7 +55,6 @@ from app.schemas.entities.statmech import StatmechRead
 from app.schemas.entities.thermo import ThermoRead
 from app.schemas.entities.transport import TransportRead
 from app.services.scientific_read.common import review_floor_predicate, where_visible
-from app.services.scientific_read.handles import canonical_level_of_theory_id
 from app.services.species_entry_review import (
     create_species_entry_review,
     list_species_entry_reviews,
@@ -132,34 +126,31 @@ entries_write_router = APIRouter()
 
 
 def _species_entry_conformer_summary(
-    session: Session, entry_id: int
+    session: Session, entry_id: int, visibility: LegacyVisibility
 ) -> SpeciesEntryConformerSummaryRead:
     """Aggregate conformer-group and observation counts for a species entry.
 
-    Uses two scalar aggregates so the top-level species-entry read stays cheap
-    and does not trigger per-row lazy loads through the conformer collection.
+    Two scalar aggregates, so the top-level species-entry read stays cheap. A count answers what the list endpoint
+    would show (decision D5): the groups and observations the request shows (the default exclusions and the profile's
+    floor), and an observation in a group the floor hides is not counted.
     """
-    # Under the curated profile a count answers what the list endpoint would show (decision D5): groups and
-    # observations below the review floor are not in it. Without a floor nothing is added.
-    group_visible = review_floor_predicate(ConformerGroup.id, SubmissionRecordType.conformer_group)
-    observation_visible = review_floor_predicate(
-        ConformerObservation.id, SubmissionRecordType.conformer_observation
-    )
     group_count = session.scalar(
-        where_visible(
+        visibility.restrict(
             select(func.count(ConformerGroup.id)).where(ConformerGroup.species_entry_id == entry_id),
-            group_visible,
+            ConformerGroup.id,
+            SubmissionRecordType.conformer_group,
         )
     ) or 0
     observation_count = session.scalar(
         where_visible(
-            where_visible(
+            visibility.restrict(
                 select(func.count(ConformerObservation.id))
                 .join(ConformerGroup)
                 .where(ConformerGroup.species_entry_id == entry_id),
-                observation_visible,
+                ConformerObservation.id,
+                SubmissionRecordType.conformer_observation,
             ),
-            group_visible,
+            review_floor_predicate(ConformerObservation.conformer_group_id, SubmissionRecordType.conformer_group),
         )
     ) or 0
     return SpeciesEntryConformerSummaryRead(
@@ -169,7 +160,9 @@ def _species_entry_conformer_summary(
 
 
 @entries_router.get("/{entry_id}", response_model=SpeciesEntryRead)
-def get_species_entry(entry_id: int, session: Session = Depends(get_db)):
+def get_species_entry(
+    entry_id: int, session: Session = Depends(get_db), visibility: LegacyVisibility = Depends()
+):
     """Return one species entry with a compact conformer summary.
 
     The summary is a count-only aggregate. Clients that want to browse the
@@ -178,8 +171,11 @@ def get_species_entry(entry_id: int, session: Session = Depends(get_db)):
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
+    # The route that returns the entry itself: an entry below the curated floor answers as an unknown id does. (Routes
+    # under it only scope by the entry and, as on the scientific reads, are not gated by it.)
+    ensure_not_below_floor(session, SubmissionRecordType.species_entry, entry_id, "SpeciesEntry")
     read = SpeciesEntryRead.model_validate(entry)
-    read.conformer_summary = _species_entry_conformer_summary(session, entry_id)
+    read.conformer_summary = _species_entry_conformer_summary(session, entry_id, visibility)
     return read
 
 
@@ -270,191 +266,19 @@ def list_conformers_for_entry(
         response, visibility.hidden(session, SubmissionRecordType.conformer_observation, matched)
     )
     observations = session.scalars(
-        visibility.restrict(
-            select(ConformerObservation)
-            .join(ConformerGroup)
-            .where(ConformerGroup.species_entry_id == entry_id),
-            ConformerObservation.id,
-            SubmissionRecordType.conformer_observation,
+        where_visible(
+            visibility.restrict(
+                select(ConformerObservation)
+                .join(ConformerGroup)
+                .where(ConformerGroup.species_entry_id == entry_id),
+                ConformerObservation.id,
+                SubmissionRecordType.conformer_observation,
+            ),
+            # An observation is shown only with its group (the floor applies to the parent).
+            review_floor_predicate(ConformerObservation.conformer_group_id, SubmissionRecordType.conformer_group),
         ).order_by(ConformerObservation.id)
     ).all()
     return [ConformerObservationRead.model_validate(o) for o in observations]
-
-
-# Quality-priority rank: smaller rank wins during per-observation collapse and,
-# unless the caller fixed quality, also as a tiebreaker in the final ranking.
-# Kept as module-level so it can be reused and its ordering is obvious.
-_QUALITY_PRIORITY: dict[CalculationQuality, int] = {
-    CalculationQuality.curated: 1,
-    CalculationQuality.raw: 2,
-    CalculationQuality.rejected: 3,
-}
-
-
-def _resolve_lowest_sp_conformer_observation(
-    session: Session,
-    *,
-    species_entry_id: int,
-    lot_id: int,
-    calculation_quality: CalculationQuality | None,
-) -> LowestSPConformerObservationRead | None:
-    """Run the lowest-qualifying-SP conformer-observation query for one species entry.
-
-    The query runs in one bounded SQL round trip, not per-row Python loops:
-
-    1. Join conformer_group → conformer_observation → calculation → calc_sp_result
-       filtered to SP calculations at the requested LoT with a populated energy,
-       optionally narrowed to a caller-supplied `calculation_quality`.
-    2. Use `ROW_NUMBER() OVER (PARTITION BY observation_id)` to collapse each
-       observation's qualifying SP rows down to one canonical candidate. The
-       within-partition order is `(quality_rank, energy, created_at, calc_id)`.
-    3. Globally order the surviving one-per-observation rows and take the top
-       with `(energy, [quality_rank if quality not fixed], created_at, calc_id)`.
-
-    Returns `None` when no qualifying SP calculation exists. That is a valid
-    query outcome, not an error.
-    """
-    quality_rank = case(
-        *[
-            (Calculation.quality == quality, rank)
-            for quality, rank in _QUALITY_PRIORITY.items()
-        ],
-        else_=len(_QUALITY_PRIORITY) + 1,
-    ).label("quality_rank")
-
-    base = (
-        select(
-            Calculation.id.label("calculation_id"),
-            ConformerObservation.id.label("observation_id"),
-            ConformerGroup.id.label("group_id"),
-            Calculation.quality.label("quality"),
-            Calculation.created_at.label("created_at"),
-            CalculationSPResult.electronic_energy_hartree.label("energy"),
-            quality_rank,
-        )
-        .select_from(Calculation)
-        .join(
-            ConformerObservation,
-            ConformerObservation.id == Calculation.conformer_observation_id,
-        )
-        .join(
-            ConformerGroup,
-            ConformerGroup.id == ConformerObservation.conformer_group_id,
-        )
-        .join(
-            CalculationSPResult,
-            CalculationSPResult.calculation_id == Calculation.id,
-        )
-        .where(
-            ConformerGroup.species_entry_id == species_entry_id,
-            Calculation.type == CalculationType.sp,
-            Calculation.lot_id == lot_id,
-            CalculationSPResult.electronic_energy_hartree.is_not(None),
-        )
-    )
-    if calculation_quality is not None:
-        base = base.where(Calculation.quality == calculation_quality)
-    # Records the active profile hides are not candidates (hidden == absent).
-    base = where_visible(base, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
-
-    base_sq = base.subquery()
-
-    # Stage 2: per-observation collapse via ROW_NUMBER partitioned by observation.
-    collapse_rank = (
-        func.row_number()
-        .over(
-            partition_by=base_sq.c.observation_id,
-            order_by=(
-                base_sq.c.quality_rank.asc(),
-                base_sq.c.energy.asc(),
-                base_sq.c.created_at.asc(),
-                base_sq.c.calculation_id.asc(),
-            ),
-        )
-        .label("collapse_rank")
-    )
-    ranked = select(base_sq, collapse_rank).subquery()
-
-    # Stage 3: final global ranking over one-row-per-observation survivors.
-    survivors = select(ranked).where(ranked.c.collapse_rank == 1).subquery()
-
-    final_order: list = [survivors.c.energy.asc()]
-    if calculation_quality is None:
-        final_order.append(survivors.c.quality_rank.asc())
-    final_order.extend([
-        survivors.c.created_at.asc(),
-        survivors.c.calculation_id.asc(),
-    ])
-
-    row = session.execute(
-        select(survivors).order_by(*final_order).limit(1)
-    ).first()
-    if row is None:
-        return None
-
-    return LowestSPConformerObservationRead(
-        species_entry_id=species_entry_id,
-        lot_id=lot_id,
-        conformer_group_id=row.group_id,
-        conformer_observation_id=row.observation_id,
-        calculation_id=row.calculation_id,
-        electronic_energy_hartree=row.energy,
-        calculation_quality=row.quality,
-    )
-
-
-@entries_router.get(
-    "/{entry_id}/conformer-observations/lowest-sp",
-    response_model=LowestSPConformerObservationResultRead,
-    deprecated=True,
-)
-def get_lowest_sp_conformer_observation_for_entry(
-    entry_id: int,
-    lot_id: int = Query(..., description="Level-of-theory id defining the comparison context"),
-    calculation_quality: CalculationQuality | None = Query(
-        default=None,
-        description="Optional filter: restrict to this quality bucket",
-    ),
-    session: Session = Depends(get_db),
-):
-    """Return the lowest qualifying SP conformer observation for a species entry.
-
-    **Deprecated.** Use ``POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies``
-    instead: it names the reference conformer, the energy kind, the level and the certificate, reports a missing value
-    as absent with a coded reason, and treats repeated records of one conformer as alternates. This route collapses
-    several single points on one observation to the lowest, which is the opposite rule. It is kept for now and will be
-    removed once it is unused.
-
-    This is a context-qualified ranking, not a stored "best conformer" claim.
-    A calculation qualifies only if it is an SP at the requested `lot_id` with
-    a non-null electronic energy on an observation belonging to this species
-    entry. Multiple SPs on the same observation are first collapsed to one
-    canonical candidate before observations are compared against each other.
-
-    Returns 200 with `result: null` when no qualifying SP exists — that is a
-    legitimate query outcome, not an error condition.
-    """
-    entry = session.get(SpeciesEntry, entry_id)
-    if entry is None:
-        raise NotFoundError("SpeciesEntry not found")
-    # A merged row's id names the row it was merged into (#591): its
-    # calculations were moved there.
-    lot_id = canonical_level_of_theory_id(session, lot_id)
-    if session.get(LevelOfTheory, lot_id) is None:
-        raise NotFoundError("LevelOfTheory not found")
-
-    result = _resolve_lowest_sp_conformer_observation(
-        session,
-        species_entry_id=entry_id,
-        lot_id=lot_id,
-        calculation_quality=calculation_quality,
-    )
-    return LowestSPConformerObservationResultRead(
-        species_entry_id=entry_id,
-        lot_id=lot_id,
-        calculation_quality=calculation_quality,
-        result=result,
-    )
 
 
 @entries_router.get(

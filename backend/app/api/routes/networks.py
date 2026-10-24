@@ -17,11 +17,11 @@ from app.api.deps import PaginationParams, get_db
 from app.api.errors import DataIntegrityError, NotFoundError
 from app.api.routes._legacy_reads import (
     EntityListResponse,
-    LegacyReadRoute,
+    Gate,
     LegacyVisibility,
     disclose_in_header,
     entity_page,
-    gate_path_record,
+    legacy_route_class,
 )
 from app.db.models.calculation import Calculation
 from app.db.models.common import NetworkKineticsModelKind, SubmissionRecordType
@@ -66,14 +66,14 @@ from app.schemas.reads.network import (
     NetworkStateParticipantRead,
     NetworkStateRead,
 )
-from app.services.scientific_read.common import review_floor_predicate, where_visible
 
 router = APIRouter(
-    route_class=LegacyReadRoute,
-    dependencies=[
-        Depends(gate_path_record("network_id", SubmissionRecordType.network, "Network")),
-        Depends(gate_path_record("solve_id", SubmissionRecordType.network_solve, "Solve")),
-    ],
+    route_class=legacy_route_class(
+        {
+        "network_id": Gate(SubmissionRecordType.network, "Network"),
+        "solve_id": Gate(SubmissionRecordType.network_solve, "Solve"),
+        }
+    )
 )
 logger = logging.getLogger(__name__)
 
@@ -419,7 +419,9 @@ def list_networks(
 
 
 @router.get("/{network_id}", response_model=NetworkDetailRead)
-def get_network(network_id: int, session: Session = Depends(get_db)):
+def get_network(
+    network_id: int, session: Session = Depends(get_db), visibility: LegacyVisibility = Depends()
+):
     network = session.scalar(
         select(Network)
         .where(Network.id == network_id)
@@ -465,9 +467,10 @@ def get_network(network_id: int, session: Session = Depends(get_db)):
 
     solve_count = (
         session.scalar(
-            where_visible(
+            visibility.restrict(
                 select(func.count()).select_from(NetworkSolve).where(NetworkSolve.network_id == network_id),
-                review_floor_predicate(NetworkSolve.id, SubmissionRecordType.network_solve),
+                NetworkSolve.id,
+                SubmissionRecordType.network_solve,
             )
         )
         or 0
@@ -708,6 +711,7 @@ def get_network_solve(
 def list_channel_kinetics(
     network_id: int,
     channel_id: int,
+    response: Response,
     session: Session = Depends(get_db),
     solve_id: int | None = Query(None),
     visibility: LegacyVisibility = Depends(),
@@ -716,6 +720,14 @@ def list_channel_kinetics(
     _get_channel_for_network_or_404(network_id, channel_id, session)
 
     # A network kinetics row is reviewed through its solve (it has no review row of its own).
+    disclose_in_header(
+        response,
+        visibility.hidden(
+            session,
+            SubmissionRecordType.network_solve,
+            select(NetworkKinetics.solve_id).where(NetworkKinetics.channel_id == channel_id),
+        ),
+    )
     stmt = (
         visibility.restrict(
             select(NetworkKinetics).where(NetworkKinetics.channel_id == channel_id),

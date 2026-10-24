@@ -211,6 +211,7 @@ def test_a_curated_entry_summary_counts_only_what_the_curated_list_shows(client,
     entry = make_species_entry(db_session, species)
     groups = [make_conformer_group(db_session, entry, label=f"g{i}") for i in range(3)]
     set_review(db_session, record_type=SubmissionRecordType.conformer_group, record_id=groups[0].id, status=S.approved)
+    set_review(db_session, record_type=SubmissionRecordType.species_entry, record_id=entry.id, status=S.approved)
 
     exploratory = client.get(f"{LEGACY}/species-entries/{entry.id}").json()["conformer_summary"]
     curated = client.get(f"{LEGACY}/species-entries/{entry.id}", params={"profile": "curated"}).json()["conformer_summary"]
