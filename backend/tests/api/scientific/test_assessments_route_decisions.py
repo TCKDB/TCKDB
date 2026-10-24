@@ -98,3 +98,27 @@ def test_check_inputs_in_a_search_body_is_refused_too(client, path):
     response = client.post(f"{API}{path}", json={"include": ["assessments"], "check_inputs": True})
     assert response.status_code == 422, response.text
     assert "check_inputs_not_supported" in response.text
+
+
+@pytest.mark.parametrize(
+    "path, body",
+    [
+        ("/thermo/search", {"software": '"check_inputs": true', "include": ["assessments"]}),
+        ("/kinetics/search", {"software": 'x "check_inputs":true y', "include": ["assessments"]}),
+        ("/transport/search", {"method": '"check_inputs": true', "include": ["assessments"]}),
+        ("/statmech/search", {"method": '"check_inputs": true', "include": ["assessments"]}),
+    ],
+)
+def test_a_string_value_that_contains_the_text_is_not_a_check_inputs_key(client, path, body):
+    """The refusal reads the parsed body's keys, not its text: a filter value that spells the text out is just a value."""
+    response = client.post(f"{API}{path}", json=body)
+    assert "check_inputs_not_supported" not in response.text, response.text
+
+
+def test_only_a_top_level_key_is_refused(client):
+    nested = client.post(
+        f"{API}/transport/search", json={"method": "x", "include": ["assessments"], "extra": {"check_inputs": True}}
+    )
+    assert "check_inputs_not_supported" not in nested.text  # a nested key is the model's own business (statmech forbids extras)
+    top = client.post(f"{API}/transport/search", json={"method": "x", "include": ["assessments"], "check_inputs": False})
+    assert top.status_code == 422 and "check_inputs_not_supported" in top.text

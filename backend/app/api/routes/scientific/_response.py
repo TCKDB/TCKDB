@@ -27,7 +27,6 @@ the surface this machinery was first written for.
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -691,17 +690,11 @@ def omit_unrequested_sections(
 MAX_CHECKED_ASSESSMENTS = 10
 
 
-_CHECK_INPUTS_KEY = re.compile(rb'"check_inputs"\s*:')
-
-
-async def refuse_check_inputs(request: Request) -> None:
-    """Dependency for every route that serves ``include=assessments`` but does not compare inputs: refuse the parameter
-    (in the query string or a search body) rather than ignore it, so a caller never believes a check ran."""
+def refuse_check_inputs(request: Request) -> None:
+    """Dependency for every route that serves ``include=assessments`` but does not compare inputs: refuse the query
+    parameter rather than ignore it, so a caller never believes a check ran. A search body is refused by its request
+    model (``refuse_check_inputs_in_body``), which judges the parsed object, not the raw text."""
     present = "check_inputs" in request.query_params
-    if not present and request.method == "POST":
-        # Looked for as a key in the raw body, with no JSON parse: a malformed body is the route's own 422 to give, and a
-        # parse here would need an exception handler that could swallow a coded error.
-        present = _CHECK_INPUTS_KEY.search(await request.body()) is not None
     if present:
         raise CodedValueError(
             "check_inputs_not_supported",

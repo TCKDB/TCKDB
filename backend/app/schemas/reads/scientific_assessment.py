@@ -6,8 +6,22 @@ from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel
+from tckdb_schemas.coded_error import CodedValidationError
 
 from app.db.models.common import ReproducibilityGrade
+
+
+def refuse_check_inputs_in_body(data: object) -> object:
+    """A search body that names ``check_inputs`` at its top level is refused: it is a query parameter of the thermo and
+    kinetics entry-scoped lists only. Judged on the parsed object, so a string value or a nested key that merely contains
+    the text is not touched."""
+    if isinstance(data, dict) and "check_inputs" in data:
+        raise CodedValidationError(
+            "check_inputs_not_supported",
+            "check_inputs is supported only on the thermo and kinetics entry-scoped lists (with include=assessments) and, "
+            "implicitly, on by-ref statmech and transport reads; this route does not compare inputs.",
+        )
+    return data
 
 
 class MadeUnder(BaseModel):
@@ -82,4 +96,5 @@ __all__ = [
     "MadeUnder",
     "PublicAssessmentSummary",
     "ReproducibilityAssessmentSummary",
+    "refuse_check_inputs_in_body",
 ]
