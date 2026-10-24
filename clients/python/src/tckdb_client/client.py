@@ -1889,9 +1889,13 @@ class TCKDBClient:
         include: list[str] | None = None,
         offset: int | None = None,
         limit: int | None = None,
+        check_inputs: bool | None = None,
         profile: str | None = None,
     ) -> ReactionKineticsResponse:
         """``GET /scientific/reaction-entries/{reaction_entry_id}/kinetics``.
+
+        ``check_inputs=True`` (with ``include=['assessments']`` and ``limit`` of at most 10) compares each stored
+        assessment's inputs with today's; without it a list reports ``inputs_unchecked``, never ``current``.
 
         Phase C: ``reaction_entry_id`` accepts the integer
         ``reaction_entry.id`` or a public ref of the form ``rxe_...``.
@@ -1917,6 +1921,7 @@ class TCKDBClient:
             "include": include,
             "offset": offset,
             "limit": limit,
+            "check_inputs": check_inputs,
             "profile": profile,
         }
         return self.request_json(
@@ -1939,9 +1944,13 @@ class TCKDBClient:
         include: list[str] | None = None,
         offset: int | None = None,
         limit: int | None = None,
+        check_inputs: bool | None = None,
         profile: str | None = None,
     ) -> SpeciesThermoResponse:
         """``GET /scientific/species-entries/{species_entry_id}/thermo``.
+
+        ``check_inputs=True`` (with ``include=['assessments']`` and ``limit`` of at most 10) compares each stored
+        assessment's inputs with today's; without it a list reports ``inputs_unchecked``, never ``current``.
 
         Phase C: ``species_entry_id`` accepts the integer
         ``species_entry.id`` or a public ref of the form ``spe_...``.
@@ -1963,6 +1972,7 @@ class TCKDBClient:
             "include": include,
             "offset": offset,
             "limit": limit,
+            "check_inputs": check_inputs,
             "profile": profile,
         }
         return self.request_json(

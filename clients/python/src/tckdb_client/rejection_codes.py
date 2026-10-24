@@ -87,6 +87,7 @@ class RejectionCode(str, Enum):
     APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH = "applied_energy_correction_source_calculation_owner_mismatch"
     APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED = "applied_energy_correction_source_key_undeclared"
     ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH = "arrhenius_a_units_molecularity_mismatch"
+    ASSESSMENT_INPUT_CHECK_LIMIT = "assessment_input_check_limit"
     ATOM_MAP_ATOMS_UNACCOUNTED_FOR = "atom_map_atoms_unaccounted_for"
     ATOM_MAP_CONTRADICTS_IRC_MAPPING = "atom_map_contradicts_irc_mapping"
     ATOM_MAP_ELEMENT_NOT_CONSERVED = "atom_map_element_not_conserved"
@@ -111,6 +112,8 @@ class RejectionCode(str, Enum):
     CANDIDATE_RIGHTS_BASIS_INCOMPATIBLE = "candidate_rights_basis_incompatible"
     CANDIDATE_RIGHTS_BASIS_MISSING = "candidate_rights_basis_missing"
     CANONICAL_PARAMETER_VALUE_REQUIRES_KEY = "canonical_parameter_value_requires_key"
+    CHECK_INPUTS_NEEDS_ASSESSMENTS = "check_inputs_needs_assessments"
+    CHECK_INPUTS_NOT_SUPPORTED = "check_inputs_not_supported"
     CLIENT_SORT_NOT_SUPPORTED = "client_sort_not_supported"
     COMPOSED_SEARCH_CANDIDATE_LIMIT_EXCEEDED = "composed_search_candidate_limit_exceeded"
     COMPOSED_SEARCH_INVALID_PAGE = "composed_search_invalid_page"
@@ -427,6 +430,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED,
         RejectionCode.ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH,
+        RejectionCode.ASSESSMENT_INPUT_CHECK_LIMIT,
         RejectionCode.ATOM_MAP_ATOMS_UNACCOUNTED_FOR,
         RejectionCode.ATOM_MAP_CONTRADICTS_IRC_MAPPING,
         RejectionCode.ATOM_MAP_ELEMENT_NOT_CONSERVED,
@@ -450,6 +454,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.CANDIDATE_RIGHTS_BASIS_INCOMPATIBLE,
         RejectionCode.CANDIDATE_RIGHTS_BASIS_MISSING,
         RejectionCode.CANONICAL_PARAMETER_VALUE_REQUIRES_KEY,
+        RejectionCode.CHECK_INPUTS_NEEDS_ASSESSMENTS,
+        RejectionCode.CHECK_INPUTS_NOT_SUPPORTED,
         RejectionCode.CLIENT_SORT_NOT_SUPPORTED,
         RejectionCode.COMPOSED_SEARCH_CANDIDATE_LIMIT_EXCEEDED,
         RejectionCode.COMPOSED_SEARCH_INVALID_PAGE,
@@ -751,6 +757,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH: frozenset({422}),
+    RejectionCode.ASSESSMENT_INPUT_CHECK_LIMIT: frozenset({422}),
     RejectionCode.ATOM_MAP_ATOMS_UNACCOUNTED_FOR: frozenset({422}),
     RejectionCode.ATOM_MAP_CONTRADICTS_IRC_MAPPING: frozenset({422}),
     RejectionCode.ATOM_MAP_ELEMENT_NOT_CONSERVED: frozenset({409, 422}),
@@ -775,6 +782,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.CANDIDATE_RIGHTS_BASIS_INCOMPATIBLE: frozenset({422}),
     RejectionCode.CANDIDATE_RIGHTS_BASIS_MISSING: frozenset({422}),
     RejectionCode.CANONICAL_PARAMETER_VALUE_REQUIRES_KEY: frozenset({422}),
+    RejectionCode.CHECK_INPUTS_NEEDS_ASSESSMENTS: frozenset({422}),
+    RejectionCode.CHECK_INPUTS_NOT_SUPPORTED: frozenset({422}),
     RejectionCode.CLIENT_SORT_NOT_SUPPORTED: frozenset({422}),
     RejectionCode.COMPOSED_SEARCH_CANDIDATE_LIMIT_EXCEEDED: frozenset({422}),
     RejectionCode.COMPOSED_SEARCH_INVALID_PAGE: frozenset({422}),

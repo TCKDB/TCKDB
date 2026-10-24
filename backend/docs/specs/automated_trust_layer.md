@@ -1160,6 +1160,37 @@ These are intentionally left for implementation review.
   agent label) that surfaces to readers but does not influence the
   evidence completeness ratio or the trust status.
 
+
+## 17. Made under
+
+**Made under.** Every assessment a page shows names the rubric that judged it and its integer version. The wire shape is `MadeUnder`
+(`app/schemas/reads/scientific_assessment.py`): `rubric`, `assessed_version`, `current_rubric`, `current_version`, `state`, `stale_reason`.
+
+- `current`: made under the version in force, and the inputs were compared with today's and match.
+- `inputs_unchecked`: made under the version in force, but the route does not compare the inputs, so nothing is claimed about them. A list or
+  search read says this and never `current`.
+- `stale`: an assessment exists but was made under another version (`stale_reason: rubric_version`) or, with the version unchanged, before its inputs changed
+  (`inputs_changed`: the inputs the assessment was computed from differ now, which can be new evidence or a changed rule under the same version). A page
+  says it has not been re-assessed under the current version; nothing schedules a re-assessment, only a curator action runs one.
+- `unassessed`: no assessment exists, so no rubric is named. Never a kind of stale.
+- Version 0 means "stamped before the 2026-10 versioning reset"; no registry holds 0, so it is never current. Pages word it that way, never as "v0".
+- The deterministic trust badge is computed at read time under the rubric version in force, so it is `current` by construction. Only stored assessments
+  (reproducibility) can be stale. Evidence-completeness checklists on thermo and kinetics are not registered rubrics and carry no version yet.
+- The line never ranks a record: it names the rule that judged it.
+- `inputs_checked`: whether the assessment's inputs were compared with today's. Re-evaluating them costs tens of statements per record, so **the route decides,
+  never the response size**: statmech and transport by-ref reads always compare them; the thermo and kinetics entry-scoped lists compare them only on an explicit
+  `check_inputs=true` with `include=assessments` and `limit` of at most 10 (422 `assessment_input_check_limit` otherwise; echoed as `request.check_inputs`);
+  every other route compares the rubric name and version only and reports `inputs_unchecked`. `null` when there is nothing to compare (`unassessed`).
+  Under a profile that hides records (`curated`) the comparison is never made, even when asked: it would compare today's inputs, hidden calculations included, with
+  the stored snapshot, and a hidden edit would move a visible verdict. The answer is `inputs_unchecked` with `inputs_unchecked_reason: curated_profile`. `check_inputs` sent
+  to a route that does not support it is refused (422 `check_inputs_not_supported`), not ignored; a bad handle is a 404 before `check_inputs` is judged.
+- The admin curator-task reads carry `made_under` for the stored machine review the task came from (the row whose `source_audit_event_id` is the task's; the
+  record's latest reviewer-family review when the task has none), read by the currency rule (`currency.stamp_mismatches`): a different prompt or rubric name or
+  version, or a stored version 0, is `stale` (`stale_reason` `rubric_version` or `prompt_version`); otherwise `inputs_unchecked`, because the evidence hash is
+  not compared for a page of tasks. A task whose source review is not stored has none. The page words it as a review ("Reviewed under ...").
+- Procedures without a version (the evidence-completeness checklists, geometry validation, SCF stability) carry no `made_under`: a version is not invented
+  for them.
+
 ## 18. The rubric-change guard, and bumping a rubric
 
 A stored assessment names the rubric version it was made under, and a reader decides *stale* by comparing that number with the current one. That only works

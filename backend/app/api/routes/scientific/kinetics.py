@@ -19,6 +19,7 @@ from app.api.routes.scientific._response import (
     omit_trust_unless_requested,
     omit_unrequested_sections,
     prepare_assessment_response,
+    require_bounded_input_check,
 )
 from app.db.models.common import KineticsModelKind, RecordReviewStatus
 from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
@@ -70,6 +71,10 @@ def reaction_kinetics(
     include: list[str] | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    check_inputs: bool = Query(
+        False,
+        description="With include=assessments: compare each stored assessment's inputs with today's. Opt-in, at most 10 records.",
+    ),
 ) -> ScientificReactionKineticsResponse:
     """Return kinetics records for a reaction entry, sorted by review status, then newest.
 
@@ -103,8 +108,10 @@ def reaction_kinetics(
         include=parse_include(include),
         offset=offset,
         limit=limit,
+        check_inputs=check_inputs,
     )
     resolved_reaction_entry_id = resolve_reaction_entry_handle(session, reaction_entry_id)
+    require_bounded_input_check(request_include=request.include, check_inputs=check_inputs, limit=limit)
     payload = get_reaction_kinetics(
         session,
         reaction_entry_id=resolved_reaction_entry_id,
@@ -114,6 +121,7 @@ def reaction_kinetics(
         session,
         payload,
         attach_assessments=attach_kinetics_assessments,
+        check_inputs=check_inputs,
     )
     visibility = omit_trust_unless_requested(visibility, payload, scope=SEARCH_SCOPE)
     return omit_unrequested_sections(

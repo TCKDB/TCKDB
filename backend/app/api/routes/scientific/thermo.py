@@ -17,6 +17,7 @@ from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._response import (
     omit_trust_unless_requested,
     prepare_assessment_response,
+    require_bounded_input_check,
 )
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
@@ -56,6 +57,10 @@ def species_thermo(
     include: list[str] | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    check_inputs: bool = Query(
+        False,
+        description="With include=assessments: compare each stored assessment's inputs with today's. Opt-in, at most 10 records.",
+    ),
 ) -> ScientificSpeciesThermoResponse:
     """Return every thermo record for a species entry, in display order.
 
@@ -86,7 +91,9 @@ def species_thermo(
         include=parse_include(include),
         offset=offset,
         limit=limit,
+        check_inputs=check_inputs,
     )
+    require_bounded_input_check(request_include=request.include, check_inputs=check_inputs, limit=limit)
     payload = get_species_thermo(
         session,
         species_entry_id=resolved_species_entry_id,
@@ -96,5 +103,6 @@ def species_thermo(
         session,
         payload,
         attach_assessments=attach_thermo_assessments,
+        check_inputs=check_inputs,
     )
     return omit_trust_unless_requested(visibility, payload, scope="search")

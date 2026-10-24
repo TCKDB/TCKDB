@@ -732,6 +732,7 @@ def get_species_thermo(
             filter=_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
             include=sorted(includes),
+            check_inputs=request.check_inputs,
         ),
         species_entry_id=species_entry_id,
         species_entry_ref=species_entry_ref,

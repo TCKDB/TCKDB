@@ -86,9 +86,11 @@ def test_prepare_assessment_response_attaches_only_when_requested():
         records=[{"record_ref": "kin_1"}],
     )
     attached: list[object] = []
+    asked: list[bool] = []
 
-    def attach(session: Session, target: _AssessmentVisibility) -> None:
+    def attach(session: Session, target: _AssessmentVisibility, *, check_inputs: bool = False) -> None:
         attached.append(session)
+        asked.append(check_inputs)
         target.records[0]["assessments"] = {"state": "unassessed"}
 
     session = cast(Session, object())
@@ -99,8 +101,27 @@ def test_prepare_assessment_response_attaches_only_when_requested():
     )
 
     assert attached == [session]
+    assert asked == [False], "a route that does not opt in must not ask for an input check"
     assert isinstance(response, JSONResponse)
     assert b'"assessments"' in response.body
+
+
+def test_prepare_assessment_response_passes_the_routes_input_check_decision_through():
+    for decision in (True, False):
+        payload = _AssessmentVisibility(
+            request=_Request(include=["assessments"]),
+            records=[{"record_ref": "kin_1"}],
+        )
+        asked: list[bool] = []
+
+        def attach(session: Session, target: _AssessmentVisibility, *, check_inputs: bool = False) -> None:
+            asked.append(check_inputs)  # noqa: B023 - read within the iteration
+            target.records[0]["assessments"] = {"state": "unassessed"}
+
+        prepare_assessment_response(
+            cast(Session, object()), payload, attach_assessments=attach, check_inputs=decision
+        )
+        assert asked == [decision]
 
 
 def test_prepare_assessment_response_omits_default_assessment_fields():

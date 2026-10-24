@@ -12,6 +12,7 @@ from app.api.routes.scientific._response import (
     ANYWHERE_SCOPE,
     omit_trust_unless_requested,
     prepare_assessment_response,
+    refuse_check_inputs,
 )
 from app.db.models.common import (
     RecordReviewStatus,
@@ -39,7 +40,7 @@ router = APIRouter(prefix="/thermo")
 _POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
 
-@router.get("/search", response_model=ScientificThermoSearchResponse)
+@router.get("/search", response_model=ScientificThermoSearchResponse, dependencies=[Depends(refuse_check_inputs)])
 def thermo_search_get(
     http_request: Request,
     session: Session = Depends(get_db),
@@ -119,7 +120,7 @@ def thermo_search_get(
     return omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
 
 
-@router.post("/search", response_model=ScientificThermoSearchResponse)
+@router.post("/search", response_model=ScientificThermoSearchResponse, dependencies=[Depends(refuse_check_inputs)])
 def thermo_search_post(
     request: Request,
     body: ThermoSearchRequest,

@@ -486,6 +486,16 @@
           "machine_review_status": {
             "$ref": "#/components/schemas/app__db__models__common__MachineReviewStatus"
           },
+          "made_under": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MadeUnder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "record_id": {
             "title": "Record Id",
             "type": "integer"
@@ -16826,7 +16836,7 @@
         "type": "object"
       },
       "DeterministicTrustSummary": {
-        "description": "Current code-defined evidence assessment; not a quality claim.",
+        "description": "Current code-defined evidence assessment; not a quality claim.\n\nEvaluated at read time under the rubric version in force, so ``made_under`` is always ``current``.",
         "properties": {
           "grade": {
             "title": "Grade",
@@ -16842,6 +16852,16 @@
               }
             ],
             "title": "Hard Fail"
+          },
+          "made_under": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MadeUnder"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "rubric": {
             "title": "Rubric",
@@ -29278,6 +29298,109 @@
         ],
         "title": "MachineReviewSeverity",
         "type": "string"
+      },
+      "MadeUnder": {
+        "description": "Which rubric judged an assessment, at which version, and whether that is still the current one.\n\n``state`` is the one word a reader needs: ``current`` (made under the rubric version in force, and the inputs were\ncompared with today's and match), ``stale`` (it is not), ``inputs_unchecked`` (the rubric version is the one in force\nbut this route does not compare the inputs, so nothing is claimed about them) or ``unassessed`` (nobody has assessed\nthis record, so there is no rubric to name). ``stale`` is not ``unassessed``: a stale assessment exists and says what it was made under.\n\n``stale_reason`` says why a stale assessment is stale: ``rubric_version`` (the rubric has moved on, or the\nassessment was stamped before the 2026-10 versioning reset, as version 0, which is never current) or\n``inputs_changed`` (same rubric version, but the inputs it was computed from differ now: new evidence, or a changed\nrule under the same version).\n\n``assessed_version`` 0 is \"stamped before the 2026-10 versioning reset\". It is never a current version.\nNothing here ranks a record: it names the rule that judged it, not how good the record is.",
+        "properties": {
+          "assessed_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessed Version"
+          },
+          "current_rubric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Rubric"
+          },
+          "current_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Version"
+          },
+          "inputs_checked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inputs Checked"
+          },
+          "inputs_unchecked_reason": {
+            "anyOf": [
+              {
+                "const": "curated_profile",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inputs Unchecked Reason"
+          },
+          "rubric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rubric"
+          },
+          "stale_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "rubric_version",
+                  "prompt_version",
+                  "inputs_changed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stale Reason"
+          },
+          "state": {
+            "enum": [
+              "current",
+              "stale",
+              "unassessed",
+              "inputs_unchecked"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "MadeUnder",
+        "type": "object"
       },
       "MatchDetail": {
         "description": "How the query was matched.",
@@ -44247,6 +44370,16 @@
               }
             ]
           },
+          "made_under": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MadeUnder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "rubric": {
             "anyOf": [
               {
@@ -44273,7 +44406,8 @@
             "enum": [
               "current",
               "stale",
-              "unassessed"
+              "unassessed",
+              "inputs_unchecked"
             ],
             "title": "State",
             "type": "string"
@@ -69092,6 +69226,11 @@
       "app__schemas__reads__scientific_kinetics__RequestEcho": {
         "description": "Echo of the parsed query.",
         "properties": {
+          "check_inputs": {
+            "default": false,
+            "title": "Check Inputs",
+            "type": "boolean"
+          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -70134,6 +70273,11 @@
       "app__schemas__reads__scientific_thermo__RequestEcho": {
         "description": "Echo of the parsed query.",
         "properties": {
+          "check_inputs": {
+            "default": false,
+            "title": "Check Inputs",
+            "type": "boolean"
+          },
           "filter": {
             "additionalProperties": true,
             "title": "Filter",
@@ -97286,6 +97430,18 @@
             }
           },
           {
+            "description": "With include=assessments: compare each stored assessment's inputs with today's. Opt-in, at most 10 records.",
+            "in": "query",
+            "name": "check_inputs",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "With include=assessments: compare each stored assessment's inputs with today's. Opt-in, at most 10 records.",
+              "title": "Check Inputs",
+              "type": "boolean"
+            }
+          },
+          {
             "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
             "in": "query",
             "name": "profile",
@@ -99713,6 +99869,18 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "With include=assessments: compare each stored assessment's inputs with today's. Opt-in, at most 10 records.",
+            "in": "query",
+            "name": "check_inputs",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "With include=assessments: compare each stored assessment's inputs with today's. Opt-in, at most 10 records.",
+              "title": "Check Inputs",
+              "type": "boolean"
             }
           },
           {

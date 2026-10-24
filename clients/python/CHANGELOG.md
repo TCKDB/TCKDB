@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.165.0 - 2026-10-24
+
+- `PublicAssessmentSummary.deterministic_trust` is now the typed `DeterministicTrustSummary` (it was a plain `JSONDict`), and both it and
+  `ReproducibilityAssessmentSummary` gain `made_under` (new `MadeUnder` type): the rubric an assessment was made under, the version it was made under, the
+  current version, `state` (`current`, `stale`, `unassessed`, `inputs_unchecked`), `stale_reason` and `inputs_checked`. `ReproducibilityAssessmentSummary.state`
+  takes `inputs_unchecked` too: a list or search read compares the rubric version only and never says `current`. Version 0 means stamped before the 2026-10
+  versioning reset. Additive.
+- `get_species_thermo` and `get_reaction_kinetics` take `check_inputs` (with `include=assessments`, at most 10 records): compare each stored assessment's
+  inputs with today's. Requires `tckdb-schemas>=0.134.0`. `RejectionCode` gains `assessment_input_check_limit`, `check_inputs_needs_assessments` and `check_inputs_not_supported`. `MadeUnder` gains `inputs_unchecked_reason` (`curated_profile`).
+
 ## 0.164.0 - 2026-10-24
 
 - The deprecated `GET /species-entries/{id}/conformer-observations/lowest-sp` route is removed from the server (it was a silent pick and named records the profile hides); the parity table drops it. Use `relative_conformer_energies`.
