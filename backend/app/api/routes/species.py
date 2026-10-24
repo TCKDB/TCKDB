@@ -19,7 +19,6 @@ from app.api.routes._legacy_reads import (
     LegacyReadRoute,
     LegacyVisibility,
     disclose_in_header,
-    ensure_not_below_floor,
     entity_page,
 )
 from app.db.models.app_user import AppUser
@@ -171,9 +170,7 @@ def get_species_entry(
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
-    # The route that returns the entry itself: an entry below the curated floor answers as an unknown id does. (Routes
-    # under it only scope by the entry and, as on the scientific reads, are not gated by it.)
-    ensure_not_below_floor(session, SubmissionRecordType.species_entry, entry_id, "SpeciesEntry")
+    # Entries are scoping parents: never gated here (nor on their sub-routes, filters or pointers).
     read = SpeciesEntryRead.model_validate(entry)
     read.conformer_summary = _species_entry_conformer_summary(session, entry_id, visibility)
     return read

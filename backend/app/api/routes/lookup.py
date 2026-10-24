@@ -1172,11 +1172,14 @@ def lookup_species_calculation(
     entries = session.scalars(
         _display_ordered(entries_stmt, SpeciesEntry, SubmissionRecordType.species_entry, visibility)
     ).all()
-    if not entries:
+    # The entry LISTING follows the visibility the scientific species search applies to entries. The calculations are
+    # searched on EVERY entry of the species: an entry is a scoping parent and never withholds a record on it.
+    if not session.scalar(select(func.count()).select_from(entries_stmt.subquery())):
         mb.add(SPECIES_ENTRY_NONE, "no species entries found")
         return _respond(query_echo, mb, results, entries_hidden=entries_hidden)
 
-    mb.add(SPECIES_ENTRY_EXISTS, f"{len(entries)} species entry(ies) exist")
+    if entries:
+        mb.add(SPECIES_ENTRY_EXISTS, f"{len(entries)} species entry(ies) exist")
     for entry in entries:
         results.append(LookupResultItem(
             resource_type="species_entry",
@@ -1193,7 +1196,7 @@ def lookup_species_calculation(
     # Step 3: find matching calculations across the entries
     stmt = (
         select(Calculation)
-        .where(Calculation.species_entry_id.in_([e.id for e in entries]))
+        .where(Calculation.species_entry_id.in_(entries_stmt.with_only_columns(SpeciesEntry.id)))
         .where(Calculation.type == type)
         .outerjoin(LevelOfTheory, Calculation.lot_id == LevelOfTheory.id)
         .where(method_matches(method))
@@ -1411,16 +1414,19 @@ def lookup_reaction_kinetics(
         _display_ordered(entries_stmt, ReactionEntry, SubmissionRecordType.reaction_entry, visibility)
     ).all()
 
-    if not entries:
+    # The entry LISTING follows the visibility the scientific searches apply to entries; the kinetics are searched on
+    # EVERY entry of the reaction (an entry is a scoping parent and never withholds a record on it).
+    if not session.scalar(select(func.count()).select_from(entries_stmt.subquery())):
         mb.add(REACTION_ENTRY_NONE, "reaction exists but no entries")
         return _respond(query_echo, mb, results, entries_hidden=entries_hidden)
 
-    mb.add(REACTION_ENTRY_EXISTS, f"{len(entries)} reaction entry(ies)")
+    if entries:
+        mb.add(REACTION_ENTRY_EXISTS, f"{len(entries)} reaction entry(ies)")
 
     for entry in entries:
         results.append(_reaction_entry_result(entry, chem_rxn.id, session, visibility))
 
-    stmt = select(Kinetics).where(Kinetics.reaction_entry_id.in_([e.id for e in entries]))
+    stmt = select(Kinetics).where(Kinetics.reaction_entry_id.in_(entries_stmt.with_only_columns(ReactionEntry.id)))
     if model_kind:
         stmt = stmt.where(Kinetics.model_kind == model_kind)
     hidden = visibility.hidden(session, SubmissionRecordType.kinetics, stmt.with_only_columns(Kinetics.id))

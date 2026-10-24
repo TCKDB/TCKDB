@@ -225,6 +225,22 @@ def test_the_embedded_model_registry_covers_the_independent_keys():
     assert set(INDEPENDENT_EMBEDDED_KEYS.values()) <= covered
 
 
+#: Detail routes that return a record of a kind that is deliberately NOT gated, with the reason.
+INDEPENDENT_UNGATED_DETAIL = {
+    "/api/v1/species-entries/{entry_id}": "scoping parent (ref_guard.UNGATED_REVIEWABLE): never gated on detail",
+    "/api/v1/reaction-entries/{entry_id}": "scoping parent (ref_guard.UNGATED_REVIEWABLE): never gated on detail",
+}
+
+
+def test_the_entry_detail_routes_are_ungated_on_purpose(routes):
+    """Entries are scoping parents. The gate-coverage net lists them here, with the reason, rather than leaving them out."""
+    by_path = {r.path: r for r in routes}
+    for path, reason in INDEPENDENT_UNGATED_DETAIL.items():
+        assert reason
+        assert path in by_path, path
+        assert not _gates_of(by_path[path]), path  # no gate declared on a scoping parent's route class
+
+
 # --- a world with a hidden record of every gated kind ---------------------------------------------------------------
 
 

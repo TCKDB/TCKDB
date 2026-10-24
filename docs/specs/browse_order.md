@@ -177,10 +177,13 @@ and the other entity routes under `backend/app/api/routes/`) are the **raw entit
 - **Default visibility.** Rejected and deprecated records are hidden unless `include_rejected` / `include_deprecated` is set. Applied
   energy corrections (`/applied-energy-corrections`) are reviewable records and follow the same rules. Species and reactions (identity
   rows), geometries, levels of theory, software, literature, workflow tools and the energy-correction *reference parameters* (schemes and
-  frequency scale factors) have no review state of their own and show every row. Species entries and reaction entries do have one:
-  `/lookup/*` lists only the entries the request shows (default exclusions and the floor), and `/species-entries/{id}` and
-  `/reaction-entries/{id}` answer an entry below the curated floor as an unknown id. The routes *under* an entry only scope by it and, as
-  on the scientific reads, are not gated by it.
+  frequency scale factors) have no review state of their own and show every row. Species entries and reaction entries have one too, but they are
+  **scoping parents: never gated on detail, sub-routes, filters or pointers; entry listings follow the scientific species-search
+  visibility.** `/species-entries/{id}` and `/reaction-entries/{id}` answer 200 for an unreviewed or rejected entry under every profile, the
+  routes under an entry and the `species_entry_id` / `reaction_entry_id` filters and pointers work for it, and an approved record on an
+  unreviewed entry shows under `curated`. Only the entry *lists* in `/lookup/*` filter (default exclusions and the floor), as the
+  scientific species search does, with the disclosure below; the records of the lookup (calculations, kinetics) are searched on every entry,
+  listed or not.
 - **Read profile.** Every legacy read takes `?profile=` (and refuses `release`), resolved by the dependency the scientific reads use.
   `curated` raises the floor to `approved` (and overrides the opt-ins): a record below it is absent from the list and from its `total`,
   and its detail route (and every route under it, e.g. `/calculations/{id}/...`) answers exactly as an id that names nothing. A visible
@@ -214,7 +217,8 @@ transport, network) is public and obeys the scientific reads' rules:
   (`calculation_count`, `thermo_count`, `kinetics_count`, `calculation_output_count`) count the records the request shows.
 - **Order.** Records are listed in the display order (`review_rank`, `created_at` descending, `id` descending), echoed in `order`. Identity rows
   (species, species entries, reactions, reaction entries) come first and are ordered the same way. Species and reaction rows are identity
-  and always listed; **entries are filtered** by the request's visibility like any other reviewable record, and what the default hid is
+  and always listed; the **entry listing is filtered** by the request's visibility (as the scientific species search does; the entries stay
+  reachable by id and the records on them are never withheld), and what the default hid is
   reported in `entries_hidden_by_default` (`"counted": "species_entries"` or `"reaction_entries"`) on every lookup that lists entries,
   whether or not it also lists records. `hidden_by_default` always means the listed *records*; one name per meaning, so a client does not
   have to know which endpoint it called to read the field. `/lookup/species-calculation` searches **every** entry of the species (it used to take the first by id).

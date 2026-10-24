@@ -248,19 +248,73 @@ def test_lookup_species_lists_the_entries_the_request_shows_and_counts_the_rest(
     assert any(r["resource_type"] == "species" for r in body["results"])
 
 
-def test_the_entry_detail_routes_answer_a_hidden_entry_as_an_unknown_id(client, db_session):
-    w = _world(db_session)  # its species entry is approved; make a second, unreviewed one and a reaction entry
-    other = make_species_entry(db_session, w["entry"].species, stereo_label="other")
-    assert client.get(f"{LEGACY}/species-entries/{other.id}").status_code == 200
-    curated = client.get(f"{LEGACY}/species-entries/{other.id}", params={"profile": "curated"})
-    assert curated.status_code == 404
-    assert curated.json() == client.get(f"{LEGACY}/species-entries/999999999", params={"profile": "curated"}).json()
-    assert client.get(f"{LEGACY}/species-entries/{w['entry'].id}", params={"profile": "curated"}).status_code == 200
-    # the reaction entry of the world is unreviewed
-    assert client.get(f"{LEGACY}/reaction-entries/{w['reaction_entry'].id}").status_code == 200
-    hidden = client.get(f"{LEGACY}/reaction-entries/{w['reaction_entry'].id}", params={"profile": "curated"})
-    assert hidden.status_code == 404
-    assert hidden.json() == client.get(f"{LEGACY}/reaction-entries/999999999", params={"profile": "curated"}).json()
+def test_an_unreviewed_species_entry_is_a_scoping_parent_reachable_everywhere(client, db_session):
+    """Entries never gate: an approved record on an unreviewed entry shows under curated, the entry answers 200 on its
+    detail and sub-routes, the entry-id filters return the record, and the record names the entry. Only the lookup's
+    entry LISTING follows the scientific species-search visibility -- and it does not withhold the records."""
+    from tests.services.scientific_read._factories import attach_opt_result, make_lot
+
+    species = make_species(db_session, smiles="C=O", inchi_key="WSFSSNUMVMOOMR-UHFFFAOYSA-N")
+    entry = make_species_entry(db_session, species)  # never reviewed: below the curated floor
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    lot = make_lot(db_session)
+    calc = make_calculation(db_session, species_entry_id=entry.id, lot_id=lot.id)
+    attach_opt_result(db_session, calculation=calc, final_energy_hartree=-1.0)
+    set_review(db_session, record_type=T.thermo, record_id=thermo.id, status=S.approved)
+    set_review(db_session, record_type=T.calculation, record_id=calc.id, status=S.approved)
+    curated = {"profile": "curated"}
+
+    assert client.get(f"{LEGACY}/species-entries/{entry.id}", params=curated).status_code == 200
+    sub_list = client.get(f"{LEGACY}/species-entries/{entry.id}/thermo", params=curated).json()
+    assert [t["id"] for t in sub_list] == [thermo.id]
+    assert sub_list[0]["species_entry_id"] == entry.id  # the record names the entry
+    by_filter = client.get(f"{LEGACY}/thermo", params={**curated, "species_entry_id": entry.id}).json()
+    assert [t["id"] for t in by_filter["items"]] == [thermo.id]
+    by_filter = client.get(f"{LEGACY}/calculations", params={**curated, "species_entry_id": entry.id}).json()
+    assert [c["id"] for c in by_filter["items"]] == [calc.id]
+    assert [r["id"] for r in client.get(f"{LEGACY}/lookup/thermo", params={**curated, "species_entry_id": entry.id}).json()["results"]] == [thermo.id]
+
+    # lookup by identity: the entry is not LISTED under curated, but the approved calculation on it is returned
+    body = client.get(
+        f"{LEGACY}/lookup/species-calculation",
+        params={**curated, "smiles": "C=O", "charge": 0, "multiplicity": 1, "type": "opt", "method": lot.method, "basis": lot.basis},
+    ).json()
+    assert [r for r in body["results"] if r["resource_type"] == "species_entry"] == []
+    assert [r["id"] for r in body["results"] if r["resource_type"] == "calculation"] == [calc.id]
+    # and with the selection mode: the record on the unlisted entry is still a candidate
+    chosen = client.get(
+        f"{LEGACY}/lookup/species-calculation",
+        params={**curated, "smiles": "C=O", "charge": 0, "multiplicity": 1, "type": "opt", "method": lot.method, "basis": lot.basis, "selection": "latest"},
+    ).json()
+    assert [r["id"] for r in chosen["results"] if r["resource_type"] == "calculation"] == [calc.id]
+
+
+def test_an_unreviewed_reaction_entry_is_a_scoping_parent_reachable_everywhere(client, db_session):
+    from tests.services.scientific_read._factories import make_kinetics
+
+    rs = make_species(db_session, smiles="CC", inchi_key="OTMSDBZUPAUEDD-UHFFFAOYSA-N")
+    ps = make_species(db_session, smiles="CCC", inchi_key="ATUOYWHBWRKTHZ-UHFFFAOYSA-N")
+    chem = make_chem_reaction(db_session, reactants=[rs], products=[ps])
+    reaction_entry = make_reaction_entry(
+        db_session,
+        reaction=chem,
+        reactant_entries=[make_species_entry(db_session, rs)],
+        product_entries=[make_species_entry(db_session, ps)],
+    )  # never reviewed
+    kinetics = make_kinetics(db_session, reaction_entry=reaction_entry, a=1e-12)
+    set_review(db_session, record_type=T.kinetics, record_id=kinetics.id, status=S.approved)
+    curated = {"profile": "curated"}
+
+    assert client.get(f"{LEGACY}/reaction-entries/{reaction_entry.id}", params=curated).status_code == 200
+    sub_list = client.get(f"{LEGACY}/reaction-entries/{reaction_entry.id}/kinetics", params=curated).json()
+    assert [k["id"] for k in sub_list] == [kinetics.id] and sub_list[0]["reaction_entry_id"] == reaction_entry.id
+    by_filter = client.get(f"{LEGACY}/kinetics", params={**curated, "reaction_entry_id": reaction_entry.id}).json()
+    assert [k["id"] for k in by_filter["items"]] == [kinetics.id]
+    body = client.get(
+        f"{LEGACY}/lookup/reaction-kinetics", params={**curated, "reactants": ["CC"], "products": ["CCC"]}
+    ).json()
+    assert [r for r in body["results"] if r["resource_type"] == "reaction_entry"] == []  # the listing follows the entry rule
+    assert [r["id"] for r in body["results"] if r["resource_type"] == "kinetics"] == [kinetics.id]  # the record is not withheld
 
 
 def test_lookup_reaction_lists_the_reaction_entries_the_request_shows(client, db_session):
