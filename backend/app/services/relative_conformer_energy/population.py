@@ -110,10 +110,7 @@ def scan_population(session: Session, *, entry_id: int, request: RelativeEnergyR
         if badges[i].status not in effective
     }
     in_floor = {i for i, ref in shown.items() if ref not in excluded}
-    entry_status = fetch_review_badges(session, record_type=SubmissionRecordType.species_entry, record_ids=[entry_id])[
-        entry_id
-    ].status
-    entry_in_floor = entry_status in effective
+    # The species entry is a scoping parent: its own review status never holds a group or a determination out.
 
     det_rows = session.execute(
         select(StructureDetermination.id, StructureDetermination.public_ref, StructureDetermination.conformer_observation_id)
@@ -150,9 +147,9 @@ def scan_population(session: Session, *, entry_id: int, request: RelativeEnergyR
         status = observation_badges[r.conformer_observation_id].status
         if status not in profile:
             continue
-        if entry_in_floor and status in effective:
+        if status in effective:
             determinations.append(r.public_ref)
-        elif status in _TERMINAL or entry_status in _TERMINAL:
+        elif status in _TERMINAL:
             # Rejected or deprecated is terminal, which is not a floor: the caller may have set none.
             terminal_held.add(group_ref_of[group_id])
         else:

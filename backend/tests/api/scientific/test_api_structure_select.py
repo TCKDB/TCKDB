@@ -291,22 +291,22 @@ def test_under_the_curated_profile_nothing_below_the_floor_is_listed_or_counted_
     assert replay_matches(manifest)  # the redaction was made before the checksum, so the download still verifies
 
 
-def test_an_entry_the_profile_hides_is_a_404_exactly_like_one_that_does_not_exist(client, db_session):
-    world = make_world(db_session, entry_status=None)
+def test_a_transition_state_entry_the_profile_hides_is_a_404_exactly_like_one_that_does_not_exist(client, db_session):
+    """A TS entry is a gated kind. (A species entry is a scoping parent: it never hides what is under it.)"""
+    world = make_ts_world(db_session, entry_status=None)
     world.sp("a", -76.4, declared=declaration())
     world.settle()
-    assert client.post(calc_url(world.entry), json={}).status_code == 200
-    ghost = f"spe_{'0' * 26}"
+    assert client.post(evidence_url(world.entry), json={}).status_code == 200
+    ghost = f"tse_{'0' * 26}"
     for suffix in ("", "/manifest"):
-        hidden = client.post(calc_url(world.entry, manifest=bool(suffix)), json={}, params={"profile": "curated"})
-        missing = client.post(f"{API}/species-entries/{ghost}/calculations/select{suffix}", json={}, params={"profile": "curated"})
+        hidden = client.post(evidence_url(world.entry, manifest=bool(suffix)), json={}, params={"profile": "curated"})
+        missing = client.post(
+            f"{API}/transition-state-entries/{ghost}/evidence/select{suffix}", json={}, params={"profile": "curated"}
+        )
         assert hidden.status_code == missing.status_code == 404
         # the whole body, not only the status: the caller's own ref is the one thing that may differ
         assert json.loads(hidden.text.replace(world.entry.public_ref, "<ref>")) == json.loads(missing.text.replace(ghost, "<ref>"))
         assert hidden.json()["code"] == "handle_not_found"
-    for url in (conformer_url(world.entry), conformer_url(world.entry, manifest=True)):
-        hidden = client.post(url, json={}, params={"profile": "curated"})
-        assert hidden.status_code == 404 and hidden.json()["code"] == "handle_not_found" and world.entry.public_ref in hidden.text
 
 
 # ---------------------------------------------------------------------------

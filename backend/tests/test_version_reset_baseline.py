@@ -62,9 +62,9 @@ EXPECTED: dict[str, int] = {
     "kinetics_semantics": 2,
     "statmech_formats": 3,
     "statmech_semantics": 2,
-    "structure_formats": 2,
+    "structure_formats": 3,
     "network_formats": 3,
-    "relative_energy_formats": 2,
+    "relative_energy_formats": 3,
 }
 
 #: Names above the baseline inside a registry whose other names are at it. The transition-state badge lists its

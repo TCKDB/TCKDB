@@ -16,12 +16,13 @@ exclusion within what the read profile already shows.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 
 from pydantic import BaseModel
 
 from app.db.models.common import RecordReviewStatus
+from app.schemas.reads.scientific_common import default_visible_statuses, status_at_or_above
 from app.schemas.reads.scientific_selection_common import (
     ELIGIBILITY_CONFIRMED_FINDINGS,
     ELIGIBILITY_DEPRECATED,
@@ -72,7 +73,9 @@ class Eligibility:
         return cls(**raw)
 
     def lifts(self, name: str) -> bool:
-        return bool(getattr(self, OVERRIDE_FIELD[name]))
+        """Whether this request lifted the named default. A default with no flag of its own (a calculation quality,
+        lifted by naming ``rejected`` among the permitted qualities) is not lifted here."""
+        return bool(getattr(self, OVERRIDE_FIELD[name], False)) if OVERRIDE_FIELD[name] in _FIELDS else False
 
 
 @dataclass(frozen=True)
@@ -166,6 +169,25 @@ def funnel(
     }
 
 
+def expected_candidate_statuses(
+    profile_floor: RecordReviewStatus | None, request_floor: RecordReviewStatus | None, eligibility: Eligibility
+) -> frozenset[RecordReviewStatus]:
+    """The review statuses a candidate itself may have: the visible ones plus the terminal statuses the request lifted.
+
+    A pure function of the two floors and the settings, so a replay judges a manifest by what the manifest recorded. A
+    read profile with a review floor ignores the lift (``curated`` cannot be overridden). Terminal statuses are out
+    unless lifted, and each floor only narrows.
+    """
+    base = default_visible_statuses(
+        include_rejected=eligibility.include_rejected and profile_floor is None,
+        include_deprecated=eligibility.include_deprecated and profile_floor is None,
+    )
+    for floor in (profile_floor, request_floor):
+        if floor is not None:
+            base = base & status_at_or_above(floor)
+    return frozenset(base)
+
+
 def echo(
     eligibility: Eligibility,
     *,
@@ -173,11 +195,15 @@ def echo(
     names: Sequence[str],
     excluded: dict[str, int],
     admitted: dict[str, int],
+    extra_lifts: Collection[str] = (),
 ) -> list[EligibilityDefaultEcho]:
-    """The list every select answer carries: each named default, whether applied, and by whose choice."""
+    """The list every select answer carries: each named default, whether applied, and by whose choice.
+
+    *extra_lifts* names defaults the request lifted by another field than ``eligibility`` (a calculation quality).
+    """
     out: list[EligibilityDefaultEcho] = []
     for name in names:
-        asked_to_lift = eligibility.lifts(name)
+        asked_to_lift = (eligibility.lifts(name) or name in extra_lifts) if name in OVERRIDE_FIELD else False
         floor_blocks = profile_floor and name in (ELIGIBILITY_REJECTED, ELIGIBILITY_DEPRECATED)
         if floor_blocks:
             applied, source = True, (EligibilitySource.read_profile if asked_to_lift else EligibilitySource.default)
@@ -188,7 +214,7 @@ def echo(
         out.append(
             EligibilityDefaultEcho(
                 name=name,
-                override_field=OVERRIDE_FIELD[name],
+                override_field=OVERRIDE_FIELD.get(name),
                 applied=applied,
                 source=source,
                 excluded=excluded.get(name, 0),
@@ -206,6 +232,7 @@ def answer_steps(
     funnel_record: dict,
     names: Sequence[str],
     profile_floor: bool,
+    extra_lifts: Collection[str] = (),
 ) -> dict:
     """The ``filters``, ``eligibility`` and ``funnel`` fields of a select answer, built from a manifest's records.
 
@@ -226,6 +253,7 @@ def answer_steps(
             names=names,
             excluded=funnel_record["excluded_by_default"],
             admitted=funnel_record["admitted_by_override"],
+            extra_lifts=extra_lifts,
         ),
         "funnel": SelectionFunnel(
             **{k: funnel_record[k] for k in ("unit", "considered", "removed_by_filters", "removed_by_eligibility", "remaining")}
@@ -235,6 +263,7 @@ def answer_steps(
 
 __all__ = [
     "answer_steps",
+    "expected_candidate_statuses",
     "ELIGIBILITY_REJECTED_QUALITY",
     "EVIDENCE_HARD_FAIL_PREFIX",
     "Eligibility",

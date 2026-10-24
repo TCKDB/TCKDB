@@ -478,7 +478,7 @@ def test_the_owning_observation_is_judged_at_its_own_grain_not_through_its_group
     assert d.public_ref in by_ref(open_)
     floor = run(db_session, world, minimum_request(min_review_status=RecordReviewStatus.approved))
     # The group is approved; the observation is not, and group approval does not approve it.
-    assert floor.assessments == () and [e["reason"] for e in floor.excluded_by_review] == ["owner_below_review_floor"]
+    assert floor.assessments == () and [e["reason"] for e in floor.excluded_by_review] == ["below_review_floor"]
     set_review(db_session, record_type=SubmissionRecordType.conformer_observation, record_id=obs.id, status=RecordReviewStatus.approved)
     again = run(db_session, world, minimum_request(min_review_status=RecordReviewStatus.approved))
     assert d.public_ref in by_ref(again)
