@@ -2,7 +2,8 @@
 
 ## 0.163.0 - 2026-10-24
 
-- `RejectionCode` gains `lowest_energy_across_levels` (the `/lookup` refusal above). No method changes.
+- `RejectionCode` gains `lowest_energy_across_levels` (the `/lookup` refusal above).
+- `get_calculation_hessian` takes `profile`: the legacy entity reads now honour the read profile like the scientific reads.
 - Requires `tckdb-schemas>=0.133.0`.
 
 ## 0.162.0 - 2026-10-23
