@@ -1446,7 +1446,8 @@
       "excluded_by_default": {},
       "remaining": 3,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 3,
      "visible_candidates": 3
@@ -1764,7 +1765,8 @@
       "excluded_by_default": {},
       "remaining": 4,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 4,
      "visible_candidates": 4
@@ -2032,7 +2034,8 @@
       "excluded_by_default": {},
       "remaining": 3,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 3,
      "visible_candidates": 3
@@ -2281,7 +2284,8 @@
       "excluded_by_default": {},
       "remaining": 3,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 3,
      "visible_candidates": 3
@@ -2493,7 +2497,8 @@
       "excluded_by_default": {},
       "remaining": 2,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
@@ -2703,7 +2708,8 @@
       "excluded_by_default": {},
       "remaining": 2,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
@@ -2803,7 +2809,8 @@
       "excluded_by_default": {},
       "remaining": 0,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 0,
      "visible_candidates": 0
@@ -3004,7 +3011,8 @@
       "excluded_by_default": {},
       "remaining": 2,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
@@ -3268,7 +3276,8 @@
       "excluded_by_default": {},
       "remaining": 3,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 3,
      "visible_candidates": 3
@@ -3482,7 +3491,8 @@
       "excluded_by_default": {},
       "remaining": 2,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
@@ -3694,7 +3704,8 @@
       "excluded_by_default": {},
       "remaining": 2,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
@@ -3906,7 +3917,8 @@
       "excluded_by_default": {},
       "remaining": 2,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
@@ -4118,7 +4130,8 @@
       "excluded_by_default": {},
       "remaining": 2,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
@@ -4434,7 +4447,8 @@
       "excluded_by_default": {},
       "remaining": 4,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 4,
      "visible_candidates": 4
@@ -4754,7 +4768,8 @@
       "excluded_by_default": {},
       "remaining": 4,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 4,
      "visible_candidates": 4
@@ -5074,7 +5089,8 @@
       "excluded_by_default": {},
       "remaining": 4,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 4,
      "visible_candidates": 4
@@ -5235,7 +5251,8 @@
       "excluded_by_default": {},
       "remaining": 1,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 1,
      "visible_candidates": 1
@@ -5442,7 +5459,8 @@
       "excluded_by_default": {},
       "remaining": 2,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
@@ -5758,7 +5776,8 @@
       "excluded_by_default": {},
       "remaining": 4,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 4,
      "visible_candidates": 4
@@ -6026,7 +6045,8 @@
       "excluded_by_default": {},
       "remaining": 3,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 3,
      "visible_candidates": 3
@@ -6240,7 +6260,8 @@
       "excluded_by_default": {},
       "remaining": 2,
       "removed_by_eligibility": 0,
-      "removed_by_filters": 0
+      "removed_by_filters": 0,
+      "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
