@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.api.config import settings as default_settings
+from app.services.scientific_read.hidden_by_default import stamp_hidden_by_default
 from app.services.scientific_read.profile import stamp_read_profile
 from app.services.scientific_read.ref_guard import withhold_for_current_request
 
@@ -198,6 +199,7 @@ def apply_internal_ids_visibility(
     would leave endpoints that silently report the default profile.
     """
     stamp_read_profile(payload)
+    stamp_hidden_by_default(payload)
     withhold_for_current_request(payload)
     resolved_includes = _extract_resolved_includes(payload)
     if should_include_internal_ids(

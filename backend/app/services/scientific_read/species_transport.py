@@ -40,6 +40,10 @@ from app.schemas.reads.scientific_transport_search import (
     RequestEcho,
     ScientificTransportSearchResponse,
 )
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -122,6 +126,15 @@ def get_species_transport(
         min_review_status=min_review_status,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
+    )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[cid].status for cid in candidate_ids),
+            include_rejected=include_rejected,
+            include_deprecated=include_deprecated,
+            min_review_status=min_review_status,
+        ),
+        scope=("transport", species_entry_id),
     )
     visible_ids = [
         cid for cid in candidate_ids if badges[cid].status in visible

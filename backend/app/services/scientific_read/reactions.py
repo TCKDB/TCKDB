@@ -43,6 +43,10 @@ from app.schemas.reads.scientific_reactions import (
     RequestEcho,
     ScientificReactionSearchResponse,
 )
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -246,6 +250,14 @@ def search_reactions(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
+    )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[e.id].status for e in entries),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        )
     )
     entries = [e for e in entries if badges[e.id].status in visible]
 
@@ -499,6 +511,14 @@ def browse_reactions(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
+    )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[e.id].status for e in entries),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        )
     )
     entries = [e for e in entries if badges[e.id].status in visible]
     if not entries:

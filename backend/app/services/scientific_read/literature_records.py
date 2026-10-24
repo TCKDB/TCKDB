@@ -46,6 +46,10 @@ from app.schemas.reads.scientific_literature_records import (
     RequestEcho,
     ScientificLiteratureRecordsResponse,
 )
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -162,6 +166,17 @@ def get_literature_records(
         include_deprecated=request.include_deprecated,
     )
     badges = _load_badges(session, rows)
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (
+                badges[(r.record_type, r.record_id)].status
+                for r in rows
+                if _is_reviewable(r.record_type) and (r.record_type, r.record_id) in badges
+            ),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+        )
+    )
     rows = [
         r for r in rows
         if _is_visible(r.record_type, r.record_id, badges, visible)

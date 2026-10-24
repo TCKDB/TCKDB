@@ -103,6 +103,10 @@ from app.schemas.reads.scientific_kinetics import (
 )
 from app.services.calculation_levels import RoleCalcInfo, derive_levels
 from app.services.composite_verification import verify_composite_calculations
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -471,6 +475,15 @@ def get_reaction_kinetics(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
+    )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[k.id].status for k in kinetics_rows),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        ),
+        scope=("kinetics", reaction_entry_id),
     )
     kinetics_rows = [k for k in kinetics_rows if badges[k.id].status in visible]
     if not kinetics_rows:

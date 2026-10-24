@@ -83,6 +83,7 @@ from app.schemas.reads.scientific_calculation_search import (
 )
 from app.schemas.reads.scientific_common import browse_order
 from app.services.composite_verification import verify_composite_calculations
+from app.services.scientific_read.hidden_by_default import hidden_by_default_block, record_hidden_by_default
 from app.services.scientific_read.calculations import (
     _INTERNAL_INCLUDE_TOKENS,
     _LEGAL_INCLUDE_TOKENS,
@@ -315,6 +316,16 @@ def search_calculations(
     # is ``not_reviewed`` and visible by default, and an inner join would
     # drop every one of them.
     candidates = stmt.subquery("candidates")
+    record_hidden_by_default(
+        hidden_by_default_block(
+            session,
+            record_type=SubmissionRecordType.calculation,
+            ids=select(candidates.c.id),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        )
+    )
     ranked_base = select(candidates.c.id, candidates.c.created_at)
     ranked_base, review = join_review(
         ranked_base, candidates.c.id, SubmissionRecordType.calculation

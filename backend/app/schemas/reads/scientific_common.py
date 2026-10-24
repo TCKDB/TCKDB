@@ -33,6 +33,22 @@ from app.db.models.common import (
 # ---------------------------------------------------------------------------
 
 
+class HiddenByDefault(BaseModel):
+    """How many records the default visibility hid from this list, and how to include them.
+
+    Reported only under the ``exploratory`` profile, and only for an exclusion the request left at its default
+    (``include_rejected`` / ``include_deprecated`` not set). ``counts`` has one key per such exclusion, counted over the
+    records that matched the request's other filters. Under ``curated`` the block is never present: records below the
+    review floor are withheld without a count (decision D6: hidden == unknown == absent).
+    """
+
+    counts: dict[str, int]
+    include_with: dict[str, str]
+    #: What ``counts`` counts, when it is not the records the list returns: a species list counts the species
+    #: *entries* the default hid (``"species_entries"``). ``"records"`` means the listed records themselves.
+    counted: str = "records"
+
+
 class ProfiledRequestEcho(BaseModel):
     """Base class for every ``/scientific/*`` response's ``request`` echo.
 
@@ -62,6 +78,9 @@ class ProfiledRequestEcho(BaseModel):
     profile: ReadProfile = ReadProfile.exploratory
     profile_recommendation: ProfileRecommendation = ProfileRecommendation.none
     profile_release_ref: str | None = None
+    #: What the default visibility hid (exploratory only; see :class:`HiddenByDefault`). ``None`` when nothing was
+    #: excluded by default, on every read that applies no default visibility, and always under ``curated``.
+    hidden_by_default: HiddenByDefault | None = None
 
 
 class SelectionPolicy(str, Enum):

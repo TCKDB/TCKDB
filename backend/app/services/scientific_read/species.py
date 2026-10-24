@@ -70,6 +70,11 @@ from app.schemas.reads.scientific_structure_search import (
     StructureQueryKind,
     StructureSearchMode,
 )
+from app.services.scientific_read.hidden_by_default import (
+    excluded_by_default,
+    hidden_by_default_from_counts,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.calculation_provenance_filters import (
     apply_calculation_provenance_filter,
 )
@@ -647,6 +652,7 @@ def search_species(
 
     # The review summary covers every surviving entry, not just the
     # page's — one aggregate rather than one badge per candidate.
+    _record_hidden_entries(session, candidates, request, species_entry_ref_id=species_entry_ref_id)
     summary = summary_from_sql(
         session,
         _visible_entry_rows(
@@ -818,6 +824,7 @@ def browse_species(
             request, includes, offset, limit, element_symbols, structure_query
         )
 
+    _record_hidden_entries(session, candidates, request, species_entry_ref_id=None)
     summary = summary_from_sql(
         session,
         _visible_entry_rows(candidates, request, visible, species_entry_ref_id=None),
@@ -1341,6 +1348,49 @@ def _browse_visible_species_total(
     keep = or_(not_(_has_any_entry_expr(candidates)), has_entries)
     counted = stmt.group_by(candidates.c.id).having(keep).subquery("kept_species")
     return session.scalar(select(func.count()).select_from(counted)) or 0
+
+
+def _record_hidden_entries(
+    session: Session,
+    candidates,
+    request: SpeciesFilterRequest,
+    *,
+    species_entry_ref_id: int | None,
+) -> None:
+    """Report how many entries of the candidate species the default visibility hid (one aggregate).
+
+    A species has no review status of its own, so what the default hides is entries; a species whose entries are all
+    hidden drops out of the list (#277). The count is of entries, and says so (``counted``).
+    """
+    statuses = excluded_by_default(
+        include_rejected=request.include_rejected,
+        include_deprecated=request.include_deprecated,
+        min_review_status=request.min_review_status,
+    )
+    if not statuses:
+        record_hidden_by_default(None)
+        return
+    stmt, review = _join_entries_and_reviews(
+        select(SpeciesEntry.id),
+        candidates,
+        request,
+        species_entry_ref_id=species_entry_ref_id,
+        outer=False,
+    )
+    rows = session.execute(
+        stmt.with_only_columns(review.status, func.count())
+        .where(review.status.in_(statuses))
+        .group_by(review.status)
+    ).all()
+    record_hidden_by_default(
+        hidden_by_default_from_counts(
+            dict(rows),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+            counted="species_entries",
+        )
+    )
 
 
 def _visible_entry_rows(

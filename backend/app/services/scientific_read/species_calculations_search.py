@@ -108,6 +108,10 @@ from app.schemas.reads.scientific_species_calculations import (
     SupportingCalculationRef,
     ValidationBlock,
 )
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.calculations import (
     _count_at_or_above_tau,
 )
@@ -302,6 +306,14 @@ def search_species_calculations(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
+    )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[r.calc_id].status for r in rows),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        )
     )
     rows = [r for r in rows if badges[r.calc_id].status in visible]
     if not rows:

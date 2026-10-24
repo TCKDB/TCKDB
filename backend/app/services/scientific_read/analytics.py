@@ -99,6 +99,7 @@ from app.schemas.reads.scientific_analytics import (
     WatermarkEcho,
 )
 from app.schemas.reads.scientific_common import ReviewStatusSummary, browse_order
+from app.services.scientific_read.hidden_by_default import hidden_by_default_block, record_hidden_by_default
 from app.services.scientific_read.common import (
     build_pagination,
     reject_client_sort,
@@ -293,6 +294,16 @@ def _run_page(
     )
 
     candidates = candidate_stmt.subquery("analytics_candidates")
+    record_hidden_by_default(
+        hidden_by_default_block(
+            session,
+            record_type=record_type,
+            ids=select(candidates.c.id),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        )
+    )
     record_class = id_column.class_
     ranked_base = select(candidates.c.id, record_class.created_at.label("created_at")).join(
         record_class, record_class.id == candidates.c.id
