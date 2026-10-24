@@ -22,6 +22,25 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Select takes filters, and its exclusions are named defaults (2026-10-24)
+
+A select call is now: the caller's filters, then requested eligibility, then the policy (still no method ranking), then the result
+(`docs/specs/browse_order.md`). Every select route is covered: thermo, kinetics, network, statmech, and the structure calculation,
+conformer and transition-state evidence selections.
+
+- **Filters.** `filters` uses the matching search's vocabulary and matching. An unknown filter is a 422. The answer echoes the normalised filters
+  and how many candidates they removed, and a `funnel` of what each step removed.
+- **Eligibility.** Rejected and deprecated review status, an evidence-rubric hard fail, a confirmed blocking finding and a rejected calculation
+  quality are named defaults. `eligibility: {include_rejected, include_deprecated, include_hard_failed_evidence, include_confirmed_findings}`
+  lifts them; the answer lists every one (`name`, `applied`, `source`, counts) and each candidate says which default it passed only by override.
+  The `curated` profile's floor is not a default and cannot be lifted.
+- **Entries.** A species or reaction entry no longer excludes a record by its own review status (statmech candidates, calculations, conformer
+  basins, relative conformer energies). A transition-state entry still gates its evidence.
+- **Versions.** Manifest formats move to 3 (thermo, kinetics, network, statmech, structure, relative conformer energies) because a recorded
+  decision now carries its filters and eligibility settings and the funnel; thermo, kinetics and statmech assessment semantics move to 2 because
+  the recorded `eligible` flag is the verdict under the request's own settings. `tckdb-client` 0.163.0, `tckdb-mcp` 0.13.0; `tckdb-schemas`
+  is unchanged (no upload field or refusal code changed).
+
 ## The made-under line (2026-10-24)
 
 An assessment now says which rubric judged it, at which version, and whether that is still the version in force.

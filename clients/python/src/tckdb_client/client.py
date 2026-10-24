@@ -169,12 +169,16 @@ def _selection_body(
     min_review_status: str | None,
     temperature_k: float | None,
     phase: str | None,
+    filters: Mapping[str, Any] | None = None,
+    eligibility: Mapping[str, Any] | None = None,
 ) -> ThermoSelectionRequest:
     """The request body: ``target`` plus whichever optional fields were supplied (never defaults of ours)."""
     body: dict[str, Any] = {"target": dict(target)}
     for key, value in (
         ("policy", policy), ("result_mode", result_mode), ("min_review_status", min_review_status),
         ("temperature_k", temperature_k), ("phase", phase),
+        ("filters", dict(filters) if filters is not None else None),
+        ("eligibility", dict(eligibility) if eligibility is not None else None),
     ):
         if value is not None:
             body[key] = value
@@ -229,6 +233,8 @@ def _network_selection_body(
             value = dict(value)
         elif key in ("outputs", "boundaries"):
             value = [dict(item) for item in value]
+        elif key in ("filters", "eligibility"):
+            value = dict(value)
         body[key] = value
     return body  # type: ignore[return-value]
 
@@ -256,6 +262,8 @@ def _kinetics_selection_body(
     mode: str | None,
     min_review_status: str | None,
     phase: str | None,
+    filters: Mapping[str, Any] | None = None,
+    eligibility: Mapping[str, Any] | None = None,
 ) -> KineticsSelectionRequest:
     """The request body: the question as stated plus whichever optional fields were supplied (no defaults of ours)."""
     body: dict[str, Any] = {
@@ -269,6 +277,8 @@ def _kinetics_selection_body(
     for key, value in (
         ("collider", dict(collider) if collider is not None else None),
         ("policy", policy), ("mode", mode), ("min_review_status", min_review_status), ("phase", phase),
+        ("filters", dict(filters) if filters is not None else None),
+        ("eligibility", dict(eligibility) if eligibility is not None else None),
     ):
         if value is not None:
             body[key] = value
@@ -332,7 +342,7 @@ def _structure_selection_body(fields: Mapping[str, Any]) -> dict[str, Any]:
             continue
         if value is None and key != "quantity":
             continue
-        if key == "recipe" and value is not None:
+        if key in ("recipe", "filters", "eligibility") and value is not None:
             value = dict(value)
         elif key in ("member_refs", "permitted_quality") and value is not None:
             value = list(value)
@@ -1989,6 +1999,8 @@ class TCKDBClient:
         min_review_status: str | None = None,
         temperature_k: float | None = None,
         phase: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> ThermoSelectionResponse:
         """``POST /scientific/species-entries/{ref}/thermo/select``.
@@ -2010,11 +2022,18 @@ class TCKDBClient:
         The result's ``outcome`` and ``basis`` are the server's explanation:
         report them verbatim. ``selection`` names a record only when the outcome
         supports one, and says so when the choice was administrative.
+
+        ``filters`` narrows the candidates by facts first, with the thermo search's own vocabulary
+        (``model_kind``, ``level_of_theory_ref``, ``software``); ``eligibility`` lifts named defaults
+        (``include_rejected``, ``include_deprecated``, ``include_hard_failed_evidence``,
+        ``include_confirmed_findings``). Both are sent only when given. The answer's ``filters``,
+        ``eligibility`` and ``funnel`` say what each step did; ``curated`` cannot be overridden.
         """
         path = _selection_path(species_entry_ref)
         body: ThermoSelectionRequest = _selection_body(
             target=target, policy=policy, result_mode=result_mode,
             min_review_status=min_review_status, temperature_k=temperature_k, phase=phase,
+            filters=filters, eligibility=eligibility,
         )
         return self.request_json(
             "POST", path, json=body, params={"profile": profile}, authenticated=False
@@ -2028,6 +2047,8 @@ class TCKDBClient:
         policy: str | None = None,
         result_mode: str | None = None,
         min_review_status: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> JSONDict:
         """``POST /scientific/species-entries/{ref}/thermo/select/manifest``.
@@ -2039,6 +2060,7 @@ class TCKDBClient:
         body = _selection_body(
             target=target, policy=policy, result_mode=result_mode,
             min_review_status=min_review_status, temperature_k=None, phase=None,
+            filters=filters, eligibility=eligibility,
         )
         return self.request_json(
             "POST", _selection_path(species_entry_ref) + "/manifest", json=body,
@@ -2060,6 +2082,8 @@ class TCKDBClient:
         mode: str | None = None,
         min_review_status: str | None = None,
         phase: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> KineticsSelectionResponse:
         """``POST /scientific/reaction-entries/{ref}/kinetics/select``.
@@ -2090,6 +2114,7 @@ class TCKDBClient:
             direction=direction, target=target, coefficient_basis=coefficient_basis,
             temperature_min_k=temperature_min_k, temperature_max_k=temperature_max_k, pressure=pressure,
             collider=collider, policy=policy, mode=mode, min_review_status=min_review_status, phase=phase,
+            filters=filters, eligibility=eligibility,
         )
         return self.request_json(
             "POST", path, json=body, params={"profile": profile}, authenticated=False
@@ -2110,6 +2135,8 @@ class TCKDBClient:
         mode: str | None = None,
         min_review_status: str | None = None,
         phase: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> JSONDict:
         """``POST /scientific/reaction-entries/{ref}/kinetics/select/manifest``.
@@ -2122,6 +2149,7 @@ class TCKDBClient:
             direction=direction, target=target, coefficient_basis=coefficient_basis,
             temperature_min_k=temperature_min_k, temperature_max_k=temperature_max_k, pressure=pressure,
             collider=collider, policy=policy, mode=mode, min_review_status=min_review_status, phase=phase,
+            filters=filters, eligibility=eligibility,
         )
         return self.request_json(
             "POST", _kinetics_selection_path(reaction_entry_ref) + "/manifest", json=body,
@@ -2145,6 +2173,8 @@ class TCKDBClient:
         administrative_policy: str | None = None,
         result_mode: str | None = None,
         repeat_policy: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> StructureSelectionResponse:
         """``POST /scientific/species-entries/{ref}/calculations/select``.
@@ -2168,7 +2198,7 @@ class TCKDBClient:
                 "permitted_quality": permitted_quality, "geometry_ref": geometry_ref, "member_refs": member_refs,
                 "recipe": recipe, "require_stable_reference": require_stable_reference,
                 "administrative_policy": administrative_policy, "result_mode": result_mode,
-                "repeat_policy": repeat_policy,
+                "repeat_policy": repeat_policy, "filters": filters, "eligibility": eligibility,
             }
         )
         return self.request_json("POST", path, json=body, params={"profile": profile}, authenticated=False).data
@@ -2204,6 +2234,8 @@ class TCKDBClient:
         administrative_policy: str | None = None,
         result_mode: str | None = None,
         repeat_policy: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> StructureSelectionResponse:
         """``POST /scientific/species-entries/{ref}/conformers/select``.
@@ -2223,7 +2255,7 @@ class TCKDBClient:
                 "permitted_quality": permitted_quality, "geometry_ref": geometry_ref, "member_refs": member_refs,
                 "recipe": recipe, "require_stable_reference": require_stable_reference,
                 "administrative_policy": administrative_policy, "result_mode": result_mode,
-                "repeat_policy": repeat_policy,
+                "repeat_policy": repeat_policy, "filters": filters, "eligibility": eligibility,
             }
         )
         return self.request_json("POST", path, json=body, params={"profile": profile}, authenticated=False).data
@@ -2258,6 +2290,8 @@ class TCKDBClient:
         administrative_policy: str | None = None,
         result_mode: str | None = None,
         repeat_policy: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> StructureSelectionResponse:
         """``POST /scientific/transition-state-entries/{ref}/evidence/select``.
@@ -2277,6 +2311,7 @@ class TCKDBClient:
                 "recipe": recipe, "require_stable_reference": require_stable_reference,
                 "require_connectivity": require_connectivity, "administrative_policy": administrative_policy,
                 "result_mode": result_mode, "repeat_policy": repeat_policy,
+                "filters": filters, "eligibility": eligibility,
             }
         )
         return self.request_json("POST", path, json=body, params={"profile": profile}, authenticated=False).data
@@ -2448,6 +2483,9 @@ class TCKDBClient:
         Which supplied statistical models of one species or transition-state entry support a stated use
         (``intent="qualify"``), and, with ``intent="protocol_coverage"``, the qualified whole models listed in display order.
         ``request`` is the full body (see :class:`~tckdb_client.StatmechSelectionRequest`); the client sends it as given.
+        It may carry ``filters`` (``model_kind``, ``method``, ``basis``, ``software``, ``software_version``,
+        ``workflow_tool``, ``workflow_tool_version``) and ``eligibility`` (``include_rejected``, ``include_deprecated``,
+        ``include_confirmed_findings``); the answer lists every default, whether it was applied and by whose choice.
         Read-only; browse orders are unchanged and no computed thermodynamic value is returned.
 
         TCKDB ranks no model above another, so the answer is the qualified models, a sole eligible model or
@@ -2499,6 +2537,8 @@ class TCKDBClient:
         mode: str | None = None,
         min_review_status: str | None = None,
         phase: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> NetworkSelectionResponse:
         """``POST /scientific/networks/{ref}/kinetics/select``.
@@ -2531,6 +2571,7 @@ class TCKDBClient:
             outputs=outputs, degeneracy_applied=degeneracy_applied, boundaries=boundaries, regime=regime,
             source_composition_hash=source_composition_hash, sink_composition_hash=sink_composition_hash,
             policy=policy, mode=mode, min_review_status=min_review_status, phase=phase,
+            filters=filters, eligibility=eligibility,
         )
         return self.request_json(
             "POST", path, json=body, params={"profile": profile}, authenticated=False
@@ -2560,6 +2601,8 @@ class TCKDBClient:
         mode: str | None = None,
         min_review_status: str | None = None,
         phase: str | None = None,
+        filters: Mapping[str, Any] | None = None,
+        eligibility: Mapping[str, Any] | None = None,
         profile: str | None = None,
     ) -> JSONDict:
         """``POST /scientific/networks/{ref}/kinetics/select/manifest``.
@@ -2575,6 +2618,7 @@ class TCKDBClient:
             outputs=outputs, degeneracy_applied=degeneracy_applied, boundaries=boundaries, regime=regime,
             source_composition_hash=source_composition_hash, sink_composition_hash=sink_composition_hash,
             policy=policy, mode=mode, min_review_status=min_review_status, phase=phase,
+            filters=filters, eligibility=eligibility,
         )
         return self.request_json(
             "POST", _network_selection_path(network_ref) + "/manifest", json=body,
