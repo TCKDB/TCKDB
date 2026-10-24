@@ -38,7 +38,7 @@ conformer and transition-state evidence selections.
   basins, relative conformer energies). A transition-state entry still gates its evidence.
 - **Versions.** Manifest formats move to 3 (thermo, kinetics, network, statmech, structure, relative conformer energies) because a recorded
   decision now carries its filters and eligibility settings and the funnel; thermo, kinetics and statmech assessment semantics move to 2 because
-  the recorded `eligible` flag is the verdict under the request's own settings. `tckdb-client` 0.163.0, `tckdb-mcp` 0.13.0; `tckdb-schemas`
+  the recorded `eligible` flag is the verdict under the request's own settings. `tckdb-client` 0.165.0, `tckdb-mcp` 0.13.0; `tckdb-schemas`
   is unchanged (no upload field or refusal code changed).
 
 ## The made-under line (2026-10-24)
