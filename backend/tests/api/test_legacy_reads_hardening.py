@@ -284,7 +284,7 @@ def test_an_unreviewed_species_entry_is_a_scoping_parent_reachable_everywhere(cl
     # the record says its entry is not listed, and the match says which entry (entries are ungated: naming it is allowed)
     assert [r["entry_listed"] for r in body["results"] if r["resource_type"] == "calculation"] == [False]
     assert "species_entry_unlisted" in body["match"]["detail_codes"]
-    assert any(str(entry.id) in d for d, c in zip(body["match"]["details"], body["match"]["detail_codes"]) if c == "species_entry_unlisted")
+    assert any(str(entry.id) in d for d, c in zip(body["match"]["details"], body["match"]["detail_codes"], strict=True) if c == "species_entry_unlisted")
     # exploratory lists the unreviewed entry: nothing to explain
     listed = client.get(
         f"{LEGACY}/lookup/species-calculation",
@@ -330,7 +330,7 @@ def test_an_unreviewed_reaction_entry_is_a_scoping_parent_reachable_everywhere(c
     assert [r["entry_listed"] for r in body["results"] if r["resource_type"] == "kinetics"] == [False]
     assert "reaction_entry_unlisted" in body["match"]["detail_codes"]
     assert any(
-        str(reaction_entry.id) in d for d, c in zip(body["match"]["details"], body["match"]["detail_codes"]) if c == "reaction_entry_unlisted"
+        str(reaction_entry.id) in d for d, c in zip(body["match"]["details"], body["match"]["detail_codes"], strict=True) if c == "reaction_entry_unlisted"
     )
 
 
