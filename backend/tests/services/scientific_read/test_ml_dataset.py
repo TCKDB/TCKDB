@@ -8,6 +8,7 @@ builders in ``app.services.scientific_read.ml_dataset`` directly against a
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -892,9 +893,10 @@ def test_every_transition_state_entry_is_listed_with_its_own_barrier(db_session)
     lines = list(iter_ml_reactions_ndjson(db_session, reaction_refs=[rxn_entry.public_ref]))
     (record,) = [p for p in _parse(lines) if p["record_type"] == "ml_reaction"]
 
+    # Display order: both entries share one deposition time here, so the id (descending) decides.
     assert [t["transition_state_entry_ref"] for t in record["transition_states"]] == [
-        first.public_ref,
         second.public_ref,
+        first.public_ref,
     ]
     by_entry = {b["transition_state_entry_ref"]: b for b in record["barriers"]}
     assert by_entry[first.public_ref]["electronic_forward_kj_mol"] == pytest.approx(0.05 * HARTREE_TO_KJ_MOL)
@@ -959,3 +961,91 @@ def test_species_export_lists_every_frequency_result_and_hessian_by_level(db_ses
     assert by_label["wb97xd/def2tzvp"]["frequencies_cm1"] == [1600.0, 3700.0, 3800.0]
     assert {h["level_of_theory"]["label"] for h in record["hessians"]} == {"wb97xd/def2tzvp", "b3lyp/6-31g"}
     assert {h["calculation_ref"] for h in record["hessians"]} == {f["calculation_ref"] for f in record["frequency_results"]}
+
+
+def test_every_ts_calculation_at_a_level_is_listed_and_the_barrier_names_the_one_it_used(db_session):
+    """Kills: keeping one calculation per level (the other calculation and its geometry vanished from the record).
+
+    Two single points of the same TS at one level, plus an optimisation final energy. All three are listed with their
+    own geometry; the barrier uses the lowest single point at the level, says so, and names it.
+    """
+    lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+    rxn_entry, e_a = _reaction_with_reactant_levels(db_session, [(lot, -115.0)])
+    ts = make_transition_state(db_session, reaction_entry=rxn_entry, label="ts")
+    tse = make_transition_state_entry(db_session, transition_state=ts)
+    refs = {}
+    for name, kind, energy in (("sp_high", "sp", -100.0), ("sp_low", "sp", -100.01), ("opt", "opt", -100.5)):
+        calc = make_calculation(
+            db_session,
+            type=CalculationType.sp if kind == "sp" else CalculationType.opt,
+            transition_state_entry_id=tse.id,
+            lot_id=lot.id,
+        )
+        geometry = make_geometry(db_session, natoms=1)
+        attach_geometry_atoms(db_session, geometry=geometry, symbols=["C"], coords=[[0.0, 0.0, float(len(refs))]])
+        attach_input_geometry(db_session, calculation=calc, geometry=geometry)
+        if kind == "sp":
+            attach_sp_result(db_session, calculation=calc, electronic_energy_hartree=energy)
+        else:
+            attach_opt_result(db_session, calculation=calc, final_energy_hartree=energy)
+        refs[name] = calc.public_ref
+
+    lines = list(iter_ml_reactions_ndjson(db_session, reaction_refs=[rxn_entry.public_ref]))
+    (record,) = [p for p in _parse(lines) if p["record_type"] == "ml_reaction"]
+
+    (ts_block,) = record["transition_states"]
+    listed = {e["calculation_ref"]: e for e in ts_block["energies"]}
+    assert set(listed) == set(refs.values())
+    assert listed[refs["sp_high"]]["electronic_energy_hartree"] == -100.0
+    assert listed[refs["sp_low"]]["electronic_energy_hartree"] == -100.01
+    assert listed[refs["opt"]]["energy_type"] == "optimization"
+    assert all(e["geometry"] is not None for e in listed.values())
+    assert len({e["geometry"]["geometry_ref"] for e in listed.values()}) == 3
+
+    # One barrier at the level, from the lowest single point; its definition states the convention.
+    (barrier,) = record["barriers"]
+    assert barrier["ts_calculation_ref"] == refs["sp_low"]
+    assert barrier["electronic_forward_kj_mol"] == pytest.approx((-100.01 - (-115.0)) * HARTREE_TO_KJ_MOL)
+    assert "lowest" in barrier["definition"] and "single-point" in barrier["definition"]
+
+
+def test_a_barrier_names_the_calculation_each_reactant_energy_came_from(db_session):
+    """Kills: reactant energies without provenance (an energy with no calculation_ref cannot be traced)."""
+    lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+    rxn_entry, e_a = _reaction_with_reactant_levels(db_session, [(lot, -115.0)])
+    _ts_with_energy(db_session, rxn_entry, [(lot, -114.95)], "ts")
+
+    lines = list(iter_ml_reactions_ndjson(db_session, reaction_refs=[rxn_entry.public_ref]))
+    (record,) = [p for p in _parse(lines) if p["record_type"] == "ml_reaction"]
+
+    (barrier,) = record["barriers"]
+    (reactant,) = barrier["reactant_energies"]
+    assert reactant["species_entry_ref"] == e_a.public_ref
+    assert reactant["energy_type"] == "single_point"
+    assert reactant["calculation_ref"].startswith("calc_")
+    assert reactant["electronic_energy_hartree"] == -115.0
+
+
+def test_transition_state_entries_are_listed_in_display_order_not_oldest_first(db_session):
+    """Kills: listing TS entries by id ascending (the newest approved entry came last)."""
+    lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+    rxn_entry, _ = _reaction_with_reactant_levels(db_session, [(lot, -115.0)])
+    oldest = _ts_with_energy(db_session, rxn_entry, [(lot, -114.9)], "ts-old")
+    middle = _ts_with_energy(db_session, rxn_entry, [(lot, -114.8)], "ts-mid")
+    newest = _ts_with_energy(db_session, rxn_entry, [(lot, -114.7)], "ts-new")
+    approved_oldest = _ts_with_energy(db_session, rxn_entry, [(lot, -114.6)], "ts-approved")
+    stamp = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    for entry, days in ((oldest, 30), (middle, 10), (newest, 1), (approved_oldest, 60)):
+        entry.created_at = stamp - timedelta(days=days)
+    db_session.flush()
+    _approve(db_session, SubmissionRecordType.transition_state_entry, approved_oldest.id)  # after: accepted rows are frozen
+
+    lines = list(iter_ml_reactions_ndjson(db_session, reaction_refs=[rxn_entry.public_ref]))
+    (record,) = [p for p in _parse(lines) if p["record_type"] == "ml_reaction"]
+
+    assert [t["transition_state_entry_ref"] for t in record["transition_states"]] == [
+        approved_oldest.public_ref,  # review rank first
+        newest.public_ref,  # then newest deposited
+        middle.public_ref,
+        oldest.public_ref,
+    ]

@@ -99,6 +99,7 @@ from app.db.models.species import (
 )
 from app.db.models.thermo import Thermo
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
+from app.schemas.reads.scientific_common import REVIEW_RANK
 from app.services.document_formats import ML_EXPORT, current_header
 from app.services.scientific_read import export as export_core
 from app.services.scientific_read.common import (
@@ -1008,18 +1009,18 @@ def _species_entry_smiles(session: Session, species_entry_id: int) -> str | None
 
 def _species_entry_energy_at_lot(
     session: Session, species_entry_id: int, lot_id: int, profile: ResolvedReadProfile
-) -> float | None:
-    """Lowest electronic energy for a species entry at a specific LOT.
+) -> tuple[float, str, str] | None:
+    """Lowest electronic energy for a species entry at ONE level of theory, with where it came from.
 
-    Prefers single-point energies, falls back to optimisation final
-    energies. Used to assemble a same-LOT reactant energy sum for the
-    electronic barrier.
+    Returns ``(energy_hartree, energy_type, calculation_ref)`` or ``None``. Single-point energies are used before
+    optimisation final energies, and the lowest value wins (the lowest-conformer convention, inside one level). Used to
+    assemble a same-level reactant energy sum for the electronic barrier; the barrier record carries the calculation
+    each reactant energy came from.
     """
     shown = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation, profile=profile)
-    values: list[float] = []
     sp_rows = session.execute(
         where_visible(
-            select(CalculationSPResult.electronic_energy_hartree)
+            select(CalculationSPResult.electronic_energy_hartree, Calculation.public_ref)
             .join(Calculation, Calculation.id == CalculationSPResult.calculation_id)
             .where(
                 Calculation.species_entry_id == species_entry_id,
@@ -1029,34 +1030,36 @@ def _species_entry_energy_at_lot(
             shown,
         )
     ).all()
-    values.extend(r[0] for r in sp_rows)
-    if not values:
-        opt_rows = session.execute(
-            where_visible(
-                select(CalculationOptResult.final_energy_hartree)
-                .join(
-                    Calculation, Calculation.id == CalculationOptResult.calculation_id
-                )
-                .where(
-                    Calculation.species_entry_id == species_entry_id,
-                    Calculation.lot_id == lot_id,
-                    CalculationOptResult.final_energy_hartree.is_not(None),
-                ),
-                shown,
-            )
-        ).all()
-        values.extend(r[0] for r in opt_rows)
-    return min(values) if values else None
+    if sp_rows:
+        energy, ref = min(sp_rows, key=lambda r: (r[0], r[1]))
+        return energy, "single_point", ref
+    opt_rows = session.execute(
+        where_visible(
+            select(CalculationOptResult.final_energy_hartree, Calculation.public_ref)
+            .join(Calculation, Calculation.id == CalculationOptResult.calculation_id)
+            .where(
+                Calculation.species_entry_id == species_entry_id,
+                Calculation.lot_id == lot_id,
+                CalculationOptResult.final_energy_hartree.is_not(None),
+            ),
+            shown,
+        )
+    ).all()
+    if opt_rows:
+        energy, ref = min(opt_rows, key=lambda r: (r[0], r[1]))
+        return energy, "optimization", ref
+    return None
 
 
-def _ts_energy_by_level(
+def _ts_calculation_energies(
     session: Session, ts_entry_id: int, profile: ResolvedReadProfile
-) -> dict[int | None, tuple[float, str, Calculation]]:
-    """The TS electronic energy at EACH level of theory: ``{lot_id: (energy_hartree, energy_type, calculation)}``.
+) -> list[tuple[float, str, Calculation]]:
+    """EVERY electronic energy of EVERY shown calculation of one TS entry: ``(energy_hartree, energy_type, calculation)``.
 
-    Within one level, a single-point energy is used before an optimisation final energy and the lowest value wins (the
-    lowest-conformer convention, at one level). Energies at different levels are never compared here or anywhere in the
-    export: every level is kept, none is preferred.
+    Nothing is dropped and nothing is chosen: two single points at one level are two entries, and an optimisation final
+    energy is an entry beside them (as the species-side ``energies`` list is). Callers group by level of theory; the
+    lowest-within-a-level convention is applied only to compute a barrier, and each barrier names the calculation it
+    used.
     """
     # Hidden calculations are not candidates: their energies would otherwise set the barrier.
     shown = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation, profile=profile)
@@ -1082,37 +1085,19 @@ def _ts_energy_by_level(
             shown,
         )
     ).all()
-
-    best_sp: dict[int | None, tuple[float, Calculation]] = {}
-    for energy, calc in sp_rows:
-        current = best_sp.get(calc.lot_id)
-        if current is None or energy < current[0]:
-            best_sp[calc.lot_id] = (energy, calc)
-    best_opt: dict[int | None, tuple[float, Calculation]] = {}
-    for energy, calc in opt_rows:
-        current = best_opt.get(calc.lot_id)
-        if current is None or energy < current[0]:
-            best_opt[calc.lot_id] = (energy, calc)
-
-    out: dict[int | None, tuple[float, str, Calculation]] = {}
-    for lot_id in set(best_sp) | set(best_opt):
-        if lot_id in best_sp:
-            energy, calc = best_sp[lot_id]
-            out[lot_id] = (energy, "single_point", calc)
-        else:
-            energy, calc = best_opt[lot_id]
-            out[lot_id] = (energy, "optimization", calc)
-    return out
+    return [(e, "single_point", c) for e, c in sp_rows] + [(e, "optimization", c) for e, c in opt_rows]
 
 
 def _ts_entries(
     session: Session, reaction_entry_id: int, profile: ResolvedReadProfile
 ) -> list[TransitionStateEntry]:
-    """EVERY transition-state entry of a reaction entry that the profile shows, by id (a listing order, not a pick).
+    """EVERY transition-state entry of a reaction entry that the profile shows, in DISPLAY order.
 
-    A hidden entry is not in the population, so it is neither listed nor named.
+    Review rank, then deposition time newest first, then id descending (``docs/specs/browse_order.md``): a listing
+    order, never a pick; all entries are returned. A hidden entry is not in the population, so it is neither listed nor
+    named.
     """
-    return list(
+    entries = list(
         session.scalars(
             where_visible(
                 select(TransitionStateEntry)
@@ -1124,9 +1109,16 @@ def _ts_entries(
                 review_floor_predicate(
                     TransitionStateEntry.id, SubmissionRecordType.transition_state_entry, profile=profile
                 ),
-            ).order_by(TransitionStateEntry.id)
+            )
         ).all()
     )
+    badges = fetch_review_badges(
+        session,
+        record_type=SubmissionRecordType.transition_state_entry,
+        record_ids=[e.id for e in entries],
+    )
+    entries.sort(key=lambda e: (REVIEW_RANK[badges[e.id].status], -e.created_at.timestamp(), -e.id))
+    return entries
 
 
 def _kinetics_blocks(
@@ -1174,9 +1166,12 @@ def _kinetics_blocks(
 
 
 BARRIER_DEFINITION = (
-    "E_TS - sum(E_reactants) at ONE level of theory, for this transition-state entry. Within that level each "
-    "energy is the single-point energy when there is one (else the optimisation final energy), lowest over the "
-    "available calculations (lowest-conformer convention). Energies at different levels are never compared."
+    "E_TS - sum(E_reactants) at ONE level of theory, for this transition-state entry. Within that level the TS "
+    "energy is the lowest single-point energy of the entry's calculations at the level (the lowest optimisation "
+    "final energy when it has no single point) and each reactant energy is chosen the same way (lowest-conformer "
+    "convention); the barrier names the TS calculation (ts_calculation_ref) and every reactant calculation it used. "
+    "Every calculation's energy is listed under transition_states[].energies regardless. Energies at different "
+    "levels are never compared."
 )
 
 
@@ -1207,20 +1202,20 @@ def _ts_blocks_and_barriers(
     blocks: list[dict] = []
     barriers: list[dict] = []
     unavailable: list[dict] = []
-    reactant_energy_cache: dict[tuple[int, int], float | None] = {}
+    reactant_energy_cache: dict[tuple[int, int], tuple[float, str, str] | None] = {}
 
-    def reactant_energy(se_id: int, lot_id: int) -> float | None:
+    def reactant_energy(se_id: int, lot_id: int) -> tuple[float, str, str] | None:
         key = (se_id, lot_id)
         if key not in reactant_energy_cache:
             reactant_energy_cache[key] = _species_entry_energy_at_lot(session, se_id, lot_id, profile)
         return reactant_energy_cache[key]
 
     for ts_entry in _ts_entries(session, reaction_entry_id, profile):
-        per_level = _ts_energy_by_level(session, ts_entry.id, profile)
+        every_energy = _ts_calculation_energies(session, ts_entry.id, profile)
         energy_blocks: list[dict] = []
-        entry_barriers: list[dict] = []
-        for lot_id, (energy, energy_type, calc) in per_level.items():
-            lot_block = _lot_block(session, lot_id, lot_cache)
+        by_level: dict[int | None, list[tuple[float, str, Calculation]]] = {}
+        for energy, energy_type, calc in every_energy:
+            lot_block = _lot_block(session, calc.lot_id, lot_cache)
             geometry: dict | None = None
             output_links, input_links = _load_geometry_links(session, [calc.id])
             gid = _resolved_geometry_id(calc.id, output_links, input_links)
@@ -1237,8 +1232,15 @@ def _ts_blocks_and_barriers(
                     "geometry": geometry,
                 }
             )
+            by_level.setdefault(calc.lot_id, []).append((energy, energy_type, calc))
+
+        entry_barriers: list[dict] = []
+        for lot_id, candidates in by_level.items():
             if lot_id is None or not reactant_ids:
                 continue
+            # The barrier's TS energy at this level: the lowest single point, else the lowest optimisation energy.
+            single_points = [c for c in candidates if c[1] == "single_point"]
+            energy, energy_type, calc = min(single_points or candidates, key=lambda c: (c[0], c[2].public_ref))
             reactant_energies = [reactant_energy(se_id, lot_id) for se_id in reactant_ids]
             if any(e is None for e in reactant_energies):
                 continue
@@ -1246,12 +1248,19 @@ def _ts_blocks_and_barriers(
                 {
                     "transition_state_entry_ref": ts_entry.public_ref,
                     "ts_calculation_ref": calc.public_ref,
-                    "level_of_theory": lot_block,
-                    "electronic_forward_kj_mol": (energy - sum(e for e in reactant_energies if e is not None))
+                    "ts_energy_type": energy_type,
+                    "level_of_theory": _lot_block(session, lot_id, lot_cache),
+                    "electronic_forward_kj_mol": (energy - sum(e[0] for e in reactant_energies if e is not None))
                     * HARTREE_TO_KJ_MOL,
                     "reactant_energies": [
-                        {"species_entry_ref": ref, "electronic_energy_hartree": e}
+                        {
+                            "species_entry_ref": ref,
+                            "calculation_ref": e[2],
+                            "energy_type": e[1],
+                            "electronic_energy_hartree": e[0],
+                        }
                         for ref, e in zip(reactant_refs, reactant_energies, strict=True)
+                        if e is not None
                     ],
                     "definition": BARRIER_DEFINITION,
                 }
