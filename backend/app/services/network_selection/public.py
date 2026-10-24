@@ -59,7 +59,7 @@ from app.services.network_selection.selection import NetworkSelection, select_ne
 from app.services.scientific_read.handles import is_ref_handle, resolve_path_handle
 from app.services.scientific_read.profile import current_read_profile
 from app.services.selection_kernel import Outcome
-from app.services.selection_kernel.requested import Eligibility, answer_steps, review_default
+from app.services.selection_kernel.requested import OFFER_REVIEW, Eligibility, answer_steps, review_default
 
 #: ``Session.info`` key a TEST harness sets, explicitly, to be read under whatever isolation it already has.
 SNAPSHOT_OPT_OUT = "tckdb_read_snapshot_opt_out"
@@ -140,7 +140,7 @@ def to_service_request(body: NetworkSelectionRequest, *, network_ref: str) -> Ne
             workflow_tool=body.filters.workflow_tool,
             workflow_tool_version=body.filters.workflow_tool_version,
         ),
-        eligibility=Eligibility.from_request(body.eligibility),
+        eligibility=Eligibility.from_request(body.eligibility, OFFER_REVIEW),
     )
 
 
@@ -270,7 +270,6 @@ def build_response(
         representations=decision["representations"],
         **answer_steps(
             request_filters=manifest["request"]["filters"],
-            min_review_status=body.min_review_status,
             eligibility_record=manifest["request"]["eligibility"],
             funnel_record=population["funnel"],
             names=NETWORK_DEFAULTS,

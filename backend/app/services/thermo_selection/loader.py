@@ -67,6 +67,7 @@ class PopulationScan:
     cap: int
     considered: int = 0
     removed_by_filters: int = 0
+    removed_by_floor: int = 0
     terminal_excluded: dict[str, int] = field(default_factory=dict)
 
     @property
@@ -182,7 +183,8 @@ def scan_population(session: Session, *, species_entry_id: int, request: H298Req
         total_rows=len(ids),
         cap=request.max_candidates,
         considered=len(ids),
-        removed_by_filters=(len(ids) - len(kept)) + below_floor,
+        removed_by_filters=len(ids) - len(kept),
+        removed_by_floor=below_floor,
         terminal_excluded=terminal_excluded,
     )
 

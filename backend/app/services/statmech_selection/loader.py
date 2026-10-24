@@ -115,6 +115,7 @@ class PopulationScan:
     #: not-lifted review default kept out, by default name.
     considered: int = 0
     removed_by_filters: int = 0
+    removed_by_floor: int = 0
     terminal_excluded: dict[str, int] = field(default_factory=dict)
 
 
@@ -380,7 +381,8 @@ def scan_population(session: Session, *, request: StatmechRequest, owner_id: int
         nested_rows=nested,
         candidate_statuses=own,
         considered=considered,
-        removed_by_filters=(considered - len(kept)) + below_floor,
+        removed_by_filters=considered - len(kept),
+        removed_by_floor=below_floor,
         terminal_excluded=terminal_excluded,
     )
 

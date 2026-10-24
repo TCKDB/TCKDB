@@ -50,7 +50,13 @@ from app.schemas.reads.scientific_structure_selection import (
 from app.services.scientific_read.handles import is_ref_handle, resolve_path_handle
 from app.services.selection_kernel.requested import answer_steps
 from app.services.structure_selection.bounds import parse_quantity
-from app.services.structure_selection.models import Grain, Quantity, StructureOutcome, StructureRequest
+from app.services.structure_selection.models import (
+    DEFAULT_PERMITTED_QUALITY,
+    Grain,
+    Quantity,
+    StructureOutcome,
+    StructureRequest,
+)
 from app.services.structure_selection.selection import StructureSelection, select_entry_structures
 
 #: ``Session.info`` key a TEST harness sets, explicitly, to be read under whatever isolation it already has.
@@ -112,11 +118,19 @@ def run_selection(session: Session, *, entry_id: int, body: SelectionBody) -> St
 
 def structure_defaults(grain: str) -> tuple[str, ...]:
     """The eligibility defaults a structure selection applies at a grain, in the order the answer lists them."""
-    names = (ELIGIBILITY_REJECTED, ELIGIBILITY_DEPRECATED, ELIGIBILITY_CONFIRMED_FINDINGS)
-    if grain == Grain.calculation.value:
-        return (*names, ELIGIBILITY_REJECTED_QUALITY)
+    names = (ELIGIBILITY_REJECTED, ELIGIBILITY_DEPRECATED, ELIGIBILITY_CONFIRMED_FINDINGS, ELIGIBILITY_REJECTED_QUALITY)
     # A species entry is a scoping parent and never excludes; a transition-state entry still gates its evidence.
     return (*names, ELIGIBILITY_ENTRY_STATUS) if grain == Grain.transition_state.value else names
+
+
+def _narrowings(request: dict[str, Any]) -> dict[str, Any]:
+    """Narrowings that are not in `filters` but remove candidates all the same, so `filters.applied` lists them."""
+    out: dict[str, Any] = {}
+    if sorted(request["permitted_quality"]) != sorted(q.value for q in DEFAULT_PERMITTED_QUALITY):
+        out["permitted_quality"] = list(request["permitted_quality"])
+    if request["member_refs"] is not None:
+        out["member_refs"] = list(request["member_refs"])
+    return out
 
 
 def _echo(manifest: dict[str, Any], entry_ref: str) -> StructureSelectionRequestEcho:
@@ -189,14 +203,12 @@ def build_response(selection: StructureSelection, *, entry_ref: str) -> Structur
         ),
         **answer_steps(
             request_filters=manifest["request"]["filters"],
-            min_review_status=(
-                RecordReviewStatus(manifest["request"]["min_review_status"]) if manifest["request"]["min_review_status"] else None
-            ),
             eligibility_record=manifest["request"]["eligibility"],
             funnel_record=population["funnel"],
             names=structure_defaults(manifest["request"]["grain"]),
             profile_floor=manifest["read_profile"]["review_floor"] is not None,
             extra_lifts=("rejected_calculation_quality",) if "rejected" in manifest["request"]["permitted_quality"] else (),
+            extra_applied=_narrowings(manifest["request"]),
         ),
         outcome=StructureOutcome(manifest["outcome"]),
         basis=decision["basis"],

@@ -28,11 +28,13 @@ from app.services.selection_kernel.requested import Verdict, funnel, judge
 from app.services.structure_selection.assessment import assess_unit
 from app.services.structure_selection.loader import (
     MAX_EXCLUDED_LISTED,
+    REASON_SOURCE_QUALITY,
     PopulationScan,
     load_population,
     scan_population,
 )
 from app.services.structure_selection.models import (
+    DEFAULT_PERMITTED_QUALITY,
     Grain,
     StructureAssessment,
     StructureAssessmentResult,
@@ -61,12 +63,31 @@ def _excluded_refs(session: Session, scan: PopulationScan) -> tuple[dict[str, st
 FINDING_BLOCK_PREFIXES = ("finding_invalidates", "role_invalidated")
 
 
+def quality_state(unit: Any, calculations: Any, request: StructureRequest) -> str | None:
+    """How the ``rejected_calculation_quality`` default touches a unit: ``"lifted"``, ``"applied"`` or ``None``.
+
+    At the calculation grain the unit is the calculation: a rejected one is in the population only because the request
+    permitted it (``lifted``). At the conformer and transition-state grains a determination rests on the calculations it
+    pins: one with rejected quality that the request permitted is ``lifted``; one the default kept out (its source reads
+    as unusable for quality, which under the default permitted qualities can only mean rejected) is ``applied``.
+    *calculations* maps a calculation ref to its normalised facts.
+    """
+    if request.grain is Grain.calculation:
+        return "lifted" if unit.quality == CalculationQuality.rejected.value else None
+    if CalculationQuality.rejected in request.quality_set:
+        pinned = (calculations.get(s.calculation_ref) for s in unit.sources if s.calculation_ref is not None)
+        return "lifted" if any(c is not None and c.quality == CalculationQuality.rejected.value for c in pinned) else None
+    if request.quality_set == DEFAULT_PERMITTED_QUALITY and any(s.unavailable_reason == REASON_SOURCE_QUALITY for s in unit.sources):
+        return "applied"
+    return None
+
+
 def verdict_of(assessment: StructureAssessment, gate: RecordReviewStatus | None, quality: str | None, request: StructureRequest) -> Verdict:
     """Whether a unit competes under the request's eligibility settings, and which defaults it failed or passed by override.
 
-    ``gate`` is the review status the review defaults judge the unit by (a calculation's own, a conformer observation's,
-    or ``None``). A unit in the population with a rejected calculation quality is there only because the request
-    permitted it, so that default is always one it passed by override. A confirmed finding the request lifted is a
+    ``gate`` is the review status the review defaults judge the unit by (a calculation's own, the weakest of a conformer
+    observation's and its group's, or ``None``). ``quality`` is :func:`quality_state`: a unit that rests on a rejected
+    calculation the request permitted passed that default by override, and one whose source the default kept out failed it. A confirmed finding the request lifted is a
     ``finding_overridden`` advisory; both are read from the assessment, so a replay that recomputes it recomputes this.
     """
     findings = [b for b in assessment.blocking if b.startswith(FINDING_BLOCK_PREFIXES)]
@@ -77,9 +98,12 @@ def verdict_of(assessment: StructureAssessment, gate: RecordReviewStatus | None,
         review_status=gate if gate is not None else RecordReviewStatus.approved,
         blocking=findings,
         eligibility=request.eligibility,
-        extra_defaults=(ELIGIBILITY_CONFIRMED_FINDINGS,) if lifted else (),
+        extra_defaults=(
+            *((ELIGIBILITY_CONFIRMED_FINDINGS,) if lifted else ()),
+            *((ELIGIBILITY_REJECTED_QUALITY,) if quality == "applied" else ()),
+        ),
     )
-    if quality == CalculationQuality.rejected.value:
+    if quality == "lifted":
         verdict = replace(verdict, passed_only_by_override=(*verdict.passed_only_by_override, ELIGIBILITY_REJECTED_QUALITY))
     return verdict
 
@@ -151,7 +175,7 @@ def assess_entry_structures(
     verdict_objects = []
     for a in assessments:
         unit = unit_by_ref[a.unit_ref]
-        v = verdict_of(a, gate_by_ref[a.unit_ref], unit.quality if request.grain is Grain.calculation else None, request)
+        v = verdict_of(a, gate_by_ref[a.unit_ref], quality_state(unit, loaded.calculations_by_ref, request), request)
         verdict_objects.append(v)
         verdicts[a.unit_ref] = verdict_record(v, gate_by_ref[a.unit_ref])
     return StructureAssessmentResult(
@@ -175,6 +199,7 @@ def assess_entry_structures(
         funnel=funnel(
             considered=scan.considered,
             removed_by_filters=scan.removed_by_filters,
+            removed_by_floor=scan.removed_by_floor,
             terminal_excluded=scan.terminal_excluded,
             verdicts=verdict_objects,
         ),

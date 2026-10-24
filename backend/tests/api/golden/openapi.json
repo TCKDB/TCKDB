@@ -17055,7 +17055,7 @@
             "type": "boolean"
           },
           "excluded": {
-            "description": "How many of the candidates that passed the filters it kept out. Only records the read profile shows are counted, so the number cannot reveal a hidden one.",
+            "description": "How many of the candidates that passed the filters it kept out. A candidate that fails several defaults is counted under each of them, so these numbers can sum to more than `funnel.removed_by_eligibility`, which counts every candidate once. Only records the read profile shows are counted, so the number cannot reveal a hidden one.",
             "title": "Excluded",
             "type": "integer"
           },
@@ -50838,9 +50838,21 @@
             "title": "Applied",
             "type": "object"
           },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the filters and the review floor removed every candidate: nothing was assessed.",
+            "title": "Note"
+          },
           "removed": {
             "default": 0,
-            "description": "Candidates the filters removed.",
+            "description": "Candidates the filters removed (not the review floor: see the funnel).",
             "title": "Removed",
             "type": "integer"
           }
@@ -50857,7 +50869,7 @@
             "type": "integer"
           },
           "remaining": {
-            "description": "Candidates that were assessed for the question.",
+            "description": "Candidates no step removed. Each candidate is counted once, at the first step that removed it, so `removed_by_filters + removed_by_floor + removed_by_eligibility + remaining` is `considered`.",
             "title": "Remaining",
             "type": "integer"
           },
@@ -50867,8 +50879,14 @@
             "type": "integer"
           },
           "removed_by_filters": {
-            "description": "Removed by the caller's filters.",
+            "description": "Removed by the caller's filters (including a narrower `permitted_quality`, `member_refs` or `population`, which `filters.applied` also lists).",
             "title": "Removed By Filters",
+            "type": "integer"
+          },
+          "removed_by_floor": {
+            "default": 0,
+            "description": "Removed by the caller's own `min_review_status` floor (the read profile's floor is not counted).",
+            "title": "Removed By Floor",
             "type": "integer"
           },
           "unit": {
@@ -58468,7 +58486,15 @@
             "title": "Recipe"
           },
           "review_status": {
-            "$ref": "#/components/schemas/RecordReviewStatus"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordReviewStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The unit's own review standing; null for a determination with no review of its own (a species entry is a scoping parent, so its status is not copied onto it)."
           },
           "unit_ref": {
             "title": "Unit Ref",

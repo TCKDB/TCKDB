@@ -29,7 +29,7 @@ from app.schemas.reads.scientific_selection_common import (
     SelectionStepsAnswer,
 )
 from app.services.public_refs import PREFIXES, PUBLIC_REF_BODY_LEN
-from app.services.selection_kernel.requested import Eligibility
+from app.services.selection_kernel.requested import OFFER_FINDINGS, Eligibility
 from app.services.statmech_selection.models import (
     Conditions,
     EnergyReference,
@@ -291,7 +291,7 @@ class StatmechSelectionRequest(_Strict):
                 workflow_tool=self.filters.workflow_tool,
                 workflow_tool_version=self.filters.workflow_tool_version,
             ),
-            eligibility=Eligibility.from_request(self.eligibility),
+            eligibility=Eligibility.from_request(self.eligibility, OFFER_FINDINGS),
         )
 
 

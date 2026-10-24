@@ -169,6 +169,7 @@ def assess_reaction_entry_kinetics(
         funnel=funnel(
             considered=scan.considered,
             removed_by_filters=scan.removed_by_filters,
+            removed_by_floor=scan.removed_by_floor,
             terminal_excluded=scan.terminal_excluded,
             verdicts=list(verdicts.values()),
         ),

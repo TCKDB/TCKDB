@@ -1232,6 +1232,7 @@ class SelectionFunnel(TypedDict):
     unit: str
     considered: int
     removed_by_filters: int
+    removed_by_floor: int
     removed_by_eligibility: int
     remaining: int
 
@@ -1239,6 +1240,7 @@ class SelectionFunnel(TypedDict):
 class SelectionFilterAnswer(TypedDict):
     applied: JSONDict
     removed: int
+    note: str | None
 
 
 class ThermoSelectionTargetIn(TypedDict, total=False):

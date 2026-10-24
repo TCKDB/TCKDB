@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -105,7 +105,7 @@ class PopulationScan:
     effective_statuses: frozenset[RecordReviewStatus]
     profile_statuses: frozenset[RecordReviewStatus]
     unit_ids: tuple[int, ...]
-    unit_status: dict[int, RecordReviewStatus]
+    unit_status: dict[int, RecordReviewStatus | None]
     excluded: tuple[tuple[int, RecordReviewStatus | None, str], ...]
     total_units: int
     nested_rows: int
@@ -120,6 +120,7 @@ class PopulationScan:
     #: qualities) removed; and those a not-lifted default removed, by default name.
     considered: int = 0
     removed_by_filters: int = 0
+    removed_by_floor: int = 0
     terminal_excluded: dict[str, int] = field(default_factory=dict)
 
 
@@ -323,6 +324,7 @@ def _scan_calculations(
     excluded: list[tuple[int, RecordReviewStatus | None, str]] = []
     terminal_excluded: dict[str, int] = {}
     removed_by_filters = considered - len(kept)
+    removed_by_floor = 0
     for i in ids:
         if i not in kept:
             continue
@@ -332,7 +334,7 @@ def _scan_calculations(
             terminal_excluded[default] = terminal_excluded.get(default, 0) + 1
         elif status[i] not in own:
             excluded.append((i, status[i], REASON_BELOW_FLOOR))
-            removed_by_filters += 1
+            removed_by_floor += 1
         elif quality[i] not in request.quality_set:
             excluded.append((i, status[i], REASON_QUALITY))
             if quality[i] is CalculationQuality.rejected:
@@ -350,7 +352,7 @@ def _scan_calculations(
         effective_statuses=effective,
         profile_statuses=profile,
         unit_ids=tuple(population),
-        unit_status=status,
+        unit_status=cast(dict[int, RecordReviewStatus | None], status),
         excluded=tuple(excluded),
         total_units=len(ids),
         nested_rows=nested,
@@ -358,6 +360,7 @@ def _scan_calculations(
         gate_status=dict(status),
         considered=considered,
         removed_by_filters=removed_by_filters,
+        removed_by_floor=removed_by_floor,
         terminal_excluded=terminal_excluded,
     )
 
@@ -396,8 +399,36 @@ def _scan_determinations(
     observation_badges = fetch_review_badges(
         session, record_type=SubmissionRecordType.conformer_observation, record_ids=observation_ids
     )
-    # A determination whose own observation the profile hides is not part of this request's world.
-    ids = [i for i in ids if observation_of[i] is None or observation_badges[observation_of[i]].status in profile]
+    # A conformer group is a gated kind: an observation hides, and is judged, with its group.
+    group_of = (
+        dict(
+            session.execute(
+                select(ConformerObservation.id, ConformerObservation.conformer_group_id).where(
+                    ConformerObservation.id.in_(observation_ids)
+                )
+            ).tuples().all()
+        )
+        if observation_ids
+        else {}
+    )
+    group_badges = fetch_review_badges(
+        session,
+        record_type=SubmissionRecordType.conformer_group,
+        record_ids={g for g in group_of.values() if g is not None},
+    )
+
+    def chain(observation_id: int | None) -> list[RecordReviewStatus]:
+        """The statuses a determination is judged by: its observation's and that observation's group's."""
+        if observation_id is None:
+            return []
+        out = [observation_badges[observation_id].status]
+        group_id = group_of.get(observation_id)
+        if group_id is not None:
+            out.append(group_badges[group_id].status)
+        return out
+
+    # A determination whose own observation or group the profile hides is not part of this request's world.
+    ids = [i for i in ids if all(s in profile for s in chain(observation_of[i]))]
     considered = len(ids)
     if request.member_refs is not None:
         wanted = set(request.member_refs)
@@ -425,15 +456,17 @@ def _scan_determinations(
     elig = request.eligibility
     population: list[int] = []
     excluded: list[tuple[int, RecordReviewStatus | None, str]] = []
-    unit_status: dict[int, RecordReviewStatus] = {}
+    unit_status: dict[int, RecordReviewStatus | None] = {}
     gate_status: dict[int, RecordReviewStatus | None] = {}
     terminal_excluded: dict[str, int] = {}
     removed_by_filters = considered - len(kept)
+    removed_by_floor = 0
     for i in ids:
         # A determination has no review of its own: its owners' are, the weakest of its entry's and its conformer
         # observation's. The observation's is the one a request can lift; the entry's floor applies as before.
         owners = [owner_badge.status]
-        gate = observation_badges[observation_of[i]].status if observation_of[i] is not None else None
+        links = chain(observation_of[i])
+        gate = max(links, key=lambda s: REVIEW_FLOOR_ORDER[s]) if links else None
         if gate is not None:
             owners.append(gate)
         gate_status[i] = gate
@@ -442,7 +475,7 @@ def _scan_determinations(
         if entry_gates:
             unit_status[i] = max(owners, key=lambda s: REVIEW_FLOOR_ORDER[s])
         else:
-            unit_status[i] = gate if gate is not None else owner_badge.status
+            unit_status[i] = gate  # None: no review of its own; the species entry's status is not copied onto it
         if i not in kept:
             continue
         default = review_default(gate) if gate is not None else None
@@ -451,7 +484,7 @@ def _scan_determinations(
             terminal_excluded[default] = terminal_excluded.get(default, 0) + 1
         elif gate is not None and gate not in own:
             excluded.append((i, gate, REASON_BELOW_FLOOR))
-            removed_by_filters += 1
+            removed_by_floor += 1
         elif entry_gates and owner_badge.status in _TERMINAL:
             excluded.append((i, owner_badge.status, REASON_TERMINAL))
             terminal_excluded[ELIGIBILITY_ENTRY_STATUS] = terminal_excluded.get(ELIGIBILITY_ENTRY_STATUS, 0) + 1
@@ -485,6 +518,7 @@ def _scan_determinations(
         candidate_statuses=own,
         considered=considered,
         removed_by_filters=removed_by_filters,
+        removed_by_floor=removed_by_floor,
         terminal_excluded=terminal_excluded,
         excluded=tuple(excluded),
         total_units=len(ids),
@@ -898,7 +932,7 @@ def load_population(session: Session, scan: PopulationScan, request: StructureRe
         loaded.calculations = _normalize_calculations(
             session,
             calcs,
-            scan.unit_status,
+            cast(dict[int, RecordReviewStatus], scan.unit_status),  # a calculation always has its own status
             dict.fromkeys((c.id for c in calcs), subject.entry_ref),
             request=request,
             with_lineage=False,

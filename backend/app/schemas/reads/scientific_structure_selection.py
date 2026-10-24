@@ -31,7 +31,7 @@ from app.schemas.reads.scientific_selection_common import (
     FindingsEligibilityIn,
     SelectionStepsAnswer,
 )
-from app.services.selection_kernel.requested import Eligibility
+from app.services.selection_kernel.requested import OFFER_FINDINGS, Eligibility
 from app.services.structure_selection.models import (
     DEFERRED_QUANTITIES,
     AdminPolicy,
@@ -163,7 +163,7 @@ def _build(body: _StrictRequest, grain: Grain, intent: Intent, *, claim: Validat
         result_mode=body.result_mode,
         repeat_policy=body.repeat_policy,
         filters=StructureFilters(**body.filters.model_dump(exclude_none=True)),
-        eligibility=Eligibility.from_request(body.eligibility),
+        eligibility=Eligibility.from_request(body.eligibility, OFFER_FINDINGS),
     )
 
 
@@ -301,7 +301,10 @@ class StructureSelectionUnit(CandidateEligibility):
     """One assessed unit (a calculation, or a basin or saddle determination) with every finding that fed its verdict."""
 
     unit_ref: str
-    review_status: RecordReviewStatus
+    review_status: RecordReviewStatus | None = Field(
+        description="The unit's own review standing; null for a determination with no review of its own (a species "
+        "entry is a scoping parent, so its status is not copied onto it)."
+    )
     created_at: datetime
     applicability: str
     reasons: list[StructureSelectionReason]

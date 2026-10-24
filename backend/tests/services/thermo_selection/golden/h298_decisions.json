@@ -1447,6 +1447,7 @@
       "remaining": 3,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 3,
@@ -1766,6 +1767,7 @@
       "remaining": 4,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 4,
@@ -2035,6 +2037,7 @@
       "remaining": 3,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 3,
@@ -2285,6 +2288,7 @@
       "remaining": 3,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 3,
@@ -2498,6 +2502,7 @@
       "remaining": 2,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
@@ -2709,6 +2714,7 @@
       "remaining": 2,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
@@ -2810,6 +2816,7 @@
       "remaining": 0,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 0,
@@ -3012,6 +3019,7 @@
       "remaining": 2,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
@@ -3277,6 +3285,7 @@
       "remaining": 3,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 3,
@@ -3492,6 +3501,7 @@
       "remaining": 2,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
@@ -3705,6 +3715,7 @@
       "remaining": 2,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
@@ -3918,6 +3929,7 @@
       "remaining": 2,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
@@ -4131,6 +4143,7 @@
       "remaining": 2,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
@@ -4448,6 +4461,7 @@
       "remaining": 4,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 4,
@@ -4769,6 +4783,7 @@
       "remaining": 4,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 4,
@@ -5090,6 +5105,7 @@
       "remaining": 4,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 4,
@@ -5252,6 +5268,7 @@
       "remaining": 1,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 1,
@@ -5460,6 +5477,7 @@
       "remaining": 2,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,
@@ -5777,6 +5795,7 @@
       "remaining": 4,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 4,
@@ -6046,6 +6065,7 @@
       "remaining": 3,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 3,
@@ -6261,6 +6281,7 @@
       "remaining": 2,
       "removed_by_eligibility": 0,
       "removed_by_filters": 0,
+      "removed_by_floor": 0,
       "unit": "candidates"
      },
      "thermo_rows_for_entry": 2,

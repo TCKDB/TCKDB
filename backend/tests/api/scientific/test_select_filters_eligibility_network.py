@@ -72,7 +72,7 @@ def test_a_software_filter_keeps_the_solves_whose_source_calculations_ran_there(
     assert body["outcome"] == "sole_eligible_candidate"
     assert body["filters"]["applied"] == {"software": "orca"} and body["filters"]["removed"] == 2
     assert body["funnel"] == {
-        "unit": "solves", "considered": 3, "removed_by_filters": 2, "removed_by_eligibility": 0, "remaining": 1
+        "unit": "solves", "considered": 3, "removed_by_filters": 2, "removed_by_floor": 0, "removed_by_eligibility": 0, "remaining": 1
     }
 
 

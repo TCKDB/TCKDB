@@ -173,6 +173,7 @@ def qualify_target(
         funnel=funnel(
             considered=scan.considered,
             removed_by_filters=scan.removed_by_filters,
+            removed_by_floor=scan.removed_by_floor,
             terminal_excluded=scan.terminal_excluded,
             verdicts=list(verdicts.values()),
         ),

@@ -19,6 +19,7 @@ RESPONSE_STEP_COUNT_PATHS = frozenset(
     {
         "funnel.considered",
         "funnel.removed_by_filters",
+        "funnel.removed_by_floor",
         "funnel.removed_by_eligibility",
         "funnel.remaining",
         "filters.removed",
@@ -32,6 +33,7 @@ MANIFEST_STEP_COUNT_PATHS = frozenset(
     {
         "population.funnel.considered",
         "population.funnel.removed_by_filters",
+        "population.funnel.removed_by_floor",
         "population.funnel.removed_by_eligibility",
         "population.funnel.remaining",
         *(f"population.funnel.excluded_by_default.{name}" for name in DEFAULT_NAMES),

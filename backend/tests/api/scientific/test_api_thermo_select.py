@@ -511,9 +511,9 @@ def _assert_integers_are_pinned(doc, *, is_manifest, curated):
     # Counts of candidates, never ids: the funnel says how many each step removed, and nothing says which.
     counts = lambda v: all(isinstance(n, int) and n >= 0 for n in v)  # noqa: E731
     for path in (
-        "funnel.considered", "funnel.removed_by_filters", "funnel.removed_by_eligibility", "funnel.remaining",
+        "funnel.considered", "funnel.removed_by_filters", "funnel.removed_by_floor", "funnel.removed_by_eligibility", "funnel.remaining",
         "filters.removed", "eligibility[].excluded", "eligibility[].admitted_by_override",
-        "population.funnel.considered", "population.funnel.removed_by_filters",
+        "population.funnel.considered", "population.funnel.removed_by_filters", "population.funnel.removed_by_floor",
         "population.funnel.removed_by_eligibility", "population.funnel.remaining",
     ):
         pinned[path] = counts

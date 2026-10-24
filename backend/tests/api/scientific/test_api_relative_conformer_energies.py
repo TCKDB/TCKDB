@@ -298,7 +298,7 @@ def test_a_hidden_ref_is_the_same_404_as_an_unknown_one_for_the_subject_and_the_
     shown, _ = conformer(world, -76.4, approve=True)
     world.settle()
     entry_visible = client.post(url(world.entry), json=body(world, shown), params={"profile": "curated"})
-    assert entry_visible.status_code != 404
+    assert entry_visible.status_code == 200
 
     visible = make_world(db_session)
     approved, _ = conformer(visible, -76.4, approve=True)

@@ -129,8 +129,10 @@ class EligibilityDefaultEcho(BaseModel):
         "it but the read profile's review floor keeps it applied."
     )
     excluded: int = Field(
-        description="How many of the candidates that passed the filters it kept out. Only records the read profile "
-        "shows are counted, so the number cannot reveal a hidden one."
+        description="How many of the candidates that passed the filters it kept out. A candidate that fails several "
+        "defaults is counted under each of them, so these numbers can sum to more than `funnel.removed_by_eligibility`, "
+        "which counts every candidate once. Only records the read profile shows are counted, so the number cannot "
+        "reveal a hidden one."
     )
     admitted_by_override: int = Field(
         default=0, description="How many candidates compete only because the caller lifted it."
@@ -146,9 +148,18 @@ class SelectionFunnel(BaseModel):
         "provenance belong to a parent record, those parents (`solves`).",
     )
     considered: int = Field(description="Candidates the read profile shows, before any step.")
-    removed_by_filters: int = Field(description="Removed by the caller's filters.")
+    removed_by_filters: int = Field(
+        description="Removed by the caller's filters (including a narrower `permitted_quality`, `member_refs` or "
+        "`population`, which `filters.applied` also lists)."
+    )
+    removed_by_floor: int = Field(
+        default=0, description="Removed by the caller's own `min_review_status` floor (the read profile's floor is not counted)."
+    )
     removed_by_eligibility: int = Field(description="Removed by eligibility defaults that were applied.")
-    remaining: int = Field(description="Candidates that were assessed for the question.")
+    remaining: int = Field(
+        description="Candidates no step removed. Each candidate is counted once, at the first step that removed it, so "
+        "`removed_by_filters + removed_by_floor + removed_by_eligibility + remaining` is `considered`."
+    )
 
 
 class SelectionFilterAnswer(BaseModel):
@@ -157,7 +168,10 @@ class SelectionFilterAnswer(BaseModel):
     applied: dict[str, Any] = Field(
         default_factory=dict, description="Only the filters the request supplied, with their normalised values."
     )
-    removed: int = Field(default=0, description="Candidates the filters removed.")
+    removed: int = Field(default=0, description="Candidates the filters removed (not the review floor: see the funnel).")
+    note: str | None = Field(
+        default=None, description="Set when the filters and the review floor removed every candidate: nothing was assessed."
+    )
 
 
 class SelectionStepsAnswer(BaseModel):

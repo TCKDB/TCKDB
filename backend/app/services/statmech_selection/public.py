@@ -247,13 +247,15 @@ def build_response(selection: StatmechSelection) -> StatmechSelectionResponse:
         ),
         **answer_steps(
             request_filters=manifest["request"]["filters"],
-            min_review_status=(
-                RecordReviewStatus(manifest["request"]["min_review_status"]) if manifest["request"]["min_review_status"] else None
-            ),
             eligibility_record=manifest["request"]["eligibility"],
             funnel_record=population["funnel"],
             names=statmech_defaults(manifest["request"]["target"]["kind"]),
             profile_floor=manifest["read_profile"]["review_floor"] is not None,
+            extra_applied=(
+                {"population": manifest["request"]["population"]}
+                if manifest["request"]["population"]["kind"] == "model_revisions"
+                else None
+            ),
         ),
         versions=manifest["versions"],
         outcome=Outcome(manifest["outcome"]),

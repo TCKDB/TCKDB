@@ -129,7 +129,9 @@ def _routes(w):
             "structure",
             f"/species-entries/{sa}/conformers/select/manifest",
             structure,
-            ("determinations[*].conformer_group_ref",),
+            # A conformer group is a gated kind: a basin whose observation sits in a hidden group hides with the group, so
+            # no identity position holds a token and the document never names the group or its observation.
+            (),
             ("cg_h",),
         ),
         Route(
@@ -508,7 +510,7 @@ def test_a_curated_selection_costs_exactly_one_statement_more_for_the_seam(clien
 
 def test_two_identical_requests_make_the_same_tokens_and_the_same_digest(client, world, monkeypatch):
     spy = install_spy(monkeypatch)
-    route = next(r for r in _routes(world) if r.name == "structure")
+    route = next(r for r in _routes(world) if r.name == "statmech")
     first = _post(client, route.path, route.body, "curated")
     first_tokens = _tokens_made(spy)
     second = _post(client, route.path, route.body, "curated")

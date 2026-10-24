@@ -40,6 +40,10 @@ from app.schemas.reads.scientific_selection_common import (
 EVIDENCE_HARD_FAIL_PREFIX = "evidence_hard_failed:"
 
 _FIELDS = tuple(OVERRIDE_FIELD[n] for n in (ELIGIBILITY_REJECTED, ELIGIBILITY_DEPRECATED, ELIGIBILITY_HARD_FAILED_EVIDENCE, ELIGIBILITY_CONFIRMED_FINDINGS))
+#: The flags a route offers, by the kind of record it selects among. A manifest records exactly these and no others.
+OFFER_ALL = _FIELDS
+OFFER_FINDINGS = ("include_rejected", "include_deprecated", "include_confirmed_findings")
+OFFER_REVIEW = ("include_rejected", "include_deprecated")
 
 
 class UnreadableEligibility(ValueError):
@@ -54,23 +58,25 @@ class Eligibility:
     include_deprecated: bool = False
     include_hard_failed_evidence: bool = False
     include_confirmed_findings: bool = False
+    #: The flags the route this request belongs to offers (the others stay ``False`` and are never recorded).
+    offered: tuple[str, ...] = _FIELDS
 
     @classmethod
-    def from_request(cls, request: BaseModel | None) -> Eligibility:
+    def from_request(cls, request: BaseModel | None, offered: tuple[str, ...] = _FIELDS) -> Eligibility:
         """The settings of a request; a field the request's model does not offer is not lifted."""
         if request is None:
-            return cls()
-        return cls(**{f: bool(getattr(request, f, False)) for f in _FIELDS})
+            return cls(offered=offered)
+        return cls(**{f: bool(getattr(request, f, False)) for f in offered}, offered=offered)
 
     def to_record(self) -> dict[str, bool]:
-        """What a manifest records: every field, so a stored decision never depends on a default that later changes."""
-        return {f: getattr(self, f) for f in _FIELDS}
+        """What a manifest records: every flag the route offers, so a stored decision never depends on a later default."""
+        return {f: getattr(self, f) for f in self.offered}
 
     @classmethod
-    def from_record(cls, raw: object) -> Eligibility:
-        if not isinstance(raw, dict) or set(raw) != set(_FIELDS) or any(type(v) is not bool for v in raw.values()):
+    def from_record(cls, raw: object, offered: tuple[str, ...] = _FIELDS) -> Eligibility:
+        if not isinstance(raw, dict) or set(raw) != set(offered) or any(type(v) is not bool for v in raw.values()):
             raise UnreadableEligibility("the manifest has no well-formed eligibility record")
-        return cls(**raw)
+        return cls(**raw, offered=offered)
 
     def lifts(self, name: str) -> bool:
         """Whether this request lifted the named default. A default with no flag of its own (a calculation quality,
@@ -140,12 +146,16 @@ def funnel(
     terminal_excluded: dict[str, int],
     verdicts: Iterable[Verdict],
     unit: str = "candidates",
+    removed_by_floor: int = 0,
 ) -> dict:
     """The recorded funnel: what each step removed, and per default how many it kept out or admitted by override.
 
-    Each candidate is attributed to the first step that removed it: the filters, then the review defaults, then the
-    findings and evidence defaults that need the candidate assessed. *terminal_excluded* counts the rows a review default
-    removed before they were loaded.
+    ``removed_by_filters``, ``removed_by_floor`` (the caller's own review floor), ``removed_by_eligibility`` and
+    ``remaining`` count each candidate once, at the first step that removed it, so they add up to ``considered``.
+    *terminal_excluded* counts the rows a review default removed before they were loaded.
+
+    ``excluded_by_default`` counts a candidate under EVERY default that would exclude it, so a candidate that fails two
+    defaults appears under both and the per-default numbers can sum to more than ``removed_by_eligibility``.
     """
     excluded: dict[str, int] = dict(terminal_excluded)
     admitted: dict[str, int] = {}
@@ -162,8 +172,9 @@ def funnel(
         "unit": unit,
         "considered": considered,
         "removed_by_filters": removed_by_filters,
+        "removed_by_floor": removed_by_floor,
         "removed_by_eligibility": removed_by_eligibility,
-        "remaining": considered - removed_by_filters - removed_by_eligibility,
+        "remaining": considered - removed_by_filters - removed_by_floor - removed_by_eligibility,
         "excluded_by_default": excluded,
         "admitted_by_override": admitted,
     }
@@ -227,28 +238,31 @@ def echo(
 def answer_steps(
     *,
     request_filters: dict,
-    min_review_status: RecordReviewStatus | None,
-    eligibility_record: object,
+    eligibility_record: dict[str, bool],
     funnel_record: dict,
     names: Sequence[str],
     profile_floor: bool,
     extra_lifts: Collection[str] = (),
+    extra_applied: dict | None = None,
 ) -> dict:
     """The ``filters``, ``eligibility`` and ``funnel`` fields of a select answer, built from a manifest's records.
 
     Every select answer states steps 1 and 2 the same way, from the same recorded numbers the downloadable manifest
     carries, so the response and the download cannot disagree.
     """
+    removed = funnel_record["removed_by_filters"]
+    total = funnel_record["considered"]
+    swept = removed + funnel_record["removed_by_floor"]
+    note = None
+    if total > 0 and swept == total:
+        who = "the filters" if funnel_record["removed_by_floor"] == 0 else "the filters and the caller's review floor"
+        note = f"{who} removed all {total} {funnel_record['unit']} before anything was assessed"
     return {
         "filters": SelectionFilterAnswer(
-            applied={
-                **request_filters,
-                **({"min_review_status": min_review_status.value} if min_review_status is not None else {}),
-            },
-            removed=funnel_record["removed_by_filters"],
+            applied={**request_filters, **(extra_applied or {})}, removed=removed, note=note
         ),
         "eligibility": echo(
-            Eligibility.from_record(eligibility_record),
+            Eligibility.from_record(eligibility_record, offered=tuple(eligibility_record)),
             profile_floor=profile_floor,
             names=names,
             excluded=funnel_record["excluded_by_default"],
@@ -256,7 +270,10 @@ def answer_steps(
             extra_lifts=extra_lifts,
         ),
         "funnel": SelectionFunnel(
-            **{k: funnel_record[k] for k in ("unit", "considered", "removed_by_filters", "removed_by_eligibility", "remaining")}
+            **{
+                k: funnel_record[k]
+                for k in ("unit", "considered", "removed_by_filters", "removed_by_floor", "removed_by_eligibility", "remaining")
+            }
         ),
     }
 
@@ -264,6 +281,9 @@ def answer_steps(
 __all__ = [
     "ELIGIBILITY_REJECTED_QUALITY",
     "EVIDENCE_HARD_FAIL_PREFIX",
+    "OFFER_ALL",
+    "OFFER_FINDINGS",
+    "OFFER_REVIEW",
     "Eligibility",
     "UnreadableEligibility",
     "Verdict",

@@ -72,7 +72,7 @@ def test_a_model_kind_filter_uses_the_stored_treatment(client, db_session):
     assert removed["candidates"] == [] and removed["filters"]["removed"] == 1
     assert removed["filters"]["applied"] == {"model_kind": "rrao"}
     assert removed["funnel"] == {
-        "unit": "candidates", "considered": 1, "removed_by_filters": 1, "removed_by_eligibility": 0, "remaining": 0
+        "unit": "candidates", "considered": 1, "removed_by_filters": 1, "removed_by_floor": 0, "removed_by_eligibility": 0, "remaining": 0
     }
 
 

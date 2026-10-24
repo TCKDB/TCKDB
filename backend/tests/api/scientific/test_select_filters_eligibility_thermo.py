@@ -111,7 +111,7 @@ def test_a_software_filter_narrows_the_pool_with_the_browse_matching(client, db_
     assert body["outcome"] == "sole_eligible_candidate"
     assert body["filters"]["applied"] == {"software": "orca"}
     assert body["filters"]["removed"] == 2
-    assert body["funnel"] == {"unit": "candidates", "considered": 3, "removed_by_filters": 2, "removed_by_eligibility": 0, "remaining": 1}
+    assert body["funnel"] == {"unit": "candidates", "considered": 3, "removed_by_filters": 2, "removed_by_floor": 0, "removed_by_eligibility": 0, "remaining": 1}
 
 
 def test_a_level_of_theory_filter_takes_a_public_ref_and_keeps_any_matching_source(client, db_session, methane):

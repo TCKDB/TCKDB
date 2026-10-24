@@ -16,6 +16,11 @@ A select call takes the caller's filters, and today's exclusions are named defau
 - Every answer gains `filters` (the normalised filters and how many candidates they removed), `eligibility` (each default: `name`, `applied`,
   `source` of `default`, `request` or `read_profile`, `excluded`, `admitted_by_override`) and `funnel` (`considered`, `removed_by_filters`,
   `removed_by_eligibility`, `remaining`). Each candidate or unit gains `blocked_by` and `passed_only_by_override`. The network answer gains `solves`.
+- `funnel` adds up: `removed_by_filters + removed_by_floor + removed_by_eligibility + remaining` is `considered`, each candidate counted once (the
+  per-default `excluded` counts can overlap). `removed_by_floor` is the caller's own `min_review_status`. `filters.applied` lists a narrower
+  `permitted_quality`, `member_refs` and a `model_revisions` population too, and `filters.note` says so when the filters removed everything.
+  A determination with no conformer observation reports `review_status: null` (its species entry's status is not copied onto it), and a
+  basin hides with a conformer group below the profile.
 - A species or reaction entry is a scoping parent: its own review status no longer excludes a statmech candidate, a calculation or a conformer
   basin. A transition-state entry still gates its evidence and statmech candidates.
 - Recorded decisions now carry the filters and eligibility settings, so replay reproduces them. Manifest formats move to version 3

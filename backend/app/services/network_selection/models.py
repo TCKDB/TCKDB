@@ -25,7 +25,7 @@ from app.api.error_contract import CodedValueError
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import SelectionPolicy
 from app.services.selection_kernel import Applicability
-from app.services.selection_kernel.requested import Eligibility
+from app.services.selection_kernel.requested import OFFER_REVIEW, Eligibility
 
 QUANTITY = "rate_coefficient"
 PHASE = "gas"
@@ -230,7 +230,7 @@ class NetworkRequest:
     first_only: bool = False
     bounds: SelectionBounds = field(default=DEFAULT_BOUNDS)
     filters: NetworkFilters = field(default_factory=NetworkFilters)
-    eligibility: Eligibility = field(default_factory=Eligibility)
+    eligibility: Eligibility = field(default_factory=lambda: Eligibility(offered=OFFER_REVIEW))
 
     def __post_init__(self) -> None:
         if self.coefficient_basis not in {"kernel", "composition_effective"}:
@@ -336,7 +336,7 @@ class NetworkRequest:
             first_only=raw["result_mode"] == "first",
             bounds=SelectionBounds.from_dict(raw["bounds"]),
             filters=NetworkFilters.from_record(raw["filters"]),
-            eligibility=Eligibility.from_record(raw["eligibility"]),
+            eligibility=Eligibility.from_record(raw["eligibility"], offered=OFFER_REVIEW),
         )
 
 

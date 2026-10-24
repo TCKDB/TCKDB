@@ -89,7 +89,8 @@ ASSESSMENT_SEMANTICS_NAME = "statmech_selection_assessment"
 ASSESSMENT_SEMANTICS = new_current_only_registry(
     "statmech_selection_assessment_semantics", ASSESSMENT_SEMANTICS_NAME, ASSESSMENT_VERSION
 )
-EVIDENCE_RUBRIC = VersionRef(name="statmech_qualification", version=ASSESSMENT_VERSION)
+#: The statmech evidence rubric has its own version: it did not change when the assessment semantics did.
+EVIDENCE_RUBRIC = VersionRef(name="statmech_qualification", version=1)
 
 INTEGRITY_NOTE = (
     "sha256 checksums over the canonical JSON of each captured input and of the whole manifest; they detect edits and "

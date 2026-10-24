@@ -61,7 +61,7 @@ from app.services.network_selection.models import (
     SolveFacts,
 )
 from app.services.scientific_read.profile import current_read_profile
-from app.services.selection_kernel.requested import Eligibility, UnreadableEligibility, review_default
+from app.services.selection_kernel.requested import OFFER_REVIEW, Eligibility, UnreadableEligibility, review_default
 from app.versioning import same_value
 
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. The
@@ -203,7 +203,7 @@ def _check_consistency(manifest: dict[str, Any]) -> None:
             f"a captured solve has a review status ({outside}) outside the recorded effective review statuses"
         )
     try:
-        eligibility = Eligibility.from_record(manifest["request"].get("eligibility"))
+        eligibility = Eligibility.from_record(manifest["request"].get("eligibility"), offered=OFFER_REVIEW)
     except UnreadableEligibility as exc:
         raise ReplayError(str(exc)) from exc
     for solve in manifest["solves"]:

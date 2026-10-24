@@ -70,7 +70,7 @@ def test_a_software_filter_narrows_the_calculations_and_the_minimum_follows(clie
     assert [u["unit_ref"] for u in body["units"]] == [orca.public_ref] and body["selected_refs"] == [orca.public_ref]
     assert body["filters"]["applied"] == {"software": "orca"} and body["filters"]["removed"] == 1
     assert body["funnel"] == {
-        "unit": "candidates", "considered": 2, "removed_by_filters": 1, "removed_by_eligibility": 0, "remaining": 1
+        "unit": "candidates", "considered": 2, "removed_by_filters": 1, "removed_by_floor": 0, "removed_by_eligibility": 0, "remaining": 1
     }
     assert body["request"]["filters"] == {"software": "orca"}
 
@@ -103,7 +103,7 @@ def test_every_default_is_echoed_per_grain(client, db_session):
     assert [e["name"] for e in body["eligibility"]] == CALC_DEFAULTS
     assert all(e["applied"] and e["source"] == "default" for e in body["eligibility"])
     conformers = client.post(conformer_url(world.entry), json={}).json()
-    assert [e["name"] for e in conformers["eligibility"]] == CALC_DEFAULTS[:3]  # a quality belongs to a calculation
+    assert [e["name"] for e in conformers["eligibility"]] == CALC_DEFAULTS  # the quality default is echoed at every grain
 
 
 def test_include_rejected_admits_exactly_the_rejected_calculation_and_says_so(client, db_session):
@@ -299,3 +299,76 @@ def test_evidence_under_a_hidden_transition_state_entry_is_not_a_candidate_and_i
     assert hidden.status_code == ghost.status_code == 404
     assert world.calcs["ev"].public_ref not in hidden.text
     assert hidden.json()["code"] == ghost.json()["code"]
+
+
+# -- a determination has no review of its own: nothing is copied onto it from a scoping parent -----------------
+
+
+def _conformer_post(client, world, extra=None, *, profile=None, manifest=False):
+    return client.post(
+        conformer_url(world.entry, manifest=manifest), json=extra or {}, params={"profile": profile} if profile else None
+    )
+
+
+def test_a_basin_with_no_observation_has_no_review_status_of_its_own_and_replays(client, db_session):
+    from tests.services.structure_selection.test_service import build_basin
+
+    world = make_world(db_session, entry_status=S.rejected)  # the species entry is rejected: a scoping parent
+    d, *_ = build_basin(world)
+    body = _conformer_post(client, world).json()
+    (unit_,) = body["units"]
+    assert unit_["unit_ref"] == d.public_ref and unit_["review_status"] is None
+    assert unit_["eligible"] is True and body["selected_refs"] == [d.public_ref]
+    assert entry_of(body, "rejected_review_status")["excluded"] == 0
+    manifest = _conformer_post(client, world, manifest=True).json()
+    assert replay_matches(manifest)
+
+
+def test_under_curated_an_unreviewed_entry_leaves_a_basin_selected_with_no_status_and_it_replays(client, db_session):
+    from tests.services.structure_selection.test_service import build_basin
+
+    world = make_world(db_session, entry_status=None)  # the entry is not reviewed
+    d, *_ = build_basin(world)
+    resp = _conformer_post(client, world, profile="curated")
+    assert resp.status_code == 200, resp.text
+    (unit_,) = resp.json()["units"]
+    assert unit_["review_status"] is None and resp.json()["selected_refs"] == [d.public_ref]
+    assert replay_matches(_conformer_post(client, world, profile="curated", manifest=True).json())
+
+
+def _basin_in_group(db_session, *, group_status, observation_status=S.approved):
+    from app.db.models.common import StructureDeterminationTargetKind
+    from tests.services.scientific_read._factories import make_conformer_group, make_conformer_observation, set_review
+    from tests.services.structure_selection.test_service import build_basin
+
+    world = make_world(db_session)
+    group = make_conformer_group(db_session, world.entry)
+    obs = make_conformer_observation(db_session, conformer_group=group)
+    d, *_ = build_basin(world, target=StructureDeterminationTargetKind.conformer_basin, observation=obs)
+    set_review(db_session, record_type=SubmissionRecordType.conformer_observation, record_id=obs.id, status=observation_status)
+    set_review(db_session, record_type=SubmissionRecordType.conformer_group, record_id=group.id, status=group_status)
+    return world, d, obs, group
+
+
+def test_a_basin_in_a_rejected_group_is_excluded_by_the_review_default_and_admitted_by_the_override(client, db_session):
+    world, d, obs, group = _basin_in_group(db_session, group_status=S.rejected)
+    default = _conformer_post(client, world).json()
+    assert default["units"] == [] and default["selected_refs"] == []
+    assert entry_of(default, "rejected_review_status")["excluded"] == 1
+    lifted = _conformer_post(client, world, {"eligibility": {"include_rejected": True}}).json()
+    (u,) = lifted["units"]
+    assert u["unit_ref"] == d.public_ref and u["review_status"] == "rejected"
+    assert u["passed_only_by_override"] == ["rejected_review_status"] and lifted["selected_refs"] == [d.public_ref]
+    assert replay_matches(_conformer_post(client, world, {"eligibility": {"include_rejected": True}}, manifest=True).json())
+
+
+def test_a_basin_in_a_group_below_the_curated_floor_hides_with_the_group_and_is_not_mentioned(client, db_session):
+    world, d, obs, group = _basin_in_group(db_session, group_status=S.rejected)
+    resp = _conformer_post(client, world, {"eligibility": {"include_rejected": True}}, profile="curated")
+    assert resp.status_code == 200
+    assert resp.json()["units"] == []
+    for ref in (obs.public_ref, group.public_ref, d.public_ref):
+        assert ref not in resp.text
+    unreviewed, d2, obs2, group2 = _basin_in_group(db_session, group_status=S.not_reviewed)
+    hidden = _conformer_post(client, unreviewed, profile="curated")
+    assert hidden.json()["units"] == [] and obs2.public_ref not in hidden.text and group2.public_ref not in hidden.text

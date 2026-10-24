@@ -222,6 +222,17 @@ def test_a_species_entrys_review_status_never_excludes_a_calculation_or_a_basin(
     d, *_ = build_basin(d_world)
     d_result = run(db_session, d_world, minimum_request(min_review_status=floor))
     assert d.public_ref in {a.unit_ref for a in d_result.assessments} and d_result.excluded_by_review == ()
+    # no review of its own: the entry's status is not copied onto it, and the manifest built from it replays
+    assert d_result.determinations[0].review_status is None
+    from app.services.structure_selection.decision import decide_structures
+    from app.services.structure_selection.manifest import build_manifest, replay_matches
+
+    decision = decide_structures(
+        request=minimum_request(min_review_status=floor), units=d_result.determinations,
+        assessments=d_result.assessments, calculations={c.calculation_ref: c for c in d_result.calculations},
+    )
+    manifest = build_manifest(d_result, decision, profile={"profile": "exploratory", "review_floor": None})
+    assert replay_matches(manifest)
 
 
 # ---------------------------------------------------------------------------

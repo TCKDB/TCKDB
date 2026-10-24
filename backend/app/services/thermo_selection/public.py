@@ -277,7 +277,6 @@ def build_response(
         candidates=candidates,
         **answer_steps(
             request_filters=manifest["request"]["filters"],
-            min_review_status=body.min_review_status,
             eligibility_record=manifest["request"]["eligibility"],
             funnel_record=population["funnel"],
             names=THERMO_DEFAULTS,

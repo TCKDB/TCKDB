@@ -87,7 +87,7 @@ def test_a_software_filter_narrows_the_pool(client, db_session, world):
     assert [c["kinetics_ref"] for c in body["candidates"]] == [in_orca.public_ref]
     assert body["outcome"] == "incomparable_alternatives" or body["outcome"] == "sole_eligible_candidate"
     assert body["filters"]["applied"] == {"software": "orca"} and body["filters"]["removed"] == 2
-    assert body["funnel"] == {"unit": "candidates", "considered": 3, "removed_by_filters": 2, "removed_by_eligibility": 0, "remaining": 1}
+    assert body["funnel"] == {"unit": "candidates", "considered": 3, "removed_by_filters": 2, "removed_by_floor": 0, "removed_by_eligibility": 0, "remaining": 1}
     assert body["request"]["filters"] == {"software": "orca"}
 
 

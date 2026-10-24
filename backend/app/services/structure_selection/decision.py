@@ -224,6 +224,12 @@ class _U:
         return self.assessment.physically_eligible
 
 
+def _ranked_status(status: RecordReviewStatus | None) -> RecordReviewStatus:
+    """The status the display order ranks a unit by. A unit with no review of its own ranks as ``not_reviewed``: that is an
+    ordering convention for ties, not a claim about the unit, and the unit itself still reports ``None``."""
+    return status if status is not None else RecordReviewStatus.not_reviewed
+
+
 def _quality_rank(refs: Sequence[str], calcs: dict[str, NormalizedCalculation]) -> int:
     ranks = [_QUALITY_RANK.get(calcs[r].quality, _UNKNOWN_QUALITY_RANK) for r in refs if r in calcs]
     return max(ranks) if ranks and len(ranks) == len(refs) else _UNKNOWN_QUALITY_RANK
@@ -271,13 +277,13 @@ def build_units(
         a = by_ref[ref]
         key = admin_key(
             policy,
-            review=unit.review_status,
+            review=_ranked_status(unit.review_status),
             quality_rank=_quality_rank(_relevant_calc_refs(unit, a), calculations),
             created_at=unit.created_at,
             ordinal=unit.id_rank,
         )
         node = AdminNode(
-            ref=ref, id_rank=unit.id_rank, review_status=unit.review_status, created_at=unit.created_at, admin_key=key
+            ref=ref, id_rank=unit.id_rank, review_status=_ranked_status(unit.review_status), created_at=unit.created_at, admin_key=key
         )
         built.append(_U(ref, unit, a, target_key(unit), cohort_id(a.recipe, a, _convention(unit)), key, node))
     return built

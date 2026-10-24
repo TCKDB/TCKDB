@@ -28,13 +28,14 @@ from typing import Any
 
 from app.db.models.common import CalculationQuality, RecordReviewStatus
 from app.services.selection_kernel import Applicability
-from app.services.selection_kernel.requested import Eligibility
+from app.services.selection_kernel.requested import OFFER_FINDINGS, Eligibility
 
 #: Version of the eligibility semantics. It is deliberately unchanged by the named eligibility defaults
 #: (``selection_kernel.requested``): under the default settings every unit is assessed exactly as before, and a lifted
 #: default only moves a confirmed finding from ``blocking`` to an advisory, which the request records. What a stored
 #: decision now means is carried by the manifest format (version 3) and its ``verdicts``, not by this number; this one also
-#: keys the transition-state evidence rubric, which this change does not touch.
+#: keys the transition-state evidence rubric, which this change does not touch. Bumping it would force a rubric bump for
+#: an assessment that returns the same verdicts under every default setting.
 ASSESSMENT_VERSION = 1
 #: Version of the recipe normaliser (which facts a cohort needs established).
 NORMALIZER_VERSION = 1
@@ -281,7 +282,7 @@ class StructureRequest:
     repeat_policy: RepeatPolicy = RepeatPolicy.retain_alternates
     bounds: SelectionBounds = field(default_factory=SelectionBounds)
     filters: StructureFilters = field(default_factory=StructureFilters)
-    eligibility: Eligibility = field(default_factory=Eligibility)
+    eligibility: Eligibility = field(default_factory=lambda: Eligibility(offered=OFFER_FINDINGS))
 
     def __post_init__(self) -> None:
         if self.intent not in INTENTS_BY_GRAIN[self.grain]:
@@ -366,7 +367,7 @@ class StructureRequest:
             repeat_policy=RepeatPolicy(raw["repeat_policy"]),
             bounds=SelectionBounds.from_dict(raw["bounds"]),
             filters=StructureFilters.from_record(raw["filters"]),
-            eligibility=Eligibility.from_record(raw["eligibility"]),
+            eligibility=Eligibility.from_record(raw["eligibility"], offered=OFFER_FINDINGS),
         )
 
 
@@ -615,7 +616,10 @@ class NormalizedDetermination:
     conformer_observation_ref: str | None
     conformer_group_ref: str | None
     evaluated_geometry_ref: str
-    review_status: RecordReviewStatus
+    #: The determination's review standing: the weakest of its conformer observation's and that observation's group's, or
+    #: of its transition-state entry's. ``None`` for a determination with none of those: it has no review of its own, and
+    #: its species entry is a scoping parent whose status is never copied onto it.
+    review_status: RecordReviewStatus | None
     created_at: datetime
     id_rank: int
     entry_kind: str | None
@@ -638,7 +642,7 @@ class NormalizedDetermination:
             "conformer_observation_ref": self.conformer_observation_ref,
             "conformer_group_ref": self.conformer_group_ref,
             "evaluated_geometry_ref": self.evaluated_geometry_ref,
-            "review_status": self.review_status.value,
+            "review_status": self.review_status.value if self.review_status is not None else None,
             "created_at": self.created_at.isoformat(),
             "id_rank": self.id_rank,
             "entry_kind": self.entry_kind,
@@ -652,7 +656,7 @@ class NormalizedDetermination:
         return cls(
             **{
                 **raw,
-                "review_status": RecordReviewStatus(raw["review_status"]),
+                "review_status": RecordReviewStatus(raw["review_status"]) if raw["review_status"] is not None else None,
                 "created_at": datetime.fromisoformat(raw["created_at"]),
                 "sources": tuple(NormalizedSource.from_dict(s) for s in raw["sources"]),
                 "findings": tuple(FindingFacts.from_dict(f) for f in raw["findings"]),

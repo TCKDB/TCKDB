@@ -36,7 +36,12 @@ from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import default_visible_statuses, status_at_or_above
 from app.services.manifest_formats import manifest_header, new_format_registry, read_manifest_format
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
-from app.services.selection_kernel.requested import Eligibility, UnreadableEligibility, expected_candidate_statuses
+from app.services.selection_kernel.requested import (
+    OFFER_FINDINGS,
+    Eligibility,
+    UnreadableEligibility,
+    expected_candidate_statuses,
+)
 from app.services.structure_selection.assessment import assess_unit
 from app.services.structure_selection.bounds import check_manifest_size
 from app.services.structure_selection.decision import (
@@ -57,7 +62,7 @@ from app.services.structure_selection.models import (
     StructureRequest,
     StructureSubject,
 )
-from app.services.structure_selection.service import verdict_of, verdict_record
+from app.services.structure_selection.service import quality_state, verdict_of, verdict_record
 from app.versioning import same_value
 
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
@@ -265,7 +270,7 @@ def _check_consistency(
     if name == "curated" and recorded != frozenset({RecordReviewStatus.approved}):
         raise ReplayError("inconsistent_manifest", "a curated profile admits approved records only")
     try:
-        eligibility = Eligibility.from_record(request_eligibility(manifest))
+        eligibility = Eligibility.from_record(request_eligibility(manifest), offered=OFFER_FINDINGS)
     except UnreadableEligibility as exc:
         raise ReplayError("inconsistent_manifest", str(exc)) from exc
     recorded_candidate = frozenset(RecordReviewStatus(s) for s in manifest.get("candidate_review_statuses") or ())
@@ -282,6 +287,8 @@ def _check_consistency(
     for item in recorded_inputs:
         ref = getattr(item, "calculation_ref", None) or item.determination_ref
         allowed = recorded_candidate if ref in unit_refs else recorded
+        if item.review_status is None and hasattr(item, "determination_ref"):
+            continue  # a determination with no review of its own (see NormalizedDetermination.review_status)
         if item.review_status not in allowed:
             raise ReplayError("inconsistent_manifest", f"{ref} has a review status its own request cannot see")
     verdicts = manifest.get("verdicts")
@@ -318,7 +325,11 @@ def request_eligibility(manifest: dict[str, Any]) -> Any:
 
 
 def _check_verdicts(
-    manifest: dict[str, Any], request: StructureRequest, units: Sequence[Any], assessments: Sequence[StructureAssessment]
+    manifest: dict[str, Any],
+    request: StructureRequest,
+    units: Sequence[Any],
+    assessments: Sequence[StructureAssessment],
+    calculations: dict[str, NormalizedCalculation],
 ) -> None:
     """Each unit's recorded verdict must be what its assessment gives under the recorded eligibility settings."""
     for unit, assessment in zip(units, assessments, strict=True):
@@ -327,8 +338,7 @@ def _check_verdicts(
         gate = RecordReviewStatus(gate_raw) if gate_raw is not None else None
         if request.grain is Grain.calculation and gate != unit.review_status:
             raise ReplayError("verdict_mismatch", f"{assessment.unit_ref} was judged by a status that is not its own")
-        quality = unit.quality if request.grain is Grain.calculation else None
-        expected = verdict_record(verdict_of(assessment, gate, quality, request), gate)
+        expected = verdict_record(verdict_of(assessment, gate, quality_state(unit, calculations, request), request), gate)
         if _canon(record) != _canon(expected):
             raise ReplayError(
                 "verdict_mismatch",
@@ -357,7 +367,7 @@ def replay_structure_assessment(manifest: dict[str, Any]) -> list[StructureAsses
     for a in recomputed:
         if _canon(a.to_dict()) != _canon(recorded[a.unit_ref]):
             raise ReplayError("assessment_mismatch", f"the recorded assessment of {a.unit_ref} is not what its inputs give")
-    _check_verdicts(manifest, request, units, recomputed)
+    _check_verdicts(manifest, request, units, recomputed, calcs)
     return recomputed
 
 

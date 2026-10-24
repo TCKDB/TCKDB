@@ -317,7 +317,6 @@ def build_response(
         candidates=candidates,
         **answer_steps(
             request_filters=request["filters"],
-            min_review_status=body.min_review_status,
             eligibility_record=request["eligibility"],
             funnel_record=population["funnel"],
             names=KINETICS_DEFAULTS,

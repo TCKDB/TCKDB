@@ -19,7 +19,7 @@ from typing import Any
 
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import SelectionPolicy
-from app.services.selection_kernel.requested import Eligibility
+from app.services.selection_kernel.requested import OFFER_FINDINGS, Eligibility
 from app.services.statmech_selection.vocabulary import (
     COMPONENT_OBSERVABLE,
     CONTRACT_VERSION,
@@ -362,7 +362,7 @@ class StatmechRequest:
     min_review_status: RecordReviewStatus | None = None
     bounds: SelectionBounds = field(default_factory=SelectionBounds)
     filters: StatmechFilters = field(default_factory=StatmechFilters)
-    eligibility: Eligibility = field(default_factory=Eligibility)
+    eligibility: Eligibility = field(default_factory=lambda: Eligibility(offered=OFFER_FINDINGS))
 
     # -- derived ---------------------------------------------------------------------------------------------
     @property
@@ -480,7 +480,7 @@ class StatmechRequest:
             min_review_status=RecordReviewStatus(raw["min_review_status"]) if raw["min_review_status"] else None,
             bounds=SelectionBounds.from_dict(raw["bounds"]),
             filters=StatmechFilters.from_record(raw["filters"]),
-            eligibility=Eligibility.from_record(raw["eligibility"]),
+            eligibility=Eligibility.from_record(raw["eligibility"], offered=OFFER_FINDINGS),
         )
 
 

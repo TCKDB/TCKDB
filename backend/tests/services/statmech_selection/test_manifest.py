@@ -126,7 +126,7 @@ def test_the_manifest_names_what_it_was_made_under_and_leaks_no_database_id():
     assert manifest["assessment_semantics"]["name"] == "statmech_selection_assessment"
     assert manifest["assessment_semantics"]["version"] == 2
     assert manifest["assessment_semantics"]["source_findings"] == {"name": "structure_source_findings", "version": 1}
-    assert manifest["assessment_semantics"]["evidence_rubric"] == {"name": "statmech_qualification", "version": 2}
+    assert manifest["assessment_semantics"]["evidence_rubric"] == {"name": "statmech_qualification", "version": 1}
 
     def keys(value):
         if isinstance(value, dict):

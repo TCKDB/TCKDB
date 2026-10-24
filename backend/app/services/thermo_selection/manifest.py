@@ -159,9 +159,23 @@ def replay_decision(manifest: dict[str, Any]) -> dict[str, Any]:
                 f"candidate {c['thermo_ref']} records eligible={c['eligible']} but its assessment under the recorded "
                 f"eligibility settings says eligible={verdict.competes}"
             )
+    _check_funnel(manifest)
     eligible = [NormalizedCandidate.from_dict(c) for c in manifest["candidates"] if c["eligible"]]
     decision = decide(eligible, admin_policy=SelectionPolicy(manifest["request"]["administrative_policy"]))
     return decision.to_dict()
+
+
+def _check_funnel(manifest: dict[str, Any]) -> None:
+    """The funnel's ``remaining`` and the per-default counts of the assessed defaults must follow from the candidates."""
+    funnel = (manifest.get("population") or {}).get("funnel") or {}
+    candidates = manifest["candidates"]
+    blocked = [c for c in candidates if c["eligibility"]["blocked_by"]]
+    if funnel.get("remaining") != len(candidates) - len(blocked):
+        raise ReplayError("the recorded funnel's `remaining` is not the number of assessed candidates no default blocks")
+    for name in ("evidence_hard_fail", "confirmed_blocking_findings"):
+        counted = sum(1 for c in candidates if name in c["eligibility"]["blocked_by"])
+        if (funnel.get("excluded_by_default") or {}).get(name, 0) != counted:
+            raise ReplayError(f"the recorded funnel counts {name} differently from the candidates that fail it")
 
 
 def replay_matches(manifest: dict[str, Any]) -> bool:
