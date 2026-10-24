@@ -215,7 +215,9 @@ transport, network) is public and obeys the scientific reads' rules:
 - **Order.** Records are listed in the display order (`review_rank`, `created_at` descending, `id` descending), echoed in `order`. Identity rows
   (species, species entries, reactions, reaction entries) come first and are ordered the same way. Species and reaction rows are identity
   and always listed; **entries are filtered** by the request's visibility like any other reviewable record, and what the default hid is
-  reported (`hidden_by_default` for a list of entries, `entries_hidden_by_default` beside a list of records). `/lookup/species-calculation` searches **every** entry of the species (it used to take the first by id).
+  reported in `entries_hidden_by_default` (`"counted": "species_entries"` or `"reaction_entries"`) on every lookup that lists entries,
+  whether or not it also lists records. `hidden_by_default` always means the listed *records*; one name per meaning, so a client does not
+  have to know which endpoint it called to read the field. `/lookup/species-calculation` searches **every** entry of the species (it used to take the first by id).
 - **`selection=lowest_energy|latest|earliest`** is an explicit request to narrow a list, and the response says what it did in `selected_by`
   (the mode, its criterion, and per species entry how many candidates there were, how many were chosen, and whether they tied). It is not a
   scientific preference. `lowest_energy` compares recorded electronic energies and is refused with **422 `lowest_energy_across_levels`**, naming

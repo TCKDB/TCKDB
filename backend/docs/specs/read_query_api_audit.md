@@ -893,7 +893,7 @@ Tests column lists representative test files (not exhaustive).
 | `transition_state_selection` | — | — | — | — | — | **Table not in ORM** |
 | `conformer_assignment_scheme` | — | — | — | — | — | ORM exists but no API |
 | `conformer_group` | ✓ | ✓ | (in species composite) | `ConformerGroupRead`/`Detail` | `test_api_reads.py` | — |
-| `conformer_observation` | ✓ | ✓ | (in species composite) | `ConformerObservationRead` | `test_api_lowest_sp_conformer.py` | — |
+| `conformer_observation` | ✓ | ✓ | (in species composite) | `ConformerObservationRead` | — | — |
 | `conformer_selection` | (POST create) | — | — | `ConformerSelectionRead` | `test_api_conformer_selections.py` | **No GET surface** |
 
 ### 5.2 Calculations

@@ -921,7 +921,7 @@ def lookup_species(
             },
         ))
 
-    return _respond(query, mb, results, hidden=entries_hidden)
+    return _respond(query, mb, results, entries_hidden=entries_hidden)
 
 
 # ---------------------------------------------------------------------------
@@ -1174,7 +1174,7 @@ def lookup_species_calculation(
     ).all()
     if not entries:
         mb.add(SPECIES_ENTRY_NONE, "no species entries found")
-        return _respond(query_echo, mb, results, hidden=entries_hidden)
+        return _respond(query_echo, mb, results, entries_hidden=entries_hidden)
 
     mb.add(SPECIES_ENTRY_EXISTS, f"{len(entries)} species entry(ies) exist")
     for entry in entries:
@@ -1305,7 +1305,7 @@ def lookup_reaction(
     for entry in entries:
         results.append(_reaction_entry_result(entry, chem_rxn.id, session, visibility))
 
-    return _respond(query_echo, mb, results, hidden=entries_hidden)
+    return _respond(query_echo, mb, results, entries_hidden=entries_hidden)
 
 
 # ---------------------------------------------------------------------------
@@ -1413,7 +1413,7 @@ def lookup_reaction_kinetics(
 
     if not entries:
         mb.add(REACTION_ENTRY_NONE, "reaction exists but no entries")
-        return _respond(query_echo, mb, results, hidden=entries_hidden)
+        return _respond(query_echo, mb, results, entries_hidden=entries_hidden)
 
     mb.add(REACTION_ENTRY_EXISTS, f"{len(entries)} reaction entry(ies)")
 

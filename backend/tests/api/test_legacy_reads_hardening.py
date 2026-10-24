@@ -237,8 +237,9 @@ def test_lookup_species_lists_the_entries_the_request_shows_and_counts_the_rest(
 
     ids, body = listed()
     assert sorted(ids) == sorted([entries[1].id, entries[2].id])
-    assert body["hidden_by_default"]["counts"] == {"rejected": 1, "deprecated": 0}
-    assert body["hidden_by_default"]["counted"] == "species_entries"
+    assert body["entries_hidden_by_default"]["counts"] == {"rejected": 1, "deprecated": 0}
+    assert body["entries_hidden_by_default"]["counted"] == "species_entries"
+    assert body["hidden_by_default"] is None  # no records are listed: that field is about records
     assert sorted(listed(include_rejected="true")[0]) == sorted(e.id for e in entries)
     ids, body = listed(profile="curated", include_rejected="true")
     assert ids == [entries[1].id]  # approved only
@@ -282,7 +283,7 @@ def test_lookup_reaction_lists_the_reaction_entries_the_request_shows(client, db
         f"{LEGACY}/lookup/reaction", params={"reactants": ["CC"], "products": ["CCC"], "profile": "curated"}
     ).json()
     assert [r for r in curated["results"] if r["resource_type"] == "reaction_entry"] == []
-    assert curated["hidden_by_default"] is None
+    assert curated["entries_hidden_by_default"] is None
 
 
 # --- applied energy corrections are reviewable records -----------------------------------------------------------------
