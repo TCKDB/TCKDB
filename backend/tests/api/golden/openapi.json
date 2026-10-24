@@ -29038,6 +29038,16 @@
       "LookupResponse": {
         "description": "Consistent envelope for all lookup endpoints.",
         "properties": {
+          "entries_hidden_by_default": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HiddenByDefault"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "hidden_by_default": {
             "anyOf": [
               {
@@ -29117,88 +29127,6 @@
           "summary"
         ],
         "title": "LookupResultItem",
-        "type": "object"
-      },
-      "LowestSPConformerObservationRead": {
-        "description": "Lowest qualifying SP conformer observation at a specified LoT.\n\nThis is an explicitly contextual result, not a universal best-conformer\nclaim. It only asserts that under the supplied `lot_id` (and optional\n`calculation_quality`), this observation had the lowest qualifying SP\nelectronic energy among the species entry's conformer observations.",
-        "properties": {
-          "calculation_id": {
-            "title": "Calculation Id",
-            "type": "integer"
-          },
-          "calculation_quality": {
-            "$ref": "#/components/schemas/CalculationQuality"
-          },
-          "conformer_group_id": {
-            "title": "Conformer Group Id",
-            "type": "integer"
-          },
-          "conformer_observation_id": {
-            "title": "Conformer Observation Id",
-            "type": "integer"
-          },
-          "electronic_energy_hartree": {
-            "title": "Electronic Energy Hartree",
-            "type": "number"
-          },
-          "lot_id": {
-            "title": "Lot Id",
-            "type": "integer"
-          },
-          "species_entry_id": {
-            "title": "Species Entry Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "species_entry_id",
-          "lot_id",
-          "conformer_group_id",
-          "conformer_observation_id",
-          "calculation_id",
-          "electronic_energy_hartree",
-          "calculation_quality"
-        ],
-        "title": "LowestSPConformerObservationRead",
-        "type": "object"
-      },
-      "LowestSPConformerObservationResultRead": {
-        "description": "Result wrapper for the lowest-SP conformer observation query.\n\n`result` is `None` when no qualifying SP calculation exists under the\nrequested comparison context. This is a normal `200` response, not an\nerror: the question is well-formed but simply has no answer yet.",
-        "properties": {
-          "calculation_quality": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CalculationQuality"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "lot_id": {
-            "title": "Lot Id",
-            "type": "integer"
-          },
-          "result": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/LowestSPConformerObservationRead"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "species_entry_id": {
-            "title": "Species Entry Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "species_entry_id",
-          "lot_id"
-        ],
-        "title": "LowestSPConformerObservationResultRead",
         "type": "object"
       },
       "MachineReviewCuratorTaskState": {
@@ -50371,6 +50299,11 @@
           },
           "chosen": {
             "title": "Chosen",
+            "type": "integer"
+          },
+          "not_compared": {
+            "default": 0,
+            "title": "Not Compared",
             "type": "integer"
           },
           "species_entry_id": {
@@ -72837,6 +72770,30 @@
             }
           },
           {
+            "description": "Include rejected records (hidden by default).",
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include rejected records (hidden by default).",
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Include deprecated records (hidden by default).",
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include deprecated records (hidden by default).",
+              "title": "Include Deprecated",
+              "type": "boolean"
+            }
+          },
+          {
             "in": "header",
             "name": "X-API-Key",
             "required": false,
@@ -76589,6 +76546,30 @@
               ],
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
+            }
+          },
+          {
+            "description": "Include rejected records (hidden by default).",
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include rejected records (hidden by default).",
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Include deprecated records (hidden by default).",
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include deprecated records (hidden by default).",
+              "title": "Include Deprecated",
+              "type": "boolean"
             }
           },
           {
@@ -82276,6 +82257,30 @@
               ],
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
+            }
+          },
+          {
+            "description": "Include rejected records (hidden by default).",
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include rejected records (hidden by default).",
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Include deprecated records (hidden by default).",
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include deprecated records (hidden by default).",
+              "title": "Include Deprecated",
+              "type": "boolean"
             }
           },
           {
@@ -105845,6 +105850,30 @@
             }
           },
           {
+            "description": "Include rejected records (hidden by default).",
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include rejected records (hidden by default).",
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Include deprecated records (hidden by default).",
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include deprecated records (hidden by default).",
+              "title": "Include Deprecated",
+              "type": "boolean"
+            }
+          },
+          {
             "in": "header",
             "name": "X-API-Key",
             "required": false,
@@ -106028,140 +106057,6 @@
           }
         },
         "summary": "List Conformer Groups For Entry",
-        "tags": [
-          "species-entries"
-        ]
-      }
-    },
-    "/api/v1/species-entries/{entry_id}/conformer-observations/lowest-sp": {
-      "get": {
-        "deprecated": true,
-        "description": "Return the lowest qualifying SP conformer observation for a species entry.\n\n**Deprecated.** Use ``POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies``\ninstead: it names the reference conformer, the energy kind, the level and the certificate, reports a missing value\nas absent with a coded reason, and treats repeated records of one conformer as alternates. This route collapses\nseveral single points on one observation to the lowest, which is the opposite rule. It is kept for now and will be\nremoved once it is unused.\n\nThis is a context-qualified ranking, not a stored \"best conformer\" claim.\nA calculation qualifies only if it is an SP at the requested `lot_id` with\na non-null electronic energy on an observation belonging to this species\nentry. Multiple SPs on the same observation are first collapsed to one\ncanonical candidate before observations are compared against each other.\n\nReturns 200 with `result: null` when no qualifying SP exists — that is a\nlegitimate query outcome, not an error condition.",
-        "operationId": "get_lowest_sp_conformer_observation_for_entry_api_v1_species_entries__entry_id__conformer_observations_lowest_sp_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "entry_id",
-            "required": true,
-            "schema": {
-              "title": "Entry Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Level-of-theory id defining the comparison context",
-            "in": "query",
-            "name": "lot_id",
-            "required": true,
-            "schema": {
-              "description": "Level-of-theory id defining the comparison context",
-              "title": "Lot Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Optional filter: restrict to this quality bucket",
-            "in": "query",
-            "name": "calculation_quality",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/CalculationQuality"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional filter: restrict to this quality bucket",
-              "title": "Calculation Quality"
-            }
-          },
-          {
-            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
-            "in": "query",
-            "name": "profile",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/ReadProfile",
-              "default": "exploratory",
-              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
-            }
-          },
-          {
-            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
-            "in": "query",
-            "name": "release",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
-              "title": "Release"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-API-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Api-Key"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "tckdb_session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Tckdb Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LowestSPConformerObservationResultRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Lowest Sp Conformer Observation For Entry",
         "tags": [
           "species-entries"
         ]
@@ -109163,6 +109058,30 @@
               ],
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
+            }
+          },
+          {
+            "description": "Include rejected records (hidden by default).",
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include rejected records (hidden by default).",
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Include deprecated records (hidden by default).",
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Include deprecated records (hidden by default).",
+              "title": "Include Deprecated",
+              "type": "boolean"
             }
           },
           {

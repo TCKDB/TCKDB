@@ -12,9 +12,9 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 | Classification | Operations |
 |---|---|
 | typed | 127 |
-| raw_only | 107 |
+| raw_only | 106 |
 | not_applicable | 47 |
-| **total** | **281** |
+| **total** | **280** |
 
 ## Typed coverage
 

@@ -22,7 +22,7 @@ from app.schemas.entities.kinetics import KineticsRead
 router = APIRouter(
     route_class=legacy_route_class(
         {
-        "kinetics_id": Gate(SubmissionRecordType.kinetics, "Kinetics"),
+            "kinetics_id": Gate(SubmissionRecordType.kinetics, "Kinetics"),
         }
     )
 )

@@ -122,7 +122,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     route_class=legacy_route_class(
         {
-        "calculation_id": Gate(SubmissionRecordType.calculation, "Calculation"),
+            "calculation_id": Gate(SubmissionRecordType.calculation, "Calculation"),
         }
     )
 )

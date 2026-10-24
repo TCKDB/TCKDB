@@ -27,7 +27,7 @@ from app.schemas.entities.statmech import StatmechRead
 router = APIRouter(
     route_class=legacy_route_class(
         {
-        "statmech_id": Gate(SubmissionRecordType.statmech, "Statmech"),
+            "statmech_id": Gate(SubmissionRecordType.statmech, "Statmech"),
         }
     )
 )

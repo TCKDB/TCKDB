@@ -70,8 +70,8 @@ from app.schemas.reads.network import (
 router = APIRouter(
     route_class=legacy_route_class(
         {
-        "network_id": Gate(SubmissionRecordType.network, "Network"),
-        "solve_id": Gate(SubmissionRecordType.network_solve, "Solve"),
+            "network_id": Gate(SubmissionRecordType.network, "Network"),
+            "solve_id": Gate(SubmissionRecordType.network_solve, "Solve"),
         }
     )
 )

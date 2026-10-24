@@ -22,7 +22,7 @@ from app.schemas.entities.thermo import ThermoRead
 router = APIRouter(
     route_class=legacy_route_class(
         {
-        "thermo_id": Gate(SubmissionRecordType.thermo, "Thermo"),
+            "thermo_id": Gate(SubmissionRecordType.thermo, "Thermo"),
         }
     )
 )

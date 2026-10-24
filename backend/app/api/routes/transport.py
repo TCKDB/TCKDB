@@ -22,7 +22,7 @@ from app.schemas.entities.transport import TransportRead
 router = APIRouter(
     route_class=legacy_route_class(
         {
-        "transport_id": Gate(SubmissionRecordType.transport, "Transport"),
+            "transport_id": Gate(SubmissionRecordType.transport, "Transport"),
         }
     )
 )

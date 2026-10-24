@@ -38,7 +38,12 @@ obey: no review filter, no read profile, id order. They now follow `docs/specs/b
   `/lookup/species-calculation` searches every entry instead of the first by id.
 - **Disclosure.** Lists report what the default visibility hid (`hidden_by_default`: counts and how to include them), under the exploratory
   profile only; under `curated` nothing about records below the floor is counted or named.
-- Packages: `tckdb-schemas` 0.133.0 and `tckdb-client` 0.163.0 (a new refusal code). No schema or migration change.
+- **Closed after review.** A path id is judged as the id FastAPI bound (`+5`, `5.0`, ` 5` were not gated). A visible record no longer
+  names a hidden record of any gated kind (registry of pointer columns, not a name suffix); embedded records, children of a hidden parent
+  and id-typed filters follow the same rule. Applied energy corrections and species/reaction entries obey the default visibility and the
+  floor. `GET /species-entries/{id}/conformer-observations/lowest-sp` is removed (a silent pick that named hidden records).
+  `/workflow-tools` and `/workflow-tool-releases` list by `id`, as their echo says.
+- Packages: `tckdb-schemas` 0.133.0 and `tckdb-client` 0.164.0 (a new refusal code; the removed route). No schema or migration change.
 
 ## Browse is a browse: no evidence keys, no silent pick (2026-10-23)
 
