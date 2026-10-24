@@ -19,6 +19,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+from pydantic import BaseModel
+
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_selection_common import (
     ELIGIBILITY_CONFIRMED_FINDINGS,
@@ -29,7 +31,6 @@ from app.schemas.reads.scientific_selection_common import (
     OVERRIDE_FIELD,
     EligibilityDefaultEcho,
     EligibilitySource,
-    SelectionEligibilityIn,
     SelectionFilterAnswer,
     SelectionFunnel,
 )
@@ -54,10 +55,11 @@ class Eligibility:
     include_confirmed_findings: bool = False
 
     @classmethod
-    def from_request(cls, request: SelectionEligibilityIn | None) -> Eligibility:
+    def from_request(cls, request: BaseModel | None) -> Eligibility:
+        """The settings of a request; a field the request's model does not offer is not lifted."""
         if request is None:
             return cls()
-        return cls(**{f: getattr(request, f) for f in _FIELDS})
+        return cls(**{f: bool(getattr(request, f, False)) for f in _FIELDS})
 
     def to_record(self) -> dict[str, bool]:
         """What a manifest records: every field, so a stored decision never depends on a default that later changes."""
@@ -128,7 +130,12 @@ def judge(
 
 
 def funnel(
-    *, considered: int, removed_by_filters: int, terminal_excluded: dict[str, int], verdicts: Iterable[Verdict]
+    *,
+    considered: int,
+    removed_by_filters: int,
+    terminal_excluded: dict[str, int],
+    verdicts: Iterable[Verdict],
+    unit: str = "candidates",
 ) -> dict:
     """The recorded funnel: what each step removed, and per default how many it kept out or admitted by override.
 
@@ -147,6 +154,7 @@ def funnel(
         blocked += 1 if v.blocked_by else 0
     removed_by_eligibility = sum(terminal_excluded.values()) + blocked
     return {
+        "unit": unit,
         "considered": considered,
         "removed_by_filters": removed_by_filters,
         "removed_by_eligibility": removed_by_eligibility,
@@ -218,7 +226,7 @@ def answer_steps(
             admitted=funnel_record["admitted_by_override"],
         ),
         "funnel": SelectionFunnel(
-            **{k: funnel_record[k] for k in ("considered", "removed_by_filters", "removed_by_eligibility", "remaining")}
+            **{k: funnel_record[k] for k in ("unit", "considered", "removed_by_filters", "removed_by_eligibility", "remaining")}
         ),
     }
 

@@ -43,7 +43,9 @@ OVERRIDE_FIELD: Final[dict[str, str]] = {
     ELIGIBILITY_DEPRECATED: "include_deprecated",
     ELIGIBILITY_HARD_FAILED_EVIDENCE: "include_hard_failed_evidence",
     ELIGIBILITY_CONFIRMED_FINDINGS: "include_confirmed_findings",
-    ELIGIBILITY_REJECTED_QUALITY: "include_rejected_quality",
+    #: Not a flag of its own: a calculation-quality selection already names the qualities that qualify, and lifting this
+    #: default is listing ``rejected`` there.
+    ELIGIBILITY_REJECTED_QUALITY: "permitted_quality",
 }
 
 
@@ -71,6 +73,21 @@ class SelectionEligibilityIn(BaseModel):
         default=False,
         description="Let a record compete although a live, confirmed structure finding invalidates one of its sources. "
         "The finding is still disclosed on the candidate.",
+    )
+
+
+class ReviewEligibilityIn(BaseModel):
+    """The defaults a record whose review and provenance belong to a parent (a network solve) can lift: its review status.
+
+    A solve has no evidence rubric and no source findings of its own, so those two defaults are not offered here and a
+    request naming them is refused rather than silently ignored.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    include_rejected: bool = Field(default=False, description=SelectionEligibilityIn.model_fields["include_rejected"].description)
+    include_deprecated: bool = Field(
+        default=False, description=SelectionEligibilityIn.model_fields["include_deprecated"].description
     )
 
 
@@ -104,6 +121,11 @@ class EligibilityDefaultEcho(BaseModel):
 class SelectionFunnel(BaseModel):
     """How many candidates each step removed, so a small answer is not mistaken for a small population."""
 
+    unit: str = Field(
+        default="candidates",
+        description="What is counted: the records the question picks among (`candidates`), or, where review and "
+        "provenance belong to a parent record, those parents (`solves`).",
+    )
     considered: int = Field(description="Candidates the read profile shows, before any step.")
     removed_by_filters: int = Field(description="Removed by the caller's filters.")
     removed_by_eligibility: int = Field(description="Removed by eligibility defaults that were applied.")

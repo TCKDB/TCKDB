@@ -62,7 +62,7 @@ EXPECTED: dict[str, int] = {
     "kinetics_semantics": 2,
     "statmech_formats": 2,
     "structure_formats": 2,
-    "network_formats": 2,
+    "network_formats": 3,
     "relative_energy_formats": 2,
 }
 
