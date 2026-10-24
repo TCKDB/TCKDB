@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.165.0 - 2026-10-24
+## 0.166.0 - 2026-10-24
 
 A select call takes the caller's filters, and today's exclusions are named defaults the request can lift.
 
