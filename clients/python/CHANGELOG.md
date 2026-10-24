@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.165.0 - 2026-10-24
+
+A select call takes the caller's filters, and today's exclusions are named defaults the request can lift.
+
+- `select_species_thermo`, `select_reaction_kinetics`, `select_network_kinetics`, `select_species_calculations`, `select_conformer_basins`,
+  `select_transition_state_evidence` and their `get_*_selection_manifest` twins take `filters` and `eligibility`. `select_statmech_models`
+  and `get_statmech_selection_manifest` send them as part of `request`. Each is sent only when given; the client invents neither.
+- `filters` uses the matching search's vocabulary: thermo and kinetics `model_kind`, `level_of_theory_ref`, `software`; network and statmech
+  `model_kind` plus `method`, `basis`, `software`, `software_version`, `workflow_tool`, `workflow_tool_version`; structure the six provenance
+  fields. A filter the search does not offer is a 422, never ignored. A filter excludes on a fact and ranks nothing.
+- `eligibility` lifts named defaults: `include_rejected`, `include_deprecated` (every route), `include_hard_failed_evidence` (thermo,
+  kinetics), `include_confirmed_findings` (thermo, kinetics, statmech, structure). A rejected calculation quality is lifted by listing `rejected`
+  in `permitted_quality`. The read profile's review floor is not a default: `curated` cannot be overridden.
+- Every answer gains `filters` (the normalised filters and how many candidates they removed), `eligibility` (each default: `name`, `applied`,
+  `source` of `default`, `request` or `read_profile`, `excluded`, `admitted_by_override`) and `funnel` (`considered`, `removed_by_filters`,
+  `removed_by_eligibility`, `remaining`). Each candidate or unit gains `blocked_by` and `passed_only_by_override`. The network answer gains `solves`.
+- A species or reaction entry is a scoping parent: its own review status no longer excludes a statmech candidate, a calculation or a conformer
+  basin. A transition-state entry still gates its evidence and statmech candidates.
+- Recorded decisions now carry the filters and eligibility settings, so replay reproduces them. Manifest formats move to version 3
+  (`thermo`, `kinetics`, `network`, `statmech`, `structure`, relative conformer energies); a manifest in format 2 is refused on replay.
+- New TypedDicts: `SelectionFilters`, `SelectionEligibilityIn`, `EligibilityDefaultEcho`, `SelectionFunnel`, `SelectionFilterAnswer`.
+
 ## 0.164.0 - 2026-10-24
 
 - The deprecated `GET /species-entries/{id}/conformer-observations/lowest-sp` route is removed from the server (it was a silent pick and named records the profile hides); the parity table drops it. Use `relative_conformer_energies`.
