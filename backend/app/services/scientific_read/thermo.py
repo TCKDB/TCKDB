@@ -230,7 +230,7 @@ def get_species_thermo(
 
     The species_entry_id path parameter is strictly ``species_entry.id``;
     ``species.id`` is rejected with 404. Sort: review_rank ASC, created_at
-    DESC, id DESC (#648; the export's ``simple_selection_sort_key``).
+    DESC, id DESC (#648; the order the exports list records in).
     ``coverage_temperature_min_k`` / ``coverage_temperature_max_k`` do not filter and do not affect
     the order: they only fill each record's ``temperature_coverage`` field.
     Every matching record is returned; the read never picks one.
@@ -683,9 +683,9 @@ def get_species_thermo(
 
     summary = review_summary(badges[t.id] for t, _ in classified)
 
-    # L3 thermo sort (#648): review status, then newest -- the same key the
-    # export, CHEMKIN and ML selection use (``simple_selection_sort_key``), so
-    # the read and the export cannot list different records first (display order, never a preference).
+    # L3 thermo sort (#648): review status, then newest, then id -- the same order the native, CHEMKIN and ML
+    # exports list records in, so the read and an export cannot list different records first (display order,
+    # never a preference; nothing is picked).
     #
     # Deliberately NOT in the key:
     #   * ``evidence_completeness.score``: six of its eight predicates are

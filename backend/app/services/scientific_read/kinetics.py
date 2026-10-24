@@ -339,8 +339,8 @@ def get_reaction_kinetics(
 ) -> ScientificReactionKineticsResponse:
     """Return kinetics records for a reaction entry, sorted by review status, then newest.
 
-    Order: review_rank ASC, created_at DESC, id DESC (the export's
-    ``simple_selection_sort_key``). Coverage and evidence are reported per
+    Order: review_rank ASC, created_at DESC, id DESC (the order the exports
+    list records in). Coverage and evidence are reported per
     record but do not order them; ``coverage_temperature_min_k`` /
     ``coverage_temperature_max_k`` do not filter, they only fill ``temperature_coverage``.
     Every matching record is returned; the read never picks one.
@@ -734,8 +734,8 @@ def get_reaction_kinetics(
     summary = review_summary(badges[k.id] for k in kinetics_rows)
 
     # Sort: review status, then newest (#648 rule, extended to kinetics): review status, then newest,
-    # then id -- the same ``simple_selection_sort_key`` the export uses, so the
-    # read and the export pick the same record. ``evidence_completeness`` and
+    # then id -- the same order the exports list records in, so the read and
+    # an export list the same record first. ``evidence_completeness`` and
     # ``temperature_coverage`` stay on each record as displayed fields but are
     # not ranking inputs: the checklist is mostly TS / calculation
     # traceability (an experimental record scores low by construction), and a
