@@ -1,3 +1,4 @@
+import { MadeUnderLine } from "../components/MadeUnderLine"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Link, Navigate } from "react-router-dom"
 import "../auth.css"
@@ -473,7 +474,10 @@ export default function CuratorQueuePage() {
                                                     {task.highest_severity}
                                                 </span>
                                             </td>
-                                            <td>{task.findings_count}</td>
+                                            <td>
+                                                {task.findings_count}
+                                                <MadeUnderLine madeUnder={task.made_under} />
+                                            </td>
                                             <td>{stateLabel(task.workflow_state)}</td>
                                             <td>
                                                 {isOpen(task.workflow_state) ? (

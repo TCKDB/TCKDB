@@ -34,6 +34,7 @@ from app.db.models.energy_correction import EnergyCorrectionScheme
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 from app.db.models.submission import Submission
 from app.schemas.fragments.refs import SoftwareReleaseRef, WorkflowToolReleaseRef
+from app.schemas.reads.scientific_assessment import MadeUnder
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.services.artifact_storage_capacity import (
@@ -57,6 +58,7 @@ from app.services.machine_review import (
     run_admin_fake_machine_review,
     start_curator_task_review,
 )
+from app.services.machine_review.made_under import latest_machine_review_made_under
 from app.services.machine_review.run import run_machine_review_for_submission
 from app.services.observation_identity_attach import attach_observation_identity
 from app.services.record_containers import (
@@ -574,6 +576,9 @@ class AdminCuratorTaskResponse(BaseModel):
     resolved_at: datetime | None = None
     resolved_by: int | None = None
     resolution_note: str | None = None
+    #: The rubric the record's latest stored machine review was made under, read against the registry. ``null`` when the
+    #: record has no stored reviewer-family review. Compares the rubric stamp only (``inputs_checked`` is false).
+    made_under: MadeUnder | None = None
 
 
 class AdminCuratorTaskBuildResponse(BaseModel):
@@ -628,6 +633,7 @@ def _to_curator_task_response(
     task: MachineReviewCuratorTask,
     record_public_ref: str | None,
     container: RecordContainer | None,
+    made_under: MadeUnder | None = None,
 ) -> AdminCuratorTaskResponse:
     """Pure mapper: the ref and the container are supplied, never looked up here.
 
@@ -656,6 +662,7 @@ def _to_curator_task_response(
         resolved_at=task.resolved_at,
         resolved_by=task.resolved_by,
         resolution_note=task.resolution_note,
+        made_under=made_under,
     )
 
 
@@ -671,6 +678,9 @@ def _curator_task_response(
         ),
         resolve_record_container(
             session, record_type=task.record_type, record_id=task.record_id
+        ),
+        latest_machine_review_made_under(session, [(task.record_type, task.record_id)]).get(
+            (task.record_type, task.record_id)
         ),
     )
 
@@ -745,12 +755,14 @@ def list_curator_tasks(
     keys = [(t.record_type, t.record_id) for t in tasks]
     public_refs = resolve_record_public_refs(session, keys)
     containers = resolve_record_containers(session, keys)
+    made_under = latest_machine_review_made_under(session, keys)
     return PaginatedResponse(
         items=[
             _to_curator_task_response(
                 t,
                 public_refs.get((t.record_type, t.record_id)),
                 containers.get((t.record_type, t.record_id)),
+                made_under.get((t.record_type, t.record_id)),
             )
             for t in tasks
         ],

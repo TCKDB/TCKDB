@@ -24,6 +24,7 @@ import { SectionHeading } from "./PageSections"
 import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
 import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
+import { MadeUnderLine } from "./MadeUnderLine"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 import { SupersessionNotice } from "./SupersessionNotice"
 import { ThermoCpChart } from "./ThermoCpChart"
@@ -396,6 +397,7 @@ function ThermoRecordBody({ record, idSuffix = "", showProvenance = true }: {
             <TemperatureCoverageBlock coverage={record.temperature_coverage ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
             <ModelBlock record={record} idSuffix={idSuffix} />
             <EvidenceCompletenessBlock completeness={record.evidence_completeness ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
+            <ReproducibilityAssessmentBlock assessments={record.assessments ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
             {showProvenance && (
                 <ProvenanceBlock
                     provenance={record.provenance ?? null}
@@ -845,6 +847,29 @@ const EVIDENCE_CHECK_LABELS: Record<string, string> = {
 
 function evidenceCheckLabel(key: string): string {
     return EVIDENCE_CHECK_LABELS[key] ?? key.replace(/^has_/, "").replaceAll("_", " ")
+}
+
+/**
+ * The reproducibility assessment of this record, with the rubric it was made under. Rendered only when the API served
+ * `assessments` (an older deployment does not). A record nobody has assessed says so: "not assessed" is not "stale".
+ * The grade is a statement about how complete the deposited evidence is for a rerun, not a ranking of the record.
+ */
+function ReproducibilityAssessmentBlock({ assessments, thermoRef, idSuffix = "" }: {
+    assessments: ThermoRecord["assessments"] | null
+    thermoRef: string
+    idSuffix?: string
+}) {
+    const reproducibility = assessments?.reproducibility
+    if (!reproducibility) return null
+    const id = `reproducibility-${thermoRef}${idSuffix}`
+    return (
+        <section aria-labelledby={id}>
+            <h4 className="model-block-heading" id={id}>
+                Reproducibility assessment{reproducibility.grade ? `: ${reproducibility.grade.replaceAll("_", " ")}` : ""}
+            </h4>
+            <MadeUnderLine madeUnder={reproducibility.made_under} />
+        </section>
+    )
 }
 
 function EvidenceCompletenessBlock({ completeness, thermoRef, idSuffix = "" }: {

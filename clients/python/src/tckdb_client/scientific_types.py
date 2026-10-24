@@ -12,10 +12,28 @@ from typing import Any, Generic, Literal, NotRequired, Required, TypeAlias, Type
 JSONDict: TypeAlias = dict[str, Any]
 
 
+class MadeUnder(TypedDict):
+    """Which rubric judged an assessment, at which version, and whether that is still the current one.
+
+    ``state`` is ``current``, ``stale`` or ``unassessed`` (a stale assessment exists; an unassessed record has none).
+    ``assessed_version`` 0 means "stamped before the 2026-10 versioning reset" and is never current.
+    ``stale_reason`` is ``rubric_version`` or ``inputs_changed`` when ``state`` is ``stale``.
+    """
+
+    state: Required[Literal["current", "stale", "unassessed"]]
+    rubric: str | None
+    assessed_version: int | None
+    current_rubric: str | None
+    current_version: int | None
+    stale_reason: Literal["rubric_version", "inputs_changed"] | None
+    inputs_checked: bool
+
+
 class ReproducibilityAssessmentSummary(TypedDict):
     """Compact immutable assessment identity and freshness state."""
 
     state: Required[str]
+    made_under: MadeUnder | None
     assessment_ref: str | None
     rubric: str | None
     rubric_version: int | None
@@ -23,8 +41,18 @@ class ReproducibilityAssessmentSummary(TypedDict):
     assessed_at: str | None
 
 
+class DeterministicTrustSummary(TypedDict):
+    """The code-defined evidence assessment, evaluated at read time (so ``made_under.state`` is always ``current``)."""
+
+    rubric: Required[str]
+    rubric_version: Required[int]
+    grade: Required[str]
+    hard_fail: str | None
+    made_under: MadeUnder | None
+
+
 class PublicAssessmentSummary(TypedDict):
-    deterministic_trust: Required[JSONDict]
+    deterministic_trust: Required[DeterministicTrustSummary]
     reproducibility: Required[ReproducibilityAssessmentSummary]
 
 
@@ -1748,6 +1776,8 @@ __all__ = [
     "ReactionParticipantRecord",
     "ReactionRecord",
     "ReactionSearchResponse",
+    "DeterministicTrustSummary",
+    "MadeUnder",
     "ReproducibilityAssessmentSummary",
     "ReviewStatusSummary",
     "ScientificDetailResponse",

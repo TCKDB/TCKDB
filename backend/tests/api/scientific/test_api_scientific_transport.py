@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
+import pytest
+
 from app.db.models.common import (
     CalculationQuality,
     CalculationType,
@@ -13,6 +17,7 @@ from app.db.models.common import (
     TransportCalculationRole,
     ValidationStatus,
 )
+from app.db.models.reproducibility_assessment import RecordReproducibilityAssessment
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.services.reproducibility_assessment import (
@@ -938,6 +943,20 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
     assert detail["deterministic_trust"]["grade"] in {"partial", "sparse"}
     assert detail["reproducibility"]["state"] == "unassessed"
     assert detail["reproducibility"]["assessment_ref"] is None
+    # "Made under": unassessed names no rubric (there is none to name); the live trust grade is current by construction.
+    assert detail["reproducibility"]["made_under"] == {
+        "rubric": None,
+        "assessed_version": None,
+        "current_rubric": None,
+        "current_version": None,
+        "state": "unassessed",
+        "stale_reason": None,
+        "inputs_checked": True,
+    }
+    trust_made_under = detail["deterministic_trust"]["made_under"]
+    assert trust_made_under["state"] == "current"
+    assert trust_made_under["rubric"] == "computed_transport"
+    assert trust_made_under["assessed_version"] == trust_made_under["current_version"] >= 1
 
     search = client.get(
         _search_url(transport_ref=tr.public_ref, include="assessments")
@@ -965,6 +984,9 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
     ).json()["record"]["assessments"]["reproducibility"]
     assert current["state"] == "current"
     assert current["assessment_ref"] == current_row.public_ref
+    assert current["made_under"]["state"] == "current"
+    assert current["made_under"]["assessed_version"] == current["made_under"]["current_version"]
+    assert current["made_under"]["stale_reason"] is None
 
     stale_row = append_reproducibility_assessment(
         db_session,
@@ -981,6 +1003,57 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
     ).json()["record"]["assessments"]["reproducibility"]
     assert stale["state"] == "stale"
     assert stale["assessment_ref"] == stale_row.public_ref
+    # Same rubric version, but its inputs have changed: stale for a different reason.
+    assert stale["made_under"]["state"] == "stale"
+    assert stale["made_under"]["stale_reason"] == "inputs_changed"
+    assert stale["made_under"]["assessed_version"] == stale["made_under"]["current_version"]
+
+
+@pytest.mark.parametrize("assessed_version", [0, 7])
+def test_assessment_under_another_rubric_version_is_stale_by_rubric_version(client, db_session, assessed_version):
+    """Version 0 (stamped before the 2026-10 versioning reset) and a version that is not the current one are stale."""
+    _, _, tr = _make_transport(db_session)
+    current_row = evaluate_and_append_reproducibility(
+        db_session, record_type=SubmissionRecordType.transport, record_id=tr.id
+    )
+    if assessed_version == 0:
+        # The append service refuses 0 (nothing new is written at 0); a row stamped by the 2026-10 reset holds it.
+        db_session.add(
+            RecordReproducibilityAssessment(
+                record_type=SubmissionRecordType.transport,
+                record_id=tr.id,
+                grade=ReproducibilityGrade.described,
+                rubric_name=current_row.rubric_name,
+                rubric_version=0,
+                context_hash=current_row.context_hash,
+                context_json=current_row.context_json,
+                passed_json=[],
+                missing_json=[],
+                warnings_json=[],
+                assessor_kind=ReproducibilityAssessorKind.system,
+                assessed_at=datetime.now(timezone.utc),
+            )
+        )
+        db_session.flush()
+    else:
+        append_reproducibility_assessment(
+            db_session,
+            record_type=SubmissionRecordType.transport,
+            record_id=tr.id,
+            grade=ReproducibilityGrade.described,
+            rubric_name=current_row.rubric_name,
+            rubric_version=assessed_version,
+            context_json=current_row.context_json,
+            assessor_kind=ReproducibilityAssessorKind.system,
+        )
+    made_under = client.get(
+        _detail_url(tr.public_ref, include="assessments")
+    ).json()["record"]["assessments"]["reproducibility"]["made_under"]
+    assert made_under["state"] == "stale"
+    assert made_under["stale_reason"] == "rubric_version"
+    assert made_under["assessed_version"] == assessed_version
+    assert made_under["current_version"] == current_row.rubric_version
+    assert made_under["rubric"] == made_under["current_rubric"] == current_row.rubric_name
 
 
 def test_search_include_all_does_not_expand_assessments(client, db_session):

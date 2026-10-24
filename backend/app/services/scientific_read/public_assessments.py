@@ -35,6 +35,7 @@ from app.db.models.thermo import Thermo
 from app.db.models.transport import Transport
 from app.schemas.reads.scientific_assessment import (
     DeterministicTrustSummary,
+    MadeUnder,
     PublicAssessmentSummary,
     ReproducibilityAssessmentSummary,
 )
@@ -43,6 +44,7 @@ from app.services.reproducibility_assessment import (
 )
 from app.services.reproducibility_rubric import (
     evaluate_reproducibility,
+    reproducibility_rubric_for,
 )
 from app.services.scientific_read.kinetics import KINETICS_TRUST_EAGER_LOADS
 from app.services.scientific_read.statmech import STATMECH_TRUST_EAGER_LOADS
@@ -56,6 +58,9 @@ from app.services.trust import (
     evaluate_loaded_transport,
 )
 from app.services.trust.models import EvidenceEvaluation
+
+#: A response with more records than this does not re-evaluate each stored assessment's inputs (see ``_attach``).
+MAX_INPUT_CHECKS = 1
 
 
 def attach_kinetics_assessments(session: Session, payload: Any) -> Any:
@@ -179,6 +184,7 @@ def _evaluate(
     model: type[Any],
     eager_loads: tuple[Any, ...],
     evaluator: Callable[[Any], EvidenceEvaluation],
+    targets_out: dict[int, Any] | None = None,
 ) -> dict[int, EvidenceEvaluation]:
     """Evaluate the deterministic rubric for a whole page in one load.
 
@@ -191,6 +197,8 @@ def _evaluate(
         select(model).where(model.id.in_(ids)).options(*eager_loads)
     ).all()
     target_by_id = {target.id: target for target in targets}
+    if targets_out is not None:
+        targets_out.update(target_by_id)
     return {
         record_id: evaluator(target_by_id[record_id])
         for record_id in ids
@@ -251,13 +259,20 @@ def _attach(
     if not records:
         return
     ids = list(dict.fromkeys(record_id for _, record_id in records))
+    targets: dict[int, Any] = {}
     evaluations = _evaluate(
         session,
         ids=ids,
         model=model,
         eager_loads=eager_loads,
         evaluator=evaluator,
+        targets_out=targets,
     )
+    # Whether the inputs of a stored assessment still match is a full re-evaluation (tens of statements) per record. A
+    # page of records cannot afford that, so it is done only when the response holds at most MAX_INPUT_CHECKS records
+    # (a detail read); on a list the rubric name and version are still compared, and the answer says the inputs were
+    # not checked (``made_under.inputs_checked`` false) rather than claim they are unchanged.
+    check_inputs = len(ids) <= MAX_INPUT_CHECKS
     latest = _latest_assessments(session, record_type=record_type, record_ids=ids)
 
     summaries: dict[int, PublicAssessmentSummary] = {}
@@ -270,12 +285,22 @@ def _attach(
                 rubric_version=trust.rubric_version,
                 grade=trust.label.value,
                 hard_fail=(trust.hard_fail_reason.value if trust.hard_fail_reason is not None else None),
+                # Evaluated just now, under the rubric version in force: current by construction.
+                made_under=MadeUnder(
+                    rubric=trust.rubric,
+                    assessed_version=trust.rubric_version,
+                    current_rubric=trust.rubric,
+                    current_version=trust.rubric_version,
+                    state="current",
+                ),
             ),
             reproducibility=_reproducibility_summary(
                 session,
                 record_type=record_type,
                 record_id=record_id,
                 assessment=assessment,
+                target=targets.get(record_id),
+                check_inputs=check_inputs,
             ),
         )
 
@@ -322,17 +347,52 @@ def _reproducibility_summary(
     record_type: SubmissionRecordType,
     record_id: int,
     assessment: RecordReproducibilityAssessment | None,
+    target: Any | None = None,
+    check_inputs: bool = True,
 ) -> ReproducibilityAssessmentSummary:
     if assessment is None:
-        return ReproducibilityAssessmentSummary(state="unassessed")
+        return ReproducibilityAssessmentSummary(state="unassessed", made_under=MadeUnder(state="unassessed"))
+
+    if not check_inputs and target is not None:
+        rubric = reproducibility_rubric_for(target)
+        rubric_is_current = (assessment.rubric_name, assessment.rubric_version) == (rubric.name, rubric.version)
+        state = "current" if rubric_is_current else "stale"
+        return ReproducibilityAssessmentSummary(
+            state=state,
+            assessment_ref=assessment.public_ref,
+            rubric=assessment.rubric_name,
+            rubric_version=assessment.rubric_version,
+            grade=assessment.grade,
+            assessed_at=assessment.assessed_at,
+            made_under=MadeUnder(
+                rubric=assessment.rubric_name,
+                assessed_version=assessment.rubric_version,
+                current_rubric=rubric.name,
+                current_version=rubric.version,
+                state=state,
+                stale_reason=None if rubric_is_current else "rubric_version",
+                inputs_checked=False,
+            ),
+        )
 
     current = evaluate_reproducibility(session, record_type=record_type, record_id=record_id)
-    is_current = (
-        (assessment.rubric_name, assessment.rubric_version) == (current.rubric_name, current.rubric_version)
-        and is_reproducibility_assessment_context_current(assessment, current_context_json=current.context_json)
+    rubric_is_current = (assessment.rubric_name, assessment.rubric_version) == (
+        current.rubric_name,
+        current.rubric_version,
+    )
+    is_current = rubric_is_current and is_reproducibility_assessment_context_current(
+        assessment, current_context_json=current.context_json
     )
     return ReproducibilityAssessmentSummary(
         state="current" if is_current else "stale",
+        made_under=MadeUnder(
+            rubric=assessment.rubric_name,
+            assessed_version=assessment.rubric_version,
+            current_rubric=current.rubric_name,
+            current_version=current.rubric_version,
+            state="current" if is_current else "stale",
+            stale_reason=None if is_current else ("inputs_changed" if rubric_is_current else "rubric_version"),
+        ),
         assessment_ref=assessment.public_ref,
         rubric=assessment.rubric_name,
         rubric_version=assessment.rubric_version,

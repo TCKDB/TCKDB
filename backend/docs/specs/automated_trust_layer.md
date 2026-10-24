@@ -1159,3 +1159,26 @@ These are intentionally left for implementation review.
 - **Advisory** — describes any signal (LLM precheck, third-party
   agent label) that surfaces to readers but does not influence the
   evidence completeness ratio or the trust status.
+
+
+## 17. Made under
+
+**Made under.** Every assessment a page shows names the rubric that judged it and its integer version. The wire shape is `MadeUnder`
+(`app/schemas/reads/scientific_assessment.py`): `rubric`, `assessed_version`, `current_rubric`, `current_version`, `state`, `stale_reason`.
+
+- `current`: made under the version in force (and, for a stored assessment, on the evidence there is now).
+- `stale`: an assessment exists but was made under another version (`stale_reason: rubric_version`) or, with the version unchanged, before its inputs changed
+  (`inputs_changed`: the inputs the assessment was computed from differ now, which can be new evidence or a changed rule under the same version). A page
+  says it has not been re-assessed under the current version; nothing schedules a re-assessment, only a curator action runs one.
+- `unassessed`: no assessment exists, so no rubric is named. Never a kind of stale.
+- Version 0 means "stamped before the 2026-10 versioning reset"; no registry holds 0, so it is never current. Pages word it that way, never as "v0".
+- The deterministic trust badge is computed at read time under the rubric version in force, so it is `current` by construction. Only stored assessments
+  (reproducibility) can be stale. Evidence-completeness checklists on thermo and kinetics are not registered rubrics and carry no version yet.
+- The line never ranks a record: it names the rule that judged it.
+- `inputs_checked`: whether the assessment's inputs were compared with today's. Re-evaluating them costs tens of statements per record, so a response holding
+  more than one record (`MAX_INPUT_CHECKS` in `public_assessments.py`) compares the rubric name and version only and reports `inputs_checked: false`; `current`
+  there means "the rubric is the one in force", nothing more. A detail read checks the inputs.
+- The admin curator-task reads carry `made_under` for the record's latest stored reviewer-family machine review, read against the rubric registry (stamp
+  only; `inputs_checked: false`). A record with no stored review has none.
+- Procedures without a version (the evidence-completeness checklists, geometry validation, SCF stability) carry no `made_under`: a version is not invented
+  for them.

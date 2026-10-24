@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { levelOfTheorySchema, productLevelsSchema } from "./scientificSchemas"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
+import { madeUnderSchema } from "../domain/madeUnder"
 
 // ---------------------------------------------------------------------------
 // Shape notes (measured 2026-08-29 against a hosted TCKDB deployment,
@@ -209,6 +210,15 @@ const groupAdditivitySchema = z.object({
     components: z.array(groupAdditivityComponentSchema).optional(),
 }).passthrough()
 
+// Only the facts the page words are pulled out; the rest of the summary rides on `.passthrough()`.
+const assessmentsSchema = z.object({
+    reproducibility: z.object({
+        state: z.string(),
+        grade: z.string().nullable().optional(),
+        made_under: madeUnderSchema.nullable().optional(),
+    }).passthrough().nullable().optional(),
+}).passthrough()
+
 const thermoRecordSchema = z.object({
     thermo_ref: z.string(),
     scientific_origin: z.string(),
@@ -242,6 +252,8 @@ const thermoRecordSchema = z.object({
     // missing.
     levels: productLevelsSchema.nullable().optional(),
     source_calculations: z.array(thermoSourceCalculationSchema).nullable().optional(),
+    // `include=assessments` (requested below): the reproducibility assessment, with the rubric it was made under.
+    assessments: assessmentsSchema.nullable().optional(),
 }).passthrough()
 
 const reviewStatusSummarySchema = z.object({
@@ -284,7 +296,9 @@ export async function loadEntryThermo(
     signal?: AbortSignal,
     onRateLimited?: (retryAfterSeconds: number) => void,
 ): Promise<ThermoListResponse> {
-    const endpoint = `/api/v1/scientific/species-entries/${encodeURIComponent(entryRef)}/thermo`
+    // `include=assessments` is the one token requested: it adds the compact reproducibility assessment and the rubric
+    // it was made under, which the "made under" line states. It is not expanded by `include=all`.
+    const endpoint = `/api/v1/scientific/species-entries/${encodeURIComponent(entryRef)}/thermo?include=assessments`
     const payload = await requestScientificJson(endpoint, signal, onRateLimited)
     return parseScientificResponse(thermoListResponseSchema, payload, "thermo")
 }
