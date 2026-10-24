@@ -43,6 +43,9 @@ obey: no review filter, no read profile, id order. They now follow `docs/specs/b
   and id-typed filters follow the same rule. Applied energy corrections and species/reaction entries obey the default visibility and the
   floor. `GET /species-entries/{id}/conformer-observations/lowest-sp` is removed (a silent pick that named hidden records).
   `/workflow-tools` and `/workflow-tool-releases` list by `id`, as their echo says.
+- **Parent rule.** A child of a hidden parent (an observation in a hidden conformer group, an entry of a hidden transition state) is hidden
+  by the detail gate, by pointers at it, by id filters naming it and by embedded copies, under the request's visibility (one registry,
+  `PARENT_OF`). Lookups report hidden entries in `entries_hidden_by_default` everywhere; `hidden_by_default` is always about records.
 - Packages: `tckdb-schemas` 0.133.0 and `tckdb-client` 0.164.0 (a new refusal code; the removed route). No schema or migration change.
 
 ## Browse is a browse: no evidence keys, no silent pick (2026-10-23)
