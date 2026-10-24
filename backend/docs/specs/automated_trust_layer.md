@@ -1159,3 +1159,34 @@ These are intentionally left for implementation review.
 - **Advisory** — describes any signal (LLM precheck, third-party
   agent label) that surfaces to readers but does not influence the
   evidence completeness ratio or the trust status.
+
+## 18. The rubric-change guard, and bumping a rubric
+
+A stored assessment names the rubric version it was made under, and a reader decides *stale* by comparing that number with the current one. That only works
+if the number moves when the rules move. `app/services/trust/rubric_pins.json` holds, for each current `(name, version)`, a fingerprint of what the rubric
+decides; `tests/scripts/test_rubric_pins.py` and `backend/scripts/generate_rubric_pins.py --check` fail when the two disagree. The test runs in the complement
+gate, like the other generator checks.
+
+**What is pinned.** Every trust rubric that declares checks, and both reproducibility rubrics (`tckdb_reproducibility`, `tckdb_reproducibility_ts_statmech`).
+Rubrics declared with `checks=()` (the review-tier ones) are not pinned: their rules live in the services that run them, a pin of an empty list would pass
+whatever those did, and `unguarded_rubric_names()` lists them.
+
+**The fingerprint.** For a trust rubric: its record type; each check's name, kind and weight and the code its runner executes; and the code of the evaluator
+entrypoints in `GRADING_ENTRYPOINTS` (hard-fail detectors, completeness aggregation, label thresholds, and for the transition-state rubric the scoped context
+builders). For a reproducibility rubric: its name and the code of `evaluate_reproducibility` and `reproducibility_rubric_for`. `explain` wording is excluded.
+"Code" is the AST without docstrings or comments, followed across `app` and `tckdb_schemas` through every function named or called (decorators unwrapped,
+`staticmethod`, `property`, `partial`, lambdas), every callable inside a constant container, every module constant read, and every in-scope class referenced as
+a whole (an enum's methods and properties count; an SQLAlchemy model contributes its methods, not its columns).
+
+**It fails closed.** It raises rather than skips: a constant it cannot canonicalise, a callable without readable source, `getattr` with a computed name
+(unless the site is listed in `DYNAMIC_ATTRIBUTE_READS` with the reason it reads a data attribute and never chooses a function), `eval`/`exec`/`globals`, and any read of
+the environment or of `settings` (declare a genuine one in `DECLARED_INPUTS`). The pins record the Python minor version, because `ast.dump` differs between minors.
+
+**To bump a rubric.** (1) Change the checks. (2) Raise `version` on its `EvidenceRubric` in `app/services/trust/rubrics.py` (or on `SHARED` / `TS_STATMECH` in
+`reproducibility_rubric.py`). (3) Run `conda run -n tckdb_env python backend/scripts/generate_rubric_pins.py` and commit the pin. A new rubric with checks also
+needs an entry in `GRADING_ENTRYPOINTS`. The script refuses to re-pin a changed rubric whose version did not move. `--allow-unbumped NAME --reason TEXT`
+overrides for a change that decides nothing new and records `{name, version, reason}` in `unbumped_overrides` (the test surfaces them);
+`--repin-for-python` re-pins everything after a Python minor upgrade and refuses unless only the Python version moved. A change to the fingerprinting itself
+bumps `ALGORITHM` and re-pins everything in a commit that changes nothing else. Pre-release, pins are kept for current versions only.
+
+**Not guarded, candidates:** selection procedures, `RENDERERS`, `PAYLOAD_FORMATS`, `PARSERS`, and the review-tier rubrics above.

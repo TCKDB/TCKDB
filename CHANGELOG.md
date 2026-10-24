@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The rubric-change guard (2026-10-24)
+
+A rubric's version now has to move when its rules move. `backend/app/services/trust/rubric_pins.json` pins a fingerprint of each current rubric (the trust
+rubrics that declare checks, and both reproducibility rubrics); `tests/scripts/test_rubric_pins.py` and `backend/scripts/generate_rubric_pins.py --check`
+fail when a rubric's checks or grading change without a bump, or a bump is not re-pinned. The walk fails closed on what it cannot follow. Maintainer steps:
+`backend/docs/specs/automated_trust_layer.md`, section 18. No wire or schema change.
+
 ## Lookup and the legacy entity lists obey the visibility rules (2026-10-24)
 
 `/lookup/*` and the raw entity lists (`/thermo`, `/kinetics`, `/calculations`, ...) used to ignore every visibility rule the scientific reads
