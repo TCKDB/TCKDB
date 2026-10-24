@@ -43,6 +43,7 @@ from app.api.routes import (
     workflow_tools,
 )
 from app.api.routes.scientific import scientific_router
+from app.api.routes.scientific._profile import resolve_profile_dependency
 
 api_router = APIRouter()
 
@@ -69,7 +70,13 @@ api_router.include_router(
 # handlers only so an old client can still poll job status while
 # the user upgrades.
 api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
-api_router.include_router(lookup.router, prefix="/lookup", tags=["lookup"])
+# Public, like the scientific reads, and under the same read profile and default visibility.
+api_router.include_router(
+    lookup.router,
+    prefix="/lookup",
+    tags=["lookup"],
+    dependencies=[Depends(resolve_profile_dependency)],
+)
 # Curator-gated release curation. The matching *public* read surface is
 # /api/v1/scientific/releases/*, which is deliberately unauthenticated: a
 # citation has to resolve for anyone.
@@ -109,7 +116,17 @@ api_router.include_router(
 # Legacy entity-read routers. Wrapped with the auth gate so a hosted
 # deployment doesn't surface the pre-Phase-D shape anonymously. Local
 # dev keeps the routes open by setting ``LEGACY_READS_REQUIRE_AUTH=false``.
-_legacy_dependency = [Depends(require_auth_for_legacy_reads)]
+_legacy_auth = [Depends(require_auth_for_legacy_reads)]
+# The legacy reads are the raw entity layer. They honour the same read profile and default visibility as the
+# scientific reads (rejected and deprecated hidden by default; ``?profile=curated`` withholds records below the review
+# floor), through the same dependency. Their write routes sit on separate routers and take no profile.
+_legacy_dependency = [*_legacy_auth, Depends(resolve_profile_dependency)]
+api_router.include_router(
+    calculations.write_router,
+    prefix="/calculations",
+    tags=["calculations"],
+    dependencies=_legacy_auth,
+)
 api_router.include_router(
     calculations.router,
     prefix="/calculations",
@@ -121,6 +138,12 @@ api_router.include_router(
     prefix="/species",
     tags=["species"],
     dependencies=_legacy_dependency,
+)
+api_router.include_router(
+    species.entries_write_router,
+    prefix="/species-entries",
+    tags=["species-entries"],
+    dependencies=_legacy_auth,
 )
 api_router.include_router(
     species.entries_router,
@@ -187,6 +210,12 @@ api_router.include_router(
     prefix="/literature",
     tags=["literature"],
     dependencies=_legacy_dependency,
+)
+api_router.include_router(
+    conformers.groups_write_router,
+    prefix="/conformer-groups",
+    tags=["conformer-groups"],
+    dependencies=_legacy_auth,
 )
 api_router.include_router(
     conformers.groups_router,

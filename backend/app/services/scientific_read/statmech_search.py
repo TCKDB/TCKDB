@@ -77,6 +77,10 @@ from app.services.scientific_read.common import (
     visible_statuses,
 )
 from app.services.scientific_read.handles import resolve_filter_ref
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
@@ -217,6 +221,14 @@ def search_statmech(
         record_ids=candidate_ids,
     )
     visible = _visible(request)
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[cid].status for cid in candidate_ids),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        )
+    )
     visible_ids = [cid for cid in candidate_ids if badges[cid].status in visible]
     if not visible_ids:
         return _empty_response(request, includes, offset, limit, _visible(request))

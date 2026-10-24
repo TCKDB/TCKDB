@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.164.0 - 2026-10-24
+
+- The deprecated `GET /species-entries/{id}/conformer-observations/lowest-sp` route is removed from the server (it was a silent pick and named records the profile hides); the parity table drops it. Use `relative_conformer_energies`.
+
+## 0.163.0 - 2026-10-24
+
+- `RejectionCode` gains `lowest_energy_across_levels` (the `/lookup` refusal above).
+- `get_calculation_hessian` takes `profile`: the legacy entity reads now honour the read profile like the scientific reads.
+- Requires `tckdb-schemas>=0.133.0`.
+
 ## 0.162.0 - 2026-10-23
 
 No read and no export picks a record for you. Browse reads list every match in display order; "give me one" is the `select_*` methods.

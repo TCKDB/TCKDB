@@ -151,6 +151,7 @@ def search_kinetics(
                 limit=page_limit,
                 include=[],
             ),
+            scope_entries=True,
         )
 
     reaction_records = collect_bounded_pages(

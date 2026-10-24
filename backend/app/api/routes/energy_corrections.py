@@ -8,11 +8,19 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.routes._pagination import PaginatedResponse
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    Gate,
+    LegacyReadRoute,
+    LegacyVisibility,
+    entity_page,
+    legacy_route_class,
+)
 from app.db.models.common import (
     EnergyCorrectionApplicationRole,
     EnergyCorrectionSchemeKind,
     FrequencyScaleKind,
+    SubmissionRecordType,
 )
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
@@ -26,9 +34,13 @@ from app.schemas.entities.energy_correction import (
 )
 from app.services.scientific_read.handles import canonical_level_of_theory_id
 
-schemes_router = APIRouter()
-scale_factors_router = APIRouter()
-applied_router = APIRouter()
+schemes_router = APIRouter(route_class=LegacyReadRoute)
+scale_factors_router = APIRouter(route_class=LegacyReadRoute)
+applied_router = APIRouter(
+    route_class=legacy_route_class(
+        {"correction_id": Gate(SubmissionRecordType.applied_energy_correction, "AppliedEnergyCorrection")}
+    )
+)
 
 
 # ---------------------------------------------------------------------------
@@ -36,7 +48,7 @@ applied_router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-@schemes_router.get("", response_model=PaginatedResponse[EnergyCorrectionSchemeRead])
+@schemes_router.get("", response_model=EntityListResponse[EnergyCorrectionSchemeRead])
 def list_energy_correction_schemes(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
@@ -76,8 +88,8 @@ def list_energy_correction_schemes(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[EnergyCorrectionSchemeRead.model_validate(r) for r in rows],
+    return entity_page(
+        [EnergyCorrectionSchemeRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -108,7 +120,7 @@ def get_energy_correction_scheme(
 
 
 @scale_factors_router.get(
-    "", response_model=PaginatedResponse[FrequencyScaleFactorRead]
+    "", response_model=EntityListResponse[FrequencyScaleFactorRead]
 )
 def list_frequency_scale_factors(
     session: Session = Depends(get_db),
@@ -151,8 +163,8 @@ def list_frequency_scale_factors(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[FrequencyScaleFactorRead.model_validate(r) for r in rows],
+    return entity_page(
+        [FrequencyScaleFactorRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -175,7 +187,7 @@ def get_frequency_scale_factor(
 
 
 @applied_router.get(
-    "", response_model=PaginatedResponse[AppliedEnergyCorrectionRead]
+    "", response_model=EntityListResponse[AppliedEnergyCorrectionRead]
 )
 def list_applied_energy_corrections(
     session: Session = Depends(get_db),
@@ -185,6 +197,7 @@ def list_applied_energy_corrections(
     scheme_id: int | None = Query(None),
     frequency_scale_factor_id: int | None = Query(None),
     application_role: EnergyCorrectionApplicationRole | None = Query(None),
+    visibility: LegacyVisibility = Depends(),
 ):
     base = select(AppliedEnergyCorrection.id)
     if target_species_entry_id is not None:
@@ -209,6 +222,8 @@ def list_applied_energy_corrections(
             AppliedEnergyCorrection.application_role == application_role
         )
 
+    hidden = visibility.hidden(session, SubmissionRecordType.applied_energy_correction, base)
+    base = visibility.restrict(base, AppliedEnergyCorrection.id, SubmissionRecordType.applied_energy_correction)
     total = session.scalar(
         select(func.count()).select_from(base.subquery())
     ) or 0
@@ -220,11 +235,12 @@ def list_applied_energy_corrections(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[AppliedEnergyCorrectionRead.model_validate(r) for r in rows],
+    return entity_page(
+        [AppliedEnergyCorrectionRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
+        hidden=hidden,
     )
 
 

@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.routes._pagination import PaginatedResponse
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    LegacyReadRoute,
+    entity_page,
+)
 from app.db.models.common import CoreTreatment
 from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
 from app.schemas.entities.level_of_theory import LevelOfTheoryRead
@@ -20,10 +24,10 @@ from app.services.scientific_read.lot_identity_filters import (
     solvent_matches,
 )
 
-router = APIRouter()
+router = APIRouter(route_class=LegacyReadRoute)
 
 
-@router.get("", response_model=PaginatedResponse[LevelOfTheoryRead])
+@router.get("", response_model=EntityListResponse[LevelOfTheoryRead])
 def list_levels_of_theory(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
@@ -62,8 +66,8 @@ def list_levels_of_theory(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[LevelOfTheoryRead.model_validate(r) for r in rows],
+    return entity_page(
+        [LevelOfTheoryRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,

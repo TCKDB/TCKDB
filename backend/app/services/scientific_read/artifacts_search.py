@@ -65,6 +65,10 @@ from app.services.scientific_read.common import (
     visible_statuses,
 )
 from app.services.scientific_read.handles import resolve_filter_ref
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
@@ -203,6 +207,14 @@ def search_artifacts(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
+    )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[row.calculation_id].status for row in rows),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        )
     )
     visible_rows = [
         row for row in rows if badges[row.calculation_id].status in visible

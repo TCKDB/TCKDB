@@ -1769,8 +1769,22 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "caller's own value). Surface.coded_exception from the same "
                 "change, and detail did not move a byte."
             )),
+    ApiCode("lowest_energy_across_levels", 422, Surface.coded_exception,
+            "backend/app/api/routes/lookup.py",
+            shape=Shape.relationship,
+            note=(
+                "/lookup/calculations and /lookup/species-calculation with selection=lowest_energy, when the "
+                "calculations that have an energy span more than one level of theory. Absolute energies from "
+                "different levels are never compared, so the lookup refuses instead of warning and returning a "
+                "winner. context carries the levels found (level_of_theory_ref, method, basis) and the candidate "
+                "count; the remedy is to filter to one level or to use a select endpoint."
+            )),
     ApiCode("lowest_energy_unavailable", 422, Surface.coded_exception,
-            "backend/app/services/scientific_read/species_calculations_search.py"),
+            "backend/app/services/scientific_read/species_calculations_search.py",
+            note=(
+                "Also raised by /lookup/calculations and /lookup/species-calculation (selection=lowest_energy) "
+                "when none of the matching calculations has a recorded energy."
+            )),
     ApiCode("manifest_already_frozen", 409, Surface.message_prefix,
             "backend/app/services/release/manifest.py",
             note=(

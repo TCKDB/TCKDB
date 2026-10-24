@@ -21,6 +21,16 @@ Internal match taxonomy (grounded in three axes):
 - result_existence: yes / no
 - lot: exact / partial / none (per-field: method, basis, dispersion, solvent, ...)
 
+Visibility, order and selection (docs/specs/browse_order.md):
+- Every read applies the scientific reads' default visibility (rejected and deprecated records are hidden unless
+  ``include_rejected`` / ``include_deprecated`` is set) and their read profile (``?profile=curated`` withholds records
+  below the ``approved`` floor, with no count of them: hidden == unknown == absent).
+- Records are listed in the display order (review status, then deposition time newest first, then id descending),
+  echoed in ``order``. The first record is the first in display order, never a recommendation.
+- ``selection=lowest_energy|latest|earliest`` is an explicit request to narrow a list. What it did is stated in
+  ``selected_by``; a mode is never a scientific preference. ``lowest_energy`` across more than one level of theory is
+  refused (422 ``lowest_energy_across_levels``), and an exact tie returns every tied record.
+
 Endpoint families:
 - **Identity**: ``/lookup/species``, ``/lookup/reaction``, ``/lookup/geometry``
 - **Result**: ``/lookup/calculations``, ``/lookup/thermo``, ``/lookup/kinetics``,
@@ -39,7 +49,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.api.error_contract import CodedValueError
 from app.api.errors import NotFoundError
+from app.api.routes._legacy_reads import LegacyVisibility
 from app.chemistry.basis_set_names import basis_identity_key
 from app.chemistry.dispersion_names import level_identity_keys, method_matches_level
 from app.chemistry.reaction_family_display import reaction_family_display_name
@@ -51,7 +63,12 @@ from app.db.models.calculation import (
     CalculationOutputGeometry,
     CalculationSPResult,
 )
-from app.db.models.common import CalculationGeometryRole
+from app.db.models.common import (
+    CalculationGeometryRole,
+    ProfileRecommendation,
+    ReadProfile,
+    SubmissionRecordType,
+)
 from app.db.models.geometry import Geometry
 from app.db.models.kinetics import Kinetics
 from app.db.models.level_of_theory import LevelOfTheory
@@ -66,8 +83,12 @@ from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
 from app.db.models.transport import Transport
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
+from app.schemas.reads.scientific_common import HiddenByDefault, OrderEcho, browse_order
 from app.services.reaction_resolution import reaction_stoichiometry_hash
+from app.services.scientific_read.handles import canonical_level_of_theory_id
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
+from app.services.scientific_read.profile import current_read_profile
+from app.services.scientific_read.sql_review import join_review, review_rank_expr
 
 router = APIRouter()
 
@@ -86,6 +107,10 @@ SPECIES_ENTRY_NONE = "species_entry_none"
 REACTION_IDENTITY_EXACT = "reaction_identity_exact"
 REACTION_IDENTITY_NONE = "reaction_identity_none"
 REACTION_ENTRY_EXISTS = "reaction_entry_exists"
+#: Records are returned from entries this request does not LIST (the entry listing follows the entry visibility; an entry
+#: is a scoping parent and never withholds a record on it). The detail names the entry ids, which are not gated.
+SPECIES_ENTRY_UNLISTED = "species_entry_unlisted"
+REACTION_ENTRY_UNLISTED = "reaction_entry_unlisted"
 REACTION_ENTRY_NONE = "reaction_entry_none"
 REACTANT_RESOLVED = "reactant_resolved"
 REACTANT_NOT_FOUND = "reactant_not_found"
@@ -163,6 +188,40 @@ class LookupResultItem(BaseModel):
     id: int
     links: ResourceLink
     summary: dict[str, Any]
+    #: For a record that sits on a species or reaction entry, in a lookup that also lists the entries: ``False`` when this
+    #: request does not list that entry (so the record has no entry row beside it), ``True`` when it does. ``None`` where
+    #: the question does not arise.
+    entry_listed: bool | None = None
+
+
+SELECTION_MODE_STATEMENT = (
+    "Chosen by the selection mode this request named, not by a scientific preference: the mode narrows the matching "
+    "records by one stated criterion and says nothing about which result is more accurate. When a group is tied, "
+    "every tied record is returned; none is picked by id."
+)
+
+
+class SelectionGroup(BaseModel):
+    """What a selection mode did within one group of candidates (one species entry)."""
+
+    species_entry_id: int | None = None
+    #: ``False`` when this request does not list the group's entry (the entry listing follows the entry visibility).
+    entry_listed: bool | None = None
+    candidates: int
+    chosen: int
+    #: ``lowest_energy`` only: candidates with no recorded energy, which cannot be compared and took no part.
+    not_compared: int = 0
+    #: ``True`` when more than one candidate satisfied the criterion exactly, so all of them are returned.
+    tied: bool = False
+
+
+class SelectedBy(BaseModel):
+    """Labels a reduced result as the outcome of the request's own ``selection`` mode."""
+
+    mode: Literal["lowest_energy", "latest", "earliest"]
+    criterion: str
+    statement: str = SELECTION_MODE_STATEMENT
+    groups: list[SelectionGroup] = Field(default_factory=list)
 
 
 class LookupResponse(BaseModel):
@@ -171,6 +230,59 @@ class LookupResponse(BaseModel):
     query: LookupQuery
     match: MatchDetail
     results: list[LookupResultItem] = Field(default_factory=list)
+    #: The display order of the records in ``results``, within each ``resource_type`` (identity rows first).
+    order: OrderEcho = Field(default_factory=lambda: _DISPLAY_ORDER.model_copy(deep=True))
+    #: The read profile this lookup answered under; ``curated`` withholds records below the approved floor.
+    profile: ReadProfile = ReadProfile.exploratory
+    profile_recommendation: ProfileRecommendation = ProfileRecommendation.none
+    #: Exploratory only: how many records the default visibility hid and how to include them. Never present under
+    #: ``curated`` (no count of records below the floor).
+    hidden_by_default: HiddenByDefault | None = None
+    #: Exploratory only: the species or reaction entries the default visibility hid (a lookup that lists both entries
+    #: and records reports the records in ``hidden_by_default`` and the entries here). Never present under ``curated``.
+    entries_hidden_by_default: HiddenByDefault | None = None
+    #: Present when the request named a ``selection`` mode: what the mode did.
+    selected_by: SelectedBy | None = None
+
+
+_DISPLAY_ORDER = browse_order("review_rank", "created_at", "id")
+
+
+def _respond(
+    query: LookupQuery,
+    mb: _MatchBuilder,
+    results: list[LookupResultItem] | None = None,
+    *,
+    hidden: HiddenByDefault | None = None,
+    entries_hidden: HiddenByDefault | None = None,
+    selected_by: SelectedBy | None = None,
+) -> LookupResponse:
+    """Build the envelope, stamped with the request's read profile."""
+    resolved = current_read_profile()
+    return LookupResponse(
+        query=query,
+        match=mb.build(),
+        results=results or [],
+        profile=resolved.profile,
+        profile_recommendation=resolved.recommendation,
+        hidden_by_default=hidden,
+        entries_hidden_by_default=entries_hidden,
+        selected_by=selected_by,
+    )
+
+
+def _display_ordered(stmt, model, record_type: SubmissionRecordType, visibility: LegacyVisibility | None = None):
+    """``stmt`` in the display order: review rank, then deposition newest first, then id descending.
+
+    With ``visibility`` it is also limited to the records the request shows. Without, nothing is filtered (a scoping
+    parent, which has an order but no review gate).
+    """
+    stmt, review = join_review(stmt, model.id, record_type)
+    if visibility is not None:
+        from app.services.scientific_read.sql_review import visible_review_filter
+
+        stmt = stmt.where(visible_review_filter(review, visibility.statuses))
+    return stmt.order_by(review_rank_expr(review), model.created_at.desc(), model.id.desc())
 
 
 # ---------------------------------------------------------------------------
@@ -315,11 +427,77 @@ def _lot_match(
 # ---------------------------------------------------------------------------
 
 #: Valid selection modes.
-SELECTION_MODES = {"all", "lowest_energy", "latest", "earliest"}
+SelectionMode = Literal["all", "lowest_energy", "latest", "earliest"]
+
+_CRITERIA = {
+    "lowest_energy": (
+        "lowest recorded electronic energy (optimisation final energy, else single-point energy), "
+        "within one level of theory"
+    ),
+    "latest": "most recently deposited (created_at)",
+    "earliest": "earliest deposited (created_at)",
+}
 
 # Detail codes for selection
 SELECTION_APPLIED = "selection_applied"
-SELECTION_MIXED_LOT_WARNING = "selection_mixed_lot_warning"
+
+
+def _calculation_energies(session: Session, calc_ids: list[int]) -> dict[int, float]:
+    """The recorded electronic energy of each calculation that has one (two statements for the whole list)."""
+    if not calc_ids:
+        return {}
+    energies: dict[int, float] = {}
+    for cid, value in session.execute(
+        select(CalculationSPResult.calculation_id, CalculationSPResult.electronic_energy_hartree).where(
+            CalculationSPResult.calculation_id.in_(calc_ids)
+        )
+    ):
+        if value is not None:
+            energies[cid] = value
+    for cid, value in session.execute(
+        select(CalculationOptResult.calculation_id, CalculationOptResult.final_energy_hartree).where(
+            CalculationOptResult.calculation_id.in_(calc_ids)
+        )
+    ):
+        if value is not None:
+            energies[cid] = value  # an optimisation's final energy wins over a single point on the same calculation
+    return energies
+
+
+def _entry_ref(session: Session, entry_id: int | None) -> str | None:
+    entry = session.get(SpeciesEntry, entry_id) if entry_id is not None else None
+    return entry.public_ref if entry is not None else None
+
+
+def _refuse_mixed_levels(session: Session, calcs: list[Calculation], entry_ref: str | None) -> None:
+    """``lowest_energy`` compares absolute energies, which are comparable only within one level of theory."""
+    # Levels are compared as the rows they stand for: a level merged into another is that other level.
+    lot_ids = {canonical_level_of_theory_id(session, c.lot_id) if c.lot_id is not None else None for c in calcs}
+    if len(lot_ids) <= 1:
+        return
+    levels = []
+    for lot_id in sorted(lot_ids, key=lambda i: (i is None, i or 0)):
+        lot = session.get(LevelOfTheory, lot_id) if lot_id is not None else None
+        levels.append(
+            {
+                "level_of_theory_ref": lot.public_ref if lot is not None else None,
+                "method": lot.method if lot is not None else None,
+                "basis": lot.basis if lot is not None else None,
+            }
+        )
+    raise CodedValueError(
+        "lowest_energy_across_levels",
+        "selection=lowest_energy compares absolute energies, and absolute energies from different levels of theory "
+        "are never compared. The matching calculations span more than one level: filter to one level (method and "
+        "basis), or use a select endpoint "
+        "(POST /api/v1/scientific/species-entries/{species_entry_ref}/calculations/select).",
+        context={
+            "selection": "lowest_energy",
+            "species_entry_ref": entry_ref,
+            "candidate_count": len(calcs),
+            "levels": levels,
+        },
+    )
 
 
 def _apply_selection(
@@ -327,69 +505,67 @@ def _apply_selection(
     selection: str,
     session: Session,
     mb: _MatchBuilder,
-) -> list[Calculation]:
-    """Apply a selection mode to reduce a list of matched calculations.
+    *,
+    species_entry_id: int | None = None,
+) -> tuple[list[Calculation], SelectionGroup | None]:
+    """Reduce a list of matched calculations by the request's selection mode.
 
-    Selection modes:
-    - ``all``: no-op, return everything.
-    - ``lowest_energy``: lowest final electronic energy (opt result),
-      tie-break: lot_match exact first → converged first → newest → lowest ID.
-    - ``latest``: most recently created (created_at DESC, then lowest ID).
-    - ``earliest``: oldest (created_at ASC, then lowest ID).
+    - ``all``: no-op.
+    - ``lowest_energy``: the calculations with the lowest recorded electronic energy. Refused when the candidates that
+      have an energy span more than one level of theory; a calculation with no recorded energy is not compared.
+    - ``latest`` / ``earliest``: the calculations deposited most recently / earliest.
 
-    Warns if lowest_energy is applied across mixed levels of theory.
+    An exact tie returns every tied calculation (``tied`` on the group): no member is picked by id. Returns the chosen
+    calculations (display order kept) and what the mode did.
     """
-    if selection == "all" or len(calcs) <= 1:
-        return calcs
+    if selection == "all":
+        return calcs, None
+    if len(calcs) <= 1:
+        return calcs, SelectionGroup(
+            species_entry_id=species_entry_id, candidates=len(calcs), chosen=len(calcs), tied=False
+        )
 
+    not_compared = 0
     if selection == "lowest_energy":
-        # Check for mixed LOT
-        lot_ids = {c.lot_id for c in calcs if c.lot_id is not None}
-        if len(lot_ids) > 1:
-            mb.add(
-                SELECTION_MIXED_LOT_WARNING,
-                "lowest_energy applied across mixed levels of theory",
+        energies = _calculation_energies(session, [c.id for c in calcs])
+        comparable = [c for c in calcs if c.id in energies]
+        if not comparable:
+            raise CodedValueError(
+                "lowest_energy_unavailable",
+                "No lowest energy is available because none of the matching calculations has a recorded energy.",
+                context={"candidate_count": len(calcs), "species_entry_ref": _entry_ref(session, species_entry_id)},
             )
+        _refuse_mixed_levels(session, comparable, _entry_ref(session, species_entry_id))
+        lowest = min(energies[c.id] for c in comparable)
+        chosen = [c for c in comparable if energies[c.id] == lowest]
+        not_compared = len(calcs) - len(comparable)
+    elif selection == "latest":
+        extreme = max(c.created_at for c in calcs)
+        chosen = [c for c in calcs if c.created_at == extreme]
+    else:  # earliest
+        extreme = min(c.created_at for c in calcs)
+        chosen = [c for c in calcs if c.created_at == extreme]
 
-        def _energy_sort_key(c: Calculation):
-            # Fetch opt result for energy
-            opt = session.scalar(
-                select(CalculationOptResult)
-                .where(CalculationOptResult.calculation_id == c.id)
-            )
-            energy = opt.final_energy_hartree if opt and opt.final_energy_hartree is not None else float("inf")
-            converged = opt.converged if opt else False
-            return (
-                energy,                          # lowest energy first
-                0 if converged else 1,            # converged before not
-                -(c.created_at.timestamp() if c.created_at else 0),  # newest first (negate for ASC sort)
-                c.id,                             # lowest ID last resort
-            )
+    tied = len(chosen) > 1
+    refs = ", ".join(c.public_ref for c in chosen)
+    mb.add(
+        SELECTION_APPLIED,
+        f"selection={selection} ({_CRITERIA[selection]}) "
+        + (f"is tied between {len(chosen)} calculations: {refs}" if tied else f"chose calculation {refs}"),
+    )
+    return chosen, SelectionGroup(
+        species_entry_id=species_entry_id,
+        candidates=len(calcs),
+        chosen=len(chosen),
+        not_compared=not_compared,
+        tied=tied,
+    )
 
-        calcs = sorted(calcs, key=_energy_sort_key)
-        winner = calcs[0]
-        mb.add(SELECTION_APPLIED, f"selection=lowest_energy chose calculation {winner.public_ref}")
-        return [winner]
 
-    if selection == "latest":
-        calcs = sorted(
-            calcs,
-            key=lambda c: (-(c.created_at.timestamp() if c.created_at else 0), c.id),
-        )
-        winner = calcs[0]
-        mb.add(SELECTION_APPLIED, f"selection=latest chose calculation {winner.public_ref}")
-        return [winner]
-
-    if selection == "earliest":
-        calcs = sorted(
-            calcs,
-            key=lambda c: (c.created_at.timestamp() if c.created_at else float("inf"), c.id),
-        )
-        winner = calcs[0]
-        mb.add(SELECTION_APPLIED, f"selection=earliest chose calculation {winner.public_ref}")
-        return [winner]
-
-    return calcs
+def _selected_by(selection: str, groups: list[SelectionGroup]) -> SelectedBy | None:
+    if selection == "all":
+        return None
+    return SelectedBy(mode=selection, criterion=_CRITERIA[selection], groups=groups)  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -597,10 +773,18 @@ def _reaction_entry_result(
     entry: ReactionEntry,
     chem_rxn_id: int,
     session: Session,
+    visibility: LegacyVisibility,
 ) -> LookupResultItem:
-    """Build a reaction_entry result item with resolved participant structure."""
+    """Build a reaction_entry result item with resolved participant structure.
+
+    ``kinetics_count`` counts the kinetics records the request shows.
+    """
     kinetics_count = session.scalar(
-        select(func.count(Kinetics.id)).where(Kinetics.reaction_entry_id == entry.id)
+        visibility.restrict(
+            select(func.count(Kinetics.id)).where(Kinetics.reaction_entry_id == entry.id),
+            Kinetics.id,
+            SubmissionRecordType.kinetics,
+        )
     ) or 0
 
     # Resolve participants from reaction_entry_structure_participant
@@ -658,13 +842,15 @@ def lookup_species(
     smiles: str = Query(..., description="SMILES string for the species"),
     charge: int = Query(..., description="Formal charge"),
     multiplicity: int = Query(..., ge=1, description="Spin multiplicity"),
+    visibility: LegacyVisibility = Depends(),
     session: Session = Depends(get_db),
 ):
     """Resolve a species by its chemical identity.
 
     Uses the same canonicalization as uploads: SMILES → canonical SMILES
     → InChI key.  Returns the species and all matching entries with
-    availability summaries.
+    availability summaries. The summaries count the records the request shows (rejected and deprecated ones are
+    left out unless included; ``profile=curated`` counts approved records only).
     """
     inputs = {"smiles": smiles, "charge": charge, "multiplicity": multiplicity}
     query = LookupQuery(kind="species", inputs=inputs)
@@ -677,19 +863,26 @@ def lookup_species(
         _canonical_smiles, inchi_key = canonical_species_identity(payload)
     except ValueError as e:
         mb.add(SPECIES_IDENTITY_NONE, str(e))
-        return LookupResponse(query=query, match=mb.build())
+        return _respond(query, mb)
 
     species = session.scalar(
         select(Species).where(Species.inchi_key == inchi_key)
     )
     if species is None:
         mb.add(SPECIES_IDENTITY_NONE, "no species with this InChI key exists")
-        return LookupResponse(query=query, match=mb.build())
+        return _respond(query, mb)
 
     mb.add(SPECIES_IDENTITY_EXACT, "species identity matched exactly by InChI key")
 
+    entries_stmt = select(SpeciesEntry).where(SpeciesEntry.species_id == species.id)
+    entries_hidden = visibility.hidden(
+        session,
+        SubmissionRecordType.species_entry,
+        entries_stmt.with_only_columns(SpeciesEntry.id),
+        counted="species_entries",
+    )
     entries = session.scalars(
-        select(SpeciesEntry).where(SpeciesEntry.species_id == species.id)
+        _display_ordered(entries_stmt, SpeciesEntry, SubmissionRecordType.species_entry, visibility)
     ).all()
 
     results: list[LookupResultItem] = []
@@ -709,12 +902,18 @@ def lookup_species(
 
     for entry in entries:
         calc_count = session.scalar(
-            select(func.count(Calculation.id))
-            .where(Calculation.species_entry_id == entry.id)
+            visibility.restrict(
+                select(func.count(Calculation.id)).where(Calculation.species_entry_id == entry.id),
+                Calculation.id,
+                SubmissionRecordType.calculation,
+            )
         ) or 0
         thermo_count = session.scalar(
-            select(func.count(Thermo.id))
-            .where(Thermo.species_entry_id == entry.id)
+            visibility.restrict(
+                select(func.count(Thermo.id)).where(Thermo.species_entry_id == entry.id),
+                Thermo.id,
+                SubmissionRecordType.thermo,
+            )
         ) or 0
 
         kind_val = entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind)
@@ -732,7 +931,7 @@ def lookup_species(
             },
         ))
 
-    return LookupResponse(query=query, match=mb.build(), results=results)
+    return _respond(query, mb, results, entries_hidden=entries_hidden)
 
 
 # ---------------------------------------------------------------------------
@@ -747,22 +946,30 @@ def lookup_calculations(
     method: str | None = Query(None, description="Level of theory method"),
     basis: str | None = Query(None, description="Basis set"),
     include: list[str] = Query(default=[], description="Optional expansions: geometry"),
-    selection: str = Query("all", description="Selection mode: all, lowest_energy, latest, earliest"),
+    selection: SelectionMode = Query(
+        "all",
+        description=(
+            "Selection mode: all, lowest_energy, latest, earliest. A mode is an explicit request to narrow the list; "
+            "the response says what it did in ``selected_by``. lowest_energy across more than one level of theory is "
+            "refused (422)."
+        ),
+    ),
+    visibility: LegacyVisibility = Depends(),
     session: Session = Depends(get_db),
 ):
     """Find calculations for a species entry, filtered by type and level of theory.
 
+    Calculations are listed in the display order (review status, deposition newest first, id descending).
+
     Use ``include=geometry`` to expand the final optimized geometry inline.
 
-    Use ``selection`` to reduce to a single result:
+    Use ``selection`` to reduce to the calculations satisfying one stated criterion (labelled in ``selected_by``):
     - ``all`` (default): return all matches.
-    - ``lowest_energy``: lowest electronic energy, tie-break: converged → newest → lowest ID.
-    - ``latest``: most recently created.
-    - ``earliest``: oldest.
+    - ``lowest_energy``: lowest recorded electronic energy; refused across more than one level of theory.
+    - ``latest``: most recently deposited.
+    - ``earliest``: earliest deposited.
+    An exact tie returns every tied calculation.
     """
-    if selection not in SELECTION_MODES:
-        raise NotFoundError(f"Unknown selection mode: {selection!r}. Valid: {sorted(SELECTION_MODES)}")
-
     inputs: dict[str, Any] = {"species_entry_id": species_entry_id}
     if type:
         inputs["type"] = type
@@ -788,8 +995,11 @@ def lookup_calculations(
     if basis is not None:
         stmt = stmt.where(basis_matches(basis))
 
-    calcs = list(session.scalars(stmt.order_by(Calculation.id)).all())
-    calcs = _apply_selection(calcs, selection, session, mb)
+    hidden = visibility.hidden(session, SubmissionRecordType.calculation, stmt.with_only_columns(Calculation.id))
+    calcs = list(
+        session.scalars(_display_ordered(stmt, Calculation, SubmissionRecordType.calculation, visibility)).all()
+    )
+    calcs, group = _apply_selection(calcs, selection, session, mb, species_entry_id=species_entry_id)
 
     results: list[LookupResultItem] = []
 
@@ -814,7 +1024,9 @@ def lookup_calculations(
                 ),
             ))
 
-    return LookupResponse(query=query_echo, match=mb.build(), results=results)
+    return _respond(
+        query_echo, mb, results, hidden=hidden, selected_by=_selected_by(selection, [group] if group else [])
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -825,9 +1037,10 @@ def lookup_calculations(
 @router.get("/thermo", response_model=LookupResponse)
 def lookup_thermo(
     species_entry_id: int = Query(..., description="Species entry to search"),
+    visibility: LegacyVisibility = Depends(),
     session: Session = Depends(get_db),
 ):
-    """Find thermo records for a species entry."""
+    """Find thermo records for a species entry, in the display order."""
     query_echo = LookupQuery(
         kind="thermo",
         inputs={"species_entry_id": species_entry_id},
@@ -838,11 +1051,9 @@ def lookup_thermo(
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
 
-    rows = session.scalars(
-        select(Thermo)
-        .where(Thermo.species_entry_id == species_entry_id)
-        .order_by(Thermo.id)
-    ).all()
+    stmt = select(Thermo).where(Thermo.species_entry_id == species_entry_id)
+    hidden = visibility.hidden(session, SubmissionRecordType.thermo, stmt.with_only_columns(Thermo.id))
+    rows = session.scalars(_display_ordered(stmt, Thermo, SubmissionRecordType.thermo, visibility)).all()
 
     results: list[LookupResultItem] = []
 
@@ -877,7 +1088,7 @@ def lookup_thermo(
                 summary=summary,
             ))
 
-    return LookupResponse(query=query_echo, match=mb.build(), results=results)
+    return _respond(query_echo, mb, results, hidden=hidden)
 
 
 # ---------------------------------------------------------------------------
@@ -894,7 +1105,15 @@ def lookup_species_calculation(
     method: str = Query(..., description="Level of theory method"),
     basis: str | None = Query(None, description="Basis set"),
     include: list[str] = Query(default=[], description="Optional expansions: geometry"),
-    selection: str = Query("all", description="Selection mode: all, lowest_energy, latest, earliest"),
+    selection: SelectionMode = Query(
+        "all",
+        description=(
+            "Selection mode: all, lowest_energy, latest, earliest. Applied within each species entry (entries are "
+            "different structures: their energies are never compared). The response says what it did in "
+            "``selected_by``; lowest_energy across more than one level of theory is refused (422)."
+        ),
+    ),
+    visibility: LegacyVisibility = Depends(),
     session: Session = Depends(get_db),
 ):
     """One-shot lookup: resolve species identity and find matching calculations.
@@ -902,18 +1121,17 @@ def lookup_species_calculation(
     Avoids a two-request round trip for the common question:
     "do you have an opt for [H][H] at wb97xd/def2tzvp?"
 
+    Every entry of the species is searched and listed (none is picked); calculations are listed in the display order.
+
     Use ``include=geometry`` to expand the final optimized geometry inline.
 
-    Use ``selection`` to reduce to a single result:
+    Use ``selection`` to narrow each entry's calculations by one stated criterion (see ``selected_by``):
     - ``all`` (default): return all matches.
-    - ``lowest_energy``: lowest electronic energy, tie-break:
-      converged → newest → lowest ID.
-    - ``latest``: most recently created.
-    - ``earliest``: oldest.
+    - ``lowest_energy``: lowest recorded electronic energy, within one level of theory.
+    - ``latest``: most recently deposited.
+    - ``earliest``: earliest deposited.
+    An exact tie returns every tied calculation.
     """
-    if selection not in SELECTION_MODES:
-        raise NotFoundError(f"Unknown selection mode: {selection!r}. Valid: {sorted(SELECTION_MODES)}")
-
     inputs: dict[str, Any] = {
         "smiles": smiles, "charge": charge, "multiplicity": multiplicity,
         "type": type, "method": method,
@@ -933,14 +1151,14 @@ def lookup_species_calculation(
         _canonical_smiles, inchi_key = canonical_species_identity(payload)
     except ValueError as e:
         mb.add(SPECIES_IDENTITY_NONE, str(e))
-        return LookupResponse(query=query_echo, match=mb.build())
+        return _respond(query_echo, mb)
 
     species = session.scalar(
         select(Species).where(Species.inchi_key == inchi_key)
     )
     if species is None:
         mb.add(SPECIES_IDENTITY_NONE, "species identity not found")
-        return LookupResponse(query=query_echo, match=mb.build())
+        return _respond(query_echo, mb)
 
     mb.add(SPECIES_IDENTITY_EXACT, "species identity matched exactly")
 
@@ -953,34 +1171,42 @@ def lookup_species_calculation(
         summary={"smiles": species.smiles, "inchi_key": species.inchi_key},
     ))
 
-    # Step 2: find species entry
-    entry = session.scalar(
-        select(SpeciesEntry)
-        .where(SpeciesEntry.species_id == species.id)
-        .order_by(SpeciesEntry.id)
-        .limit(1)
+    # Step 2: every entry of the species. None is picked: the calculations of all of them are searched.
+    entries_stmt = select(SpeciesEntry).where(SpeciesEntry.species_id == species.id)
+    entries_hidden = visibility.hidden(
+        session,
+        SubmissionRecordType.species_entry,
+        entries_stmt.with_only_columns(SpeciesEntry.id),
+        counted="species_entries",
     )
-    if entry is None:
+    entries = session.scalars(
+        _display_ordered(entries_stmt, SpeciesEntry, SubmissionRecordType.species_entry, visibility)
+    ).all()
+    # The entry LISTING follows the visibility the scientific species search applies to entries. The calculations are
+    # searched on EVERY entry of the species: an entry is a scoping parent and never withholds a record on it.
+    if not session.scalar(select(func.count()).select_from(entries_stmt.subquery())):
         mb.add(SPECIES_ENTRY_NONE, "no species entries found")
-        return LookupResponse(query=query_echo, match=mb.build(), results=results)
+        return _respond(query_echo, mb, results, entries_hidden=entries_hidden)
 
-    mb.add(SPECIES_ENTRY_EXISTS, "species entry exists")
-    results.append(LookupResultItem(
-        resource_type="species_entry",
-        id=entry.id,
-        links=ResourceLink(
-            self=f"/api/v1/species-entries/{entry.id}",
-            owner=f"/api/v1/species/{species.id}",
-        ),
-        summary={
-            "kind": entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind),
-        },
-    ))
+    if entries:
+        mb.add(SPECIES_ENTRY_EXISTS, f"{len(entries)} species entry(ies) exist")
+    for entry in entries:
+        results.append(LookupResultItem(
+            resource_type="species_entry",
+            id=entry.id,
+            links=ResourceLink(
+                self=f"/api/v1/species-entries/{entry.id}",
+                owner=f"/api/v1/species/{species.id}",
+            ),
+            summary={
+                "kind": entry.kind.value if hasattr(entry.kind, "value") else str(entry.kind),
+            },
+        ))
 
-    # Step 3: find matching calculations
+    # Step 3: find matching calculations across the entries
     stmt = (
         select(Calculation)
-        .where(Calculation.species_entry_id == entry.id)
+        .where(Calculation.species_entry_id.in_(entries_stmt.with_only_columns(SpeciesEntry.id)))
         .where(Calculation.type == type)
         .outerjoin(LevelOfTheory, Calculation.lot_id == LevelOfTheory.id)
         .where(method_matches(method))
@@ -988,8 +1214,31 @@ def lookup_species_calculation(
     if basis is not None:
         stmt = stmt.where(basis_matches(basis))
 
-    calcs = list(session.scalars(stmt.order_by(Calculation.id)).all())
-    calcs = _apply_selection(calcs, selection, session, mb)
+    hidden = visibility.hidden(session, SubmissionRecordType.calculation, stmt.with_only_columns(Calculation.id))
+    calcs = list(
+        session.scalars(_display_ordered(stmt, Calculation, SubmissionRecordType.calculation, visibility)).all()
+    )
+    by_entry: dict[int, list[Calculation]] = {}
+    for calc in calcs:
+        by_entry.setdefault(calc.species_entry_id, []).append(calc)
+    chosen_ids: set[int] = set()
+    groups: list[SelectionGroup] = []
+    for entry_id, entry_calcs in by_entry.items():
+        picked, group = _apply_selection(entry_calcs, selection, session, mb, species_entry_id=entry_id)
+        chosen_ids.update(c.id for c in picked)
+        if group is not None:
+            groups.append(group)
+    calcs = [c for c in calcs if c.id in chosen_ids]
+    listed_ids = {e.id for e in entries}
+    for group in groups:
+        group.entry_listed = group.species_entry_id in listed_ids
+    unlisted = sorted({c.species_entry_id for c in calcs} - listed_ids)
+    if unlisted:
+        mb.add(
+            SPECIES_ENTRY_UNLISTED,
+            f"records on species entry id(s) {unlisted}, which this request does not list: the entry listing follows the "
+            "entry visibility, and an entry never withholds a record on it",
+        )
 
     if not calcs:
         mb.add(CALCULATION_NONE, "species exists but no matching calculations at this LOT")
@@ -1004,15 +1253,18 @@ def lookup_species_calculation(
                 id=calc.id,
                 links=ResourceLink(
                     self=f"/api/v1/calculations/{calc.id}",
-                    owner=f"/api/v1/species-entries/{entry.id}",
+                    owner=f"/api/v1/species-entries/{calc.species_entry_id}",
                 ),
                 summary=_calc_summary(
                     calc, lot, session, lot_status,
                     include_geometry="geometry" in include,
                 ),
+                entry_listed=calc.species_entry_id in listed_ids,
             ))
 
-    return LookupResponse(query=query_echo, match=mb.build(), results=results)
+    return _respond(
+        query_echo, mb, results, hidden=hidden, entries_hidden=entries_hidden, selected_by=_selected_by(selection, groups)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1029,6 +1281,7 @@ def lookup_reaction(
     reactant_multiplicities: list[int] = Query(None, description="Reactant multiplicities"),
     product_multiplicities: list[int] = Query(None, description="Product multiplicities"),
     reversible: bool = Query(True, description="Whether the reaction is reversible"),
+    visibility: LegacyVisibility = Depends(),
     session: Session = Depends(get_db),
 ):
     """Resolve a reaction by reactant/product chemical identities.
@@ -1036,7 +1289,8 @@ def lookup_reaction(
     Contract: this endpoint resolves to ``reaction_entry`` level, not just
     ``chem_reaction`` identity.  Each returned reaction_entry includes its
     resolved participant structure (species_entry IDs, SMILES, role, order)
-    via ``reaction_entry_structure_participant``.
+    via ``reaction_entry_structure_participant``. Entries are listed in the display order; their kinetics counts are
+    of the records the request shows.
     """
     r_charges = reactant_charges or [0] * len(reactants)
     p_charges = product_charges or [0] * len(products)
@@ -1054,10 +1308,17 @@ def lookup_reaction(
         reversible, session, mb,
     )
     if chem_rxn is None:
-        return LookupResponse(query=query_echo, match=mb.build())
+        return _respond(query_echo, mb)
 
+    entries_stmt = select(ReactionEntry).where(ReactionEntry.reaction_id == chem_rxn.id)
+    entries_hidden = visibility.hidden(
+        session,
+        SubmissionRecordType.reaction_entry,
+        entries_stmt.with_only_columns(ReactionEntry.id),
+        counted="reaction_entries",
+    )
     entries = session.scalars(
-        select(ReactionEntry).where(ReactionEntry.reaction_id == chem_rxn.id)
+        _display_ordered(entries_stmt, ReactionEntry, SubmissionRecordType.reaction_entry, visibility)
     ).all()
 
     if not entries:
@@ -1066,9 +1327,9 @@ def lookup_reaction(
         mb.add(REACTION_ENTRY_EXISTS, f"{len(entries)} reaction entry(ies)")
 
     for entry in entries:
-        results.append(_reaction_entry_result(entry, chem_rxn.id, session))
+        results.append(_reaction_entry_result(entry, chem_rxn.id, session, visibility))
 
-    return LookupResponse(query=query_echo, match=mb.build(), results=results)
+    return _respond(query_echo, mb, results, entries_hidden=entries_hidden)
 
 
 # ---------------------------------------------------------------------------
@@ -1080,9 +1341,10 @@ def lookup_reaction(
 def lookup_kinetics(
     reaction_entry_id: int = Query(..., description="Reaction entry to search"),
     model_kind: str | None = Query(None, description="Kinetics model kind filter"),
+    visibility: LegacyVisibility = Depends(),
     session: Session = Depends(get_db),
 ):
-    """Find kinetics records for a reaction entry."""
+    """Find kinetics records for a reaction entry, in the display order."""
     inputs: dict[str, Any] = {"reaction_entry_id": reaction_entry_id}
     if model_kind:
         inputs["model_kind"] = model_kind
@@ -1097,7 +1359,8 @@ def lookup_kinetics(
     if model_kind:
         stmt = stmt.where(Kinetics.model_kind == model_kind)
 
-    rows = session.scalars(stmt.order_by(Kinetics.id)).all()
+    hidden = visibility.hidden(session, SubmissionRecordType.kinetics, stmt.with_only_columns(Kinetics.id))
+    rows = session.scalars(_display_ordered(stmt, Kinetics, SubmissionRecordType.kinetics, visibility)).all()
     results: list[LookupResultItem] = []
 
     if not rows:
@@ -1115,7 +1378,7 @@ def lookup_kinetics(
                 summary=_kinetics_summary(kin),
             ))
 
-    return LookupResponse(query=query_echo, match=mb.build(), results=results)
+    return _respond(query_echo, mb, results, hidden=hidden)
 
 
 # ---------------------------------------------------------------------------
@@ -1133,9 +1396,14 @@ def lookup_reaction_kinetics(
     product_multiplicities: list[int] = Query(None, description="Product multiplicities"),
     reversible: bool = Query(True, description="Whether the reaction is reversible"),
     model_kind: str | None = Query(None, description="Kinetics model kind filter"),
+    visibility: LegacyVisibility = Depends(),
     session: Session = Depends(get_db),
 ):
-    """One-shot: resolve reaction identity and find kinetics."""
+    """One-shot: resolve reaction identity and find kinetics.
+
+    The kinetics of every entry are listed together in one display order (review status, deposition newest first, id
+    descending); no entry is picked.
+    """
     r_charges = reactant_charges or [0] * len(reactants)
     p_charges = product_charges or [0] * len(products)
     r_mults = reactant_multiplicities or [1] * len(reactants)
@@ -1154,32 +1422,51 @@ def lookup_reaction_kinetics(
         reversible, session, mb,
     )
     if chem_rxn is None:
-        return LookupResponse(query=query_echo, match=mb.build())
+        return _respond(query_echo, mb)
 
+    entries_stmt = select(ReactionEntry).where(ReactionEntry.reaction_id == chem_rxn.id)
+    entries_hidden = visibility.hidden(
+        session,
+        SubmissionRecordType.reaction_entry,
+        entries_stmt.with_only_columns(ReactionEntry.id),
+        counted="reaction_entries",
+    )
     entries = session.scalars(
-        select(ReactionEntry).where(ReactionEntry.reaction_id == chem_rxn.id)
+        _display_ordered(entries_stmt, ReactionEntry, SubmissionRecordType.reaction_entry, visibility)
     ).all()
 
-    if not entries:
+    # The entry LISTING follows the visibility the scientific searches apply to entries; the kinetics are searched on
+    # EVERY entry of the reaction (an entry is a scoping parent and never withholds a record on it).
+    if not session.scalar(select(func.count()).select_from(entries_stmt.subquery())):
         mb.add(REACTION_ENTRY_NONE, "reaction exists but no entries")
-        return LookupResponse(query=query_echo, match=mb.build(), results=results)
+        return _respond(query_echo, mb, results, entries_hidden=entries_hidden)
 
-    mb.add(REACTION_ENTRY_EXISTS, f"{len(entries)} reaction entry(ies)")
+    if entries:
+        mb.add(REACTION_ENTRY_EXISTS, f"{len(entries)} reaction entry(ies)")
 
     for entry in entries:
-        results.append(_reaction_entry_result(entry, chem_rxn.id, session))
+        results.append(_reaction_entry_result(entry, chem_rxn.id, session, visibility))
 
-    all_kinetics: list[Kinetics] = []
-    for entry in entries:
-        stmt = select(Kinetics).where(Kinetics.reaction_entry_id == entry.id)
-        if model_kind:
-            stmt = stmt.where(Kinetics.model_kind == model_kind)
-        all_kinetics.extend(session.scalars(stmt).all())
+    stmt = select(Kinetics).where(Kinetics.reaction_entry_id.in_(entries_stmt.with_only_columns(ReactionEntry.id)))
+    if model_kind:
+        stmt = stmt.where(Kinetics.model_kind == model_kind)
+    hidden = visibility.hidden(session, SubmissionRecordType.kinetics, stmt.with_only_columns(Kinetics.id))
+    all_kinetics = list(
+        session.scalars(_display_ordered(stmt, Kinetics, SubmissionRecordType.kinetics, visibility)).all()
+    )
 
     if not all_kinetics:
         mb.add(KINETICS_NONE, "reaction exists but no kinetics records found")
     else:
         mb.add(KINETICS_EXISTS, f"{len(all_kinetics)} kinetics record(s) found")
+        listed_ids = {e.id for e in entries}
+        unlisted = sorted({k.reaction_entry_id for k in all_kinetics} - listed_ids)
+        if unlisted:
+            mb.add(
+                REACTION_ENTRY_UNLISTED,
+                f"records on reaction entry id(s) {unlisted}, which this request does not list: the entry listing follows "
+                "the entry visibility, and an entry never withholds a record on it",
+            )
         for kin in all_kinetics:
             results.append(LookupResultItem(
                 resource_type="kinetics",
@@ -1189,9 +1476,10 @@ def lookup_reaction_kinetics(
                     owner=f"/api/v1/reaction-entries/{kin.reaction_entry_id}",
                 ),
                 summary=_kinetics_summary(kin),
+                entry_listed=kin.reaction_entry_id in listed_ids,
             ))
 
-    return LookupResponse(query=query_echo, match=mb.build(), results=results)
+    return _respond(query_echo, mb, results, hidden=hidden, entries_hidden=entries_hidden)
 
 
 # ---------------------------------------------------------------------------
@@ -1202,12 +1490,14 @@ def lookup_reaction_kinetics(
 @router.get("/geometry", response_model=LookupResponse)
 def lookup_geometry(
     geom_hash: str = Query(..., description="Stored geometry identity hash"),
+    visibility: LegacyVisibility = Depends(),
     session: Session = Depends(get_db),
 ):
     """Discover whether a geometry already exists, by exact hash.
 
     First-pass matching semantics: exact hash only. Optional geometry-payload
     canonicalization may be added later; see ``lookup-expansion-spec.md``.
+    ``calculation_output_count`` counts the calculations the request shows.
     """
     query_echo = LookupQuery(kind="geometry", inputs={"geom_hash": geom_hash})
     mb = _MatchBuilder()
@@ -1217,13 +1507,18 @@ def lookup_geometry(
     )
     if geom is None:
         mb.add(GEOMETRY_IDENTITY_NONE, "no geometry with this hash exists")
-        return LookupResponse(query=query_echo, match=mb.build())
+        return _respond(query_echo, mb)
 
     mb.add(GEOMETRY_IDENTITY_EXACT, "geometry identity matched exactly by hash")
 
     calc_count = session.scalar(
-        select(func.count(CalculationOutputGeometry.calculation_id))
-        .where(CalculationOutputGeometry.geometry_id == geom.id)
+        visibility.restrict(
+            select(func.count(CalculationOutputGeometry.calculation_id)).where(
+                CalculationOutputGeometry.geometry_id == geom.id
+            ),
+            CalculationOutputGeometry.calculation_id,
+            SubmissionRecordType.calculation,
+        )
     ) or 0
 
     result = LookupResultItem(
@@ -1236,7 +1531,7 @@ def lookup_geometry(
             "calculation_output_count": calc_count,
         },
     )
-    return LookupResponse(query=query_echo, match=mb.build(), results=[result])
+    return _respond(query_echo, mb, [result])
 
 
 # ---------------------------------------------------------------------------
@@ -1282,12 +1577,13 @@ def _statmech_summary(row: Statmech) -> dict[str, Any]:
 @router.get("/statmech", response_model=LookupResponse)
 def lookup_statmech(
     species_entry_id: int = Query(..., description="Species entry to search"),
+    visibility: LegacyVisibility = Depends(),
     session: Session = Depends(get_db),
 ):
     """Discover statmech records attached to a species entry.
 
     Append-only: multiple records for the same species entry are all
-    returned, not collapsed into one ``preferred`` row.
+    returned, not collapsed into one ``preferred`` row, in the display order.
     """
     query_echo = LookupQuery(
         kind="statmech",
@@ -1299,11 +1595,9 @@ def lookup_statmech(
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
 
-    rows = session.scalars(
-        select(Statmech)
-        .where(Statmech.species_entry_id == species_entry_id)
-        .order_by(Statmech.id)
-    ).all()
+    stmt = select(Statmech).where(Statmech.species_entry_id == species_entry_id)
+    hidden = visibility.hidden(session, SubmissionRecordType.statmech, stmt.with_only_columns(Statmech.id))
+    rows = session.scalars(_display_ordered(stmt, Statmech, SubmissionRecordType.statmech, visibility)).all()
 
     results: list[LookupResultItem] = []
 
@@ -1322,7 +1616,7 @@ def lookup_statmech(
                 summary=_statmech_summary(row),
             ))
 
-    return LookupResponse(query=query_echo, match=mb.build(), results=results)
+    return _respond(query_echo, mb, results, hidden=hidden)
 
 
 # ---------------------------------------------------------------------------
@@ -1360,12 +1654,13 @@ def _transport_summary(row: Transport) -> dict[str, Any]:
 @router.get("/transport", response_model=LookupResponse)
 def lookup_transport(
     species_entry_id: int = Query(..., description="Species entry to search"),
+    visibility: LegacyVisibility = Depends(),
     session: Session = Depends(get_db),
 ):
     """Discover transport records attached to a species entry.
 
     Append-only: multiple records for the same species entry are all
-    returned, not collapsed into one ``preferred`` row.
+    returned, not collapsed into one ``preferred`` row, in the display order.
     """
     query_echo = LookupQuery(
         kind="transport",
@@ -1377,11 +1672,9 @@ def lookup_transport(
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
 
-    rows = session.scalars(
-        select(Transport)
-        .where(Transport.species_entry_id == species_entry_id)
-        .order_by(Transport.id)
-    ).all()
+    stmt = select(Transport).where(Transport.species_entry_id == species_entry_id)
+    hidden = visibility.hidden(session, SubmissionRecordType.transport, stmt.with_only_columns(Transport.id))
+    rows = session.scalars(_display_ordered(stmt, Transport, SubmissionRecordType.transport, visibility)).all()
 
     results: list[LookupResultItem] = []
 
@@ -1400,7 +1693,7 @@ def lookup_transport(
                 summary=_transport_summary(row),
             ))
 
-    return LookupResponse(query=query_echo, match=mb.build(), results=results)
+    return _respond(query_echo, mb, results, hidden=hidden)
 
 
 # ---------------------------------------------------------------------------
@@ -1417,6 +1710,7 @@ def lookup_network(
             "contains-all: returned networks contain every requested ID."
         ),
     ),
+    visibility: LegacyVisibility = Depends(),
     session: Session = Depends(get_db),
 ):
     """Discover networks by participating species-entry membership.
@@ -1425,6 +1719,7 @@ def lookup_network(
     only if it lists every requested ``species_entry_id`` in
     ``network_species`` (any role). This matches how network identity is
     experienced scientifically and avoids the noisiness of contains-any.
+    Networks are listed in the display order.
     """
     inputs: dict[str, Any] = {"species_entry_ids": list(species_entry_ids)}
     query_echo = LookupQuery(kind="network", inputs=inputs)
@@ -1440,7 +1735,7 @@ def lookup_network(
             SPECIES_ENTRY_NOT_FOUND,
             f"species_entry_id(s) not found: {missing}",
         )
-        return LookupResponse(query=query_echo, match=mb.build())
+        return _respond(query_echo, mb)
 
     mb.add(
         NETWORK_MEMBERSHIP_CONTAINS_ALL,
@@ -1450,32 +1745,30 @@ def lookup_network(
     # contains-all: group by network_id, count distinct requested species-entries
     # present, keep networks whose count equals len(requested).
     n_requested = len(requested)
-    network_id_rows = session.execute(
+    containing = (
         select(NetworkSpecies.network_id)
         .where(NetworkSpecies.species_entry_id.in_(requested))
         .group_by(NetworkSpecies.network_id)
         .having(
             func.count(func.distinct(NetworkSpecies.species_entry_id)) == n_requested
         )
-        .order_by(NetworkSpecies.network_id)
-    ).all()
-    network_ids = [row[0] for row in network_id_rows]
+    )
+    stmt = select(Network).where(Network.id.in_(containing))
+    hidden = visibility.hidden(session, SubmissionRecordType.network, stmt.with_only_columns(Network.id))
+    networks = session.scalars(_display_ordered(stmt, Network, SubmissionRecordType.network, visibility)).all()
 
     results: list[LookupResultItem] = []
 
-    if not network_ids:
+    if not networks:
         mb.add(NETWORK_NONE, "no networks contain all requested species entries")
-        return LookupResponse(query=query_echo, match=mb.build(), results=results)
+        return _respond(query_echo, mb, results, hidden=hidden)
 
-    mb.add(NETWORK_EXISTS, f"{len(network_ids)} network(s) contain all requested species")
+    mb.add(NETWORK_EXISTS, f"{len(networks)} network(s) contain all requested species")
 
-    for network_id in network_ids:
-        net = session.get(Network, network_id)
-        if net is None:
-            continue
+    for net in networks:
         species_count = session.scalar(
             select(func.count(func.distinct(NetworkSpecies.species_entry_id)))
-            .where(NetworkSpecies.network_id == network_id)
+            .where(NetworkSpecies.network_id == net.id)
         ) or 0
         summary: dict[str, Any] = {
             "name": net.name,
@@ -1491,4 +1784,4 @@ def lookup_network(
             summary=summary,
         ))
 
-    return LookupResponse(query=query_echo, match=mb.build(), results=results)
+    return _respond(query_echo, mb, results, hidden=hidden)

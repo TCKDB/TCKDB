@@ -22,6 +22,36 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Lookup and the legacy entity lists obey the visibility rules (2026-10-24)
+
+`/lookup/*` and the raw entity lists (`/thermo`, `/kinetics`, `/calculations`, ...) used to ignore every visibility rule the scientific reads
+obey: no review filter, no read profile, id order. They now follow `docs/specs/browse_order.md`.
+
+- **Visibility and profile.** Rejected and deprecated records are hidden unless `include_rejected` / `include_deprecated` is set. Every
+  legacy and lookup read takes `?profile=`; `curated` withholds records below the `approved` floor from lists, totals, counts and detail
+  routes (a hidden record answers as an unknown id), and drops mentions of hidden calculations from the records it does show. A curated
+  reader could previously reach below-floor records through the legacy lists: that is closed.
+- **Order.** Lookup lists use the display order (`order` echoes it). Legacy lists stay `id` ascending and now say so (`order`, described as
+  an administrative listing order).
+- **Selection modes.** `/lookup` `selection=lowest_energy|latest|earliest` labels what it did (`selected_by`); `lowest_energy` across more
+  than one level of theory is refused (422 `lowest_energy_across_levels`) instead of warning; an exact tie returns every tied record;
+  `/lookup/species-calculation` searches every entry instead of the first by id.
+- **Disclosure.** Lists report what the default visibility hid (`hidden_by_default`: counts and how to include them), under the exploratory
+  profile only; under `curated` nothing about records below the floor is counted or named.
+- **Closed after review.** A path id is judged as the id FastAPI bound (`+5`, `5.0`, ` 5` were not gated). A visible record no longer
+  names a hidden record of any gated kind (registry of pointer columns, not a name suffix); embedded records, children of a hidden parent
+  and id-typed filters follow the same rule. Applied energy corrections and species/reaction entries obey the default visibility and the
+  floor. `GET /species-entries/{id}/conformer-observations/lowest-sp` is removed (a silent pick that named hidden records).
+  `/workflow-tools` and `/workflow-tool-releases` list by `id`, as their echo says.
+- **Parent rule.** A child of a hidden parent (an observation in a hidden conformer group, an entry of a hidden transition state) is hidden
+  by the detail gate, by pointers at it, by id filters naming it and by embedded copies, under the request's visibility (one registry,
+  `PARENT_OF`). Lookups report hidden entries in `entries_hidden_by_default` everywhere; `hidden_by_default` is always about records.
+- **Entries never withhold records.** The scientific thermo, kinetics and species-calculation searches no longer drop a record because its
+  species or reaction entry is unreviewed or rejected (floor and default exclusions alike). `/lookup/species-calculation` and
+  `/lookup/reaction-kinetics` mark records on entries they do not list (`entry_listed: false`, `species_entry_unlisted` /
+  `reaction_entry_unlisted`). The hidden-by-default count includes children hidden through a rejected parent.
+- Packages: `tckdb-schemas` 0.133.0 and `tckdb-client` 0.164.0 (a new refusal code; the removed route). No schema or migration change.
+
 ## Browse is a browse: no evidence keys, no silent pick (2026-10-23)
 
 Browse, filter and select are three operations, and a browse read now does only the first (`docs/specs/browse_order.md`).

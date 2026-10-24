@@ -14,6 +14,7 @@ from app.db.models.calculation import Calculation
 from app.db.models.common import (
     CalculationType,
     ReactionRole,
+    RecordReviewStatus,
     SubmissionRecordType,
 )
 from app.db.models.kinetics import Kinetics
@@ -61,6 +62,10 @@ from app.services.scientific_read.handles import (
     reconcile_reaction_entry_pair,
     reconcile_reaction_pair,
 )
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
@@ -82,7 +87,7 @@ _DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 
 
 def search_reactions(
-    session: Session, request: ReactionSearchRequest
+    session: Session, request: ReactionSearchRequest, *, scope_entries: bool = False
 ) -> ScientificReactionSearchResponse:
     """Discover reaction entries by reactants/products with availability + trust.
 
@@ -247,6 +252,18 @@ def search_reactions(
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
     )
+    if scope_entries:
+        # The caller searches RECORDS on these entries: an entry is a scoping parent and never withholds one.
+        visible = set(RecordReviewStatus)
+    if not scope_entries:
+        record_hidden_by_default(
+            hidden_by_default_from_statuses(
+                (badges[e.id].status for e in entries),
+                include_rejected=request.include_rejected,
+                include_deprecated=request.include_deprecated,
+                min_review_status=request.min_review_status,
+            )
+        )
     entries = [e for e in entries if badges[e.id].status in visible]
 
     if not entries:
@@ -499,6 +516,14 @@ def browse_reactions(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
+    )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[e.id].status for e in entries),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        )
     )
     entries = [e for e in entries if badges[e.id].status in visible]
     if not entries:

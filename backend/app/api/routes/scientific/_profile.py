@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.db.models.common import ReadProfile
+from app.services.scientific_read.hidden_by_default import reset_holder, set_holder
 from app.services.scientific_read.profile import (
     ResolvedReadProfile,
     UnknownReleaseError,
@@ -78,6 +79,7 @@ async def resolve_profile_dependency(
 
     request.state.read_profile = resolved
     token = set_current_read_profile(resolved)
+    holder_token = set_holder()
     # The curated-ref guard needs the route's own session and the route template; both are known here.
     # ``scope["route"]`` is set by the router when it matches, before dependencies are solved.
     route = request.scope.get("route")
@@ -88,6 +90,7 @@ async def resolve_profile_dependency(
         yield resolved
     finally:
         reset_ref_guard_context(guard_token)
+        reset_holder(holder_token)
         reset_current_read_profile(token)
 
 

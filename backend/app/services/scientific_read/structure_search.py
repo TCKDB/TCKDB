@@ -72,6 +72,7 @@ from app.services.scientific_read.common import (
     validate_pagination,
     visible_statuses,
 )
+from app.services.scientific_read.hidden_by_default import hidden_by_default_from_counts, record_hidden_by_default
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
@@ -168,6 +169,17 @@ def search_species_by_structure(
             limit=limit,
         )
 
+    visible_values = {status.value for status in visible}
+    record_hidden_by_default(
+        hidden_by_default_from_counts(
+            {RecordReviewStatus(k): n for k, n in status_counts.items()},
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+            counted="species_entries",
+        )
+    )
+    status_counts = {k: n for k, n in status_counts.items() if k in visible_values}
     summary = _summary_from_counts(status_counts)
     total = summary.total
 
@@ -349,8 +361,9 @@ def _aggregate_status_counts(
     """Run ``GROUP BY review_status`` aggregate over the matched set.
 
     Returns ``{status_value: count}`` for every status that has at least
-    one visible row. The caller sums these for ``total`` and projects
-    them onto :class:`ReviewStatusSummary`.
+    one matching row, visible or not: the caller keeps the visible statuses
+    for ``total`` and the review summary, and reports the statuses the
+    default hid (``hidden_by_default``) from the same single statement.
 
     The query touches each matching row server-side exactly once but
     never returns per-row data — the wire result is at most five rows
@@ -366,7 +379,6 @@ def _aggregate_status_counts(
         JOIN species AS sp ON sp.id = se.species_id
         {_REVIEW_JOIN}
         WHERE {match_expr}
-          AND {_REVIEW_STATUS_EXPR} = ANY(:visible_statuses)
         GROUP BY {_REVIEW_STATUS_EXPR}
         """
     )

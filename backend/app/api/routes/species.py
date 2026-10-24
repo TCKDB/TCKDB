@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import case, func, select
+from fastapi import APIRouter, Depends, Query, Response
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.client_version import require_supported_tckdb_client
@@ -14,15 +14,18 @@ from app.api.deps import (
     require_curator_or_admin,
 )
 from app.api.errors import NotFoundError
-from app.api.routes._pagination import PaginatedResponse
-from app.db.models.app_user import AppUser
-from app.db.models.calculation import Calculation, CalculationSPResult
-from app.db.models.common import (
-    CalculationQuality,
-    CalculationType,
-    MoleculeKind,
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    LegacyReadRoute,
+    LegacyVisibility,
+    disclose_in_header,
+    entity_page,
 )
-from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.app_user import AppUser
+from app.db.models.common import (
+    MoleculeKind,
+    SubmissionRecordType,
+)
 from app.db.models.species import (
     ConformerGroup,
     ConformerObservation,
@@ -36,8 +39,6 @@ from app.schemas.entities.conformer import (
     ConformerGroupRead,
     ConformerGroupSummaryRead,
     ConformerObservationRead,
-    LowestSPConformerObservationRead,
-    LowestSPConformerObservationResultRead,
     SpeciesEntryConformerGroupsRead,
 )
 from app.schemas.entities.species import SpeciesRead
@@ -52,13 +53,12 @@ from app.schemas.entities.species_entry_review import (
 from app.schemas.entities.statmech import StatmechRead
 from app.schemas.entities.thermo import ThermoRead
 from app.schemas.entities.transport import TransportRead
-from app.services.scientific_read.handles import canonical_level_of_theory_id
 from app.services.species_entry_review import (
     create_species_entry_review,
     list_species_entry_reviews,
 )
 
-router = APIRouter()
+router = APIRouter(route_class=LegacyReadRoute)
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +66,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-@router.get("", response_model=PaginatedResponse[SpeciesRead])
+@router.get("", response_model=EntityListResponse[SpeciesRead])
 def list_species(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
@@ -98,8 +98,8 @@ def list_species(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[SpeciesRead.model_validate(r) for r in rows],
+    return entity_page(
+        [SpeciesRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -118,26 +118,39 @@ def get_species(species_id: int, session: Session = Depends(get_db)):
 # Species entries (mounted under /species-entries in router.py)
 # ---------------------------------------------------------------------------
 
-entries_router = APIRouter()
+entries_router = APIRouter(route_class=LegacyReadRoute)
+#: The write route of the species-entries path: no read profile applies to it.
+entries_write_router = APIRouter()
 
 
 def _species_entry_conformer_summary(
-    session: Session, entry_id: int
+    session: Session, entry_id: int, visibility: LegacyVisibility
 ) -> SpeciesEntryConformerSummaryRead:
     """Aggregate conformer-group and observation counts for a species entry.
 
-    Uses two scalar aggregates so the top-level species-entry read stays cheap
-    and does not trigger per-row lazy loads through the conformer collection.
+    Two scalar aggregates, so the top-level species-entry read stays cheap. A count answers what the list endpoint
+    would show (decision D5): the groups and observations the request shows (the default exclusions and the profile's
+    floor), and an observation in a group the floor hides is not counted.
     """
     group_count = session.scalar(
-        select(func.count(ConformerGroup.id)).where(
-            ConformerGroup.species_entry_id == entry_id
+        visibility.restrict(
+            select(func.count(ConformerGroup.id)).where(ConformerGroup.species_entry_id == entry_id),
+            ConformerGroup.id,
+            SubmissionRecordType.conformer_group,
         )
     ) or 0
     observation_count = session.scalar(
-        select(func.count(ConformerObservation.id))
-        .join(ConformerGroup)
-        .where(ConformerGroup.species_entry_id == entry_id)
+        visibility.restrict(
+            visibility.restrict(
+                select(func.count(ConformerObservation.id))
+                .join(ConformerGroup)
+                .where(ConformerGroup.species_entry_id == entry_id),
+                ConformerObservation.id,
+                SubmissionRecordType.conformer_observation,
+            ),
+            ConformerObservation.conformer_group_id,
+            SubmissionRecordType.conformer_group,
+        )
     ) or 0
     return SpeciesEntryConformerSummaryRead(
         conformer_group_count=group_count,
@@ -146,7 +159,9 @@ def _species_entry_conformer_summary(
 
 
 @entries_router.get("/{entry_id}", response_model=SpeciesEntryRead)
-def get_species_entry(entry_id: int, session: Session = Depends(get_db)):
+def get_species_entry(
+    entry_id: int, session: Session = Depends(get_db), visibility: LegacyVisibility = Depends()
+):
     """Return one species entry with a compact conformer summary.
 
     The summary is a count-only aggregate. Clients that want to browse the
@@ -155,8 +170,9 @@ def get_species_entry(entry_id: int, session: Session = Depends(get_db)):
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
+    # Entries are scoping parents: never gated here (nor on their sub-routes, filters or pointers).
     read = SpeciesEntryRead.model_validate(entry)
-    read.conformer_summary = _species_entry_conformer_summary(session, entry_id)
+    read.conformer_summary = _species_entry_conformer_summary(session, entry_id, visibility)
     return read
 
 
@@ -165,7 +181,10 @@ def get_species_entry(entry_id: int, session: Session = Depends(get_db)):
     response_model=SpeciesEntryConformerGroupsRead,
 )
 def list_conformer_groups_for_entry(
-    entry_id: int, session: Session = Depends(get_db)
+    entry_id: int,
+    response: Response,
+    session: Session = Depends(get_db),
+    visibility: LegacyVisibility = Depends(),
 ):
     """List conformer groups (basins) for a species entry, basin-first.
 
@@ -177,21 +196,33 @@ def list_conformer_groups_for_entry(
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
 
-    obs_count_sq = (
+    obs_count_sq = visibility.restrict(
         select(
             ConformerObservation.conformer_group_id.label("group_id"),
             func.count(ConformerObservation.id).label("obs_count"),
-        )
-        .group_by(ConformerObservation.conformer_group_id)
-        .subquery()
+        ),
+        ConformerObservation.id,
+        SubmissionRecordType.conformer_observation,
     )
+    obs_count_sq = obs_count_sq.group_by(ConformerObservation.conformer_group_id).subquery()
 
+    disclose_in_header(
+        response,
+        visibility.hidden(
+            session,
+            SubmissionRecordType.conformer_group,
+            select(ConformerGroup.id).where(ConformerGroup.species_entry_id == entry_id),
+        ),
+    )
     rows = session.execute(
-        select(ConformerGroup, func.coalesce(obs_count_sq.c.obs_count, 0))
-        .outerjoin(obs_count_sq, obs_count_sq.c.group_id == ConformerGroup.id)
-        .where(ConformerGroup.species_entry_id == entry_id)
-        .options(selectinload(ConformerGroup.selections))
-        .order_by(ConformerGroup.id)
+        visibility.restrict(
+            select(ConformerGroup, func.coalesce(obs_count_sq.c.obs_count, 0))
+            .outerjoin(obs_count_sq, obs_count_sq.c.group_id == ConformerGroup.id)
+            .where(ConformerGroup.species_entry_id == entry_id)
+            .options(selectinload(ConformerGroup.selections)),
+            ConformerGroup.id,
+            SubmissionRecordType.conformer_group,
+        ).order_by(ConformerGroup.id)
     ).all()
 
     groups: list[ConformerGroupSummaryRead] = [
@@ -215,192 +246,37 @@ def list_conformer_groups_for_entry(
     response_model=list[ConformerObservationRead],
 )
 def list_conformers_for_entry(
-    entry_id: int, session: Session = Depends(get_db)
+    entry_id: int,
+    response: Response,
+    session: Session = Depends(get_db),
+    visibility: LegacyVisibility = Depends(),
 ):
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
-    observations = session.scalars(
-        select(ConformerObservation)
+    matched = (
+        select(ConformerObservation.id)
         .join(ConformerGroup)
         .where(ConformerGroup.species_entry_id == entry_id)
-        .order_by(ConformerObservation.id)
+    )
+    disclose_in_header(
+        response, visibility.hidden_child(session, SubmissionRecordType.conformer_observation, matched)
+    )
+    observations = session.scalars(
+        visibility.restrict(
+            visibility.restrict(
+                select(ConformerObservation)
+                .join(ConformerGroup)
+                .where(ConformerGroup.species_entry_id == entry_id),
+                ConformerObservation.id,
+                SubmissionRecordType.conformer_observation,
+            ),
+            # An observation is shown only with its group, under the same visibility (PARENT_OF).
+            ConformerObservation.conformer_group_id,
+            SubmissionRecordType.conformer_group,
+        ).order_by(ConformerObservation.id)
     ).all()
     return [ConformerObservationRead.model_validate(o) for o in observations]
-
-
-# Quality-priority rank: smaller rank wins during per-observation collapse and,
-# unless the caller fixed quality, also as a tiebreaker in the final ranking.
-# Kept as module-level so it can be reused and its ordering is obvious.
-_QUALITY_PRIORITY: dict[CalculationQuality, int] = {
-    CalculationQuality.curated: 1,
-    CalculationQuality.raw: 2,
-    CalculationQuality.rejected: 3,
-}
-
-
-def _resolve_lowest_sp_conformer_observation(
-    session: Session,
-    *,
-    species_entry_id: int,
-    lot_id: int,
-    calculation_quality: CalculationQuality | None,
-) -> LowestSPConformerObservationRead | None:
-    """Run the lowest-qualifying-SP conformer-observation query for one species entry.
-
-    The query runs in one bounded SQL round trip, not per-row Python loops:
-
-    1. Join conformer_group → conformer_observation → calculation → calc_sp_result
-       filtered to SP calculations at the requested LoT with a populated energy,
-       optionally narrowed to a caller-supplied `calculation_quality`.
-    2. Use `ROW_NUMBER() OVER (PARTITION BY observation_id)` to collapse each
-       observation's qualifying SP rows down to one canonical candidate. The
-       within-partition order is `(quality_rank, energy, created_at, calc_id)`.
-    3. Globally order the surviving one-per-observation rows and take the top
-       with `(energy, [quality_rank if quality not fixed], created_at, calc_id)`.
-
-    Returns `None` when no qualifying SP calculation exists. That is a valid
-    query outcome, not an error.
-    """
-    quality_rank = case(
-        *[
-            (Calculation.quality == quality, rank)
-            for quality, rank in _QUALITY_PRIORITY.items()
-        ],
-        else_=len(_QUALITY_PRIORITY) + 1,
-    ).label("quality_rank")
-
-    base = (
-        select(
-            Calculation.id.label("calculation_id"),
-            ConformerObservation.id.label("observation_id"),
-            ConformerGroup.id.label("group_id"),
-            Calculation.quality.label("quality"),
-            Calculation.created_at.label("created_at"),
-            CalculationSPResult.electronic_energy_hartree.label("energy"),
-            quality_rank,
-        )
-        .select_from(Calculation)
-        .join(
-            ConformerObservation,
-            ConformerObservation.id == Calculation.conformer_observation_id,
-        )
-        .join(
-            ConformerGroup,
-            ConformerGroup.id == ConformerObservation.conformer_group_id,
-        )
-        .join(
-            CalculationSPResult,
-            CalculationSPResult.calculation_id == Calculation.id,
-        )
-        .where(
-            ConformerGroup.species_entry_id == species_entry_id,
-            Calculation.type == CalculationType.sp,
-            Calculation.lot_id == lot_id,
-            CalculationSPResult.electronic_energy_hartree.is_not(None),
-        )
-    )
-    if calculation_quality is not None:
-        base = base.where(Calculation.quality == calculation_quality)
-
-    base_sq = base.subquery()
-
-    # Stage 2: per-observation collapse via ROW_NUMBER partitioned by observation.
-    collapse_rank = (
-        func.row_number()
-        .over(
-            partition_by=base_sq.c.observation_id,
-            order_by=(
-                base_sq.c.quality_rank.asc(),
-                base_sq.c.energy.asc(),
-                base_sq.c.created_at.asc(),
-                base_sq.c.calculation_id.asc(),
-            ),
-        )
-        .label("collapse_rank")
-    )
-    ranked = select(base_sq, collapse_rank).subquery()
-
-    # Stage 3: final global ranking over one-row-per-observation survivors.
-    survivors = select(ranked).where(ranked.c.collapse_rank == 1).subquery()
-
-    final_order: list = [survivors.c.energy.asc()]
-    if calculation_quality is None:
-        final_order.append(survivors.c.quality_rank.asc())
-    final_order.extend([
-        survivors.c.created_at.asc(),
-        survivors.c.calculation_id.asc(),
-    ])
-
-    row = session.execute(
-        select(survivors).order_by(*final_order).limit(1)
-    ).first()
-    if row is None:
-        return None
-
-    return LowestSPConformerObservationRead(
-        species_entry_id=species_entry_id,
-        lot_id=lot_id,
-        conformer_group_id=row.group_id,
-        conformer_observation_id=row.observation_id,
-        calculation_id=row.calculation_id,
-        electronic_energy_hartree=row.energy,
-        calculation_quality=row.quality,
-    )
-
-
-@entries_router.get(
-    "/{entry_id}/conformer-observations/lowest-sp",
-    response_model=LowestSPConformerObservationResultRead,
-    deprecated=True,
-)
-def get_lowest_sp_conformer_observation_for_entry(
-    entry_id: int,
-    lot_id: int = Query(..., description="Level-of-theory id defining the comparison context"),
-    calculation_quality: CalculationQuality | None = Query(
-        default=None,
-        description="Optional filter: restrict to this quality bucket",
-    ),
-    session: Session = Depends(get_db),
-):
-    """Return the lowest qualifying SP conformer observation for a species entry.
-
-    **Deprecated.** Use ``POST /api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies``
-    instead: it names the reference conformer, the energy kind, the level and the certificate, reports a missing value
-    as absent with a coded reason, and treats repeated records of one conformer as alternates. This route collapses
-    several single points on one observation to the lowest, which is the opposite rule. It is kept for now and will be
-    removed once it is unused.
-
-    This is a context-qualified ranking, not a stored "best conformer" claim.
-    A calculation qualifies only if it is an SP at the requested `lot_id` with
-    a non-null electronic energy on an observation belonging to this species
-    entry. Multiple SPs on the same observation are first collapsed to one
-    canonical candidate before observations are compared against each other.
-
-    Returns 200 with `result: null` when no qualifying SP exists — that is a
-    legitimate query outcome, not an error condition.
-    """
-    entry = session.get(SpeciesEntry, entry_id)
-    if entry is None:
-        raise NotFoundError("SpeciesEntry not found")
-    # A merged row's id names the row it was merged into (#591): its
-    # calculations were moved there.
-    lot_id = canonical_level_of_theory_id(session, lot_id)
-    if session.get(LevelOfTheory, lot_id) is None:
-        raise NotFoundError("LevelOfTheory not found")
-
-    result = _resolve_lowest_sp_conformer_observation(
-        session,
-        species_entry_id=entry_id,
-        lot_id=lot_id,
-        calculation_quality=calculation_quality,
-    )
-    return LowestSPConformerObservationResultRead(
-        species_entry_id=entry_id,
-        lot_id=lot_id,
-        calculation_quality=calculation_quality,
-        result=result,
-    )
 
 
 @entries_router.get(
@@ -408,15 +284,26 @@ def get_lowest_sp_conformer_observation_for_entry(
     response_model=list[ThermoRead],
 )
 def list_thermo_for_entry(
-    entry_id: int, session: Session = Depends(get_db)
+    entry_id: int,
+    response: Response,
+    session: Session = Depends(get_db),
+    visibility: LegacyVisibility = Depends(),
 ):
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
+    disclose_in_header(
+        response,
+        visibility.hidden(
+            session, SubmissionRecordType.thermo, select(Thermo.id).where(Thermo.species_entry_id == entry_id)
+        ),
+    )
     rows = session.scalars(
-        select(Thermo)
-        .where(Thermo.species_entry_id == entry_id)
-        .order_by(Thermo.id)
+        visibility.restrict(
+            select(Thermo).where(Thermo.species_entry_id == entry_id),
+            Thermo.id,
+            SubmissionRecordType.thermo,
+        ).order_by(Thermo.id)
     ).all()
     return [ThermoRead.model_validate(r) for r in rows]
 
@@ -426,15 +313,26 @@ def list_thermo_for_entry(
     response_model=list[StatmechRead],
 )
 def list_statmech_for_entry(
-    entry_id: int, session: Session = Depends(get_db)
+    entry_id: int,
+    response: Response,
+    session: Session = Depends(get_db),
+    visibility: LegacyVisibility = Depends(),
 ):
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
+    disclose_in_header(
+        response,
+        visibility.hidden(
+            session, SubmissionRecordType.statmech, select(Statmech.id).where(Statmech.species_entry_id == entry_id)
+        ),
+    )
     rows = session.scalars(
-        select(Statmech)
-        .where(Statmech.species_entry_id == entry_id)
-        .order_by(Statmech.id)
+        visibility.restrict(
+            select(Statmech).where(Statmech.species_entry_id == entry_id),
+            Statmech.id,
+            SubmissionRecordType.statmech,
+        ).order_by(Statmech.id)
     ).all()
     return [StatmechRead.model_validate(r) for r in rows]
 
@@ -444,16 +342,27 @@ def list_statmech_for_entry(
     response_model=list[TransportRead],
 )
 def list_transport_for_entry(
-    entry_id: int, session: Session = Depends(get_db)
+    entry_id: int,
+    response: Response,
+    session: Session = Depends(get_db),
+    visibility: LegacyVisibility = Depends(),
 ):
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
+    disclose_in_header(
+        response,
+        visibility.hidden(
+            session, SubmissionRecordType.transport, select(Transport.id).where(Transport.species_entry_id == entry_id)
+        ),
+    )
     rows = session.scalars(
-        select(Transport)
-        .where(Transport.species_entry_id == entry_id)
-        .options(selectinload(Transport.source_calculations))
-        .order_by(Transport.id)
+        visibility.restrict(
+            select(Transport).where(Transport.species_entry_id == entry_id)
+            .options(selectinload(Transport.source_calculations)),
+            Transport.id,
+            SubmissionRecordType.transport,
+        ).order_by(Transport.id)
     ).all()
     return [TransportRead.model_validate(r) for r in rows]
 
@@ -463,7 +372,7 @@ def list_transport_for_entry(
 # ---------------------------------------------------------------------------
 
 
-@entries_router.post(
+@entries_write_router.post(
     "/{species_entry_id}/reviews",
     response_model=SpeciesEntryReviewRead,
     status_code=201,

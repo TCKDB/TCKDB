@@ -54,6 +54,10 @@ from app.services.scientific_read.common import (
     validate_pagination,
     visible_statuses,
 )
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
@@ -127,6 +131,15 @@ def get_species_statmech(
         session,
         record_type=SubmissionRecordType.statmech,
         record_ids=candidate_ids,
+    )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[cid].status for cid in candidate_ids),
+            include_rejected=include_rejected,
+            include_deprecated=include_deprecated,
+            min_review_status=min_review_status,
+        ),
+        scope=("statmech", species_entry_id),
     )
     visible_ids = [
         cid for cid in candidate_ids if badges[cid].status in visible

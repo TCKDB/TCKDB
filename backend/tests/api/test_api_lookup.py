@@ -452,7 +452,11 @@ class TestSelectionModes:
         )
         data = resp.json()
         calcs = [r for r in data["results"] if r["resource_type"] == "calculation"]
-        assert len(calcs) == 1
+        # Both uploads ran in one transaction, so they share a deposition time: an exact tie. Both are returned and
+        # the response says so; neither is picked by id.
+        assert len(calcs) == 2
+        assert data["selected_by"]["mode"] == "latest"
+        assert data["selected_by"]["groups"][0]["tied"] is True
         assert "selection_applied" in data["match"]["detail_codes"]
 
     def test_selection_earliest(self, client):
@@ -469,7 +473,11 @@ class TestSelectionModes:
         )
         data = resp.json()
         calcs = [r for r in data["results"] if r["resource_type"] == "calculation"]
-        assert len(calcs) == 1
+        # Both uploads ran in one transaction, so they share a deposition time: an exact tie. Both are returned and
+        # the response says so; neither is picked by id.
+        assert len(calcs) == 2
+        assert data["selected_by"]["mode"] == "earliest"
+        assert data["selected_by"]["groups"][0]["tied"] is True
         assert "selection_applied" in data["match"]["detail_codes"]
 
     def test_selection_on_single_result_is_noop(self, client):

@@ -74,6 +74,7 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
     "evaluate_network_kinetics_batch": ("net_1",),
     "export_chemkin": ({"species_refs": ["spc_1"]},),
     "get_calculation": ("calc_1",),
+    "get_calculation_hessian": (1,),
     "get_calculation_irc": ("calc_1",),
     "get_calculation_path_search": ("calc_1",),
     "get_calculation_scan": ("calc_1",),

@@ -13,7 +13,11 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.routes._pagination import PaginatedResponse
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    LegacyReadRoute,
+    entity_page,
+)
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.entities.workflow import (
     WorkflowToolDetailRead,
@@ -21,8 +25,8 @@ from app.schemas.entities.workflow import (
     WorkflowToolReleaseDetailRead,
 )
 
-router = APIRouter()
-releases_router = APIRouter()
+router = APIRouter(route_class=LegacyReadRoute)
+releases_router = APIRouter(route_class=LegacyReadRoute)
 
 
 def _release_ordering():
@@ -42,7 +46,7 @@ def _release_ordering():
 # ---------------------------------------------------------------------------
 
 
-@router.get("", response_model=PaginatedResponse[WorkflowToolRead])
+@router.get("", response_model=EntityListResponse[WorkflowToolRead])
 def list_workflow_tools(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
@@ -58,12 +62,12 @@ def list_workflow_tools(
     rows = session.scalars(
         select(WorkflowTool)
         .where(WorkflowTool.id.in_(base))
-        .order_by(WorkflowTool.name.asc(), WorkflowTool.id.asc())
+        .order_by(WorkflowTool.id.asc())
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[WorkflowToolRead.model_validate(r) for r in rows],
+    return entity_page(
+        [WorkflowToolRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -102,7 +106,7 @@ def get_workflow_tool(
 
 
 @releases_router.get(
-    "", response_model=PaginatedResponse[WorkflowToolReleaseDetailRead]
+    "", response_model=EntityListResponse[WorkflowToolReleaseDetailRead]
 )
 def list_workflow_tool_releases(
     session: Session = Depends(get_db),
@@ -134,12 +138,12 @@ def list_workflow_tool_releases(
         select(WorkflowToolRelease)
         .where(WorkflowToolRelease.id.in_(base))
         .options(selectinload(WorkflowToolRelease.workflow_tool))
-        .order_by(*_release_ordering())
+        .order_by(WorkflowToolRelease.id.asc())
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[WorkflowToolReleaseDetailRead.model_validate(r) for r in rows],
+    return entity_page(
+        [WorkflowToolReleaseDetailRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,

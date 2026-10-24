@@ -205,6 +205,5 @@ this release. Owner decisions O2, O3 and O4 of 2026-10-13 defer them until a rea
 
 ## Related
 
-The legacy `GET /api/v1/species-entries/{id}/conformer-observations/lowest-sp` collapses several single points on one
-observation to the lowest, the opposite of "repeats are alternates". It is **deprecated** in favour of this operation and
-will be removed once unused.
+The old `GET /api/v1/species-entries/{id}/conformer-observations/lowest-sp`, which collapsed several single points on one
+observation to the lowest (the opposite of "repeats are alternates"), is removed. This operation replaces it.

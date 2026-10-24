@@ -156,13 +156,107 @@ not competing records. Ascending id unless a position or role is named:
 | Scan, IRC and path-search points | `point_index` ascending |
 | Statmech torsions and electronic levels | `torsion_index`, `level_index` |
 | A record's review history | `reviewed_at` ascending, nulls last |
+| A thermo record's temperature points and NASA-9 intervals | `temperature_k`, `interval_index` ascending |
+| A kinetics record's PLOG pressure entries | `entry_index` ascending |
+| A calculation's energy components, composite terms, frequency modes | `component`, `term_position`, `mode_index` ascending |
+| A calculation's applied energy corrections, submission links | `id` ascending, `submission_id` ascending |
+| A literature record's authors | `author_order` ascending |
+| A workflow tool's releases (inside `GET /workflow-tools/{id}`) | `release_date` descending, nulls last, then `id` descending |
+| A reaction entry's `/full` provenance: calculations, networks | calculations newest deposited first then `id` descending, networks `id` ascending |
+| A statmech or transition-state entry's source calculations | `id` ascending (then `role`) |
 
 ### The legacy entity lists
 
-The primitive entity lists (`GET /api/v1/{thermo,kinetics,statmech,transport,species,reactions,conformers,...}` and the
-other entity routes under `backend/app/api/routes/`) are administrative listings: **`id` ascending, with no review
-filter**, so they include records of every review status. They are not browse reads, take no `profile`, and carry no
-`OrderEcho`. Their behaviour is unchanged here; they are handled together with `/lookup` in a later change.
+The primitive entity lists (`GET /api/v1/{thermo,kinetics,statmech,transport,calculations,species,reactions,transition-states,conformer-groups,conformer-observations,networks,...}`
+and the other entity routes under `backend/app/api/routes/`) are the **raw entity layer**: administrative listings in
+**`id` ascending**, not browse reads. They sit beside the scientific reads, and they obey the same visibility rules:
+
+- **Order.** `id` ascending, stable. Each list says so in `order` (a structured `OrderEcho` whose one key, `id`, is described as an
+  administrative listing order, with a statement that it is not the browse display order and not a scientific preference). `order` is
+  always `id` ascending whatever the review status or deposition time say; use the scientific reads to browse.
+- **Default visibility.** Rejected and deprecated records are hidden unless `include_rejected` / `include_deprecated` is set. Applied
+  energy corrections (`/applied-energy-corrections`) are reviewable records and follow the same rules. Species and reactions (identity
+  rows), geometries, levels of theory, software, literature, workflow tools and the energy-correction *reference parameters* (schemes and
+  frequency scale factors) have no review state of their own and show every row. Species entries and reaction entries have one too, but they are
+  **scoping parents: never gated on detail, sub-routes, filters or pointers; entry listings follow the scientific species-search
+  visibility.** `/species-entries/{id}` and `/reaction-entries/{id}` answer 200 for an unreviewed or rejected entry under every profile, the
+  routes under an entry and the `species_entry_id` / `reaction_entry_id` filters and pointers work for it, and an approved record on an
+  unreviewed entry shows under `curated`. Only the entry *lists* in `/lookup/*` filter (default exclusions and the floor), as the
+  scientific species search does, with the disclosure below; the records of the lookup (calculations, kinetics) are searched on every entry,
+  listed or not. A record whose entry the request does not list says so: `entry_listed: false` on the result (and on the
+  `selected_by` group), and a match detail code `species_entry_unlisted` / `reaction_entry_unlisted` whose detail names the entry ids
+  (entries are ungated, so naming them reveals nothing). The scientific thermo, kinetics and species-calculation searches discover their
+  entries without the entry visibility for the same reason: a record is never dropped because its entry is unreviewed or rejected,
+  under the floor or the default exclusions. Only the species search's *entry listing* follows the entry visibility.
+- **Read profile.** Every legacy read takes `?profile=` (and refuses `release`), resolved by the dependency the scientific reads use.
+  `curated` raises the floor to `approved` (and overrides the opt-ins): a record below it is absent from the list and from its `total`,
+  and its detail route (and every route under it, e.g. `/calculations/{id}/...`) answers exactly as an id that names nothing. A visible
+  record does not name a record the profile hides, of any gated kind: a pointer column (`statmech_id`, `conformer_observation_id`,
+  `target_conformer_group_id`, `transition_state_entry_id`, ...) is blanked, a link or edge element that carries one is dropped, and a
+  record embedded in another response (a transition state's `entries`, a group's `observations`) is shown only if the request shows it.
+  Which columns count is a registry (`POINTER_KINDS` in `app/api/routes/_legacy_reads.py`), not a naming rule; a registry test fails for
+  an id column in a returned model that is in neither it nor the list of ungated columns with their reasons. A child is hidden with its
+  parent (an observation in a hidden conformer group; an entry of a hidden transition state), and an id-typed query filter that names a
+  hidden record answers as an id that names nothing. In `hidden_by_default`, a child is counted under every excluding status that applies to it, its
+  own and its parent's (once per status). Each count is therefore the number of matching records that exclusion hides, not the number a
+  single switch restores: a child that is itself deprecated in a rejected group is in both counts and needs both switches. A path id is judged as the id FastAPI bound, so `+5`, `5.0` and ` 5` are the same
+  id as `5`. The lists under a species entry or reaction entry (thermo, statmech, transport, conformers, kinetics, transition states) and a
+  network's solves apply the same rules; the entry summary counts only what the curated list would show. Write routes take no profile.
+- **Disclosure.** A list under the exploratory profile reports `hidden_by_default` (see below). A bare-array sub-list has no envelope, so it
+  reports the counts in the `X-TCKDB-Hidden-By-Default` header (`deprecated=0; rejected=1`). The header carries counts only, one per
+  default exclusion; what is counted is per route: the records the array lists (thermo, statmech, transport, kinetics, transition states,
+  observations), conformer groups on `/conformer-groups`, network solves on `/networks/{n}/solves` and on a channel's kinetics (a
+  kinetics row is reviewed through its solve). Under `curated` there is neither. Counts inside a record (a species entry's conformer
+  summary, a network's `solve_count`, a group's `observation_count`) follow the same visibility as the list they summarise.
+
+The legacy payloads still carry raw integer foreign keys to species and reactions and to species and reaction entries when they are
+the scope of a record (they are scoping parents, as on the scientific reads). `GET /species-entries/{id}/conformer-observations/lowest-sp`
+is removed: it was a silent pick (a `limit(1)` tie-break by `created_at` and `id`) and replaced by
+`POST /scientific/species-entries/{ref}/conformers/relative-energies`.
+
+### `/lookup`
+
+`GET /api/v1/lookup/*` (species, calculations, thermo, species-calculation, reaction, kinetics, reaction-kinetics, geometry, statmech,
+transport, network) is public and obeys the scientific reads' rules:
+
+- **Visibility and profile.** Same defaults, same `include_rejected` / `include_deprecated`, same `?profile=`. Counts inside an identity result
+  (`calculation_count`, `thermo_count`, `kinetics_count`, `calculation_output_count`) count the records the request shows.
+- **Order.** Records are listed in the display order (`review_rank`, `created_at` descending, `id` descending), echoed in `order`. Identity rows
+  (species, species entries, reactions, reaction entries) come first and are ordered the same way. Species and reaction rows are identity
+  and always listed; the **entry listing is filtered** by the request's visibility (as the scientific species search does; the entries stay
+  reachable by id and the records on them are never withheld), and what the default hid is
+  reported in `entries_hidden_by_default` (`"counted": "species_entries"` or `"reaction_entries"`) on every lookup that lists entries,
+  whether or not it also lists records. `hidden_by_default` always means the listed *records*; one name per meaning, so a client does not
+  have to know which endpoint it called to read the field. `/lookup/species-calculation` searches **every** entry of the species (it used to take the first by id).
+- **`selection=lowest_energy|latest|earliest`** is an explicit request to narrow a list, and the response says what it did in `selected_by`
+  (the mode, its criterion, and per species entry how many candidates there were, how many were chosen, and whether they tied). It is not a
+  scientific preference. `lowest_energy` compares recorded electronic energies and is refused with **422 `lowest_energy_across_levels`**, naming
+  the levels found, when the candidates that have an energy span more than one level of theory (filter to one level, or use a select endpoint);
+  with no recorded energy among them it is 422 `lowest_energy_unavailable`. An exact tie returns every tied record with `tied: true`; none is
+  picked by id. A mode is applied within each species entry, since entries are different structures. A record the profile hides never takes part,
+  and `selected_by.groups[].not_compared` counts the `lowest_energy` candidates that had no recorded energy and so were not compared. Levels
+  are compared as the rows they stand for (a level merged into another is that other level).
+- `hidden_by_default` is reported for the record lists (calculations, thermo, kinetics, statmech, transport, network).
+
+## Hidden by default: what the default visibility hid
+
+A list that applies the default visibility says how many records it hid, or "no such record" cannot be told from "hidden by default".
+The block sits in `request.hidden_by_default` on the scientific lists, and at the top level of the legacy and lookup envelopes:
+
+```json
+{"counts": {"rejected": 1, "deprecated": 1},
+ "include_with": {"rejected": "include_rejected=true", "deprecated": "include_deprecated=true"},
+ "counted": "records"}
+```
+
+- It has one key per exclusion the request left at its default, counted over the records that matched the other filters. An exclusion the
+  request lifted is absent; with both lifted (or nothing hidden) the block is `null`. A status a `min_review_status` removes anyway is a
+  filter's doing and is not counted. A species list hides *entries* (`"counted": "species_entries"`), since a species has no review state.
+- **Exploratory only.** Under `curated` the block is always `null` and no count, total or summary differs in a way that reveals a record below
+  the floor (decision D6: hidden == unknown == absent); the response says only that the floor applies (`profile_recommendation:
+  approved_floor_only`).
+- **Cost.** One aggregate statement per list (none when nothing is excluded by default, none under curated). Lists that already hold the
+  candidates' review statuses in memory count them with no extra statement; structure search takes it from the aggregate it already ran.
 
 ## Selection is a separate operation
 
@@ -197,3 +291,4 @@ the select endpoint, which states the policy it applied; it is not a key of any 
 
 Visibility and ordering are independent: hiding a record never reorders the rest, and ordering never reveals a hidden
 one.
+Every list that applies these defaults reports what they hid (`hidden_by_default`, above), under the exploratory profile only.

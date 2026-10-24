@@ -110,6 +110,7 @@ from app.services.scientific_read.common import (
     where_visible,
 )
 from app.services.scientific_read.handles import level_of_theory_ref_clause
+from app.services.scientific_read.hidden_by_default import hidden_by_default_block, record_hidden_by_default
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
@@ -293,6 +294,16 @@ def _run_page(
     )
 
     candidates = candidate_stmt.subquery("analytics_candidates")
+    record_hidden_by_default(
+        hidden_by_default_block(
+            session,
+            record_type=record_type,
+            ids=select(candidates.c.id),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        )
+    )
     record_class = id_column.class_
     ranked_base = select(candidates.c.id, record_class.created_at.label("created_at")).join(
         record_class, record_class.id == candidates.c.id

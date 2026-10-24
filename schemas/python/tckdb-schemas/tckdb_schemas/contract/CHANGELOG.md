@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.133.0 - 2026-10-24
+
+One refusal code joins the contract. No field is added or removed.
+
+- `lowest_energy_across_levels` (422): a `/lookup` request with `selection=lowest_energy` matched calculations at more than one level of
+  theory. Absolute energies from different levels are never compared, so the lookup refuses (it used to warn and return a winner). The response
+  names the levels found; the remedy is to filter to one level or to use a select endpoint.
+
 ## 0.132.0 - 2026-10-23
 
 Four refusal codes join the contract. No field is added or removed.

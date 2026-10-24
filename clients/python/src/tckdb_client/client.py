@@ -995,17 +995,21 @@ class TCKDBClient:
             authenticated=False,
         ).data
 
-    def get_calculation_hessian(self, calculation_id: int) -> Any:
+    def get_calculation_hessian(self, calculation_id: int, *, profile: str | None = None) -> Any:
         """``GET /calculations/{calculation_id}/hessian`` — the stored Cartesian Hessian.
 
         Returns the packed lower triangle exactly as TCKDB stored it — no
         re-derivation, no unit conversion (native hartree/bohr²). Raises
         the appropriate :class:`~tckdb_client.errors.TCKDBHTTPError`
         (404, ``hessian_not_found``) when the calculation carries no
-        stored Hessian.
+        stored Hessian. Under ``profile="curated"`` a calculation below the
+        approved review floor answers 404 as an unknown id does.
         """
         return self.request_json(
-            "GET", f"/calculations/{calculation_id}/hessian", authenticated=False
+            "GET",
+            f"/calculations/{calculation_id}/hessian",
+            params={"profile": profile},
+            authenticated=False,
         ).data
 
     def search_calculations(

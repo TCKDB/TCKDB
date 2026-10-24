@@ -114,6 +114,10 @@ from app.services.scientific_read.handles import (
     NO_MATCH,
     reconcile_level_of_theory_pair,
 )
+from app.services.scientific_read.hidden_by_default import (
+    hidden_by_default_from_statuses,
+    record_hidden_by_default,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
@@ -363,6 +367,15 @@ def get_species_thermo(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
+    )
+    record_hidden_by_default(
+        hidden_by_default_from_statuses(
+            (badges[t.id].status for t, _ in classified),
+            include_rejected=request.include_rejected,
+            include_deprecated=request.include_deprecated,
+            min_review_status=request.min_review_status,
+        ),
+        scope=("thermo", species_entry_id),
     )
     classified = [(t, kind) for t, kind in classified if badges[t.id].status in visible]
     if not classified:

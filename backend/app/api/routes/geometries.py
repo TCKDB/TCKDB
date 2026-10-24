@@ -8,14 +8,18 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.routes._pagination import PaginatedResponse
+from app.api.routes._legacy_reads import (
+    EntityListResponse,
+    LegacyReadRoute,
+    entity_page,
+)
 from app.db.models.geometry import Geometry
 from app.schemas.entities.geometry import GeometryRead
 
-router = APIRouter()
+router = APIRouter(route_class=LegacyReadRoute)
 
 
-@router.get("", response_model=PaginatedResponse[GeometryRead])
+@router.get("", response_model=EntityListResponse[GeometryRead])
 def list_geometries(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
@@ -39,8 +43,8 @@ def list_geometries(
         .offset(pagination.skip)
         .limit(pagination.limit)
     ).all()
-    return PaginatedResponse(
-        items=[GeometryRead.model_validate(r) for r in rows],
+    return entity_page(
+        [GeometryRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
