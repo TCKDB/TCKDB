@@ -26,11 +26,7 @@ router = APIRouter(
     route_class=legacy_route_class(
         {
             "ts_id": Gate(SubmissionRecordType.transition_state, "TransitionState"),
-            "entry_id": Gate(
-                SubmissionRecordType.transition_state_entry,
-                "TransitionStateEntry",
-                parent=(TransitionStateEntry, "transition_state_id", SubmissionRecordType.transition_state),
-            ),
+            "entry_id": Gate(SubmissionRecordType.transition_state_entry, "TransitionStateEntry"),
         }
     )
 )

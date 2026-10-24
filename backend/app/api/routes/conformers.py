@@ -31,7 +31,6 @@ from app.schemas.entities.conformer import (
     ConformerObservationRead,
     ConformerSelectionRead,
 )
-from app.services.scientific_read.common import review_floor_predicate, where_visible
 from app.services.selection import create_conformer_selection
 
 groups_router = APIRouter(
@@ -46,11 +45,7 @@ groups_write_router = APIRouter()
 observations_router = APIRouter(
     route_class=legacy_route_class(
         {
-            "observation_id": Gate(
-                SubmissionRecordType.conformer_observation,
-                "ConformerObservation",
-                parent=(ConformerObservation, "conformer_group_id", SubmissionRecordType.conformer_group),
-            ),
+            "observation_id": Gate(SubmissionRecordType.conformer_observation, "ConformerObservation"),
         }
     )
 )
@@ -221,10 +216,8 @@ def list_conformer_observations(
 
     hidden = visibility.hidden(session, SubmissionRecordType.conformer_observation, base)
     base = visibility.restrict(base, ConformerObservation.id, SubmissionRecordType.conformer_observation)
-    # An observation is shown only with its group (the floor applies to the parent).
-    base = where_visible(
-        base, review_floor_predicate(ConformerObservation.conformer_group_id, SubmissionRecordType.conformer_group)
-    )
+    # An observation is shown only with its group, under the same visibility (PARENT_OF).
+    base = visibility.restrict(base, ConformerObservation.conformer_group_id, SubmissionRecordType.conformer_group)
 
     total = session.scalar(
         select(func.count()).select_from(base.subquery())

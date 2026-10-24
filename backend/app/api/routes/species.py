@@ -54,7 +54,6 @@ from app.schemas.entities.species_entry_review import (
 from app.schemas.entities.statmech import StatmechRead
 from app.schemas.entities.thermo import ThermoRead
 from app.schemas.entities.transport import TransportRead
-from app.services.scientific_read.common import review_floor_predicate, where_visible
 from app.services.species_entry_review import (
     create_species_entry_review,
     list_species_entry_reviews,
@@ -142,7 +141,7 @@ def _species_entry_conformer_summary(
         )
     ) or 0
     observation_count = session.scalar(
-        where_visible(
+        visibility.restrict(
             visibility.restrict(
                 select(func.count(ConformerObservation.id))
                 .join(ConformerGroup)
@@ -150,7 +149,8 @@ def _species_entry_conformer_summary(
                 ConformerObservation.id,
                 SubmissionRecordType.conformer_observation,
             ),
-            review_floor_predicate(ConformerObservation.conformer_group_id, SubmissionRecordType.conformer_group),
+            ConformerObservation.conformer_group_id,
+            SubmissionRecordType.conformer_group,
         )
     ) or 0
     return SpeciesEntryConformerSummaryRead(
@@ -266,7 +266,7 @@ def list_conformers_for_entry(
         response, visibility.hidden(session, SubmissionRecordType.conformer_observation, matched)
     )
     observations = session.scalars(
-        where_visible(
+        visibility.restrict(
             visibility.restrict(
                 select(ConformerObservation)
                 .join(ConformerGroup)
@@ -274,8 +274,9 @@ def list_conformers_for_entry(
                 ConformerObservation.id,
                 SubmissionRecordType.conformer_observation,
             ),
-            # An observation is shown only with its group (the floor applies to the parent).
-            review_floor_predicate(ConformerObservation.conformer_group_id, SubmissionRecordType.conformer_group),
+            # An observation is shown only with its group, under the same visibility (PARENT_OF).
+            ConformerObservation.conformer_group_id,
+            SubmissionRecordType.conformer_group,
         ).order_by(ConformerObservation.id)
     ).all()
     return [ConformerObservationRead.model_validate(o) for o in observations]

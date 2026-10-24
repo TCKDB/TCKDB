@@ -103,8 +103,19 @@ def _world(db_session):
     hidden_ts_entry = make_transition_state_entry(db_session, transition_state=ts)
     ts_calc = make_calculation(db_session, transition_state_entry_id=hidden_ts_entry.id)
     set_review(db_session, record_type=T.calculation, record_id=ts_calc.id, status=S.approved)
+    # An approved child under an unreviewed parent: its own review passes, its parent's does not.
+    orphan_calc = make_calculation(db_session, species_entry_id=entry.id, conformer_observation_id=orphaned_observation.id)
+    set_review(db_session, record_type=T.calculation, record_id=orphan_calc.id, status=S.approved)
+    hidden_ts = make_transition_state(db_session, reaction_entry=reaction_entry, label="hidden-parent-ts")  # unreviewed
+    orphan_ts_entry = make_transition_state_entry(db_session, transition_state=hidden_ts)
+    set_review(db_session, record_type=T.transition_state_entry, record_id=orphan_ts_entry.id, status=S.approved)
+    orphan_ts_calc = make_calculation(db_session, transition_state_entry_id=orphan_ts_entry.id)
+    set_review(db_session, record_type=T.calculation, record_id=orphan_ts_calc.id, status=S.approved)
     db_session.flush()
     return {
+        "orphan_calc": orphan_calc,
+        "orphan_ts_entry": orphan_ts_entry,
+        "orphan_ts_calc": orphan_ts_calc,
         "entry": entry,
         "group": group,
         "hidden_observation": hidden_observation,
@@ -391,3 +402,46 @@ def test_a_channels_kinetics_discloses_what_the_default_hid_in_a_header(client, 
     assert response.headers["X-TCKDB-Hidden-By-Default"] == "deprecated=0; rejected=1"
     curated = client.get(f"{LEGACY}/networks/{network_id}/channels/{channel_id}/kinetics", params={"profile": "curated"})
     assert "X-TCKDB-Hidden-By-Default" not in curated.headers
+
+
+# --- N1: a child of a hidden parent is hidden everywhere it can be named ------------------------------------------------
+
+
+def test_an_approved_child_of_a_hidden_parent_is_not_named_by_a_pointer(client, db_session):
+    """Kills: judging a pointer by the child's own review only. The detail route of the observation / the entry answers
+    404 (its parent is hidden); a calculation must not name it either."""
+    w = _world(db_session)
+    assert _curated(client, f"/conformer-observations/{w['orphaned_observation'].id}").status_code == 404
+    assert _curated(client, f"/transition-states/entries/{w['orphan_ts_entry'].id}").status_code == 404
+    assert _curated(client, f"/calculations/{w['orphan_calc'].id}").json()["conformer_observation_id"] is None
+    assert _curated(client, f"/calculations/{w['orphan_ts_calc'].id}").json()["transition_state_entry_id"] is None
+    # exploratory: nothing removed
+    assert client.get(f"{LEGACY}/calculations/{w['orphan_calc'].id}").json()["conformer_observation_id"] == w["orphaned_observation"].id
+
+
+def test_an_id_filter_naming_a_child_of_a_hidden_parent_answers_as_an_unknown_id(client, db_session):
+    w = _world(db_session)
+    for param, child in [
+        ("conformer_observation_id", w["orphaned_observation"].id),
+        ("transition_state_entry_id", w["orphan_ts_entry"].id),
+    ]:
+        hidden = _curated(client, "/calculations", **{param: child}).json()
+        assert hidden == _curated(client, "/calculations", **{param: 999999999}).json(), param
+        assert hidden["total"] == 0
+
+
+def test_exploratory_hides_a_child_with_its_parent_by_default(client, db_session):
+    """A rejected parent hides its observations by default, in the list and in the counts; including rejected shows them."""
+    w = _world(db_session)
+    set_review(db_session, record_type=T.conformer_group, record_id=w["group"].id, status=S.rejected)
+    listed = client.get(f"{LEGACY}/conformer-observations").json()
+    assert w["orphaned_observation"].id not in [i["id"] for i in listed["items"]]
+    under_entry = client.get(f"{LEGACY}/species-entries/{w['entry'].id}/conformers").json()
+    assert w["orphaned_observation"].id not in [i["id"] for i in under_entry]
+    summary = client.get(f"{LEGACY}/species-entries/{w['entry'].id}").json()["conformer_summary"]
+    assert summary["conformer_observation_count"] == len(under_entry)
+    lifted = client.get(f"{LEGACY}/conformer-observations", params={"include_rejected": "true"}).json()
+    assert w["orphaned_observation"].id in [i["id"] for i in lifted["items"]]
+    assert w["orphaned_observation"].id in [
+        i["id"] for i in client.get(f"{LEGACY}/species-entries/{w['entry'].id}/conformers", params={"include_rejected": "true"}).json()
+    ]

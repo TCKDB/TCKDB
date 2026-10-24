@@ -177,16 +177,10 @@ def ensure_not_below_floor(
 
 @dataclass(frozen=True)
 class Gate:
-    """A path parameter that names a record the profile may hide.
-
-    ``parent`` is ``(ORM model, foreign-key attribute, parent record type)`` for a record that cannot be shown
-    without its parent (an observation in a conformer group, an entry of a transition state): the parent's floor
-    applies to the child, as it does on the scientific surface for ``NetworkKinetics`` through its solve.
-    """
+    """A path parameter that names a record the profile may hide (judged with its parent, see :data:`PARENT_OF`)."""
 
     record_type: SubmissionRecordType
     label: str
-    parent: tuple[type, str, SubmissionRecordType] | None = None
 
 
 T = SubmissionRecordType
@@ -198,6 +192,23 @@ NETWORK_KINETICS = "network_kinetics"
 def _floor_statuses() -> set[RecordReviewStatus]:
     """The statuses the profile's floor leaves visible (every status without a floor)."""
     return visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
+
+def _parent_of() -> dict:
+    from app.db.models.species import ConformerObservation
+    from app.db.models.transition_state import TransitionStateEntry
+
+    return {
+        T.conformer_observation: (ConformerObservation, "conformer_group_id", T.conformer_group),
+        T.transition_state_entry: (TransitionStateEntry, "transition_state_id", T.transition_state),
+    }
+
+
+#: Records that cannot be shown without their parent: ``kind -> (ORM model, foreign-key attribute, parent kind)``. One
+#: rule for every way a child can be reached or named: the detail gate, a pointer at it, an id filter naming it, an
+#: embedded copy of it. A child whose own review passes is still hidden when its parent is hidden, as the scientific
+#: reads hide a ``NetworkKinetics`` through its solve. The SQL lists apply the same rule with ``LegacyVisibility.restrict``
+#: on the foreign key.
+PARENT_OF = _parent_of()
 
 #: Every id column of a legacy payload (and every id-typed query filter) that names a record of a review-gated kind,
 #: and the kind it names. A visible record must not name a record the profile hides, so the walk below blanks such a
@@ -300,7 +311,14 @@ def _hidden_ids(session: Session, kind: SubmissionRecordType, ids: set[int], sta
         hidden_solves = _hidden_ids(session, T.network_solve, {s for s in solve_of.values() if s is not None}, statuses)
         return {i for i in ids if solve_of.get(i) is None or solve_of[i] in hidden_solves}
     badges = fetch_review_badges(session, record_type=kind, record_ids=ids)
-    return {i for i in ids if badges[i].status not in statuses}
+    hidden = {i for i in ids if badges[i].status not in statuses}
+    parent = PARENT_OF.get(kind)
+    if parent is not None:
+        model, fk, parent_type = parent
+        parent_ids = dict(session.execute(select(model.id, getattr(model, fk)).where(model.id.in_(ids))).all())
+        hidden_parents = _hidden_ids(session, parent_type, {p for p in parent_ids.values() if p is not None}, statuses)
+        hidden |= {i for i, p in parent_ids.items() if p in hidden_parents}
+    return hidden
 
 
 def _is_required(model: type, name: str) -> bool:
@@ -435,13 +453,8 @@ def _wrap(endpoint: Any, gates: dict[str, Gate], path_params: set[str]) -> Any:
             session = context.session
             for param, gate in gates.items():
                 value = kwargs.get(param)
-                if isinstance(value, int):
-                    ensure_not_below_floor(session, gate.record_type, value, gate.label)
-                    if gate.parent is not None:
-                        model, fk, parent_type = gate.parent
-                        parent_id = session.scalar(select(getattr(model, fk)).where(model.id == value))
-                        if parent_id is not None:
-                            ensure_not_below_floor(session, parent_type, parent_id, gate.label)
+                if isinstance(value, int) and _hidden_ids(session, gate.record_type, {value}, _floor_statuses()):
+                    raise NotFoundError(f"{gate.label} not found")
             # An id-typed filter naming a hidden record is the filter for an id that names nothing.
             for name, value in list(kwargs.items()):
                 kind = POINTER_KINDS.get(name)
@@ -488,6 +501,7 @@ __all__ = [
     "ADMIN_LISTING_ORDER",
     "COUPLED_FIELDS",
     "NETWORK_KINETICS",
+    "PARENT_OF",
     "POINTER_KINDS",
     "RECORD_MODELS",
     "UNGATED_ID_FIELDS",

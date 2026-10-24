@@ -8,7 +8,6 @@ the response models the routes actually return. Each net also runs against a del
 
 from __future__ import annotations
 
-import json
 import types
 from typing import Any, Union, get_args, get_origin
 
@@ -59,6 +58,53 @@ EXEMPT_PREFIXES = {
     "/api/v1/record-reviews": "curation, authenticated",
     "/api/v1/curation": "curation, authenticated",
     "/api/v1/releases": "curator-gated release administration",
+}
+
+
+#: What the registries must agree with, written down separately from them. Moving a column into ``UNGATED_ID_FIELDS``,
+#: dropping a gate, or dropping a ``RECORD_MODELS`` entry then fails a test instead of leaving the nets green.
+INDEPENDENT_FIELD_KINDS = {
+    "calculation_id": T.calculation,
+    "parent_calculation_id": T.calculation,
+    "child_calculation_id": T.calculation,
+    "source_calculation_id": T.calculation,
+    "source_scan_calculation_id": T.calculation,
+    "zpe_calculation_id": T.calculation,
+    "conformer_observation_id": T.conformer_observation,
+    "source_conformer_observation_id": T.conformer_observation,
+    "conformer_group_id": T.conformer_group,
+    "target_conformer_group_id": T.conformer_group,
+    "statmech_id": T.statmech,
+    "thermo_id": T.thermo,
+    "kinetics_id": T.kinetics,
+    "transport_id": T.transport,
+    "transition_state_entry_id": T.transition_state_entry,
+    "transition_state_id": T.transition_state,
+    "network_id": T.network,
+    "solve_id": T.network_solve,
+}
+
+#: Path prefix and path parameter of every detail route that returns a gated record, and the kind it returns.
+INDEPENDENT_PATH_KINDS = [
+    ("/api/v1/thermo", "thermo_id", T.thermo),
+    ("/api/v1/kinetics", "kinetics_id", T.kinetics),
+    ("/api/v1/statmech", "statmech_id", T.statmech),
+    ("/api/v1/transport", "transport_id", T.transport),
+    ("/api/v1/calculations", "calculation_id", T.calculation),
+    ("/api/v1/transition-states", "ts_id", T.transition_state),
+    ("/api/v1/transition-states/entries", "entry_id", T.transition_state_entry),
+    ("/api/v1/conformer-groups", "group_id", T.conformer_group),
+    ("/api/v1/conformer-observations", "observation_id", T.conformer_observation),
+    ("/api/v1/networks", "network_id", T.network),
+    ("/api/v1/networks", "solve_id", T.network_solve),
+    ("/api/v1/applied-energy-corrections", "correction_id", T.applied_energy_correction),
+]
+
+#: Keys under which a response embeds a list of gated records, and the kind of those records.
+INDEPENDENT_EMBEDDED_KEYS = {
+    "entries": T.transition_state_entry,
+    "observations": T.conformer_observation,
+    "groups": T.conformer_group,
 }
 
 
@@ -141,6 +187,44 @@ def test_the_registries_name_only_what_exists():
     assert set(RECORD_MODELS.values()) <= set(POINTER_KINDS.values()) | {"network_kinetics"}
 
 
+def test_the_pointer_registry_agrees_with_the_independent_table():
+    """Kills: moving a gated column (statmech_id, ...) into ``UNGATED_ID_FIELDS`` or retargeting it."""
+    for name, kind in INDEPENDENT_FIELD_KINDS.items():
+        assert POINTER_KINDS.get(name) == kind, (name, POINTER_KINDS.get(name))
+        assert name not in UNGATED_ID_FIELDS, name
+
+
+def test_every_detail_route_that_returns_a_gated_record_has_its_gate(routes):
+    """Derived from record types and a name map, not from the gates: a gate that is removed is found missing.
+    Kills: removing a gate (the applied-energy-correction one went unnoticed once)."""
+    missing = []
+    checked = 0
+    for route in _legacy(routes):
+        gates = _gates_of(route)
+        params = {p.name for p in route.dependant.path_params}
+        # the longest prefix that matches decides the kind (``/transition-states/entries`` before ``/transition-states``)
+        candidates = [
+            (prefix, param, kind)
+            for prefix, param, kind in INDEPENDENT_PATH_KINDS
+            if (route.path == prefix or route.path.startswith(prefix + "/")) and param in params
+        ]
+        for prefix, param, kind in candidates:
+            if prefix == "/api/v1/transition-states" and route.path.startswith("/api/v1/transition-states/entries"):
+                continue
+            checked += 1
+            gate = gates.get(param)
+            if gate is None or gate.record_type != kind:
+                missing.append((route.path, param, kind.value))
+    assert checked >= 30, checked
+    assert not missing, missing
+
+
+def test_the_embedded_model_registry_covers_the_independent_keys():
+    """Kills: dropping a read model (``TransitionStateEntryRead``...) from ``RECORD_MODELS``."""
+    covered = set(RECORD_MODELS.values())
+    assert set(INDEPENDENT_EMBEDDED_KEYS.values()) <= covered
+
+
 # --- a world with a hidden record of every gated kind ---------------------------------------------------------------
 
 
@@ -174,6 +258,14 @@ def _hidden_world(db_session):
         T.transition_state_entry: w["ts_entry"].id,
     }
     return w, hidden, network
+
+
+def _hidden_sets(w, hidden) -> dict:
+    """Every hidden id per kind: the never-reviewed records, and the approved children of an unreviewed parent."""
+    sets = {kind: {record_id} for kind, record_id in hidden.items()}
+    sets[T.conformer_observation].add(w["orphaned_observation"].id)
+    sets[T.transition_state_entry].add(w["orphan_ts_entry"].id)
+    return sets
 
 
 def _gates_of(route) -> dict:
@@ -220,28 +312,23 @@ def test_every_id_typed_filter_naming_a_hidden_record_answers_as_a_missing_one(r
     """For every GET route and every query parameter that is a pointer at a gated kind: a hidden id and a missing id
     give the same answer under the curated profile. Kills: a filter that reveals a hidden record by what it returns."""
     w, hidden, network = _hidden_world(db_session)
-    channel_path_ok = 0
+    hidden_ids = _hidden_sets(w, hidden)
     tested = 0
     for route in _legacy(routes):
         if route.path.startswith("/api/v1/lookup"):
             continue
         path_names = {p.name for p in route.dependant.path_params}
         for q in route.dependant.query_params:
-            kind = POINTER_KINDS.get(q.name)
-            if kind is None or kind not in hidden:
-                continue
-            path = route.path
-            if path_names:
-                if path_names == {"network_id", "channel_id"}:
-                    continue  # needs a real channel: asserted in test_a_hidden_solve_filter_answers_as_a_missing_one
-                continue
-            hidden_answer = client.get(path, params={"profile": "curated", q.name: hidden[kind]})
-            missing_answer = client.get(path, params={"profile": "curated", q.name: 999999999})
-            assert hidden_answer.status_code == missing_answer.status_code, (route.path, q.name)
-            assert hidden_answer.json() == missing_answer.json(), (route.path, q.name)
-            tested += 1
-    assert tested >= 3, tested
-    del channel_path_ok
+            kind = INDEPENDENT_FIELD_KINDS.get(q.name)
+            if kind is None or kind not in hidden_ids or path_names:
+                continue  # a route with path parameters needs real parents: its filter is asserted by name elsewhere
+            missing_answer = client.get(route.path, params={"profile": "curated", q.name: 999999999})
+            for record_id in sorted(hidden_ids[kind]):
+                hidden_answer = client.get(route.path, params={"profile": "curated", q.name: record_id})
+                assert hidden_answer.status_code == missing_answer.status_code, (route.path, q.name, record_id)
+                assert hidden_answer.json() == missing_answer.json(), (route.path, q.name, record_id)
+                tested += 1
+    assert tested >= 4, tested
 
 
 # --- the sweep: no id of a below-floor record appears anywhere in a legacy payload ------------------------------------
@@ -259,52 +346,57 @@ def _walk(node: Any, path: str = ""):
 
 def test_no_legacy_payload_names_a_record_below_the_floor(routes, client, db_session):
     """Calls every legacy list and every detail/sub-list it can fill with the visible records of the world, under the
-    curated profile, and walks each JSON body: a pointer column whose kind is gated must never carry the id of a
-    hidden record of that kind, and an embedded record must never be one."""
+    curated profile, and walks each JSON body against the INDEPENDENT tables: a pointer column of a gated kind never
+    carries the id of a hidden record of that kind (including an approved child of a hidden parent), and no list
+    embedded under ``entries`` / ``observations`` / ``groups`` holds one."""
     w, hidden, network = _hidden_world(db_session)
-    visible = {
-        "thermo_id": w["thermo"].id,
-        "calculation_id": w["calc"].id,
-        "ts_id": w["ts"].id,
-        "group_id": w["group"].id,
-        "observation_id": w["shown_observation"].id,
-        "network_id": network.id,
-    }
+    hidden_ids = _hidden_sets(w, hidden)
     entry_params = {
         "/api/v1/species-entries": w["entry"].id,
         "/api/v1/reaction-entries": w["reaction_entry"].id,
     }
+    calculation_ids = [w["calc"].id, w["orphan_calc"].id, w["ts_calc"].id, w["orphan_ts_calc"].id]
     called = 0
     offenders: list[str] = []
-    hidden_by_name = {name: hidden[kind] for name, kind in POINTER_KINDS.items() if kind in hidden}
-    for route in _legacy(routes):
-        if route.path.startswith("/api/v1/lookup"):
-            continue
-        path = route.path
-        ok = True
-        for p in route.dependant.path_params:
-            if p.name in visible:
-                path = path.replace("{" + p.name + "}", str(visible[p.name]))
-            elif p.name == "entry_id" and any(route.path.startswith(prefix) for prefix in entry_params):
-                prefix = next(pf for pf in entry_params if route.path.startswith(pf))
-                path = path.replace("{entry_id}", str(entry_params[prefix]))
-            else:
-                ok = False
-        required_query = [q.name for q in route.dependant.query_params if q.field_info.is_required()]
-        if not ok or required_query:
-            continue
-        response = client.get(path, params={"profile": "curated", "limit": 200})
-        if response.status_code != 200:
-            continue
-        called += 1
-        body = response.json()
-        for key, value, where in _walk(body):
-            if key in hidden_by_name and value == hidden_by_name[key]:
-                offenders.append(f"{route.path}: {where}.{key} = {value}")
-        # embedded records
-        text = json.dumps(body)
-        del text
-    assert called >= 30, called
+    for calculation_id in calculation_ids:
+        visible = {
+            "thermo_id": w["thermo"].id,
+            "calculation_id": calculation_id,
+            "ts_id": w["ts"].id,
+            "group_id": w["group"].id,
+            "observation_id": w["shown_observation"].id,
+            "network_id": network.id,
+        }
+        for route in _legacy(routes):
+            if route.path.startswith("/api/v1/lookup"):
+                continue
+            path = route.path
+            ok = True
+            for p in route.dependant.path_params:
+                if p.name in visible:
+                    path = path.replace("{" + p.name + "}", str(visible[p.name]))
+                elif p.name == "entry_id" and any(route.path.startswith(prefix) for prefix in entry_params):
+                    prefix = next(pf for pf in entry_params if route.path.startswith(pf))
+                    path = path.replace("{entry_id}", str(entry_params[prefix]))
+                else:
+                    ok = False
+            required_query = [q.name for q in route.dependant.query_params if q.field_info.is_required()]
+            if not ok or required_query:
+                continue
+            response = client.get(path, params={"profile": "curated", "limit": 200})
+            if response.status_code != 200:
+                continue
+            called += 1
+            for key, value, where in _walk(response.json()):
+                kind = INDEPENDENT_FIELD_KINDS.get(key)
+                if kind in hidden_ids and value in hidden_ids[kind]:
+                    offenders.append(f"{route.path}: {where}.{key} = {value}")
+                embedded = INDEPENDENT_EMBEDDED_KEYS.get(key)
+                if embedded in hidden_ids and isinstance(value, list):
+                    for item in value:
+                        if isinstance(item, dict) and item.get("id") in hidden_ids[embedded]:
+                            offenders.append(f"{route.path}: {where}.{key} embeds hidden {embedded.value} {item['id']}")
+    assert called >= 120, called  # four calculations x the routes that can be filled
     assert not offenders, offenders
 
 
