@@ -29103,6 +29103,17 @@
       "LookupResultItem": {
         "description": "One matched resource in the results list.",
         "properties": {
+          "entry_listed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Listed"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -50300,6 +50311,17 @@
           "chosen": {
             "title": "Chosen",
             "type": "integer"
+          },
+          "entry_listed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Listed"
           },
           "not_compared": {
             "default": 0,

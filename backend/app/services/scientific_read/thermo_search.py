@@ -157,6 +157,7 @@ def search_thermo(
                 limit=page_limit,
                 include=[],
             ),
+            scope_entries=True,
         )
 
     species_records = collect_bounded_pages(

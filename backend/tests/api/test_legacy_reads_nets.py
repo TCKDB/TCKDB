@@ -232,13 +232,36 @@ INDEPENDENT_UNGATED_DETAIL = {
 }
 
 
-def test_the_entry_detail_routes_are_ungated_on_purpose(routes):
-    """Entries are scoping parents. The gate-coverage net lists them here, with the reason, rather than leaving them out."""
+def test_the_entry_detail_routes_are_ungated_on_purpose(routes, client, db_session):
+    """Entries are scoping parents. The gate-coverage net lists them here, with the reason, and CALLS each route on an
+    unreviewed entry under curated, so an ``ensure_not_below_floor`` written inside the route body is caught too."""
+    from tests.services.scientific_read._factories import (
+        make_chem_reaction,
+        make_reaction_entry,
+        make_species,
+        make_species_entry,
+        next_inchi_key,
+    )
+
+    species = make_species(db_session, smiles="C=O", inchi_key=next_inchi_key("UG"))
+    entry = make_species_entry(db_session, species)  # never reviewed: below the curated floor
+    rs = make_species(db_session, smiles="CC", inchi_key=next_inchi_key("UGR"))
+    ps = make_species(db_session, smiles="CCC", inchi_key=next_inchi_key("UGP"))
+    reaction_entry = make_reaction_entry(
+        db_session,
+        reaction=make_chem_reaction(db_session, reactants=[rs], products=[ps]),
+        reactant_entries=[make_species_entry(db_session, rs)],
+        product_entries=[make_species_entry(db_session, ps)],
+    )
+    ids = {"/api/v1/species-entries/{entry_id}": entry.id, "/api/v1/reaction-entries/{entry_id}": reaction_entry.id}
     by_path = {r.path: r for r in routes}
     for path, reason in INDEPENDENT_UNGATED_DETAIL.items():
         assert reason
         assert path in by_path, path
         assert not _gates_of(by_path[path]), path  # no gate declared on a scoping parent's route class
+        for profile in ("exploratory", "curated"):
+            response = client.get(path.replace("{entry_id}", str(ids[path])), params={"profile": profile})
+            assert response.status_code == 200, (path, profile, response.status_code)
 
 
 # --- a world with a hidden record of every gated kind ---------------------------------------------------------------

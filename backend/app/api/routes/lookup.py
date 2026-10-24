@@ -107,6 +107,10 @@ SPECIES_ENTRY_NONE = "species_entry_none"
 REACTION_IDENTITY_EXACT = "reaction_identity_exact"
 REACTION_IDENTITY_NONE = "reaction_identity_none"
 REACTION_ENTRY_EXISTS = "reaction_entry_exists"
+#: Records are returned from entries this request does not LIST (the entry listing follows the entry visibility; an entry
+#: is a scoping parent and never withholds a record on it). The detail names the entry ids, which are not gated.
+SPECIES_ENTRY_UNLISTED = "species_entry_unlisted"
+REACTION_ENTRY_UNLISTED = "reaction_entry_unlisted"
 REACTION_ENTRY_NONE = "reaction_entry_none"
 REACTANT_RESOLVED = "reactant_resolved"
 REACTANT_NOT_FOUND = "reactant_not_found"
@@ -184,6 +188,10 @@ class LookupResultItem(BaseModel):
     id: int
     links: ResourceLink
     summary: dict[str, Any]
+    #: For a record that sits on a species or reaction entry, in a lookup that also lists the entries: ``False`` when this
+    #: request does not list that entry (so the record has no entry row beside it), ``True`` when it does. ``None`` where
+    #: the question does not arise.
+    entry_listed: bool | None = None
 
 
 SELECTION_MODE_STATEMENT = (
@@ -197,6 +205,8 @@ class SelectionGroup(BaseModel):
     """What a selection mode did within one group of candidates (one species entry)."""
 
     species_entry_id: int | None = None
+    #: ``False`` when this request does not list the group's entry (the entry listing follows the entry visibility).
+    entry_listed: bool | None = None
     candidates: int
     chosen: int
     #: ``lowest_energy`` only: candidates with no recorded energy, which cannot be compared and took no part.
@@ -1219,6 +1229,16 @@ def lookup_species_calculation(
         if group is not None:
             groups.append(group)
     calcs = [c for c in calcs if c.id in chosen_ids]
+    listed_ids = {e.id for e in entries}
+    for group in groups:
+        group.entry_listed = group.species_entry_id in listed_ids
+    unlisted = sorted({c.species_entry_id for c in calcs} - listed_ids)
+    if unlisted:
+        mb.add(
+            SPECIES_ENTRY_UNLISTED,
+            f"records on species entry id(s) {unlisted}, which this request does not list: the entry listing follows the "
+            "entry visibility, and an entry never withholds a record on it",
+        )
 
     if not calcs:
         mb.add(CALCULATION_NONE, "species exists but no matching calculations at this LOT")
@@ -1239,6 +1259,7 @@ def lookup_species_calculation(
                     calc, lot, session, lot_status,
                     include_geometry="geometry" in include,
                 ),
+                entry_listed=calc.species_entry_id in listed_ids,
             ))
 
     return _respond(
@@ -1438,6 +1459,14 @@ def lookup_reaction_kinetics(
         mb.add(KINETICS_NONE, "reaction exists but no kinetics records found")
     else:
         mb.add(KINETICS_EXISTS, f"{len(all_kinetics)} kinetics record(s) found")
+        listed_ids = {e.id for e in entries}
+        unlisted = sorted({k.reaction_entry_id for k in all_kinetics} - listed_ids)
+        if unlisted:
+            mb.add(
+                REACTION_ENTRY_UNLISTED,
+                f"records on reaction entry id(s) {unlisted}, which this request does not list: the entry listing follows "
+                "the entry visibility, and an entry never withholds a record on it",
+            )
         for kin in all_kinetics:
             results.append(LookupResultItem(
                 resource_type="kinetics",
@@ -1447,6 +1476,7 @@ def lookup_reaction_kinetics(
                     owner=f"/api/v1/reaction-entries/{kin.reaction_entry_id}",
                 ),
                 summary=_kinetics_summary(kin),
+                entry_listed=kin.reaction_entry_id in listed_ids,
             ))
 
     return _respond(query_echo, mb, results, hidden=hidden, entries_hidden=entries_hidden)

@@ -46,6 +46,10 @@ obey: no review filter, no read profile, id order. They now follow `docs/specs/b
 - **Parent rule.** A child of a hidden parent (an observation in a hidden conformer group, an entry of a hidden transition state) is hidden
   by the detail gate, by pointers at it, by id filters naming it and by embedded copies, under the request's visibility (one registry,
   `PARENT_OF`). Lookups report hidden entries in `entries_hidden_by_default` everywhere; `hidden_by_default` is always about records.
+- **Entries never withhold records.** The scientific thermo, kinetics and species-calculation searches no longer drop a record because its
+  species or reaction entry is unreviewed or rejected (floor and default exclusions alike). `/lookup/species-calculation` and
+  `/lookup/reaction-kinetics` mark records on entries they do not list (`entry_listed: false`, `species_entry_unlisted` /
+  `reaction_entry_unlisted`). The hidden-by-default count includes children hidden through a rejected parent.
 - Packages: `tckdb-schemas` 0.133.0 and `tckdb-client` 0.164.0 (a new refusal code; the removed route). No schema or migration change.
 
 ## Browse is a browse: no evidence keys, no silent pick (2026-10-23)

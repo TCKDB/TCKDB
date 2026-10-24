@@ -211,7 +211,7 @@ def test_lowest_energy_within_one_level_is_labelled_as_the_requests_mode(client,
     assert selected_by["mode"] == "lowest_energy"
     assert "not by a scientific preference" in selected_by["statement"]
     assert selected_by["groups"] == [
-        {"species_entry_id": entry.id, "candidates": 2, "chosen": 1, "not_compared": 0, "tied": False}
+        {"species_entry_id": entry.id, "entry_listed": None, "candidates": 2, "chosen": 1, "not_compared": 0, "tied": False}
     ]
     assert "selected_by" in client.get(f"{LOOKUP}/calculations", params={"species_entry_id": entry.id}).json()
     assert client.get(f"{LOOKUP}/calculations", params={"species_entry_id": entry.id}).json()["selected_by"] is None

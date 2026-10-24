@@ -562,6 +562,7 @@ def _resolve_species_entry_context(
                 limit=page_limit,
                 include=[],
             ),
+            scope_entries=True,
         )
 
     species_records = collect_bounded_pages(

@@ -281,12 +281,24 @@ def test_an_unreviewed_species_entry_is_a_scoping_parent_reachable_everywhere(cl
     ).json()
     assert [r for r in body["results"] if r["resource_type"] == "species_entry"] == []
     assert [r["id"] for r in body["results"] if r["resource_type"] == "calculation"] == [calc.id]
+    # the record says its entry is not listed, and the match says which entry (entries are ungated: naming it is allowed)
+    assert [r["entry_listed"] for r in body["results"] if r["resource_type"] == "calculation"] == [False]
+    assert "species_entry_unlisted" in body["match"]["detail_codes"]
+    assert any(str(entry.id) in d for d, c in zip(body["match"]["details"], body["match"]["detail_codes"]) if c == "species_entry_unlisted")
+    # exploratory lists the unreviewed entry: nothing to explain
+    listed = client.get(
+        f"{LEGACY}/lookup/species-calculation",
+        params={"smiles": "C=O", "charge": 0, "multiplicity": 1, "type": "opt", "method": lot.method, "basis": lot.basis},
+    ).json()
+    assert [r["entry_listed"] for r in listed["results"] if r["resource_type"] == "calculation"] == [True]
+    assert "species_entry_unlisted" not in listed["match"]["detail_codes"]
     # and with the selection mode: the record on the unlisted entry is still a candidate
     chosen = client.get(
         f"{LEGACY}/lookup/species-calculation",
         params={**curated, "smiles": "C=O", "charge": 0, "multiplicity": 1, "type": "opt", "method": lot.method, "basis": lot.basis, "selection": "latest"},
     ).json()
     assert [r["id"] for r in chosen["results"] if r["resource_type"] == "calculation"] == [calc.id]
+    assert [g["entry_listed"] for g in chosen["selected_by"]["groups"]] == [False]
 
 
 def test_an_unreviewed_reaction_entry_is_a_scoping_parent_reachable_everywhere(client, db_session):
@@ -315,6 +327,11 @@ def test_an_unreviewed_reaction_entry_is_a_scoping_parent_reachable_everywhere(c
     ).json()
     assert [r for r in body["results"] if r["resource_type"] == "reaction_entry"] == []  # the listing follows the entry rule
     assert [r["id"] for r in body["results"] if r["resource_type"] == "kinetics"] == [kinetics.id]  # the record is not withheld
+    assert [r["entry_listed"] for r in body["results"] if r["resource_type"] == "kinetics"] == [False]
+    assert "reaction_entry_unlisted" in body["match"]["detail_codes"]
+    assert any(
+        str(reaction_entry.id) in d for d, c in zip(body["match"]["details"], body["match"]["detail_codes"]) if c == "reaction_entry_unlisted"
+    )
 
 
 def test_lookup_reaction_lists_the_reaction_entries_the_request_shows(client, db_session):
@@ -500,3 +517,36 @@ def test_exploratory_hides_a_child_with_its_parent_by_default(client, db_session
     assert w["orphaned_observation"].id in [
         i["id"] for i in client.get(f"{LEGACY}/species-entries/{w['entry'].id}/conformers", params={"include_rejected": "true"}).json()
     ]
+
+
+# --- the disclosure counts a child hidden through its parent under the parent's status -------------------------------------
+
+
+def test_the_disclosure_counts_children_hidden_through_a_rejected_parent(client, db_session):
+    """Kills: counting only the observation's own status (rejected: 0) while ``include_rejected`` brings it back."""
+    species = make_species(db_session, smiles="C=O", inchi_key=next_inchi_key("DC"))
+    entry = make_species_entry(db_session, species)
+    group = make_conformer_group(db_session, entry, label="rejected-group")
+    set_review(db_session, record_type=T.conformer_group, record_id=group.id, status=S.rejected)
+    child = make_conformer_observation(db_session, conformer_group=group)  # unreviewed itself
+    own_rejected = make_conformer_observation(db_session, conformer_group=group)
+    set_review(db_session, record_type=T.conformer_observation, record_id=own_rejected.id, status=S.rejected)
+
+    listed = client.get(f"{LEGACY}/conformer-observations", params={"conformer_group_id": group.id}).json()
+    assert listed["items"] == []
+    # one child hidden through its parent (rejected), one hidden by its own status (rejected): each counted once
+    assert listed["hidden_by_default"]["counts"] == {"rejected": 2, "deprecated": 0}
+    restored = client.get(
+        f"{LEGACY}/conformer-observations", params={"conformer_group_id": group.id, "include_rejected": "true"}
+    ).json()
+    assert {i["id"] for i in restored["items"]} == {child.id, own_rejected.id}  # the count matches what the switch restores
+
+    response = client.get(f"{LEGACY}/species-entries/{entry.id}/conformers")
+    assert response.json() == []
+    assert response.headers["X-TCKDB-Hidden-By-Default"] == "deprecated=0; rejected=2"
+    restored_under_entry = client.get(f"{LEGACY}/species-entries/{entry.id}/conformers", params={"include_rejected": "true"})
+    assert len(restored_under_entry.json()) == 2
+    curated = client.get(
+        f"{LEGACY}/conformer-observations", params={"conformer_group_id": group.id, "profile": "curated"}
+    ).json()
+    assert curated["hidden_by_default"] is None

@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 from app.api.error_contract import CodedValueError, reject_unsupported_filters
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
+    RecordReviewStatus,
     SubmissionRecordType,
 )
 from app.db.models.species import (
@@ -561,7 +562,7 @@ def _apply_structure_filter(
 
 
 def search_species(
-    session: Session, request: SpeciesSearchRequest
+    session: Session, request: SpeciesSearchRequest, *, scope_entries: bool = False
 ) -> ScientificSpeciesSearchResponse:
     """Discover species by chemical identity, with per-entry trust + availability.
 
@@ -573,6 +574,10 @@ def search_species(
 
     :param session: SQLAlchemy session bound to the read DB.
     :param request: Parsed request model.
+    :param scope_entries: ``True`` when the caller uses the entries only to scope a search of RECORDS (thermo, calculations):
+        entries are scoping parents and a record is never dropped because its entry is unreviewed or rejected, so no
+        entry is filtered by review status and nothing is disclosed as hidden. The entry LISTING (the default) is a list of
+        entries and follows the entry visibility.
     :returns: ``ScientificSpeciesSearchResponse`` Pydantic model.
     :raises ValueError: 422 for sort/pagination/include validation failures.
     """
@@ -631,6 +636,8 @@ def search_species(
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
     )
+    if scope_entries:
+        visible = set(RecordReviewStatus)
 
     # The identity filter, as a subquery rather than a materialized id list —
     # the entry, count and ranking queries below all re-derive it in SQL, so
@@ -652,7 +659,8 @@ def search_species(
 
     # The review summary covers every surviving entry, not just the
     # page's — one aggregate rather than one badge per candidate.
-    _record_hidden_entries(session, candidates, request, species_entry_ref_id=species_entry_ref_id)
+    if not scope_entries:
+        _record_hidden_entries(session, candidates, request, species_entry_ref_id=species_entry_ref_id)
     summary = summary_from_sql(
         session,
         _visible_entry_rows(

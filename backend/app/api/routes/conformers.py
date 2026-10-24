@@ -214,7 +214,7 @@ def list_conformer_observations(
             ConformerObservation.scientific_origin == scientific_origin
         )
 
-    hidden = visibility.hidden(session, SubmissionRecordType.conformer_observation, base)
+    hidden = visibility.hidden_child(session, SubmissionRecordType.conformer_observation, base)
     base = visibility.restrict(base, ConformerObservation.id, SubmissionRecordType.conformer_observation)
     # An observation is shown only with its group, under the same visibility (PARENT_OF).
     base = visibility.restrict(base, ConformerObservation.conformer_group_id, SubmissionRecordType.conformer_group)

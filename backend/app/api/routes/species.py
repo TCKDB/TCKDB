@@ -260,7 +260,7 @@ def list_conformers_for_entry(
         .where(ConformerGroup.species_entry_id == entry_id)
     )
     disclose_in_header(
-        response, visibility.hidden(session, SubmissionRecordType.conformer_observation, matched)
+        response, visibility.hidden_child(session, SubmissionRecordType.conformer_observation, matched)
     )
     observations = session.scalars(
         visibility.restrict(

@@ -183,7 +183,11 @@ and the other entity routes under `backend/app/api/routes/`) are the **raw entit
   routes under an entry and the `species_entry_id` / `reaction_entry_id` filters and pointers work for it, and an approved record on an
   unreviewed entry shows under `curated`. Only the entry *lists* in `/lookup/*` filter (default exclusions and the floor), as the
   scientific species search does, with the disclosure below; the records of the lookup (calculations, kinetics) are searched on every entry,
-  listed or not.
+  listed or not. A record whose entry the request does not list says so: `entry_listed: false` on the result (and on the
+  `selected_by` group), and a match detail code `species_entry_unlisted` / `reaction_entry_unlisted` whose detail names the entry ids
+  (entries are ungated, so naming them reveals nothing). The scientific thermo, kinetics and species-calculation searches discover their
+  entries without the entry visibility for the same reason: a record is never dropped because its entry is unreviewed or rejected,
+  under the floor or the default exclusions. Only the species search's *entry listing* follows the entry visibility.
 - **Read profile.** Every legacy read takes `?profile=` (and refuses `release`), resolved by the dependency the scientific reads use.
   `curated` raises the floor to `approved` (and overrides the opt-ins): a record below it is absent from the list and from its `total`,
   and its detail route (and every route under it, e.g. `/calculations/{id}/...`) answers exactly as an id that names nothing. A visible
@@ -193,7 +197,8 @@ and the other entity routes under `backend/app/api/routes/`) are the **raw entit
   Which columns count is a registry (`POINTER_KINDS` in `app/api/routes/_legacy_reads.py`), not a naming rule; a registry test fails for
   an id column in a returned model that is in neither it nor the list of ungated columns with their reasons. A child is hidden with its
   parent (an observation in a hidden conformer group; an entry of a hidden transition state), and an id-typed query filter that names a
-  hidden record answers as an id that names nothing. A path id is judged as the id FastAPI bound, so `+5`, `5.0` and ` 5` are the same
+  hidden record answers as an id that names nothing. In `hidden_by_default`, a child hidden through its parent is counted under the
+  *parent's* excluding status (its own status first, if that excludes it), once, so the count equals what `include_rejected` restores. A path id is judged as the id FastAPI bound, so `+5`, `5.0` and ` 5` are the same
   id as `5`. The lists under a species entry or reaction entry (thermo, statmech, transport, conformers, kinetics, transition states) and a
   network's solves apply the same rules; the entry summary counts only what the curated list would show. Write routes take no profile.
 - **Disclosure.** A list under the exploratory profile reports `hidden_by_default` (see below). A bare-array sub-list has no envelope, so it
