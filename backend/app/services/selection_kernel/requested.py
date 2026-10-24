@@ -30,6 +30,8 @@ from app.schemas.reads.scientific_selection_common import (
     EligibilityDefaultEcho,
     EligibilitySource,
     SelectionEligibilityIn,
+    SelectionFilterAnswer,
+    SelectionFunnel,
 )
 
 #: The prefix an evidence-rubric hard failure carries in a candidate's ``blocking`` list.
@@ -186,7 +188,43 @@ def echo(
     return out
 
 
+def answer_steps(
+    *,
+    request_filters: dict,
+    min_review_status: RecordReviewStatus | None,
+    eligibility_record: object,
+    funnel_record: dict,
+    names: Sequence[str],
+    profile_floor: bool,
+) -> dict:
+    """The ``filters``, ``eligibility`` and ``funnel`` fields of a select answer, built from a manifest's records.
+
+    Every select answer states steps 1 and 2 the same way, from the same recorded numbers the downloadable manifest
+    carries, so the response and the download cannot disagree.
+    """
+    return {
+        "filters": SelectionFilterAnswer(
+            applied={
+                **request_filters,
+                **({"min_review_status": min_review_status.value} if min_review_status is not None else {}),
+            },
+            removed=funnel_record["removed_by_filters"],
+        ),
+        "eligibility": echo(
+            Eligibility.from_record(eligibility_record),
+            profile_floor=profile_floor,
+            names=names,
+            excluded=funnel_record["excluded_by_default"],
+            admitted=funnel_record["admitted_by_override"],
+        ),
+        "funnel": SelectionFunnel(
+            **{k: funnel_record[k] for k in ("considered", "removed_by_filters", "removed_by_eligibility", "remaining")}
+        ),
+    }
+
+
 __all__ = [
+    "answer_steps",
     "ELIGIBILITY_REJECTED_QUALITY",
     "EVIDENCE_HARD_FAIL_PREFIX",
     "Eligibility",

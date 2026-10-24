@@ -31,6 +31,7 @@ from app.db.models.common import (
 from app.schemas.reads.scientific_common import SelectionPolicy
 from app.services.manifest_formats import new_current_only_registry
 from app.services.selection_kernel import Applicability, Outcome  # noqa: F401  (Outcome re-exported)
+from app.services.selection_kernel.requested import Eligibility, Verdict
 
 #: The one quantity this selector answers.
 QUANTITY = "rate_coefficient"
@@ -47,9 +48,11 @@ POLICY_NAME = "kinetics_selection"
 #: The name changed with the removal of the method-preference rules (it was ``kinetics_method_preferred``).
 POLICY_VERSION = 1
 #: Version of how eligibility is assessed: an automated geometry-validation fail is advisory and a live confirmed
-#: finding about a source calculation excludes the record (``structure_selection.source_findings``). A manifest with no
+#: finding about a source calculation excludes the record (``structure_selection.source_findings``). Version 2: each of
+#: those exclusions, and the rejected and deprecated review statuses, is a named default the request may lift, and the
+#: recorded ``eligible`` flag is the verdict under the request's own settings (``selection_kernel.requested``). A manifest with no
 #: block, or one recording a version the registry does not hold, is refused on replay.
-ASSESSMENT_SEMANTICS_VERSION = 1
+ASSESSMENT_SEMANTICS_VERSION = 2
 ASSESSMENT_SEMANTICS_NAME = "kinetics_selection_assessment"
 ASSESSMENT_SEMANTICS = new_current_only_registry(
     "kinetics_selection_assessment_semantics", ASSESSMENT_SEMANTICS_NAME, ASSESSMENT_SEMANTICS_VERSION
@@ -157,6 +160,31 @@ class ColliderRequest:
 
 
 @dataclass(frozen=True)
+class KineticsFilters:
+    """The caller's filters, with the per-entry kinetics browse's vocabulary and meaning (public refs only).
+
+    :param model_kind: The stored rate-law form (``arrhenius``, ``plog``, ``chebyshev``, ...).
+    :param level_of_theory_ref: ANY shown source calculation ran at this level of theory.
+    :param software: ANY shown source calculation ran in a software of this name.
+    """
+
+    model_kind: str | None = None
+    level_of_theory_ref: str | None = None
+    software: str | None = None
+
+    def to_record(self) -> dict[str, Any]:
+        return {k: v for k, v in self.__dict__.items() if v is not None}
+
+    @classmethod
+    def from_record(cls, raw: dict[str, Any]) -> KineticsFilters:
+        return cls(**raw)
+
+    @property
+    def active(self) -> bool:
+        return any(v is not None for v in self.__dict__.values())
+
+
+@dataclass(frozen=True)
 class KineticsRequest:
     """The normalised request: a gas-phase rate coefficient for one reaction entry.
 
@@ -167,6 +195,8 @@ class KineticsRequest:
     :param min_review_status: Optional caller floor; the read-profile floor is applied on top.
     :param admin_policy: Administrative order of the eligible determinations. Display order, never a method preference.
     :param max_candidates: Population cap; the endpoint contract is 500.
+    :param filters: The caller's filters, applied before eligibility.
+    :param eligibility: The eligibility defaults the caller lifted.
     """
 
     direction: KineticsDirection
@@ -179,6 +209,8 @@ class KineticsRequest:
     min_review_status: RecordReviewStatus | None = None
     admin_policy: SelectionPolicy = SelectionPolicy.default
     max_candidates: int = MAX_CANDIDATES
+    filters: KineticsFilters = KineticsFilters()
+    eligibility: Eligibility = Eligibility()
 
     def __post_init__(self) -> None:
         if self.direction not in (KineticsDirection.forward, KineticsDirection.reverse):
@@ -213,6 +245,8 @@ class KineticsRequest:
             "collider": self.collider.to_dict() if self.collider is not None else None,
             "min_review_status": self.min_review_status.value if self.min_review_status else None,
             "administrative_policy": self.admin_policy.value,
+            "filters": self.filters.to_record(),
+            "eligibility": self.eligibility.to_record(),
             "max_candidates": self.max_candidates,
         }
 
@@ -246,6 +280,8 @@ class KineticsRequest:
             min_review_status=RecordReviewStatus(raw["min_review_status"]) if raw["min_review_status"] else None,
             admin_policy=SelectionPolicy(raw["administrative_policy"]),
             max_candidates=raw.get("max_candidates", MAX_CANDIDATES),
+            filters=KineticsFilters.from_record(raw["filters"]),
+            eligibility=Eligibility.from_record(raw["eligibility"]),
         )
 
 
@@ -520,3 +556,7 @@ class KineticsAssessmentResult:
     unresolved_refs: tuple[str, ...] = ()
     unsupported_refs: tuple[str, ...] = ()
     notes: tuple[str, ...] = ()
+    #: Each record's verdict under the request's eligibility settings, by public ref.
+    verdicts: dict[str, Verdict] = field(default_factory=dict)
+    #: The recorded funnel (``selection_kernel.requested.funnel``).
+    funnel: dict[str, Any] = field(default_factory=dict)

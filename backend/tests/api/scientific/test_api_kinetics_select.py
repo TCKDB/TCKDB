@@ -15,6 +15,7 @@ import pytest
 from app.db.models.common import RecordReviewStatus as S
 from app.services.kinetics_selection import public as public_module
 from app.services.kinetics_selection import replay_decision, replay_matches
+from tests.services._select_steps import RESPONSE_STEP_COUNT_PATHS
 from tests.services.kinetics_selection.test_selection import ALLOWED_INTEGER_PATHS, _paths
 from tests.services.kinetics_selection.test_service import declared, determination
 from tests.services.scientific_read._factories import make_species, make_transition_state, next_inchi_key
@@ -366,7 +367,7 @@ def test_the_manifest_route_downloads_the_same_decision_and_replays_without_the_
     assert wire["outcome"] == select["outcome"] == "incomparable_alternatives"
     assert wire["decision"]["fronts"] == select["fronts"]
     assert wire["policy"] == {"name": "kinetics_selection", "version": 1}
-    assert wire["format"] == {"name": "kinetics_selection_manifest", "version": 2}
+    assert wire["format"] == {"name": "kinetics_selection_manifest", "version": 3}
     assert wire["snapshot_isolation"] in {"read committed", "repeatable read", "serializable"}
     assert "max_candidates" not in wire["request"] and wire["request"]["profile"] == "exploratory"
     assert replay_matches(wire)
@@ -414,6 +415,7 @@ ALLOWED_RESPONSE_INTEGER_PATHS = {
     "candidates[].applicability_declaration.version", "candidates[].applicability_declaration.reaction_order",
     "candidates[].protocol.version",
     "policy.version",
+    *RESPONSE_STEP_COUNT_PATHS,
 }
 
 

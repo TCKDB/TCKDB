@@ -26,10 +26,17 @@ from tckdb_schemas.kinetics_declarations import MOLE_FRACTION_SUM_TOLERANCE, Kin
 
 from app.db.models.common import (
     KineticsDeterminationTargetKind,
+    KineticsModelKind,
     PhaseKind,
     RecordReviewStatus,
 )
 from app.schemas.reads.scientific_common import ProfiledRequestEcho
+from app.schemas.reads.scientific_selection_common import (
+    CandidateEligibility,
+    LevelAndSoftwareFilters,
+    SelectionEligibilityIn,
+    SelectionStepsAnswer,
+)
 
 #: The one quantity this endpoint answers.
 QUANTITY_RATE_COEFFICIENT: Final = "rate_coefficient"
@@ -166,6 +173,15 @@ class KineticsSelectionColliderIn(BaseModel):
         return self
 
 
+class KineticsSelectionFilters(LevelAndSoftwareFilters):
+    """The filters the kinetics browse and search offer, with their meaning: rate-law form, level of theory, software.
+
+    Applied before eligibility. A filter excludes on a fact and ranks nothing.
+    """
+
+    model_kind: KineticsModelKind | None = None
+
+
 class KineticsSelectionRequest(BaseModel):
     """Request body. ``quantity`` and ``phase`` may be omitted; if given they must agree with the endpoint."""
 
@@ -188,6 +204,14 @@ class KineticsSelectionRequest(BaseModel):
     min_review_status: RecordReviewStatus | None = Field(
         default=None,
         description="Optional floor, applied on top of the read profile's floor (the stricter wins).",
+    )
+    filters: KineticsSelectionFilters = Field(
+        default_factory=KineticsSelectionFilters,
+        description="Narrow the candidates by facts before eligibility, with the kinetics search's own filters.",
+    )
+    eligibility: SelectionEligibilityIn = Field(
+        default_factory=SelectionEligibilityIn,
+        description="Lift named eligibility defaults. Every default is applied unless lifted here; the answer lists each.",
     )
 
     @model_validator(mode="after")
@@ -245,6 +269,8 @@ class KineticsSelectionRequestEcho(ProfiledRequestEcho):
     policy: KineticsSelectionPolicy
     mode: KineticsSelectionMode
     min_review_status: RecordReviewStatus | None = None
+    filters: dict[str, Any] = Field(default_factory=dict, description="The filters as supplied, normalised.")
+    eligibility: SelectionEligibilityIn = Field(default_factory=SelectionEligibilityIn)
 
 
 class KineticsSelectionReview(BaseModel):
@@ -284,7 +310,7 @@ class KineticsSelectionReason(BaseModel):
     applicability: str
 
 
-class KineticsSelectionCandidate(BaseModel):
+class KineticsSelectionCandidate(CandidateEligibility):
     """One assessed record: its stored claims, its applicability to the question, and whether it competed."""
 
     kinetics_ref: str
@@ -303,7 +329,9 @@ class KineticsSelectionCandidate(BaseModel):
     reasons: list[KineticsSelectionReason] = Field(default_factory=list)
     blocking: list[str] = Field(default_factory=list)
     advisory: list[str] = Field(default_factory=list)
-    eligible: bool = Field(description="Applicable, with no blocking finding: it competes in the ordering.")
+    eligible: bool = Field(
+        description="Applicable, and no applied eligibility default excludes it: it competes in the ordering."
+    )
 
 
 class KineticsSelectionDetermination(BaseModel):
@@ -335,7 +363,7 @@ class KineticsSelectionDisclosures(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
-class KineticsSelectionResponse(BaseModel):
+class KineticsSelectionResponse(SelectionStepsAnswer):
     """The decision, its basis, and everything it rests on, as public refs only."""
 
     request: KineticsSelectionRequestEcho

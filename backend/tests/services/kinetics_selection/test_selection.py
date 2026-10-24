@@ -33,6 +33,7 @@ from tests.services.kinetics_selection.test_service import (
     declared,
     determination,
 )
+from tests.services._select_steps import MANIFEST_STEP_COUNT_PATHS
 from tests.services.scientific_read._factories import make_calculation, make_lot
 
 PREFERRED = {"version": 1, "method_kind": "saddle_point_tst"}
@@ -178,6 +179,7 @@ ALLOWED_INTEGER_PATHS = {
     "candidates[].id_rank", "candidates[].arrhenius_terms", "candidates[].reactant_stoichiometries[]",
     "candidates[].product_stoichiometries[]", "candidates[].applicability.version", "candidates[].protocol.version",
     "candidates[].applicability.reaction_order", "determinations[].representation_count",
+    *MANIFEST_STEP_COUNT_PATHS,
 }
 
 
