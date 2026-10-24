@@ -52,9 +52,12 @@ REGISTRIES: dict[str, Callable[[], VersionRegistry]] = {
 }
 
 #: Registries whose current version is not the baseline, and why: the method-preference rules were removed, which
-#: changed the decision documents these formats describe.
+#: changed the decision documents these formats describe. A select request then gained filters and named eligibility
+#: defaults (2026-10): a recorded decision now carries them, so the format moved again, and the assessment semantics
+#: moved because the recorded ``eligible`` flag is the verdict under the request's own settings.
 EXPECTED: dict[str, int] = {
-    "thermo_formats": 2,
+    "thermo_formats": 3,
+    "thermo_semantics": 2,
     "kinetics_formats": 2,
     "statmech_formats": 2,
     "structure_formats": 2,
