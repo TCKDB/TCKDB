@@ -57182,9 +57182,23 @@
             "title": "Coverage",
             "type": "string"
           },
+          "eligibility": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "description": "The eligibility settings the decision was made under.",
+            "title": "Eligibility",
+            "type": "object"
+          },
           "entry_ref": {
             "title": "Entry Ref",
             "type": "string"
+          },
+          "filters": {
+            "additionalProperties": true,
+            "description": "The filters as supplied, normalised.",
+            "title": "Filters",
+            "type": "object"
           },
           "geometry_ref": {
             "anyOf": [

@@ -12,14 +12,15 @@ every unit.
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
 from app.db.models.common import CalculationQuality, RecordReviewStatus
-from app.schemas.reads.scientific_selection_common import ELIGIBILITY_CONFIRMED_FINDINGS, ELIGIBILITY_REJECTED_QUALITY
 from app.db.models.structure_determination import StructureDetermination
+from app.schemas.reads.scientific_selection_common import ELIGIBILITY_CONFIRMED_FINDINGS, ELIGIBILITY_REJECTED_QUALITY
 from app.services.read_snapshot import begin_read_snapshot
 from app.services.scientific_read.ref_guard import withhold_selection_facts
 from app.services.selection_kernel import Applicability
@@ -136,7 +137,7 @@ def assess_entry_structures(
             f"{len(unresolved)} unit(s) are unresolved and {len(unsupported)} unsupported; they do not compete in this "
             "result and may be applicable if their missing facts were recorded or their form evaluated"
         )
-    unit_by_ref = {
+    unit_by_ref: dict[str, Any] = {
         **{c.calculation_ref: c for c in loaded.calculations.values()},
         **{d.determination_ref: d for d in loaded.determinations.values()},
     }

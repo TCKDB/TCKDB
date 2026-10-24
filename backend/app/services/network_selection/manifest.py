@@ -39,6 +39,7 @@ from typing import Any
 
 from tckdb_schemas.network_declarations import NETWORK_DECLARATION_VERSIONS
 
+from app.db.models.common import RecordReviewStatus
 from app.services.manifest_formats import manifest_header, new_format_registry, read_manifest_format
 from app.services.network_selection.assessment import (
     ASSESSMENT_VERSION,
@@ -59,7 +60,6 @@ from app.services.network_selection.models import (
     Scope,
     SolveFacts,
 )
-from app.db.models.common import RecordReviewStatus
 from app.services.scientific_read.profile import current_read_profile
 from app.services.selection_kernel.requested import Eligibility, UnreadableEligibility, review_default
 from app.versioning import same_value

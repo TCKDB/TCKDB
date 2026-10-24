@@ -27,7 +27,13 @@ from tckdb_schemas.kinetics_declarations import (
 from app.api.error_contract import CodedValueError
 from app.api.errors import not_found
 from app.db.models.calculation import Calculation
-from app.db.models.common import KineticsCalculationRole, KineticsModelKind, ReactionRole, RecordReviewStatus, SubmissionRecordType
+from app.db.models.common import (
+    KineticsCalculationRole,
+    KineticsModelKind,
+    ReactionRole,
+    RecordReviewStatus,
+    SubmissionRecordType,
+)
 from app.db.models.kinetics import Kinetics, KineticsDetermination, KineticsSourceCalculation
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.network import Network

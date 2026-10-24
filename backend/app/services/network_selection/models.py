@@ -229,8 +229,8 @@ class NetworkRequest:
     admin_policy: SelectionPolicy = SelectionPolicy.default
     first_only: bool = False
     bounds: SelectionBounds = field(default=DEFAULT_BOUNDS)
-    filters: NetworkFilters = NetworkFilters()
-    eligibility: Eligibility = Eligibility()
+    filters: NetworkFilters = field(default_factory=NetworkFilters)
+    eligibility: Eligibility = field(default_factory=Eligibility)
 
     def __post_init__(self) -> None:
         if self.coefficient_basis not in {"kernel", "composition_effective"}:

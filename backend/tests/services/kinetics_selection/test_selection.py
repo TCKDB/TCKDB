@@ -28,12 +28,12 @@ from app.services.scientific_read.profile import (
     set_current_read_profile,
 )
 from app.services.selection_kernel import Outcome
+from tests.services._select_steps import MANIFEST_STEP_COUNT_PATHS
 from tests.services.kinetics_selection.test_service import (
     REQUEST,
     declared,
     determination,
 )
-from tests.services._select_steps import MANIFEST_STEP_COUNT_PATHS
 from tests.services.scientific_read._factories import make_calculation, make_lot
 
 PREFERRED = {"version": 1, "method_kind": "saddle_point_tst"}

@@ -98,14 +98,14 @@ def filter_by_provenance(
 
     *calculations_of* maps each candidate id to the ids of the source calculations it rests on.
     """
-    constraints = dict(
-        method=method,
-        basis=basis,
-        software=software,
-        software_version=software_version,
-        workflow_tool=workflow_tool,
-        workflow_tool_version=workflow_tool_version,
-    )
+    constraints = {
+        "method": method,
+        "basis": basis,
+        "software": software,
+        "software_version": software_version,
+        "workflow_tool": workflow_tool,
+        "workflow_tool_version": workflow_tool_version,
+    }
     if all(v is None for v in constraints.values()):
         return set(calculations_of)
     every = {c for calcs in calculations_of.values() for c in calcs}

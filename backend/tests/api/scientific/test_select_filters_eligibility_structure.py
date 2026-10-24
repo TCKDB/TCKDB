@@ -223,7 +223,7 @@ def test_a_decision_made_with_filters_and_overrides_replays_at_both_levels(clien
     manifest = post(client, world, extra, manifest=True).json()
     assert manifest["request"]["filters"] == {"software": "orca"}
     assert manifest["request"]["eligibility"]["include_rejected"] is True
-    assert {ref for ref in manifest["verdicts"]} == {u["unit_ref"] for u in response["units"]}
+    assert set(manifest["verdicts"]) == {u["unit_ref"] for u in response["units"]}
     assert "rejected" in manifest["candidate_review_statuses"]
     assert replay_matches(manifest)
     assert replay_structure_decision(manifest)["selected_refs"] == response["selected_refs"]

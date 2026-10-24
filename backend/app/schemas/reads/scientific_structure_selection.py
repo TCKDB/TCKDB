@@ -273,6 +273,8 @@ class StructureSelectionRequestEcho(ProfiledRequestEcho):
     administrative_policy: str
     result_mode: str
     repeat_policy: str
+    filters: dict[str, Any] = Field(default_factory=dict, description="The filters as supplied, normalised.")
+    eligibility: dict[str, bool] = Field(default_factory=dict, description="The eligibility settings the decision was made under.")
     bounds: dict[str, Any] = Field(
         description="The server's engineering bounds this decision was made under (never settable by the caller)."
     )
