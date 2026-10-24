@@ -76,7 +76,7 @@ from app.services.trust.rubrics import RUBRICS
 #: Bumped when the fingerprinting itself changes (what it follows), which moves every fingerprint without any rubric
 #: changing. The generator then re-pins all of them; a rubric change in the same commit would hide in that re-pin, so a
 #: commit that changes the algorithm should change nothing else.
-ALGORITHM = 5
+ALGORITHM = 6
 
 PINS_PATH = Path(__file__).with_name("rubric_pins.json")
 
@@ -175,15 +175,20 @@ DECLARED_ENVIRONMENT_CONSTANTS: dict[str, str] = {
 }
 
 _ENV_NAMES = {"environ", "getenv", "environb", "settings"}
-_ENV_CACHE: dict[str, tuple[set[str], dict[str, tuple[str, str]]]] = {}
+_Facts = tuple[dict[str, tuple[str, tuple[str, ...]]], set[str], dict[str, tuple[str, str]]]
+_ENV_CACHE: dict[str, _Facts] = {}
 
 
-def _module_env_facts(module_name: str) -> tuple[set[str], dict[str, tuple[str, str]]]:
-    """``(names assigned from the environment/settings at module level, {imported name: (module, original name)})``."""
+def _module_env_facts(module_name: str) -> _Facts:
+    """``({env-derived name: (source expression, helper functions it calls)}, env-reading functions, imports)``.
+
+    A module constant is env-derived when its assignment mentions the environment or settings, or calls a function that
+    does: one defined in the module, or one imported from an in-scope module (``from app.x import env_float``).
+    """
     cached = _ENV_CACHE.get(module_name)
     if cached is not None:
         return cached
-    env: set[str] = set()
+    env: dict[str, tuple[str, tuple[str, ...]]] = {}
     imported: dict[str, tuple[str, str]] = {}
     module = sys.modules.get(module_name)
     try:
@@ -198,33 +203,54 @@ def _module_env_facts(module_name: str) -> tuple[set[str], dict[str, tuple[str, 
             for n in ast.walk(node)
         )
 
-    # A module-level helper that reads the environment (``_env("S3_ENDPOINT_URL", default)``) makes what it feeds env-derived.
-    env_functions = {n.name for n in body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and mentions_env(n)}
     for node in body:
-        if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
-            uses_env = mentions_env(node.value) or any(
-                isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in env_functions
-                for n in ast.walk(node.value)
-            )
-            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-            if uses_env:
-                env.update(t.id for t in targets if isinstance(t, ast.Name))
-        elif isinstance(node, ast.ImportFrom) and node.module and _in_scope(node.module) and not node.level:
+        if isinstance(node, ast.ImportFrom) and node.module and _in_scope(node.module) and not node.level:
             for alias in node.names:
                 imported[alias.asname or alias.name] = (node.module, alias.name)
-    _ENV_CACHE[module_name] = (env, imported)
-    return env, imported
+    env_functions = {n.name for n in body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and mentions_env(n)}
+    _ENV_CACHE[module_name] = (env, env_functions, imported)  # registered early: an import cycle sees a partial answer
+    for local, (origin_module, origin_name) in imported.items():
+        try:
+            importlib.import_module(origin_module)
+        except ImportError:
+            continue
+        if _is_env_function(origin_module, origin_name):
+            env_functions.add(local)
+    for node in body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
+            calls = [n.func.id for n in ast.walk(node.value) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in env_functions]
+            if mentions_env(node.value) or calls:
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                for t in targets:
+                    if isinstance(t, ast.Name):
+                        env[t.id] = (ast.unparse(node.value), tuple(calls))
+    return env, env_functions, imported
 
 
-def _env_origin(module_name: str, name: str, seen: set[tuple[str, str]] | None = None) -> str | None:
-    """The ``module.name`` of the environment-derived constant *name* of *module_name* is, or ``None``."""
+def _is_env_function(module_name: str, name: str, seen: set[tuple[str, str]] | None = None) -> bool:
+    seen = seen if seen is not None else set()
+    if (module_name, name) in seen:
+        return False
+    seen.add((module_name, name))
+    _, env_functions, imported = _module_env_facts(module_name)
+    if name in env_functions:
+        return True
+    if name in imported:
+        origin_module, origin_name = imported[name]
+        return _is_env_function(origin_module, origin_name, seen)
+    return False
+
+
+def _env_origin(module_name: str, name: str, seen: set[tuple[str, str]] | None = None) -> tuple[str, str, tuple[str, ...], str] | None:
+    """``(module.name, expression, helpers, defining module)`` when *name* of *module_name* is env-derived, else ``None``."""
     seen = seen if seen is not None else set()
     if (module_name, name) in seen:
         return None
     seen.add((module_name, name))
-    env, imported = _module_env_facts(module_name)
+    env, _, imported = _module_env_facts(module_name)
     if name in env:
-        return f"{module_name}.{name}"
+        expression, helpers = env[name]
+        return f"{module_name}.{name}", expression, helpers, module_name
     if name in imported:
         origin_module, origin_name = imported[name]
         importlib.import_module(origin_module)
@@ -269,9 +295,30 @@ def _is_text(node: ast.AST) -> bool:
     return isinstance(node, ast.JoinedStr) or (isinstance(node, ast.Constant) and isinstance(node.value, str))
 
 
+_CODE_PREFIX = re.compile(r"\s*([a-z][a-z0-9_]*):")
+
+
+def _text_head(node: ast.AST) -> str | None:
+    """The leading text of a string or f-string, or ``None`` when *node* is not text."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        first = node.values[0] if node.values else None
+        return first.value if isinstance(first, ast.Constant) and isinstance(first.value, str) else ""
+    return None
+
+
+def _blank_message(node: ast.AST) -> ast.AST:
+    """The message with its wording removed but any leading ``code:`` kept: an error code is part of the contract."""
+    head = _text_head(node)
+    match = _CODE_PREFIX.match(head) if head else None
+    return ast.Constant(f"<message {match.group(1)}>" if match else "<message>")
+
+
 class _Normalise(ast.NodeTransformer):
     """Remove wording that cannot change a verdict: documentation keywords of pydantic ``Field`` and the plain-text
-    message of a ``raise``. Everything else, including an error ``code=`` and every non-text argument, stays."""
+    message of a ``raise``. An error code stays: the first positional argument of a ``Coded*`` error, any argument named
+    like ``code``, and a ``code:`` prefix of a message. Every non-text argument stays."""
 
     def visit_Call(self, node: ast.Call) -> ast.AST:
         self.generic_visit(node)
@@ -283,12 +330,24 @@ class _Normalise(ast.NodeTransformer):
     def visit_Raise(self, node: ast.Raise) -> ast.AST:
         exc = node.exc
         if isinstance(exc, ast.Call):
-            exc.args = [ast.Constant("<message>") if _is_text(a) else self.visit(a) for a in exc.args]
-            for keyword in exc.keywords:
-                if keyword.arg in _MESSAGE_KEYWORDS and _is_text(keyword.value):
-                    keyword.value = ast.Constant("<message>")
+            name = exc.func.id if isinstance(exc.func, ast.Name) else (exc.func.attr if isinstance(exc.func, ast.Attribute) else "")
+            coded = name.startswith("Coded")
+            new_args: list[ast.expr] = []
+            for index, arg in enumerate(exc.args):
+                if _text_head(arg) is None:
+                    new_args.append(self.visit(arg))
+                elif coded and index == 0:
+                    new_args.append(arg)  # the code itself
                 else:
+                    new_args.append(_blank_message(arg))  # type: ignore[arg-type]
+            exc.args = new_args
+            for keyword in exc.keywords:
+                if _text_head(keyword.value) is None:
                     keyword.value = self.visit(keyword.value)
+                elif keyword.arg and "code" in keyword.arg:
+                    continue
+                elif keyword.arg in _MESSAGE_KEYWORDS:
+                    keyword.value = _blank_message(keyword.value)  # type: ignore[assignment]
         return node
 
 
@@ -525,8 +584,9 @@ class _Walker:
         value = scope[base_name]
         module_name = where.split(":")[0]
         label = f"{module_name}.{base_name}"
-        origin = _env_origin(module_name, base_name) if isinstance(value, _SCALARS) else None
-        if origin is not None:
+        found = _env_origin(module_name, base_name) if isinstance(value, _SCALARS) else None
+        if found is not None:
+            origin, expression, helpers, defining_module = found
             if _DISCOVERED_ENV is not None:
                 _DISCOVERED_ENV.append(origin)
             if origin not in DECLARED_ENVIRONMENT_CONSTANTS:
@@ -537,7 +597,16 @@ class _Walker:
                     "differs between machines and the fingerprint cannot see what it is. Declare it in "
                     "DECLARED_ENVIRONMENT_CONSTANTS with the reason it is configuration and not a rule."
                 )
+            # What a deployment sets is configuration, but how the constant is derived (the default, a conversion, a
+            # clamp) is code: the declared assignment's expression and the helpers it calls are fingerprinted.
             self.constants[f"{origin}#environment"] = DECLARED_ENVIRONMENT_CONSTANTS[origin]
+            self.constants[f"{origin}#expression"] = expression
+            defined = sys.modules[defining_module].__dict__
+            for helper in helpers:
+                function = inspect.unwrap(defined[helper]) if helper in defined else None
+                if isinstance(function, FunctionType):
+                    # Its source, not its environment read: that read is the configuration being declared.
+                    self.code[f"{function.__module__}:{function.__qualname__}"] = self._function_text(function)[1]
             return
         self._reference(label, value, where)
         # Follow module attributes: ``module.helper`` or ``module.CONSTANT``.
@@ -563,6 +632,9 @@ class _Walker:
             self._refuse_input(label, where, "reads settings")
             return
         if inspect.isclass(value):
+            if any(c.__name__ == "BaseSettings" for c in value.__mro__):
+                self._refuse_input(label, where, "constructs settings (reads the environment)")
+                return
             self._visit_class(value)
             return
         if isinstance(value, (FunctionType, partial, staticmethod, classmethod, property)) or (

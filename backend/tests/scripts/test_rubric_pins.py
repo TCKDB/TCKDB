@@ -68,12 +68,15 @@ def test_every_rubric_with_checks_is_pinned_and_the_rest_are_named() -> None:
 
 
 def test_unbumped_overrides_are_surfaced_with_their_reasons() -> None:
-    """An unbumped re-pin leaves a trace; the test prints each so a reviewer sees them."""
-    overrides = [o for o in rubric_pins.load_overrides() if "name" in o]
+    """Every override leaves a trace: an unbumped re-pin, a Python re-pin and an algorithm re-pin are all printed."""
+    overrides = rubric_pins.load_overrides()
     for entry in overrides:
-        assert str(entry.get("reason", "")).strip(), f"unbumped override without a reason: {entry}"
-    if overrides:  # pragma: no cover - empty today
-        print("unbumped overrides:", overrides)
+        if "name" in entry:
+            assert str(entry.get("reason", "")).strip(), f"unbumped override without a reason: {entry}"
+        else:
+            assert set(entry) <= {"python_repin", "algorithm_repin"}, f"unrecognised override entry: {entry}"
+    for entry in overrides:
+        print("pins override:", entry)
 
 
 # --- the fingerprint reacts to what decides a check, and only to that --------------------------------------------
@@ -587,7 +590,7 @@ def test_no_object_address_reaches_the_walk() -> None:
     assert " at 0x" not in rubric_pins.stable_dump_for_tests("tckdb_reproducibility")
 
 
-def test_an_algorithm_bump_is_recorded_not_silent(tmp_path, monkeypatch) -> None:
+def test_an_algorithm_bump_is_recorded_not_silent(tmp_path, monkeypatch, capsys) -> None:
     import json
 
     work = tmp_path / "pins.json"
@@ -602,8 +605,10 @@ def test_an_algorithm_bump_is_recorded_not_silent(tmp_path, monkeypatch) -> None
     monkeypatch.setattr(generator.rubric_pins, "PINS_PATH", work)
     assert generator.main(["--check"]) == 1
     assert generator.main([]) == 0
+    printed = capsys.readouterr().out
     recorded = json.loads(work.read_text())["unbumped_overrides"]
     assert {"algorithm_repin": {"from": rubric_pins.ALGORITHM - 1, "to": rubric_pins.ALGORITHM}} in recorded
+    assert "algorithm_repin" in printed, "the generator must print the entry it records"
 
 
 def test_module_level_sql_is_fingerprinted_not_skipped(tmp_path, monkeypatch) -> None:
@@ -730,3 +735,87 @@ def test_fingerprints_do_not_depend_on_the_deployment_environment() -> None:
         assert result.returncode == 0, result.stderr
         outputs.append(result.stdout)
     assert outputs[0] == outputs[1]
+
+
+# --- round 3: declared environment constants, helpers that read the environment, error codes -----------------------------
+
+
+def test_declared_environment_constants_are_only_the_storage_configuration() -> None:
+    assert rubric_pins.DECLARED_ENVIRONMENT_CONSTANTS
+    for name in rubric_pins.DECLARED_ENVIRONMENT_CONSTANTS:
+        assert name.startswith("app.services.artifact_storage.S3_"), f"{name} is not storage configuration"
+
+
+_ENV_HELPER = """
+    import os
+    def env_float(name, default): return float(os.environ.get(name, default))
+"""
+
+
+def test_a_declared_environment_constants_expression_is_fingerprinted(tmp_path, monkeypatch) -> None:
+    template = """
+        import os
+        def _env(name, default): return os.environ.get(name, default)
+        LIMIT = _env("LIMIT", {T})
+        def runner(record): return record.value > LIMIT
+    """
+    monkeypatch.setitem(rubric_pins.DECLARED_ENVIRONMENT_CONSTANTS, "app._pinmod.LIMIT", "test configuration")
+    rubric_pins._ENV_CACHE.clear()
+    first = _fingerprint(tmp_path, monkeypatch, {"app._pinmod": textwrap.dedent(template).replace("{T}", "5")})
+    rubric_pins._ENV_CACHE.clear()
+    second = _fingerprint(tmp_path, monkeypatch, {"app._pinmod": textwrap.dedent(template).replace("{T}", "6")})
+    rubric_pins._ENV_CACHE.clear()
+    assert first != second, "a declared environment constant's default is code and must move the fingerprint"
+
+
+def test_an_environment_read_through_an_imported_helper_is_refused(tmp_path, monkeypatch) -> None:
+    body = """
+        from app._envhelper import env_float
+        LIMIT = env_float("LIMIT", 5)
+        def runner(record): return record.value > LIMIT
+    """
+    rubric_pins._ENV_CACHE.clear()
+    with pytest.raises(Exception) as excinfo:
+        _fingerprint(
+            tmp_path,
+            monkeypatch,
+            {"app._envhelper": textwrap.dedent(_ENV_HELPER), "app._pinmod": textwrap.dedent(body)},
+        )
+    rubric_pins._ENV_CACHE.clear()
+    assert type(excinfo.value).__name__ == "Unfingerprintable"
+    assert "environment" in str(excinfo.value)
+
+
+def test_constructing_settings_inside_a_runner_is_refused(tmp_path, monkeypatch) -> None:
+    body = """
+        from pydantic_settings import BaseSettings
+        class Local(BaseSettings):
+            limit: int = 5
+        def runner(record): return record.value > Local().limit
+    """
+    with pytest.raises(Exception) as excinfo:
+        _fingerprint(tmp_path, monkeypatch, {"app._pinmod": textwrap.dedent(body)})
+    assert type(excinfo.value).__name__ == "Unfingerprintable"
+    assert "settings" in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "def runner(record):\n    raise CodedValueError('{T}', 'a message')\n",
+        "def runner(record):\n    raise CodedValueError('x', detail='code_{T}: a message')\n",
+        "def runner(record):\n    raise ValueError(f'code_{T}: bad {record}')\n",
+        "def runner(record):\n    raise CodedValueError('x', code='{T}')\n",
+    ],
+)
+def test_an_error_code_in_a_raise_still_moves_the_fingerprint(template, tmp_path, monkeypatch) -> None:
+    a = _fingerprint(tmp_path, monkeypatch, {"app._pinmod": template.replace("{T}", "alpha")})
+    b = _fingerprint(tmp_path, monkeypatch, {"app._pinmod": template.replace("{T}", "beta")})
+    assert a != b
+
+
+def test_a_reworded_message_after_the_code_does_not_move_it(tmp_path, monkeypatch) -> None:
+    template = "def runner(record):\n    raise CodedValueError('same_code', detail='same_code: {T} wording')\n"
+    a = _fingerprint(tmp_path, monkeypatch, {"app._pinmod": template.replace("{T}", "one")})
+    b = _fingerprint(tmp_path, monkeypatch, {"app._pinmod": template.replace("{T}", "two")})
+    assert a == b

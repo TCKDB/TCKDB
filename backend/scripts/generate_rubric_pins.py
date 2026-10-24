@@ -94,7 +94,9 @@ def main(argv: list[str] | None = None) -> int:
         # say so in the pins file: a rule change landing in the same commit would otherwise hide in this re-pin.
         unbumped = []
         if "algorithm" in document:  # a first pin has nothing to re-pin from
-            overrides.append({"algorithm_repin": {"from": document["algorithm"], "to": rubric_pins.ALGORITHM}})
+            entry = {"algorithm_repin": {"from": document["algorithm"], "to": rubric_pins.ALGORITHM}}
+            overrides.append(entry)
+            print(f"recorded in unbumped_overrides: {entry}")
     refused = [n for n in unbumped if n not in args.allow_unbumped]
     if refused:
         for name in refused:
