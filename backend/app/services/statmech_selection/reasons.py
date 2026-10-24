@@ -115,6 +115,9 @@ ADVISORY_PREFIXES: tuple[str, ...] = (
     "source_literature_unidentified",
     "superseded_record",
     "source_not_linked_to_geometry_optimization",
+    # A confirmed finding that would have excluded the candidate, kept off the competition because the request lifted
+    # the ``confirmed_blocking_findings`` default. The finding is disclosed here, never hidden.
+    "finding_overridden",
 )
 
 

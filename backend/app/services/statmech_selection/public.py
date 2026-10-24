@@ -35,6 +35,11 @@ from app.db.models.statmech import Statmech
 from app.db.models.statmech_declaration import StatmechModelDeclaration
 from app.db.models.structure_determination import StructureDetermination
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
+from app.schemas.reads.scientific_selection_common import (
+    ELIGIBILITY_CONFIRMED_FINDINGS,
+    ELIGIBILITY_DEPRECATED,
+    ELIGIBILITY_REJECTED,
+)
 from app.schemas.reads.scientific_statmech_selection import (
     StatmechSelectionCandidate,
     StatmechSelectionIntegrity,
@@ -47,6 +52,7 @@ from app.schemas.reads.scientific_statmech_selection import (
     StatmechSelectionSelection,
 )
 from app.services.scientific_read.common import fetch_review_badges
+from app.services.selection_kernel.requested import answer_steps
 from app.services.statmech_selection.loader import _statuses as statuses_for
 from app.services.statmech_selection.loader import assert_subject_visible, entry_visible
 from app.services.statmech_selection.manifest import MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION, canonical
@@ -190,8 +196,14 @@ def run_selection(session: Session, *, body: StatmechSelectionRequest) -> Statme
     )
 
 
-def _candidate(facts: dict[str, Any], assessment: dict[str, Any]) -> StatmechSelectionCandidate:
+#: The eligibility defaults a statmech selection applies, in the order the answer lists them.
+STATMECH_DEFAULTS = (ELIGIBILITY_REJECTED, ELIGIBILITY_DEPRECATED, ELIGIBILITY_CONFIRMED_FINDINGS)
+
+
+def _candidate(facts: dict[str, Any], assessment: dict[str, Any], verdict: dict[str, Any]) -> StatmechSelectionCandidate:
     return StatmechSelectionCandidate(
+        blocked_by=verdict["blocked_by"],
+        passed_only_by_override=verdict["passed_only_by_override"],
         candidate_ref=assessment["candidate_ref"],
         kind=assessment["kind"],
         owner_ref=facts["owner_ref"],
@@ -217,10 +229,26 @@ def build_response(selection: StatmechSelection) -> StatmechSelectionResponse:
     statuses = sorted((RecordReviewStatus(v) for v in manifest["effective_review_statuses"]), key=lambda s: REVIEW_FLOOR_ORDER[s])
     floor = statuses[-1] if statuses else RecordReviewStatus.approved
     facts = {c["candidate_ref"]: c for c in manifest["candidates"]}
-    candidates = [_candidate(facts[a["candidate_ref"]], a) for a in manifest["assessments"]]
+    candidates = [_candidate(facts[a["candidate_ref"]], a, manifest["verdicts"][a["candidate_ref"]]) for a in manifest["assessments"]]
     return StatmechSelectionResponse(
         request=StatmechSelectionRequestEcho(**manifest["request"]),
-        review=StatmechSelectionReview(effective_floor=floor, effective_statuses=statuses),
+        review=StatmechSelectionReview(
+            effective_floor=floor,
+            effective_statuses=statuses,
+            candidate_statuses=sorted(
+                (RecordReviewStatus(v) for v in manifest["candidate_review_statuses"]), key=lambda s: REVIEW_FLOOR_ORDER[s]
+            ),
+        ),
+        **answer_steps(
+            request_filters=manifest["request"]["filters"],
+            min_review_status=(
+                RecordReviewStatus(manifest["request"]["min_review_status"]) if manifest["request"]["min_review_status"] else None
+            ),
+            eligibility_record=manifest["request"]["eligibility"],
+            funnel_record=population["funnel"],
+            names=STATMECH_DEFAULTS,
+            profile_floor=manifest["read_profile"]["review_floor"] is not None,
+        ),
         versions=manifest["versions"],
         outcome=Outcome(manifest["outcome"]),
         basis=decision["basis"],

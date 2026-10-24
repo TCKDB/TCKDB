@@ -80,7 +80,8 @@ class Verdict:
     """Whether one assessed candidate competes, and why not or why only by an override.
 
     :param blocked_by: Applied defaults the candidate fails (it does not compete).
-    :param passed_only_by_override: Defaults the candidate fails but the caller lifted (it competes because of that).
+    :param passed_only_by_override: Defaults the candidate would fail but the caller lifted. It competes because of that
+        only when it is also applicable and fails no applied default; the funnel counts it as admitted by override then.
     """
 
     competes: bool
@@ -149,8 +150,9 @@ def funnel(
     for v in verdicts:
         for name in v.blocked_by:
             excluded[name] = excluded.get(name, 0) + 1
-        for name in v.passed_only_by_override:
-            admitted[name] = admitted.get(name, 0) + 1
+        if v.competes:
+            for name in v.passed_only_by_override:
+                admitted[name] = admitted.get(name, 0) + 1
         blocked += 1 if v.blocked_by else 0
     removed_by_eligibility = sum(terminal_excluded.values()) + blocked
     return {
