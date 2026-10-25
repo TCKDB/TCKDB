@@ -94,6 +94,7 @@ from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
     reject_client_sort,
+    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
@@ -817,15 +818,23 @@ def _apply_dependency_filters(
     if dependency_role is not None:
         # Role-only filter: match any calc participating in an edge of
         # that role, on either side.
+        # An edge whose OTHER end the active profile hides is not an edge (hidden == unknown == absent): matching
+        # through it would say a hidden calculation sits on the far side with this role.
+        child_shown = review_floor_predicate(
+            CalculationDependency.child_calculation_id, SubmissionRecordType.calculation
+        )
+        parent_shown = review_floor_predicate(
+            CalculationDependency.parent_calculation_id, SubmissionRecordType.calculation
+        )
+        as_parent = CalculationDependency.parent_calculation_id == Calculation.id
+        as_child = CalculationDependency.child_calculation_id == Calculation.id
         return stmt.where(
             exists().where(
                 and_(
                     CalculationDependency.dependency_role == dependency_role,
                     or_(
-                        CalculationDependency.parent_calculation_id
-                        == Calculation.id,
-                        CalculationDependency.child_calculation_id
-                        == Calculation.id,
+                        and_(as_parent, child_shown) if child_shown is not None else as_parent,
+                        and_(as_child, parent_shown) if parent_shown is not None else as_child,
                     ),
                 )
             )

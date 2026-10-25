@@ -341,8 +341,17 @@ Filter vocabulary by route: thermo and kinetics `model_kind`, `level_of_theory_r
 matches, each field independently); network and statmech `model_kind` plus `method`, `basis`, `software`, `software_version`,
 `workflow_tool`, `workflow_tool_version` (one source calculation matches all supplied fields); the structure selections
 the six provenance fields (the calculation itself, or the calculations a determination pins as sources).
-Under `curated`, select ignores a source calculation the profile hides when it matches (hidden equals unknown equals absent);
-some searches do not, so the same filter can keep a record on a search that select drops.
+**A filter on a linked record matches only through linked records the profile can see.** This holds on every search, list and
+select route, not only on select. Under `curated`, a calculation or conformer observation below the floor contributes nothing to
+a match (hidden equals unknown equals absent): not its level of theory, method, basis, software, workflow tool or
+`scientific_origin`; not a `has_*` evidence flag (`has_source_calculations`, `has_freq_calculation`, `has_rotor_scans`,
+`has_freq`, `has_observations`, ...); not a `dependency_role` edge to it. A record whose only level-B link is hidden is not found by
+asking for level B, and `total` and `hidden_by_default` do not change because such a link exists. The provenance match is one
+helper (`apply_calculation_provenance_filter`) fed a source set already narrowed by `review_floor_predicate`; select does the same
+through `selection_filters`. A `*_ref` filter that names a parent is a scope, not a subject, and is unchanged. Under the default
+profile nothing changes: a calculation that is rejected or deprecated still takes part in a match, because the `include_rejected`
+and `include_deprecated` switches govern the records a route returns, not the evidence behind them, and a default exclusion is
+disclosed by `hidden_by_default` rather than concealed.
 
 **The read profile's floor is not a default.** Under `curated` the floor is `approved` and hidden equals unknown equals
 absent. No select request can lift it: `include_rejected` and `include_deprecated` lift nothing under it (the echo says

@@ -10,18 +10,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import exists, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     SubmissionRecordType,
 )
-from app.db.models.level_of_theory import LevelOfTheory
-from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.transport import Transport, TransportSourceCalculation
-from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     RecordReviewBadge,
@@ -35,14 +32,17 @@ from app.schemas.reads.scientific_transport_search import (
     ScientificTransportSearchResponse,
     TransportSearchRequest,
 )
+from app.services.scientific_read.calculation_provenance_filters import apply_calculation_provenance_filter
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
     reject_client_sort,
+    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
     visible_statuses,
+    where_visible,
 )
 from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.hidden_by_default import (
@@ -53,7 +53,6 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.keyset import Paging
-from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.scientific_read.transport import (
     _INTERNAL_INCLUDE_TOKENS,
@@ -262,9 +261,7 @@ def _apply_scalar_filters(stmt, request: TransportSearchRequest):
 
 def _apply_evidence_filters(stmt, request: TransportSearchRequest):
     if request.has_source_calculations is not None:
-        ex = exists().where(
-            TransportSourceCalculation.transport_id == Transport.id
-        )
+        ex = _shown_source_calculations().exists()
         stmt = stmt.where(ex if request.has_source_calculations else ~ex)
     if request.has_lj_parameters is not None:
         # ``lj_pair_both_or_neither`` constraint ensures sigma and
@@ -288,18 +285,13 @@ def _apply_method_basis_software_filters(
 ):
     """Provenance filters narrow transport rows to those whose
     source-calculation graph carries at least one row matching the
-    supplied method / basis / software / workflow."""
-    method_or_basis = request.method is not None or request.basis is not None
-    sw_filter = (
-        request.software is not None or request.software_version is not None
-    )
-    wf_filter = (
-        request.workflow_tool is not None
-        or request.workflow_tool_version is not None
-    )
-    if not (method_or_basis or sw_filter or wf_filter):
-        return stmt
+    supplied method / basis / software / workflow. A source calculation the read profile hides
+    contributes nothing to a match (hidden == unknown == absent, decision D6)."""
+    return apply_calculation_provenance_filter(stmt, request, _shown_source_calculations())
 
+
+def _shown_source_calculations():
+    """``select(Calculation.id)`` over this transport row's source calculations the active profile shows."""
     sub = (
         select(Calculation.id)
         .join(
@@ -308,38 +300,7 @@ def _apply_method_basis_software_filters(
         )
         .where(TransportSourceCalculation.transport_id == Transport.id)
     )
-    if method_or_basis:
-        sub = sub.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
-        if request.method is not None:
-            sub = sub.where(method_matches(request.method))
-        if request.basis is not None:
-            sub = sub.where(basis_matches(request.basis))
-    if sw_filter:
-        sub = sub.join(
-            SoftwareRelease,
-            SoftwareRelease.id == Calculation.software_release_id,
-        ).join(Software, Software.id == SoftwareRelease.software_id)
-        if request.software is not None:
-            sub = sub.where(Software.name == request.software)
-        if request.software_version is not None:
-            sub = sub.where(
-                SoftwareRelease.version == request.software_version
-            )
-    if wf_filter:
-        sub = sub.join(
-            WorkflowToolRelease,
-            WorkflowToolRelease.id == Calculation.workflow_tool_release_id,
-        ).join(
-            WorkflowTool,
-            WorkflowTool.id == WorkflowToolRelease.workflow_tool_id,
-        )
-        if request.workflow_tool is not None:
-            sub = sub.where(WorkflowTool.name == request.workflow_tool)
-        if request.workflow_tool_version is not None:
-            sub = sub.where(
-                WorkflowToolRelease.version == request.workflow_tool_version
-            )
-    return stmt.where(sub.exists())
+    return where_visible(sub, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
 
 
 # ---------------------------------------------------------------------------

@@ -38,8 +38,6 @@ from app.db.models.common import (
     CalculationType,
     SubmissionRecordType,
 )
-from app.db.models.level_of_theory import LevelOfTheory
-from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import (
     ConformerAssignmentScheme,
     ConformerGroup,
@@ -48,7 +46,6 @@ from app.db.models.species import (
     Species,
     SpeciesEntry,
 )
-from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     RecordReviewBadge,
@@ -64,14 +61,17 @@ from app.schemas.reads.scientific_conformer_search import (
     ScientificConformersSearchResponse,
 )
 from app.services.scientific_read import levels_of_theory
+from app.services.scientific_read.calculation_provenance_filters import apply_calculation_provenance_filter
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
     reject_client_sort,
+    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
     visible_statuses,
+    where_visible,
 )
 from app.services.scientific_read.conformers import (
     _INTERNAL_INCLUDE_TOKENS,
@@ -87,7 +87,6 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.keyset import Paging
-from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 
 # Filter knobs that count as "meaningful" for the at-least-one-filter rule.
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
@@ -392,23 +391,43 @@ def _apply_observation_filters(
         # ``A group matches scientific_origin=X iff it has at least one
         # observation with that origin.''
         stmt = stmt.where(
-            exists().where(
-                and_(
-                    ConformerObservation.conformer_group_id
-                    == ConformerGroup.id,
-                    ConformerObservation.scientific_origin == scientific_origin,
-                )
-            )
+            _shown_observations_of_group().where(ConformerObservation.scientific_origin == scientific_origin).exists()
         )
         # scientific_origin implies observations exist; if the caller
         # also said has_observations=False, that's a contradiction —
         # honor the explicit boolean and let the conjunction be empty.
     if has_observations is not None:
-        ex = exists().where(
-            ConformerObservation.conformer_group_id == ConformerGroup.id
-        )
+        ex = _shown_observations_of_group().exists()
         stmt = stmt.where(ex if has_observations else ~ex)
     return stmt
+
+
+def _shown_observations_of_group():
+    """``select(ConformerObservation.id)`` over this group's observations the active profile shows.
+
+    A hidden observation, and every calculation reached through one, contributes nothing to a filter match
+    (hidden == unknown == absent, decision D6). Without a review floor the statement is unchanged.
+    """
+    sub = select(ConformerObservation.id).where(ConformerObservation.conformer_group_id == ConformerGroup.id)
+    return where_visible(
+        sub, review_floor_predicate(ConformerObservation.id, SubmissionRecordType.conformer_observation)
+    )
+
+
+def _shown_calculations_of_group():
+    """``select(Calculation.id)`` over the shown calculations of this group's shown observations."""
+    sub = (
+        select(Calculation.id)
+        .join(
+            ConformerObservation,
+            ConformerObservation.id == Calculation.conformer_observation_id,
+        )
+        .where(ConformerObservation.conformer_group_id == ConformerGroup.id)
+    )
+    sub = where_visible(
+        sub, review_floor_predicate(ConformerObservation.id, SubmissionRecordType.conformer_observation)
+    )
+    return where_visible(sub, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
 
 
 # The evidence family, in the order the filters are applied. Each entry is
@@ -491,14 +510,7 @@ def _apply_evidence_filters(stmt, request: ConformersSearchRequest):
 def _calc_exists_in_group(*, extra_clause=None, extra_join=None):
     """Build an EXISTS clause: a calculation reachable via this conformer
     group (via observation linkage), with optional extra filters."""
-    sub = (
-        select(Calculation.id)
-        .join(
-            ConformerObservation,
-            ConformerObservation.id == Calculation.conformer_observation_id,
-        )
-        .where(ConformerObservation.conformer_group_id == ConformerGroup.id)
-    )
+    sub = _shown_calculations_of_group()
     if extra_join is not None:
         sub = sub.join(*extra_join)
     if extra_clause is not None:
@@ -522,8 +534,9 @@ def _every_observation_clause(want: bool, *, extra_clause=None, extra_join=None)
         ConformerObservation.conformer_group_id == ConformerGroup.id
     )
 
-    evidence_on_observation = select(Calculation.id).where(
-        Calculation.conformer_observation_id == ConformerObservation.id
+    evidence_on_observation = where_visible(
+        select(Calculation.id).where(Calculation.conformer_observation_id == ConformerObservation.id),
+        review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
     )
     if extra_join is not None:
         evidence_on_observation = evidence_on_observation.join(*extra_join)
@@ -533,17 +546,15 @@ def _every_observation_clause(want: bool, *, extra_clause=None, extra_join=None)
         ConformerObservation
     )
 
-    has_any_observation = (
-        select(ConformerObservation.id)
-        .where(observation_in_group)
-        .correlate(ConformerGroup)
-        .exists()
+    observation_shown = review_floor_predicate(
+        ConformerObservation.id, SubmissionRecordType.conformer_observation
     )
+    shown_observations = where_visible(
+        select(ConformerObservation.id).where(observation_in_group), observation_shown
+    )
+    has_any_observation = shown_observations.correlate(ConformerGroup).exists()
     observation_lacking_evidence = (
-        select(ConformerObservation.id)
-        .where(observation_in_group, ~evidence_on_observation.exists())
-        .correlate(ConformerGroup)
-        .exists()
+        shown_observations.where(~evidence_on_observation.exists()).correlate(ConformerGroup).exists()
     )
     if want:
         return and_(has_any_observation, ~observation_lacking_evidence)
@@ -555,56 +566,8 @@ def _apply_method_basis_software_filters(
 ):
     """Provenance filters narrow conformer groups to those whose
     calculation evidence includes a row matching the supplied
-    method/basis/software/workflow."""
-    method_or_basis = request.method is not None or request.basis is not None
-    sw_filter = (
-        request.software is not None or request.software_version is not None
-    )
-    wf_filter = (
-        request.workflow_tool is not None
-        or request.workflow_tool_version is not None
-    )
-    if not (method_or_basis or sw_filter or wf_filter):
-        return stmt
-
-    sub = (
-        select(Calculation.id)
-        .join(
-            ConformerObservation,
-            ConformerObservation.id == Calculation.conformer_observation_id,
-        )
-        .where(ConformerObservation.conformer_group_id == ConformerGroup.id)
-    )
-    if method_or_basis:
-        sub = sub.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
-        if request.method is not None:
-            sub = sub.where(method_matches(request.method))
-        if request.basis is not None:
-            sub = sub.where(basis_matches(request.basis))
-    if sw_filter:
-        sub = sub.join(
-            SoftwareRelease,
-            SoftwareRelease.id == Calculation.software_release_id,
-        ).join(Software, Software.id == SoftwareRelease.software_id)
-        if request.software is not None:
-            sub = sub.where(Software.name == request.software)
-        if request.software_version is not None:
-            sub = sub.where(SoftwareRelease.version == request.software_version)
-    if wf_filter:
-        sub = sub.join(
-            WorkflowToolRelease,
-            WorkflowToolRelease.id == Calculation.workflow_tool_release_id,
-        ).join(
-            WorkflowTool,
-            WorkflowTool.id == WorkflowToolRelease.workflow_tool_id,
-        )
-        if request.workflow_tool is not None:
-            sub = sub.where(WorkflowTool.name == request.workflow_tool)
-        if request.workflow_tool_version is not None:
-            sub = sub.where(
-                WorkflowToolRelease.version == request.workflow_tool_version
-            )
-    return stmt.where(sub.exists())
+    method/basis/software/workflow. Hidden observations and calculations contribute nothing to a match."""
+    return apply_calculation_provenance_filter(stmt, request, _shown_calculations_of_group())
 
 
 # ---------------------------------------------------------------------------
