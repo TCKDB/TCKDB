@@ -26,9 +26,9 @@ from app.db.models.common import PhaseKind, RecordReviewStatus, ThermoTargetKind
 from app.schemas.reads.scientific_common import ProfiledRequestEcho
 from app.schemas.reads.scientific_selection_common import (
     CandidateEligibility,
-    LevelAndSoftwareFilters,
     SelectionEligibilityIn,
     SelectionStepsAnswer,
+    SourceCalculationFilters,
 )
 from app.schemas.reads.scientific_thermo import ThermoModelKindQuery
 
@@ -107,8 +107,8 @@ class ThermoSelectionTargetIn(BaseModel):
         return self
 
 
-class ThermoSelectionFilters(LevelAndSoftwareFilters):
-    """The filters the thermo browse and search offer, with their meaning: model form, level of theory, software.
+class ThermoSelectionFilters(SourceCalculationFilters):
+    """The filters the thermo browse and search offer, with their meaning: model form, origin and the provenance set.
 
     Applied before eligibility. A filter excludes on a fact and ranks nothing.
     """

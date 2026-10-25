@@ -32,6 +32,7 @@ from tests.services.scientific_read._factories import (
     make_calculation,
     make_lot,
     make_software_release,
+    make_workflow_tool_release,
     set_review,
 )
 from tests.services.thermo_selection._support import make_thermo, protocol, species_entry_for
@@ -67,14 +68,27 @@ def g3(session, entry, *, sources=None, status=None, **kw):
     return _build(session, entry, "g3", sources, status, **kw)
 
 
-def source(session, entry, thermo, *, lot=None, software=None, rejected=False, calc_status=None, role=ThermoCalculationRole.opt):
+def source(
+    session, entry, thermo, *, lot=None, software=None, rejected=False, calc_status=None, role=ThermoCalculationRole.opt,
+    software_version=None, workflow_tool=None, workflow_tool_version=None,
+):
     lot_row = make_lot(session, method=lot[0], basis=lot[1]) if lot else None
-    release = make_software_release(session, name=software) if software else None
+    release = (
+        make_software_release(session, name=software, **({'version': software_version} if software_version else {}))
+        if software
+        else None
+    )
+    tool = (
+        make_workflow_tool_release(session, name=workflow_tool, **({'version': workflow_tool_version} if workflow_tool_version else {}))
+        if workflow_tool
+        else None
+    )
     calc = make_calculation(
         session,
         species_entry_id=entry.id,
         lot_id=lot_row.id if lot_row else None,
         software_release_id=release.id if release else None,
+        workflow_tool_release_id=tool.id if tool else None,
     )
     if rejected:
         calc.quality = CalculationQuality.rejected
@@ -143,7 +157,7 @@ def test_a_model_kind_filter_uses_the_stored_form(client, db_session, methane):
 
 def test_a_filter_the_search_does_not_offer_is_refused_not_ignored(client, db_session, methane):
     g4(db_session, methane)
-    refused = post(client, methane, {"filters": {"scientific_origin": "computed"}})
+    refused = post(client, methane, {"filters": {"coverage_temperature_min_k": 300.0}})
     assert refused.status_code == 422
     assert post(client, methane, {"filters": {"software": "orca", "unheard_of": 1}}).status_code == 422
 
@@ -358,3 +372,103 @@ def test_the_funnel_and_the_echo_are_the_same_in_the_response_and_the_download(c
     funnel = manifest["population"]["funnel"]
     assert {k: funnel[k] for k in body["funnel"]} == body["funnel"]
     assert funnel["excluded_by_default"]["rejected_review_status"] == entry_of(body, "rejected_review_status")["excluded"] == 1
+
+
+# -- the browse's full provenance set, matched through ONE source calculation ---------------------------------------
+
+DFT_A = {"lot": ("b3lyp", "def2tzvp"), "software": "gaussian", "software_version": "16", "workflow_tool": "arc", "workflow_tool_version": "1.0"}
+WF_B = {"lot": ("ccsd(t)-f12", "cc-pvtz-f12"), "software": "orca", "software_version": "6", "workflow_tool": "rmg", "workflow_tool_version": "2.0"}
+
+
+def two_calculation_record(session, entry, **kw):
+    thermo = g4(session, entry, **kw)
+    source(session, entry, thermo, **DFT_A)
+    source(session, entry, thermo, **WF_B, role=ThermoCalculationRole.freq)
+    return thermo
+
+
+@pytest.mark.parametrize(
+    ("filters", "matches"),
+    [
+        ({"method": "b3lyp"}, True),
+        ({"basis": "cc-pvtz-f12"}, True),
+        ({"software_version": "6"}, True),
+        ({"workflow_tool": "rmg", "workflow_tool_version": "2.0"}, True),
+        ({"method_family": ["dft"]}, True),
+        ({"method_family": ["composite"]}, False),
+        ({"dft_rung_min": 4, "dft_rung_max": 4}, True),
+        ({"dft_rung_min": 5}, False),
+        # one calculation has to satisfy every field
+        ({"method": "b3lyp", "software": "orca"}, False),
+        ({"method": "b3lyp", "software": "gaussian"}, True),
+        ({"software": "gaussian", "software_version": "6"}, False),
+        ({"workflow_tool": "arc", "basis": "cc-pvtz-f12"}, False),
+        ({"method_family": ["dft"], "software": "orca"}, False),
+        ({"method_family": ["wavefunction"], "software": "orca"}, True),
+        ({"dft_rung_min": 4, "workflow_tool": "rmg"}, False),
+        ({"method_family": "wavefunction", "workflow_tool": "rmg"}, True),
+    ],
+)
+def test_the_provenance_filters_are_matched_through_one_source_calculation(client, db_session, methane, filters, matches):
+    """Kills: matching two fields through two different source calculations (the previous reading of level and software)."""
+    thermo = two_calculation_record(db_session, methane)
+    body = post(client, methane, {"filters": filters}).json()
+    assert [c["thermo_ref"] for c in body["candidates"]] == ([thermo.public_ref] if matches else [])
+    echoed = {k: (sorted([v]) if k == "method_family" and isinstance(v, str) else v) for k, v in filters.items()}
+    assert body["filters"]["applied"] == {k: (sorted(v) if isinstance(v, list) else v) for k, v in echoed.items()}
+    assert body["filters"]["removed"] == (0 if matches else 1)
+
+
+def test_a_level_of_theory_ref_and_a_software_have_to_be_one_calculation(client, db_session, methane):
+    lot_a = make_lot(db_session, method="b3lyp", basis="def2tzvp")
+    thermo = two_calculation_record(db_session, methane)
+    ref = lot_a.public_ref
+    assert post(client, methane, {"filters": {"level_of_theory_ref": ref, "software": "orca"}}).json()["candidates"] == []
+    kept = post(client, methane, {"filters": {"level_of_theory_ref": ref, "software": "gaussian"}}).json()
+    assert [c["thermo_ref"] for c in kept["candidates"]] == [thermo.public_ref]
+
+
+def test_a_family_filter_keeps_a_record_whose_only_calculation_is_unclassified_for_unclassified_alone(client, db_session, methane):
+    thermo = g4(db_session, methane)
+    source(db_session, methane, thermo, lot=("xyg3", "def2tzvp"), software="orca")
+    assert [c["thermo_ref"] for c in post(client, methane, {"filters": {"method_family": ["unclassified"]}}).json()["candidates"]] == [thermo.public_ref]
+    assert post(client, methane, {"filters": {"method_family": ["dft"]}}).json()["candidates"] == []
+    assert post(client, methane, {"filters": {"dft_rung_min": 1}}).json()["candidates"] == []
+
+
+def test_the_scientific_origin_filter_is_matched_on_the_record(client, db_session, methane):
+    from app.db.models.common import ScientificOriginKind
+
+    computed = g4(db_session, methane, age_days=2)
+    experimental = g3(db_session, methane, age_days=1, origin=ScientificOriginKind.experimental)
+    body = post(client, methane, {"filters": {"scientific_origin": "experimental"}}).json()
+    assert [c["thermo_ref"] for c in body["candidates"]] == [experimental.public_ref]
+    assert body["filters"]["applied"] == {"scientific_origin": "experimental"} and body["filters"]["removed"] == 1
+    assert [c["thermo_ref"] for c in post(client, methane, {"filters": {"scientific_origin": "computed"}}).json()["candidates"]] == [computed.public_ref]
+    assert post(client, methane, {"filters": {"scientific_origin": "estimated"}}).json()["candidates"] == []
+    assert post(client, methane, {"filters": {"scientific_origin": "guessed"}}).status_code == 422
+
+
+@pytest.mark.parametrize("filters", [{"method_family": ["dft"]}, {"method": "b3lyp"}, {"dft_rung_min": 4}, {"software": "gaussian"}])
+def test_a_hidden_calculation_cannot_make_a_candidate_pass_a_filter_under_curated(client, db_session, methane, filters):
+    """Kills: select matching a filter through a calculation the curated profile hides."""
+    thermo = g4(db_session, methane)
+    source(db_session, methane, thermo, **DFT_A)  # hidden under curated: never approved
+    source(db_session, methane, thermo, **WF_B, role=ThermoCalculationRole.freq, calc_status=S.approved)
+    set_review(db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id, status=S.approved)
+    assert [c["thermo_ref"] for c in post(client, methane, {"filters": filters}).json()["candidates"]] == [thermo.public_ref]
+    assert post(client, methane, {"filters": filters}, profile="curated").json()["candidates"] == []
+    assert [c["thermo_ref"] for c in post(client, methane, {"filters": {"software": "orca"}}, profile="curated").json()["candidates"]] == [thermo.public_ref]
+
+
+def test_a_decision_records_its_provenance_filters_and_an_earlier_manifest_format_is_refused(client, db_session, methane):
+    two_calculation_record(db_session, methane)
+    request = {"filters": {"method_family": ["dft"], "software": "gaussian", "scientific_origin": "computed"}}
+    manifest = post(client, methane, request, manifest=True).json()
+    assert manifest["request"]["filters"] == {"method_family": ["dft"], "software": "gaussian", "scientific_origin": "computed"}
+    assert manifest["format"] == {"name": "thermo_selection_manifest", "version": 4}
+    assert replay_matches(manifest)
+    earlier = copy.deepcopy(manifest)
+    earlier["format"]["version"] = 3  # level and software were matched through any, independently
+    with pytest.raises(ReplayError, match="earlier format, not replayable"):
+        replay_decision(earlier)

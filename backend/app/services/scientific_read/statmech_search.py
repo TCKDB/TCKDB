@@ -102,6 +102,7 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "transition_state_entry_ref",
     "declared_conformer_group_ref",
     "model_kind",
+    "scientific_origin",
     "has_source_calculations",
     "has_freq_calculation",
     "has_rotor_scans",
@@ -371,6 +372,8 @@ def _apply_identity_filters(
 def _apply_scalar_filters(stmt, request: StatmechSearchRequest):
     if request.model_kind is not None:
         stmt = stmt.where(Statmech.statmech_treatment == request.model_kind)
+    if request.scientific_origin is not None:
+        stmt = stmt.where(Statmech.scientific_origin == request.scientific_origin)
     return stmt
 
 

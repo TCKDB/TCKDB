@@ -33,9 +33,9 @@ from app.db.models.common import (
 from app.schemas.reads.scientific_common import ProfiledRequestEcho
 from app.schemas.reads.scientific_selection_common import (
     CandidateEligibility,
-    LevelAndSoftwareFilters,
     SelectionEligibilityIn,
     SelectionStepsAnswer,
+    SourceCalculationFilters,
 )
 
 #: The one quantity this endpoint answers.
@@ -173,8 +173,8 @@ class KineticsSelectionColliderIn(BaseModel):
         return self
 
 
-class KineticsSelectionFilters(LevelAndSoftwareFilters):
-    """The filters the kinetics browse and search offer, with their meaning: rate-law form, level of theory, software.
+class KineticsSelectionFilters(SourceCalculationFilters):
+    """The filters the kinetics browse and search offer, with their meaning: rate-law form, origin and the provenance set.
 
     Applied before eligibility. A filter excludes on a fact and ranks nothing.
     """

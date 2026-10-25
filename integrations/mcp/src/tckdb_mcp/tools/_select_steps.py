@@ -18,8 +18,10 @@ from ..errors import invalid_input
 PROVENANCE_FILTERS = (
     "method", "basis", "software", "software_version", "workflow_tool", "workflow_tool_version",
 )
-#: thermo and kinetics: the per-entry reads' filters.
-LEVEL_FILTERS = ("model_kind", "level_of_theory_ref", "software")
+#: thermo and kinetics: the per-entry reads' filters that are plain text. ONE source calculation has to match every
+#: provenance field supplied. ``method_family`` and ``dft_rung_min`` / ``dft_rung_max`` (a classification of the method,
+#: not an accuracy measure) are not text and are not offered by this tool yet.
+LEVEL_FILTERS = ("model_kind", "scientific_origin", "level_of_theory_ref", *PROVENANCE_FILTERS)
 #: network and statmech: the model form and the provenance fields.
 MODEL_PROVENANCE_FILTERS = ("model_kind", *PROVENANCE_FILTERS)
 

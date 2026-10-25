@@ -170,6 +170,9 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "software_version",
     "workflow_tool",
     "workflow_tool_version",
+    "method_family",
+    "dft_rung_min",
+    "dft_rung_max",
     "family",
     "participant_smiles",
 )
@@ -942,7 +945,10 @@ def _request_filter_echo(request: TransitionStatesSearchRequest) -> dict[str, An
         value = getattr(request, name)
         if value is None:
             continue
-        out[name] = value.value if hasattr(value, "value") else value
+        if isinstance(value, list):
+            out[name] = sorted({getattr(v, "value", v) for v in value})
+        else:
+            out[name] = value.value if hasattr(value, "value") else value
     return out
 
 
@@ -969,6 +975,9 @@ _BROWSE_FILTER_FIELDS: tuple[str, ...] = (
     "software_version",
     "workflow_tool",
     "workflow_tool_version",
+    "method_family",
+    "dft_rung_min",
+    "dft_rung_max",
     "family",
     "participant_smiles",
 )
@@ -997,7 +1006,10 @@ def _browse_filter_echo(request: TransitionStatesBrowseRequest) -> dict[str, Any
         value = getattr(request, name)
         if value is None:
             continue
-        out[name] = value.value if hasattr(value, "value") else value
+        if isinstance(value, list):
+            out[name] = sorted({getattr(v, "value", v) for v in value})
+        else:
+            out[name] = value.value if hasattr(value, "value") else value
     return out
 
 

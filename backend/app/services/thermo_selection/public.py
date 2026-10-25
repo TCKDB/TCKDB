@@ -137,8 +137,7 @@ def run_selection(
         admin_policy=_admin_policy(body.policy),
         filters=ThermoFilters(
             model_kind=body.filters.model_kind.value if body.filters.model_kind is not None else None,
-            level_of_theory_ref=body.filters.level_of_theory_ref,
-            software=body.filters.software,
+            **body.filters.source_filter_values(),
         ),
         eligibility=Eligibility.from_request(body.eligibility),
     )

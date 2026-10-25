@@ -254,6 +254,7 @@ _register_search(
                 "transition_state_entry_ref",
                 "declared_conformer_group_ref",
                 "model_kind",
+                "scientific_origin",
                 "has_source_calculations",
                 "has_freq_calculation",
                 "has_rotor_scans",
@@ -271,7 +272,7 @@ _register_search(
         # Equals the backend's ``_MEANINGFUL_FILTER_FIELDS``; an explicit ``false`` counts (``_present``).
         required_one_of=(
             "species_ref", "species_entry_ref", "statmech_ref", "conformer_group_ref", "conformer_observation_ref",
-            "transition_state_entry_ref", "declared_conformer_group_ref", "model_kind", "has_source_calculations",
+            "transition_state_entry_ref", "declared_conformer_group_ref", "model_kind", "scientific_origin", "has_source_calculations",
             "has_freq_calculation", "has_rotor_scans", "has_torsions", "method", "basis", "software",
             "software_version", "workflow_tool", "workflow_tool_version",
         ),

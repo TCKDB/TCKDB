@@ -35,6 +35,7 @@ from app.db.models.common import (
     RecordReviewStatus,
     ScientificOriginKind,
 )
+from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
 from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
 from app.schemas.reads.scientific_common import (
@@ -103,6 +104,20 @@ class KineticsReadRequest(BaseModel):
     # Phase C: LoT may be supplied by ref instead of (or alongside) id.
     level_of_theory_ref: str | None = None
     software: str | None = None
+
+    # Further provenance filters. ONE source calculation has to match every supplied provenance field at once
+    # (``level_of_theory_*``, ``software``, and these). ``method_family`` and ``dft_rung_*`` are a classification of the
+    # calculation's method, not a measure of accuracy (``app/schemas/reads/_method_family.py``).
+    method: str | None = None
+    basis: str | None = None
+    software_version: str | None = None
+    workflow_tool: str | None = None
+    workflow_tool_version: str | None = None
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
+    #: computed, experimental or estimated: the record's own ``scientific_origin``.
+    scientific_origin: ScientificOriginKind | None = None
 
     min_review_status: RecordReviewStatus | None = None
     include_rejected: bool = False

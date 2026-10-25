@@ -66,6 +66,7 @@ from app.db.models.species import ConformerAssignmentScheme, ConformerGroup, Con
 from app.db.models.statmech import Statmech
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from app.schemas.reads._method_family import echo_source_provenance
 from app.schemas.reads.scientific_common import (
     CompositeEnergyVerification,
     CompositeSchemeSummary,
@@ -113,7 +114,7 @@ from app.services.scientific_read.common import (
     reject_client_sort,
     review_floor_predicate,
     review_summary,
-    software_names_by_calculation,
+    slice_for_pagination,
     temperature_coverage,
     validate_includes,
     validate_pagination,
@@ -143,6 +144,7 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.scientific_read.trust_floor import evaluate_shown_kinetics
+from app.services.selection_filters import filter_by_provenance, source_provenance_kwargs
 from app.services.trust import (
     TrustFragment,
     build_trust_fragment,
@@ -412,6 +414,8 @@ def get_reaction_kinetics(
         stmt = stmt.options(*_TRUST_EAGER_LOADS)
     if request.model_kind is not None:
         stmt = stmt.where(Kinetics.model_kind == request.model_kind)
+    if request.scientific_origin is not None:
+        stmt = stmt.where(Kinetics.scientific_origin == request.scientific_origin)
     kinetics_rows: list[Kinetics] = list(session.scalars(stmt).all())
 
     if not kinetics_rows:
@@ -435,47 +439,27 @@ def get_reaction_kinetics(
     sources_by_kinetics = _load_source_calculations(
         session, [k.id for k in kinetics_rows]
     )
-    all_source_ids = {sc.calculation_id for srcs in sources_by_kinetics.values() for sc in srcs}
-    # Evidence rule (ADR 0023): a source calculation the profile WITHHOLDS (rejected or deprecated under ``curated``)
-    # contributes no level, no primary software and no filter match. An unreviewed one is shown, with its badge. The record's own LINK to
-    # a withheld calculation is withheld by the ref guard; what that calculation was run at is a fact about it, so it is
-    # nulled with the link and never replaced by another source. One lookup, and none without a floor.
-    withheld_source_calc_ids = ids_withheld_as_evidence(
-        session, record_type=SubmissionRecordType.calculation, record_ids=all_source_ids
-    )
-    # Matching uses the same set (step 4 of ADR 0023): a not-reviewed source calculation contributes a filter match.
-
-    def shown(sources: list[KineticsSourceCalculation]) -> list[KineticsSourceCalculation]:
-        return [sc for sc in sources if sc.calculation_id not in withheld_source_calc_ids]
-
-    # Level-of-theory filter: a record matches when ANY of its linked (shown) source calculations ran at this level.
-    # There is no "primary" calculation for a filter, so no role priority decides which link counts.
-    if effective_lot_id is not None:
-        kinetics_rows = [
-            k
-            for k in kinetics_rows
-            if effective_lot_id in _linked_lot_ids(shown(sources_by_kinetics.get(k.id, [])))
-        ]
-    if not kinetics_rows:
-        return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
-
-    # Software filter: a record matches when ANY of its linked (shown) source calculations ran in a software of this
-    # name.
-    if request.software is not None:
-        software_by_calc = software_names_by_calculation(
+    # One source calculation has to match every supplied provenance field at once (level of theory, software, method,
+    # basis, workflow tool, method family, DFT rung): a record never matches through two different calculations.
+    # Evidence rule (ADR 0023): a source calculation the profile withholds (rejected or deprecated under curated) contributes nothing to a match; an unreviewed one does. The record's own
+    # LINK to it stays a fact of the record (the ref guard withholds the ref); what the calculation was run at is a fact
+    # about the hidden record. There is no "primary" calculation for a filter.
+    provenance = source_provenance_kwargs(request, level_of_theory_id=effective_lot_id)
+    if provenance:
+        kept = filter_by_provenance(
             session,
-            {sc.calculation_id for k in kinetics_rows for sc in shown(sources_by_kinetics.get(k.id, []))},
+            {k.id: {sc.calculation_id for sc in sources_by_kinetics.get(k.id, [])} for k in kinetics_rows},
+            **provenance,
         )
-        kinetics_rows = [
-            k
-            for k in kinetics_rows
-            if any(
-                software_by_calc.get(sc.calculation_id) == request.software
-                for sc in shown(sources_by_kinetics.get(k.id, []))
-            )
-        ]
+        kinetics_rows = [k for k in kinetics_rows if k.id in kept]
     if not kinetics_rows:
         return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
+    # What the evidence rule withholds among the remaining records' source calculations (one lookup, none without a floor).
+    withheld_source_calc_ids = ids_withheld_as_evidence(
+        session,
+        record_type=SubmissionRecordType.calculation,
+        record_ids={sc.calculation_id for k in kinetics_rows for sc in sources_by_kinetics.get(k.id, [])},
+    )
 
     # Review badges + visibility filtering.
     badges = fetch_review_badges(
@@ -1773,15 +1757,6 @@ def _primary_calc_id(sources: list[KineticsSourceCalculation]) -> int | None:
     return None
 
 
-def _linked_lot_ids(sources: list[KineticsSourceCalculation]) -> set[int]:
-    """The level of theory of EVERY source calculation linked to the record (the level-of-theory filter's match set)."""
-    return {
-        sc.calculation.lot_id
-        for sc in sources
-        if sc.calculation is not None and sc.calculation.lot_id is not None
-    }
-
-
 def _first_calc_with_type(
     by_role: dict[KineticsCalculationRole, list[KineticsSourceCalculation]],
     calc_meta: dict[int, _CalcMeta],
@@ -2077,6 +2052,7 @@ def _filter_echo(request: KineticsReadRequest) -> dict[str, object]:
         echo["level_of_theory_ref"] = request.level_of_theory_ref
     if request.software is not None:
         echo["software"] = request.software
+    echo_source_provenance(request, echo)
     if request.min_review_status is not None:
         echo["min_review_status"] = request.min_review_status.value
     if request.include_rejected:

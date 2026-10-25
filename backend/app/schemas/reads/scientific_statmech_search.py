@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.db.models.common import (
     RecordReviewStatus,
+    ScientificOriginKind,
     StatmechTreatmentKind,
 )
 from app.schemas.reads._field_bounds import (
@@ -96,6 +97,8 @@ class StatmechSearchRequest(BaseModel):
 
     # --- statmech scalar filters -----------------------------------------
     model_kind: StatmechTreatmentKind | None = None
+    #: computed, experimental or estimated: the record's own ``scientific_origin``.
+    scientific_origin: ScientificOriginKind | None = None
 
     # --- evidence filters ------------------------------------------------
     has_source_calculations: bool | None = None

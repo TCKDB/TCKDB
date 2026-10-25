@@ -34,6 +34,7 @@ from app.api.routes.scientific._response import (
     SEARCH_SCOPE,
     omit_unrequested_sections,
 )
+from app.chemistry.method_families import MethodFamily
 from app.db.models.common import CoreTreatment, SpinTreatment
 from app.schemas.reads.scientific_level_of_theory import (
     ScientificLevelOfTheoryDetailResponse,
@@ -65,6 +66,9 @@ def scientific_level_of_theory_search_get(
     basis: str | None = Query(None),
     dispersion: str | None = Query(None),
     solvent: str | None = Query(None),
+    method_family: list[MethodFamily] | None = Query(None),
+    dft_rung_min: int | None = Query(None, ge=1, le=5),
+    dft_rung_max: int | None = Query(None, ge=1, le=5),
     spin_treatment: SpinTreatment | None = Query(None),
     core_treatment: CoreTreatment | None = Query(None),
     has_correction_schemes: bool | None = Query(None),
@@ -92,6 +96,9 @@ def scientific_level_of_theory_search_get(
         basis=basis,
         dispersion=dispersion,
         solvent=solvent,
+        method_family=method_family,
+        dft_rung_min=dft_rung_min,
+        dft_rung_max=dft_rung_max,
         spin_treatment=spin_treatment,
         core_treatment=core_treatment,
         has_correction_schemes=has_correction_schemes,

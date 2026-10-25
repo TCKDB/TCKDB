@@ -21,7 +21,7 @@ beside far more selective predicates.
 
 from __future__ import annotations
 
-from sqlalchemy import and_, case, false, func, literal, or_
+from sqlalchemy import and_, case, false, func, literal, or_, true
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.chemistry.basis_set_names import HYPHEN_RULES, basis_identity_key
@@ -32,6 +32,12 @@ from app.chemistry.dispersion_names import (
     level_identity_keys,
 )
 from app.chemistry.lot_component_names import component_identity_key
+from app.chemistry.method_families import (
+    CLASSIFICATION_NAME,
+    CLASSIFICATIONS,
+    DISPERSION_STRIP_PATTERN,
+    MethodClassFilter,
+)
 from app.chemistry.method_names import NAME_ALIASES, SUFFIX_RULES
 from app.db.models.level_of_theory import LevelOfTheory
 
@@ -168,6 +174,36 @@ def basis_matches(value: str) -> ColumnElement[bool]:
     return basis_key_sql(LevelOfTheory.basis) == literal(key)
 
 
+def method_stem_key_sql(column: ColumnElement) -> ColumnElement[str]:
+    """SQL twin of :func:`~app.chemistry.method_families.method_stem_key` over a stored method column.
+
+    The method identity key without a trailing dispersion suffix, built from the same strip pattern the Python side
+    reads, so the two cannot list different suffixes.
+    """
+    stripped = func.regexp_replace(method_key_sql(column), DISPERSION_STRIP_PATTERN, "\\1")
+    return method_key_sql(stripped)
+
+
+def method_family_matches(selected: MethodClassFilter, column: ColumnElement | None = None) -> ColumnElement[bool]:
+    """``LevelOfTheory.method`` is classified into the requested families and DFT rungs.
+
+    The classification is the table in :mod:`app.chemistry.method_families`, applied to the stored method by its stem
+    key, so a dispersion suffix never changes the class and a name the table does not hold is ``unclassified``. The
+    method sets come from the table, so no column is stored and no migration is needed.
+    """
+    if not selected.active:
+        return true()
+    stem = method_stem_key_sql(LevelOfTheory.method if column is None else column)
+    keep, unclassified = selected.keys()
+    known = CLASSIFICATIONS.get(CLASSIFICATION_NAME)
+    parts: list[ColumnElement[bool]] = []
+    if keep:
+        parts.append(stem.in_(sorted(keep)))
+    if unclassified:
+        parts.append(stem.not_in(sorted(known)))
+    return or_(*parts) if parts else false()
+
+
 def _component_matches(column: ColumnElement, value: str) -> ColumnElement[bool]:
     key = component_identity_key(value)
     if key is None:
@@ -199,7 +235,9 @@ __all__ = [
     "dispersion_key_sql",
     "dispersion_matches",
     "level_keys_sql",
+    "method_family_matches",
     "method_key_sql",
     "method_matches",
+    "method_stem_key_sql",
     "solvent_matches",
 ]

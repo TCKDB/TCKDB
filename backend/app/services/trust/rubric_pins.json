@@ -16,7 +16,7 @@
       "1": "28e638f09e687fce82fcc274d372e97cdcc938dad8acbafa2b598c6d803a0c91"
     },
     "computed_transition_state": {
-      "2": "931feaffadc707231debe864144def553bf0472d77de48afea440e6da1b991d6"
+      "2": "0f29800e00a90e3fcd4eae0cd531caa76f3a90b9bbc80450cd72cec19ac73985"
     },
     "computed_transport": {
       "1": "1b5a1f833dc867aff540eddc5e123a5d6fa3cb0d320e90b7a931e94f7a158676"
@@ -92,6 +92,11 @@
       "name": "computed_transition_state",
       "version": 2,
       "reason": "curated matching follows the evidence rule (ADR 0023 step 4); stored and exploratory verdicts unchanged, curated read-time verdicts may change"
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "filter_by_provenance and calculations_matching, which the rubric's fingerprint walk reaches, gained optional keyword parameters (level of theory id, method family, DFT rung bounds) whose default is no constraint. Every existing call passes none of them and runs the same statements, so no verdict of this rubric can change; the unbumped override records that."
     }
   ]
 }

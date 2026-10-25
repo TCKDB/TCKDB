@@ -86,7 +86,7 @@ def test_a_software_filter_keeps_a_candidate_whose_source_calculation_ran_there(
 def test_a_filter_the_search_does_not_offer_is_refused(client, db_session):
     scene = build(db_session)
     assert post(client, scene, {"filters": {"level_of_theory_ref": "lot_x"}}).status_code == 422
-    assert post(client, scene, {"filters": {"scientific_origin": "computed"}}).status_code == 422
+    assert post(client, scene, {"filters": {"coverage_temperature_min_k": 300.0}}).status_code == 422
 
 
 # -- step 2: eligibility -----------------------------------------------------------------------------------------

@@ -32,6 +32,7 @@ from app.schemas.reads.scientific_common import SelectionPolicy
 from app.services.manifest_formats import new_current_only_registry
 from app.services.selection_kernel import Applicability, Outcome  # noqa: F401  (Outcome re-exported)
 from app.services.selection_kernel.requested import Eligibility, Verdict
+from app.services.selection_kernel.source_filters import SourceFilters
 
 #: The one quantity this selector answers.
 QUANTITY = "rate_coefficient"
@@ -160,28 +161,12 @@ class ColliderRequest:
 
 
 @dataclass(frozen=True)
-class KineticsFilters:
+class KineticsFilters(SourceFilters):
     """The caller's filters, with the per-entry kinetics browse's vocabulary and meaning (public refs only).
 
-    :param model_kind: The stored rate-law form (``arrhenius``, ``plog``, ``chebyshev``, ...).
-    :param level_of_theory_ref: ANY shown source calculation ran at this level of theory.
-    :param software: ANY shown source calculation ran in a software of this name.
+    The provenance fields (level of theory, software, method, basis, workflow tool, method family, DFT rung) are matched
+    through ONE shown source calculation: it has to satisfy every one supplied (``SourceFilters``).
     """
-
-    model_kind: str | None = None
-    level_of_theory_ref: str | None = None
-    software: str | None = None
-
-    def to_record(self) -> dict[str, Any]:
-        return {k: v for k, v in self.__dict__.items() if v is not None}
-
-    @classmethod
-    def from_record(cls, raw: dict[str, Any]) -> KineticsFilters:
-        return cls(**raw)
-
-    @property
-    def active(self) -> bool:
-        return any(v is not None for v in self.__dict__.values())
 
 
 @dataclass(frozen=True)

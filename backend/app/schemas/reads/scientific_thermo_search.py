@@ -15,8 +15,12 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.db.models.common import (
     RecordReviewStatus,
+    ScientificOriginKind,
     SpeciesEntryStateKind,
     StationaryPointKind,
+)
+from app.schemas.reads._field_bounds import (
+    MAX_BASIS_LENGTH as _MAX_BASIS_LENGTH,
 )
 from app.schemas.reads._field_bounds import (
     MAX_FORMULA_LENGTH as _MAX_FORMULA_LENGTH,
@@ -28,6 +32,9 @@ from app.schemas.reads._field_bounds import (
     MAX_INCHI_LENGTH as _MAX_INCHI_LENGTH,
 )
 from app.schemas.reads._field_bounds import (
+    MAX_METHOD_LENGTH as _MAX_METHOD_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_PUBLIC_REF_LENGTH as _MAX_PUBLIC_REF_LENGTH,
 )
 from app.schemas.reads._field_bounds import (
@@ -36,6 +43,10 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_SOFTWARE_NAME_LENGTH as _MAX_SOFTWARE_NAME_LENGTH,
 )
+from app.schemas.reads._field_bounds import (
+    MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
+)
+from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
 from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_assessment import refuse_check_inputs_in_body
 from app.schemas.reads.scientific_common import (
@@ -100,6 +111,20 @@ class ThermoSearchRequest(BaseModel):
         default=None, max_length=_MAX_PUBLIC_REF_LENGTH
     )
     software: str | None = Field(default=None, max_length=_MAX_SOFTWARE_NAME_LENGTH)
+
+    # Further provenance filters. ONE source calculation has to match every supplied provenance field at once
+    # (``level_of_theory_*``, ``software``, and these). ``method_family`` and ``dft_rung_*`` are a classification of the
+    # calculation's method, not a measure of accuracy (``app/schemas/reads/_method_family.py``).
+    method: str | None = Field(default=None, max_length=_MAX_METHOD_LENGTH)
+    basis: str | None = Field(default=None, max_length=_MAX_BASIS_LENGTH)
+    software_version: str | None = Field(default=None, max_length=128)
+    workflow_tool: str | None = Field(default=None, max_length=_MAX_WORKFLOW_TOOL_LENGTH)
+    workflow_tool_version: str | None = Field(default=None, max_length=128)
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
+    #: computed, experimental or estimated: the record's own ``scientific_origin``.
+    scientific_origin: ScientificOriginKind | None = None
 
     # Trust filters
     min_review_status: RecordReviewStatus | None = None

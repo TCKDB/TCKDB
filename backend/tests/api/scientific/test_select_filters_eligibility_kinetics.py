@@ -23,7 +23,13 @@ from app.db.models.kinetics import KineticsSourceCalculation
 from app.services.kinetics_selection import replay_decision, replay_matches
 from app.services.kinetics_selection.manifest import ReplayError
 from tests.services.kinetics_selection.test_service import declared, determination
-from tests.services.scientific_read._factories import make_calculation, make_lot, make_software_release, set_review
+from tests.services.scientific_read._factories import (
+    make_calculation,
+    make_lot,
+    make_software_release,
+    make_workflow_tool_release,
+    set_review,
+)
 
 BASE = {
     "direction": "forward",
@@ -50,10 +56,20 @@ def record(session, world, key, *, status=S.not_reviewed, sources=None, created_
         k.protocol_declaration = PROTOCOL
         for spec in sources or ():
             lot = make_lot(session, method=spec["lot"][0], basis=spec["lot"][1]) if spec.get("lot") else None
-            release = make_software_release(session, name=spec["software"]) if spec.get("software") else None
+            release = (
+                make_software_release(session, name=spec["software"], **({"version": spec["software_version"]} if spec.get("software_version") else {}))
+                if spec.get("software")
+                else None
+            )
+            tool = (
+                make_workflow_tool_release(session, name=spec["workflow_tool"], version=spec.get("workflow_tool_version", "1.2.3"))
+                if spec.get("workflow_tool")
+                else None
+            )
             calc = make_calculation(
                 session, species_entry_id=world.h.id,
                 lot_id=lot.id if lot else None, software_release_id=release.id if release else None,
+                workflow_tool_release_id=tool.id if tool else None,
             )
             if spec.get("rejected"):
                 calc.quality = CalculationQuality.rejected
@@ -109,8 +125,8 @@ def test_a_model_kind_filter_uses_the_stored_form(client, db_session, world):
 
 def test_a_filter_the_search_does_not_offer_is_refused(client, db_session, world):
     record(db_session, world, "a")
-    assert post(client, world, {"filters": {"scientific_origin": "computed"}}).status_code == 422
-    assert post(client, world, {"filters": {"method": "wb97xd"}}).status_code == 422
+    assert post(client, world, {"filters": {"coverage_temperature_min_k": 300.0}}).status_code == 422
+    assert post(client, world, {"filters": {"unheard_of": 1}}).status_code == 422
 
 
 # -- step 2: eligibility -------------------------------------------------------------------------------------------
@@ -219,3 +235,79 @@ def test_replay_refuses_an_edited_eligibility_record(client, db_session, world):
     del stripped["request"]["eligibility"]
     with pytest.raises(ReplayError):
         replay_decision(stripped)
+
+
+# -- the browse's full provenance set, matched through ONE source calculation ---------------------------------------
+
+DFT_A = {"lot": ("b3lyp", "def2tzvp"), "software": "gaussian", "software_version": "16", "workflow_tool": "arc", "workflow_tool_version": "1.0"}
+WF_B = {"lot": ("ccsd(t)-f12", "cc-pvtz-f12"), "software": "orca", "software_version": "6", "workflow_tool": "rmg", "workflow_tool_version": "2.0", "role": KineticsCalculationRole.freq}
+
+
+@pytest.mark.parametrize(
+    ("filters", "matches"),
+    [
+        ({"method": "b3lyp"}, True),
+        ({"basis": "cc-pvtz-f12"}, True),
+        ({"software_version": "6"}, True),
+        ({"workflow_tool": "rmg", "workflow_tool_version": "2.0"}, True),
+        ({"method_family": ["dft"]}, True),
+        ({"method_family": ["multireference"]}, False),
+        ({"dft_rung_min": 4, "dft_rung_max": 4}, True),
+        ({"dft_rung_max": 3}, False),
+        # one calculation has to satisfy every field
+        ({"method": "b3lyp", "software": "orca"}, False),
+        ({"software": "gaussian", "software_version": "6"}, False),
+        ({"workflow_tool": "arc", "basis": "cc-pvtz-f12"}, False),
+        ({"method_family": ["dft"], "software": "orca"}, False),
+        ({"method_family": ["wavefunction"], "software": "orca"}, True),
+        ({"dft_rung_min": 4, "workflow_tool": "rmg"}, False),
+    ],
+)
+def test_the_provenance_filters_are_matched_through_one_source_calculation(client, db_session, world, filters, matches):
+    """Kills: matching two fields through two different source calculations (the previous reading of level and software)."""
+    kinetics, _ = record(db_session, world, "a", sources=[DFT_A, WF_B])
+    body = post(client, world, {"filters": filters}).json()
+    assert [c["kinetics_ref"] for c in body["candidates"]] == ([kinetics.public_ref] if matches else [])
+    assert body["filters"]["applied"] == filters and body["filters"]["removed"] == (0 if matches else 1)
+
+
+def test_a_level_of_theory_ref_and_a_software_have_to_be_one_calculation(client, db_session, world):
+    lot_a = make_lot(db_session, method="b3lyp", basis="def2tzvp")
+    kinetics, _ = record(db_session, world, "a", sources=[DFT_A, WF_B])
+    assert post(client, world, {"filters": {"level_of_theory_ref": lot_a.public_ref, "software": "orca"}}).json()["candidates"] == []
+    kept = post(client, world, {"filters": {"level_of_theory_ref": lot_a.public_ref, "software": "gaussian"}}).json()
+    assert [c["kinetics_ref"] for c in kept["candidates"]] == [kinetics.public_ref]
+
+
+def test_the_scientific_origin_filter_is_matched_on_the_record(client, db_session, world):
+    from app.db.models.common import ScientificOriginKind
+
+    computed, _ = record(db_session, world, "a")
+    experimental, _ = record(db_session, world, "b", scientific_origin=ScientificOriginKind.experimental)
+    body = post(client, world, {"filters": {"scientific_origin": "experimental"}}).json()
+    assert [c["kinetics_ref"] for c in body["candidates"]] == [experimental.public_ref]
+    assert body["filters"]["applied"] == {"scientific_origin": "experimental"} and body["filters"]["removed"] == 1
+    assert [c["kinetics_ref"] for c in post(client, world, {"filters": {"scientific_origin": "computed"}}).json()["candidates"]] == [computed.public_ref]
+
+
+@pytest.mark.parametrize("filters", [{"method_family": ["dft"]}, {"method": "b3lyp"}, {"dft_rung_min": 4}, {"software": "gaussian"}])
+def test_a_hidden_calculation_cannot_make_a_candidate_pass_a_filter_under_curated(client, db_session, world, filters):
+    """Kills: select matching a filter through a calculation the curated profile hides."""
+    kinetics, _ = record(db_session, world, "a", status=S.approved, sources=[DFT_A, {**WF_B, "calc_status": S.approved}])
+    assert [c["kinetics_ref"] for c in post(client, world, {"filters": filters}).json()["candidates"]] == [kinetics.public_ref]
+    assert post(client, world, {"filters": filters}, profile="curated").json()["candidates"] == []
+    visible = post(client, world, {"filters": {"software": "orca"}}, profile="curated").json()
+    assert [c["kinetics_ref"] for c in visible["candidates"]] == [kinetics.public_ref]
+
+
+def test_a_decision_records_its_provenance_filters_and_an_earlier_manifest_format_is_refused(client, db_session, world):
+    record(db_session, world, "a", sources=[DFT_A, WF_B])
+    filters = {"method_family": ["dft"], "software": "gaussian", "scientific_origin": "computed"}
+    manifest = post(client, world, {"filters": filters}, manifest=True).json()
+    assert manifest["request"]["filters"] == filters
+    assert manifest["format"] == {"name": "kinetics_selection_manifest", "version": 4}
+    assert replay_matches(manifest)
+    earlier = copy.deepcopy(manifest)
+    earlier["format"]["version"] = 3  # level and software were matched through any, independently
+    with pytest.raises(ReplayError, match="earlier format, not replayable"):
+        replay_decision(earlier)

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.171.0 - 2026-10-26
+
+Thermo and kinetics take the full provenance filter set, and a level of theory carries a method family and DFT rung.
+
+- `get_species_thermo` and `get_reaction_kinetics` take `method`, `basis`, `software_version`, `workflow_tool`,
+  `workflow_tool_version`, `method_family`, `dft_rung_min`, `dft_rung_max` and `scientific_origin` (`computed`, `experimental` or `estimated`, matched on the
+  record itself); `search_thermo` and `search_kinetics` take the same except `method`, whose name is already the HTTP verb there. `search_statmech` takes `scientific_origin` too. `search_transition_states`, `search_levels_of_theory` and `browse_levels_of_theory` take
+  `method_family`, `dft_rung_min` and `dft_rung_max`.
+- **A behaviour change.** On thermo and kinetics, `level_of_theory_ref` / `level_of_theory_id`, `software` and the new provenance fields used to be matched
+  independently: a record with a calculation at level X in software P and another at level Y in software Q matched level X with software Q. Now ONE source
+  calculation has to match every supplied provenance field, as on every other route. A calculation the read profile hides never matches (under `curated`).
+- `method_family` is one family or a list: `dft`, `wavefunction`, `composite`, `multireference`, `semiempirical`, `force_field`, `unclassified`.
+  `dft_rung_min` / `dft_rung_max` bound the DFT rung, 1 (LDA) to 5 (double hybrid), and imply `method_family=dft`. These classify the method; they are not
+  a measure of accuracy (the ladder covers DFT only), and nothing in TCKDB orders, ranks or selects by them.
+- A level-of-theory record gains `method_family`, `dft_rung` (`null` unless `dft`) and `method_classification` (`{name, version}` of the classification
+  that produced them: `method_family_classification`, version 1).
+- `SelectionFilters` gains `scientific_origin`, `method_family`, `dft_rung_min` and `dft_rung_max`. Thermo and kinetics select take the provenance fields
+  too, with the one-calculation rule. Their manifest format moves to version 5; a manifest in format 4 is refused on replay.
+
 ## 0.170.0 - 2026-10-25
 
 - Requires `tckdb-schemas>=0.137.0`: a statmech declaration's ensemble member states the convention of its relative energy

@@ -19,6 +19,7 @@ from app.db.models.common import (
     ScientificOriginKind,
     ThermoTargetKind,
 )
+from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
 from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
 from app.schemas.reads.scientific_common import (
@@ -96,6 +97,20 @@ class ThermoReadRequest(BaseModel):
     # ``ThermoProvenance.software_release`` (the thermo's own software, e.g. Arkane): a record with no linked
     # calculation named "Arkane" is not matched by ``?software=Arkane``.
     software: str | None = None
+
+    # Further provenance filters. ONE source calculation has to match every supplied provenance field at once
+    # (``level_of_theory_*``, ``software``, and these). ``method_family`` and ``dft_rung_*`` are a classification of the
+    # calculation's method, not a measure of accuracy (``app/schemas/reads/_method_family.py``).
+    method: str | None = None
+    basis: str | None = None
+    software_version: str | None = None
+    workflow_tool: str | None = None
+    workflow_tool_version: str | None = None
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
+    #: computed, experimental or estimated: the record's own ``scientific_origin``.
+    scientific_origin: ScientificOriginKind | None = None
 
     min_review_status: RecordReviewStatus | None = None
     include_rejected: bool = False

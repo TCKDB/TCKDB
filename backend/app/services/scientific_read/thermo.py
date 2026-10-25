@@ -51,6 +51,7 @@ from app.db.models.thermo import (
     ThermoWilhoit,
 )
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from app.schemas.reads._method_family import echo_source_provenance
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
     CompositeEnergyVerification,
@@ -86,7 +87,7 @@ from app.services.scientific_read.common import (
     ids_withheld_as_evidence,
     reject_client_sort,
     review_summary,
-    software_names_by_calculation,
+    slice_for_pagination,
     temperature_coverage,
     validate_includes,
     validate_pagination,
@@ -122,6 +123,7 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.supersession import fetch_supersession_notices
+from app.services.selection_filters import filter_by_provenance, source_provenance_kwargs
 from app.services.trust import (
     TrustFragment,
     build_trust_fragment,
@@ -284,6 +286,8 @@ def get_species_thermo(
     effective_lot_id: int | None = lot_id_or_match  # type: ignore[assignment]
 
     stmt = select(Thermo).where(Thermo.species_entry_id == species_entry_id)
+    if request.scientific_origin is not None:
+        stmt = stmt.where(Thermo.scientific_origin == request.scientific_origin)
     if "trust" in includes:
         stmt = stmt.options(*_TRUST_EAGER_LOADS)
     thermo_rows = list(session.scalars(stmt).all())
@@ -323,44 +327,19 @@ def get_species_thermo(
     if not classified:
         return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
-    # A source calculation the evidence rule withholds (rejected or deprecated under curated, ADR 0023) contributes no
-    # level and no software to a filter match; a not-reviewed one does, with its badge. The record's own link to it
-    # stays a fact of the record. One lookup before paging (it decides which records match), and none without a review
-    # floor; the display below does its own lookup for the page that is returned.
-    hidden_source_calc_ids = ids_withheld_as_evidence(
-        session,
-        record_type=SubmissionRecordType.calculation,
-        record_ids={sc.calculation_id for t, _ in classified for sc in sources_by_thermo.get(t.id, [])},
-    )
-
-    def shown(sources: list[ThermoSourceCalculation]) -> list[ThermoSourceCalculation]:
-        return [sc for sc in sources if sc.calculation_id not in hidden_source_calc_ids]
-
-    # Level-of-theory filter: a record matches when ANY of its linked (shown) source calculations ran at this level.
-    # There is no "primary" calculation for a filter, so no role priority can decide which link counts.
-    if effective_lot_id is not None:
-        classified = [
-            (t, kind)
-            for t, kind in classified
-            if effective_lot_id in _linked_lot_ids(shown(sources_by_thermo.get(t.id, [])))
-        ]
-    if not classified:
-        return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
-
-    # Software filter: ANY linked (shown) source calculation ran in a software of this name.
-    if request.software is not None:
-        software_by_calc = software_names_by_calculation(
+    # One source calculation has to match every supplied provenance field at once (level of theory, software, method,
+    # basis, workflow tool, method family, DFT rung): a record never matches through two different calculations. A
+    # source calculation the active profile hides contributes nothing to a match: hidden equals unknown equals absent
+    # (D5). The record's own link to it stays a fact of the record (the ref guard withholds the ref); what the
+    # calculation ran at or in is a fact about the hidden calculation. There is no "primary" calculation for a filter.
+    provenance = source_provenance_kwargs(request, level_of_theory_id=effective_lot_id)
+    if provenance:
+        kept = filter_by_provenance(
             session,
-            {sc.calculation_id for t, _ in classified for sc in shown(sources_by_thermo.get(t.id, []))},
+            {t.id: {sc.calculation_id for sc in sources_by_thermo.get(t.id, [])} for t, _ in classified},
+            **provenance,
         )
-        classified = [
-            (t, kind)
-            for t, kind in classified
-            if any(
-                software_by_calc.get(sc.calculation_id) == request.software
-                for sc in shown(sources_by_thermo.get(t.id, []))
-            )
-        ]
+        classified = [(t, kind) for t, kind in classified if t.id in kept]
     if not classified:
         return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
@@ -1259,15 +1238,6 @@ def _primary_calc_id(sources: list[ThermoSourceCalculation]) -> int | None:
     return sources[0].calculation_id if sources else None
 
 
-def _linked_lot_ids(sources: list[ThermoSourceCalculation]) -> set[int]:
-    """The level of theory of EVERY source calculation linked to the record (the level-of-theory filter's match set)."""
-    return {
-        sc.calculation.lot_id
-        for sc in sources
-        if sc.calculation is not None and sc.calculation.lot_id is not None
-    }
-
-
 def _build_provenance(
     *,
     sources: list[ThermoSourceCalculation],
@@ -1812,6 +1782,7 @@ def _filter_echo(request: ThermoReadRequest) -> dict[str, object]:
         echo["level_of_theory_ref"] = request.level_of_theory_ref
     if request.software is not None:
         echo["software"] = request.software
+    echo_source_provenance(request, echo)
     if request.min_review_status is not None:
         echo["min_review_status"] = request.min_review_status.value
     if request.include_rejected:

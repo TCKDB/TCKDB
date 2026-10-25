@@ -1,4 +1,4 @@
-"""Shared method/basis/software/workflow-tool provenance filter.
+"""Shared method/basis/method-family/software/workflow-tool provenance filter.
 
 Factored out of ``transition_states_search.py``'s original
 ``_apply_method_basis_software_filters`` (the TS search/browse
@@ -23,23 +23,29 @@ the candidate's calculation rows). A calculation missing the relevant
 provenance link (no ``lot_id``, no ``software_release_id``, no
 ``workflow_tool_release_id``) simply cannot satisfy that field's clause
 and is excluded like any other non-match — never null-matches.
+
+A method family or DFT rung (``method_family``, ``dft_rung_min``, ``dft_rung_max``) classifies the calculation's own
+level of theory (:mod:`app.chemistry.method_families`) and is matched on that same row, with the other fields. It is a
+classification of what kind of method it is, not a measure of accuracy, and it never orders anything.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Protocol
 
 from sqlalchemy.sql import Select
 
+from app.chemistry.method_families import MethodClassFilter, MethodFamily
 from app.db.models.calculation import Calculation
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
-from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_family_matches, method_matches
 
 
 class ProvenanceFilterRequest(Protocol):
-    """Structural type: any request model exposing these six fields.
+    """Structural type: any request model exposing these nine fields.
 
     Both ``TransitionStatesSearchRequest``/``TransitionStatesBrowseRequest``
     and ``SpeciesBrowseRequest`` satisfy this without inheriting from a
@@ -53,6 +59,9 @@ class ProvenanceFilterRequest(Protocol):
     software_version: str | None
     workflow_tool: str | None
     workflow_tool_version: str | None
+    method_family: Sequence[MethodFamily] | None
+    dft_rung_min: int | None
+    dft_rung_max: int | None
 
 
 def apply_calculation_provenance_filter(
@@ -78,11 +87,12 @@ def apply_calculation_provenance_filter(
         the result into a correlated ``EXISTS`` clause applied to
         ``stmt``.
     :returns: ``stmt`` unchanged if no method/basis/software/
-        software_version/workflow_tool/workflow_tool_version field is
+        software_version/workflow_tool/workflow_tool_version/method_family/dft_rung field is
         set on ``request``; otherwise ``stmt`` with the ``EXISTS`` clause
         applied.
     """
-    method_or_basis = request.method is not None or request.basis is not None
+    classification = MethodClassFilter.from_request(request)
+    method_or_basis = request.method is not None or request.basis is not None or classification.active
     sw_filter = (
         request.software is not None or request.software_version is not None
     )
@@ -106,6 +116,8 @@ def apply_calculation_provenance_filter(
             sub_select = sub_select.where(
                 basis_matches(request.basis)
             )
+        if classification.active:
+            sub_select = sub_select.where(method_family_matches(classification))
     if sw_filter:
         sub_select = sub_select.join(
             SoftwareRelease,

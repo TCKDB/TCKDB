@@ -22,6 +22,7 @@ from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.db.models.common import ScientificOriginKind
 from app.schemas.reads._field_bounds import (
     MAX_BASIS_LENGTH,
     MAX_METHOD_LENGTH,
@@ -30,6 +31,7 @@ from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH,
 )
 from app.schemas.reads.scientific_common import ScientificResponse
+from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
 
 #: The stable machine names of the eligibility defaults, in the order they are echoed.
 ELIGIBILITY_REJECTED: Final = "rejected_review_status"
@@ -228,15 +230,46 @@ class CalculationProvenanceFilters(BaseModel):
     workflow_tool_version: str | None = Field(default=None, max_length=128)
 
 
-class LevelAndSoftwareFilters(BaseModel):
-    """The filters the per-entry thermo and kinetics reads offer besides ``model_kind``: level of theory and software.
+class SourceCalculationFilters(BaseModel):
+    """The filters the per-entry thermo and kinetics reads offer besides ``model_kind``, with their semantics.
 
-    Each matches independently: a candidate is kept when ANY of its shown source calculations ran at the level and
-    ANY of them ran in a software of that name (they need not be the same calculation), exactly as the browse does.
-    A public ref only: a select request never carries a database id.
+    The provenance fields (``level_of_theory_ref``, ``software``, ``method``, ``basis``, ``software_version``,
+    ``workflow_tool``, ``workflow_tool_version``, ``method_family``, ``dft_rung_min``, ``dft_rung_max``) are matched
+    through the record's source calculations, and ONE source calculation has to satisfy every supplied field at once. A
+    record never matches through two different calculations, never through a calculation it does not link to, and under
+    ``curated`` never through a calculation the profile hides. ``method_family`` and the rung are a classification of
+    the calculation's method, not a measure of accuracy, and they rank nothing. ``scientific_origin`` is matched on the
+    record itself. A public ref only: a select request never carries a database id.
     """
 
     model_config = ConfigDict(extra="forbid")
 
+    scientific_origin: ScientificOriginKind | None = None
     level_of_theory_ref: str | None = Field(default=None, max_length=MAX_PUBLIC_REF_LENGTH)
+    method: str | None = Field(default=None, max_length=MAX_METHOD_LENGTH)
+    basis: str | None = Field(default=None, max_length=MAX_BASIS_LENGTH)
     software: str | None = Field(default=None, max_length=MAX_SOFTWARE_NAME_LENGTH)
+    software_version: str | None = Field(default=None, max_length=128)
+    workflow_tool: str | None = Field(default=None, max_length=MAX_WORKFLOW_TOOL_LENGTH)
+    workflow_tool_version: str | None = Field(default=None, max_length=128)
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
+
+    def source_filter_values(self) -> dict[str, Any]:
+        """The fields the service-layer ``SourceFilters`` take, as plain values (the model kind is the subclass's)."""
+        return {
+            "scientific_origin": self.scientific_origin.value if self.scientific_origin is not None else None,
+            "level_of_theory_ref": self.level_of_theory_ref,
+            "method": self.method,
+            "basis": self.basis,
+            "software": self.software,
+            "software_version": self.software_version,
+            "workflow_tool": self.workflow_tool,
+            "workflow_tool_version": self.workflow_tool_version,
+            "method_family": (
+                tuple(sorted({f.value for f in self.method_family})) if self.method_family is not None else None
+            ),
+            "dft_rung_min": self.dft_rung_min,
+            "dft_rung_max": self.dft_rung_max,
+        }

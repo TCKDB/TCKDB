@@ -22,6 +22,26 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Method family and DFT rung; thermo and kinetics take the full provenance filters (2026-10-26)
+
+- **A method family and a DFT rung classify a level of theory's method.** `family` is one of `dft`, `wavefunction`, `composite`,
+  `multireference`, `semiempirical`, `force_field`, `unclassified`; a density functional also has a rung 1 (LDA) to 5 (double hybrid).
+  Level-of-theory reads carry `method_family`, `dft_rung` and `method_classification` (`method_family_classification`, version 1, held in
+  the version registry). It is derived from the method name at read time, so there is no migration. **It is a classification, not an
+  accuracy measure**: the ladder covers DFT only, and accuracy depends on the property. It is a filter fact: never a sort key, a
+  tie-breaker, a select default or a "best" label (`docs/specs/browse_order.md`).
+- **New filters** `method_family` (one or a list), `dft_rung_min`, `dft_rung_max` (a bound implies `dft`) on the level-of-theory search
+  and browse, the species browse, the transition-state search and browse, thermo and kinetics (per-entry reads, searches and selects).
+  They are matched on the same calculation as the other provenance fields, and a calculation the profile hides never matches.
+- **Thermo and kinetics take `method`, `basis`, `software_version`, `workflow_tool`, `workflow_tool_version`** beside `level_of_theory_*`
+  and `software`, and **one source calculation has to match all of them** (search, per-entry read and select). Until now level of theory
+  and software were matched through any calculation each, independently, so a record could match level X from one calculation and
+  software Q from another. Thermo and kinetics manifest formats move to version 5; a recorded decision in format 4 is refused on replay.
+- **`scientific_origin`** (`computed`, `experimental`, `estimated`) filters thermo, kinetics and statmech search, the per-entry thermo and
+  kinetics reads, and the thermo, kinetics and statmech selects.
+- `tckdb-client` 0.171.0. OpenAPI golden regenerated. The `computed_transition_state` rubric pin is re-pinned without a version bump
+  (recorded override: the shared provenance filter it reaches gained optional parameters that no existing call passes).
+
 ## Curated profile: filters match through linked evidence (2026-10-26, step 4 of 8)
 
 Under `profile=curated`, a filter on linked records (method, basis, software, workflow tool, level of theory, `scientific_origin`,

@@ -32,6 +32,7 @@ from app.api.routes.scientific._response import (
     SPECIES_BROWSE_SECTIONS,
     omit_unrequested_sections,
 )
+from app.chemistry.method_families import MethodFamily
 from app.db.models.common import (
     RecordReviewStatus,
     SpeciesEntryStateKind,
@@ -120,6 +121,15 @@ def species_browse(
             "/meta/workflow-tool-versions."
         ),
     ),
+    method_family: list[MethodFamily] | None = Query(
+        None,
+        description=(
+            "Classification of the calculation's method (not a measure of accuracy); repeat the parameter for "
+            "several. Matched on the same calculation as method=/basis=/software=."
+        ),
+    ),
+    dft_rung_min: int | None = Query(None, ge=1, le=5, description="Lowest DFT rung (1 LDA .. 5 double hybrid). Implies method_family=dft."),
+    dft_rung_max: int | None = Query(None, ge=1, le=5, description="Highest DFT rung. Implies method_family=dft."),
     query_smiles: str | None = Query(
         None,
         description=(
@@ -213,6 +223,9 @@ def species_browse(
         software_version=software_version,
         workflow_tool=workflow_tool,
         workflow_tool_version=workflow_tool_version,
+        method_family=method_family,
+        dft_rung_min=dft_rung_min,
+        dft_rung_max=dft_rung_max,
         query_smiles=query_smiles,
         query_smarts=query_smarts,
         mode=mode,
