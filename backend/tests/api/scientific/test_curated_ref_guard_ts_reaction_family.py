@@ -561,25 +561,31 @@ def test_levels_of_theory_name_only_the_calculation_types_the_profile_shows(clie
     assert cur_n["evidence_completeness"]["checklist"]["has_ts_freq_evidence"] is False
 
 
-def _extra_hidden_calculation_world(db_session, world):
-    """A level of theory used ONLY by hidden calculations: one on a visible TS entry, one on a visible species entry."""
+def _extra_hidden_calculation_world(db_session, world, status=RecordReviewStatus.rejected):
+    """A level of theory used ONLY by calculations in ``status``: one on a visible TS entry, one on a visible species
+    entry. ``None`` leaves them never reviewed. Under the evidence rule (ADR 0023) a rejected calculation is withheld
+    from a match and a not-reviewed one is not."""
     lot = make_lot(db_session, method="zzhidden", basis="zzbasis")
     entry = make_transition_state_entry(db_session, transition_state=world.visible["ts_v"], multiplicity=8)
     set_review(db_session, record_type=R.transition_state_entry, record_id=entry.id, status=APPROVED)
-    make_calculation(db_session, type=CalculationType.freq, transition_state_entry_id=entry.id, lot_id=lot.id)
+    calc = make_calculation(db_session, type=CalculationType.freq, transition_state_entry_id=entry.id, lot_id=lot.id)
     species_entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("SWF")))
     set_review(db_session, record_type=R.species_entry, record_id=species_entry.id, status=APPROVED)
-    make_calculation(db_session, type=CalculationType.freq, species_entry_id=species_entry.id, lot_id=lot.id)
+    other = make_calculation(db_session, type=CalculationType.freq, species_entry_id=species_entry.id, lot_id=lot.id)
+    if status is not None:
+        for c in (calc, other):
+            set_review(db_session, record_type=R.calculation, record_id=c.id, status=status)
     db_session.flush()
     return entry, species_entry
 
 
 def test_search_filters_agree_with_the_flags_the_records_serve(client, db_session, login_as):
-    """Under curated a filter on evidence looks at the calculations the profile shows, so ``has_irc=true`` never
-    returns a record that serves ``has_irc: false``; the method/basis filter cannot find a level used only by hidden
-    calculations, on the transition-state routes or on the species browse.
+    """Under curated a filter on evidence ignores a rejected calculation, so ``has_irc=true`` never returns a record
+    that serves ``has_irc: false``; the method/basis filter cannot find a level used only by rejected calculations, on
+    the transition-state routes or on the species browse.
 
-    Kills: leaving any one filter on the unfloored calculation set.
+    Kills: leaving any one filter on the unfiltered calculation set. (A not-reviewed calculation DOES match, see the
+    twin below; the served flags follow in step 3 of ADR 0023.)
     """
     world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
@@ -624,6 +630,27 @@ def test_search_filters_agree_with_the_flags_the_records_serve(client, db_sessio
     assert exploratory, "the species browse finds nothing under exploratory: the check is vacuous"
     assert _get(client, "/species/browse", "curated", method="zzhidden", limit=100).json()["records"] == []
     assert _get(client, "/species/browse", "curated", basis="zzbasis", limit=100).json()["records"] == []
+
+
+def test_a_not_reviewed_calculation_matches_a_curated_method_filter(client, db_session, login_as):
+    """The twin of the test above: a calculation nobody has reviewed is evidence, so a curated method/basis filter finds
+    its level on the transition-state routes and on the species browse (ADR 0023, step 4).
+
+    Kills: matching only through approved calculations (the earlier rule).
+    """
+    world = build_sweep_world(db_session, withheld=True)
+    login_as(world.extra["curator"].id)
+    tse_x, species_entry = _extra_hidden_calculation_world(db_session, world, status=None)
+    for route in ("/transition-states/browse", "/transition-states/search"):
+        extra = {"reaction_entry_ref": world.extra["reaction_entry"].public_ref} if route.endswith("search") else {}
+        for profile in ("exploratory", "curated"):
+            found = _get(client, route, profile, method="zzhidden", limit=100, **extra).json()["records"]
+            assert [r["transition_state_entry"]["transition_state_entry_ref"] for r in found] == [tse_x.public_ref], (
+                route,
+                profile,
+            )
+    for profile in ("exploratory", "curated"):
+        assert _get(client, "/species/browse", profile, method="zzhidden", limit=100).json()["records"], profile
 
 
 def test_coverage_and_atom_map_counts_follow_the_floor(client, db_session, login_as):

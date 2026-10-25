@@ -16,7 +16,7 @@
       "1": "28e638f09e687fce82fcc274d372e97cdcc938dad8acbafa2b598c6d803a0c91"
     },
     "computed_transition_state": {
-      "2": "e03bd9a77a637b31db483a67e9dd16209ee27c8dcb87b65fbde92f16fb395cbf"
+      "2": "931feaffadc707231debe864144def553bf0472d77de48afea440e6da1b991d6"
     },
     "computed_transport": {
       "1": "1b5a1f833dc867aff540eddc5e123a5d6fa3cb0d320e90b7a931e94f7a158676"
@@ -87,6 +87,11 @@
       "name": "computed_transition_state",
       "version": 2,
       "reason": "curated linked-evidence visibility (ADR 0023): stored and exploratory verdicts are unchanged; curated read-time verdicts may change, because a curated read now supplies not-reviewed and under-review evidence to the grading, which it used to leave out"
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "curated matching follows the evidence rule (ADR 0023 step 4); stored and exploratory verdicts unchanged, curated read-time verdicts may change"
     }
   ]
 }

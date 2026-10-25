@@ -76,8 +76,8 @@ from app.services.scientific_read.calculation_provenance_filters import (
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     reject_client_sort,
-    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
@@ -550,10 +550,10 @@ def _apply_scalar_filters(
 def _apply_evidence_filters(
     stmt, request: TransitionStatesSearchRequest | TransitionStatesBrowseRequest
 ):
-    # Owner decision D5: a filter on evidence agrees with the flag the record serves, so it looks at the calculations
-    # the profile shows. Otherwise ``has_irc=true`` would return an entry that serves ``has_irc: false``, which says a
-    # hidden calculation exists. ``None`` (no floor) leaves every statement as it was.
-    calc_visible = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation)
+    # Evidence rule (ADR 0023 step 4): a filter on evidence matches through the entry's calculations the profile does
+    # not withhold, that is, any but a rejected or deprecated one under curated. A not-reviewed calculation matches.
+    # ``None`` (no floor) leaves every statement as it was.
+    calc_visible = linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation)
     if request.has_calculations is not None:
         ex = where_visible(
             exists().where(
@@ -631,12 +631,12 @@ def _apply_method_basis_software_filters(
     return apply_calculation_provenance_filter(
         stmt,
         request,
-        # Only the calculations the profile shows can match the method/basis/software filter (D5).
+        # Only a calculation the evidence rule leaves visible can match the method/basis/software filter.
         where_visible(
             select(Calculation.id).where(
                 Calculation.transition_state_entry_id == TransitionStateEntry.id
             ),
-            review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
+            linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
         ),
     )
 
@@ -878,8 +878,8 @@ def _software_index_for_entries(
         .where(Calculation.transition_state_entry_id.in_(entry_ids))
         .distinct()
     )
-    # Owner decision D5: a calculation the active profile hides contributes neither its type nor its software.
-    stmt = where_visible(stmt, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
+    # Evidence rule (ADR 0023): a rejected or deprecated calculation contributes neither its type nor its software.
+    stmt = where_visible(stmt, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
 
     collected: dict[int, dict[str, dict[int, SoftwareReleaseSummary]]] = {}
     for row in session.execute(stmt):

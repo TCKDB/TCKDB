@@ -6,7 +6,8 @@ matching code of the matching browse or search endpoint:
 * method and basis compare by identity key (:mod:`app.services.scientific_read.lot_identity_filters`);
 * software, workflow tool and their versions match through the calculation's release rows;
 * a level of theory is a public ref, resolved to its canonical row (a merged row to the row it was merged into);
-* a calculation the active read profile hides contributes nothing to a match (hidden equals unknown equals absent).
+* a calculation the evidence rule withholds (rejected or deprecated under the curated profile, ADR 0023) contributes
+  nothing to a match; a not-reviewed or under-review one matches, with its badge.
 
 A filter excludes on a fact. It never ranks, and a candidate it keeps is not thereby better than one it removed.
 """
@@ -23,15 +24,16 @@ from app.db.models.common import SubmissionRecordType
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
-from app.services.scientific_read.common import ids_below_review_floor, software_names_by_calculation
+from app.services.scientific_read.common import ids_withheld_as_evidence, software_names_by_calculation
 from app.services.scientific_read.handles import NO_MATCH, reconcile_level_of_theory_pair
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 
 
 def shown_calculations(session: Session, calculation_ids: Collection[int]) -> set[int]:
-    """Which of these calculations the read profile shows (all of them without a review floor)."""
+    """Which of these calculations may take part in a match: those the evidence rule does not withhold (all of them
+    without a review floor)."""
     ids = set(calculation_ids)
-    return ids - ids_below_review_floor(session, record_type=SubmissionRecordType.calculation, record_ids=ids)
+    return ids - ids_withheld_as_evidence(session, record_type=SubmissionRecordType.calculation, record_ids=ids)
 
 
 def calculations_matching(

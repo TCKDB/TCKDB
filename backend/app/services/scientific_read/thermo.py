@@ -83,7 +83,7 @@ from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
-    ids_below_review_floor,
+    ids_withheld_as_evidence,
     reject_client_sort,
     review_summary,
     software_names_by_calculation,
@@ -323,11 +323,10 @@ def get_species_thermo(
     if not classified:
         return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
-    # A source calculation the active profile hides contributes no level and no software to a filter match: hidden
-    # equals unknown equals absent (D6). The record's own link to it stays a fact of the record (the ref guard
-    # withholds the ref); what the calculation ran at or in is a fact about the hidden calculation. One lookup, and
-    # none without a review floor.
-    hidden_source_calc_ids = ids_below_review_floor(
+    # A source calculation the evidence rule withholds (rejected or deprecated under curated, ADR 0023) contributes no
+    # level and no software to a filter match; a not-reviewed one does, with its badge. The record's own link to it
+    # stays a fact of the record. One lookup, and none without a review floor.
+    hidden_source_calc_ids = ids_withheld_as_evidence(
         session,
         record_type=SubmissionRecordType.calculation,
         record_ids={sc.calculation_id for t, _ in classified for sc in sources_by_thermo.get(t.id, [])},

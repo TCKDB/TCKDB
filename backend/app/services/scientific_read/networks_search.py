@@ -55,6 +55,7 @@ from app.schemas.reads.scientific_network_search import (
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     reject_client_sort,
     review_floor_predicate,
     review_summary,
@@ -539,7 +540,7 @@ def _apply_method_basis_software_filters(
         .where(NetworkSolve.network_id == Network.id)
     )
     sub = _visible_solves(sub)
-    sub = where_visible(sub, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
+    sub = where_visible(sub, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
     if method_or_basis:
         sub = sub.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
         if request.method is not None:

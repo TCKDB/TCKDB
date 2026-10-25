@@ -93,8 +93,8 @@ from app.services.scientific_read.calculations import (
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     reject_client_sort,
-    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
@@ -818,12 +818,12 @@ def _apply_dependency_filters(
     if dependency_role is not None:
         # Role-only filter: match any calc participating in an edge of
         # that role, on either side.
-        # An edge whose OTHER end the active profile hides is not an edge (hidden == unknown == absent): matching
-        # through it would say a hidden calculation sits on the far side with this role.
-        child_shown = review_floor_predicate(
+        # An edge whose OTHER end the evidence rule withholds (rejected / deprecated under curated) is not an edge:
+        # matching through it would say such a calculation sits on the far side with this role.
+        child_shown = linked_evidence_predicate(
             CalculationDependency.child_calculation_id, SubmissionRecordType.calculation
         )
-        parent_shown = review_floor_predicate(
+        parent_shown = linked_evidence_predicate(
             CalculationDependency.parent_calculation_id, SubmissionRecordType.calculation
         )
         as_parent = CalculationDependency.parent_calculation_id == Calculation.id

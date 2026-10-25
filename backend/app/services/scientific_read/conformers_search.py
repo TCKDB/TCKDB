@@ -65,8 +65,8 @@ from app.services.scientific_read.calculation_provenance_filters import apply_ca
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     reject_client_sort,
-    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
@@ -405,12 +405,13 @@ def _apply_observation_filters(
 def _shown_observations_of_group():
     """``select(ConformerObservation.id)`` over this group's observations the active profile shows.
 
-    A hidden observation, and every calculation reached through one, contributes nothing to a filter match
-    (hidden == unknown == absent, decision D6). Without a review floor the statement is unchanged.
+    A rejected or deprecated observation, and every calculation reached through one, contributes nothing to a
+    filter match under curated (the evidence rule, ADR 0023); a not-reviewed one does. Without a review floor the
+    statement is unchanged.
     """
     sub = select(ConformerObservation.id).where(ConformerObservation.conformer_group_id == ConformerGroup.id)
     return where_visible(
-        sub, review_floor_predicate(ConformerObservation.id, SubmissionRecordType.conformer_observation)
+        sub, linked_evidence_predicate(ConformerObservation.id, SubmissionRecordType.conformer_observation)
     )
 
 
@@ -425,9 +426,9 @@ def _shown_calculations_of_group():
         .where(ConformerObservation.conformer_group_id == ConformerGroup.id)
     )
     sub = where_visible(
-        sub, review_floor_predicate(ConformerObservation.id, SubmissionRecordType.conformer_observation)
+        sub, linked_evidence_predicate(ConformerObservation.id, SubmissionRecordType.conformer_observation)
     )
-    return where_visible(sub, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
+    return where_visible(sub, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
 
 
 # The evidence family, in the order the filters are applied. Each entry is
@@ -536,7 +537,7 @@ def _every_observation_clause(want: bool, *, extra_clause=None, extra_join=None)
 
     evidence_on_observation = where_visible(
         select(Calculation.id).where(Calculation.conformer_observation_id == ConformerObservation.id),
-        review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
+        linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
     )
     if extra_join is not None:
         evidence_on_observation = evidence_on_observation.join(*extra_join)
@@ -546,7 +547,7 @@ def _every_observation_clause(want: bool, *, extra_clause=None, extra_join=None)
         ConformerObservation
     )
 
-    observation_shown = review_floor_predicate(
+    observation_shown = linked_evidence_predicate(
         ConformerObservation.id, SubmissionRecordType.conformer_observation
     )
     shown_observations = where_visible(

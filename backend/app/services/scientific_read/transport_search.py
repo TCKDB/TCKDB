@@ -36,8 +36,8 @@ from app.services.scientific_read.calculation_provenance_filters import apply_ca
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     reject_client_sort,
-    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
@@ -286,7 +286,8 @@ def _apply_method_basis_software_filters(
     """Provenance filters narrow transport rows to those whose
     source-calculation graph carries at least one row matching the
     supplied method / basis / software / workflow. A source calculation the read profile hides
-    contributes nothing to a match (hidden == unknown == absent, decision D6)."""
+    contributes nothing to a match when the evidence rule withholds it (rejected or deprecated under
+    curated, ADR 0023); a not-reviewed one matches."""
     return apply_calculation_provenance_filter(stmt, request, _shown_source_calculations())
 
 
@@ -300,7 +301,7 @@ def _shown_source_calculations():
         )
         .where(TransportSourceCalculation.transport_id == Transport.id)
     )
-    return where_visible(sub, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
+    return where_visible(sub, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
 
 
 # ---------------------------------------------------------------------------

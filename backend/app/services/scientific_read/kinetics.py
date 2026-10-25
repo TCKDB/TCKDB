@@ -109,6 +109,7 @@ from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
     ids_below_review_floor,
+    ids_withheld_as_evidence,
     reject_client_sort,
     review_floor_predicate,
     review_summary,
@@ -443,8 +444,17 @@ def get_reaction_kinetics(
         record_ids={sc.calculation_id for srcs in sources_by_kinetics.values() for sc in srcs},
     )
 
+    # Matching follows the evidence rule (ADR 0023): only a rejected or deprecated source calculation (under curated)
+    # contributes no filter match; a not-reviewed one does. The levels and software printed on the record above still
+    # follow ``hidden_source_calc_ids`` until step 3 of ADR 0023 lands.
+    withheld_source_calc_ids = ids_withheld_as_evidence(
+        session,
+        record_type=SubmissionRecordType.calculation,
+        record_ids={sc.calculation_id for srcs in sources_by_kinetics.values() for sc in srcs},
+    )
+
     def shown(sources: list[KineticsSourceCalculation]) -> list[KineticsSourceCalculation]:
-        return [sc for sc in sources if sc.calculation_id not in hidden_source_calc_ids]
+        return [sc for sc in sources if sc.calculation_id not in withheld_source_calc_ids]
 
     # Level-of-theory filter: a record matches when ANY of its linked (shown) source calculations ran at this level.
     # There is no "primary" calculation for a filter, so no role priority decides which link counts.

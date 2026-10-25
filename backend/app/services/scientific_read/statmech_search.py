@@ -67,8 +67,8 @@ from app.services.scientific_read.calculation_provenance_filters import apply_ca
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     reject_client_sort,
-    review_floor_predicate,
     review_summary,
     review_visibility_echo,
     validate_includes,
@@ -385,13 +385,13 @@ def _apply_evidence_filters(stmt, request: StatmechSearchRequest):
         ex = exists().where(StatmechTorsion.statmech_id == Statmech.id)
         stmt = stmt.where(ex if request.has_torsions else ~ex)
     if request.has_rotor_scans is not None:
-        # A scan whose calculation the profile hides is not a scan (hidden == absent).
+        # A scan whose calculation the evidence rule withholds (rejected / deprecated under curated) is not a scan.
         scans = select(StatmechTorsion.id).where(
             StatmechTorsion.statmech_id == Statmech.id,
             StatmechTorsion.source_scan_calculation_id.is_not(None),
         )
         ex = where_visible(
-            scans, review_floor_predicate(StatmechTorsion.source_scan_calculation_id, SubmissionRecordType.calculation)
+            scans, linked_evidence_predicate(StatmechTorsion.source_scan_calculation_id, SubmissionRecordType.calculation)
         ).exists()
         stmt = stmt.where(ex if request.has_rotor_scans else ~ex)
     return stmt
@@ -403,8 +403,8 @@ def _apply_method_basis_software_filters(
     """Method/basis/software/workflow filters narrow statmech rows to
     those whose source-calculation graph carries a row matching the
     supplied provenance. The match is OR-across-calc: at least one
-    linked source calculation the read profile shows must match (a hidden calculation
-    contributes nothing to a match, decision D6).
+    linked source calculation the evidence rule leaves visible must match (a rejected or
+    deprecated one contributes nothing under curated, ADR 0023).
     """
     sub = _shown_source_calculations()
     return apply_calculation_provenance_filter(stmt, request, sub)
@@ -420,7 +420,7 @@ def _shown_source_calculations():
         )
         .where(StatmechSourceCalculation.statmech_id == Statmech.id)
     )
-    return where_visible(sub, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
+    return where_visible(sub, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
 
 
 # ---------------------------------------------------------------------------

@@ -158,8 +158,9 @@ the ML export's is `tckdb.ml` version 2.
 > steps land; the sweep lists every route where this happens (`STILL_ON_THE_EARLIER_RULE`), and the list can only shrink.
 >
 > **Still the earlier rule (decision D6: below the floor is hidden, evidence included), and described as it is:** list counts,
-> availability flags and derived levels of theory (step 3), matching in search and select (step 4), the trust and selection
-> loaders (step 5), made-under comparisons (step 6), and detail-by-ref (step 7). Every passage below that describes what `curated`
+> availability flags and derived levels of theory (step 3), the trust and selection
+> loaders (step 5), made-under comparisons (step 6), and detail-by-ref (step 7). Matching in search and select (step 4) now follows
+> the evidence rule: see the filter paragraph below. Every passage below that describes what `curated`
 > hides or shows is therefore the earlier rule except where it concerns a nested ref.
 
 ## Other lists, and where their order is documented
@@ -341,17 +342,20 @@ Filter vocabulary by route: thermo and kinetics `model_kind`, `level_of_theory_r
 matches, each field independently); network and statmech `model_kind` plus `method`, `basis`, `software`, `software_version`,
 `workflow_tool`, `workflow_tool_version` (one source calculation matches all supplied fields); the structure selections
 the six provenance fields (the calculation itself, or the calculations a determination pins as sources).
-**A filter on a linked record matches only through linked records the profile can see.** This holds on every search, list and
-select route, not only on select. Under `curated`, a calculation or conformer observation below the floor contributes nothing to
-a match (hidden equals unknown equals absent): not its level of theory, method, basis, software, workflow tool or
-`scientific_origin`; not a `has_*` evidence flag (`has_source_calculations`, `has_freq_calculation`, `has_rotor_scans`,
-`has_freq`, `has_observations`, ...); not a `dependency_role` edge to it. A record whose only level-B link is hidden is not found by
-asking for level B, and `total` and `hidden_by_default` do not change because such a link exists. The provenance match is one
-helper (`apply_calculation_provenance_filter`) fed a source set already narrowed by `review_floor_predicate`; select does the same
-through `selection_filters`. A `*_ref` filter that names a parent is a scope, not a subject, and is unchanged. Under the default
-profile nothing changes: a calculation that is rejected or deprecated still takes part in a match, because the `include_rejected`
-and `include_deprecated` switches govern the records a route returns, not the evidence behind them, and a default exclusion is
-disclosed by `hidden_by_default` rather than concealed.
+**A filter on a linked record matches through linked evidence unless the evidence rule withholds it (ADR 0023, step 4).** This holds
+on every search, list and select route, not only on select. Under `curated`, the approved record floor decides which records a
+search returns; the calculations and conformer observations they link to are evidence, and a rejected or deprecated one
+contributes nothing to a match: not its level of theory, method, basis, software, workflow tool or `scientific_origin`; not a
+`has_*` evidence flag (`has_source_calculations`, `has_freq_calculation`, `has_rotor_scans`, `has_freq`, `has_observations`, ...);
+not a `dependency_role` edge to it. A not-reviewed or under-review one matches, as it is shown, with its badge. A record whose only
+level-B link is rejected is not found by asking for level B, and `total` and `hidden_by_default` do not change because such a link
+exists. Observations inside a conformer group are evidence; transition-state entries, basins in structure select and network
+solves are records and stay on the record floor; species and reaction entries never gate. The provenance match is one helper
+(`apply_calculation_provenance_filter`) fed a source set already narrowed by `linked_evidence_predicate`; select does the same
+through `selection_filters`. A `*_ref` filter that names a parent is a scope, not a subject, and is unchanged. Under exploratory
+nothing is withheld as evidence: a rejected calculation still takes part in a match, because `include_rejected` and
+`include_deprecated` govern the records a route returns, not the evidence behind them, and a default exclusion is disclosed by
+`hidden_by_default`. That asymmetry is by design (the ADR records it).
 
 **The read profile's floor is not a default.** Under `curated` the floor is `approved` and hidden equals unknown equals
 absent. No select request can lift it: `include_rejected` and `include_deprecated` lift nothing under it (the echo says
