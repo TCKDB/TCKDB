@@ -1,4 +1,6 @@
 import { z } from "zod"
+import { listMetaOf, listRequestEchoSchema, type ListMeta } from "./listEnvelope"
+import { pageQuery, type PageRequest } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 import { compositeSchemeSummarySchema, levelOfTheorySchema } from "./scientificSchemas"
 
@@ -322,9 +324,14 @@ const paginationSchema = z.object({
 const lotBrowseResponseSchema = z.object({
     records: z.array(levelOfTheoryRecordSchema),
     pagination: paginationSchema,
+    request: listRequestEchoSchema.optional(),
 }).passthrough()
 
-export type LevelOfTheoryBrowseResult = { records: LevelOfTheoryRecord[]; pagination: z.infer<typeof paginationSchema> }
+export type LevelOfTheoryBrowseResult = {
+    records: LevelOfTheoryRecord[]
+    pagination: z.infer<typeof paginationSchema>
+    meta: ListMeta
+}
 
 // ---------------------------------------------------------------------------
 // Loaders
@@ -341,30 +348,30 @@ export interface LevelOfTheoryBrowseFilter {
     coreTreatment?: CoreTreatmentValue | "" | null
 }
 
-/** The query string for the browse call: `limit=200` always, `core_treatment`
+/** The query string for the browse call: the first page at `limit=200` unless a page is named, `core_treatment`
  *  only when a value is chosen (an empty choice sends nothing, never an empty
  *  parameter the API would reject). */
-export function levelOfTheoryBrowseQuery(filter: LevelOfTheoryBrowseFilter = {}): URLSearchParams {
-    const query = new URLSearchParams({ limit: "200" })
+export function levelOfTheoryBrowseQuery(filter: LevelOfTheoryBrowseFilter = {}, request?: PageRequest): URLSearchParams {
+    const query = request ? pageQuery(request) : new URLSearchParams({ limit: "200" })
     if (filter.coreTreatment) query.set("core_treatment", filter.coreTreatment)
     return query
 }
 
 /**
  * `/methods` index data -- unfiltered, every level of theory with >=1
- * attributing calculation (§4.1). `limit=200` (the endpoint's own cap) is
- * enough headroom for this archive's 4 rows and any near-term growth;
- * this index does not paginate (§4.1: "the index itself stays exactly as
- * small as v1 planned").
+ * attributing calculation (§4.1). The first page is `limit=200` (the endpoint's
+ * own cap); an archive with more levels than that is paged by the caller from
+ * the response's `pagination`, never shown as if the first page were all of it.
  */
 export async function loadLevelOfTheoryBrowse(
     signal?: AbortSignal,
     filter: LevelOfTheoryBrowseFilter = {},
+    request?: PageRequest,
 ): Promise<LevelOfTheoryBrowseResult> {
-    const endpoint = `/api/v1/scientific/level-of-theories/browse?${levelOfTheoryBrowseQuery(filter)}`
+    const endpoint = `/api/v1/scientific/level-of-theories/browse?${levelOfTheoryBrowseQuery(filter, request)}`
     const payload = await requestScientificJson(endpoint, signal)
     const parsed = parseScientificResponse(lotBrowseResponseSchema, payload, "level-of-theory browse")
-    return { records: parsed.records, pagination: parsed.pagination }
+    return { records: parsed.records, pagination: parsed.pagination, meta: listMetaOf(parsed) }
 }
 
 /**

@@ -298,3 +298,36 @@ describe("EntryTransportSection: design-system adoption (design/species-entry)",
         }
     })
 })
+
+describe("EntryTransportSection: paging", () => {
+    it("pages a list longer than one window and asks for the following offset", async () => {
+        const seen: string[] = []
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const params = new URL(request.url).searchParams
+            const offset = Number(params.get("offset") ?? 0)
+            const limit = Number(params.get("limit") ?? 1)
+            seen.push(`${offset}:${limit}`)
+            const all = [mockRecord(), mockRecord({ transport: { ...mockRecord().transport, transport_ref: "trn_two" } })]
+            const records = all.slice(offset, offset + limit)
+            return HttpResponse.json({
+                ...mockResponse(records),
+                pagination: { offset, limit, returned: records.length, total: all.length },
+            })
+        }))
+        page()
+        expect(await screen.findByText("Showing 1–1 of 2 transport records.")).toBeVisible()
+        expect(screen.getByText("trn_one")).toBeVisible()
+        fireEvent.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText("Showing 2–2 of 2 transport records.")).toBeVisible()
+        expect(seen).toContain("1:1")
+        expect(screen.getByText("trn_two")).toBeVisible()
+        expect(screen.queryByText("trn_one")).not.toBeInTheDocument()
+    })
+
+    it("a list that fits one window shows no paging buttons", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("trn_one")
+        expect(screen.queryByRole("button", { name: "Next" })).not.toBeInTheDocument()
+    })
+})

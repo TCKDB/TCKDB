@@ -84,8 +84,10 @@ const visuallyHiddenStyle = {
 // removed computation lived.
 // ---------------------------------------------------------------------------
 
-export function ThermoCpChart({ records, conformers, selectedConformerGroupRef }: {
+export function ThermoCpChart({ records, conformers, selectedConformerGroupRef, partialList = false }: {
     records: ThermoRecord[]
+    /** The records are one page of a longer list, so the chart overlays those, not every deposited record. */
+    partialList?: boolean
     conformers: ConformerProjection[]
     selectedConformerGroupRef: string | null
 }) {
@@ -112,7 +114,7 @@ export function ThermoCpChart({ records, conformers, selectedConformerGroupRef }
                 <p className="eyebrow">Derived view</p>
                 <SectionHeading id="cp-chart-heading">Heat capacity vs. temperature</SectionHeading>
                 <p>
-                    Every deposited thermo record's own evaluated points and NASA-7 fit, overlaid — never combined
+                    {partialList ? "The thermo records on this page" : "Every deposited thermo record"}'s own evaluated points and NASA-7 fit, overlaid — never combined
                     or averaged across conformers. Comparing the lines is how far the conformers actually agree.
                 </p>
             </div>

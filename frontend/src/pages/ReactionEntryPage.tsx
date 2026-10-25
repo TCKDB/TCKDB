@@ -261,7 +261,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                         calculations={record.calculations}
                         transitionStates={transitionStates}
                         networksStatus={networksState.status === "ready" ? (networksState.networks.length ? "populated" : "empty") : "loading"}
-                        networkRef={networksState.status === "ready" ? networksState.networks[0]?.network_ref : undefined}
+                        networkRefs={networksState.status === "ready" ? networksState.networks.map((network) => network.network_ref) : undefined}
                     />
                 </section>
 

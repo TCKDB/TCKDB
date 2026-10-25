@@ -13,6 +13,10 @@ import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryListSection, type EntryListSectionState } from "../hooks/useEntryListSection"
 import { useEntryTransport } from "../hooks/useEntryTransport"
+import { everyOrThisPage } from "../domain/paging"
+import { ListPager } from "./ListPager"
+import type { ListMeta } from "../api/listEnvelope"
+import type { PageRequest } from "../domain/paging"
 import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
 import { SectionHeading } from "./PageSections"
@@ -53,7 +57,7 @@ function reviewSummaryText(summary: TransportListResponse["review_summary"]) {
 }
 
 export function EntryTransportSection({ entryRef }: { entryRef: string }) {
-    const state = useEntryTransport(entryRef)
+    const { state, listKey, meta, goTo } = useEntryTransport(entryRef)
     if (state.status === "ready") {
         return (
             <SectionErrorBoundary
@@ -66,7 +70,7 @@ export function EntryTransportSection({ entryRef }: { entryRef: string }) {
                     </section>
                 )}
             >
-                <TransportList entryRef={entryRef} response={state.record} />
+                <TransportList listKey={listKey} meta={meta} onPage={goTo} response={state.record} />
             </SectionErrorBoundary>
         )
     }
@@ -90,11 +94,17 @@ function useTransportSection<T>(entryRef: string, token: TransportSectionToken) 
     )
 }
 
-function TransportList({ entryRef, response }: { entryRef: string; response: TransportListResponse }) {
+function TransportList({ listKey, meta, onPage, response }: {
+    /** Names the page on screen: the on-demand section hooks below key on it, so their data is never read across pages. */
+    listKey: string
+    meta: ListMeta | null
+    onPage: (request: PageRequest) => void
+    response: TransportListResponse
+}) {
     const { records, review_summary: reviewSummary, pagination } = response
 
-    const [sourceCalcsState, openSourceCalcs] = useTransportSection<TransportRecord["source_calculations"]>(entryRef, "source_calculations")
-    const [reviewState, openReview] = useTransportSection<TransportRecord["review_history"]>(entryRef, "review")
+    const [sourceCalcsState, openSourceCalcs] = useTransportSection<TransportRecord["source_calculations"]>(listKey, "source_calculations")
+    const [reviewState, openReview] = useTransportSection<TransportRecord["review_history"]>(listKey, "review")
 
     return (
         <>
@@ -103,15 +113,15 @@ function TransportList({ entryRef, response }: { entryRef: string; response: Tra
                     <p className="eyebrow">Deposited evidence</p>
                     <SectionHeading id="transport-heading">Transport</SectionHeading>
                     <p>
-                        Every transport record deposited for this entry, each shown independently. Multiple
+                        {everyOrThisPage(pagination, "transport record")}, each shown independently. Multiple
                         deposits are never merged, averaged, or reduced to one preferred value on this page.
                     </p>
                 </div>
                 <p className="note records-note">
                     {pagination.total} record{pagination.total === 1 ? "" : "s"}
-                    {pagination.total > pagination.returned ? ` (showing ${pagination.returned})` : ""}
                     {" · review: "}{reviewSummaryText(reviewSummary)}
                 </p>
+                {meta && <ListPager meta={meta} noun="transport record" onPage={onPage} label="Transport records paging" />}
                 {records.length === 0 ? (
                     <p className="empty-projection">
                         No transport records are deposited for this entry. This is the archive's own answer —

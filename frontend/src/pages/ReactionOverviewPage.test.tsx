@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { MemoryRouter, Route, Routes } from "react-router-dom"
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom"
 import ReactionOverviewPage from "./ReactionOverviewPage"
 
 const REACTION_REF = "rxn_naeqmg4l5wyqex5cl5tir2vt2y"
@@ -67,6 +67,7 @@ function searchResponse() {
                 availability: { has_kinetics: true, has_transition_state: false, has_path_search: false, kinetics_count: 3 },
             },
         ],
+        pagination: { offset: 0, limit: 50, returned: 2, total: 2 },
     }
 }
 
@@ -191,5 +192,90 @@ describe("ReactionOverviewPage", () => {
         expect(checklist).toBeVisible()
         const dt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Total")
         expect(dt?.nextElementSibling?.textContent).toBe("4")
+    })
+})
+
+describe("ReactionOverviewPage: what the page says it chose, and paging", () => {
+    it("says the title and equation come from the first listed entry when there are several", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
+        page(REACTION_REF)
+        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+        expect(screen.getByText(/The title and equation are read from rxe_tku6xu2lt3girf2rsiwl5uds4e, the first entry listed, not from every entry/)).toBeVisible()
+    })
+
+    it("says where the title comes from even for a single entry", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => {
+            const response = searchResponse()
+            return HttpResponse.json({ ...response, records: response.records.slice(0, 1), pagination: { offset: 0, limit: 50, returned: 1, total: 1 } })
+        }))
+        page(REACTION_REF)
+        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+        expect(screen.getByText("The title and equation are read from the one deposited entry, rxe_tku6xu2lt3girf2rsiwl5uds4e.")).toBeVisible()
+    })
+
+    it("pages the entries: the headline count is the archive's total and Next asks for the following window", async () => {
+        const seen: string[] = []
+        server.use(http.get("/api/v1/scientific/reactions/search", ({ request }) => {
+            const params = new URL(request.url).searchParams
+            const offset = Number(params.get("offset") ?? 0)
+            const limit = Number(params.get("limit") ?? 1)
+            seen.push(`${offset}:${limit}`)
+            const response = searchResponse()
+            const records = response.records.slice(offset, offset + limit)
+            return HttpResponse.json({ ...response, records, pagination: { offset, limit, returned: records.length, total: 2 } })
+        }))
+        page(REACTION_REF)
+        expect(await screen.findByText("Showing 1\u20131 of 2 reaction entries.")).toBeVisible()
+        expect(screen.getByText(/2 separate deposits share this reaction identity/)).toBeVisible()
+        fireEvent.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText("Showing 2\u20132 of 2 reaction entries.")).toBeVisible()
+        expect(seen).toContain("1:1")
+        expect(await screen.findByRole("link", { name: "rxe_kftcgjn7zalusaouojwi23z3gy" })).toBeVisible()
+    })
+
+    it("keeps the title and its source when the reader pages to an entry that differs", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", ({ request }) => {
+            const params = new URL(request.url).searchParams
+            const offset = Number(params.get("offset") ?? 0)
+            const limit = Number(params.get("limit") ?? 1)
+            const response = searchResponse()
+            // The second entry's products are a different species, so a title taken from the page on screen would change.
+            response.records[1].products = [participant("spe_other", "CH4", "C")]
+            const records = response.records.slice(offset, offset + limit)
+            return HttpResponse.json({ ...response, records, pagination: { offset, limit, returned: records.length, total: 2 } })
+        }))
+        page(REACTION_REF)
+        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+        const titleBefore = document.querySelector("h1")?.textContent
+        expect(titleBefore).toContain("N=N")
+        fireEvent.click(screen.getByRole("button", { name: "Next" }))
+        await screen.findByRole("link", { name: "rxe_kftcgjn7zalusaouojwi23z3gy" })
+        expect(document.querySelector("h1")?.textContent).toBe(titleBefore)
+        expect(screen.getByText(/read from rxe_tku6xu2lt3girf2rsiwl5uds4e, the first entry listed/)).toBeVisible()
+    })
+
+    it("returns to the first page when the reaction changes while the page stays mounted", async () => {
+        const seen: string[] = []
+        server.use(http.get("/api/v1/scientific/reactions/search", ({ request }) => {
+            const params = new URL(request.url).searchParams
+            const offset = Number(params.get("offset") ?? 0)
+            const limit = Number(params.get("limit") ?? 1)
+            seen.push(`${params.get("reaction_ref")}@${offset}`)
+            const response = searchResponse()
+            const records = response.records.slice(offset, offset + limit)
+            return HttpResponse.json({ ...response, records, pagination: { offset, limit, returned: records.length, total: 2 } })
+        }))
+        render(
+            <MemoryRouter initialEntries={[`/reactions/${REACTION_REF}`]}>
+                <Link to="/reactions/rxn_other">other reaction</Link>
+                <Routes><Route path="/reactions/:reactionRef" element={<ReactionOverviewPage />} /></Routes>
+            </MemoryRouter>,
+        )
+        await screen.findByText("Showing 1\u20131 of 2 reaction entries.")
+        fireEvent.click(screen.getByRole("button", { name: "Next" }))
+        await screen.findByText("Showing 2\u20132 of 2 reaction entries.")
+        fireEvent.click(screen.getByRole("link", { name: "other reaction" }))
+        expect(await screen.findByText("Showing 1\u20131 of 2 reaction entries.")).toBeVisible()
+        expect(seen.at(-1)).toBe("rxn_other@0")
     })
 })

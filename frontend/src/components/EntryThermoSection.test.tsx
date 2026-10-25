@@ -175,7 +175,7 @@ function mockRecords() {
     ]
 }
 
-function mockResponse(overrides: { records?: unknown[]; pagination?: Record<string, number> } = {}) {
+function mockResponse(overrides: { records?: unknown[]; pagination?: Record<string, number>; request?: Record<string, unknown> } = {}) {
     const records = overrides.records ?? mockRecords()
     return {
         species_entry_ref: entryRef,
@@ -183,6 +183,7 @@ function mockResponse(overrides: { records?: unknown[]; pagination?: Record<stri
         records,
         pagination: overrides.pagination
             ?? { offset: 0, limit: 50, returned: records.length, total: records.length },
+        ...(overrides.request ? { request: overrides.request } : {}),
     }
 }
 
@@ -670,17 +671,68 @@ describe("EntryThermoSection", () => {
         expect(await screen.findByRole("heading", { name: "Thermochemistry not found" })).toBeVisible()
     })
 
-    it("shows the '(showing M)' honesty note only when returned is short of total, with the real deposit total as the headline count", async () => {
+    it("says which records are on screen when the list is longer than the page, with the real deposit total as the headline count", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
             records: mockRecords().slice(0, 2),
             pagination: { offset: 0, limit: 2, returned: 2, total: 5 },
         }))))
         page()
         // "5 records" is the deposit total (`pagination.total`), never
-        // `pagination.returned` (2) printed in its place — that swap would
-        // silently delete this note's entire reason for existing.
-        expect(await screen.findByText("5 records (showing 2) · review: 1 approved · 2 not reviewed")).toBeVisible()
+        // `pagination.returned` (2) printed in its place, and the pager says
+        // plainly which slice of the 5 is on screen.
+        expect(await screen.findByText("5 records · review: 1 approved · 2 not reviewed")).toBeVisible()
+        expect(screen.getByText("Showing 1\u20132 of 5 thermochemistry records.")).toBeVisible()
         expect(screen.queryByText(/^2 records/)).not.toBeInTheDocument()
+    })
+
+    it("pages the thermo list: Next asks the archive for the following window and shows those records", async () => {
+        const seen: Array<{ offset: string | null; limit: string | null }> = []
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const url = new URL(request.url)
+            const offset = url.searchParams.get("offset")
+            const limit = url.searchParams.get("limit")
+            seen.push({ offset, limit })
+            const all = mockRecords()
+            const start = offset ? Number(offset) : 0
+            const size = limit ? Number(limit) : 2
+            return HttpResponse.json(mockResponse({
+                records: all.slice(start, start + size),
+                pagination: { offset: start, limit: size, returned: all.slice(start, start + size).length, total: all.length },
+            }))
+        }))
+        page()
+        await screen.findByText("thm_alpha")
+        const total = mockRecords().length
+        expect(total).toBeGreaterThan(2)
+        // The first request names no window (the archive's default page); the pager reads the window it was given.
+        fireEvent.click(await screen.findByRole("button", { name: "Next" }))
+        expect(await screen.findByText(`Showing 3\u2013${total} of ${total} thermochemistry records.`)).toBeVisible()
+        expect(seen.at(-1)).toEqual({ offset: "2", limit: "2" })
+        expect(screen.queryByText("thm_alpha")).not.toBeInTheDocument()
+        // Last page: Next is disabled, Previous goes back to the start.
+        expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
+        fireEvent.click(screen.getByRole("button", { name: "Previous" }))
+        expect(await screen.findByText("thm_alpha")).toBeVisible()
+        expect(seen.at(-1)).toEqual({ offset: "0", limit: "2" })
+    })
+
+    it("states what the server said about the list: its display order and the records it hid by default", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
+            request: {
+                sort: {
+                    kind: "display_order",
+                    keys: [
+                        { key: "review_rank", direction: "asc", meaning: "review status: approved first; others after" },
+                        { key: "created_at", direction: "desc", meaning: "deposition time, newest first" },
+                    ],
+                },
+                hidden_by_default: { counts: { rejected: 2, deprecated: 1 }, include_with: {}, counted: "records" },
+            },
+        }))))
+        page()
+        expect(await screen.findByText("Not listed by default: 2 rejected and 1 deprecated thermochemistry records.")).toBeVisible()
+        expect(screen.getByText(/^Display order: approved first, then newest deposited first\./)).toBeVisible()
+        expect(screen.getByText(/not a ranking or a recommendation/)).toBeVisible()
     })
 
     // The owner's report, thermo half: "he opened the Thermochemistry tab
@@ -1628,5 +1680,26 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
             expect(within(energyCell).getByText("ambiguous")).toHaveClass("value-pill", "value-pill--muted")
             expect(energyCell).not.toHaveTextContent("not recorded")
         })
+    })
+
+    it("says 'every' only when the whole list is on screen: a page of a longer list says it is the records on this page, in the intro and the chart", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
+            records: mockRecords().slice(0, 2),
+            pagination: { offset: 0, limit: 2, returned: 2, total: 5 },
+        }))))
+        page()
+        await screen.findByText("thm_alpha")
+        expect(screen.getByText(/The 2 thermo records on this page \(of 5 deposited for this entry\), each shown independently/)).toBeVisible()
+        expect(screen.getByText(/The thermo records on this page's own evaluated points/)).toBeVisible()
+        expect(screen.queryByText(/Every thermo record deposited for this entry/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/Every deposited thermo record's own/)).not.toBeInTheDocument()
+    })
+
+    it("a list that fits one page keeps the 'every' wording", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("thm_alpha")
+        expect(screen.getByText(/Every thermo record deposited for this entry, each shown independently/)).toBeVisible()
+        expect(screen.getByText(/Every deposited thermo record's own evaluated points/)).toBeVisible()
     })
 })

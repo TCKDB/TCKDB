@@ -1,5 +1,7 @@
 import { z } from "zod"
 import { recordReviewSchema } from "./scientificSchemas"
+import { listRequestEchoSchema, paginationSchema } from "./listEnvelope"
+import { pageQuery, parsePagedRef } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 /**
@@ -58,6 +60,8 @@ const reviewStatusSummarySchema = z.object({
 const searchResponseSchema = z.object({
     review_summary: reviewStatusSummarySchema,
     records: z.array(reactionRecordSchema),
+    pagination: paginationSchema,
+    request: listRequestEchoSchema.optional(),
 }).passthrough()
 
 export type ReactionOverviewRecord = z.infer<typeof reactionRecordSchema>
@@ -69,8 +73,10 @@ export async function loadReactionOverview(
     signal?: AbortSignal,
     onRateLimited?: (retryAfterSeconds: number) => void,
 ): Promise<ReactionOverview> {
-    const query = new URLSearchParams()
-    query.set("reaction_ref", reactionRef)
+    // `reactionRef` may be a paged ref (`ref#offset:limit`, see `domain/paging.ts`); a plain ref is the first page.
+    const { ref, request } = parsePagedRef(reactionRef)
+    const query = request ? pageQuery(request) : new URLSearchParams()
+    query.set("reaction_ref", ref)
     const endpoint = `/api/v1/scientific/reactions/search?${query}`
     const payload = await requestScientificJson(endpoint, signal, onRateLimited)
     return parseScientificResponse(searchResponseSchema, payload, "reaction")

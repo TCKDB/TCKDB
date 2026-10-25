@@ -22,6 +22,23 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Website lists are paged, and orders and picks are stated (2026-10-25)
+
+Frontend only; no API, schema or migration change.
+
+- **Paging.** The species-entry page's conformer, thermo, statmech and transport lists, the transition-state page's sibling saddle points,
+  the reaction chooser's entries and the methods index's levels of theory used to show one page and say little or nothing about the rest.
+  Each now says "Showing X-Y of N", pages by offset, and passes on the server's own display-order echo (`request.sort`) and its
+  hidden-by-default count (`request.hidden_by_default`). The single-point energy join reads every page.
+- **Orders and picks.** The conformer card order, the transition-state calculation row order, the network state-energy order and a
+  sibling's one-line summary are labelled as display orders or as read from one named calculation, never as a preference. A conformer
+  the page selects by itself is said to be only the first listed. The network page names which solve its energies came from, and the
+  reaction chooser always says its title is read from the first listed entry (taken from page one, so it does not change as you page).
+- **Selection and labels.** Paging the conformer picker never changes the selected conformer; a link to a basin on a later page opens it by
+  its own ref, and a default pick is marked `selection=default` so the note survives a reload. Conformer labels resolve for basins on pages
+  not opened. The single-point energies are read only when that tab is open, and say when they hit their page cap.
+- **Several-of-a-kind picks.** Several solves, networks or correction schemes are named or labelled instead of the first being shown as the one.
+
 ## Select takes filters, and its exclusions are named defaults (2026-10-24)
 
 A select call is now: the caller's filters, then requested eligibility, then the policy (still no method ranking), then the result

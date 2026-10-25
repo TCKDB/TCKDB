@@ -719,6 +719,7 @@ it("routes a reaction ref to the chooser page (ReactionOverviewPage)", async () 
             products: [{ species_entry_ref: "spe_b", smiles: "B", participant_index: 0 }],
             availability: { has_kinetics: false, has_transition_state: false, has_path_search: false, kinetics_count: 0 },
         }],
+        pagination: { offset: 0, limit: 50, returned: 1, total: 1 },
     })))
     window.history.replaceState({}, "", "/reactions/rxn_abc")
     render(<App />)
@@ -794,6 +795,7 @@ describe("the home-page identifier search recognizes and routes public reference
                 products: [{ species_entry_ref: "spe_b", smiles: "B", participant_index: 0 }],
                 availability: { has_kinetics: false, has_transition_state: false, has_path_search: false, kinetics_count: 0 },
             }],
+            pagination: { offset: 0, limit: 50, returned: 1, total: 1 },
         })))
         const user = userEvent.setup(); render(<App />)
         await user.type(await screen.findByLabelText("Exact species identifier"), `rxn_${REF_BODY}`)

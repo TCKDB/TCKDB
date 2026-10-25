@@ -1,5 +1,7 @@
 import { z } from "zod"
 import { levelOfTheorySchema, productLevelsSchema } from "./scientificSchemas"
+import { listRequestEchoSchema, paginationSchema } from "./listEnvelope"
+import { pageQuery, parsePagedRef } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 import { madeUnderSchema } from "../domain/madeUnder"
 
@@ -265,18 +267,12 @@ const reviewStatusSummarySchema = z.object({
     total: z.number(),
 }).passthrough()
 
-const paginationSchema = z.object({
-    offset: z.number(),
-    limit: z.number(),
-    returned: z.number(),
-    total: z.number(),
-}).passthrough()
-
 const thermoListResponseSchema = z.object({
     species_entry_ref: z.string(),
     review_summary: reviewStatusSummarySchema,
     records: z.array(thermoRecordSchema),
     pagination: paginationSchema,
+    request: listRequestEchoSchema.optional(),
 }).passthrough()
 
 export type ThermoRecord = z.infer<typeof thermoRecordSchema>
@@ -298,7 +294,12 @@ export async function loadEntryThermo(
 ): Promise<ThermoListResponse> {
     // `include=assessments` is the one token requested: it adds the compact reproducibility assessment and the rubric
     // it was made under, which the "made under" line states. It is not expanded by `include=all`.
-    const endpoint = `/api/v1/scientific/species-entries/${encodeURIComponent(entryRef)}/thermo?include=assessments`
+    // `entryRef` may be a paged ref (`entryRef#offset:limit`, see `domain/paging.ts`) naming one page of the list;
+    // a plain ref names the first page.
+    const { ref, request } = parsePagedRef(entryRef)
+    const query = request ? pageQuery(request) : new URLSearchParams()
+    query.append("include", "assessments")
+    const endpoint = `/api/v1/scientific/species-entries/${encodeURIComponent(ref)}/thermo?${query}`
     const payload = await requestScientificJson(endpoint, signal, onRateLimited)
     return parseScientificResponse(thermoListResponseSchema, payload, "thermo")
 }

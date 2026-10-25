@@ -1,10 +1,10 @@
-import { useEffect } from "react"
+import { useEffect, useMemo } from "react"
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import "../species-entry.css"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
-import type { SpeciesCalculationEnergyRecord } from "../api/speciesCalculationsApi"
+import { useSpeciesSinglePoints, type SinglePointsState } from "../hooks/useSpeciesSinglePoints"
 import { ConformerEvidenceLinkage } from "../components/ConformerEvidenceLinkage"
-import { sortConformersForDisplay } from "../domain/conformerEvidence"
+import { conformerLabel, sortConformersForDisplay } from "../domain/conformerEvidence"
 import { ConformerGeometryTab } from "../components/ConformerGeometryTab"
 import { ConformerSelector } from "../components/ConformerSelector"
 import { ConformerSinglePointTab } from "../components/ConformerSinglePointTab"
@@ -19,7 +19,10 @@ import { RetryCountdown } from "../components/RetryCountdown"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import { DEFAULT_SECTION, isEntrySection, LEGACY_ENTRY_SECTION_ALIASES } from "../domain/speciesEntrySections"
 import type { EntrySection } from "../domain/speciesEntrySections"
+import { useConformerByRef, useConformerLabelIndex } from "../hooks/useConformerLookup"
+import { useConformerPages } from "../hooks/useConformerPages"
 import { useSpeciesEntry } from "../hooks/useSpeciesEntry"
+import type { ListMeta } from "../api/listEnvelope"
 
 export default function SpeciesEntryPage() {
     const { entryRef = "", section } = useParams<{ entryRef: string; section?: string }>()
@@ -63,7 +66,7 @@ export default function SpeciesEntryPage() {
         <EntryDocument
             entry={state.entry}
             conformers={state.conformers}
-            spEnergies={state.spEnergies}
+            conformerMeta={state.conformerMeta}
             activeSection={activeSection}
             entryRef={entryRef}
             entryPath={entryPath}
@@ -176,10 +179,10 @@ function EmptyEntryEvidence() {
     )
 }
 
-function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef, entryPath }: {
+function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: firstPageMeta, activeSection, entryRef, entryPath }: {
     entry: SpeciesEntryProjection
     conformers: ConformerProjection[]
-    spEnergies: SpeciesCalculationEnergyRecord[]
+    conformerMeta: ListMeta
     activeSection: EntrySection
     entryRef: string
     entryPath: string
@@ -187,14 +190,42 @@ function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef,
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
     const requestedRef = searchParams.get("conformer")
-    const requestedConformer = conformers.find((conformer) => conformer.conformer_group.conformer_group_ref === requestedRef)
-    // Default to the FIRST CARD AS DISPLAYED, not the archive's top-ranked
-    // conformer. `conformers/search` orders by review rank, so `conformers[0]`
-    // is meaningful -- but the cards render in numeric label order, and a
-    // highlighted card that is not the first one reads as a bug rather than as
-    // a ranking signal. If that ranking is worth surfacing it needs to be
-    // visible on the card, not encoded in which one starts selected.
-    const selectedConformer = requestedConformer ?? sortConformersForDisplay(conformers)[0] ?? null
+    // Read only while the single-point tab is open: loading the entry never waits for it.
+    const spEnergies = useSpeciesSinglePoints(entryRef, activeSection === "sp")
+    const selectionParam = searchParams.get("selection")
+    // The conformer groups are paged. `pageConformers` is the page on screen (the picker lists exactly these); the
+    // SELECTION does not depend on it. A conformer on another page is opened by its own ref, and paging never writes
+    // `?conformer=`.
+    const conformerPages = useConformerPages(entryRef, { records: firstPageConformers, meta: firstPageMeta })
+    const pageConformers = conformerPages.records
+    // The default pick is the first card of the FIRST page as displayed (not the archive's top-ranked conformer, and
+    // not whatever page the reader has since opened): `conformers/search` orders by review rank, the cards render in
+    // numeric label order, and a highlighted card that is not the first one reads as a bug rather than as a signal.
+    const defaultConformer = sortConformersForDisplay(firstPageConformers)[0] ?? null
+    const requestedKnown = requestedRef
+        ? [...pageConformers, ...firstPageConformers].find((conformer) => conformer.conformer_group.conformer_group_ref === requestedRef)
+        : undefined
+    const byRef = useConformerByRef(entryRef, requestedRef && !requestedKnown ? requestedRef : null)
+    const requestedConformer = requestedKnown ?? (byRef.status === "ready" ? byRef.record : undefined)
+    const requestedMissing = Boolean(requestedRef) && !requestedKnown && byRef.status === "missing"
+    const selectionLoading = Boolean(requestedRef) && !requestedKnown && byRef.status === "loading"
+    // A selection the page made itself (no `?conformer=`, a ref that names nothing, or a link that says so with
+    // `selection=default`) is a default and says so; it is never presented as the reader's choice.
+    const pickedByPage = !requestedRef || requestedMissing || byRef.status === "error" || selectionParam === "default"
+    const selectedConformer = selectionLoading ? null : (requestedConformer ?? defaultConformer)
+    const selectedRef = selectedConformer?.conformer_group.conformer_group_ref ?? (selectionLoading ? requestedRef : null)
+    const selectionIsDefault = selectedConformer !== null && pickedByPage
+    // Basins the records cite may sit on pages the reader has not opened: labels are resolved by ref from an index of
+    // every group (read only when the list is longer than the page on screen), then the richer page and selected ones.
+    const meta = conformerPages.meta
+    const labelIndex = useConformerLabelIndex(entryRef, meta.pagination.total > meta.pagination.returned || meta.pagination.offset > 0)
+    const conformers = useMemo(() => {
+        const byGroup = new Map<string, ConformerProjection>()
+        for (const group of [...labelIndex, ...firstPageConformers, ...pageConformers, ...(selectedConformer ? [selectedConformer] : [])]) {
+            byGroup.set(group.conformer_group.conformer_group_ref, group)
+        }
+        return [...byGroup.values()]
+    }, [labelIndex, firstPageConformers, pageConformers, selectedConformer])
 
     // Every `?conformer=` write names the canonical path of what's on screen
     // (`entryPath`, never a legacy alias) instead of inheriting a pathname.
@@ -205,29 +236,30 @@ function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef,
     // link, `SpeciesEntryPage`'s canonicalization had already replaced the
     // URL with `/geometry` when this page first rendered, but this render
     // still saw `/calculations` and wrote it straight back (#562).
-    function writeConformerParam(conformerGroupRef: string) {
+    function writeConformerParam(conformerGroupRef: string, byPage: boolean) {
         const next = new URLSearchParams(searchParams)
         next.set("conformer", conformerGroupRef)
+        if (byPage) next.set("selection", "default")
+        else next.delete("selection")
         navigate({ pathname: entryPath, search: `?${next}` }, { replace: true })
     }
 
-    // Self-heal the URL to name what's actually selected: an empty/stale
-    // `conformer` param becomes the first conformer's ref, once conformers
-    // are known. Never fires when there is nothing to select.
+    // Self-heal the URL to name what's actually selected, and say when the page chose it: a missing `conformer` param,
+    // or one that names no group of this entry, becomes the default pick. It reads only the default and the
+    // request, never the page of the list on screen, so paging cannot trigger it.
+    const defaultRef = defaultConformer?.conformer_group.conformer_group_ref ?? null
     useEffect(() => {
-        if (!selectedConformer) return
-        const canonicalRef = selectedConformer.conformer_group.conformer_group_ref
-        if (requestedRef === canonicalRef) return
-        writeConformerParam(canonicalRef)
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only when the resolved conformer identity changes, not on every searchParams object identity change
-    }, [selectedConformer?.conformer_group.conformer_group_ref])
+        if (!defaultRef) return
+        if (!requestedRef || requestedMissing) writeConformerParam(defaultRef, true)
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only when what is requested or defaulted changes, not on every searchParams object identity change
+    }, [defaultRef, requestedRef, requestedMissing])
 
-    const conformerQuery = selectedConformer
-        ? `?conformer=${encodeURIComponent(selectedConformer.conformer_group.conformer_group_ref)}`
+    const conformerQuery = selectedRef
+        ? `?conformer=${encodeURIComponent(selectedRef)}${selectionIsDefault && selectionParam === "default" ? "&selection=default" : ""}`
         : ""
 
     function selectConformer(conformerGroupRef: string) {
-        writeConformerParam(conformerGroupRef)
+        writeConformerParam(conformerGroupRef, false)
     }
 
     return <section className="entry-page">
@@ -258,8 +290,14 @@ function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef,
         {hasAnyEvidence(entry) ? (
             <>
                 <ConformerSelector
-                    conformers={conformers}
-                    selectedRef={selectedConformer?.conformer_group.conformer_group_ref ?? null}
+                    conformers={pageConformers}
+                    selectedRef={selectedRef}
+                    selectedLabel={selectedConformer ? conformerLabel(selectedConformer) : null}
+                    selectionIsDefault={selectionIsDefault}
+                    meta={conformerPages.meta}
+                    onPage={conformerPages.goTo}
+                    pagingBusy={conformerPages.busy}
+                    pagingFailed={conformerPages.failed}
                     onSelect={selectConformer}
                 />
                 {selectedConformer && <ConformerEvidenceLinkage conformer={selectedConformer} />}
@@ -270,13 +308,17 @@ function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef,
                     conformerQuery={conformerQuery}
                     availability={entry.availability}
                 />
-                <TabPanel
-                    section={activeSection}
-                    entryRef={entryRef}
-                    conformer={selectedConformer}
-                    conformers={conformers}
-                    spEnergies={spEnergies}
-                />
+                {selectionLoading ? (
+                    <p className="note" role="status" aria-busy="true">Loading the selected conformer…</p>
+                ) : (
+                    <TabPanel
+                        section={activeSection}
+                        entryRef={entryRef}
+                        conformer={selectedConformer}
+                        conformers={conformers}
+                        spEnergies={spEnergies}
+                    />
+                )}
             </>
         ) : (
             <EmptyEntryEvidence />
@@ -296,7 +338,7 @@ function TabPanel({ section, entryRef, conformer, conformers, spEnergies }: {
     entryRef: string
     conformer: ConformerProjection | null
     conformers: ConformerProjection[]
-    spEnergies: SpeciesCalculationEnergyRecord[]
+    spEnergies: SinglePointsState
 }) {
     return (
         <div className="tab-panel" role="tabpanel" id={`panel-${section}`} aria-labelledby={`tab-${section}`} tabIndex={0}>
@@ -310,7 +352,7 @@ function TabPanelBody({ section, entryRef, conformer, conformers, spEnergies }: 
     entryRef: string
     conformer: ConformerProjection | null
     conformers: ConformerProjection[]
-    spEnergies: SpeciesCalculationEnergyRecord[]
+    spEnergies: SinglePointsState
 }) {
     if (section === "geometry") {
         return conformer

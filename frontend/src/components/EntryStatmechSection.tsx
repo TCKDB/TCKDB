@@ -25,6 +25,10 @@ import { formatQuantity } from "../domain/quantityFormat"
 import { deriveStatmechConformer } from "../domain/statmechConformerDerivation"
 import { useEntryListSection, type EntryListSectionState } from "../hooks/useEntryListSection"
 import { useEntryStatmech } from "../hooks/useEntryStatmech"
+import { everyOrThisPage } from "../domain/paging"
+import { ListPager } from "./ListPager"
+import type { ListMeta } from "../api/listEnvelope"
+import type { PageRequest } from "../domain/paging"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
@@ -93,7 +97,7 @@ export function EntryStatmechSection({ entryRef, conformer, conformers }: {
     conformer?: ConformerProjection | null
     conformers?: ConformerProjection[]
 }) {
-    const state = useEntryStatmech(entryRef)
+    const { state, listKey, meta, goTo } = useEntryStatmech(entryRef)
     if (state.status === "ready") {
         return (
             <SectionErrorBoundary
@@ -106,7 +110,7 @@ export function EntryStatmechSection({ entryRef, conformer, conformers }: {
                     </section>
                 )}
             >
-                <StatmechList entryRef={entryRef} response={state.record} conformer={conformer} conformers={conformers ?? []} />
+                <StatmechList listKey={listKey} meta={meta} onPage={goTo} response={state.record} conformer={conformer} conformers={conformers ?? []} />
             </SectionErrorBoundary>
         )
     }
@@ -130,20 +134,23 @@ function useStatmechSection<T>(entryRef: string, token: StatmechSectionToken) {
     )
 }
 
-function StatmechList({ entryRef, response, conformer, conformers }: {
-    entryRef: string
+function StatmechList({ listKey, meta, onPage, response, conformer, conformers }: {
+    /** Names the page on screen: the on-demand section hooks below key on it, so their data is never read across pages. */
+    listKey: string
+    meta: ListMeta | null
+    onPage: (request: PageRequest) => void
     response: StatmechListResponse
     conformer?: ConformerProjection | null
     conformers: ConformerProjection[]
 }) {
     const { records, review_summary: reviewSummary, pagination } = response
 
-    const [sourceCalcsState, openSourceCalcs] = useStatmechSection<StatmechRecord["source_calculations"]>(entryRef, "source_calculations")
-    const [torsionsState, openTorsions] = useStatmechSection<StatmechRecord["torsions"]>(entryRef, "torsions")
-    const [electronicLevelsState, openElectronicLevels] = useStatmechSection<StatmechRecord["electronic_levels"]>(entryRef, "electronic_levels")
-    const [frequenciesState, openFrequencies] = useStatmechSection<StatmechRecord["frequencies"]>(entryRef, "frequencies")
-    const [conformersState, openConformers] = useStatmechSection<StatmechRecord["conformers"]>(entryRef, "conformers")
-    const [reviewState, openReview] = useStatmechSection<StatmechRecord["review_history"]>(entryRef, "review")
+    const [sourceCalcsState, openSourceCalcs] = useStatmechSection<StatmechRecord["source_calculations"]>(listKey, "source_calculations")
+    const [torsionsState, openTorsions] = useStatmechSection<StatmechRecord["torsions"]>(listKey, "torsions")
+    const [electronicLevelsState, openElectronicLevels] = useStatmechSection<StatmechRecord["electronic_levels"]>(listKey, "electronic_levels")
+    const [frequenciesState, openFrequencies] = useStatmechSection<StatmechRecord["frequencies"]>(listKey, "frequencies")
+    const [conformersState, openConformers] = useStatmechSection<StatmechRecord["conformers"]>(listKey, "conformers")
+    const [reviewState, openReview] = useStatmechSection<StatmechRecord["review_history"]>(listKey, "review")
 
     // Unlike the six disclosures below (opened only when a reader expands
     // them), a selected conformer needs this same `conformers` include
@@ -184,15 +191,15 @@ function StatmechList({ entryRef, response, conformer, conformers }: {
                     <p className="eyebrow">Deposited evidence</p>
                     <SectionHeading id="statmech-heading">Statistical mechanics</SectionHeading>
                     <p>
-                        Every statmech record deposited for this entry, each shown independently. Multiple
+                        {everyOrThisPage(pagination, "statmech record")}, each shown independently. Multiple
                         deposits are never merged, averaged, or reduced to one preferred value on this page.
                     </p>
                 </div>
                 <p className="note records-note">
                     {pagination.total} record{pagination.total === 1 ? "" : "s"}
-                    {pagination.total > pagination.returned ? ` (showing ${pagination.returned})` : ""}
                     {" · review: "}{reviewSummaryText(reviewSummary)}
                 </p>
+                {meta && <ListPager meta={meta} noun="statistical-mechanics record" onPage={onPage} label="Statistical-mechanics records paging" />}
                 {records.length === 0 ? (
                     <p className="empty-projection">No statistical-mechanics records are deposited for this entry.</p>
                 ) : conformer ? (
@@ -356,8 +363,8 @@ function ConformerScopedStatmechRecords({ conformer, conformers, records, confor
             <>
                 <p className="note" role="status">
                     {conformersState.status === "error"
-                        ? `${conformersState.message} Showing every record for this entry, ungrouped, until the conformer link resolves.`
-                        : "Resolving conformer links… showing every record for this entry, ungrouped, in the meantime."}
+                        ? `${conformersState.message} Showing every record on this page, ungrouped, until the conformer link resolves.`
+                        : "Resolving conformer links… showing every record on this page, ungrouped, in the meantime."}
                 </p>
                 {renderStatmechRecords(records, conformers, sourceCalcsState, frequenciesState)}
             </>
