@@ -329,8 +329,8 @@ def get_species_thermo(
 
     # One source calculation has to match every supplied provenance field at once (level of theory, software, method,
     # basis, workflow tool, method family, DFT rung): a record never matches through two different calculations. A
-    # source calculation the active profile hides contributes nothing to a match: hidden equals unknown equals absent
-    # (D5). The record's own link to it stays a fact of the record (the ref guard withholds the ref); what the
+    # source calculation below the read profile's floor contributes nothing to a match (ADR 0023 step 4 will change
+    # linked-evidence matching in the shared helper, not here). The record's own link to it stays a fact of the record (the ref guard withholds the ref); what the
     # calculation ran at or in is a fact about the hidden calculation. There is no "primary" calculation for a filter.
     provenance = source_provenance_kwargs(request, level_of_theory_id=effective_lot_id)
     if provenance:

@@ -155,6 +155,23 @@ def test_a_dispersion_suffix_and_a_basis_never_change_the_class_in_sql(db_sessio
         "hf-3c",
         "totally-unknown",
         "pbe-d4",
+        "b97",
+        "B97-D3",
+        "b97-gd3bj",
+        "b97d",
+        "b97-1",
+        "ci",
+        "UM062X",
+        "UwB97XD",
+        "UB2PLYP",
+        "uccsd",
+        "rohf",
+        "rpbe",
+        "rm1",
+        "ub3lyp-d3bj",
+        "b3lyp-d",
+        "mrcic",
+        "u",
     ]
     lots = {s: make_lot(db_session, method=s, basis="def2tzvp") for s in spellings}
     filters = [
@@ -187,7 +204,7 @@ def test_every_table_key_is_found_by_its_own_family_in_sql(db_session):
 
 
 def test_a_level_used_only_by_hidden_calculations_is_not_listed_under_curated_whatever_its_family(client, db_session):
-    """Hidden equals unknown equals absent: the family filter cannot reveal a level the profile hides."""
+    """A level used only by rejected calculations is not listed under curated, whatever its family."""
     lot = make_lot(db_session, method="b3lyp", basis="def2tzvp")
     rejected = _used(db_session, lot)
     set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=rejected.id, status=RecordReviewStatus.rejected)
@@ -377,3 +394,33 @@ def test_statmech_select_filters_by_scientific_origin(db_session):
     assert apply_filters(db_session, ids, StatmechFilters(scientific_origin="estimated")) == []
     assert apply_filters(db_session, ids, StatmechFilters()) == ids
     assert StatmechFilters(scientific_origin="computed").to_record() == {"scientific_origin": "computed"}
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# calculation search and species-calculation search
+# ---------------------------------------------------------------------------------------------------------------
+
+
+def test_calculation_searches_filter_by_the_method_family_and_rung_of_the_calculation_itself(client, db_session):
+    """Kills: the family filter missing from either calculation search, or read from a sibling calculation."""
+    species = make_species(db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("CF"))
+    entry = make_species_entry(db_session, species)
+    dft = make_calculation(db_session, species_entry_id=entry.id, lot_id=make_lot(db_session, method="b97-d3", basis="def2tzvp").id)
+    wf = make_calculation(db_session, species_entry_id=entry.id, lot_id=make_lot(db_session, method="ccsd(t)", basis="cc-pvtz").id)
+    bare = make_calculation(db_session, species_entry_id=entry.id)
+
+    def refs(path, **params):
+        body = client.get(f"{BASE}/{path}", params=params).json()
+        return {r["calculation"]["calculation_ref"] for r in body["records"]}, body
+
+    for path in ("calculations/search", "species-calculations/search"):
+        extra = {"species_entry_ref": entry.public_ref}
+        got, body = refs(path, method_family="dft", **extra)
+        assert got == {dft.public_ref}, path
+        assert body["request"]["filter"]["method_family"] == ["dft"]
+        assert refs(path, method_family=["wavefunction", "composite"], **extra)[0] == {wf.public_ref}
+        assert refs(path, dft_rung_min=2, dft_rung_max=2, **extra)[0] == {dft.public_ref}  # B97-D3 is rung 2, not B97's 4
+        assert refs(path, dft_rung_min=4, **extra)[0] == set()
+        assert refs(path, method_family="unclassified", **extra)[0] == set()  # a calculation with no level matches no family
+        assert bare.public_ref not in refs(path, method_family="dft", **extra)[0]
+        assert client.get(f"{BASE}/{path}", params={"dft_rung_max": 9, **extra}).status_code == 422

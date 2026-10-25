@@ -10492,6 +10492,32 @@
               }
             ]
           },
+          "dft_rung_max": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Max"
+          },
+          "dft_rung_min": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Min"
+          },
           "geometry_validation_status": {
             "anyOf": [
               {
@@ -10615,6 +10641,20 @@
               }
             ],
             "title": "Method"
+          },
+          "method_family": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MethodFamily"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method Family"
           },
           "min_review_status": {
             "anyOf": [
@@ -53487,6 +53527,32 @@
             "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
             "title": "Cursor"
           },
+          "dft_rung_max": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Max"
+          },
+          "dft_rung_min": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Min"
+          },
           "electronic_state_kind": {
             "anyOf": [
               {
@@ -53594,6 +53660,20 @@
               }
             ],
             "title": "Method"
+          },
+          "method_family": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MethodFamily"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method Family"
           },
           "min_review_status": {
             "anyOf": [
@@ -91602,6 +91682,61 @@
           },
           {
             "in": "query",
+            "name": "method_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/MethodFamily"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method Family"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Max"
+            }
+          },
+          {
+            "in": "query",
             "name": "software",
             "required": false,
             "schema": {
@@ -103200,6 +103335,61 @@
                 }
               ],
               "title": "Workflow Tool"
+            }
+          },
+          {
+            "in": "query",
+            "name": "method_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/MethodFamily"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method Family"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Max"
             }
           },
           {

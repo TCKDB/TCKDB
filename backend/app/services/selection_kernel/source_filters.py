@@ -3,8 +3,8 @@
 A candidate rests on source calculations. The provenance filters (level of theory, software, method, basis, workflow
 tool, method family, DFT rung) keep a candidate when ONE source calculation it links to, and the read profile shows,
 matches every supplied field at once. A candidate never matches through two different calculations, and never through
-a calculation it does not link to. Under ``curated`` a hidden calculation contributes nothing (hidden equals unknown
-equals absent).
+a calculation it does not link to. Under ``curated`` a calculation below the read profile's floor contributes nothing (ADR 0023 step 4 will change
+linked-evidence matching in the shared helper).
 
 ``method_family`` and the DFT rung classify the calculation's method (:mod:`app.chemistry.method_families`). They are
 a classification, not a measure of accuracy, and a filter fact only: they never order or select anything.

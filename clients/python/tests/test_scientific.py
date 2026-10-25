@@ -284,7 +284,7 @@ def test_search_reactions_get_form_uses_repeated_query_params():
     client.search_reactions(
         reactants=["A1", "A2"],
         products=["B1"],
-        method="GET",
+        method_http="GET",
     )
 
     assert seen[0].method == "GET"

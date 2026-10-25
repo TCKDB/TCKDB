@@ -40,6 +40,7 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
+from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
 from app.schemas.reads.scientific_calculation import (
     ScientificCalculationRecord,
 )
@@ -119,6 +120,10 @@ class CalculationsSearchRequest(BaseModel):
         default=None, max_length=_MAX_PUBLIC_REF_LENGTH
     )
     lot_hash: str | None = Field(default=None, max_length=128)
+    #: A classification of the calculation's method (not a measure of accuracy); see ``app/schemas/reads/_method_family.py``.
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
 
     # --- software / workflow filters -------------------------------------
     software: str | None = Field(

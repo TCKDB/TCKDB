@@ -13,6 +13,7 @@ from app.api.routes.scientific._response import (
     SPECIES_CALCULATIONS_SEARCH_SECTIONS,
     omit_unrequested_sections,
 )
+from app.chemistry.method_families import MethodFamily
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     CalculationQuality,
@@ -70,6 +71,9 @@ def species_calculations_search_get(
     basis: str | None = Query(None),
     software: str | None = Query(None),
     workflow_tool: str | None = Query(None),
+    method_family: list[MethodFamily] | None = Query(None),
+    dft_rung_min: int | None = Query(None, ge=1, le=5),
+    dft_rung_max: int | None = Query(None, ge=1, le=5),
     scientific_origin: ScientificOriginKind | None = Query(None),
     calculation_quality: CalculationQuality | None = Query(None),
     min_review_status: RecordReviewStatus | None = Query(None),
@@ -119,6 +123,9 @@ def species_calculations_search_get(
         basis=basis,
         software=software,
         workflow_tool=workflow_tool,
+        method_family=method_family,
+        dft_rung_min=dft_rung_min,
+        dft_rung_max=dft_rung_max,
         scientific_origin=scientific_origin,
         calculation_quality=calculation_quality,
         min_review_status=min_review_status,

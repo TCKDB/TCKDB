@@ -115,15 +115,17 @@ offers these filters reads them the same way:
 - **Only linked calculations.** A record matches through the calculations it actually links to, never through a sibling's,
   its species entry's or the level's other uses (no borrowed provenance). A record that links no calculation matches no
   provenance filter, an `unclassified` family filter included.
-- **Hidden equals unknown equals absent.** Under `curated` a calculation the profile hides contributes nothing to a match.
-  A filter on `method=b3lyp` cannot keep a record because of a calculation the reader cannot open.
+- **Below the read profile's floor.** Under `curated` a calculation below the floor contributes nothing to a match, so a
+  filter on `method=b3lyp` cannot keep a record because of a calculation the reader cannot open. (ADR 0023 step 4 will change
+  how linked evidence is matched, in the shared helpers; a rejected or deprecated calculation will still never match.)
 - **No primary calculation.** A record's displayed `primary_calculation` is a display choice and decides no filter.
 
 The provenance fields are `level_of_theory_ref` / `level_of_theory_id` (where a route offers it), `method`, `basis`,
 `software`, `software_version`, `workflow_tool`, `workflow_tool_version`, `method_family`, `dft_rung_min` and `dft_rung_max`.
 The thermo and kinetics reads (per entry and search) offer all of them; the transition-state search and browse and the species
-browse offer `method`, `basis`, the software and workflow-tool fields and the family and rung fields; the level-of-theory
-search and browse offer the family and rung fields beside `method` and `basis`. Until 2026-10-25 the thermo and kinetics
+browse offer `method`, `basis`, the software and workflow-tool fields and the family and rung fields; the calculation search
+and the species-calculation search offer the family and rung fields beside `method` and `basis`; the level-of-theory
+search and browse offer them too. Until 2026-10-25 the thermo and kinetics
 reads and selects matched level of theory and software through *any* calculation each, independently; that reading is gone,
 and a select decision recorded under it (manifest format 3) is refused on replay.
 
@@ -146,8 +148,11 @@ double hybrid 5). Level-of-theory reads carry `method_family`, `dft_rung` (null 
 - **It is derived, not stored.** The table is code (`app/chemistry/method_families.py`) applied to the method's identity key
   (case, whitespace and the curated aliases), so no column holds a class and changing the table needs no migration; it is a
   new version of `method_family_classification`.
+- **Spin prefixes.** A leading `u`, `r` or `ro` is read through only when what remains is a classified method and the whole
+  name is not a table row of its own (`UM062X`, `uccsd`; `rm1` and `rpbe` are rows).
 - **A dispersion suffix or a basis never changes the class.** `-D2`, `-D3`, `-D3BJ`, `-D3(BJ)`, `-D4` and the like are stripped
-  before the lookup (a bare `-D` is not: `wB97X-D` and `B97-D` are functionals). A name the table does not hold is
+  before the lookup (a bare `-D` is not: `wB97X-D`, `B97-D`, `B3LYP-D` are rows). A row that itself ends in a suffix wins over its stem: `B97` (Becke 1997) is a
+  hybrid, rung 4, but `B97-D`, `B97-D3`, `B97-D3BJ` are Grimme's GGA, rung 2. A name the table does not hold is
   `unclassified`; nothing is guessed from a substring.
 - **Filters.** `method_family` takes one family or a list (any of them matches). `dft_rung_min` / `dft_rung_max` are inclusive
   and imply `method_family=dft`: with a bound, only a DFT method can match, so a bound beside a family list without `dft`

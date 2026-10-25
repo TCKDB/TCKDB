@@ -79,7 +79,7 @@ class _Thermo:
 
     name = "thermo"
 
-    def build(self, session, specs, *, approved_calcs=(), rejected_calcs=(), origin=ScientificOriginKind.computed, approve=False):
+    def build(self, session, specs, *, approved_calcs=(), rejected_calcs=(), bad_status=RecordReviewStatus.rejected, origin=ScientificOriginKind.computed, approve=False):
         species = make_species(session, smiles=unique_smiles(), inchi_key=next_inchi_key("PV"))
         self.entry = make_species_entry(session, species)
         self.record = make_thermo_scalar(session, species_entry=self.entry, scientific_origin=origin)
@@ -94,7 +94,7 @@ class _Thermo:
         for i in approved_calcs:
             set_review(session, record_type=SubmissionRecordType.calculation, record_id=self.calcs[i].id, status=RecordReviewStatus.approved)
         for i in rejected_calcs:
-            set_review(session, record_type=SubmissionRecordType.calculation, record_id=self.calcs[i].id, status=RecordReviewStatus.rejected)
+            set_review(session, record_type=SubmissionRecordType.calculation, record_id=self.calcs[i].id, status=bad_status)
         if approve:
             set_review(session, record_type=SubmissionRecordType.thermo, record_id=self.record.id, status=RecordReviewStatus.approved)
         return self
@@ -115,7 +115,7 @@ class _Thermo:
 class _Kinetics:
     name = "kinetics"
 
-    def build(self, session, specs, *, approved_calcs=(), rejected_calcs=(), origin=ScientificOriginKind.computed, approve=False):
+    def build(self, session, specs, *, approved_calcs=(), rejected_calcs=(), bad_status=RecordReviewStatus.rejected, origin=ScientificOriginKind.computed, approve=False):
         rs = make_species(session, smiles=unique_smiles(), inchi_key=next_inchi_key("KR"))
         ps = make_species(session, smiles=unique_smiles(), inchi_key=next_inchi_key("KP"))
         chem = make_chem_reaction(session, reactants=[rs], products=[ps])
@@ -140,7 +140,7 @@ class _Kinetics:
         for i in approved_calcs:
             set_review(session, record_type=SubmissionRecordType.calculation, record_id=self.calcs[i].id, status=RecordReviewStatus.approved)
         for i in rejected_calcs:
-            set_review(session, record_type=SubmissionRecordType.calculation, record_id=self.calcs[i].id, status=RecordReviewStatus.rejected)
+            set_review(session, record_type=SubmissionRecordType.calculation, record_id=self.calcs[i].id, status=bad_status)
         if approve:
             set_review(session, record_type=SubmissionRecordType.kinetics, record_id=self.record.id, status=RecordReviewStatus.approved)
         return self
@@ -282,6 +282,7 @@ def test_scientific_origin_is_matched_on_the_record_itself(db_session, kind, ori
 
 
 @KINDS
+@pytest.mark.parametrize("bad_status", [RecordReviewStatus.rejected, RecordReviewStatus.deprecated], ids=lambda s: s.value)
 @pytest.mark.parametrize(
     "filters",
     [
@@ -298,12 +299,12 @@ def test_scientific_origin_is_matched_on_the_record_itself(db_session, kind, ori
     ],
     ids=lambda f: "+".join(f),
 )
-def test_a_hidden_calculation_cannot_make_a_record_match_under_curated(db_session, kind, filters):
-    """Hidden equals unknown equals absent. Calculation A (the hybrid functional, gaussian, arc) is rejected, so hidden; B is shown.
+def test_a_hidden_calculation_cannot_make_a_record_match_under_curated(db_session, kind, filters, bad_status):
+    """Calculation A (the hybrid functional, gaussian, arc) is rejected or deprecated, so it never matches; B is shown.
 
     Kills: matching through the hidden calculation, so a record appears for a fact the profile says does not exist.
     """
-    world = kind().build(db_session, [A, B], approved_calcs=[1], rejected_calcs=[0], approve=True)
+    world = kind().build(db_session, [A, B], approved_calcs=[1], rejected_calcs=[0], bad_status=bad_status, approve=True)
     assert world.read(db_session, **filters) == [world.ref], "exploratory sees the record through calculation A"
     token = set_current_read_profile(CURATED)
     try:

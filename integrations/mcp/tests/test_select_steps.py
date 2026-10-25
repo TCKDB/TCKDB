@@ -90,7 +90,7 @@ def test_options_not_stated_are_not_sent(args):
 @pytest.mark.parametrize(
     "extra",
     [
-        {"filters": {"scientific_origin": "computed"}},  # a filter the search does not offer
+        {"filters": {"coverage_temperature_min_k": "300"}},  # a filter the search does not offer
         {"filters": {"software": ""}},
         {"filters": "orca"},
         {"eligibility": {"include_everything": True}},
@@ -103,4 +103,36 @@ def test_a_wrong_option_is_a_teaching_error_before_any_request(extra):
     seen, handler = _recording()
     with pytest.raises(MCPToolError):
         _call(name, {**base, **extra}, _client(handler))
+    assert seen == []
+
+
+@pytest.mark.parametrize("args", [THERMO, STATMECH], ids=["thermo", "statmech"])
+def test_scientific_origin_is_offered_and_forwarded(args):
+    """Kills: the tool refusing a filter its backend route takes."""
+    name, base = args
+    seen, handler = _recording()
+    _call(name, {**base, "filters": {"scientific_origin": "computed"}}, _client(handler))
+    assert json.loads(seen[0].content)["filters"] == {"scientific_origin": "computed"}
+    assert "scientific_origin" in {t["name"]: t for t in list_tools_payload()}[name]["inputSchema"]["properties"]["filters"]["properties"]
+
+
+@pytest.mark.parametrize("family", ["dft", ["dft", "composite"]])
+def test_thermo_takes_method_family_as_a_name_or_a_list_and_the_rung_as_integers(family):
+    """Kills: a string-only filter schema that refused a list of families or an integer rung."""
+    name, base = THERMO
+    seen, handler = _recording()
+    filters = {"method_family": family, "dft_rung_min": 3, "dft_rung_max": 4}
+    _call(name, {**base, "filters": filters}, _client(handler))
+    assert json.loads(seen[0].content)["filters"] == filters
+
+
+@pytest.mark.parametrize(
+    "filters",
+    [{"method_family": []}, {"method_family": [1]}, {"method_family": ""}, {"dft_rung_min": 0}, {"dft_rung_max": 6}, {"dft_rung_min": "4"}, {"dft_rung_min": True}],
+)
+def test_a_bad_family_or_rung_is_refused_before_any_call(filters):
+    name, base = THERMO
+    seen, handler = _recording()
+    with pytest.raises(MCPToolError):
+        _call(name, {**base, "filters": filters}, _client(handler))
     assert seen == []

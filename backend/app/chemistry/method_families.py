@@ -36,8 +36,9 @@ The method goes through the identity key every method comparison uses
 (:func:`~app.chemistry.method_names.method_identity_key`: case, whitespace and the curated aliases), then a trailing
 **dispersion suffix** (``-d2``, ``-d3``, ``-d3bj``, ``-d3zero``, ``-d3(bj)``, ``-d3(0)``, ``-d3m``, ``-d3mbj``, ``-d4``,
 ``-gd2``, ``-gd3``, ``-gd3bj``) is removed, and the remainder is looked up. A dispersion suffix never changes the class.
-A basis is a separate column and is never part of the method. A bare ``-d`` is NOT stripped: ``wb97x-d`` and ``b97-d``
-are functionals in their own right and are table entries. The SQL twin
+A basis is a separate column and is never part of the method. A bare ``-d`` is NOT stripped: ``wb97x-d``, ``b97-d``,
+``b3lyp-d`` and ``b2plyp-d`` are table entries. The exact key is tried first, so a table row that ends in a dispersion
+suffix (``b97-d3``) wins over its stem (``b97``). The SQL twin
 (``scientific_read/lot_identity_filters.method_stem_key_sql``) is built from the same suffix rule, and
 ``method_family_matches`` turns the table into a predicate, so a filter and this function cannot disagree.
 
@@ -45,8 +46,13 @@ Decisions the owner may want to check (every entry is in the table below)
 -------------------------------------------------------------------------
 * Range-separated hybrids (CAM-B3LYP, LC-wPBE, wB97X, HSE) and meta-hybrids (M06, M06-2X, wB97M-V) are rung 4, with the
   global hybrids.
-* B97-D, B97-3c and PBE-based functionals without exact exchange are rung 2; B97-1 and B97-2 contain exact exchange and
-  are rung 4.
+* B97 itself (Becke 1997) is a global hybrid, rung 4, as are B97-1, B97-2 and B98. The dispersion-corrected B97-D
+  family (Grimme's GGA refit: ``b97-d``, ``b97-d2``, ``b97-d3``, ``b97-d3bj``, ``b97-d4``, Gaussian ``b97d``, ``b97d3``) and
+  B97-3c are rung 2. Because stripping ``-d3`` from ``b97-d3`` would give the hybrid ``b97``, the EXACT key is looked up
+  before any suffix is stripped.
+* ``ci`` is left ``unclassified``: Molpro's ``CI`` runs internally contracted MRCI while other programs mean CISD.
+* A leading ``u``, ``r`` or ``ro`` (unrestricted, restricted, restricted-open-shell) is read through only when the rest is
+  a classified method and the prefixed name is not a table entry of its own (``uccsd``, ``um062x``, ``ub2plyp``).
 * r2SCAN-3c is rung 3 (meta-GGA, no exact exchange); PBEh-3c is rung 4 (hybrid).
 * XYG3 and the other XYG double hybrids are left out on purpose: they are evaluated on B3LYP orbitals, so their
   provenance needs a decision first. They stay ``unclassified``.
@@ -106,8 +112,13 @@ DFT_BY_RUNG: dict[int, tuple[str, ...]] = {
         "pbesol",
         "olyp",
         "xlyp",
-        "b97",
         "b97-d",
+        "b97-d2",
+        "b97-d3",
+        "b97-d3bj",
+        "b97-d4",
+        "b97d",
+        "b97d3",
         "b97-3c",
         "hcth",
         "hcth407",
@@ -133,6 +144,10 @@ DFT_BY_RUNG: dict[int, tuple[str, ...]] = {
         "mn15-l",
         "vsxc",
         "b97m-v",
+        "b97m",
+        "m11l",
+        "mn12l",
+        "mn15l",
         "tau-hcth",
         "tauhcth",
     ),
@@ -152,8 +167,21 @@ DFT_BY_RUNG: dict[int, tuple[str, ...]] = {
         "pbeh1pbe",
         "pbeh-3c",
         "revpbe0",
+        "b97",
         "b97-1",
         "b97-2",
+        "b971",
+        "b972",
+        "b98",
+        "b3lyp-d",
+        "m08hx",
+        "mn12sx",
+        "n12sx",
+        "sogga11x",
+        "lc-whpbe",
+        "lrc-ωpbeh",
+        "ωb97xd",
+        "wb97x-3c",
         "bhandh",
         "bhandhlyp",
         "bhlyp",
@@ -218,6 +246,7 @@ DFT_BY_RUNG: dict[int, tuple[str, ...]] = {
         "b2plyp",
         "b2plypd",
         "b2plypd3",
+        "b2plyp-d",
         "b2gpplyp",
         "b2gp-plyp",
         "b2k-plyp",
@@ -292,7 +321,8 @@ OTHER_BY_FAMILY: dict[MethodFamily, tuple[str, ...]] = {
         "qcisd(t)",
         "bd",
         "bd(t)",
-        "ci",
+        "bccd",
+        "qci",
         "fci",
     ),
     MethodFamily.multireference: (
@@ -308,6 +338,11 @@ OTHER_BY_FAMILY: dict[MethodFamily, tuple[str, ...]] = {
         "sc-nevpt2",
         "pc-nevpt2",
         "mrpt2",
+        "rs3",
+        "acpf",
+        "aqcc",
+        "cic",
+        "mrcic",
         "mrci",
         "mrci+q",
         "mrci(q)",
@@ -451,12 +486,39 @@ CLASSIFICATIONS.validate()
 CLASSIFICATION_REF: VersionRef = CLASSIFICATIONS.current(CLASSIFICATION_NAME)
 
 
+#: Table rows whose key itself ends in a dispersion suffix: the exact key wins over the stripped stem.
+SUFFIXED_KEYS: frozenset[str] = frozenset(k for k in CLASSIFICATION if _DISPERSION_STRIP.match(k))
+
+#: A stem that, once a dispersion suffix has been stripped from it, names a different method than the bare stem does:
+#: ``b97-<anything>`` is Grimme's B97-D family (GGA), not Becke's hybrid B97. The explicit ``b97-d3`` rows are kept as well.
+SUFFIX_STEM_OVERRIDES: dict[str, str] = {"b97": "b97-d"}
+
+#: Spin prefixes read through, longest first.
+SPIN_PREFIXES: tuple[str, ...] = ("ro", "r", "u")
+
+
 def method_stem_key(name: str) -> str:
-    """The key a method is classified under: its identity key without a trailing dispersion suffix."""
+    """The key a method is classified under.
+
+    In order: the identity key when it is a table row; else the key without a trailing dispersion suffix; else, when that
+    is not a row either, the key without a leading ``ro`` / ``r`` / ``u`` if what is left is a row.
+    """
     key = method_identity_key(name)
+    if key in CLASSIFICATION:
+        return key
     stem = _DISPERSION_STRIP.sub(r"\1", key)
     # A stem can be an aliased spelling (``m06-2x-d3zero`` -> ``m06-2x`` -> ``m062x``).
-    return method_identity_key(stem) if stem != key else key
+    stem = method_identity_key(stem) if stem != key else key
+    if stem != key:
+        stem = SUFFIX_STEM_OVERRIDES.get(stem, stem)
+    if stem in CLASSIFICATION:
+        return stem
+    for prefix in SPIN_PREFIXES:
+        if stem.startswith(prefix) and len(stem) > len(prefix):
+            rest = method_identity_key(stem[len(prefix) :])
+            if rest in CLASSIFICATION:
+                return rest
+    return stem
 
 
 def classify_method(name: str | None, version: int | None = None) -> MethodClass:
@@ -547,6 +609,9 @@ __all__ = [
     "MAX_DFT_RUNG",
     "MIN_DFT_RUNG",
     "OTHER_BY_FAMILY",
+    "SPIN_PREFIXES",
+    "SUFFIXED_KEYS",
+    "SUFFIX_STEM_OVERRIDES",
     "UNCLASSIFIED",
     "MethodClass",
     "MethodClassFilter",

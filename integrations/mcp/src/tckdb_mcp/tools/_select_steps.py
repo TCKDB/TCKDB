@@ -18,12 +18,20 @@ from ..errors import invalid_input
 PROVENANCE_FILTERS = (
     "method", "basis", "software", "software_version", "workflow_tool", "workflow_tool_version",
 )
-#: thermo and kinetics: the per-entry reads' filters that are plain text. ONE source calculation has to match every
-#: provenance field supplied. ``method_family`` and ``dft_rung_min`` / ``dft_rung_max`` (a classification of the method,
-#: not an accuracy measure) are not text and are not offered by this tool yet.
-LEVEL_FILTERS = ("model_kind", "scientific_origin", "level_of_theory_ref", *PROVENANCE_FILTERS)
+#: thermo and kinetics: the per-entry reads' filters. ONE source calculation has to match every provenance field
+#: supplied. ``method_family`` and ``dft_rung_min`` / ``dft_rung_max`` are a classification of the method, not an
+#: accuracy measure.
+LEVEL_FILTERS = (
+    "model_kind", "scientific_origin", "level_of_theory_ref", *PROVENANCE_FILTERS,
+    "method_family", "dft_rung_min", "dft_rung_max",
+)
+#: Filters that are not plain text: a family (one name or a list of them) and the DFT rung bounds (integers 1 to 5).
+FAMILY_FILTER = "method_family"
+RUNG_FILTERS = ("dft_rung_min", "dft_rung_max")
 #: network and statmech: the model form and the provenance fields.
 MODEL_PROVENANCE_FILTERS = ("model_kind", *PROVENANCE_FILTERS)
+#: statmech: also the record's own origin.
+STATMECH_FILTERS = (*MODEL_PROVENANCE_FILTERS, "scientific_origin")
 
 ELIGIBILITY_ALL = ("include_rejected", "include_deprecated", "include_hard_failed_evidence", "include_confirmed_findings")
 ELIGIBILITY_REVIEW = ("include_rejected", "include_deprecated")
@@ -37,6 +45,17 @@ _ELIGIBILITY_TEXT = {
 }
 
 
+def _filter_schema(name: str) -> dict[str, Any]:
+    if name == FAMILY_FILTER:
+        return {
+            "description": "One method family or a list: dft, wavefunction, composite, multireference, semiempirical, force_field, unclassified.",
+            "oneOf": [{"type": "string", "maxLength": 32}, {"type": "array", "items": {"type": "string", "maxLength": 32}, "minItems": 1}],
+        }
+    if name in RUNG_FILTERS:
+        return {"type": "integer", "minimum": 1, "maximum": 5}
+    return {"type": "string", "maxLength": 256}
+
+
 def step_properties(filters: tuple[str, ...], eligibility: tuple[str, ...]) -> dict[str, Any]:
     """The ``filters`` and ``eligibility`` input-schema properties of a tool."""
     return {
@@ -46,7 +65,7 @@ def step_properties(filters: tuple[str, ...], eligibility: tuple[str, ...]) -> d
                 "Narrow the candidates by facts before eligibility, with the matching search's own filters. A filter "
                 "excludes on a fact and ranks nothing; the answer's 'filters' and 'funnel' say how many it removed."
             ),
-            "properties": {name: {"type": "string", "maxLength": 256} for name in filters},
+            "properties": {name: _filter_schema(name) for name in filters},
             "additionalProperties": False,
         },
         "eligibility": {
@@ -73,7 +92,14 @@ def forward_steps(
         if unknown:
             raise invalid_input(f"unknown filter(s) {unknown!r}; this tool offers {list(filters)!r}")
         for name, item in value.items():
-            if not isinstance(item, str) or not item:
+            if name == FAMILY_FILTER:
+                items = [item] if isinstance(item, str) else item
+                if not isinstance(items, list) or not items or not all(isinstance(i, str) and i for i in items):
+                    raise invalid_input(f"filters.{name} must be a family name or a non-empty list of them; got {item!r}")
+            elif name in RUNG_FILTERS:
+                if type(item) is not int or not 1 <= item <= 5:
+                    raise invalid_input(f"filters.{name} must be an integer from 1 to 5; got {item!r}")
+            elif not isinstance(item, str) or not item:
                 raise invalid_input(f"filters.{name} must be a non-empty string; got {item!r}")
         body["filters"] = dict(value)
     if args.get("eligibility") is not None:

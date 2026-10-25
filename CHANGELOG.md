@@ -30,8 +30,11 @@ dataset must never require a code release.
   the version registry). It is derived from the method name at read time, so there is no migration. **It is a classification, not an
   accuracy measure**: the ladder covers DFT only, and accuracy depends on the property. It is a filter fact: never a sort key, a
   tie-breaker, a select default or a "best" label (`docs/specs/browse_order.md`).
+- **Corrections made before merge.** `b97` (Becke 1997) is a hybrid (rung 4) while the `b97-d*` family stays rung 2, so a row that ends in a dispersion
+  suffix is looked up exactly before the suffix is stripped; `ci` is `unclassified` (Molpro's `CI` is MRCI); a leading `u`/`r`/`ro` is read through
+  to a classified method; and more Gaussian, ORCA and Molpro spellings are listed.
 - **New filters** `method_family` (one or a list), `dft_rung_min`, `dft_rung_max` (a bound implies `dft`) on the level-of-theory search
-  and browse, the species browse, the transition-state search and browse, thermo and kinetics (per-entry reads, searches and selects).
+  and browse, the calculation search and species-calculation search, the species browse, the transition-state search and browse, thermo and kinetics (per-entry reads, searches and selects).
   They are matched on the same calculation as the other provenance fields, and a calculation the profile hides never matches.
 - **Thermo and kinetics take `method`, `basis`, `software_version`, `workflow_tool`, `workflow_tool_version`** beside `level_of_theory_*`
   and `software`, and **one source calculation has to match all of them** (search, per-entry read and select). Until now level of theory

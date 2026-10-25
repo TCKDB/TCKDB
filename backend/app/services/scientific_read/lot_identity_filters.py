@@ -36,6 +36,9 @@ from app.chemistry.method_families import (
     CLASSIFICATION_NAME,
     CLASSIFICATIONS,
     DISPERSION_STRIP_PATTERN,
+    SPIN_PREFIXES,
+    SUFFIX_STEM_OVERRIDES,
+    SUFFIXED_KEYS,
     MethodClassFilter,
 )
 from app.chemistry.method_names import NAME_ALIASES, SUFFIX_RULES
@@ -177,11 +180,23 @@ def basis_matches(value: str) -> ColumnElement[bool]:
 def method_stem_key_sql(column: ColumnElement) -> ColumnElement[str]:
     """SQL twin of :func:`~app.chemistry.method_families.method_stem_key` over a stored method column.
 
-    The method identity key without a trailing dispersion suffix, built from the same strip pattern the Python side
-    reads, so the two cannot list different suffixes.
+    Same order as the Python lookup: a table row that ends in a dispersion suffix keeps its exact key; else the key
+    without the suffix (same strip pattern); else, when that is not a row, the key without a leading ``ro`` / ``r`` /
+    ``u`` if what is left is a row.
     """
-    stripped = func.regexp_replace(method_key_sql(column), DISPERSION_STRIP_PATTERN, "\\1")
-    return method_key_sql(stripped)
+    key = method_key_sql(column)
+    stripped = method_key_sql(func.regexp_replace(key, DISPERSION_STRIP_PATTERN, "\\1"))
+    stripped = case(
+        *[(and_(stripped != key, stripped == stem), repl) for stem, repl in SUFFIX_STEM_OVERRIDES.items()],
+        else_=stripped,
+    )
+    stem = case((key.in_(sorted(SUFFIXED_KEYS)), key), else_=stripped)
+    known = sorted(CLASSIFICATIONS.get(CLASSIFICATION_NAME))
+    branches = []
+    for prefix in SPIN_PREFIXES:
+        rest = method_key_sql(func.substr(stem, len(prefix) + 1))
+        branches.append((and_(stem.like(prefix + "%"), func.length(stem) > len(prefix), rest.in_(known)), rest))
+    return case((stem.in_(known), stem), *branches, else_=stem)
 
 
 def method_family_matches(selected: MethodClassFilter, column: ColumnElement | None = None) -> ColumnElement[bool]:

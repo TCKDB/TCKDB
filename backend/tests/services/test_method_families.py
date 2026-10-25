@@ -18,6 +18,7 @@ from app.chemistry.method_families import (
     DFT_BY_RUNG,
     DISPERSION_SUFFIXES,
     OTHER_BY_FAMILY,
+    SUFFIX_STEM_OVERRIDES,
     MethodClassFilter,
     MethodFamily,
     classify_method,
@@ -73,6 +74,67 @@ NAMED = [
     ("W1BD", F.composite, None),
     ("W2", F.composite, None),
     ("HEAT-345Q", F.composite, None),
+    # --- corrected: B97 (Becke 1997) is a global hybrid; the B97-D family stays rung 2 whatever its suffix
+    ("B97", F.dft, 4),
+    ("B97-1", F.dft, 4),
+    ("B971", F.dft, 4),
+    ("B972", F.dft, 4),
+    ("B98", F.dft, 4),
+    ("B97-D", F.dft, 2),
+    ("B97-D2", F.dft, 2),
+    ("B97-D3", F.dft, 2),
+    ("B97-D3BJ", F.dft, 2),
+    ("B97-D3(BJ)", F.dft, 2),
+    ("B97-D4", F.dft, 2),
+    ("B97D", F.dft, 2),
+    ("B97D3", F.dft, 2),
+    ("B97-3c", F.dft, 2),
+    # --- ambiguous across programs: never guessed
+    ("CI", F.unclassified, None),
+    # --- representatives of each rung's kinds: range-separated, meta-hybrid, double hybrid
+    ("CAM-B3LYP", F.dft, 4),
+    ("LC-wPBE", F.dft, 4),
+    ("HSE06", F.dft, 4),
+    ("wB97X-V", F.dft, 4),
+    ("wB97M-V", F.dft, 4),
+    ("M06", F.dft, 4),
+    ("M05-2X", F.dft, 4),
+    ("B1B95", F.dft, 4),
+    ("TPSSh", F.dft, 4),
+    ("B2GP-PLYP", F.dft, 5),
+    ("DSD-PBEB95", F.dft, 5),
+    ("revDSD-PBEP86", F.dft, 5),
+    ("B97M-V", F.dft, 3),
+    ("B97M", F.dft, 3),
+    ("r2SCAN-3c", F.dft, 3),
+    ("PBEh-3c", F.dft, 4),
+    ("wB97X-3c", F.dft, 4),
+    # --- spellings added: Gaussian forms
+    ("M08HX", F.dft, 4),
+    ("M11L", F.dft, 3),
+    ("MN12L", F.dft, 3),
+    ("MN12SX", F.dft, 4),
+    ("MN15L", F.dft, 3),
+    ("SOGGA11X", F.dft, 4),
+    ("N12SX", F.dft, 4),
+    ("LC-wHPBE", F.dft, 4),
+    ("wB97XD", F.dft, 4),
+    ("ωB97XD", F.dft, 4),
+    ("LRC-ωPBEh", F.dft, 4),
+    # --- bare-D forms
+    ("B3LYP-D", F.dft, 4),
+    ("B2PLYP-D", F.dft, 5),
+    ("B2PLYP-D3BJ", F.dft, 5),
+    # --- Molpro
+    ("BCCD", F.wavefunction, None),
+    ("QCI", F.wavefunction, None),
+    ("ACPF", F.multireference, None),
+    ("AQCC", F.multireference, None),
+    ("RS3", F.multireference, None),
+    ("CIC", F.multireference, None),
+    ("MRCIC", F.multireference, None),
+    ("MRCI-F12+Q", F.multireference, None),
+    ("CASPT2", F.multireference, None),
     ("PM6", F.semiempirical, None),
     ("GFN2-xTB", F.semiempirical, None),
     ("MMFF94", F.force_field, None),
@@ -91,7 +153,7 @@ def test_the_named_methods_are_classified_as_documented(method, family, rung):
 def test_every_table_entry_classifies_as_its_own_row(key):
     """Kills: an entry the lookup cannot reach (a key the identity key rewrites, or one that still has a suffix)."""
     assert method_identity_key(key) == key, "a table key is a fixed point of the method identity key"
-    assert method_stem_key(key) == key, "a table key carries no dispersion suffix"
+    assert method_stem_key(key) == key, "the exact key is tried before any suffix is stripped"
     assert classify_method(key) == CLASSIFICATION[key]
 
 
@@ -106,8 +168,12 @@ def test_case_and_edge_whitespace_never_change_the_class(key):
 @pytest.mark.parametrize("key", sorted(CLASSIFICATION))
 def test_a_dispersion_suffix_never_changes_the_class(key, suffix):
     """Kills: a dispersion-corrected name falling out of its family (b3lyp-d3bj as unclassified)."""
-    assert classify_method(f"{key}-{suffix}") == CLASSIFICATION[key]
-    assert classify_method(f"{key.upper()}-{suffix.upper()}") == CLASSIFICATION[key]
+    # a table row of its own (b97-d3) wins over the stem it would strip to (b97); nothing else is exempt
+    expected = CLASSIFICATION.get(f"{key}-{suffix}", CLASSIFICATION[SUFFIX_STEM_OVERRIDES.get(key, key)])
+    assert classify_method(f"{key}-{suffix}") == expected
+    assert classify_method(f"{key.upper()}-{suffix.upper()}") == expected
+    if f"{key}-{suffix}" not in CLASSIFICATION and key not in SUFFIX_STEM_OVERRIDES:
+        assert expected == CLASSIFICATION[key]
 
 
 @pytest.mark.parametrize(
@@ -138,6 +204,40 @@ def test_a_method_the_table_does_not_name_is_unclassified_never_guessed(unknown)
     """Kills: a prefix or substring guess (anything containing 'lyp' is not thereby a hybrid)."""
     got = classify_method(unknown)
     assert (got.family, got.dft_rung) == (F.unclassified, None)
+
+
+@pytest.mark.parametrize(
+    ("spelled", "family", "rung"),
+    [
+        ("UM062X", F.dft, 4),
+        ("UM06-2X", F.dft, 4),
+        ("UwB97XD", F.dft, 4),
+        ("UB2PLYP", F.dft, 5),
+        ("UB3LYP-D3BJ", F.dft, 4),
+        ("ROB3LYP", F.dft, 4),
+        ("uccsd", F.wavefunction, None),
+        ("rccsd", F.wavefunction, None),
+        ("uccsd(t)-f12", F.wavefunction, None),
+        ("rohf", F.wavefunction, None),
+        ("uhf", F.wavefunction, None),
+        ("umpg", F.unclassified, None),  # the rest is not a method
+        ("ub", F.unclassified, None),
+        ("u", F.unclassified, None),
+        ("r", F.unclassified, None),
+    ],
+)
+def test_a_spin_prefix_is_read_through_only_to_a_classified_method(spelled, family, rung):
+    """Kills: a prefix stripped without checking the rest is a method, or a method such as RM1 or RPBE mangled."""
+    got = classify_method(spelled)
+    assert (got.family, got.dft_rung) == (family, rung)
+
+
+@pytest.mark.parametrize("whole", ["rm1", "rpbe", "rscan", "r2scan", "rs2", "rs3", "uff", "revpbe", "romp2", "rhf"])
+def test_a_name_that_is_its_own_row_is_never_read_through_a_prefix(whole):
+    """Kills: stripping r/u from a method whose name merely starts with it (RM1 is not R + M1)."""
+    assert whole in CLASSIFICATION
+    assert classify_method(whole) == CLASSIFICATION[whole]
+    assert method_stem_key(whole) == whole
 
 
 def test_none_is_unclassified():
@@ -216,16 +316,19 @@ def test_family_and_rung_are_never_an_order_key_a_tie_break_or_a_select_default(
                     importers.add(rel)
             if isinstance(node, ast.Call):
                 tail = ast.unparse(node.func).rsplit(".", 1)[-1]
-                if tail in {"browse_order", "OrderEcho", "order_by", "order_admin", "AdminNode"}:
+                is_key_call = tail in {"sorted", "sort", "min", "max"} and any(k.arg == "key" for k in node.keywords)
+                if is_key_call or tail in {"browse_order", "OrderEcho", "order_by", "order_admin", "AdminNode"}:
                     text = ast.unparse(node)
                     hit = [b for b in banned if b in text]
                     assert not hit, f"{rel}: {tail}(...) mentions {hit}: the classification must never order anything"
     assert importers == {
+        "api/routes/scientific/calculations.py",
         "api/routes/scientific/kinetics.py",
         "api/routes/scientific/kinetics_search.py",
         "api/routes/scientific/level_of_theory.py",
         "api/routes/scientific/level_of_theory_browse.py",
         "api/routes/scientific/species_browse.py",
+        "api/routes/scientific/species_calculations_search.py",
         "api/routes/scientific/thermo.py",
         "api/routes/scientific/thermo_search.py",
         "api/routes/scientific/transition_states.py",
@@ -233,8 +336,10 @@ def test_family_and_rung_are_never_an_order_key_a_tie_break_or_a_select_default(
         "schemas/reads/_method_family.py",
         "schemas/reads/scientific_level_of_theory.py",
         "services/scientific_read/calculation_provenance_filters.py",
+        "services/scientific_read/calculations_search.py",
         "services/scientific_read/level_of_theory_search.py",
         "services/scientific_read/lot_identity_filters.py",
+        "services/scientific_read/species_calculations_search.py",
         "services/selection_filters.py",
     }, "a new importer of the classification: confirm it filters and orders nothing, then list it here"
 
