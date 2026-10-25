@@ -51,6 +51,7 @@ from app.services.manifest_formats import (
 )
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 from app.services.selection_kernel import assessment_semantics as semantics
+from app.services.selection_kernel.requested import expected_candidate_statuses
 from app.services.statmech_selection.assessment import StatmechAssessment, assess_candidate
 from app.services.statmech_selection.bounds import check_manifest_size
 from app.services.statmech_selection.decision import (
@@ -66,7 +67,7 @@ from app.services.statmech_selection.models import (
     SUPPORTED_FINDING_VERSIONS,
     StatmechRequest,
 )
-from app.services.statmech_selection.service import StatmechQualification
+from app.services.statmech_selection.service import StatmechQualification, verdict_of
 from app.services.statmech_selection.vocabulary import CONTRACT_VERSION
 from app.services.structure_selection.models import NormalizedCalculation
 from app.versioning import same_value
@@ -74,8 +75,10 @@ from app.versioning import same_value
 #: A hidden ref in the captured facts is a placeholder token (`withheld:<n>`) under a profile with a review floor. Replay
 #: reads exactly this format; a manifest in any other is refused. Version 2: the decision no longer holds a protocol block
 #: with rules, rule matches, pair checks, edges, conflicts or undecided comparisons (it holds ``ordering``), and the
-#: request no longer holds a comparison objective or a reference model.
-MANIFEST_FORMAT_VERSION = 2
+#: request no longer holds a comparison objective or a reference model. Version 3: the request records its filters and its
+#: eligibility settings, the manifest records which review statuses a candidate itself may have and each candidate's
+#: verdict under those settings, and the population records the funnel.
+MANIFEST_FORMAT_VERSION = 3
 MANIFEST_FORMAT_NAME = "statmech_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "statmech_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -86,7 +89,8 @@ ASSESSMENT_SEMANTICS_NAME = "statmech_selection_assessment"
 ASSESSMENT_SEMANTICS = new_current_only_registry(
     "statmech_selection_assessment_semantics", ASSESSMENT_SEMANTICS_NAME, ASSESSMENT_VERSION
 )
-EVIDENCE_RUBRIC = VersionRef(name="statmech_qualification", version=ASSESSMENT_VERSION)
+#: The statmech evidence rubric has its own version: it did not change when the assessment semantics did.
+EVIDENCE_RUBRIC = VersionRef(name="statmech_qualification", version=1)
 
 INTEGRITY_NOTE = (
     "sha256 checksums over the canonical JSON of each captured input and of the whole manifest; they detect edits and "
@@ -162,6 +166,7 @@ def _population(result: StatmechQualification, *, withhold_excluded: bool) -> di
         "excluded_count": 0 if withhold_excluded else result.excluded_count,
         "excluded_by_review": [] if withhold_excluded else [dict(e) for e in result.excluded_by_review],
         "excluded_by_review_withheld": withhold_excluded,
+        "funnel": dict(result.funnel),
     }
 
 
@@ -184,6 +189,11 @@ def build_manifest(
         ),
         "request": result.request.to_dict(),
         "effective_review_statuses": sorted(s.value for s in result.effective_statuses),
+        "candidate_review_statuses": sorted(s.value for s in result.candidate_statuses),
+        "verdicts": {
+            ref: {"blocked_by": list(v.blocked_by), "passed_only_by_override": list(v.passed_only_by_override), "competes": v.competes}
+            for ref, v in sorted(result.verdicts.items())
+        },
         "read_profile": dict(profile),
         "snapshot_isolation": result.snapshot_isolation,
         "subject": result.subject.to_dict(),
@@ -298,8 +308,14 @@ def _check_consistency(
         )
     # Every captured input, not only the candidates: a declaration's members and each source calculation carry their own
     # status, and a manifest relabelled curated (or one with an input quietly flipped) must not pass on its candidates alone.
+    recorded_candidate = frozenset(RecordReviewStatus(s) for s in manifest.get("candidate_review_statuses") or ())
+    if recorded_candidate != expected_candidate_statuses(floor, request.min_review_status, request.eligibility):
+        raise ReplayError(
+            "inconsistent_manifest",
+            "the review statuses a candidate may have are not what the recorded profile, request floor and eligibility settings allow",
+        )
     for candidate in candidates:
-        if candidate.review_status not in recorded:
+        if candidate.review_status not in recorded_candidate:
             raise ReplayError("inconsistent_manifest", f"{candidate.candidate_ref} has a review status its own request cannot see")
         if candidate.declaration is not None:
             for member in candidate.declaration.members:
@@ -367,6 +383,25 @@ def _compare_with_recorded(manifest: dict[str, Any], decision: StatmechDecision)
         )
 
 
+def _check_verdicts(manifest: dict[str, Any], request: StatmechRequest, candidates: Sequence[CandidateFacts], assessments: Sequence[StatmechAssessment]) -> None:
+    """Each candidate's recorded verdict must be what its assessment gives under the recorded eligibility settings."""
+    recorded = manifest.get("verdicts")
+    if not isinstance(recorded, dict) or set(recorded) != {c.candidate_ref for c in candidates}:
+        raise ReplayError("verdict_mismatch", "the recorded verdicts do not cover exactly the captured candidates")
+    for facts, assessment in zip(candidates, assessments, strict=True):
+        verdict = verdict_of(assessment, facts, request)
+        expected = {
+            "blocked_by": list(verdict.blocked_by),
+            "passed_only_by_override": list(verdict.passed_only_by_override),
+            "competes": verdict.competes,
+        }
+        if _canon(recorded[assessment.candidate_ref]) != _canon(expected):
+            raise ReplayError(
+                "verdict_mismatch",
+                f"the recorded verdict of {assessment.candidate_ref} is not what its assessment gives under the recorded eligibility settings",
+            )
+
+
 def reproduce_statmech_ordering(manifest: dict[str, Any]) -> dict[str, Any]:
     """Re-run the decision over the manifest's **recorded** assessments. ``reassessed`` is false and says so.
 
@@ -379,6 +414,7 @@ def reproduce_statmech_ordering(manifest: dict[str, Any]) -> dict[str, Any]:
     recorded = _recorded_assessments(manifest, candidates)
     decision = decide_statmech(request=request, candidates=candidates, assessments=recorded)
     _compare_with_recorded(manifest, decision)
+    _check_verdicts(manifest, request, candidates, recorded)
     label = semantics.describe_replay(manifest, semantics=ASSESSMENT_SEMANTICS, name=ASSESSMENT_SEMANTICS_NAME)
     return {"label": label, "decision": decision.to_dict()}
 
@@ -395,6 +431,7 @@ def reassess_statmech_captured_inputs(manifest: dict[str, Any]) -> list[Statmech
         assess_candidate(
             c, request=request, subject=subject, calculations=calcs,
             effective_statuses=frozenset(RecordReviewStatus(s) for s in manifest["effective_review_statuses"]),
+            candidate_statuses=frozenset(RecordReviewStatus(s) for s in manifest["candidate_review_statuses"]),
         )
         for c in candidates
     ]
@@ -407,6 +444,7 @@ def reassess_statmech_captured_inputs(manifest: dict[str, Any]) -> list[Statmech
     for a in recomputed:
         if _canon(a.to_dict()) != _canon(recorded[a.candidate_ref]):
             raise ReplayError("assessment_mismatch", f"the recorded assessment of {a.candidate_ref} is not what its inputs give")
+    _check_verdicts(manifest, request, candidates, recomputed)
     return recomputed
 
 
@@ -454,6 +492,7 @@ __all__ = [
     "canonical",
     "describe_reassessment",
     "digest",
+    "expected_candidate_statuses",
     "expected_effective_statuses",
     "reassess_statmech_captured_inputs",
     "replay_matches",

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.13.0 - 2026-10-24
+
+The `tckdb_select_*` tools take `filters` and `eligibility`.
+
+- `filters` narrows the candidates by facts before anything is judged, with the matching search's vocabulary (thermo and kinetics:
+  `model_kind`, `level_of_theory_ref`, `software`; network and statmech: `model_kind` and the six provenance fields; the structure tools:
+  the provenance fields). `eligibility` lifts named defaults (`include_rejected`, `include_deprecated`, and where the record has them
+  `include_hard_failed_evidence`, `include_confirmed_findings`). An unknown filter or default is refused here with a teaching error.
+- Both are forwarded unchanged and the server's answer is returned unchanged: its `filters`, `eligibility` and `funnel` fields say what each step
+  did. The `curated` profile cannot be overridden.
+
 ## 0.12.0 - 2026-10-23
 
 List reads no longer pick a record.

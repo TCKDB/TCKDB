@@ -48,6 +48,7 @@ from app.services.network_selection.models import (
 from app.services.read_snapshot import begin_read_snapshot
 from app.services.scientific_read.ref_guard import withhold_selection_facts
 from app.services.selection_kernel import Applicability
+from app.services.selection_kernel.requested import funnel, judge
 
 #: What a result is scoped to, said once and uniformly: a preference is within the eligible population only.
 SCOPE_NOTE = (
@@ -164,4 +165,20 @@ def assess_network(
         unresolved_refs=unresolved,
         unsupported_refs=unsupported,
         notes=tuple(notes),
+        funnel=funnel(
+            considered=scan.considered,
+            removed_by_filters=scan.removed_by_filters,
+            removed_by_floor=scan.removed_by_floor,
+            terminal_excluded=scan.terminal_excluded,
+            unit="solves",
+            verdicts=[
+                judge(
+                    applicable=True,
+                    review_status=scan.review_status[i],
+                    blocking=(),
+                    eligibility=request.eligibility,
+                )
+                for i in scan.solve_ids
+            ],
+        ),
     )

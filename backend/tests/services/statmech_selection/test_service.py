@@ -248,11 +248,17 @@ def test_a_terminal_status_is_excluded_with_its_reason_and_is_never_an_unexplain
     assert legacy.excluded_by_review[0]["candidate_ref"].startswith("sm_")
 
 
-def test_an_entry_below_the_callers_floor_excludes_its_records_at_every_grain(db_session):
+def test_an_entrys_own_review_status_never_excludes_its_records(db_session):
+    """The entry is a scoping parent (owner decision 2026-10-24): only the candidate's own status counts."""
     scene = build(db_session)
     restatus(db_session, SubmissionRecordType.species_entry, scene.world.entry.id, RecordReviewStatus.not_reviewed)
     result = scene.qualify(scene.request(min_review_status="approved"))
-    assert result.visible_candidates == 0 and result.excluded_by_review[0]["reason"] == "owner_below_review_floor"
+    # the candidate's own status is what the caller's floor is held against, so what it was before is what it is now
+    own = scene.qualify(scene.request())
+    assert result.visible_candidates == own.visible_candidates
+    assert all(e["reason"] != "owner_below_review_floor" for e in result.excluded_by_review)
+    restatus(db_session, SubmissionRecordType.species_entry, scene.world.entry.id, RecordReviewStatus.deprecated)
+    assert scene.qualify(scene.request()).visible_candidates == own.visible_candidates
 
 
 def test_an_unknown_target_is_a_404(db_session):

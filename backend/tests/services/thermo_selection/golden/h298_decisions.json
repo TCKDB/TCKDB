@@ -1253,7 +1253,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -1274,6 +1274,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-31T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 1,
@@ -1320,6 +1324,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-30T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -1366,6 +1374,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-29T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -1418,7 +1430,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -1428,6 +1440,16 @@
     "population": {
      "assessed": 3,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 3,
+      "excluded_by_default": {},
+      "remaining": 3,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 3,
      "visible_candidates": 3
     },
@@ -1437,6 +1459,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -1492,7 +1521,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -1513,6 +1542,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-30T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -1559,6 +1592,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-29T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -1605,6 +1642,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-06-01T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 8,
@@ -1651,6 +1692,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-06-01T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 9,
@@ -1705,7 +1750,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -1715,6 +1760,16 @@
     "population": {
      "assessed": 4,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 4,
+      "excluded_by_default": {},
+      "remaining": 4,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 4,
      "visible_candidates": 4
     },
@@ -1724,6 +1779,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -1781,7 +1843,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -1802,6 +1864,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-31T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 1,
@@ -1848,6 +1914,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-30T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -1894,6 +1964,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-29T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -1946,7 +2020,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -1956,6 +2030,16 @@
     "population": {
      "assessed": 3,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 3,
+      "excluded_by_default": {},
+      "remaining": 3,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 3,
      "visible_candidates": 3
     },
@@ -1965,6 +2049,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -2020,7 +2111,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -2041,6 +2132,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-31T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 1009501285,
@@ -2072,6 +2167,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-27T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 1255217962,
@@ -2117,6 +2216,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-06-01T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3568668297,
@@ -2168,7 +2271,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -2178,6 +2281,16 @@
     "population": {
      "assessed": 3,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 3,
+      "excluded_by_default": {},
+      "remaining": 3,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 3,
      "visible_candidates": 3
     },
@@ -2187,6 +2300,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -2242,7 +2362,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -2263,6 +2383,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2025-04-27T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 1,
@@ -2308,6 +2432,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-31T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -2357,7 +2485,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -2367,6 +2495,16 @@
     "population": {
      "assessed": 2,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 2,
+      "excluded_by_default": {},
+      "remaining": 2,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
     },
@@ -2376,6 +2514,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -2429,7 +2574,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -2450,6 +2595,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2023-12-14T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 1,
@@ -2495,6 +2644,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-06-01T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -2544,7 +2697,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -2554,6 +2707,16 @@
     "population": {
      "assessed": 2,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 2,
+      "excluded_by_default": {},
+      "remaining": 2,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
     },
@@ -2563,6 +2726,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -2616,7 +2786,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [],
     "decision": {
@@ -2629,7 +2799,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "no_applicable_candidate",
     "policy": {
@@ -2639,6 +2809,16 @@
     "population": {
      "assessed": 0,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 0,
+      "excluded_by_default": {},
+      "remaining": 0,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 0,
      "visible_candidates": 0
     },
@@ -2648,6 +2828,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -2690,7 +2877,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -2711,6 +2898,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-30T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -2757,6 +2948,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-29T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -2807,7 +3002,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -2817,6 +3012,16 @@
     "population": {
      "assessed": 2,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 2,
+      "excluded_by_default": {},
+      "remaining": 2,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
     },
@@ -2826,6 +3031,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -2879,7 +3091,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -2900,6 +3112,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-31T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 1,
@@ -2946,6 +3162,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-30T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -2992,6 +3212,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-29T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -3044,7 +3268,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -3054,6 +3278,16 @@
     "population": {
      "assessed": 3,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 3,
+      "excluded_by_default": {},
+      "remaining": 3,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 3,
      "visible_candidates": 3
     },
@@ -3063,6 +3297,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -3118,7 +3359,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -3139,6 +3380,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-30T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -3185,6 +3430,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-29T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -3235,7 +3484,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -3245,6 +3494,16 @@
     "population": {
      "assessed": 2,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 2,
+      "excluded_by_default": {},
+      "remaining": 2,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
     },
@@ -3254,6 +3513,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -3307,7 +3573,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -3328,6 +3594,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-30T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -3374,6 +3644,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-29T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -3424,7 +3698,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -3434,6 +3708,16 @@
     "population": {
      "assessed": 2,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 2,
+      "excluded_by_default": {},
+      "remaining": 2,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
     },
@@ -3443,6 +3727,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -3496,7 +3787,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -3517,6 +3808,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-30T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -3563,6 +3858,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-29T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -3613,7 +3912,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -3623,6 +3922,16 @@
     "population": {
      "assessed": 2,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 2,
+      "excluded_by_default": {},
+      "remaining": 2,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
     },
@@ -3632,6 +3941,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -3685,7 +4001,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -3706,6 +4022,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-30T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -3752,6 +4072,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-29T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -3802,7 +4126,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -3812,6 +4136,16 @@
     "population": {
      "assessed": 2,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 2,
+      "excluded_by_default": {},
+      "remaining": 2,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
     },
@@ -3821,6 +4155,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -3874,7 +4215,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -3895,6 +4236,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-06-01T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 1,
@@ -3941,6 +4286,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2025-04-27T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -3987,6 +4336,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-02T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -4033,6 +4386,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2023-12-14T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 4,
@@ -4087,7 +4444,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -4097,6 +4454,16 @@
     "population": {
      "assessed": 4,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 4,
+      "excluded_by_default": {},
+      "remaining": 4,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 4,
      "visible_candidates": 4
     },
@@ -4106,6 +4473,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -4163,7 +4537,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -4184,6 +4558,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-06-01T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 1,
@@ -4230,6 +4608,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2025-04-27T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -4276,6 +4658,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-02T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -4322,6 +4708,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2023-12-14T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 4,
@@ -4376,7 +4766,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -4386,6 +4776,16 @@
     "population": {
      "assessed": 4,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 4,
+      "excluded_by_default": {},
+      "remaining": 4,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 4,
      "visible_candidates": 4
     },
@@ -4395,6 +4795,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -4452,7 +4859,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -4473,6 +4880,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-06-01T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 1,
@@ -4519,6 +4930,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2025-04-27T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -4565,6 +4980,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-02T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -4611,6 +5030,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2023-12-14T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 4,
@@ -4665,7 +5088,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -4675,6 +5098,16 @@
     "population": {
      "assessed": 4,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 4,
+      "excluded_by_default": {},
+      "remaining": 4,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 4,
      "visible_candidates": 4
     },
@@ -4684,6 +5117,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -4741,7 +5181,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -4762,6 +5202,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-29T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -4807,7 +5251,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "sole_eligible_candidate",
     "policy": {
@@ -4817,6 +5261,16 @@
     "population": {
      "assessed": 1,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 1,
+      "excluded_by_default": {},
+      "remaining": 1,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 1,
      "visible_candidates": 1
     },
@@ -4826,6 +5280,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -4874,7 +5335,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -4895,6 +5356,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-30T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -4941,6 +5406,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-29T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -4991,7 +5460,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -5001,6 +5470,16 @@
     "population": {
      "assessed": 2,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 2,
+      "excluded_by_default": {},
+      "remaining": 2,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
     },
@@ -5010,6 +5489,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -5063,7 +5549,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -5084,6 +5570,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-06-01T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 0,
@@ -5130,6 +5620,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-31T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 1,
@@ -5176,6 +5670,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-30T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -5222,6 +5720,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-29T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -5276,7 +5778,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -5286,6 +5788,16 @@
     "population": {
      "assessed": 4,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 4,
+      "excluded_by_default": {},
+      "remaining": 4,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 4,
      "visible_candidates": 4
     },
@@ -5295,6 +5807,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -5352,7 +5871,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -5373,6 +5892,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-31T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 1,
@@ -5419,6 +5942,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-27T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -5465,6 +5992,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2025-11-13T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -5517,7 +6048,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -5527,6 +6058,16 @@
     "population": {
      "assessed": 3,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 3,
+      "excluded_by_default": {},
+      "remaining": 3,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 3,
      "visible_candidates": 3
     },
@@ -5536,6 +6077,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",
@@ -5591,7 +6139,7 @@
       "name": "structure_source_findings",
       "version": 1
      },
-     "version": 1
+     "version": 2
     },
     "candidates": [
      {
@@ -5612,6 +6160,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-30T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 2,
@@ -5658,6 +6210,10 @@
        "value_kj_mol": -74.6
       },
       "created_at": "2026-05-29T12:00:00",
+      "eligibility": {
+       "blocked_by": [],
+       "passed_only_by_override": []
+      },
       "eligible": true,
       "enthalpy_reference_kind": "formation_298k",
       "id_rank": 3,
@@ -5708,7 +6264,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 2
+     "version": 3
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -5718,6 +6274,16 @@
     "population": {
      "assessed": 2,
      "excluded_by_review": [],
+     "funnel": {
+      "admitted_by_override": {},
+      "considered": 2,
+      "excluded_by_default": {},
+      "remaining": 2,
+      "removed_by_eligibility": 0,
+      "removed_by_filters": 0,
+      "removed_by_floor": 0,
+      "unit": "candidates"
+     },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
     },
@@ -5727,6 +6293,13 @@
       "approved",
       "not_reviewed"
      ],
+     "eligibility": {
+      "include_confirmed_findings": false,
+      "include_deprecated": false,
+      "include_hard_failed_evidence": false,
+      "include_rejected": false
+     },
+     "filters": {},
      "max_candidates": 500,
      "min_review_status": null,
      "phase": "gas",

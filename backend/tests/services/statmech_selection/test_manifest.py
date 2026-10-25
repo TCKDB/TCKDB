@@ -15,6 +15,7 @@ import pytest
 
 from app.api.error_contract import CodedValueError
 from app.db.models.common import RecordReviewStatus
+from app.services.selection_kernel.requested import funnel
 from app.services.statmech_selection import manifest as manifest_module
 from app.services.statmech_selection.assessment import summarize
 from app.services.statmech_selection.decision import decide_statmech
@@ -29,7 +30,7 @@ from app.services.statmech_selection.manifest import (
     reproduce_statmech_ordering,
 )
 from app.services.statmech_selection.models import SelectionBounds
-from app.services.statmech_selection.service import StatmechQualification
+from app.services.statmech_selection.service import StatmechQualification, verdict_of
 from tests.services.statmech_selection._population import _PREFERRED, candidate, population, ref
 from tests.services.statmech_selection._support import EFFECTIVE, approved_calcs, assess, req, subject
 
@@ -43,6 +44,7 @@ def make_manifest(candidates=None, profile=EXPLORATORY, request=None, statuses=E
     calcs = approved_calcs()
     assessments = tuple(assess(c, request, calcs, effective=statuses) for c in candidates)
     decision = decide_statmech(request=request, candidates=candidates, assessments=assessments)
+    verdicts = {a.candidate_ref: verdict_of(a, c, request) for a, c in zip(assessments, candidates, strict=True)}
     qualification = StatmechQualification(
         request=request,
         subject=subject(),
@@ -57,6 +59,11 @@ def make_manifest(candidates=None, profile=EXPLORATORY, request=None, statuses=E
         calculations=tuple(calcs.values()),
         assessments=assessments,
         summary=summarize(request, assessments),
+        candidate_statuses=tuple(sorted(statuses, key=lambda s: s.value)),
+        verdicts=verdicts,
+        funnel=funnel(
+            considered=len(candidates), removed_by_filters=0, terminal_excluded={}, verdicts=list(verdicts.values())
+        ),
     )
     return build_manifest(qualification, decision, profile=dict(profile))
 
@@ -106,18 +113,18 @@ def test_a_decision_replays_from_its_manifest_alone_at_both_levels():
 def test_the_manifest_holds_an_ordering_block_and_no_rule_edge_or_conflict_field():
     manifest = make_manifest()
     assert set(manifest["decision"]["ordering"]) == {"fronts", "administrative_order", "admin_key"}
-    assert "protocol" not in manifest["decision"] and manifest["format"] == {"name": "statmech_selection_manifest", "version": 2}
+    assert "protocol" not in manifest["decision"] and manifest["format"] == {"name": "statmech_selection_manifest", "version": 3}
     assert replay_matches(manifest)
 
 
 def test_the_manifest_names_what_it_was_made_under_and_leaks_no_database_id():
     manifest = make_manifest()
     assert manifest["versions"] == {
-        "contract": 1, "assessment": 1, "normalizer": 1, "decision": 1,
+        "contract": 1, "assessment": 2, "normalizer": 1, "decision": 1,
         "administrative_key": 2, "finding_semantics": [1],
     }
     assert manifest["assessment_semantics"]["name"] == "statmech_selection_assessment"
-    assert manifest["assessment_semantics"]["version"] == 1
+    assert manifest["assessment_semantics"]["version"] == 2
     assert manifest["assessment_semantics"]["source_findings"] == {"name": "structure_source_findings", "version": 1}
     assert manifest["assessment_semantics"]["evidence_rubric"] == {"name": "statmech_qualification", "version": 1}
 
@@ -308,16 +315,16 @@ def test_an_older_supported_manifest_is_labelled_historical_and_never_reassessed
 
     from app.versioning import VersionRegistry
 
-    # A release that moved to semantics 2 and still reads 1 (for a published release that cites it): 1 is registered, not current.
+    # A release that moved to semantics 3 and still reads 2 (for a published release that cites it): 2 is registered, not current.
     both = VersionRegistry("test_semantics")
     name = manifest_module.ASSESSMENT_SEMANTICS_NAME
-    both.register(name, 1, VersionRef(name=name, version=1), current=False)
-    both.register(name, 2, VersionRef(name=name, version=2), current=True)
-    monkeypatch.setattr(manifest_module, "ASSESSMENT_VERSION", 2)
+    both.register(name, 2, VersionRef(name=name, version=2), current=False)
+    both.register(name, 3, VersionRef(name=name, version=3), current=True)
+    monkeypatch.setattr(manifest_module, "ASSESSMENT_VERSION", 3)
     monkeypatch.setattr(manifest_module, "ASSESSMENT_SEMANTICS", both)
     label = reproduce_statmech_ordering(manifest)["label"]
-    assert label["kind"] == "historical" and label["recorded_assessment_semantics"] == 1 and label["reassessed"] is False
-    assert "made under 1" in label["statement"] and "assessed under 2" in label["statement"]
+    assert label["kind"] == "historical" and label["recorded_assessment_semantics"] == 2 and label["reassessed"] is False
+    assert "made under 2" in label["statement"] and "assessed under 3" in label["statement"]
     refused("historical_manifest_cannot_be_reassessed", reassess_statmech_captured_inputs, manifest)
     refused("historical_manifest_cannot_be_reassessed", replay_statmech_decision, manifest)
 

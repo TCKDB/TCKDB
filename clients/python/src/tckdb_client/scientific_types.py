@@ -1184,6 +1184,65 @@ class SpeciesThermoResponse(ScientificSearchResponse[ThermoDetailRecord]):
     species_entry_id: NotRequired[int]
 
 
+class SelectionEligibilityIn(TypedDict, total=False):
+    """The eligibility defaults a select request may lift; every one is applied unless set ``true``.
+
+    Which of these a route offers depends on the record kind: a network solve offers only the two review ones, a statmech
+    candidate and a structure unit add ``include_confirmed_findings``, thermo and kinetics offer all four. The read
+    profile's review floor (``curated``) is not one of them and no request lifts it.
+    """
+
+    include_rejected: bool
+    include_deprecated: bool
+    include_hard_failed_evidence: bool
+    include_confirmed_findings: bool
+
+
+class SelectionFilters(TypedDict, total=False):
+    """The filters a select request may carry, with the matching search's vocabulary (a route accepts its own subset).
+
+    thermo and kinetics: ``model_kind``, ``level_of_theory_ref``, ``software``. network and statmech: ``model_kind`` and
+    the provenance fields. structure: the provenance fields. An unknown filter is a 422, never ignored.
+    """
+
+    model_kind: str
+    level_of_theory_ref: str
+    method: str
+    basis: str
+    software: str
+    software_version: str
+    workflow_tool: str
+    workflow_tool_version: str
+
+
+class EligibilityDefaultEcho(TypedDict):
+    """One named eligibility default, as applied to the answer: ``source`` is ``default``, ``request`` or ``read_profile``."""
+
+    name: str
+    override_field: str | None
+    applied: bool
+    source: Literal["default", "request", "read_profile"]
+    excluded: int
+    admitted_by_override: int
+
+
+class SelectionFunnel(TypedDict):
+    """How many candidates each step removed (``unit`` says what is counted)."""
+
+    unit: str
+    considered: int
+    removed_by_filters: int
+    removed_by_floor: int
+    removed_by_eligibility: int
+    remaining: int
+
+
+class SelectionFilterAnswer(TypedDict):
+    applied: JSONDict
+    removed: int
+    note: str | None
+
+
 class ThermoSelectionTargetIn(TypedDict, total=False):
     """The thermodynamic target of a selection request.
 
@@ -1209,6 +1268,8 @@ class ThermoSelectionRequest(TypedDict, total=False):
     policy: Literal["default", "most_reviewed", "latest"]
     result_mode: Literal["all", "first"]
     min_review_status: str
+    filters: SelectionFilters
+    eligibility: SelectionEligibilityIn
 
 
 ThermoSelectionOutcomeToken: TypeAlias = Literal[
@@ -1251,6 +1312,8 @@ class ThermoSelectionCandidate(TypedDict):
     blocking: list[str]
     advisory: list[str]
     eligible: bool
+    blocked_by: list[str]
+    passed_only_by_override: list[str]
 
 
 class ThermoSelectionDisclosures(TypedDict):
@@ -1280,6 +1343,9 @@ class ThermoSelectionResponse(TypedDict):
     administrative_order: list[str]
     candidates: list[ThermoSelectionCandidate]
     disclosures: ThermoSelectionDisclosures
+    filters: SelectionFilterAnswer
+    eligibility: list[EligibilityDefaultEcho]
+    funnel: SelectionFunnel
 
 
 class KineticsSelectionTargetIn(TypedDict, total=False):
@@ -1334,6 +1400,8 @@ class KineticsSelectionRequest(TypedDict, total=False):
     policy: Literal["default", "most_reviewed", "latest"]
     mode: Literal["all", "first"]
     min_review_status: str
+    filters: SelectionFilters
+    eligibility: SelectionEligibilityIn
 
 
 KineticsSelectionOutcomeToken: TypeAlias = Literal[
@@ -1376,6 +1444,8 @@ class KineticsSelectionCandidate(TypedDict):
     blocking: list[str]
     advisory: list[str]
     eligible: bool
+    blocked_by: list[str]
+    passed_only_by_override: list[str]
 
 
 class KineticsSelectionDisclosures(TypedDict):
@@ -1408,6 +1478,9 @@ class KineticsSelectionResponse(TypedDict):
     determinations: list[JSONDict]
     candidates: list[KineticsSelectionCandidate]
     disclosures: KineticsSelectionDisclosures
+    filters: SelectionFilterAnswer
+    eligibility: list[EligibilityDefaultEcho]
+    funnel: SelectionFunnel
 
 
 class NetworkSelectionBathComponent(TypedDict, total=False):
@@ -1474,6 +1547,8 @@ class NetworkSelectionRequest(TypedDict, total=False):
     policy: Literal["default", "most_reviewed", "latest"]
     mode: Literal["all", "first"]
     min_review_status: str
+    filters: SelectionFilters
+    eligibility: SelectionEligibilityIn
 
 
 NetworkSelectionOutcomeToken: TypeAlias = Literal[
@@ -1536,6 +1611,10 @@ class NetworkSelectionResponse(TypedDict):
     administrative_order: list[str]
     determinations: list[JSONDict]
     bundles: list[JSONDict]
+    solves: list[JSONDict]
+    filters: SelectionFilterAnswer
+    eligibility: list[EligibilityDefaultEcho]
+    funnel: SelectionFunnel
     representations: list[JSONDict]
     disclosures: NetworkSelectionDisclosures
 
@@ -1742,6 +1821,7 @@ __all__ = [
     "KineticsSelectionOutcomeToken",
     "KineticsSelectionPick",
     "KineticsSelectionPressureIn",
+    "EligibilityDefaultEcho",
     "KineticsSelectionRequest",
     "KineticsSelectionResponse",
     "KineticsSelectionTargetIn",
@@ -1820,6 +1900,10 @@ __all__ = [
     "ThermoSelectionDisclosures",
     "ThermoSelectionOutcomeToken",
     "ThermoSelectionPick",
+    "SelectionEligibilityIn",
+    "SelectionFilterAnswer",
+    "SelectionFilters",
+    "SelectionFunnel",
     "ThermoSelectionRequest",
     "ThermoSelectionResponse",
     "ThermoSelectionTargetIn",
@@ -1870,6 +1954,8 @@ class _StructureSelectionRequestBase(TypedDict, total=False):
     validation_claim: Literal["local_minimum", "first_order_saddle", "higher_order_saddle", "reactive_connectivity"]
     min_review_status: str
     permitted_quality: list[Literal["raw", "curated", "rejected"]]
+    filters: SelectionFilters
+    eligibility: SelectionEligibilityIn
     geometry_ref: str
     member_refs: list[str]
     recipe: JSONDict
@@ -1917,6 +2003,8 @@ class StructureSelectionUnit(TypedDict):
     recipe: JSONDict | None
     claim: JSONDict | None
     eligible: bool
+    blocked_by: list[str]
+    passed_only_by_override: list[str]
 
 
 class StructureSelectionDisclosures(TypedDict):
@@ -1955,6 +2043,9 @@ class StructureSelectionResponse(TypedDict):
     notes: list[str]
     units: list[StructureSelectionUnit]
     disclosures: StructureSelectionDisclosures
+    filters: SelectionFilterAnswer
+    eligibility: list[EligibilityDefaultEcho]
+    funnel: SelectionFunnel
     versions: JSONDict
     snapshot_isolation: str
     integrity: JSONDict
@@ -2181,6 +2272,8 @@ class StatmechSelectionRequest(TypedDict, total=False):
     administrative_policy: Literal["default", "latest", "most_reviewed"]
     result_mode: Literal["all", "first"]
     min_review_status: str
+    filters: SelectionFilters
+    eligibility: SelectionEligibilityIn
 
 
 class StatmechSelectionCandidate(TypedDict):
@@ -2199,6 +2292,8 @@ class StatmechSelectionCandidate(TypedDict):
     recipe: JSONDict | None
     supersession: JSONDict | None
     eligible: bool
+    blocked_by: list[str]
+    passed_only_by_override: list[str]
 
 
 class StatmechSelectionSelection(TypedDict):
@@ -2230,6 +2325,9 @@ class StatmechSelectionResponse(TypedDict):
     coverage: JSONDict
     candidates: list[StatmechSelectionCandidate]
     fronts: list[list[str]]
+    filters: SelectionFilterAnswer
+    eligibility: list[EligibilityDefaultEcho]
+    funnel: SelectionFunnel
     administrative_order: list[str]
     administrative_key: JSONDict
     advisories: dict[str, list[str]]

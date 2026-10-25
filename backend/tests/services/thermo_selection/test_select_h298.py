@@ -297,7 +297,7 @@ def test_the_manifest_records_inputs_and_order_with_public_refs_only(db_session,
     result = _scenario(db_session, methane)
     m = result.manifest
     assert m["policy"] == {"name": "h298_selection", "version": 1}
-    assert m["format"] == {"name": "thermo_selection_manifest", "version": 2}
+    assert m["format"] == {"name": "thermo_selection_manifest", "version": 3}
     assert m["request"]["administrative_policy"] == "latest" and m["request"]["quantity"] == "formation_enthalpy_298k"
     assert m["decision"]["fronts"] and m["decision"]["administrative_order"]
     assert not {"rules", "rule_matches", "edges", "overridden_edges", "opposing_pairs", "cycles"} & set(m["decision"])
@@ -327,7 +327,7 @@ def test_a_manifest_whose_eligibility_flag_contradicts_its_assessment_is_refused
     for c in manifest["candidates"]:
         if c["protocol"] and c["protocol"]["recipe"]["name"] == "g4":
             c["eligible"] = False
-    with pytest.raises(ReplayError, match="physically_eligible"):
+    with pytest.raises(ReplayError, match="eligibility settings"):
         replay_decision(manifest)
 
 
@@ -337,7 +337,10 @@ def test_a_manifest_whose_eligibility_and_assessment_were_both_edited_no_longer_
         if c["protocol"] and c["protocol"]["recipe"]["name"] == "g4":
             c["eligible"] = False
             c["assessment"]["physically_eligible"] = False
-    assert not replay_matches(tampered)
+    # The flag is recomputed from the recorded assessment and the recorded eligibility settings, so editing the flag and
+    # the summary together is still caught: the applicability and the blocking list say it competes.
+    with pytest.raises(ReplayError, match="eligibility settings"):
+        replay_matches(tampered)
 
 
 def test_swapped_timestamps_reorder_the_one_front(db_session, methane):

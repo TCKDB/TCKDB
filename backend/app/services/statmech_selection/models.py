@@ -19,6 +19,7 @@ from typing import Any
 
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import SelectionPolicy
+from app.services.selection_kernel.requested import OFFER_FINDINGS, Eligibility
 from app.services.statmech_selection.vocabulary import (
     COMPONENT_OBSERVABLE,
     CONTRACT_VERSION,
@@ -46,7 +47,10 @@ from app.services.statmech_selection.vocabulary import (
     ZpeInclusion,
 )
 
-ASSESSMENT_VERSION = 1
+#: Version 2: a candidate's own rejected or deprecated review status, and a confirmed finding about a source, are named
+#: eligibility defaults the request may lift (``selection_kernel.requested``); an entry's own review status is no longer
+#: an exclusion (an entry is a scoping parent).
+ASSESSMENT_VERSION = 2
 NORMALIZER_VERSION = 1
 DECISION_VERSION = 1
 #: Version 2: ``under_review`` and ``not_reviewed`` rank equally in the review key (``docs/specs/browse_order.md``).
@@ -315,6 +319,34 @@ class Population:
 
 
 @dataclass(frozen=True)
+class StatmechFilters:
+    """The caller's filters, with the statmech search's vocabulary and meaning (public values only).
+
+    ``model_kind`` is the stored partition-function treatment. The provenance fields keep a candidate when at least one
+    of its source calculations that the read profile shows matches every one supplied.
+    """
+
+    model_kind: str | None = None
+    method: str | None = None
+    basis: str | None = None
+    software: str | None = None
+    software_version: str | None = None
+    workflow_tool: str | None = None
+    workflow_tool_version: str | None = None
+
+    def to_record(self) -> dict[str, Any]:
+        return {k: v for k, v in self.__dict__.items() if v is not None}
+
+    @classmethod
+    def from_record(cls, raw: dict[str, Any]) -> StatmechFilters:
+        return cls(**raw)
+
+    @property
+    def active(self) -> bool:
+        return any(v is not None for v in self.__dict__.values())
+
+
+@dataclass(frozen=True)
 class StatmechRequest:
     """The normalised request. Construction validates every cross-field rule; a bad combination raises ``ValueError``."""
 
@@ -329,6 +361,8 @@ class StatmechRequest:
     result_mode: ResultMode = ResultMode.all
     min_review_status: RecordReviewStatus | None = None
     bounds: SelectionBounds = field(default_factory=SelectionBounds)
+    filters: StatmechFilters = field(default_factory=StatmechFilters)
+    eligibility: Eligibility = field(default_factory=lambda: Eligibility(offered=OFFER_FINDINGS))
 
     # -- derived ---------------------------------------------------------------------------------------------
     @property
@@ -425,6 +459,8 @@ class StatmechRequest:
             "result_mode": self.result_mode.value,
             "min_review_status": self.min_review_status.value if self.min_review_status else None,
             "bounds": self.bounds.to_dict(),
+            "filters": self.filters.to_record(),
+            "eligibility": self.eligibility.to_record(),
         }
 
     @classmethod
@@ -443,6 +479,8 @@ class StatmechRequest:
             result_mode=ResultMode(raw["result_mode"]),
             min_review_status=RecordReviewStatus(raw["min_review_status"]) if raw["min_review_status"] else None,
             bounds=SelectionBounds.from_dict(raw["bounds"]),
+            filters=StatmechFilters.from_record(raw["filters"]),
+            eligibility=Eligibility.from_record(raw["eligibility"], offered=OFFER_FINDINGS),
         )
 
 

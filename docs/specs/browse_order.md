@@ -282,6 +282,57 @@ fact about a determination's source calculation: curated, raw, rejected, unknown
 alternatives or to label an administrative first; it never moves a record across a scientific distinction. It lives in
 the select endpoint, which states the policy it applied; it is not a key of any browse read.
 
+### What a select call does, in order
+
+1. **User filters.** The caller narrows the candidates by facts, with the vocabulary the matching browse or search endpoint
+   already offers, and with the same matching rules (not the same code: select reimplements the joins in
+   `selection_filters.py`). A filter the search does not offer is a 422, never ignored. A filter
+   excludes on a fact and ranks nothing.
+2. **Requested eligibility.** Each exclusion a selection applies is a *named default* the request can lift. Every one is
+   echoed in the answer (`eligibility[]`: `name`, `applied`, and `source` of `default`, `request` or `read_profile`, plus how
+   many candidates it kept out and how many compete only because it was lifted). A candidate that competes only because of an
+   override says which default in `passed_only_by_override`; the finding or failure it passed stays disclosed on the candidate.
+3. **The policy.** There are no built-in method rankings. With no rule, the outcomes stay `sole_eligible_candidate`,
+   `incomparable_alternatives` and `no_applicable_candidate`, and `result_mode=first` stays labelled administrative.
+4. **The result.** One record, or an explanation that several remain.
+
+The answer also carries `filters` (the normalised filters and how many candidates they removed; a narrower `permitted_quality`,
+`member_refs` or a `model_revisions` population is listed there too, and `note` says so when the filters removed everything) and
+`funnel` (`considered`, `removed_by_filters`, `removed_by_floor` for the caller's own `min_review_status`, `removed_by_eligibility`,
+`remaining`; `unit` says what is counted, solves for a network). Each candidate is counted once, at the first step that removed it,
+so those four add up to `considered`. Filters apply before eligibility, so a candidate a filter removed is not counted as an
+eligibility exclusion. The per-default `excluded` counts are different: a candidate that fails several defaults is counted
+under each of them, so they can sum to more than `removed_by_eligibility`.
+
+| Default (stable name) | What it excludes | Lifted by | Offered by |
+|---|---|---|---|
+| `rejected_review_status` | a record whose review status is `rejected` | `eligibility.include_rejected` | every select |
+| `deprecated_review_status` | a record whose review status is `deprecated` | `eligibility.include_deprecated` | every select |
+| `evidence_hard_fail` | a computed record whose evidence rubric hard-fails | `eligibility.include_hard_failed_evidence` | thermo, kinetics |
+| `confirmed_blocking_findings` | a record a live, confirmed structure finding invalidates through a source | `eligibility.include_confirmed_findings` | thermo, kinetics, statmech, structure |
+| `rejected_calculation_quality` | a calculation whose quality is `rejected`, or a determination resting on one | list `rejected` in `permitted_quality` | every structure grain |
+| `entry_review_status` | a determination or candidate whose **transition-state** entry is rejected, deprecated or below the floor | not liftable | structure TS evidence, statmech TS target |
+
+Filter vocabulary by route: thermo and kinetics `model_kind`, `level_of_theory_ref`, `software` (any shown source calculation
+matches, each field independently); network and statmech `model_kind` plus `method`, `basis`, `software`, `software_version`,
+`workflow_tool`, `workflow_tool_version` (one source calculation matches all supplied fields); the structure selections
+the six provenance fields (the calculation itself, or the calculations a determination pins as sources).
+Under `curated`, select ignores a source calculation the profile hides when it matches (hidden equals unknown equals absent);
+some searches do not, so the same filter can keep a record on a search that select drops.
+
+**The read profile's floor is not a default.** Under `curated` the floor is `approved` and hidden equals unknown equals
+absent. No select request can lift it: `include_rejected` and `include_deprecated` lift nothing under it (the echo says
+`source: read_profile`), and nothing below the floor is counted or named. An override can only lift an exclusion within what
+the read profile already shows. What a lifted default does change under `curated` is limited to approved records, such as an
+approved record whose evidence rubric hard-fails.
+
+**Species and reaction entries are scoping parents.** Their review status never excludes a record or hides what is under
+them, under any profile. A transition-state entry, a conformer group and the other gated kinds still hide with their parent (a basin whose conformer
+observation sits in a group below the profile hides with the group; in `exploratory` a rejected or deprecated group is
+judged by the review defaults like the observation)
+under `curated`. A decision records its filters and eligibility settings, so replay reproduces it; a manifest in an earlier
+format is refused, not read as the defaults.
+
 ## Visibility defaults
 
 - `rejected` and `deprecated` records are hidden by default; a request opts in with `include_rejected` or

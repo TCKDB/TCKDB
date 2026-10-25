@@ -669,6 +669,8 @@ def test_the_live_selection_always_runs_under_the_servers_bounds(db_session, wor
         "source_composition_hash": None, "sink_composition_hash": None, "min_review_status": None,
         "administrative_policy": "default", "result_mode": "all",
         "bounds": SelectionBounds(solves=1).to_dict(),
+        "filters": {},
+        "eligibility": {"include_rejected": False, "include_deprecated": False},
     }
     with pytest.raises(RuntimeError):
         export_module._live_selection(db_session, {"request": request}, require_snapshot=False)

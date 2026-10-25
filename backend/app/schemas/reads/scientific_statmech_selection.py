@@ -20,14 +20,22 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from tckdb_schemas.fragments.version import VersionRef
 
-from app.db.models.common import RecordReviewStatus
+from app.db.models.common import RecordReviewStatus, StatmechTreatmentKind
 from app.schemas.reads.scientific_common import ProfiledRequestEcho, SelectionPolicy
+from app.schemas.reads.scientific_selection_common import (
+    CalculationProvenanceFilters,
+    CandidateEligibility,
+    FindingsEligibilityIn,
+    SelectionStepsAnswer,
+)
 from app.services.public_refs import PREFIXES, PUBLIC_REF_BODY_LEN
+from app.services.selection_kernel.requested import OFFER_FINDINGS, Eligibility
 from app.services.statmech_selection.models import (
     Conditions,
     EnergyReference,
     Population,
     Scope,
+    StatmechFilters,
     StatmechRequest,
     Target,
 )
@@ -170,6 +178,19 @@ PopulationBody = Annotated[
 ]
 
 
+class StatmechSelectionFilters(CalculationProvenanceFilters):
+    """The filters the statmech search offers, with their meaning.
+
+    ``model_kind`` is the stored partition-function treatment. The provenance fields keep a candidate when at least one
+    of its source calculations that the read profile shows matches every supplied field. Applied before eligibility; a
+    filter excludes on a fact and ranks nothing.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    model_kind: StatmechTreatmentKind | None = None
+
+
 class StatmechSelectionRequest(_Strict):
     """Qualify a supplied statistical model for a declared use, or compare applicable whole recipes."""
 
@@ -187,6 +208,15 @@ class StatmechSelectionRequest(_Strict):
     result_mode: ResultMode = ResultMode.all
     min_review_status: RecordReviewStatus | None = Field(
         default=None, description="A stricter record-review floor than the read profile's; it never relaxes it."
+    )
+    filters: StatmechSelectionFilters = Field(
+        default_factory=StatmechSelectionFilters,
+        description="Narrow the candidates by facts before eligibility, with the statmech search's own filters.",
+    )
+    eligibility: FindingsEligibilityIn = Field(
+        default_factory=FindingsEligibilityIn,
+        description="Lift named eligibility defaults: a candidate's rejected or deprecated status, a confirmed finding "
+        "about a source. Every default is applied unless lifted here; the answer lists each.",
     )
 
     @model_validator(mode="after")
@@ -252,6 +282,16 @@ class StatmechSelectionRequest(_Strict):
             admin_policy=self.administrative_policy,
             result_mode=self.result_mode,
             min_review_status=self.min_review_status,
+            filters=StatmechFilters(
+                model_kind=self.filters.model_kind.value if self.filters.model_kind is not None else None,
+                method=self.filters.method,
+                basis=self.filters.basis,
+                software=self.filters.software,
+                software_version=self.filters.software_version,
+                workflow_tool=self.filters.workflow_tool,
+                workflow_tool_version=self.filters.workflow_tool_version,
+            ),
+            eligibility=Eligibility.from_request(self.eligibility, OFFER_FINDINGS),
         )
 
 
@@ -287,7 +327,14 @@ class StatmechSelectionRequestEcho(ProfiledRequestEcho):
 
 class StatmechSelectionReview(BaseModel):
     effective_floor: RecordReviewStatus
-    effective_statuses: list[RecordReviewStatus]
+    effective_statuses: list[RecordReviewStatus] = Field(
+        description="What every source, member and determination must have. A request never lifts this."
+    )
+    candidate_statuses: list[RecordReviewStatus] = Field(
+        default_factory=list,
+        description="What a candidate's own review status may be: the effective statuses plus the terminal ones the "
+        "request lifted (never under a read profile with a review floor).",
+    )
 
 
 class StatmechSelectionReason(BaseModel):
@@ -296,7 +343,7 @@ class StatmechSelectionReason(BaseModel):
     category: str
 
 
-class StatmechSelectionCandidate(BaseModel):
+class StatmechSelectionCandidate(CandidateEligibility):
     """One assessed candidate: a declared model (``smd_``) or a legacy record read as stored (``sm_``)."""
 
     candidate_ref: str
@@ -350,7 +397,7 @@ class StatmechSelectionIntegrity(BaseModel):
     note: str
 
 
-class StatmechSelectionResponse(BaseModel):
+class StatmechSelectionResponse(SelectionStepsAnswer):
     """The outcome of a statmech selection and everything it rests on, public refs only.
 
     ``outcome`` is the scientific outcome (a valid negative answer is HTTP 200). ``selection`` carries at most one
@@ -409,6 +456,8 @@ class StatmechSelectionManifest(BaseModel):
     assessment_semantics: dict[str, Any]
     request: StatmechSelectionManifestRequest
     effective_review_statuses: list[RecordReviewStatus]
+    candidate_review_statuses: list[RecordReviewStatus] = Field(default_factory=list)
+    verdicts: dict[str, Any] = Field(default_factory=dict)
     read_profile: dict[str, Any]
     snapshot_isolation: str
     subject: dict[str, Any]

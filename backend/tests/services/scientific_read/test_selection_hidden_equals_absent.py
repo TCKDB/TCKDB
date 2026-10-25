@@ -99,6 +99,7 @@ DESCRIBES_THE_READ = frozenset(
         "canonical_bytes",
         "snapshot_isolation",
         "effective_review_statuses",
+        "candidate_review_statuses",
         "excluded_by_review_withheld",
     }
 )
@@ -651,7 +652,10 @@ def structure_scene(session, hidden: bool, grain: str = "conformer") -> Scene:
     from tests.services.structure_selection.test_service import build_basin
 
     world = make_world(session)
-    group = make_conformer_group(session, world.entry)  # never reviewed: hidden under curated, shown under exploratory
+    # A conformer group is a gated kind: a basin whose observation sits in a hidden group hides with it (see
+    # ``test_a_basin_in_a_group_below_the_curated_floor_hides_with_the_group_and_is_not_mentioned``), so the group is
+    # approved here and this scene proves the one that remains: a hidden dependency parent of a visible basin.
+    group = make_conformer_group(session, world.entry)
     obs = make_conformer_observation(session, conformer_group=group)
     det, opt, sp, freq = build_basin(
         world,
@@ -667,6 +671,7 @@ def structure_scene(session, hidden: bool, grain: str = "conformer") -> Scene:
     world.settle()
     approve(session, R.calculation, opt)
     approve(session, R.conformer_observation, obs)  # last: nothing may be added under an accepted observation
+    approve(session, R.conformer_group, group)
     labels = label_all(det=det, group=group, obs=obs, parent=parent) | world_labels(world)
 
     def run():
@@ -687,7 +692,7 @@ def test_structure_hidden_equals_absent(db_session, captured):
         structure_scene,
         captured,
         {"calculations", "determinations", "assessments", "decision", "outcome"},
-        tokens_expected=True,
+        tokens_expected=False,  # a dropped dependency edge leaves no token: nothing names the parent
     )
 
 

@@ -64,15 +64,12 @@ def declared_ref(db_session, entry_scene, *, status: RecordReviewStatus) -> str:
 # --- hidden is unknown ---------------------------------------------------------------------------------------------------------
 
 
-def test_a_hidden_target_answers_exactly_as_an_unknown_one(client, db_session):
-    hidden = build(db_session)
-    approve(db_session, hidden)
-    restatus(db_session, SubmissionRecordType.species_entry, hidden.world.entry.id, RecordReviewStatus.not_reviewed)
-    ref = hidden.world.entry.public_ref
-    got = client.post(URL + CURATED, json=body_for(hidden))
-    unknown = client.post(URL + CURATED, json=body_for(hidden, target__species_entry_ref="spe_" + GHOST))
-    assert got.status_code == 404
-    assert normalised(got, ref) == normalised(unknown, "spe_" + GHOST)
+def test_a_species_entry_below_the_floor_is_still_a_visible_target(client, db_session):
+    """A species entry is a scoping parent (owner decision 2026-10-24): its own review status never hides what is under it."""
+    scene = build(db_session)
+    approve(db_session, scene)
+    restatus(db_session, SubmissionRecordType.species_entry, scene.world.entry.id, RecordReviewStatus.not_reviewed)
+    assert client.post(URL + CURATED, json=body_for(scene)).status_code == 200
 
 
 def test_a_hidden_transition_state_target_answers_exactly_as_an_unknown_one(client, db_session):
@@ -93,15 +90,13 @@ def test_a_hidden_basin_answers_exactly_as_an_unknown_one(client, db_session):
     assert normalised(got, scene.group.public_ref) == normalised(unknown, "cg_" + GHOST)
 
 
-def test_a_basin_of_a_hidden_entry_answers_exactly_as_an_unknown_one_not_as_a_mismatch(client, db_session):
+def test_a_basin_of_an_unreviewed_other_entry_is_a_mismatch_because_the_entry_never_hides_it(client, db_session):
     mine, theirs = build(db_session), build(db_session)
     approve(db_session, mine)
     approve(db_session, theirs)
     restatus(db_session, SubmissionRecordType.species_entry, theirs.world.entry.id, RecordReviewStatus.not_reviewed)
     got = client.post(URL + CURATED, json=body_for(mine, target__scope__conformer_group_ref=theirs.group.public_ref))
-    unknown = client.post(URL + CURATED, json=body_for(mine, target__scope__conformer_group_ref="cg_" + GHOST))
-    assert got.status_code == 404
-    assert normalised(got, theirs.group.public_ref) == normalised(unknown, "cg_" + GHOST)
+    assert got.status_code == 422 and code_of(got) == MISMATCH
 
 
 def test_a_determination_of_a_hidden_entry_answers_exactly_as_an_unknown_one(client, db_session):
@@ -201,16 +196,14 @@ def test_the_hidden_equivalence_is_checked_before_the_mismatch(client, db_sessio
     assert exploratory.status_code == 422 and code_of(curated) == "handle_not_found" and curated.status_code == 404
 
 
-def test_a_hidden_target_is_a_404_before_any_scope_ref_is_judged(client, db_session):
+def test_a_hidden_transition_state_target_is_a_404_before_any_scope_ref_is_judged(client, db_session):
     """Every other ref is judged against a target the caller may see; for one they may not, nothing else is reached."""
-    hidden, other = build(db_session), build(db_session)
-    approve(db_session, hidden)
-    approve(db_session, other)
-    restatus(db_session, SubmissionRecordType.species_entry, hidden.world.entry.id, RecordReviewStatus.not_reviewed)
-    foreign_basin = client.post(URL + CURATED, json=body_for(hidden, target__scope__conformer_group_ref=other.group.public_ref))
-    unknown = client.post(URL + CURATED, json=body_for(hidden, target__species_entry_ref="spe_" + GHOST))
-    assert foreign_basin.status_code == 404
-    assert normalised(foreign_basin, hidden.world.entry.public_ref) == normalised(unknown, "spe_" + GHOST)
+    hidden, other = build_ts_scene(db_session), build_ts_scene(db_session)
+    restatus(db_session, SubmissionRecordType.transition_state_entry, hidden.entry.id, RecordReviewStatus.not_reviewed)
+    foreign = client.post(URL + CURATED, json=make(hidden.body, target__scope__determination_ref=other.determination.public_ref))
+    unknown = client.post(URL + CURATED, json=make(hidden.body, target__transition_state_entry_ref="tse_" + GHOST))
+    assert foreign.status_code == 404
+    assert normalised(foreign, hidden.entry.public_ref) == normalised(unknown, "tse_" + GHOST)
 
 
 def test_a_species_ref_is_not_a_transition_states_basin_and_the_error_never_names_the_other_owner(client, db_session):

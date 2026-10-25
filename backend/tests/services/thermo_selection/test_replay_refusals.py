@@ -44,11 +44,11 @@ def test_a_manifest_built_now_records_the_structured_block():
     """Built by the code (not read from the committed golden), so dropping the block cannot hide behind a stale file."""
     manifest = _generate()["manifests"]["single"]["manifest"]
     assert manifest["assessment_semantics"] == {
-        "name": "thermo_selection_assessment", "version": 1, "evidence_rubric": {"name": "computed_thermo", "version": 1},
+        "name": "thermo_selection_assessment", "version": 2, "evidence_rubric": {"name": "computed_thermo", "version": 1},
         "source_findings": {"name": "structure_source_findings", "version": 1},
     }
     assert manifest["policy"]["version"] == POLICY_VERSION == 1
-    assert manifest["format"]["version"] == MANIFEST_FORMAT_VERSION == 2
+    assert manifest["format"]["version"] == MANIFEST_FORMAT_VERSION == 3
 
 
 @pytest.mark.parametrize("block", [{"version": 3}, {"version": "1"}, {"version": True}, "two", {}], ids=["future", "string", "bool", "not_a_block", "empty"])

@@ -29,11 +29,20 @@ from app.chemistry.composite_methods import composite_method_for
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.species import ConformerGroup, Species, SpeciesEntry
-from app.db.models.thermo import Thermo
+from app.db.models.thermo import (
+    Thermo,
+    ThermoNASA,
+    ThermoNASA9Interval,
+    ThermoPoint,
+    ThermoSourceCalculation,
+    ThermoWilhoit,
+)
 from app.services.scientific_read.common import fetch_review_badges, visible_statuses
 from app.services.scientific_read.ref_guard import unavailable_refs
-from app.services.scientific_read.thermo import THERMO_TRUST_EAGER_LOADS
-from app.services.thermo_selection.models import H298Request, NormalizedCandidate, Subject
+from app.services.scientific_read.thermo import THERMO_TRUST_EAGER_LOADS, _classify_model_kind
+from app.services.selection_filters import filter_by_level_and_software
+from app.services.selection_kernel.requested import review_default
+from app.services.thermo_selection.models import H298Request, NormalizedCandidate, Subject, ThermoFilters
 
 REASON_TERMINAL = "terminal_review_status"
 REASON_BELOW_FLOOR = "below_review_floor"
@@ -43,7 +52,11 @@ _TERMINAL = frozenset({RecordReviewStatus.rejected, RecordReviewStatus.deprecate
 
 @dataclass(frozen=True)
 class PopulationScan:
-    """Ids and review states of one entry's thermo rows, partitioned before anything is loaded."""
+    """Ids and review states of one entry's thermo rows, partitioned before anything is loaded.
+
+    ``considered`` counts the rows the read profile shows; ``removed_by_filters`` those the caller's filters (and own
+    review floor) removed; ``terminal_excluded`` those a not-lifted review default removed, by default name.
+    """
 
     species_entry_id: int
     effective_statuses: frozenset[RecordReviewStatus]
@@ -52,6 +65,10 @@ class PopulationScan:
     excluded: tuple[tuple[int, RecordReviewStatus, str], ...]
     total_rows: int
     cap: int
+    considered: int = 0
+    removed_by_filters: int = 0
+    removed_by_floor: int = 0
+    terminal_excluded: dict[str, int] = field(default_factory=dict)
 
     @property
     def over_cap(self) -> bool:
@@ -76,39 +93,99 @@ def molecular_formula(smiles: str) -> str | None:
     return rdMolDescriptors.CalcMolFormula(mol) if mol is not None else None
 
 
-def scan_population(session: Session, *, species_entry_id: int, request: H298Request) -> PopulationScan:
-    """Partition the entry's thermo rows by review state; load nothing else.
+def model_kinds(session: Session, ids: list[int]) -> dict[int, str]:
+    """The model form of each thermo row, by the browse's own classification (stored kind, else the child rows present)."""
+    rows = list(session.scalars(select(Thermo).where(Thermo.id.in_(ids))))
+    has_nasa = set(session.scalars(select(ThermoNASA.thermo_id).where(ThermoNASA.thermo_id.in_(ids))))
+    has_nasa9 = set(session.scalars(select(ThermoNASA9Interval.thermo_id).where(ThermoNASA9Interval.thermo_id.in_(ids))))
+    has_wilhoit = set(session.scalars(select(ThermoWilhoit.thermo_id).where(ThermoWilhoit.thermo_id.in_(ids))))
+    has_points = set(session.scalars(select(ThermoPoint.thermo_id).where(ThermoPoint.thermo_id.in_(ids))))
+    return {
+        t.id: _classify_model_kind(
+            t,
+            has_nasa=t.id in has_nasa,
+            has_nasa9=t.id in has_nasa9,
+            has_wilhoit=t.id in has_wilhoit,
+            has_points=t.id in has_points,
+        ).value
+        for t in rows
+    }
 
-    The population is every row whose review status passes the effective floor (the caller's
-    ``min_review_status`` combined with the read profile's floor) and is not rejected or
-    deprecated. Rows outside it are listed with why, so a disclosure never silently drops one.
+
+def apply_filters(session: Session, ids: list[int], filters: ThermoFilters) -> list[int]:
+    """The ids the caller's filters keep: the per-entry thermo browse's matching, applied to the profile-visible rows."""
+    if not ids or not filters.active:
+        return ids
+    keep = set(ids)
+    if filters.model_kind is not None:
+        kinds = model_kinds(session, ids)
+        keep = {i for i in keep if kinds.get(i) == filters.model_kind}
+    if keep and (filters.level_of_theory_ref is not None or filters.software is not None):
+        links: dict[int, set[int]] = {i: set() for i in keep}
+        for thermo_id, calculation_id in session.execute(
+            select(ThermoSourceCalculation.thermo_id, ThermoSourceCalculation.calculation_id).where(
+                ThermoSourceCalculation.thermo_id.in_(keep)
+            )
+        ):
+            links[thermo_id].add(calculation_id)
+        keep = filter_by_level_and_software(
+            session, links, level_of_theory_ref=filters.level_of_theory_ref, software=filters.software
+        )
+    return [i for i in ids if i in keep]
+
+
+def scan_population(session: Session, *, species_entry_id: int, request: H298Request) -> PopulationScan:
+    """Partition the entry's thermo rows by the caller's filters and review state; load nothing else.
+
+    In order: rows the read profile hides are not part of this request's world (never counted, never listed); the
+    caller's filters narrow the rest; a rejected or deprecated row is kept out unless the request lifted that default;
+    a row below the caller's own review floor is kept out; the remainder is the population. Rows kept out by review are
+    listed with why, so a disclosure never silently drops one.
 
     :raises NotFoundError: if the species entry does not exist.
     """
     if session.get(SpeciesEntry, species_entry_id) is None:
         raise not_found("species_entry", row_id=species_entry_id)
+    elig = request.eligibility
     effective = frozenset(
         visible_statuses(
-            min_review_status=request.min_review_status, include_rejected=False, include_deprecated=False
+            min_review_status=request.min_review_status,
+            include_rejected=elig.include_rejected,
+            include_deprecated=elig.include_deprecated,
         )
     )
-    ids = list(session.scalars(select(Thermo.id).where(Thermo.species_entry_id == species_entry_id).order_by(Thermo.id)))
-    badges = fetch_review_badges(session, record_type=SubmissionRecordType.thermo, record_ids=ids)
+    profile_visible = frozenset(visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True))
+    all_ids = list(session.scalars(select(Thermo.id).where(Thermo.species_entry_id == species_entry_id).order_by(Thermo.id)))
+    badges = fetch_review_badges(session, record_type=SubmissionRecordType.thermo, record_ids=all_ids)
+    ids = [i for i in all_ids if badges[i].status in profile_visible]
     status = {i: badges[i].status for i in ids}
-    population = tuple(i for i in ids if status[i] in effective)
-    excluded = tuple(
-        (i, status[i], REASON_TERMINAL if status[i] in _TERMINAL else REASON_BELOW_FLOOR)
-        for i in ids
-        if status[i] not in effective
-    )
+    kept = apply_filters(session, ids, request.filters)
+    population: list[int] = []
+    excluded: list[tuple[int, RecordReviewStatus, str]] = []
+    terminal_excluded: dict[str, int] = {}
+    below_floor = 0
+    for i in kept:
+        default = review_default(status[i])
+        if default is not None and not elig.lifts(default):
+            excluded.append((i, status[i], REASON_TERMINAL))
+            terminal_excluded[default] = terminal_excluded.get(default, 0) + 1
+        elif status[i] not in effective:
+            excluded.append((i, status[i], REASON_BELOW_FLOOR))
+            below_floor += 1
+        else:
+            population.append(i)
     return PopulationScan(
         species_entry_id=species_entry_id,
         effective_statuses=effective,
-        population_ids=population,
+        population_ids=tuple(population),
         review_status=status,
-        excluded=excluded,
+        excluded=tuple(excluded),
         total_rows=len(ids),
         cap=request.max_candidates,
+        considered=len(ids),
+        removed_by_filters=len(ids) - len(kept),
+        removed_by_floor=below_floor,
+        terminal_excluded=terminal_excluded,
     )
 
 

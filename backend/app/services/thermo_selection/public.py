@@ -33,6 +33,12 @@ from app.api.error_contract import CodedValueError
 from app.db.models.common import RecordReviewStatus, ThermoTargetKind
 from app.db.models.species import ConformerGroup
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER, SelectionPolicy
+from app.schemas.reads.scientific_selection_common import (
+    ELIGIBILITY_CONFIRMED_FINDINGS,
+    ELIGIBILITY_DEPRECATED,
+    ELIGIBILITY_HARD_FAILED_EVIDENCE,
+    ELIGIBILITY_REJECTED,
+)
 from app.schemas.reads.scientific_thermo_selection import (
     QUANTITY_H298,
     REFERENCE_TEMPERATURE_K,
@@ -60,8 +66,17 @@ from app.services.scientific_read.handles import (
     resolve_species_entry_handle,
 )
 from app.services.scientific_read.profile import current_read_profile
-from app.services.thermo_selection.models import MAX_CANDIDATES, H298Request, H298Selection, Outcome
+from app.services.selection_kernel.requested import Eligibility, answer_steps
+from app.services.thermo_selection.models import MAX_CANDIDATES, H298Request, H298Selection, Outcome, ThermoFilters
 from app.services.thermo_selection.service import select_h298
+
+#: The eligibility defaults a thermo selection applies, in the order the answer lists them.
+THERMO_DEFAULTS = (
+    ELIGIBILITY_REJECTED,
+    ELIGIBILITY_DEPRECATED,
+    ELIGIBILITY_HARD_FAILED_EVIDENCE,
+    ELIGIBILITY_CONFIRMED_FINDINGS,
+)
 
 #: ``Session.info`` key a TEST harness sets, explicitly, to be read under whatever isolation it already has.
 SNAPSHOT_OPT_OUT = "tckdb_read_snapshot_opt_out"
@@ -120,6 +135,12 @@ def run_selection(
         conformer_group_id=group_id,
         min_review_status=body.min_review_status,
         admin_policy=_admin_policy(body.policy),
+        filters=ThermoFilters(
+            model_kind=body.filters.model_kind.value if body.filters.model_kind is not None else None,
+            level_of_theory_ref=body.filters.level_of_theory_ref,
+            software=body.filters.software,
+        ),
+        eligibility=Eligibility.from_request(body.eligibility),
     )
     selection = select_h298(
         session,
@@ -215,6 +236,8 @@ def build_response(
             protocol=c["protocol"],
             linked_recipe_keys=c["linked_recipe_keys"],
             applicability=c["assessment"]["applicability"],
+            blocked_by=c["eligibility"]["blocked_by"],
+            passed_only_by_override=c["eligibility"]["passed_only_by_override"],
             reasons=[ThermoSelectionReason(**r) for r in c["assessment"]["reasons"]],
             answer_representation=c["assessment"]["answer_representation"],
             value_kj_mol=c["assessment"]["value_kj_mol"],
@@ -238,6 +261,8 @@ def build_response(
             policy=body.policy,
             result_mode=body.result_mode,
             min_review_status=body.min_review_status,
+            filters=manifest["request"]["filters"],
+            eligibility=body.eligibility,
         ),
         review=ThermoSelectionReview(effective_floor=floor, effective_statuses=statuses),
         policy=ThermoSelectionPolicyInfo(
@@ -250,6 +275,13 @@ def build_response(
         fronts=[] if decision is None else decision["fronts"],
         administrative_order=[] if decision is None else decision["administrative_order"],
         candidates=candidates,
+        **answer_steps(
+            request_filters=manifest["request"]["filters"],
+            eligibility_record=manifest["request"]["eligibility"],
+            funnel_record=population["funnel"],
+            names=THERMO_DEFAULTS,
+            profile_floor=profile_has_floor(),
+        ),
         disclosures=ThermoSelectionDisclosures(
             unresolved_refs=disclosures.get("unresolved_refs", []),
             unsupported_refs=disclosures.get("unsupported_refs", []),
