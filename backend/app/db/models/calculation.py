@@ -502,9 +502,18 @@ class CalculationOutputGeometry(Base):
 class CalculationDependency(Base):
     """Directed dependency edge between two calculations.
 
-    Self-edges are forbidden in the schema. Stronger role-specific parent-count
-    rules or full DAG validation belong in application logic unless the policy
-    is narrowed enough for partial unique indexes. Selected roles currently
+    Self-edges are forbidden by the ``not_self`` CHECK, and the graph as a whole
+    is acyclic: the ``trg_calculation_dependency_acyclic`` trigger (revision
+    ``e2f2b3fb6725``) refuses any INSERT, or UPDATE of either endpoint, whose
+    parent is already reachable from its child. It takes the transaction-scoped
+    advisory lock ``hashtextextended('calculation_dependency:acyclic', 0)`` so
+    two concurrent transactions cannot each add half of a cycle. The refusal is
+    SQLSTATE 23514 with constraint name ``calculation_dependency_acyclic``,
+    surfaced by the API as the 409 ``calculation_dependency_cycle``. Diamonds
+    are legal. Reader-side ``dependency_cycle`` handling remains as defence in
+    depth for rows written before the trigger. Stronger role-specific
+    parent-count rules belong in application logic unless the policy is
+    narrowed enough for partial unique indexes. Selected roles currently
     enforce at most one parent per child: `optimized_from`, `freq_on`,
     `single_point_on`, and `scan_parent`.
     """

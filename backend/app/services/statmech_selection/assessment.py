@@ -979,6 +979,8 @@ def assess_candidate(
         evidence["absolute_energy"] = tuple(sorted(ev.energy))
     if ev.parameters:
         evidence["parameters"] = tuple(sorted(ev.parameters))
+    # Defence in depth: new dependency writes refuse a cycle (trg_calculation_dependency_acyclic,
+    # revision e2f2b3fb6725); this branch is reachable only from rows written before it.
     if any(c.lineage_cyclic for c in ev.curvature):
         f.add("dependency_cycle")
 

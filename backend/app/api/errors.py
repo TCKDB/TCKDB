@@ -34,6 +34,26 @@ from app.workflows.rehearsal import RehearsalContended
 
 logger = logging.getLogger(__name__)
 
+#: Constraint name the ``calculation_dependency`` acyclicity trigger reports
+#: (revision ``e2f2b3fb6725``). A trigger is not in the scientific check
+#: register's constraint table, so it is keyed here, as the idempotency
+#: constraint is.
+CALCULATION_DEPENDENCY_CYCLE_CONSTRAINT = "calculation_dependency_acyclic"
+
+
+def _cycle_refs(orig: Any) -> dict[str, str]:
+    """Public references the trigger put in ``DETAIL`` (``parent=...;child=...``).
+
+    Only ``public_ref`` values travel; the trigger never selects a row id.
+    """
+    detail = getattr(getattr(orig, "diag", None), "message_detail", None) or ""
+    pairs = dict(part.split("=", 1) for part in detail.split(";") if "=" in part)
+    return {
+        key: pairs[wire]
+        for key, wire in (("parent_calculation", "parent"), ("child_calculation", "child"))
+        if pairs.get(wire)
+    }
+
 
 class DomainError(Exception):
     """Business logic violation (valid payload, invalid operation)."""
@@ -413,6 +433,19 @@ def _integrity_error_handler(
     rejection = _constraint_rejections().get(constraint) if constraint else None
     if rejection is not None:
         code, message = rejection
+    elif constraint == CALCULATION_DEPENDENCY_CYCLE_CONSTRAINT:
+        code = "calculation_dependency_cycle"
+        context = _cycle_refs(orig)
+        message = (
+            "This dependency would make a calculation depend on itself through a chain of "
+            "other calculations. The calculation dependency graph must stay acyclic; "
+            "drop or reverse the dependency that points back"
+            + (
+                f" (parent {context['parent_calculation']}, child {context['child_calculation']})."
+                if len(context) == 2
+                else "."
+            )
+        )
     elif constraint == IDEMPOTENCY_UNIQUE_CONSTRAINT:
         code = "idempotency_conflict"
         message = (

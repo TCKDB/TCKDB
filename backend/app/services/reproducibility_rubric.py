@@ -534,6 +534,8 @@ def _source_refs(target: Any) -> list[tuple[Calculation, str]]:
     return [unique[key] for key in sorted(unique)]
 
 
+# Defence in depth: new dependency writes refuse a cycle (trg_calculation_dependency_acyclic,
+# revision e2f2b3fb6725); this branch is reachable only from rows written before it.
 def _calculation_closure(roots: list[Calculation]) -> tuple[list[Calculation], bool]:
     rows: dict[int, Calculation] = {}
     visiting: set[int] = set()

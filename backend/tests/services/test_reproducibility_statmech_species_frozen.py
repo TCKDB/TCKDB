@@ -80,6 +80,7 @@ from tests.services.scientific_read._factories import (
     attach_statmech_electronic_level,
     attach_statmech_source_calculation,
     attach_statmech_torsion,
+    legacy_dependency_cycles_allowed,
     make_calculation,
     make_chem_reaction,
     make_geometry,
@@ -427,20 +428,21 @@ def _dependency_edges(db_session, user):
 def _dependency_cycle(db_session, user):
     """Two source calculations that are each other's parent.
 
-    Nothing in the schema forbids the pair (the primary key is the ordered pair, and self-edges are the only edge
-    refused), so the closure walk's cycle branch is reachable from stored data.
+    New writes refuse the pair (acyclicity trigger, revision e2f2b3fb6725), but rows written before it can
+    still hold one, so the closure walk's cycle branch stays reachable from stored data.
     """
     entry = _entry(db_session)
     statmech = make_statmech(db_session, species_entry=entry)
     calcs = _opt_freq_sp(db_session, entry, statmech, user=user)
     opt, freq = calcs[CalculationType.opt], calcs[CalculationType.freq]
-    db_session.add_all(
-        [
-            _edge(opt, freq, CalculationDependencyRole.freq_on),
-            _edge(freq, opt, CalculationDependencyRole.optimized_from),
-        ]
-    )
-    db_session.flush()
+    with legacy_dependency_cycles_allowed(db_session):  # writes now refuse a cycle; only legacy rows can hold one
+        db_session.add_all(
+            [
+                _edge(opt, freq, CalculationDependencyRole.freq_on),
+                _edge(freq, opt, CalculationDependencyRole.optimized_from),
+            ]
+        )
+        db_session.flush()
     for calculation in calcs.values():
         db_session.refresh(calculation)
     return statmech

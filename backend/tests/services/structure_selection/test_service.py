@@ -40,6 +40,7 @@ from app.services.structure_selection import (
 from tests.id_leak import id_in_text
 from tests.services.scientific_read._factories import (
     attach_dependency,
+    legacy_dependency_cycles_allowed,
     make_conformer_group,
     make_conformer_observation,
     make_geometry,
@@ -355,7 +356,8 @@ def test_a_dependency_cycle_is_reported_and_never_walked_forever(db_session):
     sp = world.sp("sp", -76.41, declared=declaration())
     f = world.freq("f", declared=declaration())
     attach_dependency(db_session, parent=o, child=sp, role=CalculationDependencyRole.single_point_on)
-    attach_dependency(db_session, parent=sp, child=o, role=CalculationDependencyRole.optimized_from)
+    with legacy_dependency_cycles_allowed(db_session):  # writes now refuse a cycle; only legacy rows can hold one
+        attach_dependency(db_session, parent=sp, child=o, role=CalculationDependencyRole.optimized_from)
     d = world.determination([("geometry_optimization", o), ("energy", sp), ("curvature", f)])
     a = by_ref(run(db_session, world, minimum_request()))[d.public_ref]
     assert a.applicability is A.unresolved and any(r.code == "dependency_cycle" for r in a.reasons)

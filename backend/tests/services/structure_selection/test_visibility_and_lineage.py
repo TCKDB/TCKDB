@@ -26,6 +26,7 @@ from app.services.structure_selection.bounds import parse_quantity
 from tests.services.scientific_read._factories import (
     attach_dependency,
     attach_hessian,
+    legacy_dependency_cycles_allowed,
     make_conformer_group,
     make_conformer_observation,
     set_review,
@@ -270,7 +271,8 @@ def test_a_real_cycle_is_still_a_cycle(db_session):
     sp = world.sp("s", -76.41, declared=declaration())
     freq = world.freq("f", declared=declaration())
     attach_dependency(db_session, parent=a, child=b, role=CalculationDependencyRole.optimized_from)
-    attach_dependency(db_session, parent=b, child=a, role=CalculationDependencyRole.optimized_from)
+    with legacy_dependency_cycles_allowed(db_session):  # writes now refuse a cycle; only legacy rows can hold one
+        attach_dependency(db_session, parent=b, child=a, role=CalculationDependencyRole.optimized_from)
     attach_dependency(db_session, parent=a, child=sp, role=CalculationDependencyRole.single_point_on)
     d = world.determination([("geometry_optimization", a), ("energy", sp), ("curvature", freq)])
     result = run(db_session, world, minimum_request())

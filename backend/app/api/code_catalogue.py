@@ -997,6 +997,15 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "the count is a property of the parsed model, and "
                 "bundle_too_large is what bounds the cost of parsing."
             )),
+    ApiCode("calculation_dependency_cycle", 409, Surface.response_literal,
+            "backend/app/api/errors.py",
+            shape=Shape.relationship,
+            note=(
+                "Raised by the calculation_dependency acyclicity trigger "
+                "(revision e2f2b3fb6725), keyed on the constraint name the "
+                "trigger reports. context names the refused edge's "
+                "parent_calculation and child_calculation by public_ref."
+            )),
     ApiCode("calculation_geometry_conformer_mismatch", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
             shape=Shape.relationship,

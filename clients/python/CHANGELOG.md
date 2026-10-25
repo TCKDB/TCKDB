@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.168.0 - 2026-10-25
+
+A calculation dependency that would close a cycle is refused with a coded 409.
+
+- New rejection code `calculation_dependency_cycle` (`RejectionCode.CALCULATION_DEPENDENCY_CYCLE`). `context` carries
+  `parent_calculation` and `child_calculation`, both public references. Nothing else about the client changes.
+
 ## 0.167.0 - 2026-10-25
 
 Every list read can be walked by cursor, and every `iter_*` helper does.
