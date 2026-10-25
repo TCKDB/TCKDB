@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.135.0 - 2026-10-25
+
+One refusal code joins the contract. No field is added or removed.
+
+- `calculation_dependency_cycle` (409): a calculation dependency whose parent is already reachable from its child is refused; `context` names both calculations by public reference.
+
 ## 0.134.0 - 2026-10-24
 
 Three refusal codes join the contract. No field is added or removed.
