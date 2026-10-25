@@ -200,6 +200,10 @@ def test_trigger_does_not_mask_or_hide_the_accepted_science_refusal(db_session):
     with pytest.raises(DBAPIError) as caught, db_session.begin_nested():
         _edge(db_session, a, b)
     assert "calculation_dependency_cycle" not in str(caught.value)
+    assert "is immutable" in str(caught.value)
+    message = str(caught.value.orig)
+    assert a.public_ref in message or b.public_ref in message, "the guard names the record by public ref"
+    assert f"record {a.id} " not in message and f"record {b.id} " not in message, "and never by row id"
     c, d = _calcs(db_session, 2, "ACYCAS2")
     _edge(db_session, c, d)
     assert _refused(db_session, d, c).orig.diag.constraint_name == "calculation_dependency_acyclic"
@@ -336,7 +340,8 @@ def test_two_transactions_each_closing_one_edge_of_a_cycle_cannot_both_commit(ra
         waiting = 0
         with race_engine.connect() as probe:
             while time.time() < deadline and not outcome:
-                waiting = probe.scalar(text("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted"))
+                waiting = probe.scalar(text("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted "
+                    "AND database = (SELECT oid FROM pg_database WHERE datname = current_database())"))
                 if waiting:
                     break
                 time.sleep(0.05)
@@ -345,6 +350,110 @@ def test_two_transactions_each_closing_one_edge_of_a_cycle_cannot_both_commit(ra
         thread.join(timeout=10)
         assert not thread.is_alive()
         assert outcome["second"] == "calculation_dependency_acyclic"
+        with race_engine.connect() as check:
+            committed = check.scalar(
+                text(
+                    "SELECT count(*) FROM calculation_dependency WHERE "
+                    "(parent_calculation_id, child_calculation_id) IN ((:b, :c), (:d, :a))"
+                ),
+                {"a": a_id, "b": b_id, "c": c_id, "d": d_id},
+            )
+        assert committed == 1, "exactly one of the two edges that would close the ring may commit"
+    finally:
+        first.close()
+        second.close()
+
+
+# -- the walk terminates, and a legal reversal is not mistaken for a cycle ---
+
+
+def test_the_walk_terminates_next_to_a_stored_ring(db_session):
+    """Only a ring that was stored with the row trigger disabled (below, inside this test's transaction)
+    can exercise the walk's termination; the trigger itself never lets one be written.
+
+    With ``UNION ALL`` the recursive walk would never end: ``statement_timeout`` turns that into an error
+    instead of a hung test."""
+    a, b, c = _calcs(db_session, 3, "ACYCRING")
+    db_session.execute(text("ALTER TABLE calculation_dependency DISABLE TRIGGER trg_calculation_dependency_acyclic"))
+    try:
+        _edge(db_session, a, b)
+        _edge(db_session, b, a, Role.freq_on)
+    finally:
+        db_session.execute(text("ALTER TABLE calculation_dependency ENABLE TRIGGER trg_calculation_dependency_acyclic"))
+    db_session.execute(text("SET LOCAL statement_timeout = '5s'"))
+    _edge(db_session, c, a, Role.single_point_on)  # reaches the ring, closes nothing: accepted
+    exc = _refused(db_session, a, c, Role.scan_parent)  # a -> c with c -> a: a real cycle, refused rather than looped
+    assert exc.orig.diag.constraint_name == "calculation_dependency_acyclic"
+
+
+def test_reversing_a_single_edge_by_update_is_legal(db_session):
+    a, b = _calcs(db_session, 2, "ACYCREV")
+    _edge(db_session, a, b)
+    db_session.execute(
+        text(
+            "UPDATE calculation_dependency SET parent_calculation_id = :b, child_calculation_id = :a "
+            "WHERE parent_calculation_id = :a AND child_calculation_id = :b"
+        ),
+        {"a": a.id, "b": b.id},
+    )
+    assert db_session.scalar(
+        text("SELECT count(*) FROM calculation_dependency WHERE parent_calculation_id = :b AND child_calculation_id = :a"),
+        {"a": a.id, "b": b.id},
+    ) == 1
+
+
+# -- the deadlock schedule ----------------------------------------------------
+
+
+def test_the_advisory_lock_is_taken_before_any_row_lock_so_two_writers_cannot_deadlock(race_engine):
+    """T1 inserts A->B (holds A, B and the lock). T2 inserts C->D. T1 then inserts D->E.
+
+    If the lock were taken after the accepted-science row locks, T2 would hold C and D while waiting for the
+    lock T1 holds, and T1 would wait for D: a deadlock. Taken first, T2 waits holding nothing, so T1 finishes."""
+    insert = text(
+        "INSERT INTO calculation_dependency (parent_calculation_id, child_calculation_id, dependency_role) "
+        "VALUES (:p, :c, 'arkane_source')"
+    )
+    with Session(race_engine) as seed:
+        calcs = _calcs(seed, 5, "ACYCDEAD")
+        seed.commit()
+        a_id, b_id, c_id, d_id, e_id = (calc.id for calc in calcs)
+    first = race_engine.connect()
+    second = race_engine.connect()
+    outcome: dict[str, object] = {}
+    try:
+        first_tx = first.begin()
+        first.execute(insert, {"p": a_id, "c": b_id})
+
+        def second_writer():
+            try:
+                with second.begin():
+                    second.execute(insert, {"p": c_id, "c": d_id})
+                outcome["second"] = "committed"
+            except Exception as exc:
+                outcome["second"] = repr(exc)
+
+        thread = threading.Thread(target=second_writer)
+        thread.start()
+        deadline = time.time() + 10
+        waiting = 0
+        with race_engine.connect() as probe:
+            while time.time() < deadline and not outcome:
+                waiting = probe.scalar(
+                    text(
+                        "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted "
+                        "AND database = (SELECT oid FROM pg_database WHERE datname = current_database())"
+                    )
+                )
+                if waiting:
+                    break
+                time.sleep(0.05)
+        assert waiting, f"the second writer never queued on the advisory lock: {outcome}"
+        first.execute(insert, {"p": d_id, "c": e_id})  # needs D: must not wait on the queued writer
+        first_tx.commit()
+        thread.join(timeout=20)
+        assert not thread.is_alive()
+        assert outcome == {"second": "committed"}, outcome
     finally:
         first.close()
         second.close()

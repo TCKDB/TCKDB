@@ -51,6 +51,8 @@ __all__ = [
     "assert_transition_state_calculations_unanchored",
     "conformer_key_by_unique_geometry_key",
     "calculation_geometry_conformer_error",
+    "dependency_cycle_message",
+    "find_dependency_cycle",
     "find_scf_source_cycle",
     "owner_mismatch_context",
     "owner_mismatch_detail",
@@ -450,3 +452,46 @@ def find_scf_source_cycle(sources: Mapping[str, str]) -> list[str] | None:
             node = sources.get(node)
         done.update(path)
     return None
+
+
+def find_dependency_cycle(parents: Mapping[str, Iterable[str]]) -> list[str] | None:
+    """Return a cycle in ``calculation key -> parent calculation keys``, or ``None``.
+
+    Unlike a stability citation, a calculation may depend on several parents, so
+    this is a general directed-graph search (iterative, three colours). The
+    returned list names the depositor's own keys in dependency order, e.g.
+    ``["a", "b"]`` when a depends on b and b depends on a. A shared parent
+    reached by two paths is not a cycle.
+    """
+    done: set[str] = set()
+    for start in parents:
+        if start in done:
+            continue
+        path: list[str] = [start]
+        on_path = {start: 0}
+        stack = [iter(parents.get(start, ()))]
+        while stack:
+            for parent in stack[-1]:
+                if parent in on_path:
+                    return path[on_path[parent]:]
+                if parent in done:
+                    continue
+                on_path[parent] = len(path)
+                path.append(parent)
+                stack.append(iter(parents.get(parent, ())))
+                break
+            else:
+                stack.pop()
+                node = path.pop()
+                del on_path[node]
+                done.add(node)
+    return None
+
+
+def dependency_cycle_message(cycle: list[str]) -> str:
+    """The 422 sentence for a ``depends_on`` ring; names only the depositor's own keys."""
+    ring = " -> ".join([*cycle, cycle[0]])
+    return (
+        f"depends_on forms a cycle: {ring}. A calculation cannot depend, directly or through "
+        f"others, on itself; drop or reverse one of these dependencies."
+    )

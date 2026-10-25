@@ -622,6 +622,33 @@ def run_one_job(session: Session, job: UploadJob) -> None:
 # Worker loop
 # ---------------------------------------------------------------------------
 
+def _public_job_error(exc: BaseException, job_id: str) -> tuple[str, bool]:
+    """``(message, terminal)`` for a failed attempt; the message is what the client reads.
+
+    ``JobStatusResponse.error`` is returned to the depositor, so it never carries a raw exception string:
+    ``str(IntegrityError)`` includes column values and row ids. A database refusal the error contract maps is
+    reported as its code and public sentence; a coded validation refusal keeps its own (public) code and detail.
+    Both are deterministic, so they are *terminal*: retrying the same request cannot change the answer. Anything
+    else is a generic sentence naming only the exception class; the detail goes to the server log.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    from app.api.errors import public_integrity_error
+
+    if isinstance(exc, IntegrityError):
+        code, message, _context, specific = public_integrity_error(exc)
+        return f"{code}: {message}", specific
+    code = getattr(exc, "code", None)
+    if isinstance(code, str) and isinstance(exc, ValueError):
+        return f"{code}: {getattr(exc, 'detail', None) or exc}", True
+    logger.error("job %s failed with %s (detail withheld from the client)", job_id, type(exc).__name__)
+    return (
+        f"{type(exc).__name__}: the upload could not be processed. The detail is in the server log "
+        f"(quote job {job_id}).",
+        False,
+    )
+
+
 def _process_one_cycle() -> bool:
     """Claim and process one job. Returns True if a job was processed."""
     # A session-scoped advisory lock must stay on one physical PostgreSQL
@@ -666,10 +693,10 @@ def _process_one_cycle() -> bool:
                     # failure we durably record the failed attempt against it.
                     with session.begin():
                         job = session.get(UploadJob, job_id)
-                        job.error = f"{type(exc).__name__}: {exc}"
+                        job.error, terminal = _public_job_error(exc, job_id)
                         job.lease_expires_at = None
                         job.heartbeat_at = _utcnow()
-                        if job.attempts >= job.max_attempts:
+                        if terminal or job.attempts >= job.max_attempts:
                             job.status = UploadJobStatus.failed
                             job.completed_at = _utcnow()
                             submission = _submission_for_job(session, job)

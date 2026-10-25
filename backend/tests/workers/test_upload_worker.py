@@ -425,7 +425,7 @@ def test_process_one_cycle_requeues_on_failure_when_attempts_remain(
         assert persisted.completed_at is None
         assert persisted.error is not None
         assert "ValueError" in persisted.error
-        assert "boom" in persisted.error
+        assert "boom" not in persisted.error  # the raw exception text never reaches the client
 
 
 # ---------------------------------------------------------------------------
@@ -463,7 +463,7 @@ def test_process_one_cycle_marks_failed_when_attempts_exhausted(
         assert persisted.attempts == 3
         assert persisted.error is not None
         assert "RuntimeError" in persisted.error
-        assert "kaboom" in persisted.error
+        assert "kaboom" not in persisted.error  # the raw exception text never reaches the client
         assert persisted.completed_at is not None
 
     # A follow-up cycle must not re-queue or re-claim the terminally failed job.
@@ -669,7 +669,7 @@ def test_transport_job_is_requeued_on_transient_failure(worker_db, monkeypatch):
         assert persisted.attempts == 1
         assert persisted.completed_at is None
         assert "ValueError" in persisted.error
-        assert "transient transport failure" in persisted.error
+        assert "transient transport failure" not in persisted.error  # the raw exception text never reaches the client
 
 
 def test_transport_job_is_marked_failed_when_attempts_exhausted(
@@ -708,7 +708,7 @@ def test_transport_job_is_marked_failed_when_attempts_exhausted(
         assert persisted.result is None
         assert persisted.completed_at is not None
         assert "RuntimeError" in persisted.error
-        assert "permanent transport failure" in persisted.error
+        assert "permanent transport failure" not in persisted.error  # the raw exception text never reaches the client
 
 
 # ---------------------------------------------------------------------------
@@ -1064,3 +1064,55 @@ def test_terminal_worker_failure_records_durable_ingestion_failed(
                 text("DELETE FROM submission WHERE id = :sid"),
                 {"sid": submission_id},
             )
+
+
+# ---------------------------------------------------------------------------
+# The error a client reads never carries a raw exception string
+# ---------------------------------------------------------------------------
+
+
+class _Diag:
+    constraint_name = "calculation_dependency_acyclic"
+    message_detail = "parent=calc_aaaa;child=calc_bbbb"
+
+
+class _Orig(Exception):
+    sqlstate = "23514"
+    diag = _Diag()
+
+
+def _run_failing_job(worker_db, monkeypatch, exc, *, max_attempts=3):
+    def failing_handler(session, job, review_policy=None):
+        raise exc
+
+    monkeypatch.setitem(upload_worker._DISPATCH, UploadJobKind.thermo, failing_handler)
+    with worker_db.begin():
+        job = _insert_job(worker_db, kind=UploadJobKind.thermo, attempts=0, max_attempts=max_attempts)
+        job_id = job.id
+    assert upload_worker._process_one_cycle() is True
+    with worker_db.begin():
+        worker_db.expire_all()
+        return worker_db.get(UploadJob, job_id)
+
+
+def test_a_cycle_refusal_is_coded_free_of_row_ids_and_not_retried(worker_db, monkeypatch):
+    from sqlalchemy.exc import IntegrityError
+
+    exc = IntegrityError(
+        "INSERT INTO calculation_dependency (parent_calculation_id, child_calculation_id) VALUES (%(p)s, %(c)s)",
+        {"p": 987654, "c": 987655},
+        _Orig("calculation_dependency_cycle: parent_calculation_id: 987654"),
+    )
+    persisted = _run_failing_job(worker_db, monkeypatch, exc, max_attempts=3)
+    assert persisted.status == UploadJobStatus.failed, "a coded refusal must not be retried"
+    assert persisted.attempts == 1
+    assert persisted.error.startswith("calculation_dependency_cycle:")
+    assert "calc_aaaa" in persisted.error and "calc_bbbb" in persisted.error
+    assert "987654" not in persisted.error and "987655" not in persisted.error
+
+
+def test_an_unknown_exception_is_stored_generically_and_retried(worker_db, monkeypatch):
+    persisted = _run_failing_job(worker_db, monkeypatch, RuntimeError("row 987654 is broken"), max_attempts=3)
+    assert persisted.status == UploadJobStatus.queued
+    assert "987654" not in persisted.error and "broken" not in persisted.error
+    assert persisted.error.startswith("RuntimeError:")
