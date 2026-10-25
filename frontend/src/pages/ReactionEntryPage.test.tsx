@@ -335,6 +335,18 @@ describe("ReactionEntryPage -- network-only kinetics sentence", () => {
         expect(screen.getByText("net_only1", { selector: "a" })).toBeVisible()
     })
 
+    it("kinetics: [] and several networks -- names every network, and says none is preferred, instead of naming only the first", async () => {
+        const network = (ref: string) => ({
+            network_ref: ref, name: "hydrazine", solve_temperature_min_k: 300, solve_temperature_max_k: 2000,
+            solve_pressure_min_bar: 0.01, solve_pressure_max_bar: 100, channel_count: 21, review: { status: "not_reviewed" },
+        })
+        handleFull(mockFull({ kinetics: [], networks: [network("net_one"), network("net_two")] }))
+        page()
+        expect(await screen.findByText(/served by 2 networks, none preferred over another/)).toBeVisible()
+        expect(screen.getByText("net_one", { selector: "a" })).toBeVisible()
+        expect(screen.getByText("net_two", { selector: "a" })).toBeVisible()
+    })
+
     it("kinetics: [] and no network -- the plain archive-absence sentence, not the network-only one", async () => {
         handleFull(mockFull({ kinetics: [], networks: [] }))
         page()

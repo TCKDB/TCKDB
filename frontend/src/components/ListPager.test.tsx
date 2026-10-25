@@ -102,21 +102,47 @@ describe("ListPager: what the server said about the list", () => {
         expect(screen.getByText("Not listed by default: 4 rejected species entries.")).toBeVisible()
     })
 
-    it("states the display order from the server's echo, as an order for browsing and not a ranking", () => {
+    it("states the display order in the server's own words, without naming internal tie-break keys, as an order for browsing and not a ranking", () => {
+        render(<ListPager
+            meta={meta({ offset: 0, limit: 50, returned: 3, total: 3 }, {
+                sort: { keys: [
+                        { key: "review_rank", direction: "asc", meaning: "review status: approved first; under_review and not_reviewed rank equally; deprecated, then rejected, after them" },
+                        { key: "created_at", direction: "desc", meaning: "deposition time, the row's created_at: when it was deposited in TCKDB, newest first" },
+                        { key: "id", direction: "desc", meaning: "unique tie-breaker that makes the order total (the internal row id); no scientific meaning" },
+                    ] },
+            })}
+            noun="record"
+            onPage={() => {}}
+        />)
+        expect(screen.getByText("Display order: approved first, then newest deposited first. An order for browsing, not a ranking or a recommendation.")).toBeVisible()
+        expect(screen.queryByText(/tie-breaker/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/\bid\b/)).not.toBeInTheDocument()
+    })
+
+    it("adds the direction when the server's wording does not state it", () => {
+        render(<ListPager
+            meta={meta({ offset: 0, limit: 50, returned: 3, total: 3 }, {
+                sort: { keys: [{ key: "method", direction: "asc", meaning: "level-of-theory method name, alphabetical" }] },
+            })}
+            noun="record"
+            onPage={() => {}}
+        />)
+        expect(screen.getByText(/level-of-theory method name, alphabetical \(ascending\)/)).toBeVisible()
+    })
+
+    it("an order the request asked for is reported as requested and is never called 'not a ranking'", () => {
         render(<ListPager
             meta={meta({ offset: 0, limit: 50, returned: 3, total: 3 }, {
                 sort: {
-                    keys: [
-                        { key: "review_rank", direction: "asc", meaning: "review status" },
-                        { key: "created_at", direction: "desc", meaning: "deposition time" },
-                        { key: "id", direction: "desc", meaning: "tie-breaker" },
-                    ],
+                    requested_by: "ranking=lowest_energy",
+                    keys: [{ key: "energy_hartree", direction: "asc", meaning: "electronic energy in hartree, lowest first; records with no energy last" }],
                 },
             })}
             noun="record"
             onPage={() => {}}
         />)
-        expect(screen.getByText("Display order: review rank, then created at, then id. An order for browsing, not a ranking or a recommendation.")).toBeVisible()
+        expect(screen.getByText("Order requested (ranking=lowest_energy): electronic energy in hartree, lowest first.")).toBeVisible()
+        expect(screen.queryByText(/not a ranking/)).not.toBeInTheDocument()
     })
 
     it("makes no order statement when the server made none", () => {

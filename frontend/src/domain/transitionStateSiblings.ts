@@ -18,6 +18,7 @@ export const SIBLING_SUMMARY_STAGE_ORDER = ["sp", "irc", "freq", "opt", "path_se
 export type SiblingCalculationLike = {
     type: string
     level_of_theory?: unknown
+    software_release?: unknown
 }
 
 export type SiblingStageSummary<T extends SiblingCalculationLike> = {
@@ -28,6 +29,13 @@ export type SiblingStageSummary<T extends SiblingCalculationLike> = {
     stageCalculationCount: number
     /** How many DIFFERENT levels of theory those calculations use (0 when none records one). */
     distinctLevelCount: number
+    /** How many DIFFERENT software releases those calculations use (0 when none records one). */
+    distinctSoftwareCount: number
+    /**
+     * The calculations at this stage do not all agree on level of theory or software (they differ, or some record one
+     * and some do not), so no single calculation's level and software describe them. A line must not show one.
+     */
+    varies: boolean
 }
 
 function levelKey(level: unknown): string | null {
@@ -42,8 +50,20 @@ export function summariseSiblingStage<T extends SiblingCalculationLike>(
     for (const stage of stages) {
         const atStage = calculations.filter((calculation) => calculation.type === stage)
         if (atStage.length === 0) continue
-        const levels = new Set(atStage.map((calculation) => levelKey(calculation.level_of_theory)).filter((key) => key !== null))
-        return { stage, calculation: atStage[0], stageCalculationCount: atStage.length, distinctLevelCount: levels.size }
+        const levelKeys = atStage.map((calculation) => levelKey(calculation.level_of_theory))
+        const softwareKeys = atStage.map((calculation) => levelKey(calculation.software_release))
+        const levels = new Set(levelKeys.filter((key) => key !== null))
+        const software = new Set(softwareKeys.filter((key) => key !== null))
+        const mixedPresence = (keys: Array<string | null>) => keys.some((key) => key === null) && keys.some((key) => key !== null)
+        const varies = levels.size > 1 || software.size > 1 || mixedPresence(levelKeys) || mixedPresence(softwareKeys)
+        return {
+            stage,
+            calculation: atStage[0],
+            stageCalculationCount: atStage.length,
+            distinctLevelCount: levels.size,
+            distinctSoftwareCount: software.size,
+            varies,
+        }
     }
     return null
 }

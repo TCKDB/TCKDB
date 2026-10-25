@@ -44,8 +44,8 @@ function pickerHeading(count: number): string {
 
 /** What the card order is, said where the cards are: the browser orders them, the server's own order differs. */
 export const CONFORMER_CARD_ORDER_NOTE =
-    "Basins on this page are listed by conformer number, then label, then reference. That is a display order "
-    + "for browsing, not a ranking: no basin is preferred over another."
+    "Pages follow the archive's display order (above); the cards within a page are listed by conformer number, "
+    + "then label, then reference. Neither is a ranking: no basin is preferred over another."
 
 /**
  * "Choose a conformer, then see its geometry, single-point energy,
@@ -57,10 +57,12 @@ export const CONFORMER_CARD_ORDER_NOTE =
  * report for how this renders at 1 / 4 / many.
  */
 export function ConformerSelector({
-    conformers, selectedRef, onSelect, selectionIsDefault = false, meta = null, onPage, pagingBusy = false, pagingFailed = false,
+    conformers, selectedRef, onSelect, selectedLabel = null, selectionIsDefault = false, meta = null, onPage, pagingBusy = false, pagingFailed = false,
 }: {
     conformers: ConformerProjection[]
     selectedRef: string | null
+    /** The selected basin's label, which may be a basin on another page of the list than the cards shown. */
+    selectedLabel?: string | null
     onSelect: (conformerGroupRef: string) => void
     /** The selected card is there because the page picked it (it is listed first), not because the reader chose it. */
     selectionIsDefault?: boolean
@@ -72,7 +74,7 @@ export function ConformerSelector({
 }) {
     // The count the note states is the server's total, not the length of the page on screen.
     const total = meta?.pagination.total ?? conformers.length
-    const selected = conformers.find((conformer) => conformer.conformer_group.conformer_group_ref === selectedRef) ?? null
+    const selectedOnPage = conformers.some((conformer) => conformer.conformer_group.conformer_group_ref === selectedRef)
     return (
         <section className="conformer-picker" aria-labelledby="conformer-picker-title">
             <p className="eyebrow">Conformers</p>
@@ -95,9 +97,14 @@ export function ConformerSelector({
                             That page of conformers could not be loaded; the previous page is still shown.
                         </p>
                     )}
-                    {selectionIsDefault && selected && total > 1 && (
+                    {selectedRef && selectedLabel && !selectedOnPage && (
+                        <p className="conformer-picker-note conformer-offpage-note">
+                            {selectedLabel} is selected; it is on another page of this list.
+                        </p>
+                    )}
+                    {selectionIsDefault && selectedLabel && total > 1 && (
                         <p className="conformer-picker-note conformer-default-note">
-                            {conformerLabel(selected)} is selected only because it is listed first. That is not a
+                            {selectedLabel} is selected only because it is listed first. That is not a
                             preference or a recommendation; choose a basin to see its evidence instead.
                         </p>
                     )}

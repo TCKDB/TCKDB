@@ -16,6 +16,7 @@ import {
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryThermo } from "../hooks/useEntryThermo"
+import { everyOrThisPage, isPartialWindow } from "../domain/paging"
 import { ListPager } from "./ListPager"
 import type { ListMeta } from "../api/listEnvelope"
 import type { PageRequest } from "../domain/paging"
@@ -269,7 +270,7 @@ function ThermoList({ response, meta, onPage, conformer, conformers }: {
                 <p className="eyebrow">Deposited evidence</p>
                 <SectionHeading id="thermo-heading">Thermochemistry</SectionHeading>
                 <p>
-                    Every thermo record deposited for this entry, each shown independently. Multiple deposits
+                    {everyOrThisPage(pagination, "thermo record")}, each shown independently. Multiple deposits
                     are never merged, averaged, or reduced to one preferred value on this page.
                 </p>
             </div>
@@ -290,6 +291,7 @@ function ThermoList({ response, meta, onPage, conformer, conformers }: {
                     records={records}
                     conformers={conformers}
                     selectedConformerGroupRef={conformer?.conformer_group.conformer_group_ref ?? null}
+                    partialList={isPartialWindow(pagination)}
                 />
             )}
             {records.length === 0 ? (

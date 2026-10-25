@@ -363,16 +363,20 @@ function CorrectionSchemesSection({ schemes, available }: { schemes: EnergyCorre
  * chosen.
  */
 function CorrectionSchemeKindGroup({ schemes }: { schemes: EnergyCorrectionSchemeRecord[] }) {
-    const [selectedRef, setSelectedRef] = useState(
-        schemes[0].energy_correction_scheme.energy_correction_scheme_ref,
-    )
+    // `null` until the reader picks one: until then the first listed scheme is shown, and the page says that is all it is.
+    const [chosenRef, setChosenRef] = useState<string | null>(null)
     const selected = schemes.find(
-        (scheme) => scheme.energy_correction_scheme.energy_correction_scheme_ref === selectedRef,
+        (scheme) => scheme.energy_correction_scheme.energy_correction_scheme_ref === chosenRef,
     ) ?? schemes[0]
     return (
         <div className="correction-scheme-kind-group">
             {schemes.length > 1 && (
-                <CorrectionSchemeSelect schemes={schemes} selectedRef={selected.energy_correction_scheme.energy_correction_scheme_ref} onSelect={setSelectedRef} />
+                <CorrectionSchemeSelect schemes={schemes} selectedRef={selected.energy_correction_scheme.energy_correction_scheme_ref} onSelect={setChosenRef} />
+            )}
+            {schemes.length > 1 && chosenRef === null && (
+                <p className="note correction-scheme-default-note">
+                    {schemes.length} schemes of this kind are deposited. The first listed is shown until you choose one; it is not preferred over the others.
+                </p>
             )}
             <CorrectionSchemeBox key={selected.energy_correction_scheme.energy_correction_scheme_ref} scheme={selected} />
         </div>

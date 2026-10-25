@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest"
 import { summariseSiblingStage } from "./transitionStateSiblings"
 
-const calc = (type: string, level: string | null) => ({ type, level_of_theory: level === null ? null : { display: level } })
+const calc = (type: string, level: string | null, software: string | null = "Molpro") => ({
+    type,
+    level_of_theory: level === null ? null : { display: level },
+    software_release: software === null ? null : { software },
+})
 
 describe("summariseSiblingStage", () => {
     it("reads the sp stage when there is one, whatever order the calculations came in", () => {
@@ -33,5 +37,26 @@ describe("summariseSiblingStage", () => {
 
     it("has nothing to summarise without calculations", () => {
         expect(summariseSiblingStage([])).toBeNull()
+    })
+
+    it("varies when one level is shared but the software differs", () => {
+        const summary = summariseSiblingStage([calc("sp", "a", "Molpro"), calc("sp", "a", "Gaussian")])
+        expect(summary?.distinctLevelCount).toBe(1)
+        expect(summary?.distinctSoftwareCount).toBe(2)
+        expect(summary?.varies).toBe(true)
+    })
+
+    it("varies when one calculation records a level and another does not, rather than reporting none or one", () => {
+        const summary = summariseSiblingStage([calc("sp", null), calc("sp", "a")])
+        expect(summary?.varies).toBe(true)
+    })
+
+    it("does not vary when every calculation at the stage agrees", () => {
+        const summary = summariseSiblingStage([calc("sp", "a"), calc("sp", "a")])
+        expect(summary?.varies).toBe(false)
+    })
+
+    it("does not vary for a lone calculation that records nothing", () => {
+        expect(summariseSiblingStage([calc("sp", null, null)])?.varies).toBe(false)
     })
 })

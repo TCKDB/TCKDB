@@ -80,22 +80,25 @@ function softwareCellText(release: { software: string; version?: string | null }
     return softwareLabel(release)
 }
 
-export function ReactionKineticsSection({ kinetics, calculations, transitionStates, networksStatus, networkRef }: {
+export function ReactionKineticsSection({ kinetics, calculations, transitionStates, networksStatus, networkRefs }: {
     kinetics: ReactionKineticsRecord[]
     calculations: ReactionFullCalculationEvidence[] | null | undefined
     transitionStates: ReactionTransitionStateInFull[]
     /** Whether this entry's network membership is known yet, and whether it has any — decides the empty-kinetics wording. */
     networksStatus: "loading" | "empty" | "populated"
-    /** The first network ref, used only when `networksStatus === "populated"`. */
-    networkRef?: string
+    /** Every network that admits this entry, used only when `networksStatus === "populated"`. */
+    networkRefs?: string[]
 }) {
     if (kinetics.length === 0) {
-        if (networksStatus === "populated" && networkRef) {
+        if (networksStatus === "populated" && networkRefs && networkRefs.length > 0) {
             return (
                 <>
                     <p className="empty-projection">
                         No rate coefficient deposited on this entry; phenomenological k(T,P) for this system is
-                        served by network <a href="#network-heading">{networkRef}</a>.
+                        served by {networkRefs.length === 1 ? "network" : `${networkRefs.length} networks, none preferred over another:`}{" "}
+                        {networkRefs.map((ref, index) => (
+                            <span key={ref}>{index > 0 && ", "}<a href="#network-heading">{ref}</a></span>
+                        ))}.
                     </p>
                     <p className="note">
                         A network-only reaction never renders channel kinetics as if they were this entry's own —

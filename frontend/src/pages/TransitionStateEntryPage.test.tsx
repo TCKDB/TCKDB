@@ -3,7 +3,7 @@ import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { MemoryRouter, Route, Routes } from "react-router-dom"
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom"
 import TransitionStateEntryPage from "./TransitionStateEntryPage"
 import { bySummaryText } from "../test/disclosureQueries"
 
@@ -1207,7 +1207,7 @@ describe("transition-state entry page: orders and picks that are now stated", ()
         ])
         page()
         const section = (await screen.findByText("Other saddle points deposited for this reaction")).closest("section") as HTMLElement
-        expect(within(section).getByText(/2 different levels of theory at the sp stage/)).toBeVisible()
+        expect(within(section).getByText(/2 calculations at the sp stage differ in level of theory or software/)).toBeVisible()
         expect(within(section).queryByText(/ccsd\(t\)-f12/i)).not.toBeInTheDocument()
         expect(within(section).queryByText(/mrci\+davidson/i)).not.toBeInTheDocument()
     })
@@ -1217,7 +1217,7 @@ describe("transition-state entry page: orders and picks that are now stated", ()
         page()
         const section = (await screen.findByText("Other saddle points deposited for this reaction")).closest("section") as HTMLElement
         expect(within(section).getByText(/read from one calculation of that saddle point/)).toBeVisible()
-        expect(within(section).getByText(/This entry is not listed here, though the count above includes it/)).toBeVisible()
+        expect(within(section).getByText(/This entry is left out of the list below; a count above includes it unless it is hidden by default/)).toBeVisible()
     })
 
     it("pages the siblings: more than one page says so, and Next asks for the following window", async () => {
@@ -1244,5 +1244,80 @@ describe("transition-state entry page: orders and picks that are now stated", ()
         expect(seen).toContain("2:2")
         expect(within(section).getByRole("link", { name: "tse_many_3" })).toBeVisible()
         expect(within(section).queryByRole("link", { name: "tse_many_1" })).not.toBeInTheDocument()
+    })
+})
+
+describe("transition-state entry page: siblings when this entry is the only record on a page", () => {
+    it("keeps the section and its pager when the page holds only this entry, so the reader can go back", async () => {
+        const user = userEvent.setup()
+        const seen: string[] = []
+        server.use(
+            http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json({ record: mockRecord() })),
+            http.get("/api/v1/scientific/transition-states/search", ({ request }) => {
+                const params = new URL(request.url).searchParams
+                const offset = Number(params.get("offset") ?? 0)
+                const limit = Number(params.get("limit") ?? 50)
+                seen.push(`${offset}:${limit}`)
+                const all = Array.from({ length: 51 }, (_, index) => (
+                    index === 50
+                        ? { transition_state_entry: { transition_state_entry_ref: ENTRY_REF, created_at: "2026-08-05T00:00:00", review: { status: "not_reviewed" } }, transition_state: { label: "TS0" }, calculations: [] }
+                        : sibling(`tse_p_${index + 1}`, [])
+                ))
+                const records = all.slice(offset, offset + limit)
+                return HttpResponse.json({ records, pagination: { offset, limit, returned: records.length, total: all.length } })
+            }),
+        )
+        page()
+        const heading = await screen.findByText("Other saddle points deposited for this reaction")
+        expect(await within(heading.closest("section") as HTMLElement).findByText("Showing 1\u201350 of 51 saddle points.")).toBeVisible()
+        await user.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText("Showing 51\u201351 of 51 saddle points.")).toBeVisible()
+        expect(screen.getByRole("heading", { name: "Other saddle points deposited for this reaction" })).toBeVisible()
+        expect(screen.getByText("No other saddle points are on this page.")).toBeVisible()
+        await user.click(screen.getByRole("button", { name: "Previous" }))
+        expect(await screen.findByRole("link", { name: "tse_p_1" })).toBeVisible()
+        expect(seen).toContain("50:50")
+    })
+
+    it("a page that is only this entry, with no other page, shows no section", async () => {
+        server.use(
+            http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json({ record: mockRecord() })),
+            http.get("/api/v1/scientific/transition-states/search", () => HttpResponse.json({
+                records: [{ transition_state_entry: { transition_state_entry_ref: ENTRY_REF, created_at: "2026-08-05T00:00:00", review: { status: "not_reviewed" } }, transition_state: { label: "TS0" }, calculations: [] }],
+                pagination: { offset: 0, limit: 50, returned: 1, total: 1 },
+            })),
+        )
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.queryByText("Other saddle points deposited for this reaction")).not.toBeInTheDocument()
+    })
+
+    it("returns to the first page when the entry shown changes (the page position is not carried to another entry)", async () => {
+        const user = userEvent.setup()
+        const seen: string[] = []
+        server.use(
+            http.get("/api/v1/scientific/transition-state-entries/:ref", ({ params }) => HttpResponse.json({ record: mockRecord({ transition_state_entry: { ...mockRecord().transition_state_entry, transition_state_entry_ref: String(params.ref) } }) })),
+            http.get("/api/v1/scientific/transition-states/search", ({ request }) => {
+                const params = new URL(request.url).searchParams
+                const offset = Number(params.get("offset") ?? 0)
+                const limit = Number(params.get("limit") ?? 50)
+                seen.push(`${offset}`)
+                const all = Array.from({ length: 120 }, (_, index) => sibling(`tse_q_${index + 1}`, []))
+                const records = all.slice(offset, offset + limit)
+                return HttpResponse.json({ records, pagination: { offset, limit, returned: records.length, total: all.length } })
+            }),
+        )
+        render(
+            <MemoryRouter initialEntries={[`/transition-state-entries/${ENTRY_REF}`]}>
+                <Link to="/transition-state-entries/tse_other">go elsewhere</Link>
+                <Routes><Route path="/transition-state-entries/:entryRef" element={<TransitionStateEntryPage />} /></Routes>
+            </MemoryRouter>,
+        )
+        await screen.findByText("Showing 1–50 of 120 saddle points.")
+        await user.click(screen.getByRole("button", { name: "Next" }))
+        await screen.findByText("Showing 51–100 of 120 saddle points.")
+        await user.click(screen.getByRole("link", { name: "go elsewhere" }))
+        expect(await screen.findByText("Showing 1–50 of 120 saddle points.")).toBeVisible()
+        expect(seen.at(-1)).toBe("0")
     })
 })

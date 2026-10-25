@@ -344,12 +344,15 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         // appearing in the control's own `<option>`), and opening the box
         // shows its own 8-row table.
         expect(screen.getByText("Gaussian 16", { selector: ".value-pill" })).toBeVisible()
+        // ... and the page says that is only because it is listed first, until the reader chooses.
+        expect(screen.getByText(/2 schemes of this kind are deposited\. The first listed is shown until you choose one; it is not preferred/)).toBeVisible()
         await user.click(screen.getByText("Atom-energy correction").closest("summary") as HTMLElement)
         expect(within(screen.getByRole("table", { name: "Element correction parameters" })).getAllByRole("row")).toHaveLength(1 + 8)
 
         // Switching the control swaps the box's own content -- title pill
         // AND parameter table both flip to ORCA's, never both shown at once.
         await user.selectOptions(select, "ecs_atom_orca")
+        expect(screen.queryByText(/is shown until you choose one/)).not.toBeInTheDocument()
         expect(screen.queryByText("Gaussian 16", { selector: ".value-pill" })).not.toBeInTheDocument()
         expect(screen.getByText("ORCA 6", { selector: ".value-pill" })).toBeVisible()
         await user.click(screen.getByText("Atom-energy correction").closest("summary") as HTMLElement)

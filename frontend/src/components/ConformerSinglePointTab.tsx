@@ -4,7 +4,7 @@ import "../conformer-group.css"
 import "../entry-science.css"
 import "../energy-display.css"
 import type { ConformerProjection } from "../api/speciesEntryApi"
-import type { SpeciesCalculationEnergyRecord } from "../api/speciesCalculationsApi"
+import type { SinglePointsState } from "../hooks/useSpeciesSinglePoints"
 import { conformerLabel } from "../domain/conformerEvidence"
 import {
     ENERGY_DISPLAY_UNITS,
@@ -65,13 +65,13 @@ function buildRows(observations: NonNullable<ConformerProjection["observations"]
  */
 export function ConformerSinglePointTab({ conformer, spEnergies }: {
     conformer: ConformerProjection
-    spEnergies: SpeciesCalculationEnergyRecord[]
+    spEnergies: SinglePointsState
 }) {
     const [unit, setUnit] = useState<EnergyDisplayUnit>("hartree")
     const observations = conformer.observations ?? []
     const rows = buildRows(observations)
     const energyByCalculationRef = new Map(
-        spEnergies.map((record) => [record.calculation.calculation_ref, record.energy?.energy_hartree ?? null]),
+        (spEnergies.status === "ready" ? spEnergies.records : []).map((record) => [record.calculation.calculation_ref, record.energy?.energy_hartree ?? null]),
     )
 
     return (
@@ -81,6 +81,17 @@ export function ConformerSinglePointTab({ conformer, spEnergies }: {
                 <SectionHeading id="sp-heading">Single-point energy</SectionHeading>
                 <p>Single-point energy evidence for {conformerLabel(conformer)}, one row per deposited observation.</p>
             </div>
+            {spEnergies.status !== "ready" && (
+                <p className="note" role="status">
+                    The energies are still being read from the archive; an energy shown as not recorded may simply not have arrived yet.
+                </p>
+            )}
+            {spEnergies.status === "ready" && spEnergies.capped && (
+                <p className="note" role="note">
+                    This entry has more single-point energies than this page reads ({spEnergies.records.length} were read). An energy
+                    shown as not recorded may be one that was not read, not one that is missing from the archive.
+                </p>
+            )}
             {rows.length === 0 ? (
                 <p className="empty-projection">No deposited observations are projected for this conformer.</p>
             ) : (

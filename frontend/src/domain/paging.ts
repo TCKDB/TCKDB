@@ -73,9 +73,49 @@ export function hiddenByDefaultNote(hidden: HiddenByDefault | null | undefined, 
     return `Not listed by default: ${parts.join(" and ")} ${counted}.`
 }
 
-/** The display-order statement, from the server's own echo. */
+function isTieBreaker(key: { key: string; meaning: string }): boolean {
+    return key.key === "id" || key.key.endsWith("_id") || /^unique tie-breaker/.test(key.meaning)
+}
+
+/**
+ * Plain wording for the keys every default browse order uses, built from the echo's key and direction. A key not named
+ * here is worded from the server's own meaning.
+ */
+const KNOWN_KEY_WORDS: Record<string, (direction: string) => string> = {
+    review_rank: (direction) => (direction === "asc" ? "approved first" : "approved last"),
+    created_at: (direction) => (direction === "desc" ? "newest deposited first" : "oldest deposited first"),
+}
+
+/** One key in words: plain wording for a known key, else the server's own meaning (its first clause) with the direction added when it does not say it. */
+function describeOrderKey(key: { key: string; meaning: string; direction: string }): string {
+    const known = KNOWN_KEY_WORDS[key.key]
+    if (known) return known(key.direction)
+    const base = key.meaning.split(";")[0].trim()
+    if (/\b(first|last)\b/.test(base)) return base
+    return `${base} (${key.direction === "desc" ? "descending" : "ascending"})`
+}
+
+/**
+ * The order statement, from the server's own echo. A DEFAULT order is worded as an order for browsing, not a
+ * preference. An order the request itself asked for (`requested_by`, e.g. a named ranking) is reported as asked for and
+ * is not called "not a ranking", because it is one. Internal tie-break keys are not named.
+ */
 export function displayOrderSentence(sort: OrderEcho | null | undefined): string | null {
     if (!sort || sort.keys.length === 0) return null
-    const keys = sort.keys.map((key) => key.key.replaceAll("_", " ")).join(", then ")
-    return `Display order: ${keys}. An order for browsing, not a ranking or a recommendation.`
+    const keys = sort.keys.filter((key) => !isTieBreaker(key))
+    if (keys.length === 0) return null
+    const words = keys.map(describeOrderKey).join(", then ")
+    if (sort.requested_by) return `Order requested (${sort.requested_by}): ${words}.`
+    return `Display order: ${words}. An order for browsing, not a ranking or a recommendation.`
+}
+
+/** The list is longer than the window on screen, or the window is not the first: what is shown is not "every" record. */
+export function isPartialWindow(page: Pagination): boolean {
+    return page.total > page.returned || page.offset > 0
+}
+
+/** "Every" when the window holds the whole list, else "The N" with the window's own size: for sentences about what is on screen. */
+export function everyOrThisPage(page: Pagination | null | undefined, noun: string): string {
+    if (!page || !isPartialWindow(page)) return `Every ${noun} deposited for this entry`
+    return `The ${page.returned} ${noun}${page.returned === 1 ? "" : "s"} on this page (of ${page.total} deposited for this entry)`
 }

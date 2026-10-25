@@ -4,8 +4,6 @@ import { loadEntryConformerPage, loadSpeciesEntry } from "../api/speciesEntryApi
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
 import type { ListMeta } from "../api/listEnvelope"
 import { ScientificApiError, ScientificRateLimitError } from "../api/scientificTransport"
-import { loadSpeciesSinglePointEnergies } from "../api/speciesCalculationsApi"
-import type { SpeciesCalculationEnergyRecord } from "../api/speciesCalculationsApi"
 
 export type SpeciesEntryState =
     | {
@@ -14,10 +12,9 @@ export type SpeciesEntryState =
         /** The FIRST page of conformer groups; `useConformerPages` moves past it. */
         conformers: ConformerProjection[]
         conformerMeta: ListMeta
-        spEnergies: SpeciesCalculationEnergyRecord[]
     }
     | { entryRef: string; status: "missing" | "malformed" | "http-error" }
-    // A 429 was seen on at least one of the three requests below and
+    // A 429 was seen on at least one of the two requests below and
     // `requestScientificJson` is in the middle of its own automatic
     // `Retry-After` wait (up to a minute -- `rate_limit_anon_read_per_minute`,
     // `backend/app/api/config.py`). Never terminal: resolves into either the
@@ -43,7 +40,7 @@ export function useSpeciesEntry(entryRef: string): SpeciesEntryState | null {
         // section-tab click no longer remounts this page at all (see
         // `App.tsx`'s `SpeciesEntrySectionRoute`), but Back/forward across
         // a real navigation away from the entry still does, and this makes
-        // that case free too: the three requests below fire once per
+        // that case free too: the two requests below fire once per
         // `entryRef` per page life, not once per mount.
         //
         // `dedupedFetch` owns each request's `AbortSignal`, never this
@@ -59,16 +56,7 @@ export function useSpeciesEntry(entryRef: string): SpeciesEntryState | null {
         const conformersSubscription = dedupedFetch(
             loadEntryConformerPage, entryRef, (signal, onRateLimited) => loadEntryConformerPage(entryRef, signal, onRateLimited),
         )
-        // Best-effort enrichment (see the module docstring on
-        // `loadSpeciesSinglePointEnergies`) -- it resolves to `[]` rather
-        // than rejecting, so a failure here never turns the whole entry
-        // page into an error state.
-        const spEnergiesSubscription = dedupedFetch(
-            loadSpeciesSinglePointEnergies,
-            entryRef,
-            (signal, onRateLimited) => loadSpeciesSinglePointEnergies(entryRef, signal, onRateLimited),
-        )
-        // All three requests share the same anonymous-read budget, so a
+        // Both requests share the same anonymous-read budget, so a
         // 429 on one typically means a 429 on the others too -- whichever
         // reports last simply wins, which is fine: they report
         // near-identical `retryAfterSeconds` values from the same window.
@@ -78,13 +66,12 @@ export function useSpeciesEntry(entryRef: string): SpeciesEntryState | null {
         const stopWaitingListeners = [
             entrySubscription.onWaiting(onWaiting),
             conformersSubscription.onWaiting(onWaiting),
-            spEnergiesSubscription.onWaiting(onWaiting),
         ]
-        void Promise.all([entrySubscription.promise, conformersSubscription.promise, spEnergiesSubscription.promise])
-            .then(([entry, conformerPage, spEnergies]) => {
+        void Promise.all([entrySubscription.promise, conformersSubscription.promise])
+            .then(([entry, conformerPage]) => {
                 if (mounted) {
                     setState(entry
-                        ? { entryRef, entry, conformers: conformerPage.records, conformerMeta: conformerPage.meta, spEnergies }
+                        ? { entryRef, entry, conformers: conformerPage.records, conformerMeta: conformerPage.meta }
                         : { entryRef, status: "missing" })
                 }
             })
@@ -105,7 +92,6 @@ export function useSpeciesEntry(entryRef: string): SpeciesEntryState | null {
             for (const stop of stopWaitingListeners) stop()
             entrySubscription.unsubscribe()
             conformersSubscription.unsubscribe()
-            spEnergiesSubscription.unsubscribe()
         }
     }, [entryRef])
 

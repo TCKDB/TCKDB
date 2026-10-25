@@ -5,7 +5,7 @@ import {
     speciesEntrySummarySchema,
 } from "./scientificSpeciesSchemas"
 import { listMetaOf, listRequestEchoSchema, paginationSchema, type ListMeta } from "./listEnvelope"
-import { pageQuery, parsePagedRef } from "../domain/paging"
+import { nextPageRequest, pageQuery, parsePagedRef } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 const softwareReleaseSchema = z.object({
@@ -133,6 +133,58 @@ export async function loadSpeciesEntry(
     return null
 }
 
+const CONFORMER_INCLUDES = ["observations", "observation_details", "calculations", "geometries", "fingerprints"]
+
+/** Joins an entry ref and a conformer group ref into the one string key the cached loaders take. */
+export function conformerKey(entryRef: string, conformerGroupRef: string): string {
+    return `${entryRef}@@${conformerGroupRef}`
+}
+
+/**
+ * One conformer group, fetched by its own ref (`conformer_group_ref` filter) with the same includes a page of the list
+ * carries, so it renders exactly as it would on its page. `null` when the entry has no such group. The selection of a
+ * conformer must not depend on which page of the list it falls on; this is how one on another page is opened.
+ */
+export async function loadEntryConformerByRef(
+    key: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<ConformerProjection | null> {
+    const at = key.indexOf("@@")
+    const entryRef = key.slice(0, at)
+    const groupRef = key.slice(at + 2)
+    const query = new URLSearchParams({ species_entry_ref: entryRef, conformer_group_ref: groupRef, limit: "1" })
+    for (const include of CONFORMER_INCLUDES) query.append("include", include)
+    const payload = await requestScientificJson(`/api/v1/scientific/conformers/search?${query}`, signal, onRateLimited)
+    const response = parseScientificResponse(conformerResponseSchema, payload, "conformer")
+    return response.records.find((record) => record.conformer_group.conformer_group_ref === groupRef) ?? null
+}
+
+/**
+ * Every conformer group of the entry WITHOUT the heavy includes, read page by page, so a record that cites a basin on a
+ * page the reader has not opened still gets its label. Capped; a capped read returns what it has, and a ref it did not
+ * reach is shown as its ref, never as a guess.
+ */
+export async function loadEntryConformerLabels(
+    entryRef: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<ConformerProjection[]> {
+    const records: ConformerProjection[] = []
+    let request = { offset: 0, limit: 200 }
+    for (let page = 0; page < 25; page += 1) {
+        const query = new URLSearchParams({ species_entry_ref: entryRef })
+        for (const [key, value] of pageQuery(request)) query.set(key, value)
+        const payload = await requestScientificJson(`/api/v1/scientific/conformers/search?${query}`, signal, onRateLimited)
+        const response = parseScientificResponse(conformerResponseSchema, payload, "conformer")
+        records.push(...response.records)
+        const next = response.pagination ? nextPageRequest(response.pagination) : null
+        if (!next) break
+        request = next
+    }
+    return records
+}
+
 export type ConformerPage = { records: ConformerProjection[]; meta: ListMeta }
 
 /**
@@ -166,9 +218,7 @@ export async function loadEntryConformerPage(
     // this token every observation's `calculations` would be `undefined`,
     // silently downgrading every conformer card on this page from a
     // per-observation staging statement to the aggregate-only one.
-    for (const include of ["observations", "observation_details", "calculations", "geometries", "fingerprints"]) {
-        query.append("include", include)
-    }
+    for (const include of CONFORMER_INCLUDES) query.append("include", include)
     const payload = await requestScientificJson(`/api/v1/scientific/conformers/search?${query}`, signal, onRateLimited)
     const response = parseScientificResponse(conformerResponseSchema, payload, "conformer")
     const count = response.records.length

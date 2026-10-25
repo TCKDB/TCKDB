@@ -1107,4 +1107,32 @@ describe("NetworkEntryPage -- which solve the energies came from, and the order 
         // Served highest first; shown lowest first.
         expect(cells[0]).toMatch(/^0\b/)
     })
+
+    it("the visible energy sentence names which solve it is about when several are deposited, and lists every solve ref", async () => {
+        const make = (ref: string) => ({ network_solve_ref: ref, kind: "computed", me_method: "modified strong collision", interpolation_model: "chebyshev", tmin_k: 300, tmax_k: 2000, pmin_bar: 0.01, pmax_bar: 100, review: { status: "not_reviewed" } })
+        handleEverything({ stateEnergies, record: { solves: [make("nsolve_test1"), make("nsolve_test2")] } })
+        page()
+        expect(await screen.findByText(/The first of this network's 2 deposited solves \(nsolve_test1; the others are not read here, and it is not preferred over them\) separately carries/)).toBeVisible()
+        expect(screen.queryByText(/This network's own solve separately carries/)).not.toBeInTheDocument()
+        fireEvent.click(screen.getByText(/^References/))
+        expect(screen.getByText("nsolve_test1")).toBeInTheDocument()
+        expect(screen.getByText("nsolve_test2")).toBeInTheDocument()
+        expect(screen.getByText("Network solve 2 of 2")).toBeInTheDocument()
+    })
+
+    it("with one solve the sentence stays as it was", async () => {
+        handleEverything({ stateEnergies })
+        page()
+        expect(await screen.findByText(/This network's own solve separately carries/)).toBeVisible()
+    })
+
+    it("states the master-equation method per solve when several are deposited, not the first solve's alone", async () => {
+        const make = (ref: string, method: string) => ({ network_solve_ref: ref, kind: "computed", me_method: method, interpolation_model: "chebyshev", tmin_k: 300, tmax_k: 2000, pmin_bar: 0.01, pmax_bar: 100, review: { status: "not_reviewed" } })
+        handleEverything({ stateEnergies, record: { solves: [make("nsolve_test1", "modified strong collision"), make("nsolve_test2", "reservoir state")] } })
+        page()
+        const term = await screen.findByText("ME method")
+        const value = term.nextElementSibling as HTMLElement
+        expect(value.textContent).toContain("modified strong collision (nsolve_test1)")
+        expect(value.textContent).toContain("reservoir state (nsolve_test2)")
+    })
 })

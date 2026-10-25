@@ -13,6 +13,7 @@ import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryListSection, type EntryListSectionState } from "../hooks/useEntryListSection"
 import { useEntryTransport } from "../hooks/useEntryTransport"
+import { everyOrThisPage } from "../domain/paging"
 import { ListPager } from "./ListPager"
 import type { ListMeta } from "../api/listEnvelope"
 import type { PageRequest } from "../domain/paging"
@@ -112,7 +113,7 @@ function TransportList({ listKey, meta, onPage, response }: {
                     <p className="eyebrow">Deposited evidence</p>
                     <SectionHeading id="transport-heading">Transport</SectionHeading>
                     <p>
-                        Every transport record deposited for this entry, each shown independently. Multiple
+                        {everyOrThisPage(pagination, "transport record")}, each shown independently. Multiple
                         deposits are never merged, averaged, or reduced to one preferred value on this page.
                     </p>
                 </div>

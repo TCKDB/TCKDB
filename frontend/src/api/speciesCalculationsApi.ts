@@ -49,43 +49,50 @@ const responseSchema = z.object({
 
 export type SpeciesCalculationEnergyRecord = z.infer<typeof recordSchema>
 
+export type SinglePointEnergies = {
+    records: SpeciesCalculationEnergyRecord[]
+    /** More energies exist than the walk read (the page cap was reached); the missing ones are NOT absent in the archive. */
+    capped: boolean
+}
+
+export const SINGLE_POINT_PAGE_SIZE = 200
+export const SINGLE_POINT_MAX_PAGES = 50
+
 /**
  * Loads every `sp` calculation's electronic energy for one species entry,
  * keyed by `calculation_ref` for `ConformerSinglePointTab` to join against
- * the calculations it already has. Returns `[]` (not a thrown error) on any
- * network/parse failure -- this is a "nice to have" enrichment of a page
- * that otherwise renders fine without it (the calculation ref link still
- * works), so a failure here must not take down the whole entry page.
+ * the calculations it already has. It is a join index, not a list the reader
+ * pages, so it reads every page, up to `SINGLE_POINT_MAX_PAGES`; past that it
+ * says it stopped (`capped`) instead of presenting the rest as absent. It runs
+ * only when the single-point tab is open (`useSpeciesSinglePoints`), never as
+ * part of loading the entry.
+ *
+ * Returns `[]` (not a thrown error) on any network/parse failure -- this is
+ * a "nice to have" enrichment of a page that otherwise renders fine without
+ * it (the calculation ref link still works).
  */
 export async function loadSpeciesSinglePointEnergies(
     entryRef: string,
     signal?: AbortSignal,
     onRateLimited?: (retryAfterSeconds: number) => void,
-): Promise<SpeciesCalculationEnergyRecord[]> {
-    // This is a join index (calculation ref -> energy) behind the single-point tab, not a list the reader pages, so it
-    // reads EVERY page: stopping at the first would leave the energies of later calculations silently missing.
-    const MAX_PAGES = 50
+): Promise<SinglePointEnergies> {
     try {
         const records: SpeciesCalculationEnergyRecord[] = []
-        let request = { offset: 0, limit: 200 }
-        for (let page = 0; page < MAX_PAGES; page += 1) {
+        let request = { offset: 0, limit: SINGLE_POINT_PAGE_SIZE }
+        for (let page = 0; page < SINGLE_POINT_MAX_PAGES; page += 1) {
             const query = new URLSearchParams({ species_entry_ref: entryRef, calculation_type: "sp" })
             for (const [key, value] of pageQuery(request)) query.set(key, value)
             const payload = await requestScientificJson(`/api/v1/scientific/species-calculations/search?${query}`, signal, onRateLimited)
             const response = parseScientificResponse(responseSchema, payload, "species calculation energy")
             records.push(...response.records)
             const next = response.pagination ? nextPageRequest(response.pagination) : null
-            if (!next) break
+            if (!next) return { records, capped: false }
             request = next
         }
-        return records
+        return { records, capped: true }
     } catch {
-        // A caller-initiated abort (route navigated away) is not a failure
-        // to swallow silently forever, but re-throwing it here would make
-        // `useSpeciesEntry`'s `Promise.all` treat "the reader navigated
-        // away" the same as "the archive is broken" -- both this helper's
-        // callers already ignore an aborted fetch's result, so [] is a
-        // harmless value to resolve with either way.
-        return []
+        // A caller-initiated abort (route navigated away) is not a failure to swallow silently forever, but both
+        // callers already ignore an aborted fetch's result, so an empty result is a harmless value either way.
+        return { records: [], capped: false }
     }
 }

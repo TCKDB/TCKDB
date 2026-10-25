@@ -25,6 +25,7 @@ import { formatQuantity } from "../domain/quantityFormat"
 import { deriveStatmechConformer } from "../domain/statmechConformerDerivation"
 import { useEntryListSection, type EntryListSectionState } from "../hooks/useEntryListSection"
 import { useEntryStatmech } from "../hooks/useEntryStatmech"
+import { everyOrThisPage } from "../domain/paging"
 import { ListPager } from "./ListPager"
 import type { ListMeta } from "../api/listEnvelope"
 import type { PageRequest } from "../domain/paging"
@@ -190,7 +191,7 @@ function StatmechList({ listKey, meta, onPage, response, conformer, conformers }
                     <p className="eyebrow">Deposited evidence</p>
                     <SectionHeading id="statmech-heading">Statistical mechanics</SectionHeading>
                     <p>
-                        Every statmech record deposited for this entry, each shown independently. Multiple
+                        {everyOrThisPage(pagination, "statmech record")}, each shown independently. Multiple
                         deposits are never merged, averaged, or reduced to one preferred value on this page.
                     </p>
                 </div>
@@ -362,8 +363,8 @@ function ConformerScopedStatmechRecords({ conformer, conformers, records, confor
             <>
                 <p className="note" role="status">
                     {conformersState.status === "error"
-                        ? `${conformersState.message} Showing every record for this entry, ungrouped, until the conformer link resolves.`
-                        : "Resolving conformer links… showing every record for this entry, ungrouped, in the meantime."}
+                        ? `${conformersState.message} Showing every record on this page, ungrouped, until the conformer link resolves.`
+                        : "Resolving conformer links… showing every record on this page, ungrouped, in the meantime."}
                 </p>
                 {renderStatmechRecords(records, conformers, sourceCalcsState, frequenciesState)}
             </>

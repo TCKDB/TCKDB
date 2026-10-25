@@ -803,8 +803,40 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         await screen.findByRole("link", { name: "calc_sp_1" })
         // Two DIFFERENT calculations on the same observation must show
         // their OWN energy, not one value copied onto both rows.
-        expect(screen.getByText(/-76\.111111 hartree/)).toBeVisible()
+        expect(await screen.findByText(/-76\.111111 hartree/)).toBeVisible()
         expect(screen.getByText(/-76\.222222 hartree/)).toBeVisible()
+    })
+
+    it("does not read the single-point energies until the single-point tab is open, and never blocks the entry on them", async () => {
+        let energyRequests = 0
+        server.use(
+            http.get("/api/v1/scientific/species-calculations/search", () => {
+                energyRequests += 1
+                return HttpResponse.json({ records: [], pagination: { offset: 0, limit: 200, returned: 0, total: 0 } })
+            }),
+            ...handlers(),
+        )
+        window.history.replaceState({}, "", `/species-entries/${entryRef}/geometry`)
+        render(<App />)
+        await screen.findByText("Choose a conformer")
+        expect(energyRequests).toBe(0)
+        fireEvent.click(screen.getByRole("tab", { name: /Single-point energy/ }))
+        await waitFor(() => expect(energyRequests).toBe(1))
+    })
+
+    it("shows the entry while the energies are still on their way, and says they are", async () => {
+        server.use(
+            http.get("/api/v1/scientific/species-calculations/search", async () => {
+                await new Promise((resolve) => setTimeout(resolve, 400))
+                return HttpResponse.json({ records: [], pagination: { offset: 0, limit: 200, returned: 0, total: 0 } })
+            }),
+            ...handlers(),
+        )
+        window.history.replaceState({}, "", `/species-entries/${entryRef}/sp`)
+        render(<App />)
+        expect(await screen.findByRole("link", { name: "calc_sp_1" })).toBeVisible()
+        expect(screen.getByText(/still being read from the archive/)).toBeVisible()
+        await waitFor(() => expect(screen.queryByText(/still being read from the archive/)).not.toBeInTheDocument())
     })
 
     it("renders 'not recorded' for an sp calculation with no matching energy record, rather than dropping its row", async () => {
@@ -812,6 +844,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         window.history.replaceState({}, "", `/species-entries/${entryRef}/sp`)
         render(<App />)
         expect(await screen.findByRole("link", { name: "calc_sp_1" })).toBeVisible()
+        await waitFor(() => expect(screen.queryByText(/still being read from the archive/)).not.toBeInTheDocument())
         expect(screen.getAllByText("not recorded").length).toBeGreaterThan(0)
     })
 
@@ -951,7 +984,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         // include=conformers refetch -- wait for the ERROR-specific text,
         // not the count line, which would pass even mid-flight.
         expect(await screen.findByText(
-            /Showing every record for this entry, ungrouped, until the conformer link resolves\./,
+            /Showing every record on this page, ungrouped, until the conformer link resolves\./,
         )).toBeVisible()
         expect(screen.getByText((_, element) => element?.textContent === "3 records · review: 3 not reviewed")).toBeVisible()
         expect(screen.getAllByText("sm_1").some((node) => node.tagName === "CODE")).toBe(true)
@@ -1182,15 +1215,19 @@ function pagedConformerHandler(total: number, seen: string[] = []) {
         const offset = Number(params.get("offset") ?? 0)
         const limit = Number(params.get("limit") ?? 50)
         seen.push(`${offset}:${limit}`)
-        const records = manyConformers(total).slice(offset, offset + limit)
+        const wantedRef = params.get("conformer_group_ref")
+        const everyone = manyConformers(total)
+        const records = wantedRef
+            ? everyone.filter((record) => record.conformer_group.conformer_group_ref === wantedRef)
+            : everyone.slice(offset, offset + limit)
         return HttpResponse.json({
             request: {
                 filter: {},
-                sort: { kind: "display_order", keys: [{ key: "review_rank", direction: "asc", meaning: "review status" }] },
+                sort: { kind: "display_order", keys: [{ key: "review_rank", direction: "asc", meaning: "review status: approved first; others after" }] },
                 hidden_by_default: { counts: { rejected: 3 }, include_with: { rejected: "include_rejected=true" }, counted: "records" },
             },
             records,
-            pagination: { offset, limit, returned: records.length, total },
+            pagination: { offset, limit, returned: records.length, total: wantedRef ? records.length : total },
         })
     })
 }
@@ -1207,7 +1244,7 @@ describe("species-entry page: paging the conformer basins", () => {
         expect(screen.getByText(/This entry has 120 deposited conformer basins/)).toBeVisible()
         // What the server said about the list is passed on, not dropped.
         expect(screen.getByText("Not listed by default: 3 rejected conformer basins.")).toBeVisible()
-        expect(screen.getByText(/^Display order: review rank\./)).toBeVisible()
+        expect(screen.getByText(/^Display order: approved first\./)).toBeVisible()
         expect(seen[0]).toBe("0:50")
     })
 
@@ -1244,7 +1281,7 @@ describe("species-entry page: what the conformer picker says about its own order
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
         await screen.findByText("Choose a conformer")
-        expect(screen.getByText(/listed by conformer number, then label, then reference/)).toBeVisible()
+        expect(screen.getByText(/Pages follow the archive's display order \(above\); the cards within a page are listed by conformer number, then label, then reference/)).toBeVisible()
         expect(screen.getByText(/no basin is preferred over another/)).toBeVisible()
     })
 
@@ -1273,5 +1310,75 @@ describe("species-entry page: what the conformer picker says about its own order
         await screen.findByText("Choose a conformer")
         await waitFor(() => expect(screen.getByRole("button", { name: /Conformer Group 2/ })).toHaveAttribute("aria-pressed", "true"))
         expect(screen.queryByText(/is selected only because it is listed first/)).not.toBeInTheDocument()
+    })
+})
+
+describe("species-entry page: the selected conformer does not depend on the page of the list", () => {
+    it("paging leaves ?conformer= alone and the default note true", async () => {
+        const user = userEvent.setup()
+        server.use(pagedConformerHandler(120), ...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByText("Showing 1\u201350 of 120 conformer basins.")
+        await waitFor(() => expect(new URLSearchParams(window.location.search).get("conformer")).toBe("cg_many_1"))
+        expect(new URLSearchParams(window.location.search).get("selection")).toBe("default")
+        await user.click(screen.getByRole("button", { name: "Next" }))
+        await screen.findByText("Showing 51\u2013100 of 120 conformer basins.")
+        expect(new URLSearchParams(window.location.search).get("conformer")).toBe("cg_many_1")
+        expect(screen.getByText(/Conformer Group 1 is selected only because it is listed first/)).toBeVisible()
+        expect(screen.getByText(/Conformer Group 1 is selected; it is on another page of this list/)).toBeVisible()
+    })
+
+    it("a link to a basin on a later page opens that basin, by its own ref, and keeps the link as written", async () => {
+        const seen: string[] = []
+        server.use(
+            http.get("/api/v1/scientific/conformers/search", ({ request }) => {
+                seen.push(new URL(request.url).searchParams.get("conformer_group_ref") ?? "")
+                return undefined
+            }),
+            pagedConformerHandler(120),
+            ...handlers(),
+        )
+        window.history.replaceState({}, "", `/species-entries/${entryRef}?conformer=cg_many_80`)
+        render(<App />)
+        expect(await screen.findByText(/Conformer Group 80 is selected; it is on another page of this list/)).toBeVisible()
+        expect(seen).toContain("cg_many_80")
+        expect(new URLSearchParams(window.location.search).get("conformer")).toBe("cg_many_80")
+        expect(new URLSearchParams(window.location.search).get("selection")).toBeNull()
+        expect(screen.queryByText(/is selected only because it is listed first/)).not.toBeInTheDocument()
+        expect(await screen.findByRole("heading", { name: /Evidence for Conformer Group 80/ })).toBeVisible()
+    })
+
+    it("after a reload the note still says the page made the pick", async () => {
+        server.use(pagedConformerHandler(120), ...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}?conformer=cg_many_1&selection=default`)
+        render(<App />)
+        expect(await screen.findByText(/Conformer Group 1 is selected only because it is listed first/)).toBeVisible()
+    })
+
+    it("a ref that names no basin of this entry falls back to the default pick and says so", async () => {
+        server.use(pagedConformerHandler(120), ...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}?conformer=cg_nope`)
+        render(<App />)
+        expect(await screen.findByText(/Conformer Group 1 is selected only because it is listed first/)).toBeVisible()
+        await waitFor(() => expect(new URLSearchParams(window.location.search).get("conformer")).toBe("cg_many_1"))
+    })
+
+    it("a basin on a page the reader has not opened still has its label in thermo, not its raw ref", async () => {
+        const [record] = thermoRecords()
+        server.use(
+            http.get(`/api/v1/scientific/species-entries/${entryRef}/thermo`, () => HttpResponse.json({
+                species_entry_ref: entryRef,
+                review_summary: { approved: 0, under_review: 0, not_reviewed: 1, deprecated: 0, rejected: 0, total: 1 },
+                records: [{ ...record, provenance: { ...record.provenance, conformer_group_ref: "cg_many_100" } }],
+                pagination: { offset: 0, limit: 50, returned: 1, total: 1 },
+            })),
+            pagedConformerHandler(120),
+            ...handlers(),
+        )
+        window.history.replaceState({}, "", `/species-entries/${entryRef}/thermo`)
+        render(<App />)
+        expect(await screen.findByRole("heading", { name: "From Conformer Group 100" })).toBeInTheDocument()
+        expect(screen.queryByRole("heading", { name: "From cg_many_100" })).not.toBeInTheDocument()
     })
 })
