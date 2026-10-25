@@ -92,3 +92,28 @@ def test_a_bundle_fit_refuses_a_bath_gas_at_the_high_pressure_limit():
         )
     (error,) = caught.value.errors()
     assert error["ctx"]["error"].code == "kinetics_bath_gas_at_high_pressure_limit"
+
+
+def test_the_declaration_rules_read_a_stated_bath_gas():
+    from tckdb_schemas.kinetics_declarations import kinetics_declaration_error
+
+    claim = {"version": 1, "claim_origin": "source_publication"}
+    ar = {"species": {"smiles": "[Ar]", "charge": 0, "multiplicity": 1}}
+    n2 = {"species": {"smiles": "N#N", "charge": 0, "multiplicity": 1}}
+    base = {"scientific_origin": "experimental", "model_kind": "arrhenius", "bath_gas": [{"mole_fraction": 1.0}]}
+    contradicts = "kinetics_declaration_contradicts_record"
+
+    def error(applicability, **extra):
+        return kinetics_declaration_error({**base, **extra, "applicability": {**claim, **applicability}})
+
+    assert error({"pressure_dependence": "high_pressure_limit"})[0] == contradicts
+    assert error({"pressure_dependence": "high_pressure_limit"}, bath_gas=[]) is None
+    assert error({"collider_kind": "specified_collider", "colliders": [ar]}) is None
+    assert error({"collider_kind": "specified_collider", "colliders": [ar]}, bath_gas=[{"mole_fraction": 0.6}])[0] == contradicts
+    mixture = {
+        "collider_kind": "fixed_mixture",
+        "colliders": [{**ar, "mole_fraction": 0.5}, {**n2, "mole_fraction": 0.5}],
+    }
+    assert error(mixture, bath_gas=[{"mole_fraction": 0.5}, {"mole_fraction": 0.5}]) is None
+    assert error(mixture, bath_gas=[{"mole_fraction": 0.7}, {"mole_fraction": 0.3}])[0] == contradicts
+    assert error({"collider_kind": "not_dependent"}) is None

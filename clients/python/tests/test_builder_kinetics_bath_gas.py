@@ -108,3 +108,25 @@ def test_an_apparent_rate_needs_its_pressure():
     with pytest.raises(TCKDBBuilderValidationError, match="requires pressure_bar"):
         _kinetics(pressure_context="apparent_at_pressure")
     assert _kinetics(pressure_context="apparent_at_pressure", pressure_bar=1.0).pressure_bar == 1.0
+
+
+_CLAIM = {"version": 1, "claim_origin": "source_publication"}
+
+
+def test_a_high_pressure_limit_declaration_with_a_bath_gas_is_refused_with_the_server_code():
+    """The pressure context is unset, so only the declaration says high-pressure limit."""
+    ar, _ = _species()
+    with pytest.raises(TCKDBBuilderValidationError, match="kinetics_declaration_contradicts_record"):
+        _kinetics(applicability={**_CLAIM, "pressure_dependence": "high_pressure_limit"}, bath_gas=[(ar, 1.0)])
+
+
+def test_a_specified_collider_needs_a_bath_gas_of_one_species_at_one():
+    ar, n2 = _species()
+    declared = {
+        **_CLAIM,
+        "collider_kind": "specified_collider",
+        "colliders": [{"species": {"smiles": "[Ar]", "charge": 0, "multiplicity": 1}}],
+    }
+    with pytest.raises(TCKDBBuilderValidationError, match="kinetics_declaration_contradicts_record"):
+        _kinetics(applicability=declared, bath_gas=[(ar, 0.5), (n2, 0.5)])
+    assert _kinetics(applicability=declared, bath_gas=[(ar, 1.0)]).bath_gas

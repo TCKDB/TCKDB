@@ -36,6 +36,9 @@ kinetics record can now say which bath gas it was obtained for, where the deposi
   resolve to one species entry).
 - **Read.** Each kinetics record carries `bath_gas` (`species_entry_ref`, `mole_fraction`), null when none was stated; the kinetics export carries it too.
 - **Accepted science.** Once a kinetics record is approved its bath gas can be neither added, edited nor removed.
+- **No contradictions.** A stated bath gas is refused, under `kinetics_declaration_contradicts_record`, when the applicability declaration says `high_pressure_limit`,
+  when a declared `specified_collider` is not exactly the bath gas at 1, when a declared `fixed_mixture` has other species or fractions, or when the fit's linked
+  network solve states a different bath gas. Nothing is inferred from either statement; the selector still reads only the declaration.
 - **Bundles.** A kinetics bundle exports the bath gas as species content and a re-import writes the same rows.
 
 ## Calculation dependencies are acyclic, enforced by the database (2026-10-25)

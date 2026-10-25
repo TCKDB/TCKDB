@@ -166,3 +166,74 @@ def test_two_spellings_of_one_species_entry_are_refused_at_write_time(db_conn, m
 def test_a_component_outside_zero_to_one_is_refused(fraction: float) -> None:
     with pytest.raises(ValidationError):
         _plog_request(bath_gas=[{"species_entry": AR, "mole_fraction": fraction}])
+
+
+# ---------------------------------------------------------------------------
+# A linked network solve's bath gas
+# ---------------------------------------------------------------------------
+
+
+def _solve_with_bath_gas(session, species: dict):
+    from app.db.models.network_pdep import NetworkSolveBathGas
+    from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
+    from app.services.species_resolution import resolve_species_entry
+    from tests.workflows.test_kinetics_upload import _make_network_kinetics
+
+    nk = _make_network_kinetics(session)
+    entry = resolve_species_entry(session, SpeciesEntryIdentityPayload(**species))
+    session.add(NetworkSolveBathGas(solve_id=nk.solve_id, species_entry_id=entry.id, mole_fraction=1.0))
+    session.flush()
+    return nk
+
+
+def test_a_bath_gas_that_differs_from_the_linked_solves_is_refused(db_conn, monkeypatch) -> None:
+    """Kills: the network comparison missing. The code is the declaration-contradiction one."""
+    _patch_doi(monkeypatch)
+    with Session(db_conn) as session:
+        nk = _solve_with_bath_gas(session, AR)
+        request = _shape_kinetics_request(
+            network_kinetics_ref=nk.public_ref, bath_gas=[{"species_entry": N2, "mole_fraction": 1.0}]
+        )
+        with pytest.raises(CodedValueError) as caught:
+            persist_kinetics_upload(session, request)
+        assert caught.value.code == "kinetics_declaration_contradicts_record"
+        assert caught.value.context["reason"] == "network"
+        session.rollback()
+
+
+def test_a_bath_gas_that_agrees_with_the_linked_solve_is_accepted(db_conn, monkeypatch) -> None:
+    _patch_doi(monkeypatch)
+    with Session(db_conn) as session:
+        nk = _solve_with_bath_gas(session, AR)
+        request = _shape_kinetics_request(
+            network_kinetics_ref=nk.public_ref, bath_gas=[{"species_entry": AR, "mole_fraction": 1.0}]
+        )
+        assert persist_kinetics_upload(session, request).network_kinetics_id == nk.id
+        session.rollback()
+
+
+def test_a_record_stating_no_bath_gas_is_not_compared_with_the_solve(db_conn, monkeypatch) -> None:
+    """Never infer one statement from the other: no bath gas stated is no bath gas stored."""
+    _patch_doi(monkeypatch)
+    with Session(db_conn) as session:
+        nk = _solve_with_bath_gas(session, AR)
+        kinetics = persist_kinetics_upload(session, _shape_kinetics_request(network_kinetics_ref=nk.public_ref))
+        assert session.scalars(select(KineticsBathGas).where(KineticsBathGas.kinetics_id == kinetics.id)).all() == []
+        session.rollback()
+
+
+def test_the_evidence_snapshot_carries_a_bath_gas_only_when_one_is_stated(db_conn, monkeypatch) -> None:
+    """Kills: the snapshot ignoring the bath gas, and the snapshot of a record without one changing."""
+    from app.db.models.common import SubmissionRecordType
+    from app.services.reproducibility_rubric import _target_snapshot
+
+    _patch_doi(monkeypatch)
+    with Session(db_conn) as session:
+        plain = persist_kinetics_upload(session, _plog_request())
+        stated = persist_kinetics_upload(session, _plog_request(bath_gas=[{"species_entry": AR, "mole_fraction": 1.0}]))
+        session.flush()
+        session.refresh(stated)
+        assert "bath_gases" not in _target_snapshot(plain, SubmissionRecordType.kinetics)["relationships"]
+        rows = _target_snapshot(stated, SubmissionRecordType.kinetics)["relationships"]["bath_gases"]
+        assert [row["mole_fraction"] for row in rows] == [1.0]
+        session.rollback()

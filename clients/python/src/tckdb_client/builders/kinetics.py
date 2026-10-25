@@ -349,6 +349,11 @@ class Kinetics:
                 "scientific_origin": "computed",
                 "model_kind": self.model_kind,
                 "is_third_body": False,
+                "pressure_context": self.pressure_context,
+                "pressure_bar": self.pressure_bar,
+                # Fractions only: whether the species agree with a declared collider is judged where
+                # species are resolved (the server), never by comparing spellings here.
+                "bath_gas": [{"mole_fraction": fraction} for _species, fraction in self.bath_gas],
                 "determination": self.determination,
                 "applicability": self.applicability,
                 "protocol": self.protocol,

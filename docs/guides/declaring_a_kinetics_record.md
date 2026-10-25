@@ -80,8 +80,16 @@ solve (`kinetics_bath_gas_mole_fraction_sum`); and one species named twice, incl
 one species entry (`kinetics_bath_gas_duplicate_species`). It is read back as `bath_gas` on the record, and is frozen
 with the record once it is approved.
 
-`bath_gas` is a relational, queryable statement. The `colliders` of an applicability declaration (above) are part of
-the declared claim about what the coefficient is of; the two are not cross-checked.
+The mole fractions must sum to 1 within 1e-9 and are never renormalised, so normalise before sending: rounded air
+(N2 0.78, O2 0.21, Ar 0.0093) is refused.
+
+`bath_gas` is a relational, queryable statement; the `colliders` of an applicability declaration (above) are part of the
+declared claim about what the coefficient is of. Neither is ever inferred from the other, and the selector reads only
+the declaration, so a stated bath gas must not contradict it. Under `kinetics_declaration_contradicts_record` the record
+is refused when: the declaration says `high_pressure_limit` and a bath gas is stated; a `specified_collider` X is declared
+and the bath gas is not exactly X at 1; a `fixed_mixture` is declared and the bath gas has other species or fractions
+(beyond 1e-9). `composition_dependent` and `not_dependent` are not checked. Species are compared as species, after
+resolution. A fit linked to a network solve that states a different bath gas is refused under the same code.
 
 ## How the rate was produced
 

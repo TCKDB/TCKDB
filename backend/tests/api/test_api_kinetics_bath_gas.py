@@ -176,3 +176,92 @@ def test_a_record_without_bath_gas_exports_without_one(client, db_session):
     bundle, imported = _round_trip(db_session, [_latest(db_session).id])
     assert bundle.records.kinetics_uploads[0].bath_gas == []
     assert _stored(db_session, imported[0]) == {}
+
+
+# ---------------------------------------------------------------------------
+# A bath gas and the applicability declaration's colliders must not contradict
+# ---------------------------------------------------------------------------
+
+_CONTRADICTS = "kinetics_declaration_contradicts_record"
+_AR = {"smiles": "[Ar]", "charge": 0, "multiplicity": 1}
+
+
+def _applicability(**fields) -> dict:
+    return {"version": 1, "claim_origin": "source_publication", **fields}
+
+
+def _collider(species: dict, fraction: float | None = None) -> dict:
+    return {"species": species, **({"mole_fraction": fraction} if fraction is not None else {})}
+
+
+def test_high_pressure_limit_declaration_with_a_bath_gas_and_no_pressure_context_is_refused(client, db_session):
+    """Kills: the high-pressure-limit rule reading only the pressure_context column (the bypass)."""
+    body = _standalone(
+        applicability=_applicability(pressure_dependence="high_pressure_limit"),
+        determination={"key": "k1", "target_kind": "whole_reaction", "representation_role": "complete"},
+        bath_gas=[{"species_entry": HE, "mole_fraction": 1.0}],
+    )
+    assert "pressure_context" not in body
+    assert _code(client.post(KINETICS, json=body)) == _CONTRADICTS
+    assert db_session.scalars(select(Kinetics)).all() == []
+
+
+@pytest.mark.parametrize(
+    ("declared", "bath_gas", "accepted"),
+    [
+        ({"collider_kind": "specified_collider", "colliders": [_collider(N2)]}, [(N2, 1.0)], True),
+        ({"collider_kind": "specified_collider", "colliders": [_collider(N2)]}, [(HE, 1.0)], False),
+        ({"collider_kind": "specified_collider", "colliders": [_collider(N2)]}, [(N2, 0.5), (HE, 0.5)], False),
+        (
+            {"collider_kind": "fixed_mixture", "colliders": [_collider(HE, 0.5), _collider(N2, 0.5)]},
+            [(N2, 0.5), (HE, 0.5)],
+            True,
+        ),
+        (
+            {"collider_kind": "fixed_mixture", "colliders": [_collider(HE, 0.5), _collider(N2, 0.5)]},
+            [(HE, 0.6), (N2, 0.4)],
+            False,
+        ),
+        (
+            {"collider_kind": "fixed_mixture", "colliders": [_collider(HE, 0.5), _collider(N2, 0.5)]},
+            [(HE, 0.5), (_AR, 0.5)],
+            False,
+        ),
+        ({"collider_kind": "not_dependent"}, [(HE, 1.0)], True),
+    ],
+    ids=[
+        "specified_agrees",
+        "specified_other_species",
+        "specified_but_a_mixture",
+        "mixture_agrees",
+        "mixture_other_fractions",
+        "mixture_other_species",
+        "not_dependent_unchecked",
+    ],
+)
+def test_bath_gas_against_declared_colliders(client, declared, bath_gas, accepted):
+    """Kills: no check, a check on the wrong species, or a fraction compared loosely."""
+    body = _standalone(
+        **_APPARENT,
+        applicability=_applicability(pressure_dependence="fixed_pressure", **declared),
+        bath_gas=[{"species_entry": sp, "mole_fraction": f} for sp, f in bath_gas],
+    )
+    response = client.post(KINETICS, json=body)
+    if accepted:
+        assert response.status_code == 201, response.text[:500]
+    else:
+        # Species-level cases are refused at write time; the real write dependency rolls back, and the
+        # harness shares one session without that rollback, so the stored rows are asserted elsewhere.
+        assert _code(response) == _CONTRADICTS
+
+
+def test_two_spellings_of_one_species_entry_are_refused_over_http(client):
+    """Kills: only the workflow raising it. Different payloads, one resolved entry, and no 500."""
+    body = _standalone(
+        **_APPARENT,
+        bath_gas=[
+            {"species_entry": N2, "mole_fraction": 0.5},
+            {"species_entry": {"smiles": "[N]#[N]", "charge": 0, "multiplicity": 1}, "mole_fraction": 0.5},
+        ],
+    )
+    assert _code(client.post(KINETICS, json=body)) == "kinetics_bath_gas_duplicate_species"
