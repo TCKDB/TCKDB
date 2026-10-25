@@ -650,7 +650,8 @@ def ids_below_review_floor(
 ) -> set[int]:
     """Which of ``record_ids`` the active read profile's review floor hides (the detail route answers 404 for them).
 
-    Mirrors the floor the detail-by-ref gate applies (``handles.py``). For the count and flag floors (owner decision
+    Mirrors the floor the detail-by-ref gate applies (``handles.py``); that stops being true in step 7 of ADR 0023, when
+    the gate moves to the withheld set. For the count and flag floors (owner decision
     D5), where a count must not include a record the profile hides. It is not a ref rule: refs are withheld at the
     response boundary by ``ref_guard``. Without a review floor (exploratory, or outside a scientific request) nothing is
     hidden and no query is made. Otherwise one statement.
@@ -705,20 +706,23 @@ def where_visible(stmt: Any, predicate: Any) -> Any:
 # The evidence rule (owner decision 2026-10-25, DR/ADR 0023)
 # ---------------------------------------------------------------------------
 #
-# Two rules decide what the curated profile shows. They are different rules and must not be mixed up.
+# Three things are assigned to three rules under the curated profile. They must not be mixed up.
 #
 #   RECORD FLOOR   ``review_floor_predicate`` / ``ids_below_review_floor`` / ``status_hidden_under_profile``.
-#                  Decides which RECORDS a list, search or select returns. Under ``curated`` anything below
+#                  Covers lists, searches and selects: which RECORDS are returned. Under ``curated`` anything below
 #                  ``approved`` is not returned.
 #
-#   EVIDENCE RULE  this section. Decides which LINKED EVIDENCE of a returned record is shown (source calculations,
-#                  levels derived from them, conformer observations inside a group, evidence counts, nested refs).
-#                  Under ``curated`` such evidence is shown with its review badge, whatever its status, except
-#                  ``rejected`` and ``deprecated`` evidence, which is withheld ("absent" semantics). A missing review
-#                  row reads as ``not_reviewed`` and is therefore visible.
+#   DETAIL-BY-REF  ``resolve_path_handle`` -> ``_hidden_by_floor`` in ``handles.py``. Under ``curated`` it uses the
+#                  withheld set below (rejected / deprecated) from step 7 of ADR 0023 onward, amending ADR 0006's second
+#                  seam. Until step 7 it still applies the record floor.
 #
-# Curated withholds evidence exactly as the default (exploratory) profile withholds records. Under exploratory
-# nothing is withheld as evidence (the profile shows everything with badges), so every function here answers
+#   EVIDENCE RULE  this section. Covers LINKED EVIDENCE of a returned record (source calculations, levels derived from
+#                  them, conformer observations inside a group, evidence counts, nested refs). Under ``curated`` such
+#                  evidence is shown with its review badge, except ``rejected`` and ``deprecated`` evidence, which is
+#                  withheld ("absent" semantics). A missing review row reads as ``not_reviewed`` and is visible.
+#
+# The evidence rule withholds the same statuses the default (exploratory) profile hides by default; unlike the default it
+# cannot be lifted by request. Under exploratory nothing is withheld as evidence, so every function here answers
 # "visible" and issues no query.
 #
 # STATUS: nothing calls this section yet. It lands ahead of its callers; the code still applies the earlier rule

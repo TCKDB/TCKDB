@@ -1,7 +1,8 @@
 # Curated profile: the approved floor applies to records; linked evidence is badged
 
 **Status: accepted 2026-10-25** (owner decision). Related:
-[0006](0006-exploratory-reads-by-default-with-mandatory-disclosure.md) (exploratory by default, with disclosure),
+[0006](0006-exploratory-reads-by-default-with-mandatory-disclosure.md) (exploratory by default, with disclosure; **this record
+amends its detail-page seam**, see Q1),
 [0007](0007-curated-selections-are-a-release-overlay-not-a-column.md) (curated selections are a release overlay),
 [0016](0016-review-approves-a-claim-and-does-not-cascade.md) (review approves a claim and does not cascade).
 Supersedes the read-side rule known as D6 ("hidden == unknown == absent") for linked evidence. The rule is being rolled out in
@@ -31,8 +32,17 @@ There are two rules, and they are different.
   `under_review`, `approved`). Evidence at `rejected` or `deprecated` is withheld, with the existing "absent" semantics. A
   missing review row reads as `not_reviewed`, so it is visible.
 
-Put the other way round: `curated` withholds evidence exactly as the default profile withholds records. Under `exploratory`
-nothing is withheld as evidence.
+Put the other way round: `curated` withholds evidence for the same statuses the default profile hides by default (`rejected`,
+`deprecated`). Unlike the default, whose exclusions a request lifts with `include_rejected` / `include_deprecated`, the evidence
+rule has no lift switch. Under `exploratory` nothing is withheld as evidence.
+
+Three things are assigned to three rules, so none is mixed up:
+
+- **Record floor** (`approved`): lists, searches and selects.
+- **Detail-by-ref** under `curated`: the withheld set (`rejected`, `deprecated`) from step 7 onward. This amends ADR 0006's
+  second seam (`resolve_path_handle`, which reaches `_hidden_by_floor` and `status_hidden_under_profile` in `handles.py`).
+  Until step 7 the seam still applies the floor.
+- **Evidence rule**: a returned record's linked evidence.
 
 The boundary between a record and its evidence, as approved by the owner:
 
@@ -44,7 +54,7 @@ The boundary between a record and its evidence, as approved by the owner:
 - **Q5** Network solves are records. A supersession successor is shown badged.
 - **Q6** The transition-state trust badge follows the evidence rule.
 - **Q7** Dataset releases are unchanged. ML-export energy rows keep their calculations approved-only.
-- **Q8** `curated` now checks made-under inputs.
+- **Q8** `curated` will check made-under inputs (step 6): curated responses compare a stamp's inputs as exploratory does.
 - **Q9** Entry lists follow the 2026-10-24 decision (a list filter). An entry embedded in another record, such as a `/full`
   participant, is shown badged.
 
@@ -56,8 +66,8 @@ does not link to. TCKDB ships no built-in method ranking.
 - Matching under `curated` may go through linked evidence that is not reviewed. It never goes through `rejected` or
   `deprecated` evidence.
 - Under `exploratory`, matching still goes through rejected evidence, because exploratory withholds nothing as evidence. The
-  asymmetry is by design: each profile withholds at one level only, records for `exploratory`'s default exclusions, evidence
-  for `curated`.
+  asymmetry is by design: `exploratory` withholds records only (its default exclusions, which a request can lift), while
+  `curated` withholds at two levels, records by the floor and evidence by the withheld set (which a request cannot lift).
 - A curated reader sees what an approved record rests on, and the badge says how much of it anyone has checked.
 - Counts of evidence under `curated` include unreviewed evidence and exclude rejected and deprecated evidence.
 

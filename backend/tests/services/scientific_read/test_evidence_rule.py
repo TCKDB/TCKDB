@@ -87,7 +87,7 @@ def test_sql_predicate_selects_exactly_the_visible_ids(db_session, seeded):
     assert got == {seeded[k] for k in ("approved", "under_review", "not_reviewed", "none")}
 
 
-def test_sql_predicate_is_none_under_exploratory(seeded):
+def test_sql_predicate_is_none_under_exploratory():
     assert linked_evidence_predicate(Calculation.id, CALC, profile=EXPLORATORY) is None
 
 
@@ -106,3 +106,53 @@ def test_ids_withheld_is_scoped_to_the_record_type(db_session, seeded):
 def test_ids_withheld_under_exploratory_and_empty_issue_no_query(db_session, seeded):
     assert ids_withheld_as_evidence(db_session, record_type=CALC, record_ids=seeded.values(), profile=EXPLORATORY) == set()
     assert ids_withheld_as_evidence(db_session, record_type=CALC, record_ids=[], profile=CURATED) == set()
+
+
+def test_sql_predicate_is_scoped_to_the_record_type(db_session, seeded):
+    """A rejected review of another record type with the same id does not withhold the calculation."""
+    from ._factories import set_review
+
+    set_review(db_session, record_type=SubmissionRecordType.thermo, record_id=seeded["approved"], status=S.rejected)
+    pred = linked_evidence_predicate(Calculation.id, CALC, profile=CURATED)
+    got = set(db_session.scalars(select(Calculation.id).where(Calculation.id.in_(seeded.values())).where(pred)))
+    assert seeded["approved"] in got
+
+
+def _count_statements(session, fn):
+    from sqlalchemy import event
+
+    seen: list[str] = []
+
+    def before(conn, cursor, statement, *args):
+        seen.append(statement)
+
+    engine = session.get_bind()
+    event.listen(engine, "before_cursor_execute", before)
+    try:
+        fn()
+    finally:
+        event.remove(engine, "before_cursor_execute", before)
+    return len(seen)
+
+
+def test_ids_withheld_issues_no_query_under_exploratory(db_session, seeded):
+    n = _count_statements(
+        db_session,
+        lambda: ids_withheld_as_evidence(db_session, record_type=CALC, record_ids=seeded.values(), profile=EXPLORATORY),
+    )
+    assert n == 0
+
+
+def test_ids_withheld_issues_no_query_for_empty_input(db_session):
+    n = _count_statements(
+        db_session, lambda: ids_withheld_as_evidence(db_session, record_type=CALC, record_ids=[], profile=CURATED)
+    )
+    assert n == 0
+
+
+def test_ids_withheld_issues_one_query_otherwise(db_session, seeded):
+    n = _count_statements(
+        db_session,
+        lambda: ids_withheld_as_evidence(db_session, record_type=CALC, record_ids=seeded.values(), profile=CURATED),
+    )
+    assert n == 1

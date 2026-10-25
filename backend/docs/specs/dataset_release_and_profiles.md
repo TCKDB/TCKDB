@@ -105,8 +105,8 @@ report the profile:
   in every dataset manifest" means for them. They capture the profile
   *eagerly*, because a streaming generator can outlive the request-scoped
   context that holds it.
-  (Export withholding below is the earlier rule; the evidence rule above will narrow it in a later step, except ML-export energy rows,
-  whose calculations stay approved-only.)
+  (Export withholding below is the earlier rule; the evidence rule described in the banner at the end of section 2.4 will narrow it in a
+  later step, except ML-export energy rows, whose calculations stay approved-only.)
   Under `curated` the exports also withhold hidden refs, in untyped (`null`)
   mode, a batch of 200 records at a time: **a withheld ref is `null`**, **a
   hidden member of a list of refs is dropped** from the list, free text that
@@ -147,8 +147,8 @@ Resolved once, by an `async` router-level dependency
 > Under `curated`, the `approved` floor decides which *records* a list, search or select returns (the *record floor*). A
 > returned record's own linked evidence (source calculations, levels derived from them, conformer observations in a group,
 > evidence counts, nested refs) is always shown with its review badge; only `rejected` and `deprecated` evidence is withheld
-> (the *evidence rule*). A missing review row reads as `not_reviewed` and is visible. `curated` withholds evidence exactly as
-> the default profile withholds records. This is being rolled out in steps; **until those land, the code still applies the
+> (the *evidence rule*). A missing review row reads as `not_reviewed` and is visible. `curated` withholds evidence for the same
+> statuses the default hides by default (`rejected`, `deprecated`); unlike the default, this cannot be lifted by request. This is being rolled out in steps; **until those land, the code still applies the
 > earlier rule (below the floor is hidden, evidence included), and the text below describes that code.** The two rules'
 > shared helper is `evidence_withheld_under_profile` and its siblings in `common.py`; no read calls it yet.
 
