@@ -22,6 +22,29 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Every list can be walked by cursor (2026-10-25)
+
+Every browse and list read takes `cursor` and returns `next_cursor` (null on the last page) and, on cursor pages, `watermark`. `offset` stays, for "page N of
+M", and is now described as what it is: deterministic only for a static corpus. Between two offset pages an upload that sorts above the
+reader repeats a record, and a record leaving the visible set (a deprecation) makes the reader skip one; neither shows in the response.
+A cursor holds the sort key of the last record delivered and a snapshot bound, so neither can happen to it.
+
+- Covered: the species, reaction, thermo, kinetics, statmech, transport, calculation, conformer, transition-state, network, level-of-theory,
+  frequency-scale-factor, energy-correction-scheme, artifact, literature-record, structure-search and analytics reads, the per-entry
+  thermo/statmech/transport/observation reads, the calculation point series, the custody record and its history, and the release list and ledger.
+  Each POST search twin takes `cursor` in its body and shares the cursor with its GET form.
+- Not covered, with the reason: the two NDJSON exports (a stream with no envelope), and the authenticated operations lists (admin users and
+  curator tasks, submissions for review and mine, a submission's audit events and record links).
+- A cursor is bound to its endpoint, filters and read profile (422 `cursor_query_mismatch`), cannot be combined with a non-zero `offset`
+  (`cursor_offset_conflict`), and is refused when altered or from another version (`invalid_cursor`, exact version equality).
+- Under `profile=curated` a cursor names no hidden record: its key is a record already delivered, and its snapshot bound is the highest id the
+  profile shows. The snapshot does not freeze review state; a record deprecated mid-traversal drops out, and none that stays visible is skipped.
+- `next_cursor` and `watermark` are now fields of every list response, as they were on the analytics ones; `pagination.mode` (`offset` or
+  `cursor`) replaces the analytics `request.pagination_mode`. The analytics cursor now ends exactly: `next_cursor` is null on a full last page.
+- The cursor payload gained an integrity digest and the version is 3: a version 2 cursor is refused.
+- Every `iter_*` helper in `tckdb-client` follows the cursor; the paged MCP tools take `cursor`. `tckdb-client` 0.167.0, `tckdb-mcp` 0.14.0;
+  `tckdb-schemas` unchanged. No migration.
+
 ## Website lists are paged, and orders and picks are stated (2026-10-25)
 
 Frontend only; no API, schema or migration change.

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.167.0 - 2026-10-25
+
+Every list read can be walked by cursor, and every `iter_*` helper does.
+
+- Each `search_*` / `browse_*` / `get_*` list method takes `cursor`, and the response carries `next_cursor` (`None` on the last page) and
+  `watermark`. `pagination.mode` says whether a page was served by `offset` or by `cursor`.
+- All `iter_*` helpers follow `next_cursor` (they used to count offsets, except the four analytics ones). A traversal over a corpus that is
+  being written to no longer repeats or skips a record. Passing a non-zero `offset` to an `iter_*` helper still walks by offset, from there.
+- `offset` is random access and is deterministic only for a static corpus; use it for "page N of M". The cursor pins a traversal to the
+  records that existed when it began; it does not freeze review state. A cursor is bound to its endpoint, filters and read profile
+  (`cursor_query_mismatch`), and cannot be combined with a non-zero `offset` (`cursor_offset_conflict`).
+- The analytics request echo no longer carries `pagination_mode`; it is `pagination.mode`.
+
 ## 0.166.0 - 2026-10-24
 
 A select call takes the caller's filters, and today's exclusions are named defaults the request can lift.

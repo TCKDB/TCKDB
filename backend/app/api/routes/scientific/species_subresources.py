@@ -38,7 +38,7 @@ from fastapi import APIRouter, Depends, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
     SEARCH_SCOPE,
     STATMECH_RECORD_SECTIONS,
@@ -92,7 +92,8 @@ def species_statmech(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Return statmech records for a species entry.
@@ -125,6 +126,7 @@ def species_statmech(
         include_deprecated=include_deprecated,
         sort=sort,
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     visibility = prepare_assessment_response(
@@ -153,7 +155,8 @@ def species_transport(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Return transport records for a species entry.
@@ -186,6 +189,7 @@ def species_transport(
         include_deprecated=include_deprecated,
         sort=sort,
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     visibility = prepare_assessment_response(
@@ -213,7 +217,8 @@ def species_observations(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Return molecular-property observations for a species entry.
@@ -248,6 +253,7 @@ def species_observations(
         include_deprecated=include_deprecated,
         sort=sort,
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     return apply_internal_ids_visibility(payload)

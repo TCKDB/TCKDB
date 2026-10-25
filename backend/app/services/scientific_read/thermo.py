@@ -86,7 +86,6 @@ from app.services.scientific_read.common import (
     ids_below_review_floor,
     reject_client_sort,
     review_summary,
-    slice_for_pagination,
     software_names_by_calculation,
     temperature_coverage,
     validate_includes,
@@ -121,6 +120,7 @@ from app.services.scientific_read.hidden_by_default import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.trust import (
     TrustFragment,
@@ -257,6 +257,13 @@ def get_species_thermo(
         min_name="coverage_temperature_min_k",
         max_name="coverage_temperature_max_k",
     )
+    paging = Paging(
+        "/scientific/species-entries/{id}/thermo",
+        request,
+        offset=offset,
+        limit=limit,
+        scope_extra={"species_entry_id": species_entry_id},
+    )
 
     species_entry = session.get(SpeciesEntry, species_entry_id)
     if species_entry is None:
@@ -378,6 +385,7 @@ def get_species_thermo(
         scope=("thermo", species_entry_id),
     )
     classified = [(t, kind) for t, kind in classified if badges[t.id].status in visible]
+    classified = paging.snapshot(classified, id_of=lambda pair: pair[0].id)
     if not classified:
         return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
@@ -715,17 +723,16 @@ def get_species_thermo(
     created_at = {t.id: t.created_at for t, _ in classified}
     review_status_by_id = {t.id: badges[t.id].status for t, _ in classified}
 
-    records.sort(
-        key=lambda rec: simple_selection_sort_key(
+    page = paging.window(
+        records,
+        key_of=lambda rec: simple_selection_sort_key(
             rec.thermo_id,
             policy=SelectionPolicy.default,
             review_status_by_id=review_status_by_id,
             created_at_by_id=created_at,
-        )
+        ),
     )
-
-    total = len(records)
-    returned = slice_for_pagination(records, offset=offset, limit=limit)
+    returned = page.items
 
     return ScientificSpeciesThermoResponse(
         request=RequestEcho(
@@ -742,8 +749,10 @@ def get_species_thermo(
             offset=offset,
             limit=limit,
             returned=len(returned),
-            total=total,
+            total=page.total,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 

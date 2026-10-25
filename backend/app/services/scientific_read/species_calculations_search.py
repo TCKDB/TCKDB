@@ -33,6 +33,7 @@ is set; the service must never fabricate associations.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqlalchemy import func, or_, select
@@ -117,7 +118,6 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     reject_client_sort,
     review_summary,
-    slice_for_pagination,
     validate_includes,
     validate_pagination,
     visible_statuses,
@@ -138,6 +138,7 @@ from app.services.scientific_read.hidden_by_default import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 from app.services.scientific_read.species import search_species
 from app.services.scientific_read.species_identity import (
@@ -220,6 +221,7 @@ def search_species_calculations(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/species-calculations/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -316,6 +318,7 @@ def search_species_calculations(
         )
     )
     rows = [r for r in rows if badges[r.calc_id].status in visible]
+    rows = paging.snapshot(rows, id_of=lambda r: r.calc_id)
     if not rows:
         return _empty_response(request, includes, offset, limit)
 
@@ -433,10 +436,9 @@ def search_species_calculations(
         )
 
     summary = review_summary(badges[r.calc_id] for r in rows)
-    sort_echo = _apply_ranking_sort(records, request)
-
-    total = len(records)
-    returned = slice_for_pagination(records, offset=offset, limit=limit)
+    ranking_key, sort_echo = _ranking_sort(request)
+    page = paging.window(records, key_of=ranking_key)
+    returned = page.items
 
     return ScientificSpeciesCalculationsSearchResponse(
         request=RequestEcho(
@@ -451,8 +453,10 @@ def search_species_calculations(
             offset=offset,
             limit=limit,
             returned=len(returned),
-            total=total,
+            total=page.total,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 
@@ -1326,11 +1330,11 @@ def _ranking_echo(ranking: CalculationRanking) -> OrderEcho:
     return browse_order("review_rank", "created_at", "id")
 
 
-def _apply_ranking_sort(
-    records: list[SpeciesCalculationsSearchRecord],
-    request: SpeciesCalculationsSearchRequest,
-) -> str:
-    """Sort records in-place per the requested ranking; return sort echo."""
+def _ranking_sort(request: SpeciesCalculationsSearchRequest) -> tuple[Callable[[SpeciesCalculationsSearchRecord], tuple], OrderEcho]:
+    """The key that orders the records for the requested ranking, and the echo that says so.
+
+    Every key ends in the calculation id, so the order is total and a cursor can resume from it.
+    """
     ranking = request.ranking
 
     if ranking == CalculationRanking.lowest_energy:
@@ -1346,30 +1350,29 @@ def _apply_ranking_sort(
                 -rec.calculation.calculation_id,
             )
 
-        records.sort(key=key)
-        return _ranking_echo(ranking)
+        return key, _ranking_echo(ranking)
 
     if ranking == CalculationRanking.latest:
-        records.sort(
-            key=lambda r: (-r.calculation.created_at.timestamp(), -r.calculation.calculation_id)
+        return (
+            lambda r: (-r.calculation.created_at.timestamp(), -r.calculation.calculation_id),
+            _ranking_echo(ranking),
         )
-        return _ranking_echo(ranking)
 
     if ranking == CalculationRanking.earliest:
-        records.sort(
-            key=lambda r: (r.calculation.created_at.timestamp(), r.calculation.calculation_id)
+        return (
+            lambda r: (r.calculation.created_at.timestamp(), r.calculation.calculation_id),
+            _ranking_echo(ranking),
         )
-        return _ranking_echo(ranking)
 
     # default and review_rank are equivalent for v0.
-    records.sort(
-        key=lambda r: (
+    return (
+        lambda r: (
             REVIEW_RANK[r.calculation.review.status],
             -r.calculation.created_at.timestamp(),
             -r.calculation.calculation_id,
-        )
+        ),
+        browse_order("review_rank", "created_at", "id"),
     )
-    return browse_order("review_rank", "created_at", "id")
 
 
 # ---------------------------------------------------------------------------

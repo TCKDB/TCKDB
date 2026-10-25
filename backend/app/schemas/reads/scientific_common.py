@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
@@ -149,17 +149,59 @@ DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
 
 
+#: A cursor is base64 of a small JSON payload. The bound exists to reject a 10 MB query parameter, not to validate the
+#: token; decoding does that.
+MAX_CURSOR_LENGTH: int = 4096
+
+CURSOR_DESCRIPTION = (
+    "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the "
+    "traversal to the records that existed when it began and is bound to this endpoint, these filters and this read "
+    "profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random "
+    "access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record "
+    "whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable "
+    "set use a published dataset release."
+)
+
+#: The ``cursor`` field of a list request.
+CursorToken = Annotated[str | None, Field(max_length=MAX_CURSOR_LENGTH, description=CURSOR_DESCRIPTION)]
+
+
 class Pagination(BaseModel):
     """Echoed pagination block per L5.
 
     ``total``     post-filter match count, before page slicing.
     ``returned``  actual length of ``records``.
+    ``mode``      which contract served this page: ``offset`` (random access) or ``cursor`` (stable traversal).
+
+    Two ways to move through a list
+    -------------------------------
+    ``offset`` is random access: "page N of M". It is deterministic only for a static corpus. An upload that sorts
+    above the reader's position, or a record that leaves the visible set, shifts every later page, and the reader
+    silently skips or repeats a record. ``next_cursor`` (a field of the response, beside this block) is the stable
+    traversal: pass it back as ``cursor`` for the following page. It is ``null`` on the last page. A cursor pins the
+    traversal to the records that existed when it began; it does not freeze review state. For an immutable, citable
+    set read a published dataset release. ``offset`` and ``cursor`` cannot be combined.
     """
 
     offset: int = Field(ge=0)
     limit: int = Field(ge=1, le=MAX_LIMIT)
     returned: int = Field(ge=0)
     total: int = Field(ge=0)
+    mode: Literal["offset", "cursor"] = "offset"
+
+
+class WatermarkEcho(BaseModel):
+    """The snapshot bound in force for a cursor traversal.
+
+    ``taken_at`` is when the traversal's snapshot was established: the moment the first page was served, not the
+    moment this page was. It is informational: the authoritative bound travels inside the opaque cursor.
+
+    The bound itself is a record id and is therefore deliberately not echoed; internal integer ids are hidden from
+    public responses by policy, and the caller never needs it.
+    """
+
+    taken_at: datetime
+    release_ref: str | None = None
 
 
 # ---------------------------------------------------------------------------

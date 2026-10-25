@@ -19,11 +19,12 @@ def test_slice_for_pagination_applies_offset_and_limit_to_every_record():
 
 
 @pytest.mark.parametrize("total", [0, 1, 4])
-def test_build_pagination_carries_exactly_the_four_counts(total: int):
-    """No read collapses its records to one, so there is no second total: ``post_collapse_total`` is gone."""
+def test_build_pagination_carries_exactly_the_four_counts_and_the_mode(total: int):
+    """No read collapses its records to one, so there is no second total: ``post_collapse_total`` is gone. ``mode``
+    says which paging contract served the page; without a cursor it is ``offset``."""
     pagination = build_pagination(offset=0, limit=50, returned=total, total=total)
 
-    assert pagination.model_dump() == {"offset": 0, "limit": 50, "returned": total, "total": total}
+    assert pagination.model_dump() == {"offset": 0, "limit": 50, "returned": total, "total": total, "mode": "offset"}
 
 
 def test_collect_bounded_pages_walks_past_first_page(monkeypatch):

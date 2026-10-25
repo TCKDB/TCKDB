@@ -52,6 +52,7 @@ from app.services.scientific_read.hidden_by_default import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.scientific_read.transport import (
@@ -93,6 +94,7 @@ def search_transport(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/transport/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -160,16 +162,18 @@ def search_transport(
     if not visible_ids:
         return _empty_response(request, includes, offset, limit)
 
+    visible_ids = paging.snapshot(visible_ids, id_of=lambda cid: cid)
     summary = review_summary(badges[cid] for cid in visible_ids)
-    visible_ids.sort(
-        key=lambda cid: (
+    page = paging.window(
+        visible_ids,
+        key_of=lambda cid: (
             REVIEW_RANK[badges[cid].status],
             -created_at_by_id[cid].timestamp(),
             -cid,
-        )
+        ),
     )
-    total = len(visible_ids)
-    page_ids = visible_ids[offset : offset + limit]
+    total = page.total
+    page_ids = page.items
     records = _materialize_records(session, page_ids, badges, includes)
 
     return ScientificTransportSearchResponse(
@@ -181,8 +185,9 @@ def search_transport(
         review_summary=summary,
         records=records,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(records), total=total
+            offset=offset, limit=limit, returned=len(records), total=total, page=page
         ),
+        **page.envelope(),
     )
 
 

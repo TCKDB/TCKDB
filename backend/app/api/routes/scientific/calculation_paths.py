@@ -26,7 +26,7 @@ from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.schemas.reads.scientific_calculation_paths import (
     ScientificCalculationIRCResponse,
     ScientificCalculationPathSearchResponse,
@@ -54,7 +54,8 @@ def scientific_calculation_scan(
     include_geometries: bool = Query(False),
     include: list[str] | None = Query(None),
     sort: str | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Return full scan data for one calculation, paginated by point.
@@ -86,6 +87,7 @@ def scientific_calculation_scan(
         include=parse_include(include),
         sort=sort,
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     return apply_internal_ids_visibility(payload)
@@ -101,7 +103,8 @@ def scientific_calculation_irc(
     include_geometries: bool = Query(False),
     include: list[str] | None = Query(None),
     sort: str | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Return full IRC data for one calculation, paginated by point.
@@ -129,6 +132,7 @@ def scientific_calculation_irc(
         include=parse_include(include),
         sort=sort,
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     return apply_internal_ids_visibility(payload)
@@ -144,7 +148,8 @@ def scientific_calculation_path_search(
     include_geometries: bool = Query(False),
     include: list[str] | None = Query(None),
     sort: str | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Return full path-search data for one calculation, paginated by
@@ -172,6 +177,7 @@ def scientific_calculation_path_search(
         include=parse_include(include),
         sort=sort,
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     return apply_internal_ids_visibility(payload)

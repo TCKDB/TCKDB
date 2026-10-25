@@ -23,6 +23,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery
 from app.db.models.common import DatasetReleaseStatus
 from app.schemas.reads.scientific_release import (
     ScientificReleaseDetailResponse,
@@ -66,7 +67,8 @@ def _claim_release_backing(release) -> None:
 def scientific_releases(
     session: Session = Depends(get_db),
     status: DatasetReleaseStatus | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """List dataset releases, newest first.
@@ -74,7 +76,7 @@ def scientific_releases(
     Withdrawn releases are listed rather than hidden: a reader holding an old
     citation needs to be able to discover that it was retracted.
     """
-    payload = list_releases(session, status=status, offset=offset, limit=limit)
+    payload = list_releases(session, status=status, offset=offset, limit=limit, cursor=cursor)
     return apply_internal_ids_visibility(payload)
 
 
@@ -121,7 +123,8 @@ def scientific_release_selections(
     release_handle: str = Path(..., min_length=1, max_length=64),
     session: Session = Depends(get_db),
     include_superseded: bool = Query(True),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """The attributed, append-only selection ledger behind a release.
@@ -135,6 +138,7 @@ def scientific_release_selections(
         release_handle,
         include_superseded=include_superseded,
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     return apply_internal_ids_visibility(payload)

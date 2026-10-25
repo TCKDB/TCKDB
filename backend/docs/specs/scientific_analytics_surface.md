@@ -207,14 +207,14 @@ v0 sort policy.
 
 `offset` / `limit` behave exactly as on the other scientific searches.
 `pagination.total` is the post-filter, post-visibility count of the whole
-matching set. `request.pagination_mode` reports `"offset"`.
+matching set. `pagination.mode` reports `"offset"`.
 
 ### 5.3 Keyset (opt-in)
 
-Every response carries `next_cursor`. It is non-null whenever the page came
-back full (`returned == limit`); a short page means the traversal is complete.
+Every response carries `next_cursor`. It is non-null exactly when more records follow this page, and null on the last
+page (a full last page included). The cursor engine is shared by every list read; see `docs/specs/browse_order.md`.
 Passing it as `?cursor=` returns the next page and reports
-`request.pagination_mode == "cursor"`.
+`pagination.mode == "cursor"`.
 
 The contract:
 

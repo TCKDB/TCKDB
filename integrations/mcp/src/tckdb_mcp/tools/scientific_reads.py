@@ -21,7 +21,7 @@ from ._path_handles import PUBLIC_REF_MAX_LENGTH, validate_path_handle
 Method = Literal["GET", "POST"]
 
 REVIEW_FIELDS = frozenset({"min_review_status", "include_rejected", "include_deprecated"})
-PAGING_FIELDS = frozenset({"offset", "limit"})
+PAGING_FIELDS = frozenset({"offset", "limit", "cursor"})
 COMMON_SEARCH_FIELDS = REVIEW_FIELDS | PAGING_FIELDS | frozenset({"include", "sort"})
 
 
@@ -656,9 +656,11 @@ def run_search(client: TCKDBHttpClient, config: Config, tool: SearchTool, argume
     _require_one(args, tool.required_one_of)
     include = _validate_include(args.get("include", []), tool.include_tokens)
     offset = _validate_offset(args.get("offset", 0))
+    cursor = _validate_cursor(args.get("cursor"), offset)
     limit = _validate_limit(config, args.get("limit"))
     body = {k: v for k, v in args.items() if k in tool.fields and k not in PAGING_FIELDS and k != "include"}
     body["offset"] = offset
+    body["cursor"] = cursor
     body["limit"] = limit
     body["include"] = include
     body = {k: v for k, v in body.items() if v is not None}
@@ -676,7 +678,7 @@ def run_detail(client: TCKDBHttpClient, config: Config, tool: DetailTool, argume
     args = dict(arguments or {})
     accepted = frozenset({tool.ref_field, "include"})
     if tool.name == "tckdb_literature_records":
-        accepted = accepted | frozenset({"offset", "limit", "record_type", "include_rejected", "include_deprecated", "sort"})
+        accepted = accepted | frozenset({"offset", "limit", "cursor", "record_type", "include_rejected", "include_deprecated", "sort"})
     _reject_integer_fields(args, tool.rejected_integer_fields)
     _reject_unknown(args, accepted)
     ref = validate_path_handle(args.get(tool.ref_field), field_name=tool.ref_field, expected_prefix=tool.ref_prefix)
@@ -691,6 +693,7 @@ def run_detail(client: TCKDBHttpClient, config: Config, tool: DetailTool, argume
                 "include_deprecated": args.get("include_deprecated"),
                 "sort": args.get("sort"),
                 "offset": _validate_offset(args.get("offset", 0)),
+                "cursor": _validate_cursor(args.get("cursor"), _validate_offset(args.get("offset", 0))),
                 "limit": _validate_limit(config, args.get("limit")),
             }
         )
@@ -730,6 +733,7 @@ def _detail_schema(tool: DetailTool) -> dict[str, Any]:
                 "include_deprecated": {"type": "boolean"},
                 "sort": {"type": "string"},
                 "offset": {"type": "integer", "minimum": 0},
+                "cursor": {"type": "string", "minLength": 1, "maxLength": 4096, "description": "Stable paging: pass the previous response's next_cursor to get the next page (null on the last page). Do not combine with a non-zero offset. offset is random access and can skip or repeat records if the database changes between pages."},
                 "limit": {"type": "integer", "minimum": 1},
             }
         )
@@ -737,6 +741,8 @@ def _detail_schema(tool: DetailTool) -> dict[str, Any]:
 
 
 def _schema_for_field(field: str) -> dict[str, Any]:
+    if field == "cursor":
+        return {"type": "string", "minLength": 1, "maxLength": 4096, "description": "Stable paging: pass the previous response's next_cursor to get the next page (null on the last page). Do not combine with a non-zero offset. offset is random access and can skip or repeat records if the database changes between pages."}
     if field in PAGING_FIELDS:
         return {"type": "integer", "minimum": 0 if field == "offset" else 1}
     if field.startswith("has_") or field.startswith("include_") or field.startswith("used_by_"):
@@ -778,6 +784,16 @@ def _validate_include(value: Any, legal: frozenset[str]) -> list[str]:
     if illegal:
         raise invalid_input(f"unknown include token(s): {illegal!r}. Legal tokens: {sorted(legal)!r}")
     return list(value)
+
+
+def _validate_cursor(value: Any, offset: int) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise invalid_input("cursor must be the next_cursor string of the previous page")
+    if offset:
+        raise invalid_input("cursor and a non-zero offset cannot be combined; use the cursor alone")
+    return value
 
 
 def _validate_offset(value: Any) -> int:

@@ -59,6 +59,7 @@ from app.schemas.reads.scientific_calculation import (
     CalculationFreqResultSummary,
 )
 from app.schemas.reads.scientific_common import (
+    CursorToken,
     LevelOfTheorySummary,
     OrderEcho,
     Pagination,
@@ -68,6 +69,7 @@ from app.schemas.reads.scientific_common import (
     SCFStabilitySummary,
     SoftwareReleaseSummary,
     ValidationSummary,
+    WatermarkEcho,
     WorkflowToolReleaseSummary,
 )
 
@@ -156,6 +158,7 @@ class SpeciesCalculationsSearchRequest(BaseModel):
     sort: str | None = None  # rejected non-None per v0 sort policy
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
 
@@ -436,3 +439,7 @@ class ScientificSpeciesCalculationsSearchResponse(BaseModel):
     review_summary: ReviewStatusSummary
     records: list[SpeciesCalculationsSearchRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None

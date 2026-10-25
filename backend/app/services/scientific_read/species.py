@@ -99,6 +99,7 @@ from app.services.scientific_read.hidden_by_default import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Page, Paging
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
 )
@@ -583,6 +584,7 @@ def search_species(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/species/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -642,10 +644,13 @@ def search_species(
     # The identity filter, as a subquery rather than a materialized id list —
     # the entry, count and ranking queries below all re-derive it in SQL, so
     # a match of any size stays a match rather than becoming bind parameters.
-    candidates = _candidate_species_stmt(
-        request,
-        species_ref_id=species_ref_id,
-        species_entry_ref_id=species_entry_ref_id,
+    candidates = paging.restrict(
+        _candidate_species_stmt(
+            request,
+            species_ref_id=species_ref_id,
+            species_entry_ref_id=species_entry_ref_id,
+        ),
+        Species.id,
     ).subquery("candidate_species")
 
     # The total is the number of *species* matched, whether or not
@@ -671,15 +676,16 @@ def search_species(
         ),
     )
 
-    page_species_ids = _rank_and_slice_species(
+    page = _rank_and_slice_species(
         session,
         candidates,
         request,
         visible,
         species_entry_ref_id=species_entry_ref_id,
-        offset=offset,
-        limit=limit,
+        paging=paging,
+        total=total,
     )
+    page_species_ids = [int(row.id) for row in page.items]
 
     returned_records = _build_page_records(
         session,
@@ -695,6 +701,7 @@ def search_species(
         limit=limit,
         returned=len(returned_records),
         total=total,
+        page=page,
     )
 
     request_filter = _filter_echo(request)
@@ -707,6 +714,7 @@ def search_species(
         review_summary=summary,
         records=returned_records,
         pagination=pagination,
+        **page.envelope(),
     )
 
 
@@ -784,6 +792,7 @@ def browse_species(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/species/browse", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _BROWSE_LEGAL_INCLUDE_TOKENS,
@@ -814,11 +823,14 @@ def browse_species(
         include_deprecated=request.include_deprecated,
     )
 
-    candidates = _browse_candidate_species_stmt(
-        request,
-        element_symbols,
-        structure_query,
-        include_heavy_atom_count=order_by_size,
+    candidates = paging.restrict(
+        _browse_candidate_species_stmt(
+            request,
+            element_symbols,
+            structure_query,
+            include_heavy_atom_count=order_by_size,
+        ),
+        Species.id,
     ).subquery("candidate_species")
 
     # #277 (see the docstring above): always drop a candidate species that
@@ -838,17 +850,18 @@ def browse_species(
         _visible_entry_rows(candidates, request, visible, species_entry_ref_id=None),
     )
 
-    page_species_ids = _rank_and_slice_species(
+    page = _rank_and_slice_species(
         session,
         candidates,
         request,
         visible,
         species_entry_ref_id=None,
-        offset=offset,
-        limit=limit,
+        paging=paging,
+        total=total,
         require_visible_entries=True,
         order_by_size=order_by_size,
     )
+    page_species_ids = [int(row.id) for row in page.items]
 
     returned_records = _build_page_records(
         session,
@@ -864,6 +877,7 @@ def browse_species(
         limit=limit,
         returned=len(returned_records),
         total=total,
+        page=page,
     )
 
     return ScientificSpeciesBrowseResponse(
@@ -875,6 +889,7 @@ def browse_species(
         review_summary=summary,
         records=returned_records,
         pagination=pagination,
+        **page.envelope(),
     )
 
 
@@ -1194,6 +1209,10 @@ def _has_any_entry_expr(candidates):
     ) > 0
 
 
+#: Stands in for a NULL heavy-atom count (a SMILES the cartridge cannot parse) so it sorts after every real size.
+_UNPARSED_HEAVY_ATOM_COUNT = 2**31 - 1
+
+
 def _rank_and_slice_species(
     session: Session,
     candidates,
@@ -1201,12 +1220,12 @@ def _rank_and_slice_species(
     visible: set,
     *,
     species_entry_ref_id: int | None,
-    offset: int,
-    limit: int,
+    paging: Paging,
+    total: int,
     require_visible_entries: bool = False,
     order_by_size: bool = False,
-) -> list[int]:
-    """Order the candidate species and return one page of ids.
+) -> Page:
+    """Order the candidate species and return one page (its ``items`` are rows with an ``id``).
 
     ``review_rank ASC, created_at DESC, id DESC``, where
     ``review_rank`` is the best rank among a species' *visible* entries and
@@ -1294,7 +1313,7 @@ def _rank_and_slice_species(
     best_rank = func.coalesce(func.min(visible_rank), _NO_VISIBLE_ENTRY_RANK)
     has_entries = func.count(visible_rank) > 0
     group_by_cols = [candidates.c.id, candidates.c.created_at]
-    order_by_cols = []
+    key_columns = [best_rank.label("best_rank"), candidates.c.created_at.label("created_at")]
     if order_by_size:
         # heavy_atom_count is functionally dependent on candidates.c.id
         # (one row per candidate species), but Postgres doesn't infer that
@@ -1303,19 +1322,23 @@ def _rank_and_slice_species(
         # grouped explicitly for the same reason (see the module-level
         # note above), so heavy_atom_count follows the same pattern.
         group_by_cols.append(candidates.c.heavy_atom_count)
-        order_by_cols.append(candidates.c.heavy_atom_count.asc().nulls_last())
+        # NULLS LAST as a sentinel above any real count, so the key compares like a number and a cursor can carry it.
+        key_columns.insert(0, func.coalesce(candidates.c.heavy_atom_count, _UNPARSED_HEAVY_ATOM_COUNT).label("size_key"))
     stmt = stmt.group_by(*group_by_cols)
     if require_visible_entries:
         stmt = stmt.having(or_(not_(_has_any_entry_expr(candidates)), has_entries))
-    order_by_cols.extend(
-        [
-            best_rank.asc(),
-            candidates.c.created_at.desc(),
-            candidates.c.id.desc(),
-        ]
+    ranked = stmt.add_columns(*key_columns).subquery("ranked_species")
+    keys: list[tuple[Any, str]] = []
+    if order_by_size:
+        keys.append((ranked.c.size_key, "asc"))
+    keys.extend([(ranked.c.best_rank, "asc"), (ranked.c.created_at, "desc"), (ranked.c.id, "desc")])
+    return paging.sql_window(
+        session,
+        ranked,
+        columns=[ranked.c.id, *[col for col, _direction in keys if col is not ranked.c.id]],
+        keys=keys,
+        total=total,
     )
-    stmt = stmt.order_by(*order_by_cols).offset(offset).limit(limit)
-    return list(session.scalars(stmt))
 
 
 def _browse_visible_species_total(

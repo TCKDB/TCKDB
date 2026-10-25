@@ -118,11 +118,11 @@ def test_cursor_from_a_future_version_is_rejected():
 
 
 def test_a_version_one_cursor_is_refused_as_an_old_cursor_version():
-    """Kills: leaving CURSOR_VERSION at 1 after the analytics order changed, so an old cursor resumes the new order."""
+    """Kills: leaving CURSOR_VERSION unchanged after the payload changed, so an old cursor resumes the new order."""
     import base64
     import json
 
-    assert CURSOR_VERSION == 2
+    assert CURSOR_VERSION == 3
     payload = json.dumps(
         {"v": 1, "watermark": _watermark().as_dict(), "last_values": [1], "query_signature": "sig-a"}
     )

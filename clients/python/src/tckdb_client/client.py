@@ -35,7 +35,7 @@ from tckdb_client.errors import (
     TCKDBValidationError,
 )
 from tckdb_client.idempotency import validate_idempotency_key
-from tckdb_client.pagination import iter_keyset_records, iter_paginated_records
+from tckdb_client.pagination import iter_keyset_records
 from tckdb_client.retry import RetryPolicy
 from tckdb_client.scientific_types import (
     ArtifactRecord,
@@ -1608,6 +1608,7 @@ class TCKDBClient:
         include_rejected: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> SpeciesSearchResponse:
@@ -1634,6 +1635,7 @@ class TCKDBClient:
             "include_rejected": include_rejected,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -1661,6 +1663,7 @@ class TCKDBClient:
         include_rejected: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> SpeciesBrowseResponse:
@@ -1716,6 +1719,7 @@ class TCKDBClient:
             "include_rejected": include_rejected,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -1741,6 +1745,7 @@ class TCKDBClient:
         include_rejected: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method: str = "POST",
@@ -1777,6 +1782,7 @@ class TCKDBClient:
             "include_rejected": include_rejected,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         if method.upper() == "GET":
@@ -1808,6 +1814,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> ReactionSearchResponse:
@@ -1871,6 +1878,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -1898,6 +1906,7 @@ class TCKDBClient:
         include_rejected: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         check_inputs: bool | None = None,
         profile: str | None = None,
@@ -1930,6 +1939,7 @@ class TCKDBClient:
             "include_rejected": include_rejected,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "check_inputs": check_inputs,
             "profile": profile,
@@ -1953,6 +1963,7 @@ class TCKDBClient:
         include_rejected: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         check_inputs: bool | None = None,
         profile: str | None = None,
@@ -1981,6 +1992,7 @@ class TCKDBClient:
             "include_rejected": include_rejected,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "check_inputs": check_inputs,
             "profile": profile,
@@ -2678,6 +2690,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> SpeciesObservationsResponse:
@@ -2708,6 +2721,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -2739,6 +2753,7 @@ class TCKDBClient:
         include_rejected: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method: str = "POST",
@@ -2774,6 +2789,7 @@ class TCKDBClient:
             "include_rejected": include_rejected,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         if method.upper() == "GET":
@@ -2814,6 +2830,7 @@ class TCKDBClient:
         include_rejected: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method: str = "POST",
@@ -2851,6 +2868,7 @@ class TCKDBClient:
             "include_rejected": include_rejected,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         if method.upper() == "GET":
@@ -2899,6 +2917,7 @@ class TCKDBClient:
         ranking: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: str = "POST",
@@ -2947,6 +2966,7 @@ class TCKDBClient:
             "ranking": ranking,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         if method_http.upper() == "GET":
@@ -3036,6 +3056,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3072,6 +3093,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3114,6 +3136,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> NetworkSearchResponse:
@@ -3168,6 +3191,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -3208,6 +3232,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3242,6 +3267,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3416,6 +3442,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3455,6 +3482,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3490,6 +3518,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3526,6 +3555,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3558,6 +3588,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3585,6 +3616,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3624,6 +3656,7 @@ class TCKDBClient:
         include_deprecated: bool | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3658,6 +3691,7 @@ class TCKDBClient:
             "include_deprecated": include_deprecated,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3682,6 +3716,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3709,6 +3744,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3750,6 +3786,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3796,6 +3833,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3835,6 +3873,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3874,6 +3913,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3904,6 +3944,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3929,6 +3970,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -3959,6 +4001,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -3984,6 +4027,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -4011,6 +4055,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
@@ -4039,6 +4084,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
         }
         return self._request_scientific_search(
@@ -4066,6 +4112,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> LevelOfTheorySearchResponse:
@@ -4105,6 +4152,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -4432,7 +4480,7 @@ class TCKDBClient:
     def iter_species(self, **parameters: Any) -> Iterator[SpeciesRecord]:
         """Lazily yield every species record matching ``search_species``."""
 
-        return iter_paginated_records(self.search_species, parameters)
+        return iter_keyset_records(self.search_species, parameters)
 
     def iter_species_browse(self, **parameters: Any) -> Iterator[SpeciesRecord]:
         """Lazily yield every species record matching ``browse_species``.
@@ -4442,89 +4490,89 @@ class TCKDBClient:
         though the two yield the identical ``SpeciesRecord`` shape.
         """
 
-        return iter_paginated_records(self.browse_species, parameters)
+        return iter_keyset_records(self.browse_species, parameters)
 
     def iter_reactions(self, **parameters: Any) -> Iterator[ReactionRecord]:
         """Lazily yield every reaction record matching ``search_reactions``."""
 
-        return iter_paginated_records(self.search_reactions, parameters)
+        return iter_keyset_records(self.search_reactions, parameters)
 
     def iter_thermo(self, **parameters: Any) -> Iterator[ThermoRecord]:
         """Lazily yield every thermo record matching ``search_thermo``."""
 
-        return iter_paginated_records(self.search_thermo, parameters)
+        return iter_keyset_records(self.search_thermo, parameters)
 
     def iter_kinetics(self, **parameters: Any) -> Iterator[KineticsRecord]:
         """Lazily yield every kinetics record matching ``search_kinetics``."""
 
-        return iter_paginated_records(self.search_kinetics, parameters)
+        return iter_keyset_records(self.search_kinetics, parameters)
 
     def iter_species_calculations(
         self, **parameters: Any
     ) -> Iterator[SpeciesCalculationRecord]:
         """Lazily yield matching species-calculation records."""
 
-        return iter_paginated_records(self.search_species_calculations, parameters)
+        return iter_keyset_records(self.search_species_calculations, parameters)
 
     def iter_networks(self, **parameters: Any) -> Iterator[NetworkRecord]:
         """Lazily yield every network matching ``search_networks``."""
 
-        return iter_paginated_records(self.search_networks, parameters)
+        return iter_keyset_records(self.search_networks, parameters)
 
     def iter_network_solves(
         self, **parameters: Any
     ) -> Iterator[NetworkSolveRecord]:
         """Lazily yield network-solve records matching the supplied filters."""
 
-        return iter_paginated_records(self.search_network_solves, parameters)
+        return iter_keyset_records(self.search_network_solves, parameters)
 
     def iter_network_kinetics(
         self, **parameters: Any
     ) -> Iterator[NetworkKineticsRecord]:
         """Lazily yield PDep kinetics records matching the supplied filters."""
 
-        return iter_paginated_records(self.search_network_kinetics, parameters)
+        return iter_keyset_records(self.search_network_kinetics, parameters)
 
     def iter_statmech(self, **parameters: Any) -> Iterator[StatmechRecord]:
         """Lazily yield statmech records matching the supplied filters."""
 
-        return iter_paginated_records(self.search_statmech, parameters)
+        return iter_keyset_records(self.search_statmech, parameters)
 
     def iter_transport(self, **parameters: Any) -> Iterator[TransportRecord]:
         """Lazily yield transport records matching the supplied filters."""
 
-        return iter_paginated_records(self.search_transport, parameters)
+        return iter_keyset_records(self.search_transport, parameters)
 
     def iter_artifacts(self, **parameters: Any) -> Iterator[ArtifactRecord]:
         """Lazily yield artifact metadata records matching the filters."""
 
-        return iter_paginated_records(self.search_artifacts, parameters)
+        return iter_keyset_records(self.search_artifacts, parameters)
 
     def iter_species_structures(
         self, **parameters: Any
     ) -> Iterator[SpeciesStructureRecord]:
         """Lazily yield every structure-search hit matching the filters."""
 
-        return iter_paginated_records(self.search_species_structures, parameters)
+        return iter_keyset_records(self.search_species_structures, parameters)
 
     def iter_conformers(self, **parameters: Any) -> Iterator[ConformerRecord]:
         """Lazily yield conformer groups matching the supplied filters."""
 
-        return iter_paginated_records(self.search_conformers, parameters)
+        return iter_keyset_records(self.search_conformers, parameters)
 
     def iter_transition_states(
         self, **parameters: Any
     ) -> Iterator[TransitionStateEntryRecord]:
         """Lazily yield transition-state entries matching the filters."""
 
-        return iter_paginated_records(self.search_transition_states, parameters)
+        return iter_keyset_records(self.search_transition_states, parameters)
 
     def iter_energy_correction_schemes(
         self, **parameters: Any
     ) -> Iterator[EnergyCorrectionSchemeRecord]:
         """Lazily yield energy-correction schemes matching the filters."""
 
-        return iter_paginated_records(
+        return iter_keyset_records(
             self.search_energy_correction_schemes, parameters
         )
 
@@ -4533,7 +4581,7 @@ class TCKDBClient:
     ) -> Iterator[FrequencyScaleFactorRecord]:
         """Lazily yield frequency scale factors matching the filters."""
 
-        return iter_paginated_records(
+        return iter_keyset_records(
             self.search_frequency_scale_factors, parameters
         )
 
@@ -4542,7 +4590,7 @@ class TCKDBClient:
     ) -> Iterator[LevelOfTheoryRecord]:
         """Lazily yield levels of theory matching the filters."""
 
-        return iter_paginated_records(self.search_levels_of_theory, parameters)
+        return iter_keyset_records(self.search_levels_of_theory, parameters)
 
     def iter_literature_records(
         self, literature_ref_or_id: int | str, **parameters: Any
@@ -4558,7 +4606,7 @@ class TCKDBClient:
                 literature_ref_or_id, **page_parameters
             )
 
-        return iter_paginated_records(fetch_page, parameters)
+        return iter_keyset_records(fetch_page, parameters)
 
     # Keyset iterators. These follow ``next_cursor`` rather than counting
     # offsets, so a dataset build over a corpus that is still being written
@@ -4861,6 +4909,7 @@ class TCKDBClient:
         sort: str | None = None,
         include: list[str] | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> LiteratureRecordsResponse:
@@ -4877,6 +4926,7 @@ class TCKDBClient:
             "sort": sort,
             "include": include,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -4896,6 +4946,7 @@ class TCKDBClient:
         include: list[str] | None,
         sort: str | None,
         offset: int | None,
+        cursor: str | None,
         limit: int | None,
         profile: str | None,
     ) -> Any:
@@ -4906,6 +4957,7 @@ class TCKDBClient:
             "include": include,
             "sort": sort,
             "offset": offset,
+            "cursor": cursor,
             "limit": limit,
             "profile": profile,
         }
@@ -4924,6 +4976,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         sort: str | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> Any:
@@ -4940,6 +4993,7 @@ class TCKDBClient:
             include=include,
             sort=sort,
             offset=offset,
+            cursor=cursor,
             limit=limit,
             profile=profile,
         )
@@ -4952,6 +5006,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         sort: str | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> Any:
@@ -4964,6 +5019,7 @@ class TCKDBClient:
             include=include,
             sort=sort,
             offset=offset,
+            cursor=cursor,
             limit=limit,
             profile=profile,
         )
@@ -4976,6 +5032,7 @@ class TCKDBClient:
         include: list[str] | None = None,
         sort: str | None = None,
         offset: int | None = None,
+        cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
     ) -> Any:
@@ -4988,6 +5045,7 @@ class TCKDBClient:
             include=include,
             sort=sort,
             offset=offset,
+            cursor=cursor,
             limit=limit,
             profile=profile,
         )

@@ -6,6 +6,7 @@ See docs/specs/browse_order.md.
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -51,7 +52,6 @@ from app.services.scientific_read.common import (
     reject_client_sort,
     review_floor_predicate,
     review_summary,
-    slice_for_pagination,
     validate_includes,
     validate_pagination,
     visible_statuses,
@@ -69,6 +69,7 @@ from app.services.scientific_read.hidden_by_default import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
 )
@@ -119,6 +120,7 @@ def search_reactions(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/reactions/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -265,6 +267,7 @@ def search_reactions(
             )
         )
     entries = [e for e in entries if badges[e.id].status in visible]
+    entries = paging.snapshot(entries, id_of=lambda e: e.id)
 
     if not entries:
         return _empty_response(request, includes, offset, limit)
@@ -340,8 +343,8 @@ def search_reactions(
 
     summary = review_summary(badges[e.id] for e in entries)
 
-    total = len(records)
-    returned_records = slice_for_pagination(records, offset=offset, limit=limit)
+    page = paging.window(records, key_of=_reaction_key({e.id: e.created_at for e in entries}))
+    returned_records = page.items
 
     return ScientificReactionSearchResponse(
         request=RequestEcho(
@@ -355,8 +358,10 @@ def search_reactions(
             offset=offset,
             limit=limit,
             returned=len(returned_records),
-            total=total,
+            total=page.total,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 
@@ -435,6 +440,7 @@ def browse_reactions(
     :raises ValueError: 422 for pagination validation failures.
     """
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/reactions/browse", request, offset=offset, limit=limit)
 
     reactant_species_ids = _resolve_smiles_to_species_ids(
         session, request.reactant_smiles
@@ -526,6 +532,7 @@ def browse_reactions(
         )
     )
     entries = [e for e in entries if badges[e.id].status in visible]
+    entries = paging.snapshot(entries, id_of=lambda e: e.id)
     if not entries:
         return _empty_browse_response(request, offset, limit)
 
@@ -614,10 +621,8 @@ def browse_reactions(
 
     summary = review_summary(badges[e.id] for e in entries)
 
-    total = len(records)
-    page_records = slice_for_pagination(
-        records, offset=offset, limit=limit
-    )
+    page = paging.window(records, key_of=_reaction_key({e.id: e.created_at for e in entries}))
+    page_records = page.items
 
     return ScientificReactionSearchResponse(
         request=RequestEcho(
@@ -631,8 +636,10 @@ def browse_reactions(
             offset=offset,
             limit=limit,
             returned=len(page_records),
-            total=total,
+            total=page.total,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 
@@ -1158,6 +1165,19 @@ def _materialize_and_sort_reaction_records(
 
     records.sort(key=sort_key)
     return records
+
+
+def _reaction_key(entry_created_at: dict[int, datetime]):
+    """The display-order key of a reaction record: review rank, newest deposit, newest id."""
+
+    def key(rec: ReactionScientificRecord) -> tuple:
+        return (
+            REVIEW_RANK[rec.review.status],
+            -entry_created_at[rec.reaction_entry_id].timestamp(),
+            -rec.reaction_entry_id,
+        )
+
+    return key
 
 
 def _filter_echo(request: ReactionSearchRequest) -> dict[str, object]:

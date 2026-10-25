@@ -26,6 +26,7 @@ def _page(*, offset: int = 0, limit: int = 50, total: int = 0) -> dict[str, Any]
             "returned": returned,
             "total": total,
         },
+        "next_cursor": f"c{offset + returned}" if offset + returned < total else None,
     }
 
 
@@ -94,7 +95,7 @@ def test_iter_network_solves_paginates_with_stable_filters() -> None:
         body = bodies[-1]
         return httpx.Response(
             200,
-            json=_page(offset=body["offset"], limit=body["limit"], total=3),
+            json=_page(offset=int((body.get("cursor") or "c0")[1:]), limit=body["limit"], total=3),
         )
 
     client, _recorder = make_client(handler)
@@ -104,7 +105,7 @@ def test_iter_network_solves_paginates_with_stable_filters() -> None:
 
     assert inspect.isgenerator(iterator)
     assert [record["ordinal"] for record in iterator] == [0, 1, 2]
-    assert [body["offset"] for body in bodies] == [0, 2]
+    assert [body.get("cursor") for body in bodies] == [None, "c2"]
     assert all(body["network_ref"] == "net_a" for body in bodies)
     assert all(body["include"] == ["kinetics", "review"] for body in bodies)
 

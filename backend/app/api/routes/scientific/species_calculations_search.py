@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_optional_current_user
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
     SEARCH_SCOPE,
@@ -79,7 +79,8 @@ def species_calculations_search_get(
     ranking: CalculationRanking = Query(CalculationRanking.default),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
     actor: AppUser | None = Depends(get_optional_current_user),
 ) -> ScientificSpeciesCalculationsSearchResponse:
@@ -128,6 +129,7 @@ def species_calculations_search_get(
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = search_species_calculations(session, request)

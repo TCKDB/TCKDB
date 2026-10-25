@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Res
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_curator_or_admin
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
     ARTIFACT_RECORD_SECTIONS,
@@ -119,7 +119,8 @@ def artifacts_search_get(
     # sort / include / pagination
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ) -> ScientificArtifactSearchResponse:
     """Standalone artifact-metadata search.
@@ -159,6 +160,7 @@ def artifacts_search_get(
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = search_artifacts(session, request)
@@ -213,7 +215,8 @@ def artifact_integrity_search(
     calculation_ref: str | None = Query(None),
     only_currently_broken: bool = Query(False),
     sort: str | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ) -> ScientificArtifactIntegrityResponse:
     """What TCKDB has observed about custody of its own stored objects.
@@ -247,6 +250,7 @@ def artifact_integrity_search(
         only_currently_broken=only_currently_broken,
         sort=sort,
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     return apply_internal_ids_visibility(payload)
@@ -260,7 +264,8 @@ def artifact_integrity_detail(
     sha256: str = Path(pattern=r"^[0-9a-f]{64}$"),
     _user: AppUser = Depends(require_curator_or_admin),
     session: Session = Depends(get_db),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ) -> ScientificArtifactIntegrityHistoryResponse:
     """Every observation recorded for one object, oldest first.
@@ -279,7 +284,7 @@ def artifact_integrity_detail(
     """
     return apply_internal_ids_visibility(
         artifact_integrity_history(
-            session, sha256=sha256, offset=offset, limit=limit
+            session, sha256=sha256, offset=offset, limit=limit, cursor=cursor
         )
     )
 

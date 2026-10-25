@@ -47,7 +47,6 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     reject_client_sort,
     review_summary,
-    slice_for_pagination,
     validate_includes,
     validate_pagination,
     visible_statuses,
@@ -59,6 +58,7 @@ from app.services.scientific_read.hidden_by_default import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 
 # No heavy include-gated sections exist on this surface; ``internal_ids`` is
 # the only legal token, matching the sibling per-entry reads' pattern of
@@ -83,6 +83,7 @@ def get_species_observations(
     sort: str | None = None,
     offset: int = 0,
     limit: int = 50,
+    cursor: str | None = None,
 ) -> ScientificSpeciesObservationsResponse:
     """Return molecular-property observations for one species entry.
 
@@ -96,6 +97,19 @@ def get_species_observations(
     """
     reject_client_sort(sort)
     offset, limit = validate_pagination(offset, limit)
+    paging = Paging(
+        "/scientific/species-entries/{id}/observations",
+        {
+            "cursor": cursor,
+            "species_entry_id": species_entry_id,
+            "property_kind": property_kind,
+            "min_review_status": min_review_status.value if min_review_status is not None else None,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+        },
+        offset=offset,
+        limit=limit,
+    )
     includes = validate_includes(
         include or [],
         _LEGAL_INCLUDE_TOKENS,
@@ -160,18 +174,17 @@ def get_species_observations(
     if not visible_ids:
         return _empty_response(filter_echo, includes, offset, limit)
 
+    visible_ids = paging.snapshot(visible_ids, id_of=lambda cid: cid)
     summary = review_summary(badges[cid] for cid in visible_ids)
-    total = len(visible_ids)
-    visible_ids.sort(
-        key=lambda cid: (
+    page = paging.window(
+        visible_ids,
+        key_of=lambda cid: (
             REVIEW_RANK[badges[cid].status],
             -created_at_by_id[cid].timestamp(),
             -cid,
-        )
+        ),
     )
-    page_ids = slice_for_pagination(
-        visible_ids, offset=offset, limit=limit
-    )
+    page_ids = page.items
     records = _materialize_records(session, page_ids, badges)
 
     return ScientificSpeciesObservationsResponse(
@@ -183,8 +196,9 @@ def get_species_observations(
         review_summary=summary,
         records=records,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(records), total=total
+            offset=offset, limit=limit, returned=len(records), total=page.total, page=page
         ),
+        **page.envelope(),
     )
 
 

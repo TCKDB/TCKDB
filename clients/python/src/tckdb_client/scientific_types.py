@@ -71,6 +71,8 @@ class Pagination(TypedDict):
     limit: int
     returned: int
     total: int
+    #: ``offset`` (random access, deterministic only for a static corpus) or ``cursor`` (a stable traversal).
+    mode: Literal["offset", "cursor"]
 
 
 class OrderKeyEcho(TypedDict):
@@ -117,11 +119,16 @@ class ErrorEnvelope(TypedDict):
 RecordT = TypeVar("RecordT")
 
 
-class ScientificSearchResponse(TypedDict, Generic[RecordT]):
-    request: ScientificRequestEcho
-    review_summary: ReviewStatusSummary
-    records: list[RecordT]
-    pagination: Pagination
+class ScientificSearchResponse(TypedDict, Generic[RecordT], total=False):
+    """A list envelope. ``next_cursor`` is the stable traversal: pass it back as ``cursor``; it is ``None`` on the last
+    page. ``iter_*`` follows it. ``offset`` is random access and is deterministic only for a static corpus."""
+
+    request: Required[ScientificRequestEcho]
+    review_summary: Required[ReviewStatusSummary]
+    records: Required[list[RecordT]]
+    pagination: Required[Pagination]
+    next_cursor: str | None
+    watermark: WatermarkEcho | None
 
 
 class ScientificDetailResponse(TypedDict, Generic[RecordT]):
@@ -1018,7 +1025,6 @@ class LiteratureLinkedRecord(TypedDict, total=False):
 class AnalyticsRequestEcho(TypedDict, total=False):
     filter: Required[JSONDict]
     sort: Required[OrderEcho]
-    pagination_mode: Required[str]
     include: list[str]
     profile: str
     profile_recommendation: str

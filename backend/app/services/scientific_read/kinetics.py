@@ -110,7 +110,6 @@ from app.services.scientific_read.common import (
     reject_client_sort,
     review_floor_predicate,
     review_summary,
-    slice_for_pagination,
     software_names_by_calculation,
     temperature_coverage,
     validate_includes,
@@ -138,6 +137,7 @@ from app.services.scientific_read.hidden_by_default import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.scientific_read.trust_floor import evaluate_shown_kinetics
 from app.services.trust import (
@@ -363,6 +363,13 @@ def get_reaction_kinetics(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging(
+        "/scientific/reaction-entries/{id}/kinetics",
+        request,
+        offset=offset,
+        limit=limit,
+        scope_extra={"reaction_entry_id": reaction_entry_id},
+    )
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -486,6 +493,7 @@ def get_reaction_kinetics(
         scope=("kinetics", reaction_entry_id),
     )
     kinetics_rows = [k for k in kinetics_rows if badges[k.id].status in visible]
+    kinetics_rows = paging.snapshot(kinetics_rows, id_of=lambda k: k.id)
     if not kinetics_rows:
         return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
 
@@ -757,17 +765,16 @@ def get_reaction_kinetics(
     created_at = {k.id: k.created_at for k in kinetics_rows}
     review_status_by_id = {k.id: badges[k.id].status for k in kinetics_rows}
 
-    records.sort(
-        key=lambda rec: simple_selection_sort_key(
+    page = paging.window(
+        records,
+        key_of=lambda rec: simple_selection_sort_key(
             rec.kinetics_id,
             policy=SelectionPolicy.default,
             review_status_by_id=review_status_by_id,
             created_at_by_id=created_at,
-        )
+        ),
     )
-
-    total = len(records)
-    returned = slice_for_pagination(records, offset=offset, limit=limit)
+    returned = page.items
 
     return ScientificReactionKineticsResponse(
         request=RequestEcho(
@@ -784,8 +791,10 @@ def get_reaction_kinetics(
             offset=offset,
             limit=limit,
             returned=len(returned),
-            total=total,
+            total=page.total,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 

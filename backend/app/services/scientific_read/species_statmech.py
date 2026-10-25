@@ -49,7 +49,6 @@ from app.services.scientific_read.common import (
     reject_client_sort,
     review_summary,
     review_visibility_echo,
-    slice_for_pagination,
     validate_includes,
     validate_pagination,
     visible_statuses,
@@ -61,6 +60,7 @@ from app.services.scientific_read.hidden_by_default import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.statmech import (
     _DETAIL_LEGAL_INCLUDE_TOKENS,
     _INTERNAL_INCLUDE_TOKENS,
@@ -84,6 +84,7 @@ def get_species_statmech(
     sort: str | None = None,
     offset: int = 0,
     limit: int = 50,
+    cursor: str | None = None,
 ) -> ScientificStatmechSearchResponse:
     """Return statmech records for one species entry.
 
@@ -99,6 +100,18 @@ def get_species_statmech(
     """
     reject_client_sort(sort)
     offset, limit = validate_pagination(offset, limit)
+    paging = Paging(
+        "/scientific/species-entries/{id}/statmech",
+        {
+            "cursor": cursor,
+            "species_entry_id": species_entry_id,
+            "min_review_status": min_review_status.value if min_review_status is not None else None,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+        },
+        offset=offset,
+        limit=limit,
+    )
     includes = validate_includes(
         include or [],
         _DETAIL_LEGAL_INCLUDE_TOKENS,
@@ -147,17 +160,17 @@ def get_species_statmech(
     if not visible_ids:
         return _empty_response(species_entry_ref, includes, offset, limit, visible)
 
+    visible_ids = paging.snapshot(visible_ids, id_of=lambda cid: cid)
     summary = review_summary(badges[cid] for cid in visible_ids)
-    total = len(visible_ids)
-    ordered_ids = sorted(
+    page = paging.window(
         visible_ids,
-        key=lambda cid: (
+        key_of=lambda cid: (
             REVIEW_RANK[badges[cid].status],
             -created_at_by_id[cid].timestamp(),
             -cid,
         ),
     )
-    page_ids = slice_for_pagination(ordered_ids, offset=offset, limit=limit)
+    page_ids = page.items
     records = _materialize_records(session, page_ids, badges, includes)
 
     return ScientificStatmechSearchResponse(
@@ -168,8 +181,10 @@ def get_species_statmech(
             offset=offset,
             limit=limit,
             returned=len(records),
-            total=total,
+            total=page.total,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 

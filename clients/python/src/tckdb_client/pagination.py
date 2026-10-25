@@ -1,11 +1,12 @@
 """Safe lazy pagination for scientific search envelopes.
 
-Two traversals live here. :func:`iter_paginated_records` walks offsets and
-is what the transactional searches use. :func:`iter_keyset_records` follows
-the analytics surface's ``next_cursor`` instead, because offset paging over
-a corpus that is still being written to can skip or duplicate rows — a
-dataset built that way is not reproducible, and nothing in the response
-would tell the caller it happened.
+Two traversals live here. :func:`iter_keyset_records` follows the server's
+``next_cursor``; every ``iter_*`` helper on the client uses it, because offset
+paging over a corpus that is still being written to can skip or duplicate rows
+-- a dataset built that way is not reproducible, and nothing in the response
+would tell the caller it happened. :func:`iter_paginated_records` walks offsets
+(random access, deterministic only for a static corpus); it is the fallback for
+a caller who pins a starting ``offset``.
 """
 
 from __future__ import annotations

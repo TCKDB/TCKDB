@@ -32,11 +32,13 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_assessment import refuse_check_inputs_in_body
 from app.schemas.reads.scientific_common import (
+    CursorToken,
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    WatermarkEcho,
 )
 from app.schemas.reads.scientific_kinetics import KineticsRecord
 from app.schemas.reads.scientific_reactions import (
@@ -126,6 +128,7 @@ class KineticsSearchRequest(BaseModel):
 
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
     @field_validator("reactants", "products")
@@ -210,3 +213,7 @@ class ScientificKineticsSearchResponse(BaseModel):
     review_summary: ReviewStatusSummary
     records: list[KineticsSearchRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None

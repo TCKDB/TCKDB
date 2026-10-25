@@ -1768,10 +1768,10 @@ def test_structure_filter_size_sort_keeps_id_as_the_final_tiebreak(db_session):
         event.remove(bind, "before_cursor_execute", _capture)
 
     order_by_statements = [
-        s for s in captured if "ORDER BY" in s and "heavy_atom_count" in s
+        s for s in captured if "ORDER BY" in s and "heavy_atom_count" in s and "size_key" in s
     ]
     assert order_by_statements, (
-        "no captured statement both sorted and referenced heavy_atom_count "
+        "no captured statement both sorted by the size key and referenced heavy_atom_count "
         f"-- captured {len(captured)} statement(s) total"
     )
     for statement in order_by_statements:
@@ -1781,11 +1781,13 @@ def test_structure_filter_size_sort_keeps_id_as_the_final_tiebreak(db_session):
         # clause, which a looser check matches by accident. The compiled
         # sort key itself is this exact, unambiguous fragment.
         order_by_clause = statement.split("ORDER BY", 1)[1]
-        heavy_pos = order_by_clause.find("heavy_atom_count")
-        id_key_pos = order_by_clause.find("candidate_species.id DESC")
+        # The size key is heavy_atom_count with a NULL (unparseable SMILES) standing in as the largest, so a cursor can
+        # carry it; the species page is cut from that ranked subquery.
+        heavy_pos = order_by_clause.find("size_key")
+        id_key_pos = order_by_clause.find("ranked_species.id DESC")
         assert heavy_pos != -1, statement
         assert id_key_pos != -1, (
-            "candidate_species.id DESC is not present as an ORDER BY key: "
+            "ranked_species.id DESC is not present as an ORDER BY key: "
             f"{order_by_clause!r}"
         )
         assert heavy_pos < id_key_pos, (

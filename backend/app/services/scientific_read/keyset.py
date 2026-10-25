@@ -5,9 +5,10 @@ The problem offset pagination has
 ``LIMIT/OFFSET`` is deterministic for a *static* corpus and wrong for a live
 one. Between page 1 and page 2 an upload can insert a record that sorts above
 the reader's position — every subsequent page then shifts down by one and the
-reader silently **skips** a record. A deprecation removes a record from the
-visible set and the reader silently sees one **twice**. Neither is detectable
-from the responses. For a database whose whole point is that someone can build
+reader silently sees one record **twice**. A deprecation removes a record from
+the visible set above the reader's position — every subsequent page shifts up
+and the reader silently **skips** one. Neither is detectable from the
+responses. For a database whose whole point is that someone can build
 a dataset from it and cite what they built, "your traversal may have quietly
 omitted rows" is a correctness problem, not a performance one.
 
@@ -39,25 +40,54 @@ artifact, which Stage 3 already guarantees is byte-stable
 (``backend/docs/specs/dataset_release_and_profiles.md``). This module makes
 *live* traversal far more reproducible than offset paging; it does not make it
 immutable, and it must not be described as if it did.
+
+One engine for every list
+-------------------------
+Every browse and list read pages through :class:`Paging`. It opens the request's
+cursor (or notes its absence), bounds the candidate set to the snapshot, and
+returns one :class:`Page` that says where the next one starts. Two flavours share
+the cursor, the signature and the watermark:
+
+* :meth:`Paging.window` for a list a service has already materialised in Python
+  (most do: they classify records, then order them);
+* :meth:`Paging.sql_window` for a ranked SQL subquery, where the "strictly
+  after" predicate is pushed into the statement.
+
+A cursor never carries a hidden record. It holds the sort key of the last row
+*delivered* (so a row the profile shows) and a watermark taken over the rows
+the request is allowed to see, never over the table. A record the read profile
+withholds therefore contributes neither a key, an id nor a count to any cursor.
+
+``offset`` stays for random access ("page N of M") and is deterministic only for
+a static corpus. A cursor and a non-zero offset cannot be combined.
 """
 
 from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
+import hmac
 import json
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Literal
+from datetime import datetime, timezone
+from typing import Any, Generic, Literal, TypeVar
 
-from sqlalchemy import and_, or_
+from pydantic import BaseModel
+from sqlalchemy import and_, func, or_, select
 
+from app.api.error_contract import CodedValueError
+from app.schemas.reads.scientific_common import WatermarkEcho
 from app.versioning import same_value
 
+T = TypeVar("T")
+
 #: Bumped when the cursor payload's shape changes, so an old cursor is
-#: rejected with a clear error instead of being silently misread. Version 2: the analytics key is
-#: ``review_rank, created_at, id`` (it was ``review_rank, id``), so a version 1 cursor holds the wrong number of values.
-CURSOR_VERSION = 2
+#: rejected with a clear error instead of being silently misread. Compared with :func:`same_value` (exact type and
+#: value), never ``==``, so a payload that spells the version ``true`` or ``3.0`` is refused. Version 3: every list
+#: endpoint pages through this module, and the payload carries an integrity digest.
+CURSOR_VERSION = 3
 
 SortDirection = Literal["asc", "desc"]
 
@@ -77,12 +107,16 @@ class Watermark:
     taken_at: datetime
     #: Set when traversal is pinned to a published dataset release.
     release_ref: str | None = None
+    #: For a list that mixes several tables (ids of different tables are not comparable): the highest id per table
+    #: when the traversal began. A table absent here had no row then, so every row of it is newer than the snapshot.
+    groups: dict[str, int] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "max_id": self.max_id,
             "taken_at": self.taken_at.isoformat(),
             "release_ref": self.release_ref,
+            "groups": self.groups,
         }
 
     @classmethod
@@ -91,6 +125,11 @@ class Watermark:
             max_id=int(payload["max_id"]),
             taken_at=datetime.fromisoformat(payload["taken_at"]),
             release_ref=payload.get("release_ref"),
+            groups=(
+                {str(k): int(v) for k, v in payload["groups"].items()}
+                if payload.get("groups") is not None
+                else None
+            ),
         )
 
 
@@ -119,6 +158,8 @@ class Cursor:
 def _encode_value(value: Any) -> Any:
     if isinstance(value, datetime):
         return {"__dt__": value.isoformat()}
+    if isinstance(value, (tuple, list)):
+        return [_encode_value(v) for v in value]
     if hasattr(value, "value"):  # enum
         return value.value
     return value
@@ -127,12 +168,28 @@ def _encode_value(value: Any) -> Any:
 def _decode_value(value: Any) -> Any:
     if isinstance(value, dict) and "__dt__" in value:
         return datetime.fromisoformat(value["__dt__"])
+    if isinstance(value, list):
+        return tuple(_decode_value(v) for v in value)
     return value
+
+
+def _digest(payload: Mapping[str, Any]) -> str:
+    """A short integrity digest over every field of the payload but the digest itself.
+
+    It is not a secret and not authentication: it detects an edited or truncated token, so one that was altered is
+    refused rather than read as a different position. (A token cannot gain access by being edited: every page applies
+    the request's own visibility rules again.)
+    """
+    body = {k: v for k, v in payload.items() if k != "k"}
+    raw = json.dumps(body, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def encode_cursor(cursor: Cursor) -> str:
     """Serialize a cursor to a URL-safe opaque token."""
-    raw = json.dumps(cursor.as_dict(), separators=(",", ":"), sort_keys=True)
+    payload = cursor.as_dict()
+    payload["k"] = _digest(payload)
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True)
     return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
 
 
@@ -156,6 +213,9 @@ def decode_cursor(token: str, *, expected_signature: str) -> Cursor:
             "invalid_cursor: cursor version is not supported by this server; "
             "restart the traversal without a cursor."
         )
+    recorded_digest = payload.get("k")
+    if not isinstance(recorded_digest, str) or not hmac.compare_digest(recorded_digest, _digest(payload)):
+        raise InvalidCursorError("invalid_cursor: the cursor was altered or is not a token this API issued.")
     signature = payload.get("query_signature")
     if signature != expected_signature:
         raise InvalidCursorError(
@@ -164,12 +224,15 @@ def decode_cursor(token: str, *, expected_signature: str) -> Cursor:
             "produced it; restart the traversal without a cursor."
         )
     try:
+        last_values = payload["last_values"]
+        if not isinstance(last_values, list) or not last_values:
+            raise ValueError("last_values")
         return Cursor(
             watermark=Watermark.from_dict(payload["watermark"]),
-            last_values=[_decode_value(v) for v in payload["last_values"]],
+            last_values=[_decode_value(v) for v in last_values],
             query_signature=signature,
         )
-    except (KeyError, TypeError, ValueError) as exc:
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
         raise InvalidCursorError(
             "invalid_cursor: the cursor payload is malformed."
         ) from exc
@@ -241,15 +304,320 @@ def watermark_predicate(id_column, watermark: Watermark):
     return id_column <= watermark.max_id
 
 
+# ---------------------------------------------------------------------------
+# The engine every list read pages through
+# ---------------------------------------------------------------------------
+
+#: Request fields that choose a page or a response shape, not a result set. Everything else a request model carries is a
+#: filter, and a cursor is bound to it.
+_NOT_A_FILTER: frozenset[str] = frozenset({"offset", "limit", "cursor", "include", "sort", "check_inputs"})
+
+
+def request_scope(request: BaseModel | Mapping[str, Any] | None) -> dict[str, Any]:
+    """The filters of a request, as the value a cursor is bound to.
+
+    Paging knobs (offset, limit, cursor) and response-shape knobs (include) are left out, so a client may change the page
+    size between pages and may ask for more detail on one of them. A filter that is unset is left out too, so an
+    omitted default and an explicit ``None`` bind the same cursor.
+    """
+    if request is None:
+        return {}
+    if isinstance(request, BaseModel):
+        return request.model_dump(mode="json", exclude=set(_NOT_A_FILTER), exclude_none=True)
+    return {k: v for k, v in request.items() if k not in _NOT_A_FILTER and v is not None}
+
+
+def signature_for(endpoint: str, scope: Mapping[str, Any]) -> str:
+    """Bind a cursor to this endpoint, these filters, and the read profile in force.
+
+    The profile is part of the signature because it changes the visible set: a cursor issued mid-traversal under
+    ``exploratory`` and replayed under ``curated`` would silently walk a different corpus. Refusing it is the honest
+    outcome.
+    """
+    from app.services.scientific_read.profile import current_read_profile
+
+    resolved = current_read_profile()
+    return query_signature(endpoint, {**scope, "__profile__": resolved.profile.value})
+
+
+@dataclass(frozen=True)
+class Page(Generic[T]):
+    """One page, and where the next one starts."""
+
+    items: list[T]
+    #: Size of the set this traversal walks (the snapshot, after the request's filters and visibility rules).
+    total: int
+    mode: Literal["offset", "cursor"]
+    #: ``None`` on the last page.
+    next_cursor: str | None
+    watermark: Watermark
+
+    def envelope(self) -> dict[str, Any]:
+        """The response fields that carry the cursor contract: ``next_cursor`` and ``watermark``.
+
+        ``watermark`` (when the traversal's snapshot was taken) is echoed on cursor pages only. A page served by offset
+        names no snapshot, so the same request still returns the same body: nothing in it is the wall clock. The
+        snapshot's time is inside ``next_cursor``, and every later page echoes it.
+        """
+        return {
+            "next_cursor": self.next_cursor,
+            "watermark": (
+                WatermarkEcho(taken_at=self.watermark.taken_at, release_ref=self.watermark.release_ref)
+                if self.mode == "cursor"
+                else None
+            ),
+        }
+
+
+def _as_key(values: Sequence[Any]) -> tuple:
+    return tuple(_as_key(v) if isinstance(v, (list, tuple)) else v for v in values)
+
+
+class Paging:
+    """One request's position in a list: opens its cursor, bounds the set to the snapshot, slices a page.
+
+    Build one right after the request's offset and limit are validated, before any early return, so that a cursor
+    that does not belong to this request is refused even when the request matches nothing::
+
+        paging = Paging("thermo/search", request, offset=offset, limit=limit)
+        visible = paging.snapshot(visible, id_of=lambda r: r.id)      # then summarise ``visible``
+        page = paging.window(visible, key_of=lambda r: (rank(r), -ts(r), -r.id))
+
+    ``key_of`` must return a tuple whose ascending order is the display order, ending in a unique value (the record's
+    id, negated for a newest-first order) so the order is total. The cursor holds that tuple for the last record
+    delivered and the next page asks for records strictly after it. Because the page is cut from the key, not from a
+    row count, a record that sorts above the reader's position cannot shift it.
+    """
+
+    def __init__(
+        self,
+        endpoint: str,
+        request: BaseModel | Mapping[str, Any] | None,
+        *,
+        offset: int,
+        limit: int,
+        scope_extra: Mapping[str, Any] | None = None,
+    ) -> None:
+        if isinstance(request, BaseModel):
+            token = getattr(request, "cursor", None)
+        elif request is not None:
+            token = request.get("cursor")
+        else:
+            token = None
+        if token is not None and offset:
+            raise CodedValueError(
+                "cursor_offset_conflict",
+                "cursor= and a non-zero offset= cannot be combined; a cursor already encodes the traversal position. "
+                "Re-issue with the cursor alone, or drop the cursor to page by offset.",
+                context={"offset": offset},
+            )
+        scope = request_scope(request)
+        if scope_extra:
+            scope.update(scope_extra)
+        self.endpoint = endpoint
+        self.offset = offset
+        self.limit = limit
+        self.signature = signature_for(endpoint, scope)
+        self.cursor: Cursor | None = (
+            decode_cursor(token, expected_signature=self.signature) if token is not None else None
+        )
+        self._watermark: Watermark | None = self.cursor.watermark if self.cursor is not None else None
+        self._snapshotted = False
+
+    @property
+    def mode(self) -> Literal["offset", "cursor"]:
+        return "cursor" if self.cursor is not None else "offset"
+
+    # -- the snapshot -----------------------------------------------------------------------------------------------
+
+    def snapshot(
+        self,
+        items: list[T],
+        *,
+        id_of: Callable[[T], int],
+        group_of: Callable[[T], str] | None = None,
+    ) -> list[T]:
+        """Bound ``items`` (the records this request may see) to the traversal's snapshot.
+
+        Under a cursor, drops what was inserted after the traversal began. Without one, starts the traversal: the bound
+        is the highest id among ``items``, and ``items`` must already be what the read profile shows, so that the bound
+        never encodes the id of a record the profile withholds.
+        """
+        self._snapshotted = True
+        if group_of is not None:
+            # Ids of different tables are not comparable: bound each table by its own highest id.
+            if self.cursor is not None:
+                bounds = self.cursor.watermark.groups or {}
+                return [item for item in items if id_of(item) <= bounds.get(group_of(item), 0)]
+            bounds = {}
+            for item in items:
+                group = group_of(item)
+                bounds[group] = max(bounds.get(group, 0), id_of(item))
+            self._watermark = Watermark(max_id=0, taken_at=datetime.now(timezone.utc), groups=bounds)
+            return items
+        if self.cursor is not None:
+            bound = self.cursor.watermark.max_id
+            return [item for item in items if id_of(item) <= bound]
+        self._watermark = Watermark(
+            max_id=max((id_of(item) for item in items), default=0),
+            taken_at=datetime.now(timezone.utc),
+        )
+        return items
+
+    def window(
+        self,
+        items: list[T],
+        *,
+        key_of: Callable[[T], tuple],
+        id_of: Callable[[T], int] | None = None,
+    ) -> Page[T]:
+        """Order ``items`` by ``key_of`` and cut the page: after the cursor's position, or at ``offset``.
+
+        Pass ``id_of`` unless :meth:`snapshot` was already called on this list.
+        """
+        if not self._snapshotted:
+            if id_of is None:
+                raise ValueError("Paging.window needs id_of when snapshot() was not called.")
+            items = self.snapshot(items, id_of=id_of)
+        watermark = self._watermark
+        assert watermark is not None
+        keyed = sorted(((_as_key(key_of(item)), item) for item in items), key=lambda pair: pair[0])
+        total = len(keyed)
+        if self.cursor is not None:
+            last = _as_key(self.cursor.last_values)
+            if keyed and len(last) != len(keyed[0][0]):
+                raise InvalidCursorError("invalid_cursor: the cursor payload is malformed.")
+            keyed = [pair for pair in keyed if pair[0] > last]
+            start = 0
+        else:
+            start = self.offset
+        chunk = keyed[start : start + self.limit]
+        more = len(keyed) > start + self.limit
+        next_cursor = None
+        if more and chunk:
+            next_cursor = encode_cursor(
+                Cursor(watermark=watermark, last_values=list(chunk[-1][0]), query_signature=self.signature)
+            )
+        return Page(
+            items=[item for _key, item in chunk],
+            total=total,
+            mode=self.mode,
+            next_cursor=next_cursor,
+            watermark=watermark,
+        )
+
+    # -- SQL ----------------------------------------------------------------------------------------------------------
+
+    def begin(self, max_id: int | None) -> None:
+        """Start a traversal whose rows a caller selects itself (raw SQL): ``max_id`` is the highest id the request may
+        see. Under a cursor the traversal's own snapshot stands and this does nothing."""
+        if self.cursor is None:
+            self._watermark = Watermark(max_id=int(max_id or 0), taken_at=datetime.now(timezone.utc))
+
+    def finish(self, rows: list[T], *, more: bool, last_values: Sequence[Any] | None, total: int) -> Page[T]:
+        """The :class:`Page` for rows a caller selected itself. ``last_values`` is the sort key of ``rows[-1]``."""
+        watermark = self._watermark
+        assert watermark is not None, "Paging.begin() was not called"
+        next_cursor = None
+        if more and rows and last_values is not None:
+            next_cursor = encode_cursor(
+                Cursor(watermark=watermark, last_values=list(last_values), query_signature=self.signature)
+            )
+        return Page(items=rows, total=total, mode=self.mode, next_cursor=next_cursor, watermark=watermark)
+
+    def restrict(self, stmt, id_column):
+        """Under a cursor, limit ``stmt`` to rows that existed when the traversal began (so counts and summaries agree
+        with the page). Without one, ``stmt`` is returned unchanged."""
+        if self.cursor is None:
+            return stmt
+        return stmt.where(id_column <= self.cursor.watermark.max_id)
+
+    def sql_window(
+        self,
+        session,
+        ranked,
+        *,
+        columns: Sequence[Any],
+        keys: Sequence[tuple[Any, SortDirection]],
+        total: int,
+    ) -> Page[Any]:
+        """One page of a ranked subquery, with the "strictly after the cursor" predicate pushed into the statement.
+
+        ``ranked`` exposes an ``id`` column; ``columns`` is what to select (it must include every key column);
+        ``keys`` is the sort, most significant first, ending in the unique ``ranked.c.id``. ``total`` is the size of the
+        set the caller counted (after :meth:`restrict`). The page's ``items`` are the selected rows.
+        """
+        id_column = ranked.c.id
+        if self._watermark is None:
+            max_id = session.scalar(select(func.max(id_column)))
+            self.begin(max_id)
+        stmt = select(*columns).where(id_column <= self._watermark.max_id)  # type: ignore[union-attr]
+        return self.sql_page(session, stmt, keys=keys, total=total)
+
+    def sql_page(
+        self,
+        session,
+        stmt,
+        *,
+        keys: Sequence[tuple[Any, SortDirection]],
+        total: int,
+    ) -> Page[Any]:
+        """Order ``stmt`` by ``keys`` and cut the page after the cursor's position (or at ``offset``).
+
+        For a statement the caller built itself, already bounded to the snapshot (:meth:`restrict`); in offset mode the
+        caller must have called :meth:`begin`. ``keys`` must end in a column that is unique per row.
+        """
+        watermark = self._watermark
+        assert watermark is not None, "Paging.begin() was not called"
+        stmt = stmt.order_by(*[col.asc() if direction == "asc" else col.desc() for col, direction in keys])
+        if self.cursor is not None:
+            if len(self.cursor.last_values) != len(keys):
+                raise InvalidCursorError("invalid_cursor: the cursor payload is malformed.")
+            stmt = stmt.where(keyset_predicate(list(keys), self.cursor.last_values))
+        else:
+            stmt = stmt.offset(self.offset)
+        rows = list(session.execute(stmt.limit(self.limit + 1)).all())
+        more = len(rows) > self.limit
+        rows = rows[: self.limit]
+        last_values = [_plain(_key_value(rows[-1], col)) for col, _direction in keys] if rows else None
+        return self.finish(rows, more=more, last_values=last_values, total=total)
+
+
+def _key_value(row, column) -> Any:
+    """The value of sort column ``column`` on ``row``: by the column itself, else off the row's entity (an ORM column
+    selected as part of a whole entity is not a key of the row's mapping)."""
+    try:
+        return row._mapping[column]
+    except KeyError:
+        pass
+    try:
+        return getattr(row, column.key)
+    except AttributeError:
+        return getattr(row[0], column.key)
+
+
+def _plain(value: Any) -> Any:
+    """A database value as a JSON-able cursor value (a ``Decimal`` rank is still a number)."""
+    from decimal import Decimal
+
+    if isinstance(value, Decimal):
+        return int(value) if value == value.to_integral_value() else float(value)
+    return value
+
+
 __all__ = [
     "CURSOR_VERSION",
     "Cursor",
     "InvalidCursorError",
+    "Page",
+    "Paging",
     "SortDirection",
     "Watermark",
     "decode_cursor",
     "encode_cursor",
     "keyset_predicate",
     "query_signature",
+    "request_scope",
+    "signature_for",
     "watermark_predicate",
 ]

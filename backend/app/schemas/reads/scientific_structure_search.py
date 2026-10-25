@@ -35,11 +35,13 @@ from app.db.models.common import (
     StereoKind,
 )
 from app.schemas.reads.scientific_common import (
+    CursorToken,
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    WatermarkEcho,
 )
 
 # ---------------------------------------------------------------------------
@@ -191,6 +193,7 @@ class ScientificSpeciesStructureSearchRequest(BaseModel):
     sort: str | None = None
     include: list[str] = Field(default_factory=list)
     offset: int = Field(default=0, ge=0)
+    cursor: CursorToken = None
     limit: int = Field(default=50, ge=1, le=200)
 
 
@@ -215,6 +218,10 @@ class ScientificSpeciesStructureSearchResponse(BaseModel):
     review_summary: ReviewStatusSummary
     records: list[ScientificSpeciesStructureSearchRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 __all__ = [
