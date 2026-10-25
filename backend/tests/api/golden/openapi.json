@@ -32073,6 +32073,20 @@
           "network_ref": {
             "title": "Network Ref",
             "type": "string"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           }
         },
         "required": [
@@ -32569,6 +32583,20 @@
             },
             "title": "Points",
             "type": "array"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "tmax_k": {
             "anyOf": [
@@ -35104,6 +35132,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/NetworkExportRequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "selection_basis": {
             "description": "The selection's outcome, or 'administrative_choice' when the caller accepted one of several unranked alternatives (not a method claim).",

@@ -383,6 +383,24 @@ class RefGuardUnplaceable(RuntimeError):
         )
 
 
+class SubjectBelowFloor(RefGuardUnplaceable):
+    """A record below the read profile's floor was returned as the ANSWER of a read: the service's population filter is missing.
+
+    A subclass of :class:`RefGuardUnplaceable` (it fails the request the same way) with its own message: the remedy is the
+    service's floor, not the field's optionality and not ``POINTER_MODELS``.
+    """
+
+    def __init__(self, model_name: str, field_path: str, ref_prefix: str) -> None:
+        RuntimeError.__init__(
+            self,
+            f"a {ref_prefix}_ record below the read profile's floor was returned as a result at {field_path} ({model_name}); "
+            "the service's population filter is missing",
+        )
+        self.model_name = model_name
+        self.field_path = field_path
+        self.ref_prefix = ref_prefix
+
+
 # ---------------------------------------------------------------------------
 # Request context
 # ---------------------------------------------------------------------------
@@ -1090,7 +1108,7 @@ def withhold_in_model(
     # badge would say. Only the evidence set says what a nested pointer does.
     for path, ref in sites:
         if ref in found.subject_below_floor and _is_subject_own_ref(path, ref):
-            raise RefGuardUnplaceable(type(path[-1][0]).__name__, _path_text(path), ref.split("_", 1)[0])
+            raise SubjectBelowFloor(type(path[-1][0]).__name__, _path_text(path), ref.split("_", 1)[0])
     if not report.hidden:
         return report
     planned: dict[tuple[int, Any, str], _Action] = {}
@@ -1518,6 +1536,7 @@ __all__ = [
     "RefGuardContext",
     "RefGuardUnplaceable",
     "RefSets",
+    "SubjectBelowFloor",
     "WithheldSite",
     "WithholdReport",
     "attach_review_statuses",

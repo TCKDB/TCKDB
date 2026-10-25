@@ -359,8 +359,12 @@ def test_the_subject_of_a_response_is_never_deleted_as_a_pointer(monkeypatch):
         below_floor(monkeypatch, HIDDEN_CALC)
 
         as_record = SubjectEnvelope(record=SubjectRow(calculation_ref=HIDDEN_CALC))
-        with pytest.raises(ref_guard.RefGuardUnplaceable):
+        with pytest.raises(ref_guard.SubjectBelowFloor) as caught:
             run(as_record)
+        # The message names the real defect (a missing population filter), not a registry or optionality remedy.
+        assert "below the read profile's floor was returned as a result" in str(caught.value)
+        assert "population filter is missing" in str(caught.value)
+        assert "POINTER_MODELS" not in str(caught.value) and "optional" not in str(caught.value)
         assert as_record.record is not None
 
         as_records = SubjectEnvelope(records=[SubjectRow(calculation_ref=HIDDEN_CALC)])

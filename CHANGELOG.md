@@ -71,8 +71,8 @@ Version effects. A curated selection document now names the not-reviewed and und
 placeholder or leave out, so the thermo, kinetics, statmech, structure, network and relative-energy manifests move to **format 4**. Each
 records its `read_profile` and, in it, `linked_evidence_withheld` (`["deprecated", "rejected"]` under `curated`, `[]` otherwise); a
 format-3 manifest is refused on replay, not read as the new rule. The relative-energy manifests (and their comparison) move to format 4 too. The
-`computed_transition_state` rubric is re-pinned without a version bump (curated linked-evidence visibility; stored and exploratory
-verdicts unchanged): the grading code is untouched, only the evidence a curated read supplies to it differs.
+`computed_transition_state` rubric is re-pinned without a version bump (ADR 0023). Stored and exploratory verdicts are unchanged; curated read-time
+verdicts may change, because a curated read now supplies not-reviewed and under-review evidence to the grading. The grading code is untouched.
 
 ## Conformer basins: symmetric groups, hydroxyl and amine rotors, stated tolerances (2026-10-26)
 

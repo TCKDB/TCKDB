@@ -181,6 +181,16 @@ def test_ml_species_leaves_out_the_hidden_calculations_and_drops_hidden_conforme
     un_sa = [r for r in _lines(unlisted) if r.get("species_entry_ref") == sa]
     assert hidden["cg_h"] in groups(un_sa) and groups(un_sa) <= groups(ex_sa)
     assert w.visible["co_v2"].public_ref in observations(un_sa)
+    # The unlisted group is shown WITH its badge: the line's map has it, with its real status.
+    for line in un_sa:
+        badges = line["review_status_by_ref"]
+        for group in line["conformer_group_refs"]:
+            assert group in badges, (group, badges)
+            if group == hidden["cg_h"]:
+                assert badges[group] == "under_review"  # as the world built it: unlisted, not approved
+            if group == w.visible["cg_v"].public_ref:
+                assert badges[group] == "approved"
+    assert any(hidden["cg_h"] in line["review_status_by_ref"] for line in un_sa)
 
     # Withheld: nothing hidden is named.
     w.withhold_hidden(db_session)

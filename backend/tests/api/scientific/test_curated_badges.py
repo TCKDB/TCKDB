@@ -30,7 +30,14 @@ NO_ENVELOPE = ("/export/", "/manifest")
 
 
 def _enveloped(route_key, body):
-    return isinstance(body, dict) and "review_status_by_ref" in body and not any(p in route_key[1] for p in NO_ENVELOPE)
+    """Whether the body is a scientific envelope that must carry the map. A JSON body without the field on such a route FAILS
+    (a missing field is not a skip); the export streams, the hashed manifests and the exempt release reads are not envelopes."""
+    if any(p in route_key[1] for p in NO_ENVELOPE) or "/releases" in route_key[1]:
+        return False
+    if not isinstance(body, dict):
+        return False
+    assert "review_status_by_ref" in body, f"{route_key}: a scientific envelope without review_status_by_ref"
+    return True
 
 
 def _named(node, out, top=True):
@@ -120,6 +127,54 @@ def test_no_withheld_ref_is_a_key_of_any_badge_map(client, db_session, swept, mo
         leaked = hidden & set(body["review_status_by_ref"])
         assert not leaked, f"{route} {label}: withheld refs in the badge map: {sorted(leaked)}"
     assert seen > 30
+
+
+#: Response models that are NOT envelopes carrying the map, each with the reason. Hashed and replayed manifests cannot carry a
+#: field their digest would have to cover; the release reads are exempt from the guard; the rest are not scientific reads.
+NOT_ENVELOPES = {
+    "ThermoSelectionManifest": "hashed, replayed manifest; records each candidate's review status",
+    "KineticsSelectionManifest": "hashed, replayed manifest",
+    "StatmechSelectionManifest": "hashed, replayed manifest",
+    "StructureSelectionManifest": "hashed, replayed manifest",
+    "NetworkSelectionManifest": "hashed, replayed manifest",
+    "RelativeConformerEnergyManifest": "hashed, replayed manifest",
+    "RelativeConformerEnergyCompareManifest": "hashed, replayed manifest",
+    "ScientificReleaseManifestResponse": "dataset release artifact (exempt, ADR 0023 Q7)",
+    "ScientificReleaseDetailResponse": "dataset release read (exempt)",
+    "ScientificReleaseListResponse": "dataset release read (exempt)",
+    "ScientificReleaseSelectionsResponse": "dataset release read (exempt)",
+}
+
+
+def test_every_scientific_response_envelope_inherits_the_badge_base(client):
+    """Kills: a new response model for a ``/scientific`` route that cannot carry the badge map (so a gated ref it names would
+    go unbadged). Every response model is a ``ScientificResponse`` or is named in NOT_ENVELOPES with a reason."""
+    import typing
+
+    from pydantic import BaseModel
+
+    from app.schemas.reads.scientific_common import ScientificResponse
+
+    def models(annotation):
+        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            yield annotation
+        for arg in typing.get_args(annotation):
+            yield from models(arg)
+
+    missing = set()
+    seen_exempt = set()
+    for route in client.app.routes:
+        if not getattr(route, "path", "").startswith("/api/v1/scientific"):
+            continue
+        for model in models(getattr(route, "response_model", None)):
+            if issubclass(model, ScientificResponse):
+                continue
+            if model.__name__ in NOT_ENVELOPES:
+                seen_exempt.add(model.__name__)
+                continue
+            missing.add(model.__name__)
+    assert not missing, f"response models that are neither a ScientificResponse nor in NOT_ENVELOPES: {sorted(missing)}"
+    assert seen_exempt == set(NOT_ENVELOPES), f"stale NOT_ENVELOPES entries: {sorted(set(NOT_ENVELOPES) - seen_exempt)}"
 
 
 def test_the_map_helper_keeps_only_refs_still_present():

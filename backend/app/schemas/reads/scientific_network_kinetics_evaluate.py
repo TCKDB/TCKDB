@@ -21,6 +21,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from app.db.models.common import ArrheniusAUnits, NetworkKineticsModelKind
+from app.schemas.reads.scientific_common import ScientificResponse
 
 
 class NetworkKineticsEvaluatedPoint(BaseModel):
@@ -49,7 +50,7 @@ class NetworkKineticsEvaluatedPoint(BaseModel):
     in_range: bool
 
 
-class NetworkKineticsEvaluateResponse(BaseModel):
+class NetworkKineticsEvaluateResponse(ScientificResponse):
     """Response envelope for
     ``GET /scientific/network-kinetics/{ref}/evaluate``.
 

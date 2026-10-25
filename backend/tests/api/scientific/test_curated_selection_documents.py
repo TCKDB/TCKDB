@@ -492,6 +492,26 @@ def test_a_comparison_manifest_of_a_retired_relative_energy_version_is_refused(c
     assert raised.value.code == "unsupported_semantic_version"
 
 
+def test_a_format_3_relative_energy_manifest_and_comparison_are_refused(client, world):
+    """ADR 0023: the single manifest and the comparison, each recorded before the evidence rule (format 3), are refused on
+    replay, not read as format 4. Kills: format 3 left registered for either document."""
+    routes = {r.name: r for r in _routes(world)}
+    single = _post(client, routes["relative_energy"].path, routes["relative_energy"].body, "exploratory")
+    single["format"]["version"] = 3
+    with pytest.raises(Exception, match="manifest format|unsupported_manifest_format"):
+        relative_manifest.replay_matches(_reseal_integrity(single, relative_manifest.digest))
+
+    from tests.api.scientific import _curated_sweep_inputs as inputs
+
+    path = f"/species-entries/{world.extra['species_entry'].public_ref}/conformers/relative-energies/compare/manifest"
+    (variant,) = inputs._RELATIVE_ENERGIES_COMPARE(world)
+    comparison = _post(client, path, variant["json"], "exploratory")
+    assert comparison["format"]["version"] == 4
+    comparison["format"]["version"] = 3
+    with pytest.raises(Exception, match="manifest format|unsupported_manifest_format"):
+        relative_manifest.replay_comparison_matches(_reseal_integrity(comparison, relative_manifest.digest))
+
+
 @pytest.mark.parametrize("name", ["thermo", "kinetics", "network", "structure", "statmech"])
 def test_a_format_version_nobody_wrote_is_refused(client, world, name):
     route = next(r for r in _routes(world) if r.name == name)
