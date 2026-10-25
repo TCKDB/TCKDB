@@ -12,7 +12,9 @@ optional, attributed and stored as you made it. A record deposited without one i
 - **A repeated record is not another state.** An ensemble cites each member record once. Counting two uploads of the same
   basin as two states would double its weight; a real multiplicity is stated as `counting_multiplicity`. Two different members may sit in one basin.
 - **A declaration is never edited.** To correct one, deposit a new statmech record; the stored declaration, members and sources
-  refuse every update.
+  refuse every update. The one exception is operational, not yours: if TCKDB changes the rule that decides which conformer
+  group a basin is filed under, the group a declaration or member names is re-pointed by a recorded repair (nothing else about the
+  declaration changes).
 - **Nothing is inferred from the other fields.** Having several conformers on an entry does not make an ensemble, and a
   `torsions` block does not say which harmonic modes the rotors replaced.
 

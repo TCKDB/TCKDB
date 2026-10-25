@@ -3,6 +3,10 @@ from typing import Self
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 from tckdb_schemas.coded_error import CodedValidationError
+from tckdb_schemas.fragments.kinetics_bath_gas import (
+    KineticsBathGasUpload,
+    check_kinetics_bath_gas,
+)
 from tckdb_schemas.fragments.kinetics_evidence import (
     T0_K_DESCRIPTION,
     T0_K_MAX,
@@ -291,6 +295,8 @@ class KineticsUploadRequest(SchemaBase):
         falloff), which raises the effective main-line Arrhenius A-units
         order by one.
     :param energy_level_of_theory: SP level of theory for source-calc auto-resolution.
+    :param bath_gas: Optional bath gas the rate was obtained for (species entries with mole
+        fractions summing to 1; not valid at ``pressure_context='high_p_limit'``).
     :param literature: Optional literature submission payload.
     :param software_release: Optional software provenance reference (fitting tool).
     :param workflow_tool_release: Optional workflow-tool provenance reference.
@@ -411,6 +417,15 @@ class KineticsUploadRequest(SchemaBase):
     tunneling_application: KineticsTunnelingApplicationUpload | None = None
     pressure_context: PressureContext | None = None
     pressure_bar: float | None = Field(default=None, gt=0)
+    bath_gas: list[KineticsBathGasUpload] = Field(
+        default_factory=list,
+        description=(
+            "The bath gas this rate was obtained for, where the depositor states it: each "
+            "component is a species entry (by content) with its mole fraction. The fractions sum "
+            "to 1 and the same species is named once. Meaningless for a high-pressure-limit rate "
+            "(refused). Empty means not stated; it is never inferred."
+        ),
+    )
 
     falloff: FalloffUpload | None = None
     third_body_efficiencies: list[ThirdBodyEfficiencyUpload] = Field(
@@ -450,6 +465,21 @@ class KineticsUploadRequest(SchemaBase):
             raise ValueError(
                 "reported_ea and reported_ea_units must both be provided or both omitted."
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_bath_gas(self) -> Self:
+        """A stated bath gas is a composition the rate could have been obtained for.
+
+        Not at the ``high_p_limit`` pressure context (the limit has no collider), each species at most
+        once, and the mole fractions sum to 1.0 within 1e-9, as for a network solve's bath gas. An
+        empty list is "not stated" and is never refused or inferred.
+        """
+        check_kinetics_bath_gas(
+            pressure_context=self.pressure_context,
+            mole_fractions=[bg.mole_fraction for bg in self.bath_gas],
+            identities=[bg.species_entry.model_dump_json() for bg in self.bath_gas],
+        )
         return self
 
     @model_validator(mode="after")

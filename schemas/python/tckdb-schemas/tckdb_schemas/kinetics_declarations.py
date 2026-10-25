@@ -32,6 +32,7 @@ and a declaration that contradicts one of them is refused
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from typing import Annotated, Any
@@ -91,6 +92,7 @@ __all__ = [
     "W_KINETICS_DECLARATION_VERSION_UNSUPPORTED",
     "W_KINETICS_DETERMINATION_INVALID",
     "kinetics_applicability_error",
+    "kinetics_bath_gas_species_error",
     "kinetics_declaration_context",
     "kinetics_declaration_error",
     "kinetics_determination_error",
@@ -732,6 +734,11 @@ class KineticsRecordFacts:
     has_network_kinetics: bool | None = None
     has_falloff: bool | None = None
     has_third_body_efficiencies: bool | None = None
+    #: The mole fractions of the bath gas the record states, in order; ``None`` when it states none
+    #: (or this layer has no request). Species are compared where they are resolved
+    #: (:func:`kinetics_bath_gas_species_error`), never here: two spellings of one species are
+    #: only known to be one species after resolution.
+    bath_gas_fractions: tuple[float, ...] | None = None
 
 
 def _has_field(payload: Any, name: str) -> bool:
@@ -766,7 +773,11 @@ def kinetics_record_facts(payload: Any) -> KineticsRecordFacts:
         has_efficiencies = bool(_get(payload, "third_body_efficiencies"))
     else:
         has_efficiencies = False
+    bath_gas = _get(payload, "bath_gas") if _has_field(payload, "bath_gas") else None
     return KineticsRecordFacts(
+        bath_gas_fractions=(
+            tuple(_get(item, "mole_fraction") for item in bath_gas) if bath_gas else None
+        ),
         direction=_value(_get(payload, "direction")),
         scientific_origin=_value(_get(payload, "scientific_origin")),
         model_kind=model_kind,
@@ -907,6 +918,34 @@ def kinetics_applicability_error(
             "falloff treatment.",
         )
 
+    bath = facts.bath_gas_fractions
+    if bath:
+        if dependence == "high_pressure_limit":
+            return _contradiction(
+                "pressure_dependence",
+                "declares the high-pressure limit but the record states a bath gas, which the "
+                "limit does not have.",
+            )
+        if collider_kind == "specified_collider" and (
+            len(bath) != 1 or abs(bath[0] - 1.0) > MOLE_FRACTION_SUM_TOLERANCE
+        ):
+            return _contradiction(
+                "collider_kind",
+                "declares one specified collider but the record's bath gas is not that one "
+                "species at mole fraction 1.",
+            )
+        if collider_kind == "fixed_mixture":
+            declared = sorted(
+                f for f in (_get(c, "mole_fraction") for c in _get(applicability, "colliders") or []) if f is not None
+            )
+            if len(declared) != len(bath) or any(
+                abs(a - b) > MOLE_FRACTION_SUM_TOLERANCE for a, b in zip(declared, sorted(bath), strict=True)
+            ):
+                return _contradiction(
+                    "collider_kind",
+                    "declares a fixed mixture but the record's bath gas has different mole fractions.",
+                )
+
     order = _get(applicability, "reaction_order")
     # The coefficient's order is the number of species on the side it is a rate *of*: the reactants
     # for a forward rate, the products for a reverse one. A net rate, or one whose direction is not
@@ -921,6 +960,40 @@ def kinetics_applicability_error(
                 f"({side} {'reactant' if facts.direction == 'forward' else 'product'}(s)"
                 + (", plus the third body" if expected > side else "")
                 + ").",
+            )
+    return None
+
+
+def kinetics_bath_gas_species_error(
+    applicability: Any, stated: Mapping[str, float]
+) -> tuple[str, str] | None:
+    """``(code, message)`` when a stated bath gas names other species than the declared colliders.
+
+    The species-level half of the bath-gas rules, run where species are resolved: ``stated`` maps
+    a species public ref to the mole fraction the record states for it, and the declaration's
+    ``colliders`` are the stored form (``species_ref``, ``mole_fraction``). A ``specified_collider``
+    X needs the bath gas to be exactly X at 1; a ``fixed_mixture`` needs the same species with the
+    same fractions (absolute 1e-9). ``composition_dependent`` and ``not_dependent`` are not checked.
+    Neither statement is ever inferred from the other: the selector reads only the declaration.
+    """
+    if applicability is None or not stated:
+        return None
+    kind = _value(_get(applicability, "collider_kind"))
+    colliders = _get(applicability, "colliders") or []
+    declared = {_get(c, "species_ref"): _get(c, "mole_fraction") for c in colliders}
+    if kind == "specified_collider":
+        if set(stated) != set(declared) or any(abs(f - 1.0) > MOLE_FRACTION_SUM_TOLERANCE for f in stated.values()):
+            return _contradiction(
+                "collider_kind",
+                "declares a specified collider but the record's bath gas is not exactly that species.",
+            )
+    elif kind == "fixed_mixture":
+        if set(stated) != set(declared) or any(
+            abs(stated[ref] - declared[ref]) > MOLE_FRACTION_SUM_TOLERANCE for ref in declared
+        ):
+            return _contradiction(
+                "collider_kind",
+                "declares a fixed mixture but the record's bath gas has other species or fractions.",
             )
     return None
 

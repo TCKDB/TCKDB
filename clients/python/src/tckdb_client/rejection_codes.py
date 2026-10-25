@@ -187,6 +187,9 @@ class RejectionCode(str, Enum):
     INVALID_STRUCTURE_QUERY = "invalid_structure_query"
     INVALID_TEMPERATURE_RANGE = "invalid_temperature_range"
     IRC_RESULT_NOT_FOUND = "irc_result_not_found"
+    KINETICS_BATH_GAS_AT_HIGH_PRESSURE_LIMIT = "kinetics_bath_gas_at_high_pressure_limit"
+    KINETICS_BATH_GAS_DUPLICATE_SPECIES = "kinetics_bath_gas_duplicate_species"
+    KINETICS_BATH_GAS_MOLE_FRACTION_SUM = "kinetics_bath_gas_mole_fraction_sum"
     KINETICS_DECLARATION_CONTRADICTS_RECORD = "kinetics_declaration_contradicts_record"
     KINETICS_DECLARATION_INVALID = "kinetics_declaration_invalid"
     KINETICS_DECLARATION_VERSION_UNSUPPORTED = "kinetics_declaration_version_unsupported"
@@ -515,6 +518,9 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.INVALID_RANGE,
         RejectionCode.INVALID_STRUCTURE_QUERY,
         RejectionCode.INVALID_TEMPERATURE_RANGE,
+        RejectionCode.KINETICS_BATH_GAS_AT_HIGH_PRESSURE_LIMIT,
+        RejectionCode.KINETICS_BATH_GAS_DUPLICATE_SPECIES,
+        RejectionCode.KINETICS_BATH_GAS_MOLE_FRACTION_SUM,
         RejectionCode.KINETICS_DECLARATION_CONTRADICTS_RECORD,
         RejectionCode.KINETICS_DECLARATION_INVALID,
         RejectionCode.KINETICS_DECLARATION_VERSION_UNSUPPORTED,
@@ -859,6 +865,9 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.INVALID_STRUCTURE_QUERY: frozenset({422}),
     RejectionCode.INVALID_TEMPERATURE_RANGE: frozenset({422}),
     RejectionCode.IRC_RESULT_NOT_FOUND: frozenset({404}),
+    RejectionCode.KINETICS_BATH_GAS_AT_HIGH_PRESSURE_LIMIT: frozenset({422}),
+    RejectionCode.KINETICS_BATH_GAS_DUPLICATE_SPECIES: frozenset({422}),
+    RejectionCode.KINETICS_BATH_GAS_MOLE_FRACTION_SUM: frozenset({422}),
     RejectionCode.KINETICS_DECLARATION_CONTRADICTS_RECORD: frozenset({422}),
     RejectionCode.KINETICS_DECLARATION_INVALID: frozenset({422}),
     RejectionCode.KINETICS_DECLARATION_VERSION_UNSUPPORTED: frozenset({422}),

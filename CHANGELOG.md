@@ -22,6 +22,25 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A kinetics record can state its bath gas (2026-10-25)
+
+A PLOG or Chebyshev fit, or an apparent rate at a stated pressure, is a statement about a collider: a table fitted for Ar is not one for N2. A reaction-level
+kinetics record can now say which bath gas it was obtained for, where the depositor states it. A network solve already could (`network_solve_bath_gas`).
+
+- **Schema.** New table `kinetics_bath_gas` (revision `a4c8e1f7b392`): `(kinetics_id, species_entry_id, mole_fraction)`, primary key on the pair,
+  `CHECK (mole_fraction > 0 AND mole_fraction <= 1)`. No backfill: an existing record has none, which reads as "not stated". The downgrade refuses while any row exists.
+- **Upload.** `bath_gas` on `POST /uploads/kinetics` (and on a kinetics contribution bundle) is a list of `{species_entry, mole_fraction}`; on
+  `POST /uploads/computed-reaction` a fit's `bath_gas` is a list of `{species_key, mole_fraction}`. Optional; empty means not stated and nothing is inferred.
+- **Refusals (422).** `kinetics_bath_gas_at_high_pressure_limit` (a bath gas on a `high_p_limit` rate), `kinetics_bath_gas_mole_fraction_sum` (the fractions do not sum
+  to 1 within 1e-9, the rule a network solve's bath gas already follows), `kinetics_bath_gas_duplicate_species` (one species named twice, including two spellings that
+  resolve to one species entry).
+- **Read.** Each kinetics record carries `bath_gas` (`species_entry_ref`, `mole_fraction`), null when none was stated; the kinetics export carries it too.
+- **Accepted science.** Once a kinetics record is approved its bath gas can be neither added, edited nor removed.
+- **No contradictions.** A stated bath gas is refused, under `kinetics_declaration_contradicts_record`, when the applicability declaration says `high_pressure_limit`,
+  when a declared `specified_collider` is not exactly the bath gas at 1, when a declared `fixed_mixture` has other species or fractions, or when the fit's linked
+  network solve states a different bath gas. Nothing is inferred from either statement; the selector still reads only the declaration.
+- **Bundles.** A kinetics bundle exports the bath gas as species content and a re-import writes the same rows.
+
 ## Calculation dependencies are acyclic, enforced by the database (2026-10-25)
 
 A new Alembic revision (`e2f2b3fb6725`) adds a row trigger on `calculation_dependency` that refuses an INSERT, or an UPDATE of either
@@ -54,6 +73,42 @@ records its `read_profile` and, in it, `linked_evidence_withheld` (`["deprecated
 format-3 manifest is refused on replay, not read as the new rule. The relative-energy manifests (and their comparison) move to format 4 too. The
 `computed_transition_state` rubric is re-pinned without a version bump (curated linked-evidence visibility; stored and exploratory
 verdicts unchanged): the grading code is untouched, only the evidence a curated read supplies to it differs.
+
+## Conformer basins: symmetric groups, hydroxyl and amine rotors, stated tolerances (2026-10-26)
+
+In plain terms: two geometries of one molecule are now filed as the same conformer when some relabelling of the molecule that its own
+structure allows makes every rotor match within a stated tolerance. Before, a nearly planar aryl group could land in two conformers
+depending only on which side of 0 degrees the program printed, and rotamers that differ only in an O-H or N-H orientation (ethanol
+trans and gauche, syn and anti acetic acid, a hydrogen-bonded and a free hydroxyl) were filed as one.
+
+- **New scheme version.** `conformer_assignment_scheme` `torsion_basin` gains version 2 (a data row; no schema change) and becomes the
+  default. Its parameters are stored on the row: heavy-atom and methyl rotors match within 20 degrees, one- and two-hydrogen tops (O-H,
+  S-H, O-O-H, N-O-H, -NH2, a radical -CH2) within 30 degrees, and the symmetry search is capped at 4096 mappings. The cap can only split a
+  basin, never merge two, and is recorded on the observation when it is hit.
+- **What changed in matching.** Same basin means *there exists* a graph symmetry under which every rotor is within its own tolerance. The
+  earlier tie-break by lexicographically smallest quantised bins (discontinuous at the 0/360 wrap) is gone; the stored bins are display only.
+  One- and two-hydrogen tops are now rotors; the two hydrogens of -NH2 and a radical -CH2 are interchangeable; methyl hydrogens are folded as
+  before. Version 1 is no longer implemented.
+- **Existing data is reassigned on deploy.** Revision `d3f8a1c6e92b` recomputes every species entry's basins under the per-entry advisory lock
+  live uploads take, and prints a count report. A merge lands on the older group; a split leaves the original row with the original
+  representative. A thermo target moves to the group holding the observation its own calculations came from, else it stays with the old
+  representative's group; conformer selections follow the representative. Every group whose membership changed has its review reset to
+  `not_reviewed` with a review event.
+- **Approved rows move through the declared-repair path** (`accepted_science_repair`): one declaration per table naming the exact columns
+  (observation link, scheme and fingerprint; thermo target), every changed accepted row recorded old to new. The accepted-science triggers
+  are not disabled.
+- **Statmech basins move too (owner decision).** `statmech_model_declaration` and `statmech_model_member` still refuse every UPDATE, except
+  `conformer_group_id` under a declared repair (revision `a5d9c3e7b1f2` changes the trigger function only; it never disables it). Any other
+  column, an undeclared basin edit, a NULL basin and a group of another species entry are still refused. They follow the same rule as
+  thermo targets. A declaration's `content_hash` (which covers its basin and each member's basin) is recomputed in the same repair, and
+  may change only because a basin moved in that transaction.
+- **Nothing is deleted.** A group a merge empties keeps its row, public ref and review history; its review is reset like any group whose
+  membership changed. A conformer selection that would duplicate one on the target stays where it is; a moved selection is stamped
+  with the new scheme. The rigid-molecule fallback (no rotors) now takes the minimum RMSD over the same symmetry mappings, so ethane,
+  methylamine, hydrazine and an ethyl radical no longer depend on the order of atoms in a file.
+- **Cap.** Above the symmetry cap the result can depend on atom order in a deposited file; `symmetry_cap_hit` on the observation says so.
+- **Not changed:** the both-terminal ("ethane") rule, methyl folding, the rigid-molecule RMSD fallback, trust rubrics (the rubric pin check is
+  unchanged).
 
 ## Curated profile: records are floored, linked evidence is badged (2026-10-25, step 1 of 8)
 

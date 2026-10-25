@@ -1912,6 +1912,22 @@ the gap.
 
 - `ck_kinetics_arrhenius_entry_arrhenius_entry_index_ge_1`: `entry_index >= 1`
 
+### `kinetics_bath_gas`
+
+**Role:** role not stated on the model
+
+**Purpose:** One component of the bath gas a pressure-dependent rate was obtained for.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `kinetics_id` | BIGINT | no | — | kinetics.id | — | not documented |
+| `species_entry_id` | BIGINT | no | — | species_entry.id | — | not documented |
+| `mole_fraction` | DOUBLE PRECISION | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_kinetics_bath_gas_mole_fraction_range`: `mole_fraction > 0 AND mole_fraction <= 1`
+
 ### `kinetics_chebyshev`
 
 **Role:** role not stated on the model

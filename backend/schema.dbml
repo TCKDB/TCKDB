@@ -2379,6 +2379,22 @@ Table kinetics_arrhenius_entry {
   Note: 'One modified-Arrhenius term of a sum-of-Arrhenius rate (DR-0036).'
 }
 
+Table kinetics_bath_gas {
+  kinetics_id bigint [not null, ref: > kinetics.id]
+  species_entry_id bigint [not null, ref: > species_entry.id]
+  mole_fraction double [not null]
+
+  indexes {
+    (kinetics_id, species_entry_id) [pk]
+  }
+
+  checks {
+    `mole_fraction > 0 AND mole_fraction <= 1` [name: 'ck_kinetics_bath_gas_mole_fraction_range']
+  }
+
+  Note: 'One component of the bath gas a pressure-dependent rate was obtained for.'
+}
+
 Table kinetics_chebyshev {
   kinetics_id bigint [pk, not null, ref: > kinetics.id]
   n_temperature int [not null]

@@ -110,6 +110,7 @@ from app.services.hessian_extraction import (
 from app.services.input_geometry_extraction import (
     try_extract_input_geometry_from_artifact_upload,
 )
+from app.services.kinetics_bath_gas import persist_kinetics_bath_gas
 from app.services.kinetics_declaration_resolution import (
     assert_kinetics_declaration_columns,
     resolve_kinetics_declarations,
@@ -2004,6 +2005,22 @@ def persist_computed_reaction_upload(
         session.flush()
         kinetics_ids.append(kinetics.id)
 
+        persist_kinetics_bath_gas(
+            session,
+            kinetics,
+            [
+                (
+                    resolve_species_key(
+                        bg.species_key,
+                        species_key_to_entry,
+                        field=f"{kin_field_prefix}bath_gas[{bg_index}].species_key",
+                    ),
+                    bg.mole_fraction,
+                )
+                for bg_index, bg in enumerate(kin.bath_gas)
+            ],
+            field=f"{kin_field_prefix}bath_gas",
+        )
         persist_interpretation_assignments(session, kinetics, resolved_interpretations)
         if kin.tunneling_application is not None:
             persist_tunneling_application(

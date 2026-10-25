@@ -905,6 +905,13 @@ def _kinetics_to_upload(
         if kinetics.ea_uncertainty_kj_mol is not None:
             payload["d_reported_ea"] = kinetics.ea_uncertainty_kj_mol
 
+    # The bath gas the record states, as species content (absent when none was stated).
+    if kinetics.bath_gases:
+        payload["bath_gas"] = [
+            {"species_entry": _species_entry_payload(bg.species_entry), "mole_fraction": bg.mole_fraction}
+            for bg in kinetics.bath_gases
+        ]
+
     literature = _literature_payload(kinetics.literature)
     if literature is not None:
         payload["literature"] = literature

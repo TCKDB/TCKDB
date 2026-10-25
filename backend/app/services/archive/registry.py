@@ -98,6 +98,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "group_additivity_scheme",
         "kinetics",
         "kinetics_arrhenius_entry",
+        "kinetics_bath_gas",
         "kinetics_chebyshev",
         # A complete determination of a rate: identity. A restore that dropped it would hand
         # back records whose determination_id points at nothing.
@@ -314,7 +315,7 @@ PRESEEDED_TABLES: Mapping[
     ),
     "conformer_assignment_scheme": (
         ("name", "version"),
-        frozenset({("torsion_basin", 1)}),
+        frozenset({("torsion_basin", 1), ("torsion_basin", 2)}),
     ),
 }
 

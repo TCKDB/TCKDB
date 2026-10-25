@@ -3953,6 +3953,27 @@
       "title": "KineticsBarrierBasis",
       "type": "string"
     },
+    "KineticsBathGasUpload": {
+      "additionalProperties": false,
+      "description": "One bath-gas component of a rate, named by species content.\n\n:param species_entry: Species-entry identity of the component (resolved or created, as for a\n    reaction participant).\n:param mole_fraction: Mole fraction of this component, in (0, 1].",
+      "properties": {
+        "mole_fraction": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Mole Fraction",
+          "type": "number"
+        },
+        "species_entry": {
+          "$ref": "#/$defs/SpeciesEntryIdentityPayload"
+        }
+      },
+      "required": [
+        "species_entry",
+        "mole_fraction"
+      ],
+      "title": "KineticsBathGasUpload",
+      "type": "object"
+    },
     "KineticsCalculationPurpose": {
       "description": "What a supporting calculation supplies to the rate.",
       "enum": [
@@ -4870,7 +4891,7 @@
     },
     "KineticsUploadRequest": {
       "additionalProperties": false,
-      "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param t0_k: Reference temperature T0 in K, so that\n    ``k = A (T/T0)^n exp(-Ea/RT)``. Defaults to 1 K.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional finite, strictly positive reaction-path degeneracy.\n:param degeneracy_convention: Whether degeneracy is already included in the rate.\n:param tunneling_model: Optional tunneling model label.\n:param determination: Needs ``direction`` and a literature or workflow tool.\n:param applicability: Optional declaration of what the coefficient is.\n:param protocol: Optional declaration of how the rate was produced.\n:param note: Optional free-text note.",
+      "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param bath_gas: Optional bath gas the rate was obtained for (species entries with mole\n    fractions summing to 1; not valid at ``pressure_context='high_p_limit'``).\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param t0_k: Reference temperature T0 in K, so that\n    ``k = A (T/T0)^n exp(-Ea/RT)``. Defaults to 1 K.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional finite, strictly positive reaction-path degeneracy.\n:param degeneracy_convention: Whether degeneracy is already included in the rate.\n:param tunneling_model: Optional tunneling model label.\n:param determination: Needs ``direction`` and a literature or workflow tool.\n:param applicability: Optional declaration of what the coefficient is.\n:param protocol: Optional declaration of how the rate was produced.\n:param note: Optional free-text note.",
       "examples": [
         {
           "a": 1230000000000.0,
@@ -4971,6 +4992,14 @@
             "$ref": "#/$defs/MultiArrheniusEntryUpload"
           },
           "title": "Arrhenius Entries",
+          "type": "array"
+        },
+        "bath_gas": {
+          "description": "The bath gas this rate was obtained for, where the depositor states it: each component is a species entry (by content) with its mole fraction. The fractions sum to 1 and the same species is named once. Meaningless for a high-pressure-limit rate (refused). Empty means not stated; it is never inferred.",
+          "items": {
+            "$ref": "#/$defs/KineticsBathGasUpload"
+          },
+          "title": "Bath Gas",
           "type": "array"
         },
         "chebyshev": {
