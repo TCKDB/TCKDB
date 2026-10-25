@@ -1,8 +1,9 @@
 """Under ``profile=curated`` three more reads must not name records the curated profile hides.
 
-Same rule as the statmech source blocks (#765): under a review floor a ref whose own detail route answers 404 is
-never named; exploratory output is unchanged; record-level facts (levels, evidence, availability flags) are not
-filtered.
+Same rule as the statmech source blocks (#765), as ADR 0023 now states it: under a review floor a ref to a record the
+profile WITHHOLDS (rejected or deprecated) is never named; a ref to one that is merely below the floor (not reviewed,
+under review) is linked evidence and is named. Each hiding test below runs over a rejected record and has an unreviewed
+twin. Exploratory output is unchanged; record-level facts (levels, evidence, availability flags) are not filtered.
 
   (a) transition-state-entry ``include=statmech`` -> ``statmech[].source_calculations``
   (b) species-entry thermo provenance -> the statmech fallback's primary / freq / sp calculations (and the conformer
@@ -71,7 +72,7 @@ def _entry(db_session, tag):
 # --- (a) transition-state entry include=statmech ---------------------------------------------------------------
 
 
-def _ts_world(db_session):
+def _ts_world(db_session, hidden_status=None):
     r1, r2, p = _entry(db_session, "RSA1"), _entry(db_session, "RSA2"), _entry(db_session, "RSAP")
     reaction = make_chem_reaction(db_session, reactants=[r1.species, r2.species], products=[p.species], reversible=False)
     rxn_entry = make_reaction_entry(db_session, reaction=reaction, reactant_entries=[r1, r2], product_entries=[p])
@@ -90,6 +91,8 @@ def _ts_world(db_session):
     attach_statmech_source_calculation(db_session, statmech=sm, calculation=shown, role=R.opt)
     attach_statmech_source_calculation(db_session, statmech=sm, calculation=hidden, role=R.freq)
     _review(db_session, SubmissionRecordType.calculation, shown)
+    if hidden_status is not None:
+        _review(db_session, SubmissionRecordType.calculation, hidden, hidden_status)
     _review(db_session, SubmissionRecordType.transition_state_entry, ts)
     _review(db_session, SubmissionRecordType.statmech, sm)  # approved last: its links exist first
     return ts, sm, shown, hidden
@@ -102,9 +105,16 @@ def _ts_sources(client, ts, profile):
     return sm
 
 
-def test_ts_entry_statmech_curated_omits_hidden_calculation(client, db_session):
-    """Kills: no profile filtering in ``_build_statmech_summaries`` (today's leak)."""
+def test_ts_entry_statmech_curated_names_an_unreviewed_calculation(client, db_session):
+    """ADR 0023: the unreviewed source calculation is linked evidence of the approved statmech, so it is listed."""
     ts, sm, shown, hidden = _ts_world(db_session)
+    summary = _ts_sources(client, ts, "curated")
+    assert {c["calculation_ref"] for c in summary["source_calculations"]} == {shown.public_ref, hidden.public_ref}
+
+
+def test_ts_entry_statmech_curated_omits_withheld_calculation(client, db_session):
+    """Kills: no profile filtering in ``_build_statmech_summaries`` (today's leak). The calculation is rejected."""
+    ts, sm, shown, hidden = _ts_world(db_session, RecordReviewStatus.rejected)
     assert client.get(f"{BASE}/calculations/{hidden.public_ref}", params={"profile": "curated"}).status_code == 404
     summary = _ts_sources(client, ts, "curated")
     assert [c["calculation_ref"] for c in summary["source_calculations"]] == [shown.public_ref]
@@ -120,7 +130,7 @@ def test_ts_entry_statmech_exploratory_lists_everything(client, db_session):
     assert {c["calculation_ref"] for c in explicit["source_calculations"]} == {shown.public_ref, hidden.public_ref}
 
 
-def _ts_world_with_hidden_statmech(db_session):
+def _ts_world_with_hidden_statmech(db_session, hidden_status=None):
     ts, sm, shown, hidden = _ts_world(db_session)
     # A second statmech on the same entry that is not approved; the first (with its calculations) is.
     hidden_sm = Statmech(
@@ -130,13 +140,24 @@ def _ts_world_with_hidden_statmech(db_session):
     )
     db_session.add(hidden_sm)
     db_session.flush()
+    if hidden_status is not None:
+        _review(db_session, SubmissionRecordType.statmech, hidden_sm, hidden_status)
     _review(db_session, SubmissionRecordType.transition_state, ts.transition_state)
     return ts, sm, hidden_sm
 
 
-def test_ts_entry_include_statmech_omits_hidden_statmech_records(client, db_session):
-    """Kills: listing every owned statmech under a floor (only their source calculations were filtered)."""
+def test_ts_entry_include_statmech_names_an_unreviewed_statmech(client, db_session):
+    """ADR 0023: a second statmech on the entry that is only not reviewed is listed beside the approved one."""
     ts, sm, hidden_sm = _ts_world_with_hidden_statmech(db_session)
+    r = client.get(f"{BASE}/transition-state-entries/{ts.public_ref}", params={"include": "statmech", "profile": "curated"})
+    assert r.status_code == 200, r.text
+    assert sorted(x["statmech_ref"] for x in r.json()["record"]["statmech"]) == sorted([sm.public_ref, hidden_sm.public_ref])
+
+
+def test_ts_entry_include_statmech_omits_hidden_statmech_records(client, db_session):
+    """Kills: listing every owned statmech under a floor (only their source calculations were filtered). The second statmech
+    is rejected."""
+    ts, sm, hidden_sm = _ts_world_with_hidden_statmech(db_session, RecordReviewStatus.rejected)
     assert client.get(f"{BASE}/statmech/{hidden_sm.public_ref}", params={"profile": "curated"}).status_code == 404
     r = client.get(f"{BASE}/transition-state-entries/{ts.public_ref}", params={"include": "statmech", "profile": "curated"})
     assert r.status_code == 200, r.text
@@ -145,9 +166,21 @@ def test_ts_entry_include_statmech_omits_hidden_statmech_records(client, db_sess
     assert sorted(m["statmech_ref"] for m in x.json()["record"]["statmech"]) == sorted([sm.public_ref, hidden_sm.public_ref])
 
 
-def test_ts_concept_include_statmech_omits_hidden_statmech_records(client, db_session):
-    """Kills: the same leak on the transition-state concept route."""
+def test_ts_concept_include_statmech_names_an_unreviewed_statmech(client, db_session):
+    """ADR 0023: on the concept route the entry's statmech models are nested under the transition state; an unreviewed one
+    is named."""
     ts, sm, hidden_sm = _ts_world_with_hidden_statmech(db_session)
+    r = client.get(
+        f"{BASE}/transition-states/{ts.transition_state.public_ref}", params={"include": "statmech", "profile": "curated"}
+    )
+    assert r.status_code == 200, r.text
+    (entry_block,) = r.json()["record"]["statmech"]
+    assert sorted(m["statmech_ref"] for m in entry_block["statmech"]) == sorted([sm.public_ref, hidden_sm.public_ref])
+
+
+def test_ts_concept_include_statmech_omits_hidden_statmech_records(client, db_session):
+    """Kills: the same leak on the transition-state concept route. The second statmech is rejected."""
+    ts, sm, hidden_sm = _ts_world_with_hidden_statmech(db_session, RecordReviewStatus.rejected)
     r = client.get(
         f"{BASE}/transition-states/{ts.transition_state.public_ref}", params={"include": "statmech", "profile": "curated"}
     )
@@ -187,9 +220,18 @@ def _provenance(client, entry, profile):
     return rec["provenance"], rec
 
 
-def test_thermo_curated_does_not_name_a_hidden_statmech_freq_calculation(client, db_session):
-    """Kills: building the provenance fallback from every statmech link under a review floor."""
+def test_thermo_curated_names_an_unreviewed_statmech_freq_calculation(client, db_session):
+    """ADR 0023: an unreviewed frequency calculation is linked evidence, named in the provenance."""
     entry, sm, sp, freq = _thermo_world(db_session, freq_status=None)
+    prov, _ = _provenance(client, entry, "curated")
+    assert prov["freq_calculation_ref"] == freq.public_ref
+    assert prov["sp_calculation_ref"] == sp.public_ref
+
+
+def test_thermo_curated_does_not_name_a_withheld_statmech_freq_calculation(client, db_session):
+    """Kills: building the provenance fallback from every statmech link under a review floor. The frequency calculation is
+    rejected."""
+    entry, sm, sp, freq = _thermo_world(db_session, freq_status=RecordReviewStatus.rejected)
     assert client.get(f"{BASE}/calculations/{freq.public_ref}", params={"profile": "curated"}).status_code == 404
     prov, rec = _provenance(client, entry, "curated")
     assert prov["freq_calculation_ref"] is None
@@ -243,9 +285,17 @@ def _own_sources_world(db_session, hidden_status=None):
     return entry, hidden_sp, shown_freq
 
 
-def test_thermo_curated_does_not_name_its_own_hidden_source_calculation(client, db_session):
-    """Kills: filtering only the statmech fallback and not the thermo's own source rows."""
+def test_thermo_curated_names_its_own_unreviewed_source_calculation(client, db_session):
+    """ADR 0023: the thermo's own source calculation is linked evidence; unreviewed, it is named."""
     entry, hidden_sp, shown_freq = _own_sources_world(db_session)
+    prov, rec = _provenance(client, entry, "curated")
+    assert prov["sp_calculation_ref"] == hidden_sp.public_ref
+    assert prov["freq_calculation_ref"] == shown_freq.public_ref
+
+
+def test_thermo_curated_does_not_name_its_own_withheld_source_calculation(client, db_session):
+    """Kills: filtering only the statmech fallback and not the thermo's own source rows. The calculation is rejected."""
+    entry, hidden_sp, shown_freq = _own_sources_world(db_session, hidden_status=RecordReviewStatus.rejected)
     assert client.get(f"{BASE}/calculations/{hidden_sp.public_ref}", params={"profile": "curated"}).status_code == 404
     prov, rec = _provenance(client, entry, "curated")
     assert prov["sp_calculation_ref"] is None
@@ -267,8 +317,8 @@ def test_thermo_own_sources_exploratory_unchanged_and_levels_do_not_vary(client,
 
 
 def test_thermo_search_surface_is_filtered_too(client, db_session):
-    """Kills: filtering only the species thermo list and not the search surface that reuses the builder."""
-    entry, hidden_sp, shown_freq = _own_sources_world(db_session)
+    """Kills: filtering only the species thermo list and not the search surface that reuses the builder (rejected)."""
+    entry, hidden_sp, shown_freq = _own_sources_world(db_session, hidden_status=RecordReviewStatus.rejected)
     # Curated search also needs the species and its entry to clear the floor.
     _review(db_session, SubmissionRecordType.species_entry, entry)
     _review(db_session, SubmissionRecordType.species, entry.species)
@@ -305,9 +355,23 @@ def _gated_refs_world(db_session, *, group_status=None, observation_status=None,
     return entry, sm, group, obs
 
 
-def test_thermo_curated_does_not_name_a_hidden_target_group_statmech_or_traced_conformer(client, db_session):
-    """Kills: leaving thermodynamic_target / provenance.statmech_ref / provenance conformer refs unfiltered."""
-    entry, sm, group, obs = _gated_refs_world(db_session)  # none of the three is approved
+def test_thermo_curated_names_an_unreviewed_target_group_statmech_and_traced_conformer(client, db_session):
+    """ADR 0023: none of the three is reviewed, and each is linked evidence of the approved thermo, so each is named."""
+    entry, sm, group, obs = _gated_refs_world(db_session)
+    prov, rec = _provenance(client, entry, "curated")
+    assert rec["thermodynamic_target"] == {"kind": "single_conformer", "conformer_group_ref": group.public_ref}
+    assert prov["statmech_ref"] == sm.public_ref
+    assert prov["conformer_observation_ref"] == obs.public_ref
+    assert prov["conformer_group_ref"] == group.public_ref
+
+
+def test_thermo_curated_does_not_name_a_withheld_target_group_statmech_or_traced_conformer(client, db_session):
+    """Kills: leaving thermodynamic_target / provenance.statmech_ref / provenance conformer refs unfiltered. All three are
+    rejected."""
+    entry, sm, group, obs = _gated_refs_world(
+        db_session, group_status=RecordReviewStatus.rejected, observation_status=RecordReviewStatus.rejected,
+        statmech_status=RecordReviewStatus.rejected,
+    )
     for path, row in (("conformer-groups", group), ("conformer-observations", obs), ("statmech", sm)):
         assert client.get(f"{BASE}/{path}/{row.public_ref}", params={"profile": "curated"}).status_code == 404
     prov, rec = _provenance(client, entry, "curated")
@@ -334,15 +398,15 @@ def test_thermo_exploratory_still_names_those_refs(client, db_session):
 
 
 def test_thermo_curated_names_each_approved_ref_independently(client, db_session):
-    """Kills: nulling all gated refs together (an approved group/statmech with an unapproved observation)."""
+    """Kills: nulling all gated refs together (an approved group/statmech with a withheld observation)."""
     entry, sm, group, obs = _gated_refs_world(
-        db_session, group_status=APPROVED, observation_status=None, statmech_status=APPROVED
+        db_session, group_status=APPROVED, observation_status=RecordReviewStatus.rejected, statmech_status=APPROVED
     )
     prov, rec = _provenance(client, entry, "curated")
     assert rec["thermodynamic_target"]["conformer_group_ref"] == group.public_ref
     assert prov["conformer_group_ref"] == group.public_ref
     assert prov["statmech_ref"] == sm.public_ref
-    assert prov["conformer_observation_ref"] is None  # the one unapproved ref
+    assert prov["conformer_observation_ref"] is None  # the one withheld ref
 
 
 # --- (c) statmech include=conformers ----------------------------------------------------------------------------
@@ -367,9 +431,16 @@ def _conformer_refs(client, sm, profile):
     return [c["conformer_group_ref"] for c in rec["conformers"]], rec
 
 
-def test_statmech_conformers_curated_omits_hidden_group(client, db_session):
-    """Kills: no profile filtering in ``_build_conformer_context`` (today's leak)."""
+def test_statmech_conformers_curated_lists_an_unreviewed_group(client, db_session):
+    """ADR 0023: an unreviewed conformer group is linked evidence of the statmech; it is listed."""
     sm, shown, hidden = _conformer_world(db_session)
+    refs, _ = _conformer_refs(client, sm, "curated")
+    assert sorted(refs) == sorted([shown.public_ref, hidden.public_ref])
+
+
+def test_statmech_conformers_curated_omits_withheld_group(client, db_session):
+    """Kills: no profile filtering in ``_build_conformer_context`` (today's leak). The group is rejected."""
+    sm, shown, hidden = _conformer_world(db_session, RecordReviewStatus.rejected)
     assert client.get(f"{BASE}/conformer-groups/{hidden.public_ref}", params={"profile": "curated"}).status_code == 404
     refs, rec = _conformer_refs(client, sm, "curated")
     assert refs == [shown.public_ref]
@@ -389,26 +460,35 @@ def test_statmech_conformers_exploratory_lists_every_group(client, db_session):
 # --- review statuses: every status below the floor is hidden, not only ``not_reviewed`` -------------------------
 
 BELOW_FLOOR = [RecordReviewStatus.under_review, RecordReviewStatus.rejected, RecordReviewStatus.deprecated]
+#: Of the statuses below the floor, the ones the evidence rule withholds (ADR 0023): a nested ref to a record at one of
+#: the others is named.
+WITHHELD = {RecordReviewStatus.rejected, RecordReviewStatus.deprecated}
 
 
 @pytest.mark.parametrize("status", BELOW_FLOOR)
-def test_thermo_own_source_hidden_for_every_status_below_the_floor(client, db_session, status):
-    """Kills: hiding only ``not_reviewed`` (the visibility check must be the floor, not one status)."""
+def test_thermo_own_source_follows_the_evidence_rule_for_every_status_below_the_floor(client, db_session, status):
+    """Kills: hiding only one status, or hiding all of them (the evidence rule withholds rejected and deprecated)."""
     entry, hidden_sp, shown_freq = _own_sources_world(db_session, hidden_status=status)
     assert client.get(f"{BASE}/calculations/{hidden_sp.public_ref}", params={"profile": "curated"}).status_code == 404
     prov, rec = _provenance(client, entry, "curated")
-    assert prov["sp_calculation_ref"] is None
-    assert hidden_sp.public_ref not in str(rec)
+    if status in WITHHELD:
+        assert prov["sp_calculation_ref"] is None
+        assert hidden_sp.public_ref not in str(rec)
+    else:
+        assert prov["sp_calculation_ref"] == hidden_sp.public_ref
     assert prov["freq_calculation_ref"] == shown_freq.public_ref
 
 
 @pytest.mark.parametrize("status", BELOW_FLOOR)
-def test_statmech_conformer_group_hidden_for_every_status_below_the_floor(client, db_session, status):
-    """Kills: hiding only ``not_reviewed`` conformer groups."""
+def test_statmech_conformer_group_follows_the_evidence_rule_for_every_status_below_the_floor(client, db_session, status):
+    """Kills: hiding only one status, or hiding all of them."""
     sm, shown, hidden = _conformer_world(db_session, hidden_status=status)
     assert client.get(f"{BASE}/conformer-groups/{hidden.public_ref}", params={"profile": "curated"}).status_code == 404
     refs, _ = _conformer_refs(client, sm, "curated")
-    assert refs == [shown.public_ref]
+    if status in WITHHELD:
+        assert refs == [shown.public_ref]
+    else:
+        assert sorted(refs) == sorted([shown.public_ref, hidden.public_ref])
 
 
 # --- provenance slots are picked from every link, then a hidden pick is left unnamed --------------------------------
@@ -434,8 +514,10 @@ def _substitution_world(db_session):
 
 
 def test_thermo_curated_does_not_substitute_another_calculation_for_a_hidden_pick(client, db_session):
-    """Kills: filtering the links BEFORE the picker (it falls through to the next, visible, candidate)."""
+    """Kills: filtering the links BEFORE the picker (it falls through to the next, visible, candidate). The primary is
+    rejected: withheld, left unnamed, and nothing else promoted into its place."""
     entry, own_sp, own_freq, sm_sp = _substitution_world(db_session)
+    _review(db_session, SubmissionRecordType.calculation, own_sp, RecordReviewStatus.rejected)
     prov_x, rec_x = _provenance(client, entry, "exploratory")
     assert prov_x["primary_calculation"]["calculation_ref"] == own_sp.public_ref  # the true primary
     prov_c, rec_c = _provenance(client, entry, "curated")

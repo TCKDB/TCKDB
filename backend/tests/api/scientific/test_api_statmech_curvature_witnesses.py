@@ -208,9 +208,18 @@ def _read_profile(client, sm, profile):
     return r.json()["record"]["frequencies"]["curvature_witnesses"]
 
 
-def test_curated_profile_does_not_reveal_a_calculation_it_hides(client, db_session):
-    """Kills: witnesses ignoring the profile's calculation visibility (leaking has_hessian of a 404 calc)."""
-    sm, hidden = _curated_world(db_session, calc_status=None)  # not_reviewed
+def test_curated_profile_lists_an_unreviewed_calculation_as_evidence(client, db_session):
+    """ADR 0023: a not-reviewed source calculation is linked evidence of the approved statmech, so its curvature witness is
+    listed under curated as it is under exploratory. Its own detail route still answers 404 (step 7)."""
+    sm, unreviewed = _curated_world(db_session, calc_status=None)  # not_reviewed
+    assert client.get(f"/api/v1/scientific/calculations/{unreviewed.public_ref}", params={"profile": "curated"}).status_code == 404
+    (w,) = _read_profile(client, sm, "curated")
+    assert w["calculation_ref"] == unreviewed.public_ref and w["has_hessian"] is True
+
+
+def test_curated_profile_does_not_reveal_a_calculation_it_withholds(client, db_session):
+    """Kills: witnesses ignoring the profile's calculation visibility (leaking has_hessian of a 404 calc). Rejected."""
+    sm, hidden = _curated_world(db_session, calc_status=RecordReviewStatus.rejected)
     # The calculation read itself hides it under curated; the witness list must agree.
     assert client.get(f"/api/v1/scientific/calculations/{hidden.public_ref}", params={"profile": "curated"}).status_code == 404
     assert _read_profile(client, sm, "curated") == []
