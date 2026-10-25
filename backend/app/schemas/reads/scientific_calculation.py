@@ -51,6 +51,7 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
     SCFStabilityStatusValue,
+    ScientificResponse,
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
@@ -1528,7 +1529,7 @@ class ScientificCalculationRecord(BaseModel):
     trust: TrustFragment | None = None
 
 
-class ScientificCalculationDetailResponse(BaseModel):
+class ScientificCalculationDetailResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/calculations/{handle}."""
 
     request: RequestEcho

@@ -34,8 +34,8 @@ from app.services.statmech_selection.service import StatmechQualification, verdi
 from tests.services.statmech_selection._population import _PREFERRED, candidate, population, ref
 from tests.services.statmech_selection._support import EFFECTIVE, approved_calcs, assess, req, subject
 
-EXPLORATORY = {"profile": "exploratory", "review_floor": None}
-CURATED = {"profile": "curated", "review_floor": "approved"}
+EXPLORATORY = {"profile": "exploratory", "review_floor": None, "linked_evidence_withheld": []}
+CURATED = {"profile": "curated", "review_floor": "approved", "linked_evidence_withheld": ["deprecated", "rejected"]}
 
 
 def make_manifest(candidates=None, profile=EXPLORATORY, request=None, statuses=EFFECTIVE, **extra) -> dict[str, Any]:
@@ -113,7 +113,7 @@ def test_a_decision_replays_from_its_manifest_alone_at_both_levels():
 def test_the_manifest_holds_an_ordering_block_and_no_rule_edge_or_conflict_field():
     manifest = make_manifest()
     assert set(manifest["decision"]["ordering"]) == {"fronts", "administrative_order", "admin_key"}
-    assert "protocol" not in manifest["decision"] and manifest["format"] == {"name": "statmech_selection_manifest", "version": 3}
+    assert "protocol" not in manifest["decision"] and manifest["format"] == {"name": "statmech_selection_manifest", "version": 4}
     assert replay_matches(manifest)
 
 

@@ -231,7 +231,7 @@ def test_a_species_entrys_review_status_never_excludes_a_calculation_or_a_basin(
         request=minimum_request(min_review_status=floor), units=d_result.determinations,
         assessments=d_result.assessments, calculations={c.calculation_ref: c for c in d_result.calculations},
     )
-    manifest = build_manifest(d_result, decision, profile={"profile": "exploratory", "review_floor": None})
+    manifest = build_manifest(d_result, decision, profile={"profile": "exploratory", "review_floor": None, "linked_evidence_withheld": []})
     assert replay_matches(manifest)
 
 

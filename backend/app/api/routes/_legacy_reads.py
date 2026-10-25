@@ -11,6 +11,12 @@ the scientific reads obey. This module gives them the same three:
   resolved by the same dependency as on the scientific surface. A record below the floor is absent: from a list, from
   a count, and from its own detail route, where it answers exactly as an id that names nothing (decision D6, hidden ==
   unknown == absent).
+* **Linked evidence (ADR 0023).** The floor decides which rows a list returns and which detail routes answer. What a returned
+  row NAMES (a pointer column, an embedded record such as a conformer group's observations) is linked evidence: under
+  ``curated`` only a rejected or deprecated record is blanked or dropped, and one that is merely below the floor is named as
+  it is under the default profile. These payloads carry raw ids and no badge field, so the badge is not shown; the record's
+  own detail route still answers by the floor until step 7. An id-typed filter naming a withheld record is rewritten to name
+  nothing; one naming an unreviewed record is kept (a filter is not a subject).
 * **Disclosure.** A list under the exploratory profile reports how many records each default exclusion hid
   (``hidden_by_default``). Under ``curated`` it reports nothing about records below the floor.
 
@@ -41,7 +47,7 @@ from app.schemas.reads.scientific_common import (
     OrderEcho,
     OrderKeyEcho,
 )
-from app.services.scientific_read.common import fetch_review_badges, visible_statuses
+from app.services.scientific_read.common import evidence_visible_statuses, fetch_review_badges, visible_statuses
 from app.services.scientific_read.handles import status_hidden_under_profile
 from app.services.scientific_read.hidden_by_default import hidden_by_default_block
 from app.services.scientific_read.profile import current_read_profile
@@ -225,6 +231,12 @@ NETWORK_KINETICS = "network_kinetics"
 def _floor_statuses() -> set[RecordReviewStatus]:
     """The statuses the profile's floor leaves visible (every status without a floor)."""
     return visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
+
+def _evidence_statuses() -> set[RecordReviewStatus]:
+    """The statuses linked evidence may have and still be shown under the profile (ADR 0023): all but ``rejected`` and
+    ``deprecated`` under a floor, every status without one."""
+    return set(evidence_visible_statuses())
+
 
 def _parent_of() -> dict:
     from app.db.models.species import ConformerObservation
@@ -436,9 +448,10 @@ class _Drop(Exception):
 def withhold_hidden_records(session: Session, payload: Any, *, request_statuses: set[RecordReviewStatus]) -> Any:
     """Strip a legacy response of every mention of a record the request does not show.
 
-    * Pointer columns and id-typed links (:data:`POINTER_KINDS`) are judged by the profile's review floor.
+    * Pointer columns and id-typed links (:data:`POINTER_KINDS`) are linked evidence: under a floor only ``rejected`` and
+      ``deprecated`` records are withheld (ADR 0023).
     * Records embedded in the response (:data:`RECORD_MODELS`) are judged by the request's visibility (the default
-      exclusions and the floor).
+      exclusions) without a floor, and by the same evidence rule under one.
 
     One statement per kind present; none when the response names nothing gated, and no pointer statement without a
     floor. The payload's own top-level rows are already filtered in SQL and are not dropped here.
@@ -448,13 +461,16 @@ def withhold_hidden_records(session: Session, payload: Any, *, request_statuses:
     pointers: dict = {}
     records: dict = {}
     _collect(body, pointers, records)
-    floor_statuses = _floor_statuses()
+    floor = current_read_profile().review_floor is not None
+    # ADR 0023: under a floor a nested pointer, and a record embedded in another (a group's observation), is linked
+    # evidence. Only rejected and deprecated evidence is withheld; a not-reviewed one is named as it always was (these
+    # payloads carry raw ids and no badge field). The floor still decides which TOP-LEVEL rows a list returns, in SQL.
+    evidence_statuses = _evidence_statuses()
     hidden_pointers = (
-        {kind: _hidden_ids(session, kind, ids, floor_statuses) for kind, ids in pointers.items()}
-        if current_read_profile().review_floor is not None
-        else {}
+        {kind: _hidden_ids(session, kind, ids, evidence_statuses) for kind, ids in pointers.items()} if floor else {}
     )
-    hidden_records = {kind: _hidden_ids(session, kind, ids, request_statuses) for kind, ids in records.items()}
+    embedded_statuses = evidence_statuses if floor else request_statuses
+    hidden_records = {kind: _hidden_ids(session, kind, ids, embedded_statuses) for kind, ids in records.items()}
     if not any(hidden_pointers.values()) and not any(hidden_records.values()):
         return payload
     stripped = _strip(body, hidden_pointers, hidden_records, top=True)
@@ -488,11 +504,12 @@ def _wrap(endpoint: Any, gates: dict[str, Gate], path_params: set[str]) -> Any:
                 value = kwargs.get(param)
                 if isinstance(value, int) and _hidden_ids(session, gate.record_type, {value}, _floor_statuses()):
                     raise NotFoundError(f"{gate.label} not found")
-            # An id-typed filter naming a hidden record is the filter for an id that names nothing.
+            # An id-typed filter naming a WITHHELD record (rejected or deprecated) is the filter for an id that names
+            # nothing. A filter naming a not-reviewed one is kept: a filter is not a subject (ADR 0023).
             for name, value in list(kwargs.items()):
                 kind = POINTER_KINDS.get(name)
                 if kind is not None and name not in path_params and isinstance(value, int) and name not in gates:
-                    if _hidden_ids(session, kind, {value}, _floor_statuses()):
+                    if _hidden_ids(session, kind, {value}, _evidence_statuses()):
                         kwargs[name] = -1
         result = endpoint(*args, **kwargs)
         if context is None:

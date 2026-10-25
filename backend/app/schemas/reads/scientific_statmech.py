@@ -42,6 +42,7 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
     ScientificLevelsSummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     SupersessionNotice,
     WorkflowToolReleaseSummary,
@@ -447,7 +448,7 @@ class ScientificStatmechRecord(BaseModel):
     assessments: PublicAssessmentSummary | None = None
 
 
-class ScientificStatmechDetailResponse(BaseModel):
+class ScientificStatmechDetailResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/statmech/{handle}``."""
 
     request: RequestEcho

@@ -4,6 +4,10 @@
 profile. The statmech source-calculations block (ref, role, type, review status) and the frequency pointer
 (``source_freq_calculation_refs`` / ``_ids``) used to list such calculations anyway.
 
+ADR 0023: only a calculation the profile WITHHOLDS (rejected or deprecated) is left out of those blocks. One that is
+merely below the floor (not reviewed, under review) is linked evidence of the approved statmech and is listed with its
+review badge; each hiding test below runs over a rejected calculation and has an unreviewed twin.
+
 Deliberate scope: only those two blocks are filtered. Record-level facts (``levels``, ``evidence_summary``
 counts, ``available_sections`` flags, trust) describe the approved statmech's own provenance and do not vary by
 profile. Release, archive and export copy raw provenance tables and are untouched.
@@ -34,8 +38,8 @@ R = StatmechCalculationRole
 URL = "/api/v1/scientific/statmech/"
 
 
-def _world(db_session):
-    """An approved statmech linking an approved opt and a not-reviewed freq calculation."""
+def _world(db_session, hidden_status=None):
+    """An approved statmech linking an approved opt and a freq calculation that is not reviewed (or ``hidden_status``)."""
     entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("CSRC")))
     sm = make_statmech(db_session, species_entry=entry)
     shown = make_calculation(db_session, type=CalculationType.opt, species_entry_id=entry.id)
@@ -43,6 +47,8 @@ def _world(db_session):
     attach_statmech_source_calculation(db_session, statmech=sm, calculation=shown, role=R.opt)
     attach_statmech_source_calculation(db_session, statmech=sm, calculation=hidden, role=R.freq)
     set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=shown.id, status=RecordReviewStatus.approved)
+    if hidden_status is not None:
+        set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=hidden.id, status=hidden_status)
     # Approve last: an approved statmech is immutable, so its links must exist first.
     set_review(db_session, record_type=SubmissionRecordType.statmech, record_id=sm.id, status=RecordReviewStatus.approved)
     return entry, sm, shown, hidden
@@ -60,9 +66,20 @@ def _src_refs(rec):
     return [c["calculation_ref"] for c in rec["source_calculations"]]
 
 
-def test_curated_hides_the_unapproved_calculation_from_both_blocks(client, db_session):
-    """Kills: no filtering of source_rows under a review floor (today's leak)."""
+def test_curated_names_an_unreviewed_calculation_with_its_badge(client, db_session):
+    """ADR 0023: the unreviewed freq calculation is linked evidence of the approved statmech. Listed, badged, and the
+    frequency pointer names it. Kills: the earlier rule, which left it out of both blocks."""
     _, sm, shown, hidden = _world(db_session)
+    rec = _record(client, sm, "curated")
+    assert sorted(_src_refs(rec)) == sorted([shown.public_ref, hidden.public_ref])
+    by_ref = {c["calculation_ref"]: c["review"]["status"] for c in rec["source_calculations"]}
+    assert by_ref == {shown.public_ref: "approved", hidden.public_ref: "not_reviewed"}
+    assert rec["frequencies"]["source_freq_calculation_refs"] == [hidden.public_ref]
+
+
+def test_curated_hides_the_withheld_calculation_from_both_blocks(client, db_session):
+    """Kills: no filtering of source_rows under a review floor (today's leak). The calculation is rejected."""
+    _, sm, shown, hidden = _world(db_session, RecordReviewStatus.rejected)
     assert client.get(f"/api/v1/scientific/calculations/{hidden.public_ref}", params={"profile": "curated"}).status_code == 404
     rec = _record(client, sm, "curated")
     assert _src_refs(rec) == [shown.public_ref]
@@ -127,7 +144,7 @@ def test_approved_calculations_stay_visible_under_curated(client, db_session):
 
 def test_species_statmech_read_is_filtered_too(client, db_session):
     """Kills: filtering only in the detail route instead of the shared record builder."""
-    entry, sm, shown, hidden = _world(db_session)
+    entry, sm, shown, hidden = _world(db_session, RecordReviewStatus.rejected)
     r = client.get(
         f"/api/v1/scientific/species-entries/{entry.public_ref}/statmech",
         params={"include": "source_calculations,frequencies", "profile": "curated"},
@@ -141,7 +158,7 @@ def test_species_statmech_read_is_filtered_too(client, db_session):
 
 def test_search_read_is_filtered_too(client, db_session):
     """Kills: filtering only the detail/species routes."""
-    _, sm, shown, hidden = _world(db_session)
+    _, sm, shown, hidden = _world(db_session, RecordReviewStatus.rejected)
     r = client.post(
         "/api/v1/scientific/statmech/search?profile=curated",
         json={"statmech_ref": sm.public_ref, "include": ["source_calculations", "frequencies"]},
@@ -171,9 +188,15 @@ def _torsion_scan(client, sm, profile):
     return t
 
 
-def test_curated_does_not_name_an_unapproved_scan_calculation(client, db_session):
-    """Kills: leaving ``source_scan_calculation_ref`` / ``_id`` unfiltered under a review floor."""
+def test_curated_names_an_unreviewed_scan_calculation(client, db_session):
+    """ADR 0023: an unreviewed scan calculation is linked evidence of the torsion; it is named."""
     sm, scan = _torsion_world(db_session, scan_status=None)
+    assert _torsion_scan(client, sm, "curated")["source_scan_calculation_ref"] == scan.public_ref
+
+
+def test_curated_does_not_name_a_withheld_scan_calculation(client, db_session):
+    """Kills: leaving ``source_scan_calculation_ref`` / ``_id`` unfiltered under a review floor. The scan is rejected."""
+    sm, scan = _torsion_world(db_session, scan_status=RecordReviewStatus.rejected)
     assert client.get(f"/api/v1/scientific/calculations/{scan.public_ref}", params={"profile": "curated"}).status_code == 404
     t = _torsion_scan(client, sm, "curated")
     assert t["source_scan_calculation_ref"] is None
@@ -211,8 +234,8 @@ def test_no_calculation_statement_when_no_naming_block_is_requested(client, db_s
 
 
 def test_curated_does_not_expose_an_unapproved_scan_calculation_id(client, db_session, allow_internal_ids):
-    """Kills: nulling the ref but leaving ``source_scan_calculation_id`` under ``internal_ids``."""
-    sm, scan = _torsion_world(db_session, scan_status=None)
+    """Kills: nulling the ref but leaving ``source_scan_calculation_id`` under ``internal_ids`` (a rejected scan)."""
+    sm, scan = _torsion_world(db_session, scan_status=RecordReviewStatus.rejected)
     r = client.get(URL + sm.public_ref, params={"include": "torsions,internal_ids", "profile": "curated"})
     (t,) = r.json()["record"]["torsions"]
     assert "source_scan_calculation_id" in t  # non-vacuous: the id field is present in this mode

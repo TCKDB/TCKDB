@@ -30,6 +30,7 @@ from app.services.kinetics_selection.models import (
     NormalizedKinetics,
 )
 from app.services.manifest_formats import manifest_header, new_format_registry, read_manifest_format
+from app.services.scientific_read.common import check_read_profile_block, read_profile_block
 from app.services.selection_kernel import Applicability
 from app.services.selection_kernel.assessment_semantics import (
     UnsupportedAssessmentSemantics,
@@ -44,8 +45,10 @@ from app.versioning import same_value
 #: reads exactly this format; a manifest in any other is refused. Version 2: the decision no longer holds rules,
 #: rule matches, pair checks, edges, overridden or unused edges, opposing pairs or cycles. Version 3: the request records
 #: its filters and its eligibility settings, each candidate records which defaults it failed or passed only by override,
-#: and the population records the funnel.
-MANIFEST_FORMAT_VERSION = 3
+#: and the population records the funnel. Version 4: the manifest records its ``read_profile`` and, in it, the review
+#: statuses whose linked evidence that profile withheld (ADR 0023); under ``curated`` a not-reviewed or under-review
+#: record is shown as evidence and only a rejected or deprecated one is a token.
+MANIFEST_FORMAT_VERSION = 4
 MANIFEST_FORMAT_NAME = "kinetics_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "kinetics_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -68,6 +71,7 @@ def build_manifest(result: KineticsAssessmentResult, decision: KineticsDecision)
             version=ASSESSMENT_SEMANTICS_VERSION,
             evidence_rubric=COMPUTED_KINETICS.ref,
         ),
+        "read_profile": read_profile_block(),
         "request": {
             **result.request.to_dict(),
             "effective_review_statuses": [s.value for s in result.effective_statuses],
@@ -116,6 +120,9 @@ def replay_decision(manifest: dict[str, Any]) -> dict[str, Any]:
         determinations it says the eligible records form).
     """
     read_manifest_format(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME, manifest, ReplayError)
+    problem = check_read_profile_block(manifest.get("read_profile"))
+    if problem is not None:
+        raise ReplayError(problem)
     if not same_value(manifest["policy"], {"name": POLICY_NAME, "version": POLICY_VERSION}):
         raise ReplayError(
             f"manifest was made under policy {manifest['policy']!r}; this registry replays {POLICY_NAME} version {POLICY_VERSION}"

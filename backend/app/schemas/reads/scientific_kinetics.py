@@ -50,6 +50,7 @@ from app.schemas.reads.scientific_common import (
     ReviewStatusSummary,
     SCFStabilitySummary,
     ScientificLevelsSummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     SupersessionNotice,
     TemperatureCoverage,
@@ -552,7 +553,7 @@ class RequestEcho(ProfiledRequestEcho):
     check_inputs: bool = False
 
 
-class ScientificReactionKineticsResponse(BaseModel):
+class ScientificReactionKineticsResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/reaction-entries/{id}/kinetics.
 
     Phase B: ``reaction_entry_ref`` mirrors ``reaction_entry_id`` as the

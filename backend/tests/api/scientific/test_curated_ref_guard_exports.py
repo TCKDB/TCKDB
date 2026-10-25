@@ -153,19 +153,50 @@ def test_native_ndjson_names_no_hidden_record_and_keeps_the_visible_ones(client,
     assert shown_thermos and shown_thermos <= visible_thermos
 
 
-def test_ml_species_leaves_out_the_hidden_calculations_and_drops_hidden_conformer_refs(client, world):
+def test_ml_species_leaves_out_the_hidden_calculations_and_drops_hidden_conformer_refs(client, db_session, world):
     """Kills: no withhold on the ML species stream; a hidden calculation's energy, frequencies or Hessian kept; a
-    hidden conformer group kept in ``conformer_group_refs``."""
+    withheld conformer group kept in ``conformer_group_refs``; an unlisted one dropped (ADR 0023).
+
+    A calculation below the floor keeps the record floor in the ML export (owner Q7): its energies, frequencies and Hessian
+    are left out whatever its status. A conformer group and observation are linked evidence: named while unlisted, dropped
+    once rejected or deprecated.
+    """
     w = world
     hidden = _hidden(w)
-    curated = _get(client, "/export/ml/species.ndjson", "curated", {**_query(w), "include_hessian": True})
     exploratory = _get(client, "/export/ml/species.ndjson", "exploratory", {**_query(w), "include_hessian": True})
-    for key, ref in hidden.items():
-        assert ref not in curated, f"curated names {key}"
     for key in ("calc_h_xlin", "calc_h_xsp", "cg_h"):
         assert hidden[key] in exploratory, f"exploratory does not name {key}"
 
     sx = w.extra["species_entry_export"].public_ref
+    sa = w.extra["species_entry"].public_ref
+    groups = lambda rows: {g for r in rows for g in r["conformer_group_refs"]}  # noqa: E731
+    observations = lambda rows: {o for r in rows for o in r["conformer_observation_refs"]}  # noqa: E731
+    ex_sa = [r for r in _lines(exploratory) if r.get("species_entry_ref") == sa]
+
+    # Unlisted: the calculations are still left out; the group is named, with the observations that lead to it.
+    unlisted = _get(client, "/export/ml/species.ndjson", "curated", {**_query(w), "include_hessian": True})
+    for key, ref in hidden.items():
+        if key.startswith("calc"):
+            assert ref not in unlisted, f"curated names the unlisted calculation {key}"
+    un_sa = [r for r in _lines(unlisted) if r.get("species_entry_ref") == sa]
+    assert hidden["cg_h"] in groups(un_sa) and groups(un_sa) <= groups(ex_sa)
+    assert w.visible["co_v2"].public_ref in observations(un_sa)
+    # The unlisted group is shown WITH its badge: the line's map has it, with its real status.
+    for line in un_sa:
+        badges = line["review_status_by_ref"]
+        for group in line["conformer_group_refs"]:
+            assert group in badges, (group, badges)
+            if group == hidden["cg_h"]:
+                assert badges[group] == "under_review"  # as the world built it: unlisted, not approved
+            if group == w.visible["cg_v"].public_ref:
+                assert badges[group] == "approved"
+    assert any(hidden["cg_h"] in line["review_status_by_ref"] for line in un_sa)
+
+    # Withheld: nothing hidden is named.
+    w.withhold_hidden(db_session)
+    curated = _get(client, "/export/ml/species.ndjson", "curated", {**_query(w), "include_hessian": True})
+    for key, ref in hidden.items():
+        assert ref not in curated, f"curated names {key}"
     ex_sx = [r for r in _lines(exploratory) if r.get("species_entry_ref") == sx]
     cu_sx = [r for r in _lines(curated) if r.get("species_entry_ref") == sx]
     # The hidden calculations carry the collinear geometry, the frequencies and the Hessian: with them gone only the
@@ -173,24 +204,34 @@ def test_ml_species_leaves_out_the_hidden_calculations_and_drops_hidden_conforme
     assert len(ex_sx) == 2 and len(cu_sx) == 1
     assert [e["calculation_ref"] for e in cu_sx[0]["energies"]] == [w.visible["calc_xv"].public_ref]
     assert cu_sx[0]["frequency_results"] == [] and cu_sx[0]["hessians"] == []
-    # The conformer group arrives as a list of strings: the hidden one is dropped (the list stays, now empty) and the
+    # The conformer group arrives as a list of strings: the withheld one is dropped (the list stays, now empty) and the
     # visible observation beside it stays.
-    sa = w.extra["species_entry"].public_ref
     cu_sa = [r for r in _lines(curated) if r.get("species_entry_ref") == sa]
-    ex_sa = [r for r in _lines(exploratory) if r.get("species_entry_ref") == sa]
-    groups = lambda rows: {g for r in rows for g in r["conformer_group_refs"]}  # noqa: E731
     assert hidden["cg_h"] in groups(ex_sa)
     assert hidden["cg_h"] not in groups(cu_sa) and groups(cu_sa) <= groups(ex_sa)
-    assert w.visible["co_v2"].public_ref in {o for r in cu_sa for o in r["conformer_observation_refs"]}
+    assert w.visible["co_v2"].public_ref in observations(cu_sa)
 
 
-def test_ml_reactions_barrier_comes_from_shown_energies_and_a_hidden_owner_is_null(client, world):
+def test_ml_reactions_barrier_comes_from_shown_energies_and_a_hidden_owner_is_null(client, db_session, world):
     """Kills: no withhold on the ML reactions stream; a hidden calculation setting the barrier; a hidden TS entry
-    picked or named; the owner ref of a visible entry of a hidden transition state kept."""
+    picked or named; the owner ref of a visible entry of a withheld transition state kept; an unlisted owner dropped
+    (ADR 0023: an entry's parent transition state is context, shown badged).
+    """
     w = world
     hidden = _hidden(w)
-    curated = _get(client, "/export/ml/reactions.ndjson", "curated", _query(w))
     exploratory = _get(client, "/export/ml/reactions.ndjson", "exploratory", _query(w))
+    unlisted = _get(client, "/export/ml/reactions.ndjson", "curated", _query(w))
+    owner = w.extra["reaction_entry_hidden_ts_owner"].public_ref
+    visible_entry = w.visible["tse_xd"].public_ref
+    blocks = _by(_lines(unlisted), "reaction_entry_ref", owner)["transition_states"]
+    unlisted_entry = next(t for t in blocks if t["transition_state_entry_ref"] == visible_entry)
+    assert unlisted_entry["transition_state_ref"] == hidden["ts_h_x"]  # the unlisted parent is named
+    for key, ref in hidden.items():
+        if key.startswith("calc"):
+            assert ref not in unlisted, f"curated names the unlisted calculation {key}"  # Q7: calculations stay floored
+
+    w.withhold_hidden(db_session)
+    curated = _get(client, "/export/ml/reactions.ndjson", "curated", _query(w))
     for key, ref in hidden.items():
         assert ref not in curated, f"curated names {key}"
     for key in ("calc_h_xts", "ts_h_x", "kin_h", "ts_hw"):
@@ -323,9 +364,9 @@ def test_one_visibility_statement_per_batch(client, world, monkeypatch):
     _get(client, "/export/ml/reactions.ndjson", "curated", _query(w))
     assert sum(calls) == n_records and len(calls) == -(-n_records // 2) and max(calls) == 2
 
-    # and each call is one statement: hidden_refs once per call
+    # and each call is one statement: withheld_evidence_refs once per call
     statements: list[int] = []
-    real_hidden = ref_guard.hidden_refs
+    real_hidden = ref_guard.classify_refs
     inside = {"on": False}
 
     def spying_hidden(session, refs, *, profile, **kwargs):
@@ -340,7 +381,7 @@ def test_one_visibility_statement_per_batch(client, world, monkeypatch):
         finally:
             inside["on"] = False
 
-    monkeypatch.setattr(ref_guard, "hidden_refs", spying_hidden)
+    monkeypatch.setattr(ref_guard, "classify_refs", spying_hidden)
     monkeypatch.setattr(ref_guard, "withhold_in_document", wrapped)
     monkeypatch.setattr(export_withhold, "EXPORT_BATCH_SIZE", 200)
     _get(client, "/export/ml/reactions.ndjson", "curated", _query(w))
@@ -376,6 +417,7 @@ def _consume_after_the_context_is_gone(open_stream):
 def test_a_stream_consumed_after_the_request_context_is_gone_keeps_its_profile(db_session, world):
     """Kills: reading the profile from the context variable inside a generator (it is the exploratory default there)."""
     w = world
+    w.withhold_hidden(db_session)  # a withheld ref is what the stream must not name (unlisted ones are named: ADR 0023)
     hidden = _hidden(w)
     species = [w.extra[k].public_ref for k in ("species_entry", "species_entry_export", "species_entry_conflict")]
     filters = ml_dataset.MLFilters(min_review_status=NOT_REVIEWED, include_hessian=True)
@@ -455,12 +497,29 @@ def test_gap_and_skip_counts_follow_the_floor(client, world):
 # ---------------------------------------------------------------------------
 
 
+def test_an_unlisted_ref_in_a_document_is_kept_and_a_withheld_one_is_not(db_session, world):
+    """ADR 0023: only a rejected or deprecated record is withheld from an export document. Kills: the earlier rule, where a
+    not-reviewed record's ref was blanked."""
+    w = world
+    unlisted = w.hidden["calc_h"].public_ref
+    document = [{"a": unlisted, "c": [unlisted], "note": f"see {unlisted}"}]
+    kept = ref_guard.withhold_in_document(db_session, document, profile=CURATED, mode="null")
+    assert kept.facts == document and kept.hidden == set()
+    tokens = ref_guard.withhold_in_document(db_session, document, profile=CURATED, mode="placeholder")
+    assert tokens.facts == document and tokens.tokens == {}
+
+    w.withhold_hidden(db_session)
+    gone = ref_guard.withhold_in_document(db_session, document, profile=CURATED, mode="null")
+    assert gone.facts == [{"a": None, "c": [], "note": None}] and gone.hidden == {unlisted}
+
+
 def test_null_mode_blanks_values_and_drops_list_strings_on_a_copy(db_session, world):
     """Kills: a hidden ref kept as a value or list element; a list element blanked instead of dropped; free text kept;
     the input modified (the guard returns a copy)."""
     import copy
 
     w = world
+    w.withhold_hidden(db_session)
     hidden_calc, visible_calc = w.hidden["calc_h"].public_ref, w.visible["calc_vf"].public_ref
     documents = [
         {
@@ -495,6 +554,7 @@ def test_the_mode_is_required_and_placeholder_is_not_null(db_session, world):
     """Kills: a default mode; a placeholder mode that quietly behaves like null."""
     with pytest.raises(TypeError):
         ref_guard.withhold_in_document(db_session, [{}], profile=CURATED)  # type: ignore[call-arg]
+    world.withhold_hidden(db_session)
     hidden_calc = world.hidden["calc_h"].public_ref
     as_null = ref_guard.withhold_in_document(db_session, [{"a": hidden_calc}], profile=CURATED, mode="null")
     as_placeholder = ref_guard.withhold_in_document(db_session, [{"a": hidden_calc}], profile=CURATED, mode="placeholder")
@@ -516,12 +576,14 @@ def test_a_ref_that_names_no_row_is_hidden(db_session, world):
 
 def test_the_batcher_releases_the_withheld_copy_and_not_its_input(db_session, world):
     """Kills: a batcher that ignores the return value of the guard (and so emits the hidden ref)."""
+    world.withhold_hidden(db_session)
     hidden_calc = world.hidden["calc_h"].public_ref
     batcher = export_withhold.WithheldBatcher(db_session, CURATED)
     record = {"calculation_ref": hidden_calc, "value": 1.0}
     assert batcher.add(record) == []
     lines = batcher.flush()
-    assert [json.loads(line) for line in lines] == [{"calculation_ref": None, "value": 1.0}]
+    # The withheld ref is null, and it is not in the badge map either (nothing withheld can leak through it).
+    assert [json.loads(line) for line in lines] == [{"calculation_ref": None, "review_status_by_ref": {}, "value": 1.0}]
     assert hidden_calc not in "".join(lines)
     assert record["calculation_ref"] == hidden_calc  # the input is the caller's, untouched
 
@@ -552,11 +614,13 @@ def test_text_whose_encoding_never_settles_is_refused_not_a_422(db_session, worl
         ref_guard.refuse_hidden_refs_in_text(db_session, {"tran.dat": text}, profile=CURATED)
 
 
-def test_a_group_is_named_only_through_a_shown_observation(client, world):
-    """Kills: the observation-to-group join without a floor (a visible group named beside an empty observation list).
+def test_a_group_is_named_only_through_a_shown_observation(client, db_session, world):
+    """Kills: the observation-to-group join without the evidence rule (a visible group named beside an empty observation
+    list once its observation is withheld; an unlisted observation dropped).
 
-    ``calc_vsp`` is a shown calculation on the HIDDEN observation ``co_h`` of the SHOWN group ``cg_v``: exploratory names
-    both; curated names neither (the group was reachable only through a hidden observation).
+    ``calc_vsp`` is a shown calculation on the hidden observation ``co_h`` of the shown group ``cg_v``. Exploratory names
+    both. While ``co_h`` is unlisted it is linked evidence, named with its group. Once it is rejected or deprecated neither
+    is named (the group was reachable only through a withheld observation).
     """
     w = world
     geometry_ref = w.extra["geometry_vsp"].public_ref
@@ -568,6 +632,9 @@ def test_a_group_is_named_only_through_a_shown_observation(client, world):
 
     assert record("exploratory")["conformer_group_refs"] == [cg_v]
     assert record("exploratory")["conformer_observation_refs"] == [co_h]
+    unlisted = record("curated")
+    assert unlisted["conformer_group_refs"] == [cg_v] and unlisted["conformer_observation_refs"] == [co_h]
+    w.withhold_hidden(db_session)
     shown = record("curated")
     assert shown["conformer_group_refs"] == [] and shown["conformer_observation_refs"] == []
 
@@ -597,6 +664,7 @@ def test_the_reactant_energy_floor_moves_the_barrier(client, world):
 
 def test_generated_text_that_names_a_hidden_ref_is_refused(db_session, world):
     """Kills: emitting CHEMKIN text that names a hidden record."""
+    world.withhold_hidden(db_session)
     hidden_calc = world.hidden["calc_h"].public_ref
     ref_guard.refuse_hidden_refs_in_text(
         db_session,
@@ -614,7 +682,7 @@ def test_generated_text_that_names_a_hidden_ref_is_refused(db_session, world):
 # Every visibility statement, on every stream
 # ---------------------------------------------------------------------------
 
-#: A visibility statement of the guard is the batched ref lookup (``ref_guard.hidden_refs``): it selects
+#: A visibility statement of the guard is the batched ref lookup (``ref_guard.withheld_evidence_refs``): it selects
 #: ``<table>.public_ref`` through ``LEFT OUTER JOIN record_review``. Floors embedded in the statements that read the rows
 #: are subqueries of those statements (``EXISTS (SELECT record_review.id ...)``), not statements of their own.
 _VISIBILITY_STATEMENT = "LEFT OUTER JOIN record_review"
@@ -640,7 +708,7 @@ def _count_visibility_statements(db_session, send) -> tuple[int, int, int]:
 
 
 def test_every_stream_issues_at_most_one_visibility_statement_per_batch(client, db_session, world, monkeypatch):
-    """Kills: a visibility statement per record or per source (the CHEMKIN/NDJSON witness asked ``hidden_refs`` up to
+    """Kills: a visibility statement per record or per source (the CHEMKIN/NDJSON witness asked ``withheld_evidence_refs`` up to
     twice per transport, outside the batch seam); a batch that asks twice.
 
     The count is of EVERY statement of the guard's lookup shape the stream issues, not of calls through the seam. Budget:

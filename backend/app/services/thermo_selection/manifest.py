@@ -21,6 +21,7 @@ from typing import Any
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER, SelectionPolicy
 from app.services.manifest_formats import manifest_header, read_manifest_format
+from app.services.scientific_read.common import check_read_profile_block, read_profile_block
 from app.services.selection_kernel import Applicability
 from app.services.selection_kernel.assessment_semantics import (
     UnsupportedAssessmentSemantics,
@@ -78,6 +79,7 @@ def build_manifest(
         "assessment_semantics": semantics_block(
             name=ASSESSMENT_SEMANTICS_NAME, version=ASSESSMENT_SEMANTICS_VERSION, evidence_rubric=COMPUTED_THERMO.ref
         ),
+        "read_profile": read_profile_block(),
         "request": {
             "quantity": QUANTITY,
             "temperature_k": REFERENCE_TEMPERATURE_K,
@@ -130,6 +132,9 @@ def replay_decision(manifest: dict[str, Any]) -> dict[str, Any]:
         the running registry.
     """
     read_manifest_format(MANIFEST_FORMATS, MANIFEST_FORMAT_NAME, manifest, ReplayError)
+    problem = check_read_profile_block(manifest.get("read_profile"))
+    if problem is not None:
+        raise ReplayError(problem)
     if not same_value(manifest["policy"], {"name": POLICY_NAME, "version": POLICY_VERSION}):
         raise ReplayError(f"manifest was made under policy {manifest['policy']!r}; this registry replays {POLICY_NAME} version {POLICY_VERSION}")
     try:

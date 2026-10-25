@@ -46,6 +46,7 @@ from app.schemas.reads.scientific_common import (
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
     WatermarkEcho,
 )
 from app.schemas.reads.scientific_transition_state import (
@@ -254,7 +255,7 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificTransitionStatesSearchResponse(BaseModel):
+class ScientificTransitionStatesSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/transition-states/search.
 
     Records are at the transition-state-entry grain.

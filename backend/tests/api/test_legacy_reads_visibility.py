@@ -164,26 +164,32 @@ def test_a_record_below_the_floor_answers_its_detail_route_as_an_unknown_id_does
     assert approved.status_code == 200
 
 
-def test_a_curated_thermo_does_not_name_a_calculation_the_floor_hides(client, db_session):
-    """An approved thermo cites two calculations; the curated read shows the approved one and is silent about the
-    other (decision D6), in the list and on the detail route."""
+def test_a_curated_thermo_names_unreviewed_calculations_and_not_rejected_ones(client, db_session):
+    """An approved thermo cites an approved, an unreviewed and a rejected calculation. The curated read shows the first two
+    (the unreviewed one is linked evidence, ADR 0023) and is silent about the rejected one, in the list and on the detail
+    route."""
     species = make_species(db_session, smiles="C=O", inchi_key=next_inchi_key("LNK"))
     entry = make_species_entry(db_session, species)
     thermo = make_thermo_scalar(db_session, species_entry=entry)
     shown = make_calculation(db_session, species_entry_id=entry.id)
-    hidden = make_calculation(db_session, species_entry_id=entry.id)
+    hidden = make_calculation(db_session, species_entry_id=entry.id)  # never reviewed
+    rejected = make_calculation(db_session, species_entry_id=entry.id)
     attach_thermo_source_calculation(db_session, thermo=thermo, calculation=shown)
     attach_thermo_source_calculation(db_session, thermo=thermo, calculation=hidden)
+    attach_thermo_source_calculation(db_session, thermo=thermo, calculation=rejected)
     set_review(db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id, status=S.approved)
     set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=shown.id, status=S.approved)
+    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=rejected.id, status=S.rejected)
 
     def linked(body):
         record = body["items"][0] if "items" in body else body
         return sorted(sc["calculation_id"] for sc in record["source_calculations"])
 
-    assert linked(client.get(f"{LEGACY}/thermo").json()) == sorted([shown.id, hidden.id])  # exploratory: both
-    assert linked(client.get(f"{LEGACY}/thermo", params={"profile": "curated"}).json()) == [shown.id]
-    assert linked(client.get(f"{LEGACY}/thermo/{thermo.id}", params={"profile": "curated"}).json()) == [shown.id]
+    # exploratory withholds nothing as evidence: all three
+    assert linked(client.get(f"{LEGACY}/thermo").json()) == sorted([shown.id, hidden.id, rejected.id])
+    expected = sorted([shown.id, hidden.id])
+    assert linked(client.get(f"{LEGACY}/thermo", params={"profile": "curated"}).json()) == expected
+    assert linked(client.get(f"{LEGACY}/thermo/{thermo.id}", params={"profile": "curated"}).json()) == expected
 
 
 def test_the_entry_sub_lists_obey_the_profile_and_the_default_visibility(client, db_session):

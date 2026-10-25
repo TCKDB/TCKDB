@@ -60,6 +60,7 @@ from app.services.network_selection.models import (
     Scope,
     SolveFacts,
 )
+from app.services.scientific_read.common import linked_evidence_withheld_values
 from app.services.scientific_read.profile import current_read_profile
 from app.services.selection_kernel.requested import OFFER_REVIEW, Eligibility, UnreadableEligibility, review_default
 from app.versioning import same_value
@@ -70,8 +71,9 @@ from app.versioning import same_value
 #: stands there today. Replay reads exactly this format; a manifest in any other is refused. Version 2: the decision no
 #: longer holds rules, rule matches, pair checks, edges, overridden or unused edges, opposing pairs or cycles, and the
 #: request no longer holds an objective, a reference model or reference outputs. Version 3: the request records its
-#: filters and its eligibility settings, and the population records the funnel (counted in solves).
-MANIFEST_FORMAT_VERSION = 3
+#: filters and its eligibility settings, and the population records the funnel (counted in solves). Version 4: ``visibility`` records the review statuses
+#: whose linked evidence the profile withheld (ADR 0023).
+MANIFEST_FORMAT_VERSION = 4
 MANIFEST_FORMAT_NAME = "network_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "network_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -113,6 +115,7 @@ def build_manifest(result: NetworkAssessmentResult, decision: NetworkDecision) -
         "request": {**result.request.to_dict(), "effective_review_statuses": [s.value for s in result.effective_statuses]},
         "visibility": {
             "read_profile": profile.profile.value,
+            "linked_evidence_withheld": linked_evidence_withheld_values(profile=profile),
             "recommendation": profile.recommendation.value,
             "review_statuses_observed": sorted({s.review_status.value for s in result.solves}),
         },
@@ -214,6 +217,9 @@ def _check_consistency(manifest: dict[str, Any]) -> None:
                 f"settings keep out ({default}); they do not lift it"
             )
     profile = manifest["visibility"]["read_profile"]
+    expected_withheld = ["deprecated", "rejected"] if profile == "curated" else []
+    if manifest["visibility"].get("linked_evidence_withheld") != expected_withheld:
+        raise ReplayError("the manifest's recorded linked-evidence rule is not the one its read profile applies")
     if profile == "curated" and effective != {"approved"}:
         raise ReplayError("a curated manifest's effective review statuses are approved only")
     stamped = manifest["request"].get("profile")

@@ -29,6 +29,7 @@ from app.schemas.reads.scientific_common import (
     LiteratureSummary,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
@@ -121,7 +122,7 @@ class ScientificFrequencyScaleFactorRecord(BaseModel):
     used_by: list[FrequencyScaleFactorUsageSummary] | None = None
 
 
-class ScientificFrequencyScaleFactorDetailResponse(BaseModel):
+class ScientificFrequencyScaleFactorDetailResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/frequency-scale-factors/{handle}``."""
 
     request: RequestEcho

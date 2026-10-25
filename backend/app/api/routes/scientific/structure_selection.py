@@ -38,6 +38,7 @@ from app.schemas.reads.scientific_structure_selection import (
     TransitionStateEvidenceSelectionRequest,
 )
 from app.services.scientific_read.profile import stamp_read_profile
+from app.services.scientific_read.ref_guard import attach_review_statuses
 from app.services.structure_selection.public import (
     SelectionBody,
     build_response,
@@ -71,6 +72,7 @@ def _select(session: Session, request: Request, body: SelectionBody, entry_id: i
     selection = run_selection(session, entry_id=entry_id, body=body)
     payload = build_response(selection, entry_ref=entry_ref)
     stamp_read_profile(payload)
+    attach_review_statuses(payload)
     return payload
 
 

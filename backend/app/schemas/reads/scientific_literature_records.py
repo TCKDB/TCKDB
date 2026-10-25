@@ -28,6 +28,7 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
     WatermarkEcho,
 )
 
@@ -153,7 +154,7 @@ class LiteratureLinkedRecordSummary(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ScientificLiteratureRecordsResponse(BaseModel):
+class ScientificLiteratureRecordsResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/literature/{handle}/records``.
 
     Records are flattened across types and paginated. ``total`` is

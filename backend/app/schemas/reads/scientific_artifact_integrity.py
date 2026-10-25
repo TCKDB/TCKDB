@@ -41,6 +41,7 @@ from app.schemas.reads.scientific_common import (
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
+    ScientificResponse,
     WatermarkEcho,
 )
 
@@ -128,7 +129,7 @@ class IntegrityRequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificArtifactIntegrityResponse(BaseModel):
+class ScientificArtifactIntegrityResponse(ScientificResponse):
     """Response envelope for ``/scientific/artifacts/integrity``."""
 
     request: IntegrityRequestEcho
@@ -140,7 +141,7 @@ class ScientificArtifactIntegrityResponse(BaseModel):
     watermark: WatermarkEcho | None = None
 
 
-class ScientificArtifactIntegrityHistoryResponse(BaseModel):
+class ScientificArtifactIntegrityHistoryResponse(ScientificResponse):
     """Response envelope for ``/scientific/artifacts/{sha256}/integrity``.
 
     The summary and the sequence together: a caller that only needs the

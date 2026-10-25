@@ -67,6 +67,7 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
     SCFStabilitySummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     ValidationSummary,
     WatermarkEcho,
@@ -432,7 +433,7 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str]
 
 
-class ScientificSpeciesCalculationsSearchResponse(BaseModel):
+class ScientificSpeciesCalculationsSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/species-calculations/search."""
 
     request: RequestEcho

@@ -38,6 +38,7 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
     WatermarkEcho,
 )
 from app.schemas.reads.scientific_kinetics import KineticsRecord
@@ -206,7 +207,7 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str]
 
 
-class ScientificKineticsSearchResponse(BaseModel):
+class ScientificKineticsSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/kinetics/search."""
 
     request: RequestEcho

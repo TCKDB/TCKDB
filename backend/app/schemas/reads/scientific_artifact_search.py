@@ -58,6 +58,7 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     WatermarkEcho,
     WorkflowToolReleaseSummary,
@@ -206,7 +207,7 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificArtifactSearchResponse(BaseModel):
+class ScientificArtifactSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/artifacts/search."""
 
     request: RequestEcho

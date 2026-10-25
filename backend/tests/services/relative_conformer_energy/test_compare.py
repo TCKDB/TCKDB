@@ -524,7 +524,7 @@ def test_requests_that_differ_in_more_than_their_protocol_are_refused():
 def test_the_comparison_manifest_replays_and_holds_both_runs_and_the_pairing(db_session):
     world, cand_lot, (a, *_) = two_level_world(db_session)
     manifest = run_service(db_session, world, request_for(world, a, cand_lot, world.lot)).manifest
-    assert manifest["format"] == {"name": "relative_conformer_energy_comparison_manifest", "version": 3}
+    assert manifest["format"] == {"name": "relative_conformer_energy_comparison_manifest", "version": 4}
     assert manifest["request"]["pairing"] == "same_basin"
     assert manifest["runs"]["candidate"]["request"]["level"]["level_of_theory_ref"] == cand_lot.public_ref
     assert manifest["runs"]["reference"]["request"]["level"]["level_of_theory_ref"] == world.lot.public_ref

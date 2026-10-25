@@ -16,7 +16,7 @@ def fmt(route: tuple[str, str], text: str) -> str:
 
 
 #: Top-level and nested keys that describe the request or the page, not the records. Compared by key name.
-REQUEST_KEYS = frozenset({"request", "review_visibility", "pagination", "review_summary"})
+REQUEST_KEYS = frozenset({"request", "review_visibility", "pagination", "review_summary", "review_status_by_ref"})
 
 #: Counts that legitimately differ between profiles because they answer "what would the list return" (owner decision
 #: D5: population summaries follow the floor in the service). They are not facts about a visible record, so the
@@ -205,6 +205,140 @@ def ref_leaks(text: str, hidden_refs: dict[str, str], request_text: str) -> set[
         if not any(fk == k for fk, _ in found):
             found.add((k, "<raw>"))  # in a dict key, or under `request`: still on the wire
     return found
+
+
+#: Direct identity keys of a selection candidate (the node under ``candidates[*]``): the ref that says which record it is.
+CANDIDATE_IDENTITY_KEYS = frozenset({"thermo_ref", "kinetics_ref", "candidate_ref", "unit_ref", "solve_ref"})
+CANDIDATE_PATHS = frozenset({"candidates[*]", "result.candidates[*]"})
+
+
+def route_subject_identities(app) -> dict[tuple[str, str], tuple[str, ...] | None]:
+    """``(method, path) -> identity path`` of the subject model of every scientific route that returns ``record`` / ``records``.
+
+    Read from the app's own response models and the guard's registry (:data:`ref_guard.SUBJECT_IDENTITY`), so the sweep
+    and the guard's subject net agree on what a subject's identity is. ``None`` marks an ungated subject (no check).
+    """
+    import typing
+
+    from pydantic import BaseModel
+
+    def models(annotation):
+        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            yield annotation
+        for arg in typing.get_args(annotation):
+            yield from models(arg)
+
+    out: dict[tuple[str, str], tuple[str, ...] | None] = {}
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        if not path.startswith("/api/v1/scientific"):
+            continue
+        for envelope in models(getattr(route, "response_model", None)):
+            for field_name in ("record", "records"):
+                field = envelope.model_fields.get(field_name)
+                if field is None:
+                    continue
+                for model in models(field.annotation):
+                    identity = ref_guard.SUBJECT_IDENTITY.get(model.__name__)
+                    for method in getattr(route, "methods", ()) or ():
+                        out[(method, path)] = identity
+    return out
+
+
+def _at(node: Any, keys: tuple[str, ...]) -> Any:
+    for key in keys:
+        if not isinstance(node, dict):
+            return None
+        node = node.get(key)
+    return node
+
+
+def subject_leaks(
+    text: str, hidden_refs: dict[str, str], identity: tuple[str, ...] | None = None
+) -> set[tuple[str, str]]:
+    """``(hidden key, json path)`` where an UNLISTED record is the subject of the answer (ADR 0023).
+
+    A record below the approved floor may be named nested, badged; it must never BE the answer: not ``record``, not a row of
+    ``records``, not a candidate. The subject's identity is the path the guard's registry declares for its model
+    (``identity``, from :func:`route_subject_identities`); a ref anywhere else on the row is linked evidence and is allowed.
+    A candidate of a selection is checked by :data:`CANDIDATE_IDENTITY_KEYS`.
+    """
+    present = {k: r for k, r in hidden_refs.items() if r in text}
+    if not present:
+        return set()
+    kind, obj = parse_body(text)
+    if kind != "json":
+        return set()
+    by_ref = {r: k for k, r in present.items()}
+    found: set[tuple[str, str]] = set()
+    for path, node in _dicts(obj):
+        if identity is not None and path in ("record", "records[*]"):
+            value = _at(node, identity)
+            if isinstance(value, str) and value in by_ref:
+                found.add((by_ref[value], f"{path}.{'.'.join(identity)}"))
+        elif path in CANDIDATE_PATHS:
+            for key in CANDIDATE_IDENTITY_KEYS & set(node):
+                if isinstance(node[key], str) and node[key] in by_ref:
+                    found.add((by_ref[node[key]], f"{path}.{key}"))
+    return found
+
+
+def subject_rows(text: str, identity: tuple[str, ...] | None) -> list[tuple[str | None, Any]]:
+    """``(identity ref, row)`` for every subject row (``record`` / ``records[*]``) of a JSON body."""
+    kind, obj = parse_body(text)
+    return _rows_of(kind, obj, identity)
+
+
+def _rows_of(kind: str, obj: Any, identity: tuple[str, ...] | None) -> list[tuple[str | None, Any]]:
+    if kind != "json" or not isinstance(obj, dict):
+        return []
+    rows: list[Any] = []
+    if isinstance(obj.get("record"), dict):
+        rows.append(obj["record"])
+    if isinstance(obj.get("records"), list):
+        rows.extend(r for r in obj["records"] if isinstance(r, dict))
+    out = []
+    for row in rows:
+        ref = _at(row, identity) if identity is not None else None
+        out.append((ref if isinstance(ref, str) else None, row))
+    return out
+
+
+def refs_in(node: Any, found: set[str] | None = None) -> set[str]:
+    """Every string anywhere in ``node`` (the caller matches them against the refs it cares about)."""
+    found = set() if found is None else found
+    if isinstance(node, dict):
+        for value in node.values():
+            refs_in(value, found)
+    elif isinstance(node, list):
+        for item in node:
+            refs_in(item, found)
+    elif isinstance(node, str):
+        found.add(node)
+    return found
+
+
+def refs_outside_floored_rows(text: str, identity: tuple[str, ...] | None, floored: set[str]) -> set[str]:
+    """Strings of a body that sit outside every subject row whose own identity ref is in ``floored``.
+
+    A row below the floor is the floor's to drop (its whole subtree goes with it), so what is nested inside it is not
+    evidence a curated read owes. Everything else in the body (other rows, the envelope) is kept.
+    """
+    kind, obj = parse_body(text)
+    if kind != "json" or not isinstance(obj, dict):
+        return refs_in(obj) if kind == "json" else set()
+    dropped = {id(row) for ref, row in _rows_of(kind, obj, identity) if ref in floored}
+    out: set[str] = set()
+    for key, value in obj.items():
+        if key == "record" and id(value) in dropped:
+            continue
+        if key == "records" and isinstance(value, list):
+            for row in value:
+                if id(row) not in dropped:
+                    refs_in(row, out)
+            continue
+        refs_in(value, out)
+    return out
 
 
 def id_leaks(text: str, world: SweepWorld) -> set[tuple[str, str]]:

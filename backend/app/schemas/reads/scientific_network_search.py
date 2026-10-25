@@ -28,6 +28,7 @@ from app.schemas.reads.scientific_common import (
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
     WatermarkEcho,
 )
 from app.schemas.reads.scientific_network import (
@@ -189,7 +190,7 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificNetworkSearchResponse(BaseModel):
+class ScientificNetworkSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/networks/search.
 
     Reused verbatim (not subclassed) for

@@ -91,7 +91,7 @@ def test_under_the_curated_profile_the_manifest_redacts_what_the_floor_hides_and
     finally:
         reset_current_read_profile(token)
     manifest = result.manifest
-    assert manifest["read_profile"] == {"profile": "curated", "review_floor": "approved"}
+    assert manifest["read_profile"] == {"profile": "curated", "review_floor": "approved", "linked_evidence_withheld": ["deprecated", "rejected"]}
     assert manifest["population"]["excluded_by_review"] == [] and manifest["population"]["total_candidates"] == 1
     assert hidden.public_ref not in canonical(manifest)
     assert replay_matches(manifest)

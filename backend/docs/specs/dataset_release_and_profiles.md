@@ -148,9 +148,18 @@ Resolved once, by an `async` router-level dependency
 > returned record's own linked evidence (source calculations, levels derived from them, conformer observations in a group,
 > evidence counts, nested refs) is always shown with its review badge; only `rejected` and `deprecated` evidence is withheld
 > (the *evidence rule*). A missing review row reads as `not_reviewed` and is visible. `curated` withholds evidence for the same
-> statuses the default hides by default (`rejected`, `deprecated`); unlike the default, this cannot be lifted by request. This is being rolled out in steps; **until those land, the code still applies the
-> earlier rule (below the floor is hidden, evidence included), and the text below describes that code.** The two rules'
-> shared helper is `evidence_withheld_under_profile` and its siblings in `common.py`; no read calls it yet.
+> statuses the default hides by default (`rejected`, `deprecated`); unlike the default, this cannot be lifted by request.
+>
+> **Badges (step 2):** every scientific response has `review_status_by_ref` under `curated` (null otherwise); the exports carry it
+> per line. **Interim state until steps 3 to 5:** a nested unreviewed record can sit beside a count or level that omits it.
+>
+> **Landed (step 2):** the response-level ref guard (`ref_guard.py`) is split into two sets. The *evidence set* (rejected and
+> deprecated records) drives every nested withhold: pointers in responses, selection documents, and the export streams. The
+> *record-floor set* is used only to fail loud when a response's subject is below the floor. The legacy entity reads and the ML
+> export's conformer refs follow the evidence set; the ML export's energy rows keep their calculations approved-only (a release
+> is unchanged). **Still the earlier rule (below the floor is hidden, evidence included), and the text below describes that
+> code:** counts, flags and derived levels (step 3), matching (step 4), trust and selection loaders (step 5), made-under
+> (step 6) and detail-by-ref (step 7; the second seam below still applies the floor until then).
 
 Behaviourally, `curated` is applied at exactly **two** seams, which between
 them cover the whole read surface:

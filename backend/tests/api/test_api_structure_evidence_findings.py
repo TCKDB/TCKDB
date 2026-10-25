@@ -543,14 +543,19 @@ def test_replacing_one_roles_ruling_leaves_the_other_roles_ruling_standing(clien
 # --------------------------------------------------------------------------------------------------------------------
 
 
-def test_under_curated_a_finding_on_a_hidden_source_is_not_applied_and_its_refs_are_not_named(client, db_session, curator):
+@pytest.mark.parametrize("hidden_status", [None, RecordReviewStatus.rejected], ids=["unlisted", "withheld"])
+def test_under_curated_a_finding_on_a_withheld_source_is_not_applied_and_its_refs_are_not_named(
+    client, db_session, curator, hidden_status
+):
     """A visible H298 record cites a hidden calculation as a source. The finding the curator recorded about that calculation
-    would block the record if it were read; under curated the calculation is unknown, so it must neither block nor be named.
-    The exploratory run in the same test is the positive control: there the same finding blocks and the manifest records its
-    effect. The manifest names the effect, not the refs, so the effect is what must be absent under curated."""
+    would block the record if it were read. ADR 0023: a source that is merely not reviewed is linked evidence, so the
+    finding about it applies under curated as it does under exploratory; a source that is rejected is withheld, so the
+    finding neither blocks nor is named. The exploratory run in the same test is the positive control: there the same
+    finding blocks and the manifest records its effect. The manifest names the effect, not the refs, so the effect is what
+    must be absent when the source is withheld."""
     world = make_world(db_session)
     visible_calc = world.sp("v", -76.4, declared=declaration())
-    hidden_calc = world.sp("h", -76.9, status=None)  # no review: hidden under curated
+    hidden_calc = world.sp("h", -76.9, status=hidden_status)  # no review (unlisted), or rejected (withheld)
     thermo = make_thermo(db_session, world.entry, proto=protocol("g4"))
     attach_thermo_source_calculation(db_session, thermo=thermo, calculation=visible_calc, role=ThermoCalculationRole.sp)
     attach_thermo_source_calculation(db_session, thermo=thermo, calculation=hidden_calc, role=ThermoCalculationRole.freq)
@@ -573,9 +578,13 @@ def test_under_curated_a_finding_on_a_hidden_source_is_not_applied_and_its_refs_
         hidden_view, hidden_text = run()
     finally:
         reset_current_read_profile(token)
-    (closed_assessment,) = hidden_view.assessments
-    assert closed_assessment.blocking == () and hidden_view.selected_ref == thermo.public_ref
-    assert "source_finding:" not in hidden_text, "the hidden subject's finding left a trace in the curated document"
+    (curated_assessment,) = hidden_view.assessments
+    if hidden_status is None:
+        assert curated_assessment.blocking, "an unreviewed source is evidence: its finding applies"
+        assert "source_finding:freq:finding_invalidates" in hidden_text
+        return
+    assert curated_assessment.blocking == () and hidden_view.selected_ref == thermo.public_ref
+    assert "source_finding:" not in hidden_text, "the withheld subject's finding left a trace in the curated document"
     assert hidden_calc.public_ref not in hidden_text and finding not in hidden_text
 
 

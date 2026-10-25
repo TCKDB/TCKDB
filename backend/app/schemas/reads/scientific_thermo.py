@@ -32,6 +32,7 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
     ScientificLevelsSummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     SupersessionNotice,
     TemperatureCoverage,
@@ -341,7 +342,7 @@ class RequestEcho(ProfiledRequestEcho):
     check_inputs: bool = False
 
 
-class ScientificSpeciesThermoResponse(BaseModel):
+class ScientificSpeciesThermoResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/species-entries/{id}/thermo.
 
     Phase B: ``species_entry_ref`` mirrors ``species_entry_id`` as the

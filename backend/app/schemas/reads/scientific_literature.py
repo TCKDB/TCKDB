@@ -22,6 +22,7 @@ from app.db.models.common import LiteratureKind
 from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
 )
 
 # ---------------------------------------------------------------------------
@@ -162,7 +163,7 @@ class ScientificLiteratureRecord(BaseModel):
     available_sections: AvailableLiteratureSections
 
 
-class ScientificLiteratureDetailResponse(BaseModel):
+class ScientificLiteratureDetailResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/literature/{handle}``."""
 
     request: RequestEcho

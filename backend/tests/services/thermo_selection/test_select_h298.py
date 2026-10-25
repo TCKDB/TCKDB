@@ -297,7 +297,7 @@ def test_the_manifest_records_inputs_and_order_with_public_refs_only(db_session,
     result = _scenario(db_session, methane)
     m = result.manifest
     assert m["policy"] == {"name": "h298_selection", "version": 1}
-    assert m["format"] == {"name": "thermo_selection_manifest", "version": 3}
+    assert m["format"] == {"name": "thermo_selection_manifest", "version": 4}
     assert m["request"]["administrative_policy"] == "latest" and m["request"]["quantity"] == "formation_enthalpy_298k"
     assert m["decision"]["fronts"] and m["decision"]["administrative_order"]
     assert not {"rules", "rule_matches", "edges", "overridden_edges", "opposing_pairs", "cycles"} & set(m["decision"])

@@ -45,6 +45,7 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
     WatermarkEcho,
 )
 from app.schemas.reads.scientific_thermo import ThermoModelKindQuery, ThermoRecord
@@ -173,7 +174,7 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str]
 
 
-class ScientificThermoSearchResponse(BaseModel):
+class ScientificThermoSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/thermo/search."""
 
     request: RequestEcho

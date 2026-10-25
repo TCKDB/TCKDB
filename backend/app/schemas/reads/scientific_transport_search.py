@@ -39,6 +39,7 @@ from app.schemas.reads.scientific_common import (
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
     WatermarkEcho,
 )
 from app.schemas.reads.scientific_transport import (
@@ -124,7 +125,7 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificTransportSearchResponse(BaseModel):
+class ScientificTransportSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/transport/search."""
 
     request: RequestEcho

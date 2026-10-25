@@ -168,7 +168,7 @@ def test_a_manifest_made_under_the_old_format_or_policy_is_refused_not_re_answer
 
     golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
     manifest = golden["manifests"]["e1_g4_over_g3"]["manifest"]
-    assert manifest["format"] == {"name": "thermo_selection_manifest", "version": 3}
+    assert manifest["format"] == {"name": "thermo_selection_manifest", "version": 4}
     assert manifest["policy"] == {"name": POLICY_NAME, "version": POLICY_VERSION}
     old_format = json.loads(json.dumps(manifest))
     old_format["format"]["version"] = 1

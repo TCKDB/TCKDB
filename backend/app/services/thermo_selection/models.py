@@ -49,8 +49,10 @@ ASSESSMENT_SEMANTICS = new_current_only_registry(
 #: reads exactly this format; a manifest in any other is refused. Version 2: the decision no longer holds rules,
 #: rule matches, edges, overridden edges, opposing pairs or cycles. Version 3: the request records its filters and its
 #: eligibility settings, each candidate records which defaults it failed or passed only by override, and the population
-#: records the funnel.
-MANIFEST_FORMAT_VERSION = 3
+#: records the funnel. Version 4: the manifest records its ``read_profile`` and, in it, the review statuses whose
+#: linked evidence that profile withheld (ADR 0023); under ``curated`` a not-reviewed or under-review record is shown
+#: as evidence and only a rejected or deprecated one is a token.
+MANIFEST_FORMAT_VERSION = 4
 MANIFEST_FORMAT_NAME = "thermo_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "thermo_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION

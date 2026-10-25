@@ -40,6 +40,7 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     ReviewStatusSummary,
     ReviewVisibilityEcho,
+    ScientificResponse,
     WatermarkEcho,
 )
 from app.schemas.reads.scientific_statmech import (
@@ -140,7 +141,7 @@ class RequestEcho(ProfiledRequestEcho):
     review_visibility: ReviewVisibilityEcho | None = None
 
 
-class ScientificStatmechSearchResponse(BaseModel):
+class ScientificStatmechSearchResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/statmech/search."""
 
     request: RequestEcho

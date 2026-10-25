@@ -36,6 +36,7 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     SupersessionNotice,
     WorkflowToolReleaseSummary,
@@ -228,7 +229,7 @@ class ScientificTransportRecord(BaseModel):
     assessments: PublicAssessmentSummary | None = None
 
 
-class ScientificTransportDetailResponse(BaseModel):
+class ScientificTransportDetailResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/transport/{handle}``."""
 
     request: RequestEcho

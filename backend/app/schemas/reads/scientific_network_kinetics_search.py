@@ -55,6 +55,7 @@ from app.schemas.reads.scientific_common import (
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
     WatermarkEcho,
 )
 from app.schemas.reads.scientific_network_kinetics import (
@@ -157,7 +158,7 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificNetworkKineticsSearchResponse(BaseModel):
+class ScientificNetworkKineticsSearchResponse(ScientificResponse):
     request: RequestEcho
     review_summary: ReviewStatusSummary
     records: list[ScientificNetworkKineticsRecord]

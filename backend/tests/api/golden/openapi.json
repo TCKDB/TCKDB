@@ -4707,6 +4707,20 @@
           "request": {
             "$ref": "#/components/schemas/AnalyticsRequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -23128,6 +23142,20 @@
           "request": {
             "$ref": "#/components/schemas/AnalyticsRequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -25795,6 +25823,11 @@
             "title": "Population",
             "type": "object"
           },
+          "read_profile": {
+            "additionalProperties": true,
+            "title": "Read Profile",
+            "type": "object"
+          },
           "request": {
             "$ref": "#/components/schemas/KineticsSelectionManifestRequest"
           },
@@ -25811,6 +25844,7 @@
         "required": [
           "format",
           "policy",
+          "read_profile",
           "request",
           "snapshot_isolation",
           "subject",
@@ -26409,6 +26443,20 @@
           },
           "review": {
             "$ref": "#/components/schemas/KineticsSelectionReview"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "selection": {
             "anyOf": [
@@ -32035,6 +32083,20 @@
           "network_ref": {
             "title": "Network Ref",
             "type": "string"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           }
         },
         "required": [
@@ -32531,6 +32593,20 @@
             },
             "title": "Points",
             "type": "array"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "tmax_k": {
             "anyOf": [
@@ -35067,6 +35143,20 @@
           "request": {
             "$ref": "#/components/schemas/NetworkExportRequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "selection_basis": {
             "description": "The selection's outcome, or 'administrative_choice' when the caller accepted one of several unranked alternatives (not a method claim).",
             "title": "Selection Basis",
@@ -36108,6 +36198,20 @@
           },
           "review": {
             "$ref": "#/components/schemas/NetworkSelectionReview"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "selection": {
             "anyOf": [
@@ -42904,6 +43008,20 @@
           "review": {
             "$ref": "#/components/schemas/RelativeEnergyReview"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "snapshot_isolation": {
             "title": "Snapshot Isolation",
             "type": "string"
@@ -43221,6 +43339,20 @@
           },
           "review": {
             "$ref": "#/components/schemas/RelativeEnergyReview"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "search_completeness": {
             "title": "Search Completeness",
@@ -46518,6 +46650,20 @@
           "request": {
             "$ref": "#/components/schemas/IntegrityRequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "sha256": {
             "maxLength": 64,
             "title": "Sha256",
@@ -46578,6 +46724,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/IntegrityRequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "watermark": {
             "anyOf": [
@@ -46981,6 +47141,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_artifact_search__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -47012,6 +47186,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_calculation__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -47060,6 +47248,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/IRCRequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "watermark": {
             "anyOf": [
@@ -47118,6 +47320,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/PathSearchRequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "watermark": {
             "anyOf": [
@@ -47548,6 +47764,20 @@
           "request": {
             "$ref": "#/components/schemas/ScanRequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "scan": {
             "$ref": "#/components/schemas/CalculationScanSummary"
           },
@@ -47601,6 +47831,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_calculation_search__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -47632,6 +47876,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_composite_scheme__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -47693,6 +47951,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_conformer__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -47831,6 +48103,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_conformer__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -47992,6 +48278,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_conformer_search__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -48023,6 +48323,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_energy_correction_scheme__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -48164,6 +48478,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_energy_correction_scheme_search__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -48195,6 +48523,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_frequency_scale_factor__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -48311,6 +48653,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_frequency_scale_factor_search__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -48404,6 +48760,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_geometry__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "submission_id": {
             "anyOf": [
               {
@@ -48483,6 +48853,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_kinetics_search__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -48514,6 +48898,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_level_of_theory__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -48630,6 +49028,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_level_of_theory_search__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -48795,6 +49207,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_literature__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           }
@@ -48866,6 +49292,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_literature_records__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -48898,6 +49338,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_network__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           }
@@ -48918,6 +49372,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_network__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -49115,6 +49583,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_network_kinetics_search__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -49337,6 +49819,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_network_search__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -49368,6 +49864,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_network__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -49574,6 +50084,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_network_solve_search__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -49749,6 +50273,20 @@
             ],
             "title": "Review Records"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -49838,6 +50376,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_kinetics__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -49888,6 +50440,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_reactions__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -50229,6 +50795,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_species__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -50278,6 +50858,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_species_calculations__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -50329,6 +50923,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_observation__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -50378,6 +50986,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_species__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -50708,6 +51330,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_structure_search__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -50758,6 +51394,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_thermo__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -50799,6 +51449,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_statmech__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -51041,6 +51705,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_statmech_search__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -51091,6 +51769,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_thermo_search__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -51123,6 +51815,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_transition_state__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           }
@@ -51143,6 +51849,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_transition_state__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -51453,6 +52173,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_transition_state_search__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -51503,6 +52237,20 @@
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_transition_state_search__RequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -51534,6 +52282,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_transport__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -51690,6 +52452,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_transport_search__RequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -53993,6 +54769,20 @@
           "request": {
             "$ref": "#/components/schemas/AnalyticsRequestEcho"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
           },
@@ -56187,6 +56977,20 @@
           },
           "review": {
             "$ref": "#/components/schemas/StatmechSelectionReview"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "selection": {
             "$ref": "#/components/schemas/StatmechSelectionSelection"
@@ -59280,6 +60084,20 @@
           "review": {
             "$ref": "#/components/schemas/StructureSelectionReview"
           },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
+          },
           "search_completeness": {
             "title": "Search Completeness",
             "type": "string"
@@ -60773,6 +61591,20 @@
           },
           "request": {
             "$ref": "#/components/schemas/AnalyticsRequestEcho"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
@@ -63782,6 +64614,11 @@
             "title": "Population",
             "type": "object"
           },
+          "read_profile": {
+            "additionalProperties": true,
+            "title": "Read Profile",
+            "type": "object"
+          },
           "request": {
             "$ref": "#/components/schemas/ThermoSelectionManifestRequest"
           },
@@ -63794,6 +64631,7 @@
         "required": [
           "format",
           "policy",
+          "read_profile",
           "request",
           "subject",
           "population",
@@ -64210,6 +65048,20 @@
           },
           "review": {
             "$ref": "#/components/schemas/ThermoSelectionReview"
+          },
+          "review_status_by_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Status By Ref"
           },
           "selection": {
             "anyOf": [
