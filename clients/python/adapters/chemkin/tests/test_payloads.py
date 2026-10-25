@@ -100,6 +100,19 @@ def test_chebyshev_payload(built):
     assert c["coefficients"][0] == pytest.approx([10.0, 0.2, 0.03])
 
 
+def test_no_payload_carries_a_bath_gas(built):
+    """A CHEMKIN file does not say which bath gas a PLOG or Chebyshev fit was obtained for.
+
+    The importer leaves it empty on every record: a collider is not inferred from the third-body
+    efficiencies, the mechanism's name or the pressure, so no payload has the field at all.
+    """
+    assert built.kinetics
+    assert {p["model_kind"] for p in built.kinetics} >= {"plog", "chebyshev"}
+    for payload in built.kinetics:
+        assert "bath_gas" not in payload
+        assert "pressure_context" not in payload
+
+
 def test_simple_third_body_payload(built):
     p = _kin_by_reactants(built, ["[O]", "[O]"])
     assert p["model_kind"] == "modified_arrhenius"

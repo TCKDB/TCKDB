@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.169.0 - 2026-10-25
+
+A kinetics record can state the bath gas it was obtained for.
+
+- `Kinetics.modified_arrhenius` takes `pressure_context`, `pressure_bar` and `bath_gas`, a list of `(Species, mole_fraction)` pairs. The species join the upload's
+  species list and are sent by bundle key. Nothing is inferred or defaulted; the builder refuses, with the server's codes, a bath gas at `high_p_limit`
+  (`kinetics_bath_gas_at_high_pressure_limit`), fractions that do not sum to 1 (`kinetics_bath_gas_mole_fraction_sum`) and one species twice
+  (`kinetics_bath_gas_duplicate_species`).
+- The three codes join `RejectionCode`. A kinetics record read back carries `bath_gas` (`KineticsDetailRecord`), null when none was stated.
+- Requires `tckdb-schemas>=0.136.0`.
+
 ## 0.168.0 - 2026-10-25
 
 A calculation dependency that would close a cycle is refused with a coded 409.

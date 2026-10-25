@@ -65,6 +65,7 @@ from app.services.conformer_selection_locator import (
     selection_kind_token,
     unknown_conformer_selection,
 )
+from app.services.kinetics_bath_gas import persist_kinetics_bath_gas
 from app.services.kinetics_declaration_resolution import W_KINETICS_DETERMINATION_MISMATCH
 from app.services.kinetics_resolution import persist_kinetics, resolve_kinetics_upload
 from app.services.kinetics_ts_scope import (
@@ -1029,6 +1030,15 @@ def persist_kinetics_upload(
                 efficiency=tb.efficiency,
             )
         )
+    # The bath gas the rate states, if any (never inferred).
+    persist_kinetics_bath_gas(
+        session,
+        kinetics,
+        [
+            (resolve_species_entry(session, bg.species_entry, created_by=created_by), bg.mole_fraction)
+            for bg in request.bath_gas
+        ],
+    )
     # 2c. Standalone PLOG / Chebyshev fits (DR-0032 Part C).
     for entry in request.plog_entries:
         session.add(
@@ -1075,6 +1085,7 @@ def persist_kinetics_upload(
     if (
         request.falloff is not None
         or request.third_body_efficiencies
+        or request.bath_gas
         or request.plog_entries
         or request.arrhenius_entries
         or request.chebyshev is not None

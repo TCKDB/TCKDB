@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Iterator
 
 from pydantic import BaseModel, ValidationError
+from tckdb_schemas.coded_error import CodedValidationError
+from tckdb_schemas.fragments.kinetics_bath_gas import check_kinetics_bath_gas
 from tckdb_schemas.kinetics_declarations import (
     KineticsApplicabilityDeclaration,
     KineticsDeterminationDeclaration,
@@ -27,6 +29,7 @@ from tckdb_client.builders.validation import (
 
 if TYPE_CHECKING:  # pragma: no cover — type-only import
     from tckdb_client.builders.calculation import Calculation
+    from tckdb_client.builders.species import Species
 
 __all__ = ["Kinetics"]
 
@@ -67,6 +70,11 @@ _EA_UNIT_HANDLERS: dict[str, tuple[str, float]] = {
     "kcal/mol": ("kj_mol", 4.184),
     "kcal_mol": ("kj_mol", 4.184),
 }
+
+# ``PressureContext`` tokens the server accepts.
+_PRESSURE_CONTEXTS: frozenset[str] = frozenset(
+    {"high_p_limit", "apparent_at_pressure", "pressure_dependent"}
+)
 
 # Kinetics source-role aliases accepted by ``source_calculations``
 # kwargs → backend ``KineticsCalculationRole`` enum value.
@@ -295,6 +303,14 @@ class Kinetics:
     #: supporting calculations) and the ``(purpose, Calculation)`` pairs it rests on.
     protocol: Any = None
     protocol_calculations: list[tuple[str, Any]] = field(default_factory=list)
+    #: ``"high_p_limit"``, ``"apparent_at_pressure"`` or ``"pressure_dependent"``. Never inferred.
+    pressure_context: str | None = None
+    #: The pressure of an ``apparent_at_pressure`` rate, bar.
+    pressure_bar: float | None = None
+    #: The bath gas the rate was obtained for, as ``(Species, mole_fraction)`` pairs. The species
+    #: join the upload's species list (identity only unless the assembler is given more) and are
+    #: named on the wire by their bundle key. Never inferred; not valid at ``high_p_limit``.
+    bath_gas: list[tuple[Any, float]] = field(default_factory=list)
     # role → Calculation builder. Order-preserving from the user's
     # source_calculations dict; payload emission walks this list to
     # produce ``(calculation_key, role)`` entries.
@@ -315,6 +331,7 @@ class Kinetics:
             self.applicability, KineticsApplicabilityDeclaration, "applicability"
         )
         self.protocol = _protocol_dict(self.protocol)
+        self._validate_pressure_and_bath_gas()
         if self.protocol_calculations and self.protocol is None:
             raise TCKDBBuilderValidationError(
                 "Kinetics.protocol_calculations needs a protocol to be part of."
@@ -340,6 +357,58 @@ class Kinetics:
         if error is not None:
             raise TCKDBBuilderValidationError(f"{error[0]}: {error[1]}")
         self._validated = True
+
+    def _validate_pressure_and_bath_gas(self) -> None:
+        """Hold the pressure context and bath gas to the rules the server applies."""
+        if self.pressure_context is not None and self.pressure_context not in _PRESSURE_CONTEXTS:
+            raise TCKDBBuilderValidationError(
+                f"Kinetics.pressure_context must be one of {sorted(_PRESSURE_CONTEXTS)!r}, "
+                f"got {self.pressure_context!r}."
+            )
+        if self.pressure_bar is not None:
+            if isinstance(self.pressure_bar, bool) or not isinstance(self.pressure_bar, (int, float)):
+                raise TCKDBBuilderValidationError("Kinetics.pressure_bar must be numeric.")
+            if not math.isfinite(self.pressure_bar) or self.pressure_bar <= 0:
+                raise TCKDBBuilderValidationError(
+                    f"Kinetics.pressure_bar must be finite and > 0, got {self.pressure_bar!r}."
+                )
+        if self.pressure_context == "apparent_at_pressure" and self.pressure_bar is None:
+            raise TCKDBBuilderValidationError(
+                "pressure_context='apparent_at_pressure' requires pressure_bar."
+            )
+        from tckdb_client.builders.species import Species
+
+        entries: list[tuple[Any, float]] = []
+        for index, item in enumerate(self.bath_gas):
+            if not (isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], Species)):
+                raise TCKDBBuilderValidationError(
+                    f"Kinetics.bath_gas[{index}] must be a (Species, mole_fraction) pair."
+                )
+            species, fraction = item
+            if isinstance(fraction, bool) or not isinstance(fraction, (int, float)):
+                raise TCKDBBuilderValidationError(
+                    f"Kinetics.bath_gas[{index}] mole_fraction must be numeric."
+                )
+            if not (0 < fraction <= 1):
+                raise TCKDBBuilderValidationError(
+                    f"Kinetics.bath_gas[{index}] mole_fraction must be in (0, 1], got {fraction!r}."
+                )
+            entries.append((species, float(fraction)))
+        self.bath_gas = entries
+        try:
+            check_kinetics_bath_gas(
+                pressure_context=self.pressure_context,
+                mole_fractions=[fraction for _sp, fraction in entries],
+                # Species builders are distinct by ``is`` (the minter keys them that way): each
+                # component is identified by the position of the first one that is the same object.
+                identities=[
+                    next(first for first, (other, _f) in enumerate(entries) if other is species)
+                    for species, _fraction in entries
+                ],
+                field="Kinetics.bath_gas",
+            )
+        except CodedValidationError as exc:
+            raise TCKDBBuilderValidationError(f"{exc.code}: {exc.detail}") from exc
 
     # ----- factories ------------------------------------------------
 
@@ -371,6 +440,9 @@ class Kinetics:
         applicability: "KineticsApplicabilityDeclaration | dict[str, Any] | None" = None,
         protocol: "KineticsProtocolDeclaration | dict[str, Any] | None" = None,
         protocol_calculations: "list[tuple[str, Calculation]] | None" = None,
+        pressure_context: str | None = None,
+        pressure_bar: float | None = None,
+        bath_gas: "list[tuple[Species, float]] | None" = None,
     ) -> "Kinetics":
         """Build a modified-Arrhenius kinetics record.
 
@@ -384,6 +456,12 @@ class Kinetics:
         rule the server applies and never inferred or defaulted. A ``protocol``'s supporting
         calculations are given as ``protocol_calculations``, ``(purpose, Calculation)`` pairs
         the assembler names by bundle key.
+
+        ``pressure_context`` / ``pressure_bar`` state what the rate means with respect to
+        pressure (an ``apparent_at_pressure`` rate needs its pressure). ``bath_gas`` is the
+        collider the rate was obtained for, as ``(Species, mole_fraction)`` pairs summing to 1:
+        stated only where the producer knows it, never inferred, and refused at
+        ``high_p_limit``. Its species are added to the upload's species list by the assembler.
 
         ``A`` must be strictly positive and numeric. ``A_units`` is
         normalised via the SDK's unit alias map (see module docstring).
@@ -504,6 +582,9 @@ class Kinetics:
             applicability=applicability,
             protocol=protocol,
             protocol_calculations=list(protocol_calculations or []),
+            pressure_context=pressure_context,
+            pressure_bar=float(pressure_bar) if pressure_bar is not None else None,
+            bath_gas=list(bath_gas or []),
             source_calculations=resolved_sources,
         )
 
@@ -519,6 +600,7 @@ class Kinetics:
         reactant_keys: list[str],
         product_keys: list[str],
         calc_key_lookup,
+        species_key_lookup=None,
     ) -> dict[str, Any]:
         """Render the kinetics record as a ``BundleKineticsIn`` dict.
 
@@ -550,6 +632,20 @@ class Kinetics:
             out["tunneling_model"] = self.tunneling_model
         if self.note is not None:
             out["note"] = self.note
+        if self.pressure_context is not None:
+            out["pressure_context"] = self.pressure_context
+        if self.pressure_bar is not None:
+            out["pressure_bar"] = self.pressure_bar
+        if self.bath_gas:
+            if species_key_lookup is None:
+                raise TCKDBBuilderValidationError(
+                    "Kinetics.bath_gas requires a species_key_lookup so each component resolves "
+                    "to the bundle's species key."
+                )
+            out["bath_gas"] = [
+                {"species_key": species_key_lookup(species), "mole_fraction": fraction}
+                for species, fraction in self.bath_gas
+            ]
         if self.direction is not None:
             out["direction"] = self.direction
         if self.determination is not None:

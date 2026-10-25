@@ -76,6 +76,10 @@ _NETWORK_DETERMINATION_REVISION = _VERSIONS / "e5b9c2a7d4f1_declare_network_kine
 #: scientific content of the declaring statmech record, frozen with it, with the TRUNCATE refusal.
 _STATMECH_MODEL_REVISION = _VERSIONS / "e6b3a9d1f742_declare_statmech_models.py"
 
+#: ``a4c8e1f7b392`` adds ``kinetics_bath_gas``, the bath gas a reaction-level rate was obtained for: an
+#: ownership child of ``kinetics`` guarded on ``kinetics_id`` like ``kinetics_plog``, with the TRUNCATE refusal.
+_KINETICS_BATH_GAS_REVISION = _VERSIONS / "a4c8e1f7b392_kinetics_bath_gas.py"
+
 _EXTENSION_REVISIONS = (
     _ATOM_MAP_REVISION,
     _EVIDENCE_REVISION,
@@ -87,6 +91,7 @@ _EXTENSION_REVISIONS = (
     _STATE_ENERGY_SOURCE_REVISION,
     _NETWORK_DETERMINATION_REVISION,
     _STATMECH_MODEL_REVISION,
+    _KINETICS_BATH_GAS_REVISION,
 )
 
 #: ``d4e9b1c7a253`` narrows the regime instead of extending it: it removes one

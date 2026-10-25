@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from app.db.models.network_pdep import NetworkChannel, NetworkKinetics
     from app.db.models.reaction import ReactionEntry
     from app.db.models.software import SoftwareRelease
-    from app.db.models.species import ConformerSelection, Species
+    from app.db.models.species import ConformerSelection, Species, SpeciesEntry
     from app.db.models.statmech import Statmech
     from app.db.models.transition_state import TransitionStateEntry
     from app.db.models.workflow import WorkflowToolRelease
@@ -365,6 +365,11 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         order_by="KineticsPlog.entry_index",
         cascade="all, delete-orphan",
     )
+    bath_gases: Mapped[list["KineticsBathGas"]] = relationship(
+        back_populates="kinetics",
+        order_by="KineticsBathGas.species_entry_id",
+        cascade="all, delete-orphan",
+    )
     chebyshev: Mapped[Optional["KineticsChebyshev"]] = relationship(
         back_populates="kinetics",
         uselist=False,
@@ -661,6 +666,44 @@ class KineticsThirdBodyEfficiency(Base):
             "kinetics_id", "collider_species_id", name="uq_kinetics_collider"
         ),
         CheckConstraint("efficiency >= 0", name="efficiency_ge_0"),
+    )
+
+
+class KineticsBathGas(Base):
+    """One component of the bath gas a pressure-dependent rate was obtained for.
+
+    A PLOG or Chebyshev fit, or an apparent rate at a stated pressure, is a
+    statement about a collider: a table fitted for Ar is not one for N2.
+    Same shape as ``network_solve_bath_gas`` (a species entry and a mole
+    fraction), and recorded only where the depositor states it: no row is ever
+    written for a record that did not, and none is inferred from a falloff's
+    third-body efficiencies. Meaningless at the high-pressure limit, which the
+    upload refuses (``kinetics_bath_gas_at_high_pressure_limit``).
+    """
+
+    __tablename__ = "kinetics_bath_gas"
+
+    kinetics_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("kinetics.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+    )
+    species_entry_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("species_entry.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+    )
+    mole_fraction: Mapped[float] = mapped_column(Double, nullable=False)
+
+    kinetics: Mapped["Kinetics"] = relationship(back_populates="bath_gases")
+    species_entry: Mapped["SpeciesEntry"] = relationship()
+
+    __table_args__ = (
+        PrimaryKeyConstraint("kinetics_id", "species_entry_id"),
+        CheckConstraint(
+            "mole_fraction > 0 AND mole_fraction <= 1",
+            name="mole_fraction_range",
+        ),
     )
 
 

@@ -57,7 +57,7 @@ from app.db.models.common import (
     ThermoModelKind,
 )
 from app.db.models.geometry import Geometry
-from app.db.models.kinetics import Kinetics, KineticsThirdBodyEfficiency
+from app.db.models.kinetics import Kinetics, KineticsBathGas, KineticsThirdBodyEfficiency
 from app.db.models.reaction import (
     ChemReaction,
     ReactionEntry,
@@ -351,6 +351,7 @@ class SelectedKinetics:
             "chebyshev": self._chebyshev(),
             "falloff": self._falloff(),
             "third_body_efficiencies": self._third_body_efficiencies(),
+            "bath_gas": self._bath_gas(),
         }
 
     def _multi_arrhenius(self) -> list[dict] | None:
@@ -441,6 +442,18 @@ class SelectedKinetics:
             for tb in tbes
         ]
         blocks.sort(key=lambda b: b["collider_ref"])
+        return blocks
+
+    def _bath_gas(self) -> list[dict] | None:
+        """The stated bath gas (mirrors read ``KineticsBathGasBlock``), sorted by entry ref."""
+        components = self.kinetics.bath_gases
+        if not components:
+            return None
+        blocks = [
+            {"species_entry_ref": bg.species_entry.public_ref, "mole_fraction": bg.mole_fraction}
+            for bg in components
+        ]
+        blocks.sort(key=lambda b: b["species_entry_ref"])
         return blocks
 
 
@@ -1173,6 +1186,7 @@ def _build_reaction_record(
                 selectinload(Kinetics.third_body_efficiencies).selectinload(
                     KineticsThirdBodyEfficiency.collider_species
                 ),
+                selectinload(Kinetics.bath_gases).selectinload(KineticsBathGas.species_entry),
             )
         ).all()
         by_id = {k.id: k for k in loaded}

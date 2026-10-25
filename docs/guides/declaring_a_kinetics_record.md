@@ -56,6 +56,33 @@ send stay authoritative, and a declaration that contradicts one is refused: a fi
 cannot be declared pressure independent; the coefficient basis must agree with `is_third_body`; the order must
 match the reaction. A mixture's mole fractions must sum to one (within 1e-9) and are never renormalised.
 
+## The bath gas a rate was obtained for
+
+A PLOG or Chebyshev fit, or an apparent rate at a stated pressure, belongs to a collider: a table fitted for Ar is
+not one for N2. State it with `bath_gas`, the same shape as a network solve's bath gas:
+
+```json
+{"pressure_context": "pressure_dependent",
+ "bath_gas": [
+   {"species_entry": {"smiles": "[Ar]", "charge": 0, "multiplicity": 1}, "mole_fraction": 0.75},
+   {"species_entry": {"smiles": "N#N", "charge": 0, "multiplicity": 1}, "mole_fraction": 0.25}
+ ]}
+```
+
+On a computed-reaction bundle a component names a species of the bundle by key instead:
+`{"species_key": "ar", "mole_fraction": 0.75}`.
+
+It is optional, and an omitted bath gas is "not stated": nothing is inferred, from the third-body efficiencies of a
+falloff, from a CHEMKIN file (which carries none for a PLOG or Chebyshev fit) or from the pressure. Three things are
+refused, each with its own code: a bath gas on a `high_p_limit` rate, where there is no collider
+(`kinetics_bath_gas_at_high_pressure_limit`); mole fractions that do not sum to one within 1e-9, as for a network
+solve (`kinetics_bath_gas_mole_fraction_sum`); and one species named twice, including two spellings that resolve to
+one species entry (`kinetics_bath_gas_duplicate_species`). It is read back as `bath_gas` on the record, and is frozen
+with the record once it is approved.
+
+`bath_gas` is a relational, queryable statement. The `colliders` of an applicability declaration (above) are part of
+the declared claim about what the coefficient is of; the two are not cross-checked.
+
 ## How the rate was produced
 
 ```json
@@ -77,5 +104,6 @@ and corrected only by a replacement) are in `backend/schema_spec.md`.
 ## In the SDK
 
 `Kinetics.modified_arrhenius(..., direction="forward", determination=..., applicability=..., protocol=...,
-protocol_calculations=[("geometry", opt_calculation)])` checks the same rules before any request. A bundle fit
+protocol_calculations=[("geometry", opt_calculation)])` checks the same rules before any request. The bath gas is
+`pressure_context=..., bath_gas=[(argon, 0.75), (nitrogen, 0.25)]`, `Species` builders that join the upload's species list. A bundle fit
 states `forward` (or `net`); a reverse-direction fit swaps its reactant and product keys.

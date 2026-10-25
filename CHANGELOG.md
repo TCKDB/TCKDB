@@ -22,6 +22,22 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A kinetics record can state its bath gas (2026-10-25)
+
+A PLOG or Chebyshev fit, or an apparent rate at a stated pressure, is a statement about a collider: a table fitted for Ar is not one for N2. A reaction-level
+kinetics record can now say which bath gas it was obtained for, where the depositor states it. A network solve already could (`network_solve_bath_gas`).
+
+- **Schema.** New table `kinetics_bath_gas` (revision `a4c8e1f7b392`): `(kinetics_id, species_entry_id, mole_fraction)`, primary key on the pair,
+  `CHECK (mole_fraction > 0 AND mole_fraction <= 1)`. No backfill: an existing record has none, which reads as "not stated". The downgrade refuses while any row exists.
+- **Upload.** `bath_gas` on `POST /uploads/kinetics` (and on a kinetics contribution bundle) is a list of `{species_entry, mole_fraction}`; on
+  `POST /uploads/computed-reaction` a fit's `bath_gas` is a list of `{species_key, mole_fraction}`. Optional; empty means not stated and nothing is inferred.
+- **Refusals (422).** `kinetics_bath_gas_at_high_pressure_limit` (a bath gas on a `high_p_limit` rate), `kinetics_bath_gas_mole_fraction_sum` (the fractions do not sum
+  to 1 within 1e-9, the rule a network solve's bath gas already follows), `kinetics_bath_gas_duplicate_species` (one species named twice, including two spellings that
+  resolve to one species entry).
+- **Read.** Each kinetics record carries `bath_gas` (`species_entry_ref`, `mole_fraction`), null when none was stated; the kinetics export carries it too.
+- **Accepted science.** Once a kinetics record is approved its bath gas can be neither added, edited nor removed.
+- **Bundles.** A kinetics bundle exports the bath gas as species content and a re-import writes the same rows.
+
 ## Calculation dependencies are acyclic, enforced by the database (2026-10-25)
 
 A new Alembic revision (`e2f2b3fb6725`) adds a row trigger on `calculation_dependency` that refuses an INSERT, or an UPDATE of either
