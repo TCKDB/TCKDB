@@ -120,16 +120,27 @@ def test_thermo_filters_that_remove_everything_say_so(client, db_session, methan
     assert floored["filters"]["note"] is None  # the approved one stays
 
 
-def test_thermo_a_hidden_source_calculation_never_counts_toward_a_filter_match_under_curated(
-    client, db_session, methane
-):
-    """The curated D6 guard: an approved record whose only orca source is not reviewed matches nothing under curated."""
-    kept = th.g4(db_session, methane, status=S.approved, sources=[{"software": "orca", "calc_status": S.not_reviewed}])
+@pytest.mark.parametrize(
+    "calc_status,matches",
+    [(S.not_reviewed, True), (S.under_review, True), (S.rejected, False), (S.deprecated, False)],
+    ids=["not_reviewed", "under_review", "rejected", "deprecated"],
+)
+def test_thermo_filter_match_follows_the_evidence_rule_under_curated(client, db_session, methane, calc_status, matches):
+    """ADR 0023 step 4: an approved record whose only orca source is rejected or deprecated matches nothing under
+    curated; a not-reviewed or under-review one is evidence like any other and matches. Exploratory withholds nothing.
+
+    Kills: matching through withheld evidence (the funnel would count it), or refusing not-reviewed evidence.
+    """
+    kept = th.g4(db_session, methane, status=S.approved, sources=[{"software": "orca", "calc_status": calc_status}])
     exploratory = th.post(client, methane, {"filters": {"software": "orca"}}).json()
     assert [c["thermo_ref"] for c in exploratory["candidates"]] == [kept.public_ref]
     curated = th.post(client, methane, {"filters": {"software": "orca"}}, profile="curated").json()
-    assert curated["candidates"] == [] and curated["filters"]["removed"] == 1
-    assert curated["filters"]["note"].startswith("the filters removed all")
+    if matches:
+        assert [c["thermo_ref"] for c in curated["candidates"]] == [kept.public_ref]
+        assert curated["filters"]["removed"] == 0
+    else:
+        assert curated["candidates"] == [] and curated["filters"]["removed"] == 1
+        assert curated["filters"]["note"].startswith("the filters removed all")
 
 
 def test_thermo_replay_refuses_a_funnel_that_does_not_follow_from_the_candidates(client, db_session, methane):
