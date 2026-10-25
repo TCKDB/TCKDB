@@ -23,7 +23,10 @@ fix:
 The digests were re-captured once, in versioning PR-4, because the stored snapshot's rubric block and reason
 tokens changed shape (name plus integer version), and again when the unreachable ``cycle_detected`` evidence
 key was dropped from ``upstream_dependency_snapshot`` (the dependency graph is acyclic by trigger). Grades and
-checks did not change either time. Otherwise these literals are
+checks did not change either time. The digest of
+``declaration_with_members_and_sources`` was re-captured a third time when an ensemble member's relative energy gained
+its stated convention: the scenario's member carries an energy, so its row now carries the convention too (a member
+with no energy keeps its digest, see ``snapshot_defaults``). Grade and checks did not change. Otherwise these literals are
 expected to stay byte-identical when the owner-scoped rubric lands. If one of them changes,
 species grading changed: that is the failure this file exists to catch, not a literal to refresh.
 """
@@ -537,6 +540,7 @@ def _declaration_with_members_and_sources(db_session, user):
                 member_statmech_id=member.id,
                 counting_multiplicity=1,
                 relative_energy_kj_mol=0.0,
+                relative_energy_convention="electronic_plus_zpe",
             ),
             StatmechModelSource(
                 declaration_id=declaration.id,
@@ -707,7 +711,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "5eb5a6fe81bb5affac5d471c180a58e4dab415db404e97a3db1db58848abc5d8",
+        "digest": "38ccd020bba40a481cc034f9b7105dd1c9e25c168a018157ce80de54173cbe22",
     },
     "dependency_edges": {
         "grade": "described",

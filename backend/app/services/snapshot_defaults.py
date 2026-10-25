@@ -73,6 +73,10 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
     # actual protocol, which is NULL. One that declares a protocol includes the column, so its digest differs,
     # as what it claims does. Adding the column restales no stored review or assessment of any existing row.
     ("calculation", "actual_protocol_declaration"): None,
+    # statmech_model_member.relative_energy_convention: a member stored before the column existed stated no energy
+    # (the column is present if and only if the energy is), which is NULL. A member that states an energy includes the
+    # column, so its digest differs, as its meaning does: the energy is read under that convention.
+    ("statmech_model_member", "relative_energy_convention"): None,
 }
 
 

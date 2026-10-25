@@ -806,6 +806,7 @@ def statmech_scene(session, hidden: bool) -> Scene:
             conformer_group_id=away.id if hidden else None,  # the member's own group: unavailable, or never stated
             counting_multiplicity=1,
             relative_energy_kj_mol=0.0,
+            relative_energy_convention="electronic_plus_zpe",
         )
     )
     session.add(
