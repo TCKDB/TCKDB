@@ -31,6 +31,42 @@ calculations by public reference, if the table already holds a cycle; it never e
 the `cycle_detected` evidence key of the reproducibility rubric's `upstream_dependency_snapshot`); traversals keep a visited set. No verdict
 can change. The three affected rubric pins were re-pinned without a version bump. A bundle whose `depends_on` forms a ring is refused at validation with a 422 naming the depositor's own keys. The lock the trigger takes is statement-level, so it is acquired before the accepted-science row locks (no deadlock); it is held to the end of the transaction. Async job errors are now a code and public sentence (or a generic one), never a raw exception string, and a deterministic refusal is not retried. The accepted-science immutability message names the record by public reference. `tckdb-client` 0.168.0 gains the rejection code.
 
+## Conformer basins: symmetric groups, hydroxyl and amine rotors, stated tolerances (2026-10-26)
+
+In plain terms: two geometries of one molecule are now filed as the same conformer when some relabelling of the molecule that its own
+structure allows makes every rotor match within a stated tolerance. Before, a nearly planar aryl group could land in two conformers
+depending only on which side of 0 degrees the program printed, and rotamers that differ only in an O-H or N-H orientation (ethanol
+trans and gauche, syn and anti acetic acid, a hydrogen-bonded and a free hydroxyl) were filed as one.
+
+- **New scheme version.** `conformer_assignment_scheme` `torsion_basin` gains version 2 (a data row; no schema change) and becomes the
+  default. Its parameters are stored on the row: heavy-atom and methyl rotors match within 20 degrees, one- and two-hydrogen tops (O-H,
+  S-H, O-O-H, N-O-H, -NH2, a radical -CH2) within 30 degrees, and the symmetry search is capped at 4096 mappings. The cap can only split a
+  basin, never merge two, and is recorded on the observation when it is hit.
+- **What changed in matching.** Same basin means *there exists* a graph symmetry under which every rotor is within its own tolerance. The
+  earlier tie-break by lexicographically smallest quantised bins (discontinuous at the 0/360 wrap) is gone; the stored bins are display only.
+  One- and two-hydrogen tops are now rotors; the two hydrogens of -NH2 and a radical -CH2 are interchangeable; methyl hydrogens are folded as
+  before. Version 1 is no longer implemented.
+- **Existing data is reassigned on deploy.** Revision `d3f8a1c6e92b` recomputes every species entry's basins under the per-entry advisory lock
+  live uploads take, and prints a count report. A merge lands on the older group; a split leaves the original row with the original
+  representative. A thermo target moves to the group holding the observation its own calculations came from, else it stays with the old
+  representative's group; conformer selections follow the representative. Every group whose membership changed has its review reset to
+  `not_reviewed` with a review event.
+- **Approved rows move through the declared-repair path** (`accepted_science_repair`): one declaration per table naming the exact columns
+  (observation link, scheme and fingerprint; thermo target), every changed accepted row recorded old to new. The accepted-science triggers
+  are not disabled.
+- **Statmech basins move too (owner decision).** `statmech_model_declaration` and `statmech_model_member` still refuse every UPDATE, except
+  `conformer_group_id` under a declared repair (revision `a5d9c3e7b1f2` changes the trigger function only; it never disables it). Any other
+  column, an undeclared basin edit, a NULL basin and a group of another species entry are still refused. They follow the same rule as
+  thermo targets. A declaration's `content_hash` (which covers its basin and each member's basin) is recomputed in the same repair, and
+  may change only because a basin moved in that transaction.
+- **Nothing is deleted.** A group a merge empties keeps its row, public ref and review history; its review is reset like any group whose
+  membership changed. A conformer selection that would duplicate one on the target stays where it is; a moved selection is stamped
+  with the new scheme. The rigid-molecule fallback (no rotors) now takes the minimum RMSD over the same symmetry mappings, so ethane,
+  methylamine, hydrazine and an ethyl radical no longer depend on the order of atoms in a file.
+- **Cap.** Above the symmetry cap the result can depend on atom order in a deposited file; `symmetry_cap_hit` on the observation says so.
+- **Not changed:** the both-terminal ("ethane") rule, methyl folding, the rigid-molecule RMSD fallback, trust rubrics (the rubric pin check is
+  unchanged).
+
 ## Curated profile: records are floored, linked evidence is badged (2026-10-25, step 1 of 8)
 
 Owner decision, recorded as [ADR 0023](docs/adr/0023-curated-profile-floor-applies-to-records-linked-evidence-is-badged.md): under

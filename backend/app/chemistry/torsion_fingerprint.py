@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from rdkit import Chem
@@ -39,6 +40,14 @@ class RotorSlot:
     :param canonical_rank_end: Canonical rank of bond_end (invariant across orderings).
     :param symmetry_fold: Rotational symmetry number for this rotor (1, 2, or 3).
     :param is_methyl: Whether this rotor is a methyl group.
+    :param top_kind: What the rotor's tolerance class is. ``"heavy"``: both terminals are heavy atoms.
+        ``"methyl"``: a methyl top, measured on its folded angle. ``"single_h"``: a one-hydrogen top
+        (O-H, S-H, O-O-H, N-O-H). ``"two_h"``: a two-hydrogen top (-NH2, a radical -CH2). The last two
+        are the "terminal hydrogen" classes; the basin matcher gives them their own tolerance.
+    :param alt_terminal_h: For a ``"two_h"`` top, the other hydrogen on the same atom (the terminal that
+        is a hydrogen is ``terminal_a`` or ``terminal_d``, whichever side the top is on). The two are
+        interchangeable, so the *displayed* torsion takes whichever gives the smaller angle; basin
+        matching tries both and never reads the displayed value.
     """
 
     bond_begin: int
@@ -49,6 +58,13 @@ class RotorSlot:
     canonical_rank_end: int = 0
     symmetry_fold: int = 1
     is_methyl: bool = False
+    top_kind: str = "heavy"
+    alt_terminal_h: int | None = None
+
+    @property
+    def is_terminal_h(self) -> bool:
+        """Whether the torsion is defined by the hydrogens of a one- or two-hydrogen top."""
+        return self.top_kind in ("single_h", "two_h")
 
     @property
     def canonical_key(self) -> str:
@@ -74,6 +90,11 @@ class TorsionFingerprint:
     folded_torsions_deg: list[float] = field(default_factory=list)
     quantized_bins: list[int] = field(default_factory=list)
     bin_width_deg: float = 15.0
+    #: How many graph symmetries basin matching searched for this molecule, and whether the cap cut the
+    #: search short. Set by the basin matcher (``app.chemistry.basin_matching``); ``None`` when the
+    #: fingerprint was built without one. Diagnostic only.
+    symmetry_mappings: int | None = None
+    symmetry_cap_hit: bool | None = None
 
     @property
     def rotor_count(self) -> int:
@@ -91,7 +112,7 @@ class TorsionFingerprint:
 
     def to_dict(self) -> dict:
         """Serialize for JSONB storage."""
-        return {
+        data = {
             "rotor_count": self.rotor_count,
             "canonical_rotor_keys": [r.canonical_key for r in self.rotor_slots],
             "raw_torsions_deg": [round(t, 4) for t in self.raw_torsions_deg],
@@ -100,6 +121,10 @@ class TorsionFingerprint:
             "bin_width_deg": self.bin_width_deg,
             "fingerprint_hash": self.fingerprint_hash,
         }
+        if self.symmetry_mappings is not None:
+            data["symmetry_mappings"] = self.symmetry_mappings
+            data["symmetry_cap_hit"] = bool(self.symmetry_cap_hit)
+        return data
 
 
 # ---------------------------------------------------------------------------
@@ -268,11 +293,34 @@ def identify_rotor_slots(
         # bond partner. The torsion is defined only by H positions.
         # Skip unless the terminal side is a recognized methyl (already
         # handled by symmetry folding and explicitly not excluded above).
-        if exclude_terminal_noisy and not is_methyl:
+        #
+        # With ``exclude_terminal_noisy=False`` the one- and two-hydrogen
+        # tops are kept instead (O-H, S-H, O-O-H, N-O-H; -NH2, a radical
+        # -CH2): they are real minima (ethanol trans/gauche, syn/anti acetic
+        # acid) that the exclusion merged. A top of three or more hydrogens
+        # that is not a methyl (-NH3+, -PH3) stays out: it is three-fold
+        # symmetric and no fold is defined for it.
+        top_kind = "methyl" if is_methyl else "heavy"
+        alt_terminal_h: int | None = None
+        if not is_methyl:
             noisy_a = _is_terminal_noisy(mol, a1_idx, a2_idx)
             noisy_d = _is_terminal_noisy(mol, a2_idx, a1_idx)
             if noisy_a or noisy_d:
-                continue
+                if exclude_terminal_noisy:
+                    continue
+                # Both ends cannot be hydrogen-only here: the both-terminal rule above already dropped that bond.
+                top_atom_idx = a1_idx if noisy_a else a2_idx
+                top_terminal = term_a if noisy_a else term_d
+                hydrogens = sorted(
+                    n.GetIdx() for n in mol.GetAtomWithIdx(top_atom_idx).GetNeighbors() if n.GetAtomicNum() == 1
+                )
+                if len(hydrogens) == 1:
+                    top_kind = "single_h"
+                elif len(hydrogens) == 2:
+                    top_kind = "two_h"
+                    alt_terminal_h = next(h for h in hydrogens if h != top_terminal)
+                else:
+                    continue
 
         if is_methyl_a and is_methyl_d:
             # Both sides are methyl → 6-fold (3 × 2) symmetry
@@ -291,6 +339,8 @@ def identify_rotor_slots(
             canonical_rank_end=canonical_ranks[a2_idx],
             symmetry_fold=sym_fold,
             is_methyl=is_methyl,
+            top_kind=top_kind,
+            alt_terminal_h=alt_terminal_h,
         ))
 
     # Sort by canonical key for deterministic ordering
@@ -337,6 +387,19 @@ def compute_torsion_fingerprint(
         raw = rdMolTransforms.GetDihedralDeg(
             conf, slot.terminal_a, slot.bond_begin, slot.bond_end, slot.terminal_d
         )
+        if slot.alt_terminal_h is not None:
+            # A two-hydrogen top: its hydrogens are interchangeable, so display the one with the smaller
+            # angle rather than whichever the atom mapping happened to put first.
+            if mol.GetAtomWithIdx(slot.terminal_d).GetAtomicNum() == 1:
+                alt = rdMolTransforms.GetDihedralDeg(
+                    conf, slot.terminal_a, slot.bond_begin, slot.bond_end, slot.alt_terminal_h
+                )
+            else:
+                alt = rdMolTransforms.GetDihedralDeg(
+                    conf, slot.alt_terminal_h, slot.bond_begin, slot.bond_end, slot.terminal_d
+                )
+            if normalize_angle(alt) < normalize_angle(raw):
+                raw = alt
         raw_norm = normalize_angle(raw)
         folded = fold_angle(raw_norm, slot.symmetry_fold)
 
@@ -357,8 +420,8 @@ def compute_torsion_fingerprint(
 
 
 def kabsch_rmsd(
-    coords_a: list[tuple[float, float, float]],
-    coords_b: list[tuple[float, float, float]],
+    coords_a: Sequence[Sequence[float]],
+    coords_b: Sequence[Sequence[float]],
 ) -> float:
     """Compute Kabsch-aligned RMSD between two sets of matched coordinates.
 

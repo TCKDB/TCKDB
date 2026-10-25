@@ -863,6 +863,41 @@ on replay (not reinterpreted), and the SHA-256 pins of the rule manifests move; 
 pin is the owner's approval of reviewed bytes, so pin changes need the owner's
 approval.
 
+## Conformer basins reassigned (revision `d3f8a1c6e92b`)
+
+Adds `conformer_assignment_scheme` `torsion_basin` version 2 (a data row; no schema change), makes it the default, and
+**reassigns every conformer observation under it inside the migration's own transaction**. A normal `alembic upgrade head`
+does all of it; there is no separate step.
+
+- **Runs as the table owner.** Observations and thermo targets that were ever approved are changed only through the declared-repair
+  path (`accepted_science_repair`, see "Repairing an accepted record"), which only a role that owns the table may use. The migration
+  role does. The trigger is never disabled.
+- **Take the backup first** (step 2 of the upgrade flow). The step moves observations between groups, empties (but keeps) groups a merge leaves bare,
+  and re-points thermo targets and conformer selections. The downgrade makes version 1 the default again but does **not** undo the
+  grouping: version 1 is no longer implemented and a merge destroys which observation was in which group.
+- **Read the output.** The migration prints one line, `conformer reassignment: ...`, with counts (observations moved, groups created and
+  emptied, thermo targets and statmech basins moved, reviews reset, symmetry-cap hits, which tables a repair was declared for).
+- **Statmech basins move too, through the same repair path.** `statmech_model_declaration` and `statmech_model_member` refuse every
+  UPDATE (`tckdb_statmech_model_immutable`) except `conformer_group_id` (and a declaration's `content_hash`, only when a basin moved in
+  the same transaction) under a declared repair, added by revision `a5d9c3e7b1f2`. The trigger is not disabled; every other column,
+  an undeclared edit, a NULL basin, and a group of another species entry still refuse. The checksum covers the declaration's basin and
+  each member's basin, so it is recomputed in the same repair, including when only a member moved; the ledger holds the old and new
+  value of each. The reassignment (`app.services.conformer_reassignment.reassign_conformer_groups`) is idempotent and takes a list of
+  species entries, but no operator script is shipped for it, and it needs an owner role.
+- **Emptied groups are kept**, with their review reset to `not_reviewed` and their representative cleared. Nothing is deleted, so no
+  review history or public ref is orphaned. A conformer selection that would collide with one already on the target stays where it
+  is (there is no supersede mechanism for a selection and none may be deleted).
+- **Stored reproducibility assessments of a moved thermo record will read stale**: the snapshot includes `target_conformer_group_id`
+  (`app/services/snapshot_defaults.py`), so re-run the assessment for thermo records whose target moved.
+- **Reviews are reset on purpose.** A group whose membership changed returns to `not_reviewed`, which downgrades or hides
+  previously approved observations under curated reads (`structure_selection/loader.py`), as intended.
+- **Cap determinism.** The symmetry search is capped (4096 mappings by default). Below the cap nothing depends on atom order in a
+  deposited file; above it the result can, and `symmetry_cap_hit` on the observation's fingerprint says so.
+- **Every future scheme version ships its own data step.** This one runs only while the default scheme is exactly
+  (`torsion_basin`, 2); on any other default it declines and reports why.
+- **Locks.** One transaction-scoped advisory lock per species entry is held until the migration commits (the same lock live uploads
+  take), so the Postgres lock table needs room for one lock per entry that has a conformer group.
+
 ## Self-hosted / Raspberry Pi note
 
 Single-node and Raspberry-Pi deployments follow the same flow as any other deployed DB. Two extra notes:
