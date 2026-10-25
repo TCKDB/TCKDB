@@ -9,8 +9,9 @@ Supersedes the read-side rule known as D6 ("hidden == unknown == absent") for li
 steps; a site that has not been moved yet still applies D6. The helper that holds the rule (`evidence_withheld_under_profile` and
 its siblings in `app/services/scientific_read/common.py`) is called, from step 2, by the response-level ref guard
 (`ref_guard.py`), the selection documents, the export streams, the legacy entity reads and the ML export's conformer refs. Still on
-D6: service counts and derived levels, matching, the trust and selection loaders' own populations, made-under comparisons, and
-detail-by-ref.
+D6: service counts and derived levels, the trust and selection loaders' own populations, made-under comparisons, and
+detail-by-ref. Matching in search, browse and select moved in step 4 (filters match through linked evidence unless it is rejected
+or deprecated; a filter ref that names such evidence matches nothing).
 
 Under the `curated` profile, the `approved` floor decides which **records** a list, search or select returns. The **linked
 evidence** of a returned record is always shown with its review badge. Only `rejected` and `deprecated` evidence is withheld.

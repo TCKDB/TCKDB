@@ -30,7 +30,8 @@ the `has_*` evidence flags, `dependency_role`) now matches through any linked ca
 match, and no total or hidden-by-default count moves because it exists. The statmech, transport, conformer and calculation searches
 now do this too (they matched through every linked record before), through the shared `apply_calculation_provenance_filter`. Also
 moved to the rule: the thermo and kinetics filters, the select routes' `filters`, species browse, transition-state search and browse,
-and the network, solve and network-kinetics searches. The record population stays on the approved floor, and exploratory is
+and the network, solve and network-kinetics searches, and the energy-correction-scheme `used_by_calculation` filter. A filter ref that names
+rejected or deprecated linked evidence (`parent_calculation_ref`, `child_calculation_ref`, `conformer_observation_ref`) matches nothing. The record population stays on the approved floor, and exploratory is
 unchanged. Counts, flags and derived levels on a returned record follow in step 3. No migration; no manifest or rubric change.
 
 ## A kinetics record can state its bath gas (2026-10-25)

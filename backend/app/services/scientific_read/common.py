@@ -725,10 +725,11 @@ def where_visible(stmt: Any, predicate: Any) -> Any:
 # cannot be lifted by request. Under exploratory nothing is withheld as evidence, so every function here answers
 # "visible" and issues no query.
 #
-# STATUS (step 2 of ADR 0023): the response-level ref guard (``ref_guard.py``: pointers in responses, the document modes, the
+# STATUS (steps 2 and 4 of ADR 0023): matching in search, browse and select (``linked_evidence_predicate`` and
+# ``ids_withheld_as_evidence`` in every filter on linked calculations and observations) is done. The response-level ref guard (``ref_guard.py``: pointers in responses, the document modes, the
 # selection loaders' unavailable-evidence seam, the export batcher), the legacy entity reads, and the ML export's conformer
 # refs call this section. Still on the earlier rule (D6: below the floor is hidden, evidence included) until their steps land:
-# service counts and derived levels (step 3), matching in search and select (step 4), the trust and selection loaders'
+# service counts and derived levels (step 3), the trust and selection loaders'
 # own populations (step 5), made-under comparisons (step 6), and detail-by-ref (step 7).
 
 #: Review statuses whose linked evidence is withheld under a profile with a review floor.

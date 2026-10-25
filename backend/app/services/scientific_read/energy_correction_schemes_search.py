@@ -36,8 +36,8 @@ from app.schemas.reads.scientific_energy_correction_scheme_search import (
 )
 from app.services.scientific_read.common import (
     build_pagination,
+    linked_evidence_predicate,
     reject_client_sort,
-    review_floor_predicate,
     validate_includes,
     validate_pagination,
     where_visible,
@@ -178,7 +178,9 @@ def search_energy_correction_schemes(
         )
         stmt = stmt.where(ex if request.has_corrections else ~ex)
     if request.used_by_calculation is not None:
-        # An application counts when its target and its source calculation are shown by the read profile.
+        # An application counts when its target is shown by the read profile and its source calculation is not withheld
+        # by the evidence rule (rejected / deprecated under curated, ADR 0023): the filter matches through that
+        # linked calculation, so a not-reviewed one counts.
         ex = where_visible(
             where_visible(
                 exists().where(
@@ -187,7 +189,7 @@ def search_energy_correction_schemes(
                 ),
                 applied_target_visible(),
             ),
-            review_floor_predicate(AppliedEnergyCorrection.source_calculation_id, SubmissionRecordType.calculation),
+            linked_evidence_predicate(AppliedEnergyCorrection.source_calculation_id, SubmissionRecordType.calculation),
         )
         stmt = stmt.where(ex if request.used_by_calculation else ~ex)
 

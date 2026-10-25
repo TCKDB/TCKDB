@@ -315,6 +315,12 @@ def _resolve_filter_ref(
 # ---------------------------------------------------------------------------
 
 
+def _evidence_visible(id_column, record_type) -> tuple:
+    """The evidence-rule condition as a tuple of 0 or 1 elements (empty without a review floor)."""
+    predicate = linked_evidence_predicate(id_column, record_type)
+    return () if predicate is None else (predicate,)
+
+
 def _apply_identity_filters(
     stmt,
     *,
@@ -335,12 +341,13 @@ def _apply_identity_filters(
         ).where(SpeciesEntry.species_id == species_id)
     if conformer_observation_id is not None:
         # Match the group that owns this observation.
+        # The observation is linked evidence (ADR 0023): a rejected / deprecated one named by ref matches nothing.
         stmt = stmt.where(
             exists().where(
                 and_(
-                    ConformerObservation.conformer_group_id
-                    == ConformerGroup.id,
+                    ConformerObservation.conformer_group_id == ConformerGroup.id,
                     ConformerObservation.id == conformer_observation_id,
+                    *_evidence_visible(ConformerObservation.id, SubmissionRecordType.conformer_observation),
                 )
             )
         )

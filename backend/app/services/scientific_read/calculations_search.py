@@ -773,11 +773,15 @@ def _apply_dependency_filters(
         # is parameterless w.r.t. Calculation.id; pair it with
         # ``Calculation.id IN (parent, child)`` to scope the result to
         # the two endpoints.
+        # Evidence rule (ADR 0023): an edge with an end the rule withholds (rejected / deprecated under curated) is not
+        # an edge, whichever end the caller named.
         exact_edge_exists = exists().where(
             _and(
                 CalculationDependency.parent_calculation_id == parent_calc_id,
                 CalculationDependency.child_calculation_id == child_calc_id,
                 role_clause,
+                linked_evidence_predicate(CalculationDependency.parent_calculation_id, SubmissionRecordType.calculation),
+                linked_evidence_predicate(CalculationDependency.child_calculation_id, SubmissionRecordType.calculation),
             )
         )
         return stmt.where(
@@ -797,6 +801,10 @@ def _apply_dependency_filters(
                     CalculationDependency.child_calculation_id
                     == Calculation.id,
                     role_clause,
+                    # The named far end is linked evidence: a rejected / deprecated one matches nothing.
+                    linked_evidence_predicate(
+                        CalculationDependency.parent_calculation_id, SubmissionRecordType.calculation
+                    ),
                 )
             )
         )
@@ -811,6 +819,9 @@ def _apply_dependency_filters(
                     CalculationDependency.parent_calculation_id
                     == Calculation.id,
                     role_clause,
+                    linked_evidence_predicate(
+                        CalculationDependency.child_calculation_id, SubmissionRecordType.calculation
+                    ),
                 )
             )
         )

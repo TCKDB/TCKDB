@@ -352,7 +352,9 @@ level-B link is rejected is not found by asking for level B, and `total` and `hi
 exists. Observations inside a conformer group are evidence; transition-state entries, basins in structure select and network
 solves are records and stay on the record floor; species and reaction entries never gate. The provenance match is one helper
 (`apply_calculation_provenance_filter`) fed a source set already narrowed by `linked_evidence_predicate`; select does the same
-through `selection_filters`. A `*_ref` filter that names a parent is a scope, not a subject, and is unchanged. Under exploratory
+through `selection_filters`. A record-level `*_ref` filter that names a parent (`species_entry_ref`) is a scope, not a subject, and is unchanged; a ref that names linked
+evidence (`parent_calculation_ref`, `child_calculation_ref`, `conformer_observation_ref`) is evidence, and matches nothing when it names a
+rejected or deprecated record. Under exploratory
 nothing is withheld as evidence: a rejected calculation still takes part in a match, because `include_rejected` and
 `include_deprecated` govern the records a route returns, not the evidence behind them, and a default exclusion is disclosed by
 `hidden_by_default`. That asymmetry is by design (the ADR records it).
