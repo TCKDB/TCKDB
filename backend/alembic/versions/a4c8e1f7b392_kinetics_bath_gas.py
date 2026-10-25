@@ -40,7 +40,7 @@ record cannot be deleted, so for those the refusal is permanent); it deletes
 nothing. Otherwise it drops the triggers and the table.
 
 Revision ID: a4c8e1f7b392
-Revises: e2f2b3fb6725
+Revises: d3f8a1c6e92b
 Create Date: 2026-10-25
 """
 
@@ -53,7 +53,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a4c8e1f7b392"
-down_revision: Union[str, Sequence[str], None] = "e2f2b3fb6725"
+down_revision: Union[str, Sequence[str], None] = "d3f8a1c6e92b"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
