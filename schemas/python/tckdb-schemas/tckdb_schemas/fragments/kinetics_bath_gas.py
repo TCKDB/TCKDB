@@ -72,7 +72,7 @@ class BundleKineticsBathGasIn(SchemaBase):
 
 def check_kinetics_bath_gas(
     *,
-    pressure_context: PressureContext | None,
+    pressure_context: str | None,
     mole_fractions: Sequence[float],
     identities: Sequence[Hashable],
     field: str = "bath_gas",
