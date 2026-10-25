@@ -90,6 +90,10 @@ def verdict_of(assessment: StructureAssessment, gate: RecordReviewStatus | None,
     calculation the request permitted passed that default by override, and one whose source the default kept out failed it. A confirmed finding the request lifted is a
     ``finding_overridden`` advisory; both are read from the assessment, so a replay that recomputes it recomputes this.
     """
+    if quality == "applied" and assessment.applicability is Applicability.applicable:
+        # The kept-out source is in a role the request does not need: the assessment is applicable without it, and the
+        # decision selects a unit by its assessment, so the verdict must not block what the decision selects.
+        quality = None
     findings = [b for b in assessment.blocking if b.startswith(FINDING_BLOCK_PREFIXES)]
     other = [b for b in assessment.blocking if not b.startswith(FINDING_BLOCK_PREFIXES)]
     lifted = any(a.startswith("finding_overridden") for a in assessment.advisory)

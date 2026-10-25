@@ -266,7 +266,12 @@ def answer_steps(
     swept = removed + funnel_record["removed_by_floor"]
     note = None
     if total > 0 and swept == total:
-        who = "the filters" if funnel_record["removed_by_floor"] == 0 else "the filters and the caller's review floor"
+        if funnel_record["removed_by_floor"] == 0:
+            who = "the filters"
+        elif removed == 0:
+            who = "the caller's review floor"
+        else:
+            who = "the filters and the caller's review floor"
         note = f"{who} removed all {total} {funnel_record['unit']} before anything was assessed"
     return {
         "filters": SelectionFilterAnswer(

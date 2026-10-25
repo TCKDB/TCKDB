@@ -133,7 +133,6 @@ def _without_digest(raw: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
 
 
 def _population(result: StructureAssessmentResult, *, withhold_excluded: bool) -> dict[str, Any]:
-    funnel_record = result.funnel
     """The population block. Under a read profile that imposes a floor the records below it are not listed or counted.
 
     Under ``curated`` the floor is ``approved``: a record below it is one the caller could not have reached through any
@@ -141,6 +140,7 @@ def _population(result: StructureAssessmentResult, *, withhold_excluded: bool) -
     checksum is computed, so the downloaded manifest still verifies and replays; the total is replaced by the visible
     count so the difference cannot be recovered from the arithmetic.
     """
+    funnel_record = result.funnel
     return {
         "total_units": result.visible_units if withhold_excluded else result.total_units,
         "visible_units": result.visible_units,

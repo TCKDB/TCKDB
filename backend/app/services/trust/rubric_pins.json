@@ -16,7 +16,7 @@
       "1": "28e638f09e687fce82fcc274d372e97cdcc938dad8acbafa2b598c6d803a0c91"
     },
     "computed_transition_state": {
-      "2": "001bcb9e65a1d5d1c07c1cdd4c2c905085e9c7492eec57af6c8d74d638a9b709"
+      "2": "3309765ea034a1505a3d0a65734aebee1c73ea9c2ca12468211c2719cd0b62ba"
     },
     "computed_transport": {
       "1": "1b5a1f833dc867aff540eddc5e123a5d6fa3cb0d320e90b7a931e94f7a158676"
@@ -42,6 +42,11 @@
       "name": "computed_transition_state",
       "version": 2,
       "reason": "select filters and eligibility defaults: structure selection gains request options that are off by default and the species-entry and conformer-group gating moved; the transition-state grading verdicts under default settings are unchanged (a TS entry still gates its evidence)"
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "select filters and eligibility defaults: structure selection gains request options that are off by default, species-entry and conformer-group gating moved, and a rejected-quality source in a role the request does not need no longer blocks the verdict; the transition-state grading verdicts under default settings are unchanged (a TS entry still gates its evidence)"
     }
   ]
 }

@@ -44,6 +44,24 @@ def assert_adds_up(body, listed_not_blocked: int, *, considered: int, **expected
     for key, value in expected.items():
         assert funnel[key] == value, (key, funnel)
     assert body["filters"]["removed"] == funnel["removed_by_filters"]
+    assert_selected_are_eligible(body)
+
+
+def assert_selected_are_eligible(body) -> None:
+    """The answer cannot contradict itself: whatever it selects competes, and `remaining` has room for it."""
+    items = body.get("units") or body.get("candidates") or []
+    by_ref = {
+        i.get("unit_ref") or i.get("thermo_ref") or i.get("kinetics_ref") or i.get("candidate_ref"): i for i in items
+    }
+    selection = body.get("selection") or {}
+    refs = list(body.get("selected_refs") or [])
+    refs += [selection[k] for k in ("thermo_ref", "sole_eligible_ref", "administrative_ref") if selection.get(k)]
+    refs += list(selection.get("kinetics_refs") or [])
+    named = [r for r in refs if r in by_ref]
+    for ref in named:
+        assert by_ref[ref]["eligible"] is True, f"{ref} is selected but reported not eligible"
+        assert not by_ref[ref]["blocked_by"], f"{ref} is selected but blocked_by {by_ref[ref]['blocked_by']}"
+    assert body["funnel"]["remaining"] >= len(named)
 
 
 # -- thermo -----------------------------------------------------------------------------------------------------
@@ -54,17 +72,26 @@ def test_thermo_every_step_counts_its_own_candidates_once(client, db_session, me
     th.g3(db_session, methane, status=S.approved, sources=[{"software": "gaussian"}])  # the filter
     th.g4(db_session, methane, status=S.rejected, sources=[{"software": "orca"}])  # a review default
     th.g3(db_session, methane, status=S.under_review, sources=[{"software": "orca"}])  # the caller's floor
-    bad = th.g3(db_session, methane, status=S.approved, sources=[{"software": "orca", "rejected": True}])  # a blocking default
+    bad = th.g3(
+        db_session, methane, status=S.approved, sources=[{"software": "orca", "rejected": True}]
+    )  # a blocking default
     body = th.post(client, methane, {"filters": {"software": "orca"}, "min_review_status": "approved"}).json()
     assert_adds_up(
-        body, len([c for c in body["candidates"] if not c["blocked_by"]]),
-        considered=5, removed_by_filters=1, removed_by_floor=1, removed_by_eligibility=2, remaining=1,
+        body,
+        len([c for c in body["candidates"] if not c["blocked_by"]]),
+        considered=5,
+        removed_by_filters=1,
+        removed_by_floor=1,
+        removed_by_eligibility=2,
+        remaining=1,
     )
     assert th.candidate(body, bad)["blocked_by"] == ["evidence_hard_fail"]
     assert body["filters"]["applied"] == {"software": "orca"}  # the floor is its own step, not a filter
 
 
-def test_thermo_per_default_counts_may_exceed_removed_by_eligibility_because_a_candidate_counts_under_each(client, db_session, methane):
+def test_thermo_per_default_counts_may_exceed_removed_by_eligibility_because_a_candidate_counts_under_each(
+    client, db_session, methane
+):
     th.g4(db_session, methane, status=S.rejected, sources=[{"rejected": True}])
     body = th.post(client, methane, {"eligibility": {"include_rejected": True}}).json()
     assert body["funnel"]["removed_by_eligibility"] == 1
@@ -75,7 +102,9 @@ def test_thermo_per_default_counts_may_exceed_removed_by_eligibility_because_a_c
 
 
 def test_thermo_only_a_competing_candidate_counts_as_admitted_by_override(client, db_session, methane):
-    th.g4(db_session, methane, status=S.rejected, sources=[{"rejected": True}])  # lifted status, still blocked by evidence
+    th.g4(
+        db_session, methane, status=S.rejected, sources=[{"rejected": True}]
+    )  # lifted status, still blocked by evidence
     body = th.post(client, methane, {"eligibility": {"include_rejected": True}}).json()
     assert th.entry_of(body, "rejected_review_status")["admitted_by_override"] == 0
     assert th.entry_of(body, "evidence_hard_fail")["excluded"] == 1
@@ -91,7 +120,9 @@ def test_thermo_filters_that_remove_everything_say_so(client, db_session, methan
     assert floored["filters"]["note"] is None  # the approved one stays
 
 
-def test_thermo_a_hidden_source_calculation_never_counts_toward_a_filter_match_under_curated(client, db_session, methane):
+def test_thermo_a_hidden_source_calculation_never_counts_toward_a_filter_match_under_curated(
+    client, db_session, methane
+):
     """The curated D6 guard: an approved record whose only orca source is not reviewed matches nothing under curated."""
     kept = th.g4(db_session, methane, status=S.approved, sources=[{"software": "orca", "calc_status": S.not_reviewed}])
     exploratory = th.post(client, methane, {"filters": {"software": "orca"}}).json()
@@ -133,8 +164,13 @@ def test_kinetics_every_step_counts_its_own_candidates_once(client, db_session, 
     kin.record(db_session, world, "d", status=S.under_review, sources=[{"software": "orca"}])
     body = kin.post(client, world, {"filters": {"software": "orca"}, "min_review_status": "approved"}).json()
     assert_adds_up(
-        body, len([c for c in body["candidates"] if not c["blocked_by"]]),
-        considered=4, removed_by_filters=1, removed_by_floor=1, removed_by_eligibility=1, remaining=1,
+        body,
+        len([c for c in body["candidates"] if not c["blocked_by"]]),
+        considered=4,
+        removed_by_filters=1,
+        removed_by_floor=1,
+        removed_by_eligibility=1,
+        remaining=1,
     )
     none = kin.post(client, world, {"filters": {"software": "nonesuch"}}).json()
     assert none["filters"]["note"].startswith("the filters removed all")
@@ -154,9 +190,18 @@ def test_network_every_step_counts_its_own_solves_once(client, db_session, nworl
         json={**net.question(nworld), "filters": {"software": "orca"}, "min_review_status": "approved"},
     ).json()
     assert body["funnel"]["unit"] == "solves"
-    assert_adds_up(body, len(body["solves"]), considered=4, removed_by_filters=1, removed_by_floor=1, removed_by_eligibility=1, remaining=1)
+    assert_adds_up(
+        body,
+        len(body["solves"]),
+        considered=4,
+        removed_by_filters=1,
+        removed_by_floor=1,
+        removed_by_eligibility=1,
+        remaining=1,
+    )
     none = client.post(
-        f"/api/v1/scientific/networks/{nworld.ref}/kinetics/select", json={**net.question(nworld), "filters": {"software": "nonesuch"}}
+        f"/api/v1/scientific/networks/{nworld.ref}/kinetics/select",
+        json={**net.question(nworld), "filters": {"software": "nonesuch"}},
     ).json()
     assert none["filters"]["note"] == "the filters removed all 4 solves before anything was assessed"
 
@@ -170,17 +215,29 @@ def test_network_the_recorded_eligibility_holds_only_the_flags_the_route_offers(
 # -- statmech ---------------------------------------------------------------------------------------------------
 
 
-def test_statmech_the_floor_and_the_filters_are_separate_steps_and_a_model_revisions_population_is_listed(client, db_session):
+def test_statmech_the_floor_and_the_filters_are_separate_steps_and_a_model_revisions_population_is_listed(
+    client, db_session
+):
     scene = sm.scene_with_software(db_session, "orca", status=S.not_reviewed)
     floored = sm.post(client, scene, {"min_review_status": "approved"}).json()
     assert floored["candidates"] == []
-    assert_adds_up(floored, 0, considered=1, removed_by_filters=0, removed_by_floor=1, removed_by_eligibility=0, remaining=0)
-    assert floored["filters"]["note"] == "the filters and the caller's review floor removed all 1 candidates before anything was assessed"
+    assert_adds_up(
+        floored, 0, considered=1, removed_by_filters=0, removed_by_floor=1, removed_by_eligibility=0, remaining=0
+    )
+    assert (
+        floored["filters"]["note"] == "the caller's review floor removed all 1 candidates before anything was assessed"
+    )
     ref = sm.post(client, scene).json()["candidates"][0]["candidate_ref"]
     explicit = sm.post(client, scene, {"population": {"kind": "model_revisions", "model_refs": [ref]}}).json()
-    assert explicit["filters"]["applied"]["population"] == {"kind": "model_revisions", "model_refs": [ref], "release_ref": None}
+    assert explicit["filters"]["applied"]["population"] == {
+        "kind": "model_revisions",
+        "model_refs": [ref],
+        "release_ref": None,
+    }
     other = sm.post(client, scene, {"filters": {"software": "gaussian"}}).json()
-    assert_adds_up(other, 0, considered=1, removed_by_filters=1, removed_by_floor=0, removed_by_eligibility=0, remaining=0)
+    assert_adds_up(
+        other, 0, considered=1, removed_by_filters=1, removed_by_floor=0, removed_by_eligibility=0, remaining=0
+    )
     assert other["filters"]["note"].startswith("the filters removed all")
 
 
@@ -198,8 +255,12 @@ def test_statmech_a_transition_state_entry_still_gates_its_candidates(client, db
     restatus(db_session, SubmissionRecordType.transition_state_entry, ts.entry.id, S.not_reviewed)
     floor = client.post(url, json={**ts.body, "min_review_status": "approved"}).json()
     assert floor["candidates"] == []
-    lifted = client.post(url, json={**ts.body, "eligibility": {"include_rejected": True, "include_deprecated": True}}).json()
-    assert len(lifted["candidates"]) == 1  # not_reviewed passes by default; the lifts do not matter to a TS entry's own floor
+    lifted = client.post(
+        url, json={**ts.body, "eligibility": {"include_rejected": True, "include_deprecated": True}}
+    ).json()
+    assert (
+        len(lifted["candidates"]) == 1
+    )  # not_reviewed passes by default; the lifts do not matter to a TS entry's own floor
     assert manifest_module.replay_matches(client.post(url + "/manifest", json=ts.body).json())
 
 
@@ -214,10 +275,21 @@ def test_structure_every_step_counts_its_own_calculations_once_and_the_narrowing
     other.software_release_id = world.calcs["orca"].software_release_id
     world.settle()
     body = st.post(client, world, {"filters": {"software": "orca"}, "min_review_status": "approved"}).json()
-    assert_adds_up(body, len(body["units"]), considered=3, removed_by_filters=1, removed_by_floor=1, removed_by_eligibility=0, remaining=1)
-    narrowed = st.post(client, world, {"permitted_quality": ["curated"], "member_refs": [world.calcs["orca"].public_ref]}).json()
+    assert_adds_up(
+        body,
+        len(body["units"]),
+        considered=3,
+        removed_by_filters=1,
+        removed_by_floor=1,
+        removed_by_eligibility=0,
+        remaining=1,
+    )
+    narrowed = st.post(
+        client, world, {"permitted_quality": ["curated"], "member_refs": [world.calcs["orca"].public_ref]}
+    ).json()
     assert narrowed["filters"]["applied"] == {
-        "permitted_quality": ["curated"], "member_refs": [world.calcs["orca"].public_ref]
+        "permitted_quality": ["curated"],
+        "member_refs": [world.calcs["orca"].public_ref],
     }
     assert narrowed["filters"]["removed"] == narrowed["funnel"]["removed_by_filters"]
     none = st.post(client, world, {"filters": {"software": "nonesuch"}}).json()
@@ -249,7 +321,9 @@ def test_structure_permitting_a_rejected_quality_admits_a_basin_by_override_and_
     assert unit["passed_only_by_override"] == ["rejected_calculation_quality"] and unit["eligible"] is True
     echo = st.entry_of(body, "rejected_calculation_quality")
     assert (echo["applied"], echo["source"], echo["admitted_by_override"]) == (False, "request", 1)
-    manifest = st._conformer_post(client, world, {"permitted_quality": ["raw", "curated", "rejected"]}, manifest=True).json()
+    manifest = st._conformer_post(
+        client, world, {"permitted_quality": ["raw", "curated", "rejected"]}, manifest=True
+    ).json()
     assert st.replay_matches(manifest)
 
 
@@ -261,3 +335,62 @@ def test_structure_a_ts_evidence_selection_echoes_the_quality_default_too(client
     world.settle()
     body = client.post(f"{st.API}/transition-state-entries/{world.entry.public_ref}/evidence/select", json={}).json()
     assert "rejected_calculation_quality" in [e["name"] for e in body["eligibility"]]
+
+
+# -- a source in a role the request does not need cannot block a unit the assessment selects ------------------
+
+
+def _qualify_evidence(client, url, extra=None):
+    body = {"intent": "qualify_evidence", "quantity": None, "validation_claim": extra or "local_minimum"}
+    return client.post(url, json=body).json()
+
+
+def test_a_rejected_quality_energy_source_does_not_block_a_conformer_basin_when_no_energy_is_asked_for(
+    client, db_session
+):
+    from tests.services.structure_selection.test_service import build_basin
+
+    world = make_world(db_session)
+    d, *_ = build_basin(world, qualities={"sp": CalculationQuality.rejected})  # the energy source is rejected
+    body = _qualify_evidence(client, st.conformer_url(world.entry))
+    (unit_,) = body["units"]
+    assert unit_["unit_ref"] == d.public_ref and unit_["applicability"] == "applicable"
+    assert unit_["eligible"] is True and unit_["blocked_by"] == []
+    assert body["selected_refs"] == [d.public_ref]
+    assert_adds_up(body, 1, considered=1, removed_by_eligibility=0, remaining=1)
+    assert st.entry_of(body, "rejected_calculation_quality")["excluded"] == 0
+    # asked for the energy, the same unit rests on a source the default kept out: not applicable, so not selected
+    asked = st._conformer_post(client, world).json()
+    assert asked["units"][0]["eligible"] is False and asked["selected_refs"] == []
+    assert_adds_up(asked, 0, considered=1, removed_by_eligibility=1, remaining=0)
+
+
+def test_a_rejected_quality_energy_source_does_not_block_a_saddle_when_no_energy_is_asked_for(client, db_session):
+    from app.db.models.common import StructureDeterminationTargetKind
+    from tests.services.structure_selection._support import make_ts_world
+
+    world = make_ts_world(db_session)
+    freq = world.freq("f", frequencies=(-1500.0, 100.0), reaction_coordinate_mode_index=1, structural_flag=False)
+    opt = world.opt("o", -76.0)
+    sp = world.sp("e", -76.0, quality=CalculationQuality.rejected)
+    d = world.determination(
+        [("geometry_optimization", opt), ("curvature", freq), ("energy", sp)],
+        target=StructureDeterminationTargetKind.saddle_point,
+        quantity=None,
+    )
+    url = f"{st.API}/transition-state-entries/{world.entry.public_ref}/evidence/select"
+    body = _qualify_evidence(client, url, "first_order_saddle")
+    (unit_,) = body["units"]
+    assert unit_["unit_ref"] == d.public_ref and unit_["applicability"] == "applicable"
+    assert unit_["eligible"] is True and unit_["blocked_by"] == [] and body["selected_refs"] == [d.public_ref]
+    assert_adds_up(body, 1, considered=1, removed_by_eligibility=0, remaining=1)
+
+
+def test_the_note_names_what_removed_the_units(client, db_session, methane):
+    th.g4(db_session, methane, status=S.not_reviewed)
+    floored = th.post(client, methane, {"min_review_status": "approved"}).json()
+    assert (
+        floored["filters"]["note"] == "the caller's review floor removed all 1 candidates before anything was assessed"
+    )
+    both = th.post(client, methane, {"min_review_status": "approved", "filters": {"software": "orca"}}).json()
+    assert both["filters"]["note"] == "the filters removed all 1 candidates before anything was assessed"
