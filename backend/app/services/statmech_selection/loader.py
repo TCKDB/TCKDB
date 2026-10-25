@@ -621,6 +621,9 @@ def load_population(session: Session, scan: PopulationScan, request: StatmechReq
                     ),
                     counting_multiplicity=m.counting_multiplicity,
                     relative_energy_kj_mol=m.relative_energy_kj_mol,
+                    relative_energy_convention=(
+                        m.relative_energy_convention.value if m.relative_energy_convention else None
+                    ),
                     region_key=m.region_key,
                     review_status=member_badges[m.member_statmech_id].status if m.member_statmech_id in member_refs else None,
                 )

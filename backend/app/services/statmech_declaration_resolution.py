@@ -203,6 +203,7 @@ def recompute_content_hash(session: Session, row: StatmechModelDeclaration) -> s
             "multiplicity": m.counting_multiplicity,
             "relative_energy_kj_mol": m.relative_energy_kj_mol,
             "region_key": m.region_key,
+            **({"relative_energy_convention": m.relative_energy_convention.value} if m.relative_energy_convention else {}),
         }
         for m in row.members
     ]
@@ -349,6 +350,7 @@ def persist_statmech_model_declaration(
                 conformer_group_id=member_group_id,
                 counting_multiplicity=member.counting_multiplicity,
                 relative_energy_kj_mol=member.relative_energy_kj_mol,
+                relative_energy_convention=member.relative_energy_convention,
                 region_key=member.region_key,
             )
         )
@@ -360,6 +362,12 @@ def persist_statmech_model_declaration(
                 "multiplicity": member.counting_multiplicity,
                 "relative_energy_kj_mol": member.relative_energy_kj_mol,
                 "region_key": member.region_key,
+                # Only when stated, so a member without an energy hashes exactly as it did before the field existed.
+                **(
+                    {"relative_energy_convention": member.relative_energy_convention.value}
+                    if member.relative_energy_convention
+                    else {}
+                ),
             }
         )
 

@@ -2952,12 +2952,15 @@ the gap.
 | `conformer_group_id` | BIGINT | yes | — | conformer_group.id | — | not documented |
 | `counting_multiplicity` | SMALLINT | yes | — | — | — | not documented |
 | `relative_energy_kj_mol` | DOUBLE PRECISION | yes | — | — | — | not documented |
+| `relative_energy_convention` | EnergyCorrectionConvention (enum) | yes | — | — | `electronic_only`, `electronic_plus_zpe`, `atom_and_bond_corrected`, `thermal_enthalpy_298k`, `other` | not documented |
 | `region_key` | TEXT | yes | — | — | — | not documented |
 
 **Check constraints:**
 
 - `ck_statmech_model_member_counting_multiplicity_ge_1`: `counting_multiplicity IS NULL OR counting_multiplicity >= 1`
 - `ck_statmech_model_member_member_key_bounded`: `length(btrim(member_key)) > 0 AND length(member_key) <= 64`
+- `ck_statmech_model_member_relative_energy_convention_not_other`: `relative_energy_convention IS DISTINCT FROM 'other'`
+- `ck_statmech_model_member_relative_energy_convention_with_energy`: `(relative_energy_kj_mol IS NULL) = (relative_energy_convention IS NULL)`
 - `ck_statmech_model_member_relative_energy_finite`: `relative_energy_kj_mol IS NULL OR (relative_energy_kj_mol <> 'NaN' AND abs(relative_energy_kj_mol) < 'Infinity')`
 
 ### `statmech_model_source`

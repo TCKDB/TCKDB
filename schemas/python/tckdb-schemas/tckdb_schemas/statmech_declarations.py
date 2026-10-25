@@ -24,7 +24,7 @@ from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
-from tckdb_schemas.enums import StatmechModelScopeKind, StatmechModelSourceRole
+from tckdb_schemas.enums import EnergyCorrectionConvention, StatmechModelScopeKind, StatmechModelSourceRole
 from tckdb_schemas.fragments.refs import FreqScaleFactorRef, WorkflowToolReleaseRef
 from tckdb_schemas.literature import LiteratureUploadRequest
 from tckdb_schemas.local_key_codes import W_STATMECH_CALCULATION_KEY_UNDECLARED, undeclared_key_error
@@ -123,6 +123,14 @@ class ModelEnergyZero(str, Enum):
 
     electronic = "electronic"
     e0 = "e0"
+
+
+#: The only convention a stated ``energy_zero`` allows for member energies. Nothing else is mapped: any other
+#: convention beside a stated ``energy_zero`` is a contradiction, and an omitted ``energy_zero`` is not checked.
+_ENERGY_ZERO_CONVENTION = {
+    ModelEnergyZero.electronic: EnergyCorrectionConvention.electronic_only,
+    ModelEnergyZero.e0: EnergyCorrectionConvention.electronic_plus_zpe,
+}
 
 
 class IsotopeMasses(str, Enum):
@@ -277,6 +285,11 @@ class ModelMember(SchemaBase):
     :param conformer_group_ref: The basin the member is assigned to.
     :param counting_multiplicity: The depositor's attributed multiplicity; omitted means not stated, never one.
     :param relative_energy_kj_mol: The member's energy relative to the ensemble's reference, in kJ/mol.
+    :param relative_energy_convention: What is already folded into that energy: ``electronic_only``,
+        ``electronic_plus_zpe``, ``atom_and_bond_corrected`` or ``thermal_enthalpy_298k``. Required with an energy and
+        refused without one; never assumed. All members of one declaration share one convention, and it agrees with the
+        recipe's ``energy_zero`` when that is stated. The shared enum lists ``other``, but it is always refused on a member,
+        because a member carries no note to explain it.
     :param region_key: The configurational region the member covers, to diagnose overlap with a rotor's integral.
     """
 
@@ -285,7 +298,17 @@ class ModelMember(SchemaBase):
     conformer_group_ref: _ConformerGroupRef | None = None
     counting_multiplicity: int | None = Field(default=None, ge=1)
     relative_energy_kj_mol: float | None = Field(default=None, allow_inf_nan=False)
+    relative_energy_convention: EnergyCorrectionConvention | None = None
     region_key: _Key | None = None
+
+    @model_validator(mode="after")
+    def validate_energy_convention(self) -> ModelMember:
+        """An energy states its convention and a convention belongs to an energy; ``other`` has no note to explain it."""
+        if (self.relative_energy_kj_mol is None) != (self.relative_energy_convention is None):
+            raise ValueError("relative_energy_kj_mol and relative_energy_convention are stated together or not at all.")
+        if self.relative_energy_convention is EnergyCorrectionConvention.other:
+            raise ValueError("relative_energy_convention 'other' is not accepted: a member has no note to explain it.")
+        return self
 
 
 class ModelSource(SchemaBase):
@@ -383,6 +406,17 @@ class StatmechModelDeclaration(SchemaBase):
             )
         if (kind is StatmechModelScopeKind.explicit_equilibrium_ensemble) != bool(self.members):
             raise ValueError("An explicit_equilibrium_ensemble has members, and no other scope does.")
+        conventions = {m.relative_energy_convention for m in self.members if m.relative_energy_convention is not None}
+        if len(conventions) > 1:
+            raise ValueError("members state one relative_energy_convention between them: an ensemble's energies share a convention.")
+        if conventions and self.recipe.energy_zero is not None:
+            (convention,) = conventions
+            if _ENERGY_ZERO_CONVENTION[self.recipe.energy_zero] is not convention:
+                raise ValueError(
+                    f"relative_energy_convention {convention.value} contradicts the recipe's energy_zero "
+                    f"{self.recipe.energy_zero.value}: {self.recipe.energy_zero.value} energies are "
+                    f"{_ENERGY_ZERO_CONVENTION[self.recipe.energy_zero].value}."
+                )
         member_keys = [m.member_key for m in self.members]
         if len(set(member_keys)) != len(member_keys):
             raise ValueError("members names a member_key twice.")
