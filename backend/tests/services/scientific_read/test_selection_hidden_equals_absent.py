@@ -300,10 +300,57 @@ def differences(a, b, path=""):
     return [] if a == b else [f"{path}: {a!r} != {b!r}"]
 
 
+def withhold_hidden_refs(session, refs) -> None:
+    """Turn every record of the scene that is not approved from merely-unreviewed into rejected, so the evidence rule
+    withholds it (``refs`` is every ref the scene labelled, the identity-position groups and entries included).
+
+    ADR 0023: under curated a record that is only below the floor is linked evidence, shown; "hidden == absent" is the
+    property of evidence the profile WITHHOLDS (rejected, deprecated). The scenes build their hidden records unreviewed, so
+    this pins them to the withheld state before the curated run. A record reviewed through a parent (a network-kinetics fit,
+    through its solve) has no review row of its own and is left to the parent. The loaders' own populations still apply the
+    floor (step 5 moves them), so the unlisted state is not claimed here.
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from app.db.models.record_review import RecordReview
+
+    for ref in sorted(refs):
+        gated = ref_guard.GATED_TYPES.get(ref.split("_", 1)[0])
+        if gated is None or gated.parent_fk is not None:
+            continue
+        row = session.scalar(select(gated.model).where(gated.model.public_ref == ref))
+        existing = session.scalar(
+            select(RecordReview).where(RecordReview.record_type == gated.record_type, RecordReview.record_id == row.id)
+        )
+        if existing is not None and existing.status is APPROVED:
+            continue  # the scene's visible records stay as they are
+        if existing is None:
+            set_review(session, record_type=gated.record_type, record_id=row.id, status=RecordReviewStatus.rejected)
+        else:
+            existing.status = RecordReviewStatus.rejected
+            existing.reviewed_at = existing.reviewed_at or datetime.now(timezone.utc)
+            if existing.reviewed_by is None:
+                existing.reviewed_by = _reviewer(session)
+    session.flush()
+
+
+def _reviewer(session) -> int:
+    from app.db.models.app_user import AppUser
+    from app.db.models.common import AppUserRole
+
+    user = AppUser(username=f"hea_reviewer_{uuid4().hex[:8]}", role=AppUserRole.curator)
+    session.add(user)
+    session.flush()
+    return user.id
+
+
 def assert_hidden_equals_absent(session, scene, captured, keep, *, tokens_expected: bool):
     """Curated over the full world == exploratory over the world without the hidden records."""
     captured.clear()
     full = scene(session, hidden=True)
+    withhold_hidden_refs(session, set(full.labels) | set(full.hidden_refs))
     curated_doc = run_under(CURATED, full.run)
     tokens = dict(captured)
     assert bool(tokens) == tokens_expected, tokens

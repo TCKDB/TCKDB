@@ -25710,6 +25710,11 @@
             "title": "Population",
             "type": "object"
           },
+          "read_profile": {
+            "additionalProperties": true,
+            "title": "Read Profile",
+            "type": "object"
+          },
           "request": {
             "$ref": "#/components/schemas/KineticsSelectionManifestRequest"
           },
@@ -25726,6 +25731,7 @@
         "required": [
           "format",
           "policy",
+          "read_profile",
           "request",
           "snapshot_isolation",
           "subject",
@@ -63679,6 +63685,11 @@
             "title": "Population",
             "type": "object"
           },
+          "read_profile": {
+            "additionalProperties": true,
+            "title": "Read Profile",
+            "type": "object"
+          },
           "request": {
             "$ref": "#/components/schemas/ThermoSelectionManifestRequest"
           },
@@ -63691,6 +63702,7 @@
         "required": [
           "format",
           "policy",
+          "read_profile",
           "request",
           "subject",
           "population",

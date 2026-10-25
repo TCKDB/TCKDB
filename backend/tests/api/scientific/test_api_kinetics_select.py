@@ -367,7 +367,7 @@ def test_the_manifest_route_downloads_the_same_decision_and_replays_without_the_
     assert wire["outcome"] == select["outcome"] == "incomparable_alternatives"
     assert wire["decision"]["fronts"] == select["fronts"]
     assert wire["policy"] == {"name": "kinetics_selection", "version": 1}
-    assert wire["format"] == {"name": "kinetics_selection_manifest", "version": 3}
+    assert wire["format"] == {"name": "kinetics_selection_manifest", "version": 4}
     assert wire["snapshot_isolation"] in {"read committed", "repeatable read", "serializable"}
     assert "max_candidates" not in wire["request"] and wire["request"]["profile"] == "exploratory"
     assert replay_matches(wire)
