@@ -15,6 +15,7 @@ from collections.abc import Callable
 
 import pytest
 
+from app.chemistry.method_families import CLASSIFICATIONS
 from app.parser_registry import PARSERS
 from app.services import document_formats
 from app.services.kinetics_selection.manifest import MANIFEST_FORMATS as KINETICS_FORMATS
@@ -49,6 +50,7 @@ REGISTRIES: dict[str, Callable[[], VersionRegistry]] = {
     "thermo_semantics": lambda: THERMO_SEMANTICS,
     "kinetics_semantics": lambda: KINETICS_SEMANTICS,
     "statmech_semantics": lambda: STATMECH_SEMANTICS,
+    "method_family_classifications": lambda: CLASSIFICATIONS,
 }
 
 #: Registries whose current version is not the baseline, and why: the method-preference rules were removed, which
@@ -57,10 +59,12 @@ REGISTRIES: dict[str, Callable[[], VersionRegistry]] = {
 #: moved because the recorded ``eligible`` flag is the verdict under the request's own settings. The curated evidence rule
 #: (ADR 0023, step 2) moved the thermo, kinetics, statmech, structure, network and relative-energy formats to 4: a manifest records the
 #: review statuses whose linked evidence its profile withheld, and one recorded before that is refused.
+#: The thermo and kinetics formats moved once more to 5 (2026-10-26): their provenance filters are matched through ONE source
+#: calculation and the filter set grew, so a decision recorded under the earlier reading is refused on replay.
 EXPECTED: dict[str, int] = {
-    "thermo_formats": 4,
+    "thermo_formats": 5,
     "thermo_semantics": 2,
-    "kinetics_formats": 4,
+    "kinetics_formats": 5,
     "kinetics_semantics": 2,
     "statmech_formats": 4,
     "statmech_semantics": 2,
@@ -94,4 +98,4 @@ def test_every_registered_name_is_at_its_expected_version_and_nothing_is_empty(n
 
 
 def test_the_expected_registries_are_all_covered() -> None:
-    assert len(REGISTRIES) == 14
+    assert len(REGISTRIES) == 15
