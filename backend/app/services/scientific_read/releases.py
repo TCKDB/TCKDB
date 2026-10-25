@@ -218,7 +218,7 @@ def list_releases(
     stmt = select(DatasetRelease)
     if status is not None:
         stmt = stmt.where(DatasetRelease.status == status)
-    if paging.cursor is None:
+    if paging.resume is None:
         paging.begin(session.scalar(select(func.max(DatasetRelease.id))))
     stmt = paging.restrict(stmt, DatasetRelease.id)
     total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
@@ -433,7 +433,7 @@ def get_release_selections(
     if not include_superseded:
         stmt = stmt.where(stands)
 
-    if paging.cursor is None:
+    if paging.resume is None:
         paging.begin(
             session.scalar(
                 select(func.max(ReleaseSelection.id)).where(ReleaseSelection.dataset_release_id == release.id)

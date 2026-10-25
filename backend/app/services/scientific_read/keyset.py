@@ -399,7 +399,7 @@ class Paging:
         scope_extra: Mapping[str, Any] | None = None,
     ) -> None:
         if isinstance(request, BaseModel):
-            token = getattr(request, "cursor", None)
+            token = request.model_dump(include={"cursor"}).get("cursor")
         elif request is not None:
             token = request.get("cursor")
         else:
@@ -418,15 +418,15 @@ class Paging:
         self.offset = offset
         self.limit = limit
         self.signature = signature_for(endpoint, scope)
-        self.cursor: Cursor | None = (
+        self.resume: Cursor | None = (
             decode_cursor(token, expected_signature=self.signature) if token is not None else None
         )
-        self._watermark: Watermark | None = self.cursor.watermark if self.cursor is not None else None
+        self._watermark: Watermark | None = self.resume.watermark if self.resume is not None else None
         self._snapshotted = False
 
     @property
     def mode(self) -> Literal["offset", "cursor"]:
-        return "cursor" if self.cursor is not None else "offset"
+        return "cursor" if self.resume is not None else "offset"
 
     # -- the snapshot -----------------------------------------------------------------------------------------------
 
@@ -446,8 +446,8 @@ class Paging:
         self._snapshotted = True
         if group_of is not None:
             # Ids of different tables are not comparable: bound each table by its own highest id.
-            if self.cursor is not None:
-                bounds = self.cursor.watermark.groups or {}
+            if self.resume is not None:
+                bounds = self.resume.watermark.groups or {}
                 return [item for item in items if id_of(item) <= bounds.get(group_of(item), 0)]
             bounds = {}
             for item in items:
@@ -455,8 +455,8 @@ class Paging:
                 bounds[group] = max(bounds.get(group, 0), id_of(item))
             self._watermark = Watermark(max_id=0, taken_at=datetime.now(timezone.utc), groups=bounds)
             return items
-        if self.cursor is not None:
-            bound = self.cursor.watermark.max_id
+        if self.resume is not None:
+            bound = self.resume.watermark.max_id
             return [item for item in items if id_of(item) <= bound]
         self._watermark = Watermark(
             max_id=max((id_of(item) for item in items), default=0),
@@ -483,8 +483,8 @@ class Paging:
         assert watermark is not None
         keyed = sorted(((_as_key(key_of(item)), item) for item in items), key=lambda pair: pair[0])
         total = len(keyed)
-        if self.cursor is not None:
-            last = _as_key(self.cursor.last_values)
+        if self.resume is not None:
+            last = _as_key(self.resume.last_values)
             if keyed and len(last) != len(keyed[0][0]):
                 raise InvalidCursorError("invalid_cursor: the cursor payload is malformed.")
             keyed = [pair for pair in keyed if pair[0] > last]
@@ -511,7 +511,7 @@ class Paging:
     def begin(self, max_id: int | None) -> None:
         """Start a traversal whose rows a caller selects itself (raw SQL): ``max_id`` is the highest id the request may
         see. Under a cursor the traversal's own snapshot stands and this does nothing."""
-        if self.cursor is None:
+        if self.resume is None:
             self._watermark = Watermark(max_id=int(max_id or 0), taken_at=datetime.now(timezone.utc))
 
     def finish(self, rows: list[T], *, more: bool, last_values: Sequence[Any] | None, total: int) -> Page[T]:
@@ -528,9 +528,9 @@ class Paging:
     def restrict(self, stmt, id_column):
         """Under a cursor, limit ``stmt`` to rows that existed when the traversal began (so counts and summaries agree
         with the page). Without one, ``stmt`` is returned unchanged."""
-        if self.cursor is None:
+        if self.resume is None:
             return stmt
-        return stmt.where(id_column <= self.cursor.watermark.max_id)
+        return stmt.where(id_column <= self.resume.watermark.max_id)
 
     def sql_window(
         self,
@@ -570,10 +570,10 @@ class Paging:
         watermark = self._watermark
         assert watermark is not None, "Paging.begin() was not called"
         stmt = stmt.order_by(*[col.asc() if direction == "asc" else col.desc() for col, direction in keys])
-        if self.cursor is not None:
-            if len(self.cursor.last_values) != len(keys):
+        if self.resume is not None:
+            if len(self.resume.last_values) != len(keys):
                 raise InvalidCursorError("invalid_cursor: the cursor payload is malformed.")
-            stmt = stmt.where(keyset_predicate(list(keys), self.cursor.last_values))
+            stmt = stmt.where(keyset_predicate(list(keys), self.resume.last_values))
         else:
             stmt = stmt.offset(self.offset)
         rows = list(session.execute(stmt.limit(self.limit + 1)).all())

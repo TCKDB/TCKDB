@@ -268,7 +268,7 @@ def _run_page(
             mode=paging.mode,
             next_cursor=None,
             watermark=(
-                WatermarkEcho(taken_at=paging.cursor.watermark.taken_at, release_ref=None) if paging.cursor else None
+                WatermarkEcho(taken_at=paging.resume.watermark.taken_at, release_ref=None) if paging.resume else None
             ),
         )
 

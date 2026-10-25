@@ -414,9 +414,9 @@ def _summary_from_counts(counts: dict[str, int]) -> ReviewStatusSummary:
 
 def _bound(paging: Paging, match_expr: str, params: dict[str, Any]) -> str:
     """Under a cursor, add "existed when the traversal began" to the match (and its parameter)."""
-    if paging.cursor is None:
+    if paging.resume is None:
         return match_expr
-    params["watermark_id"] = paging.cursor.watermark.max_id
+    params["watermark_id"] = paging.resume.watermark.max_id
     return f"({match_expr}) AND se.id <= :watermark_id"
 
 
@@ -438,15 +438,15 @@ def _keyset_page(
     """
     base_from = f"FROM species_entry AS se JOIN species AS sp ON sp.id = se.species_id {_REVIEW_JOIN}"
     visible_clause = f"{_REVIEW_STATUS_EXPR} = ANY(:visible_statuses)"
-    if paging.cursor is None:
+    if paging.resume is None:
         max_id = session.execute(
             text(f"SELECT max(se.id) {base_from} WHERE {match_expr} AND {visible_clause}"), params
         ).scalar()
         paging.begin(max_id)
     where = [f"({match_expr})", visible_clause]
     bind = dict(params)
-    if paging.cursor is not None:
-        last = paging.cursor.last_values
+    if paging.resume is not None:
+        last = paging.resume.last_values
         if len(last) != len(keys):
             raise InvalidCursorError("invalid_cursor: the cursor payload is malformed.")
         branches = []
@@ -457,7 +457,7 @@ def _keyset_page(
         where.append("(" + " OR ".join(branches) + ")")
         bind.update({f"cursor_k{j}": value for j, value in enumerate(last)})
     order = ", ".join(f"{expr} {direction.upper()}" for expr, direction, _column in keys)
-    offset_sql = "" if paging.cursor is not None else " OFFSET :row_offset"
+    offset_sql = "" if paging.resume is not None else " OFFSET :row_offset"
     sql = text(
         f"""
         SELECT
@@ -473,7 +473,7 @@ def _keyset_page(
         """
     )
     bind["row_limit"] = paging.limit + 1
-    if paging.cursor is None:
+    if paging.resume is None:
         bind["row_offset"] = paging.offset
     rows = list(session.execute(sql, bind).all())
     more = len(rows) > paging.limit

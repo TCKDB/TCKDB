@@ -92,7 +92,7 @@ def _summaries(
     only_currently_broken: bool,
     paging: Paging,
 ) -> tuple[list[ArtifactIntegrityDigestSummary], int, Page]:
-    if paging.cursor is None:
+    if paging.resume is None:
         paging.begin(session.scalar(select(func.max(ArtifactIntegrityEvent.id))))
     stats = (
         paging.restrict(
@@ -303,7 +303,7 @@ def artifact_integrity_history(
         only_currently_broken=False,
         paging=Paging(endpoint, {"sha256": sha256}, offset=0, limit=1),
     )
-    if paging.cursor is None:
+    if paging.resume is None:
         paging.begin(session.scalar(select(func.max(ArtifactIntegrityEvent.id))))
     bounded = paging.restrict(
         select(ArtifactIntegrityEvent).where(ArtifactIntegrityEvent.sha256 == sha256), ArtifactIntegrityEvent.id
