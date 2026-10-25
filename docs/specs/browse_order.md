@@ -137,6 +137,15 @@ are listed by label, never ordered by energy.
 `collapse` and `selection_policy` are refused on every export. The native export's format is `tckdb.export` version 2 and
 the ML export's is `tckdb.ml` version 2.
 
+> **Rule change in progress (owner decision 2026-10-25, [ADR 0023](../adr/0023-curated-profile-floor-applies-to-records-linked-evidence-is-badged.md)).**
+> Every passage below that describes what the `curated` profile hides or shows (the legacy reads, "hidden by default", the select
+> rules, and "Visibility defaults") describes the earlier rule, decision D6: below the floor is hidden, evidence included, and
+> "hidden equals unknown equals absent". Under the new rule, the floor decides which *records* a list, search or select returns; a
+> returned record's linked evidence (source calculations, levels derived from them, conformer observations in a group, evidence
+> counts, nested refs) is shown with its review badge, and only `rejected` and `deprecated` evidence is withheld. Select matches
+> through unreviewed evidence under `curated` but never through rejected or deprecated evidence. This is being rolled out in steps;
+> **until they land, the code still applies D6, and the passages below describe that code.**
+
 ## Other lists, and where their order is documented
 
 ### Detail sub-lists

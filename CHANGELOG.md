@@ -22,6 +22,14 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Curated profile: records are floored, linked evidence is badged (2026-10-25, step 1 of 8)
+
+Owner decision, recorded as [ADR 0023](docs/adr/0023-curated-profile-floor-applies-to-records-linked-evidence-is-badged.md): under
+`curated`, the `approved` floor applies to the records a list, search or select returns; a returned record's linked evidence is shown
+with its review badge, and only `rejected` and `deprecated` evidence is withheld. This step is documentation and a helper only
+(`evidence_withheld_under_profile`, `evidence_visible_statuses`, `linked_evidence_predicate`, `ids_withheld_as_evidence`). Nothing
+calls the helper yet, so **no read changes behaviour**; later steps move each site over and name their own version effects.
+
 ## Every list can be walked by cursor (2026-10-25)
 
 Every browse and list read takes `cursor` and returns `next_cursor` (null on the last page) and, on cursor pages, `watermark`. `offset` stays, for "page N of

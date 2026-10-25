@@ -248,6 +248,9 @@ def status_hidden_under_profile(status: RecordReviewStatus, *, profile: Any = No
     record, including the curated-ref guard, calls this instead of restating the comparison. With no
     floor (exploratory, or outside a scientific request) nothing is hidden.
 
+    Changes in step 7 of ADR 0023: the detail-by-ref callers move to the evidence rule's withheld set, and this stays the
+    record floor (lists, searches, selects).
+
     ``profile`` defaults to the request's profile; callers outside the request context (streams,
     which captured their profile eagerly) pass it explicitly.
     """
