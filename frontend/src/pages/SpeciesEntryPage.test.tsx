@@ -1161,3 +1161,117 @@ describe("species-entry page: tab clicks and Back are client-side, no re-fetch (
         expect(thermoRequests).toBe(1)
     })
 })
+
+// ---------------------------------------------------------------------------
+// Paging. An entry with more conformer basins than one page holds used to show
+// the first 50 and nothing else, with no sign the list was cut.
+// ---------------------------------------------------------------------------
+
+function manyConformers(total: number) {
+    const [template] = conformerRecords()
+    return Array.from({ length: total }, (_, index) => ({
+        ...template,
+        conformer_group: { conformer_group_ref: `cg_many_${index + 1}`, label: `conformer_${index + 1}` },
+        observations: [],
+    }))
+}
+
+function pagedConformerHandler(total: number, seen: string[] = []) {
+    return http.get("/api/v1/scientific/conformers/search", ({ request }) => {
+        const params = new URL(request.url).searchParams
+        const offset = Number(params.get("offset") ?? 0)
+        const limit = Number(params.get("limit") ?? 50)
+        seen.push(`${offset}:${limit}`)
+        const records = manyConformers(total).slice(offset, offset + limit)
+        return HttpResponse.json({
+            request: {
+                filter: {},
+                sort: { kind: "display_order", keys: [{ key: "review_rank", direction: "asc", meaning: "review status" }] },
+                hidden_by_default: { counts: { rejected: 3 }, include_with: { rejected: "include_rejected=true" }, counted: "records" },
+            },
+            records,
+            pagination: { offset, limit, returned: records.length, total },
+        })
+    })
+}
+
+describe("species-entry page: paging the conformer basins", () => {
+    it("says the list is longer than a page, and the count it states is the archive's total, not the page's", async () => {
+        const seen: string[] = []
+        server.use(pagedConformerHandler(120, seen), ...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByText("Choose a conformer")
+        expect(await screen.findByText("Showing 1–50 of 120 conformer basins.")).toBeVisible()
+        expect(document.querySelectorAll(".conformer-card")).toHaveLength(50)
+        expect(screen.getByText(/This entry has 120 deposited conformer basins/)).toBeVisible()
+        // What the server said about the list is passed on, not dropped.
+        expect(screen.getByText("Not listed by default: 3 rejected conformer basins.")).toBeVisible()
+        expect(screen.getByText(/^Display order: review rank\./)).toBeVisible()
+        expect(seen[0]).toBe("0:50")
+    })
+
+    it("Next shows the following 50 basins, fetched by offset, and the first page's basins are gone", async () => {
+        const user = userEvent.setup()
+        const seen: string[] = []
+        server.use(pagedConformerHandler(120, seen), ...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByText("Showing 1–50 of 120 conformer basins.")
+        expect(screen.queryByText("Conformer Group 51")).not.toBeInTheDocument()
+        await user.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText("Showing 51–100 of 120 conformer basins.")).toBeVisible()
+        expect(seen).toContain("50:50")
+        expect(await screen.findByText("Conformer Group 51")).toBeVisible()
+        expect(screen.queryByText("Conformer Group 1")).not.toBeInTheDocument()
+        await user.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText("Showing 101–120 of 120 conformer basins.")).toBeVisible()
+        expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
+    })
+
+    it("a list that fits one page shows no paging buttons", async () => {
+        server.use(...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByText("Choose a conformer")
+        expect(screen.queryByRole("button", { name: "Next" })).not.toBeInTheDocument()
+    })
+})
+
+describe("species-entry page: what the conformer picker says about its own order and default", () => {
+    it("states that the card order is a display order and not a preference", async () => {
+        server.use(...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByText("Choose a conformer")
+        expect(screen.getByText(/listed by conformer number, then label, then reference/)).toBeVisible()
+        expect(screen.getByText(/no basin is preferred over another/)).toBeVisible()
+    })
+
+    it("says a selection the page made by itself is only the first listed, not a preference", async () => {
+        server.use(...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByText("Choose a conformer")
+        expect(await screen.findByText(/Conformer Group 1 is selected only because it is listed first/)).toBeVisible()
+    })
+
+    it("drops that statement once the reader chooses a basin, even the same one", async () => {
+        const user = userEvent.setup()
+        server.use(...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByText(/is selected only because it is listed first/)
+        await user.click(screen.getByRole("button", { name: /Conformer Group 2/ }))
+        await waitFor(() => expect(screen.queryByText(/is selected only because it is listed first/)).not.toBeInTheDocument())
+    })
+
+    it("makes no such statement for a basin the link named", async () => {
+        server.use(...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}?conformer=${groupTwoRef}`)
+        render(<App />)
+        await screen.findByText("Choose a conformer")
+        await waitFor(() => expect(screen.getByRole("button", { name: /Conformer Group 2/ })).toHaveAttribute("aria-pressed", "true"))
+        expect(screen.queryByText(/is selected only because it is listed first/)).not.toBeInTheDocument()
+    })
+})

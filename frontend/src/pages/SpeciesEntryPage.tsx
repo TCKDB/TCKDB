@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import "../species-entry.css"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
@@ -19,7 +19,9 @@ import { RetryCountdown } from "../components/RetryCountdown"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import { DEFAULT_SECTION, isEntrySection, LEGACY_ENTRY_SECTION_ALIASES } from "../domain/speciesEntrySections"
 import type { EntrySection } from "../domain/speciesEntrySections"
+import { useConformerPages } from "../hooks/useConformerPages"
 import { useSpeciesEntry } from "../hooks/useSpeciesEntry"
+import type { ListMeta } from "../api/listEnvelope"
 
 export default function SpeciesEntryPage() {
     const { entryRef = "", section } = useParams<{ entryRef: string; section?: string }>()
@@ -63,6 +65,7 @@ export default function SpeciesEntryPage() {
         <EntryDocument
             entry={state.entry}
             conformers={state.conformers}
+            conformerMeta={state.conformerMeta}
             spEnergies={state.spEnergies}
             activeSection={activeSection}
             entryRef={entryRef}
@@ -176,9 +179,10 @@ function EmptyEntryEvidence() {
     )
 }
 
-function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef, entryPath }: {
+function EntryDocument({ entry, conformers: firstPageConformers, conformerMeta: firstPageMeta, spEnergies, activeSection, entryRef, entryPath }: {
     entry: SpeciesEntryProjection
     conformers: ConformerProjection[]
+    conformerMeta: ListMeta
     spEnergies: SpeciesCalculationEnergyRecord[]
     activeSection: EntrySection
     entryRef: string
@@ -187,6 +191,13 @@ function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef,
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
     const requestedRef = searchParams.get("conformer")
+    // The conformer groups are paged. `conformers` is the page on screen: the picker, the tabs and every
+    // conformer lookup below read it, so a conformer on another page is simply not in it until that page is shown.
+    const conformerPages = useConformerPages(entryRef, { records: firstPageConformers, meta: firstPageMeta })
+    const conformers = conformerPages.records
+    // The conformer the READER chose (a deep link's `?conformer=`, or a click). A selection the page made by
+    // itself is a default and says so; it is never presented as a choice.
+    const [chosenRef, setChosenRef] = useState<string | null>(requestedRef)
     const requestedConformer = conformers.find((conformer) => conformer.conformer_group.conformer_group_ref === requestedRef)
     // Default to the FIRST CARD AS DISPLAYED, not the archive's top-ranked
     // conformer. `conformers/search` orders by review rank, so `conformers[0]`
@@ -227,8 +238,12 @@ function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef,
         : ""
 
     function selectConformer(conformerGroupRef: string) {
+        setChosenRef(conformerGroupRef)
         writeConformerParam(conformerGroupRef)
     }
+
+    const selectedRef = selectedConformer?.conformer_group.conformer_group_ref ?? null
+    const selectionIsDefault = selectedRef !== null && selectedRef !== chosenRef
 
     return <section className="entry-page">
         <nav className="record-breadcrumbs" aria-label="Breadcrumb">
@@ -259,7 +274,12 @@ function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef,
             <>
                 <ConformerSelector
                     conformers={conformers}
-                    selectedRef={selectedConformer?.conformer_group.conformer_group_ref ?? null}
+                    selectedRef={selectedRef}
+                    selectionIsDefault={selectionIsDefault}
+                    meta={conformerPages.meta}
+                    onPage={conformerPages.goTo}
+                    pagingBusy={conformerPages.busy}
+                    pagingFailed={conformerPages.failed}
                     onSelect={selectConformer}
                 />
                 {selectedConformer && <ConformerEvidenceLinkage conformer={selectedConformer} />}

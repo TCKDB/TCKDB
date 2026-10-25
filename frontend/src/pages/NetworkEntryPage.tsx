@@ -18,7 +18,7 @@ import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { ReviewNote } from "../components/ReviewNote"
-import { computeSpeciesEnergyCoverage } from "../domain/networkEnergyCoverage"
+import { computeSpeciesEnergyCoverage, solveEnergySourceSentence, STATE_ENERGY_ORDER_NOTE } from "../domain/networkEnergyCoverage"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 
@@ -250,6 +250,7 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
     const solveSentence = solveEnergySentence(record.solves[0]?.me_method, stateEnergies.length, stateTotal, channelBarriers.length, channelTotal)
 
     const stateLabelByHash = new Map(record.states.map((state) => [state.composition_hash, state.composition.state_label]))
+    const solveSource = solveEnergySourceSentence(record.solves.map((solve) => solve.network_solve_ref))
     const sortedStateEnergies = [...stateEnergies].sort((a, b) => a.energy_kj_mol - b.energy_kj_mol)
 
     return (
@@ -273,9 +274,11 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
                     className="disclosure--inset"
                     summary="Solve-internal state & channel energies (electronic-only, referenced to the lowest state)"
                 >
+                    {solveSource && <p className="t-body" style={{ margin: "0 0 .6rem" }}>{solveSource}</p>}
                     {stateEnergies.length > 0 && (
                         <>
                             <p className="t-heading-2" style={{ font: "var(--type-heading-2-font)", margin: "0 0 .5rem" }}>{`States — ${stateEnergies.length} of ${stateTotal}`}</p>
+                            <p className="note state-energy-order-note">{STATE_ENERGY_ORDER_NOTE}</p>
                             <div className="table-scroll">
                                 <table className="data-table" aria-label="Solve-internal state energies">
                                     <thead><tr><th scope="col">State</th><th scope="col">Relative energy</th><th scope="col">Source calculation</th></tr></thead>

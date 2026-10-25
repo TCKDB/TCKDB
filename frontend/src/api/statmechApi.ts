@@ -1,5 +1,7 @@
 import { z } from "zod"
 import { levelOfTheorySchema, productLevelsSchema } from "./scientificSchemas"
+import { listRequestEchoSchema, paginationSchema } from "./listEnvelope"
+import { pageQuery, parsePagedRef, type PageRequest } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 // ---------------------------------------------------------------------------
@@ -262,17 +264,11 @@ const reviewStatusSummarySchema = z.object({
     total: z.number(),
 }).passthrough()
 
-const paginationSchema = z.object({
-    offset: z.number(),
-    limit: z.number(),
-    returned: z.number(),
-    total: z.number(),
-}).passthrough()
-
 const statmechListResponseSchema = z.object({
     review_summary: reviewStatusSummarySchema,
     records: z.array(statmechRecordSchema),
     pagination: paginationSchema,
+    request: listRequestEchoSchema.optional(),
 }).passthrough()
 
 export type StatmechRecord = z.infer<typeof statmechRecordSchema>
@@ -280,12 +276,11 @@ export type StatmechSupersession = z.infer<typeof supersessionSchema>
 export type StatmechAvailableSections = z.infer<typeof availableSectionsSchema>
 export type StatmechListResponse = z.infer<typeof statmechListResponseSchema>
 
-function buildEndpoint(entryRef: string, tokens: readonly string[]): string {
+function buildEndpoint(entryRef: string, tokens: readonly string[], request?: PageRequest | null): string {
     const base = `/api/v1/scientific/species-entries/${encodeURIComponent(entryRef)}/statmech`
-    if (tokens.length === 0) return base
-    const query = new URLSearchParams()
+    const query = request ? pageQuery(request) : new URLSearchParams()
     for (const token of tokens) query.append("include", token)
-    return `${base}?${query}`
+    return query.size === 0 ? base : `${base}?${query}`
 }
 
 /**
@@ -299,7 +294,10 @@ export async function loadEntryStatmech(
     signal?: AbortSignal,
     onRateLimited?: (retryAfterSeconds: number) => void,
 ): Promise<StatmechListResponse> {
-    const payload = await requestScientificJson(buildEndpoint(entryRef, []), signal, onRateLimited)
+    // `entryRef` may be a paged ref (`entryRef#offset:limit`, see `domain/paging.ts`) naming one page of the list;
+    // a plain ref names the first page.
+    const { ref, request } = parsePagedRef(entryRef)
+    const payload = await requestScientificJson(buildEndpoint(ref, [], request), signal, onRateLimited)
     return parseScientificResponse(statmechListResponseSchema, payload, "statmech")
 }
 
@@ -316,7 +314,8 @@ export async function loadEntryStatmech(
 export async function loadEntryStatmechSection(
     entryRef: string, token: StatmechSectionToken, signal?: AbortSignal,
 ): Promise<StatmechRecord[]> {
-    const payload = await requestScientificJson(buildEndpoint(entryRef, [token]), signal)
+    const { ref, request } = parsePagedRef(entryRef)
+    const payload = await requestScientificJson(buildEndpoint(ref, [token], request), signal)
     return parseScientificResponse(statmechListResponseSchema, payload, "statmech").records
 }
 

@@ -67,6 +67,7 @@ function searchResponse() {
                 availability: { has_kinetics: true, has_transition_state: false, has_path_search: false, kinetics_count: 3 },
             },
         ],
+        pagination: { offset: 0, limit: 50, returned: 2, total: 2 },
     }
 }
 
@@ -191,5 +192,44 @@ describe("ReactionOverviewPage", () => {
         expect(checklist).toBeVisible()
         const dt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Total")
         expect(dt?.nextElementSibling?.textContent).toBe("4")
+    })
+})
+
+describe("ReactionOverviewPage: what the page says it chose, and paging", () => {
+    it("says the title and equation come from the first listed entry when there are several", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
+        page(REACTION_REF)
+        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+        expect(screen.getByText(/The title and equation are read from the first entry listed below, not from every entry/)).toBeVisible()
+    })
+
+    it("makes no such statement for a single entry", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => {
+            const response = searchResponse()
+            return HttpResponse.json({ ...response, records: response.records.slice(0, 1), pagination: { offset: 0, limit: 50, returned: 1, total: 1 } })
+        }))
+        page(REACTION_REF)
+        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+        expect(screen.queryByText(/read from the first entry listed below/)).not.toBeInTheDocument()
+    })
+
+    it("pages the entries: the headline count is the archive's total and Next asks for the following window", async () => {
+        const seen: string[] = []
+        server.use(http.get("/api/v1/scientific/reactions/search", ({ request }) => {
+            const params = new URL(request.url).searchParams
+            const offset = Number(params.get("offset") ?? 0)
+            const limit = Number(params.get("limit") ?? 1)
+            seen.push(`${offset}:${limit}`)
+            const response = searchResponse()
+            const records = response.records.slice(offset, offset + limit)
+            return HttpResponse.json({ ...response, records, pagination: { offset, limit, returned: records.length, total: 2 } })
+        }))
+        page(REACTION_REF)
+        expect(await screen.findByText("Showing 1\u20131 of 2 reaction entries.")).toBeVisible()
+        expect(screen.getByText(/2 separate deposits share this reaction identity/)).toBeVisible()
+        fireEvent.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText("Showing 2\u20132 of 2 reaction entries.")).toBeVisible()
+        expect(seen).toContain("1:1")
+        expect(await screen.findByRole("link", { name: "rxe_kftcgjn7zalusaouojwi23z3gy" })).toBeVisible()
     })
 })

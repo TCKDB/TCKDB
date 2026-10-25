@@ -1076,3 +1076,35 @@ describe("NetworkEntryPage -- k(T,P) chart stacks selected channels by unit fami
         }
     })
 })
+
+describe("NetworkEntryPage -- which solve the energies came from, and the order of the state table", () => {
+    const stateEnergies = [
+        { state_composition_hash: "hash_bim", energy_kj_mol: 123.729, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
+        { state_composition_hash: "hash_well", energy_kj_mol: 0, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
+    ]
+
+    it("names the one deposited solve the energies are read from", async () => {
+        handleEverything({ stateEnergies })
+        page()
+        expect(await screen.findByText(/read from the network's one deposited solve, nsolve_test1/)).toBeInTheDocument()
+    })
+
+    it("with several solves deposited, says the energies are the first one's and that the first is not preferred", async () => {
+        const second = { network_solve_ref: "nsolve_test2", kind: "computed", me_method: "reservoir state", interpolation_model: "plog", tmin_k: 300, tmax_k: 2000, pmin_bar: 0.01, pmax_bar: 100, review: { status: "not_reviewed" } }
+        const first = { network_solve_ref: "nsolve_test1", kind: "computed", me_method: "modified strong collision", interpolation_model: "chebyshev", tmin_k: 300, tmax_k: 2000, pmin_bar: 0.01, pmax_bar: 100, review: { status: "not_reviewed" } }
+        handleEverything({ stateEnergies, record: { solves: [first, second] } })
+        page()
+        expect(await screen.findByText(/read from solve nsolve_test1, the first of 2 deposited solves/)).toBeInTheDocument()
+        expect(screen.getByText(/the first is not preferred/)).toBeInTheDocument()
+    })
+
+    it("says the state rows run lowest to highest, and that this ranks nothing", async () => {
+        handleEverything({ stateEnergies })
+        page()
+        expect(await screen.findByText(/Rows are listed from the lowest relative energy to the highest/)).toBeInTheDocument()
+        const table = screen.getByRole("table", { name: "Solve-internal state energies" })
+        const cells = Array.from(table.querySelectorAll('td[data-label="Relative energy"]')).map((cell) => cell.textContent)
+        // Served highest first; shown lowest first.
+        expect(cells[0]).toMatch(/^0\b/)
+    })
+})

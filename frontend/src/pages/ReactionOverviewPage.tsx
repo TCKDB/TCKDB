@@ -4,7 +4,10 @@ import "../record-identity-header.css"
 import "../reaction-entry.css"
 import type { ReactionOverviewParticipant, ReactionOverviewRecord } from "../api/reactionOverviewApi"
 import { loadReactionOverview } from "../api/reactionOverviewApi"
+import type { ListMeta } from "../api/listEnvelope"
+import type { PageRequest } from "../domain/paging"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
+import { ListPager } from "../components/ListPager"
 import { SpeciesFace } from "../components/Formula"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
@@ -13,7 +16,7 @@ import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton } from "../components/RefsDisclosure"
 import { stereoChip } from "../domain/recordFacets"
 import { reviewPillClass } from "../domain/reviewPillFormat"
-import { useScientificRecord } from "../hooks/useScientificRecord"
+import { usePagedList } from "../hooks/usePagedList"
 
 function statusLabel(status: string): string {
     return status.replaceAll("_", " ")
@@ -42,7 +45,7 @@ export default function ReactionOverviewPage() {
 }
 
 function ReactionChooser({ reactionRef }: { reactionRef: string }) {
-    const state = useScientificRecord(reactionRef, loadReactionOverview)
+    const { state, meta, goTo } = usePagedList(reactionRef, loadReactionOverview)
 
     if (state.status !== "ready") {
         return (
@@ -64,11 +67,18 @@ function ReactionChooser({ reactionRef }: { reactionRef: string }) {
             />
         )
     }
-    return <ChooserDocument reactionRef={reactionRef} records={state.record.records} reviewSummary={state.record.review_summary} />
+    return <ChooserDocument reactionRef={reactionRef} records={state.record.records} reviewSummary={state.record.review_summary} meta={meta} onPage={goTo} />
 }
 
-function ChooserDocument({ reactionRef, records, reviewSummary }: {
+/** What the title and equation above the entry table are read from, said under them when it is a choice. */
+export const CHOOSER_HEADER_SOURCE_NOTE =
+    "The title and equation are read from the first entry listed below, not from every entry. "
+    + "Entries under one reaction can differ (for example, in which isomer a participant is), so check each row."
+
+function ChooserDocument({ reactionRef, records, reviewSummary, meta, onPage }: {
     reactionRef: string
+    meta: ListMeta | null
+    onPage: (request: PageRequest) => void
     records: ReactionOverviewRecord[]
     reviewSummary: { approved: number; under_review: number; not_reviewed: number; deprecated: number; rejected: number; total: number }
 }) {
@@ -91,10 +101,11 @@ function ChooserDocument({ reactionRef, records, reviewSummary }: {
                                 <ReactionEquation reactants={first.reactants} products={first.products} reversible={first.reversible} />
                             </h1>
                             <p className="t-body section-intro">
-                                {records.length > 1
-                                    ? `${records.length} separate deposits share this reaction identity. This site never merges or silently chooses between matching entries — pick the record you mean below.`
+                                {(meta?.pagination.total ?? records.length) > 1
+                                    ? `${meta?.pagination.total ?? records.length} separate deposits share this reaction identity. This site never merges or silently chooses between matching entries — pick the record you mean below.`
                                     : "One deposited entry carries this reaction identity."}
                             </p>
+                            {records.length > 1 && <p className="t-body section-intro reaction-header-source">{CHOOSER_HEADER_SOURCE_NOTE}</p>}
                             <div className="record-identity-known">
                                 <dl className="kv-list record-identity-facts">
                                     <div>
@@ -119,6 +130,7 @@ function ChooserDocument({ reactionRef, records, reviewSummary }: {
                 <section className="ledger-section" aria-labelledby="entries-heading">
                     <p className="t-kicker section-kicker">Deposited records</p>
                     <SectionHeading id="entries-heading">Reaction entries</SectionHeading>
+                    {meta && <ListPager meta={meta} noun="reaction entry" nounPlural="reaction entries" onPage={onPage} label="Reaction entries paging" />}
                     <div className="table-scroll">
                         <table className="data-table" aria-label={`Reaction entries for ${reactionRef}`}>
                             <thead>

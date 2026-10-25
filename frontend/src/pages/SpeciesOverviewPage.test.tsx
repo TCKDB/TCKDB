@@ -406,3 +406,24 @@ describe("species overview: shared design-system primitives", () => {
         expect(groundSummary.getAttribute("aria-describedby")).not.toBe(excitedHeading.id)
     })
 })
+
+describe("species overview: entries the default visibility left out", () => {
+    it("says how many entries were not listed, using the server's own count", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({
+            ...speciesPayload(),
+            request: { hidden_by_default: { counts: { rejected: 2, deprecated: 1 }, include_with: {}, counted: "species_entries" } },
+        })))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        expect(await screen.findByRole("heading", { name: "CH3" })).toBeVisible()
+        expect(screen.getByText("Not listed by default: 2 rejected and 1 deprecated species entries.")).toBeVisible()
+    })
+
+    it("says nothing when the server hid nothing", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        expect(await screen.findByRole("heading", { name: "CH3" })).toBeVisible()
+        expect(screen.queryByText(/Not listed by default/)).not.toBeInTheDocument()
+    })
+})

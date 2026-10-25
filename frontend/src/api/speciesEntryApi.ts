@@ -4,6 +4,8 @@ import {
     scientificSpeciesSearchSchema,
     speciesEntrySummarySchema,
 } from "./scientificSpeciesSchemas"
+import { listMetaOf, listRequestEchoSchema, paginationSchema, type ListMeta } from "./listEnvelope"
+import { pageQuery, parsePagedRef } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 const softwareReleaseSchema = z.object({
@@ -90,6 +92,9 @@ const conformerResponseSchema = z.object({
             geometry: geometrySummarySchema.extend({ role: z.string().nullable().optional() }),
         }).passthrough()).nullable().optional(),
     }).passthrough()),
+    // Optional only so a response without the window (a stub) still parses; the live route always sends both.
+    pagination: paginationSchema.optional(),
+    request: listRequestEchoSchema.optional(),
 }).passthrough()
 
 export type SpeciesEntryProjection = z.infer<typeof speciesEntrySummarySchema> & {
@@ -128,12 +133,21 @@ export async function loadSpeciesEntry(
     return null
 }
 
-export async function loadEntryConformers(
-    entryRef: string,
+export type ConformerPage = { records: ConformerProjection[]; meta: ListMeta }
+
+/**
+ * One page of the entry's conformer groups. `pagedRefValue` is a plain entry ref (the first page, limit 50, exactly as
+ * before) or a paged ref from `domain/paging.ts`'s `pagedRef`. The page's `meta` carries the server's own window, so a
+ * list longer than a page is reported as such rather than shown as the whole.
+ */
+export async function loadEntryConformerPage(
+    pagedRefValue: string,
     signal?: AbortSignal,
     onRateLimited?: (retryAfterSeconds: number) => void,
-): Promise<ConformerProjection[]> {
-    const query = new URLSearchParams({ species_entry_ref: entryRef, limit: "50" })
+): Promise<ConformerPage> {
+    const { ref: entryRef, request } = parsePagedRef(pagedRefValue)
+    const query = new URLSearchParams({ species_entry_ref: entryRef })
+    for (const [key, value] of (request ? pageQuery(request) : new URLSearchParams({ limit: "50" }))) query.set(key, value)
     // `fingerprints` populates `conformer_group.fingerprint` -- the numeric
     // basin identity (quantized torsion bins + representative angles) that
     // distinguishes one group from another under the same entry. Small
@@ -156,5 +170,17 @@ export async function loadEntryConformers(
         query.append("include", include)
     }
     const payload = await requestScientificJson(`/api/v1/scientific/conformers/search?${query}`, signal, onRateLimited)
-    return parseScientificResponse(conformerResponseSchema, payload, "conformer").records
+    const response = parseScientificResponse(conformerResponseSchema, payload, "conformer")
+    const count = response.records.length
+    const pagination = response.pagination ?? { offset: 0, limit: 50, returned: count, total: count }
+    return { records: response.records, meta: listMetaOf({ pagination, request: response.request }) }
+}
+
+/** The first page's records, for callers that only need the groups. */
+export async function loadEntryConformers(
+    entryRef: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<ConformerProjection[]> {
+    return (await loadEntryConformerPage(entryRef, signal, onRateLimited)).records
 }

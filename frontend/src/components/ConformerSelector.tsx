@@ -1,6 +1,9 @@
+import type { ListMeta } from "../api/listEnvelope"
 import type { ConformerProjection } from "../api/speciesEntryApi"
+import type { PageRequest } from "../domain/paging"
 import { calculationTypeCounts, conformerLabel, sortConformersForDisplay } from "../domain/conformerEvidence"
 import { buildBasinRotors, formatDeg, formatRangeDeg, parseRotorKey } from "../domain/conformerFingerprint"
+import { ListPager } from "./ListPager"
 import { SectionHeading } from "./PageSections"
 import { RefsDisclosure } from "./RefsDisclosure"
 
@@ -39,6 +42,11 @@ function pickerHeading(count: number): string {
     return "Choose a conformer"
 }
 
+/** What the card order is, said where the cards are: the browser orders them, the server's own order differs. */
+export const CONFORMER_CARD_ORDER_NOTE =
+    "Basins on this page are listed by conformer number, then label, then reference. That is a display order "
+    + "for browsing, not a ranking: no basin is preferred over another."
+
 /**
  * "Choose a conformer, then see its geometry, single-point energy,
  * statistical mechanics and thermochemistry" -- the owner's own words for
@@ -48,11 +56,23 @@ function pickerHeading(count: number): string {
  * card, already selected) to many without changing shape -- see the design
  * report for how this renders at 1 / 4 / many.
  */
-export function ConformerSelector({ conformers, selectedRef, onSelect }: {
+export function ConformerSelector({
+    conformers, selectedRef, onSelect, selectionIsDefault = false, meta = null, onPage, pagingBusy = false, pagingFailed = false,
+}: {
     conformers: ConformerProjection[]
     selectedRef: string | null
     onSelect: (conformerGroupRef: string) => void
+    /** The selected card is there because the page picked it (it is listed first), not because the reader chose it. */
+    selectionIsDefault?: boolean
+    /** The server's paging window and notes for the conformer list; absent for a list known to be complete. */
+    meta?: ListMeta | null
+    onPage?: (request: PageRequest) => void
+    pagingBusy?: boolean
+    pagingFailed?: boolean
 }) {
+    // The count the note states is the server's total, not the length of the page on screen.
+    const total = meta?.pagination.total ?? conformers.length
+    const selected = conformers.find((conformer) => conformer.conformer_group.conformer_group_ref === selectedRef) ?? null
     return (
         <section className="conformer-picker" aria-labelledby="conformer-picker-title">
             <p className="eyebrow">Conformers</p>
@@ -62,12 +82,32 @@ export function ConformerSelector({ conformers, selectedRef, onSelect }: {
             ) : (
                 <>
                     <p className="conformer-picker-note">
-                        {conformers.length === 1
+                        {total === 1
                             ? "This entry has one deposited conformer basin. Its evidence is shown below."
-                            : `This entry has ${conformers.length} deposited conformer basins. Choose one to see `
+                            : `This entry has ${total} deposited conformer basins. Choose one to see `
                                 + "its geometry, single-point energy, statistical mechanics and thermochemistry."}
                     </p>
+                    {meta && onPage && (
+                        <ListPager meta={meta} noun="conformer basin" onPage={onPage} busy={pagingBusy} label="Conformer basins paging" />
+                    )}
+                    {pagingFailed && (
+                        <p className="empty-projection" role="alert">
+                            That page of conformers could not be loaded; the previous page is still shown.
+                        </p>
+                    )}
+                    {selectionIsDefault && selected && total > 1 && (
+                        <p className="conformer-picker-note conformer-default-note">
+                            {conformerLabel(selected)} is selected only because it is listed first. That is not a
+                            preference or a recommendation; choose a basin to see its evidence instead.
+                        </p>
+                    )}
+                    <p className="conformer-picker-note conformer-order-note">
+                        {CONFORMER_CARD_ORDER_NOTE}
+                    </p>
                     <div className="conformer-list" role="group" aria-labelledby="conformer-picker-title">
+                        {/* The cards are listed by conformer number (below), then label, then
+                            ref -- the line under the heading says so. This is display order,
+                            not the server's order and not a ranking. */}
                         {/* Display order only -- `conformers/search`'s own ranking
                             (review rank, then recency) is untouched everywhere else
                             this list is passed (default selection, attribution

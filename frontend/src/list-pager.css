@@ -1,0 +1,48 @@
+/* ListPager: the "showing X-Y of N" line, the server's own notes about a list
+   (display order, records hidden by default) and the Previous / Next buttons. */
+
+.list-pager {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    margin: .8rem 0 1rem;
+}
+
+.list-pager p {
+    margin: 0;
+}
+
+.list-pager-range {
+    color: var(--ink);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+}
+
+.list-pager-note {
+    max-width: var(--measure-note);
+    color: var(--muted);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+}
+
+.list-pager-buttons {
+    display: flex;
+    gap: .6rem;
+    margin-top: .3rem;
+}
+
+.list-pager-buttons button {
+    padding: .4rem .9rem;
+    border: 1px solid var(--control-border);
+    border-radius: .4rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    cursor: pointer;
+}
+
+.list-pager-buttons button:disabled {
+    color: var(--faint);
+    cursor: not-allowed;
+}

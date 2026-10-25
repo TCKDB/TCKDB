@@ -5,7 +5,9 @@ import "../transition-state-entry.css"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import type { StructureAssessment, TransitionStateEntryRecord, TransitionStateSiblingRecord } from "../api/transitionStateEntryApi"
 import { loadTransitionStateEntry, loadTransitionStateSiblings } from "../api/transitionStateEntryApi"
+import type { ListMeta } from "../api/listEnvelope"
 import { Disclosure } from "../components/Disclosure"
+import { ListPager } from "../components/ListPager"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
@@ -14,6 +16,8 @@ import { RecordStatus } from "../components/RecordStatus"
 import { RefsDisclosure } from "../components/RefsDisclosure"
 import { MadeUnderLine } from "../components/MadeUnderLine"
 import { liveMadeUnder } from "../domain/madeUnder"
+import type { PageRequest } from "../domain/paging"
+import { SIBLING_SUMMARY_STAGE_NOTE, summariseSiblingStage } from "../domain/transitionStateSiblings"
 import { formatEnergyForDisplay } from "../domain/energyUnits"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import type { TransitionStateIdentity } from "../domain/recordIdentity"
@@ -56,6 +60,10 @@ const GEOMETRY_ROLE_ORDER = ["irc_forward", "irc_reverse"]
 // returned them."), which this sort makes untrue and which was dropped
 // along with it. Ties within a stage keep their original relative order
 // (a stable sort, via the `index` tiebreak below).
+export const CALCULATION_ROW_ORDER_NOTE =
+    "Rows are grouped by stage (opt, freq, sp, irc, path search), and keep the order the archive returned "
+    + "within a stage. That is a display order for reading, not a ranking: no row is preferred over another."
+
 const STAGE_ORDER: Record<string, number> = {
     opt: 0,
     freq: 1,
@@ -73,21 +81,6 @@ function sortCalculationsByStage(calculations: Calculation[]): Calculation[] {
             return rankA !== rankB ? rankA - rankB : a.index - b.index
         })
         .map(({ calc }) => calc)
-}
-
-// Priority order for picking one "primary" calculation off a sibling
-// entry's calc list to summarise its level of theory/software with --
-// `sp` first (the most-refined stage, and the one this archive's own
-// hydrazine siblings actually differ on: wb97xd opt/freq, MRCI+Davidson
-// or CCSD(T)-F12 sp), falling down through progressively earlier stages.
-const SIBLING_PRIMARY_STAGE_PRIORITY = ["sp", "irc", "freq", "opt", "path_search"]
-
-function pickPrimaryCalcSummary(calculations: Calculation[]): Calculation | null {
-    for (const stage of SIBLING_PRIMARY_STAGE_PRIORITY) {
-        const found = calculations.find((calc) => calc.type === stage)
-        if (found) return found
-    }
-    return calculations[0] ?? null
 }
 
 function energyKindLabel(kind: string): string {
@@ -279,7 +272,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
         ...(reaction.reaction_entry_ref ? [{ label: "Reaction entry", value: reaction.reaction_entry_ref }] : []),
     ]
 
-    const { siblings, status: siblingsStatus } = useTransitionStateSiblings(reaction.reaction_ref, entry.transition_state_entry_ref)
+    const { siblings, meta: siblingsMeta, status: siblingsStatus, busy: siblingsBusy, goTo: goToSiblingsPage } = useTransitionStateSiblings(reaction.reaction_ref, entry.transition_state_entry_ref)
     const siblingsFailed = siblingsStatus === "error"
 
     return (
@@ -398,9 +391,22 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                     >
                         Other saddle points deposited for this reaction
                     </SectionHeading>
+                    {siblingsMeta && (
+                        <ListPager
+                            meta={siblingsMeta}
+                            noun="saddle point"
+                            onPage={goToSiblingsPage}
+                            busy={siblingsBusy}
+                            label="Other saddle points paging"
+                        />
+                    )}
+                    <p className="note tse-siblings-note">
+                        This entry is not listed here, though the count above includes it. {SIBLING_SUMMARY_STAGE_NOTE}
+                    </p>
                     <ul className="tse-siblings-list">
                         {siblings.map((sibling) => {
-                            const primary = pickPrimaryCalcSummary(sibling.calculations ?? [])
+                            const summary = summariseSiblingStage(sibling.calculations ?? [])
+                            const primary = summary?.calculation ?? null
                             const siblingRef = sibling.transition_state_entry.transition_state_entry_ref
                             const reviewStatus = sibling.transition_state_entry.review.status
                             return (
@@ -420,8 +426,20 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                         {siblingRef}
                                     </Link>
                                     <span>deposited {isoDate(sibling.transition_state_entry.created_at)}</span>
-                                    <span>{primary?.level_of_theory ? <LevelOfTheoryLink levelOfTheory={primary.level_of_theory} /> : "level of theory not recorded"}</span>
-                                    <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>
+                                    {summary && summary.distinctLevelCount > 1 ? (
+                                        <span>
+                                            {summary.distinctLevelCount} different levels of theory at the {statusLabel(summary.stage)} stage;
+                                            open the entry to see them
+                                        </span>
+                                    ) : (
+                                        <>
+                                            <span>
+                                                {summary ? `${statusLabel(summary.stage)} stage: ` : ""}
+                                                {primary?.level_of_theory ? <LevelOfTheoryLink levelOfTheory={primary.level_of_theory} /> : "level of theory not recorded"}
+                                            </span>
+                                            <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>
+                                        </>
+                                    )}
                                     <span className={reviewPillClass(reviewStatus)}>
                                         {statusLabel(reviewStatus)}
                                     </span>
@@ -451,7 +469,10 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 <SectionHeading id="calc-ledger" kicker="Machine detail">Calculation evidence</SectionHeading>
                 <EvidencePills evidence={evidence} entryRef={entry.transition_state_entry_ref} />
                 {calculationsAvailability === "populated" ? (
-                    <CalculationTable calculations={calculations} entryRef={entry.transition_state_entry_ref} />
+                    <>
+                        <p className="note calculation-order-note">{CALCULATION_ROW_ORDER_NOTE}</p>
+                        <CalculationTable calculations={calculations} entryRef={entry.transition_state_entry_ref} />
+                    </>
                 ) : (
                     <SectionEmptyMessage
                         availability={calculationsAvailability}
@@ -597,33 +618,58 @@ type SiblingsFetchStatus = "loading" | "loaded" | "error"
 function useTransitionStateSiblings(
     reactionRef: string | null | undefined,
     excludeEntryRef: string,
-): { siblings: TransitionStateSiblingRecord[]; status: SiblingsFetchStatus } {
-    // Keyed on (reactionRef, excludeEntryRef) rather than reset with a
+): {
+    siblings: TransitionStateSiblingRecord[]
+    meta: ListMeta | null
+    status: SiblingsFetchStatus
+    /** A different page of the siblings is being fetched; the previous page is still shown. */
+    busy: boolean
+    goTo: (request: PageRequest) => void
+} {
+    // Keyed on (reactionRef, excludeEntryRef, page) rather than reset with a
     // synchronous `setState([])` at the top of the effect (the
     // `useScientificRecord` pattern): a stale result is discarded by
     // comparing the key at READ time instead, so the effect body only
     // ever calls `setState` from inside the async callback.
-    const key = `${reactionRef ?? ""}:${excludeEntryRef}`
+    const [position, setPosition] = useState<{ scope: string; request: PageRequest | null }>({ scope: "", request: null })
+    const scope = `${reactionRef ?? ""}:${excludeEntryRef}`
+    const request = position.scope === scope ? position.request : null
+    const key = request ? `${scope}#${request.offset}:${request.limit}` : scope
     const [state, setState] = useState<{
         key: string
+        scope: string
         siblings: TransitionStateSiblingRecord[]
+        meta: ListMeta | null
         status: SiblingsFetchStatus
-    }>({ key, siblings: [], status: "loading" })
-    const current = state.key === key ? state : { key, siblings: [] as TransitionStateSiblingRecord[], status: "loading" as const }
+    }>({ key, scope, siblings: [], meta: null, status: "loading" })
+    // A different PAGE of the same reaction keeps the page on screen (marked busy) while the next one loads, so the
+    // list does not vanish and come back; a different reaction or entry starts empty.
+    const current = state.key === key
+        ? state
+        : state.scope === scope && state.status === "loaded"
+            ? { ...state, key, status: "loading" as const }
+            : { key, scope, siblings: [] as TransitionStateSiblingRecord[], meta: null, status: "loading" as const }
 
     useEffect(() => {
         if (!reactionRef) return
         const controller = new AbortController()
-        loadTransitionStateSiblings(reactionRef, excludeEntryRef, controller.signal)
-            .then((records) => {
-                if (!controller.signal.aborted) setState({ key, siblings: records, status: "loaded" })
+        loadTransitionStateSiblings(reactionRef, excludeEntryRef, controller.signal, request ?? undefined)
+            .then((page) => {
+                if (!controller.signal.aborted) setState({ key, scope, siblings: page.records, meta: page.meta, status: "loaded" })
             })
             .catch(() => {
-                if (!controller.signal.aborted) setState({ key, siblings: [], status: "error" })
+                if (!controller.signal.aborted) setState({ key, scope, siblings: [], meta: null, status: "error" })
             })
         return () => controller.abort()
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- `request` is fully named by `key`
     }, [key, reactionRef, excludeEntryRef])
-    return { siblings: current.siblings, status: current.status }
+    return {
+        busy: current.status === "loading" && current.meta !== null,
+        siblings: current.siblings,
+        meta: current.meta,
+        status: current.status,
+        goTo: (next) => setPosition({ scope, request: next }),
+    }
 }
 
 /**

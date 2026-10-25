@@ -1,13 +1,21 @@
 import { useEffect, useState } from "react"
 import { dedupedFetch } from "../api/requestCache"
-import { loadEntryConformers, loadSpeciesEntry } from "../api/speciesEntryApi"
+import { loadEntryConformerPage, loadSpeciesEntry } from "../api/speciesEntryApi"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
+import type { ListMeta } from "../api/listEnvelope"
 import { ScientificApiError, ScientificRateLimitError } from "../api/scientificTransport"
 import { loadSpeciesSinglePointEnergies } from "../api/speciesCalculationsApi"
 import type { SpeciesCalculationEnergyRecord } from "../api/speciesCalculationsApi"
 
 export type SpeciesEntryState =
-    | { entryRef: string; entry: SpeciesEntryProjection; conformers: ConformerProjection[]; spEnergies: SpeciesCalculationEnergyRecord[] }
+    | {
+        entryRef: string
+        entry: SpeciesEntryProjection
+        /** The FIRST page of conformer groups; `useConformerPages` moves past it. */
+        conformers: ConformerProjection[]
+        conformerMeta: ListMeta
+        spEnergies: SpeciesCalculationEnergyRecord[]
+    }
     | { entryRef: string; status: "missing" | "malformed" | "http-error" }
     // A 429 was seen on at least one of the three requests below and
     // `requestScientificJson` is in the middle of its own automatic
@@ -49,7 +57,7 @@ export function useSpeciesEntry(entryRef: string): SpeciesEntryState | null {
             loadSpeciesEntry, entryRef, (signal, onRateLimited) => loadSpeciesEntry(entryRef, signal, onRateLimited),
         )
         const conformersSubscription = dedupedFetch(
-            loadEntryConformers, entryRef, (signal, onRateLimited) => loadEntryConformers(entryRef, signal, onRateLimited),
+            loadEntryConformerPage, entryRef, (signal, onRateLimited) => loadEntryConformerPage(entryRef, signal, onRateLimited),
         )
         // Best-effort enrichment (see the module docstring on
         // `loadSpeciesSinglePointEnergies`) -- it resolves to `[]` rather
@@ -73,8 +81,12 @@ export function useSpeciesEntry(entryRef: string): SpeciesEntryState | null {
             spEnergiesSubscription.onWaiting(onWaiting),
         ]
         void Promise.all([entrySubscription.promise, conformersSubscription.promise, spEnergiesSubscription.promise])
-            .then(([entry, conformers, spEnergies]) => {
-                if (mounted) setState(entry ? { entryRef, entry, conformers, spEnergies } : { entryRef, status: "missing" })
+            .then(([entry, conformerPage, spEnergies]) => {
+                if (mounted) {
+                    setState(entry
+                        ? { entryRef, entry, conformers: conformerPage.records, conformerMeta: conformerPage.meta, spEnergies }
+                        : { entryRef, status: "missing" })
+                }
             })
             .catch((error: unknown) => {
                 if (!mounted) return

@@ -1,4 +1,6 @@
 import { z } from "zod"
+import { paginationSchema } from "./listEnvelope"
+import { nextPageRequest, pageQuery } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 // ---------------------------------------------------------------------------
@@ -42,6 +44,7 @@ const recordSchema = z.object({
 
 const responseSchema = z.object({
     records: z.array(recordSchema),
+    pagination: paginationSchema.optional(),
 }).passthrough()
 
 export type SpeciesCalculationEnergyRecord = z.infer<typeof recordSchema>
@@ -59,10 +62,23 @@ export async function loadSpeciesSinglePointEnergies(
     signal?: AbortSignal,
     onRateLimited?: (retryAfterSeconds: number) => void,
 ): Promise<SpeciesCalculationEnergyRecord[]> {
-    const query = new URLSearchParams({ species_entry_ref: entryRef, calculation_type: "sp", limit: "100" })
+    // This is a join index (calculation ref -> energy) behind the single-point tab, not a list the reader pages, so it
+    // reads EVERY page: stopping at the first would leave the energies of later calculations silently missing.
+    const MAX_PAGES = 50
     try {
-        const payload = await requestScientificJson(`/api/v1/scientific/species-calculations/search?${query}`, signal, onRateLimited)
-        return parseScientificResponse(responseSchema, payload, "species calculation energy").records
+        const records: SpeciesCalculationEnergyRecord[] = []
+        let request = { offset: 0, limit: 200 }
+        for (let page = 0; page < MAX_PAGES; page += 1) {
+            const query = new URLSearchParams({ species_entry_ref: entryRef, calculation_type: "sp" })
+            for (const [key, value] of pageQuery(request)) query.set(key, value)
+            const payload = await requestScientificJson(`/api/v1/scientific/species-calculations/search?${query}`, signal, onRateLimited)
+            const response = parseScientificResponse(responseSchema, payload, "species calculation energy")
+            records.push(...response.records)
+            const next = response.pagination ? nextPageRequest(response.pagination) : null
+            if (!next) break
+            request = next
+        }
+        return records
     } catch {
         // A caller-initiated abort (route navigated away) is not a failure
         // to swallow silently forever, but re-throwing it here would make

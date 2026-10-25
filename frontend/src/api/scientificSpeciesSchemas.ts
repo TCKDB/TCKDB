@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { recordReviewSchema } from "./scientificSchemas"
+import { listRequestEchoSchema } from "./listEnvelope"
 
 export const speciesEntrySummarySchema = z.object({
     species_entry_ref: z.string(),
@@ -33,6 +34,7 @@ export const scientificSpeciesRecordSchema = z.object({
 
 export const scientificSpeciesSearchSchema = z.object({
     records: z.array(scientificSpeciesRecordSchema),
+    request: listRequestEchoSchema.optional(),
 }).passthrough()
 
 export type ScientificSpeciesRecord = z.infer<typeof scientificSpeciesRecordSchema>

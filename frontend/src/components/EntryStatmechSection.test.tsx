@@ -1540,3 +1540,28 @@ describe("EntryStatmechSection -- geometry/frequency/energy levels of theory", (
         })
     })
 })
+
+describe("EntryStatmechSection: paging", () => {
+    it("pages the list, and the section requests it makes for the page on screen carry that page's window", async () => {
+        const seen: Array<{ offset: string | null; includes: string[] }> = []
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const params = new URL(request.url).searchParams
+            const offset = Number(params.get("offset") ?? 0)
+            const limit = Number(params.get("limit") ?? 1)
+            seen.push({ offset: params.get("offset"), includes: params.getAll("include") })
+            const all = mockRecords()
+            const records = all.slice(offset, offset + limit)
+            return HttpResponse.json({
+                ...mockResponse(records),
+                pagination: { offset, limit, returned: records.length, total: all.length },
+            })
+        }))
+        page()
+        expect(await screen.findByText(`Showing 1–1 of ${mockRecords().length} statistical-mechanics records.`)).toBeVisible()
+        fireEvent.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText(`Showing 2–2 of ${mockRecords().length} statistical-mechanics records.`)).toBeVisible()
+        // The eager on-demand sections (source calculations, frequencies) are refetched for THIS window, never
+        // read from the first page's response: a record on page 2 must not be matched against page 1's data.
+        await waitFor(() => expect(seen.some((call) => call.offset === "1" && call.includes.includes("frequencies"))).toBe(true))
+    })
+})

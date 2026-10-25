@@ -1,5 +1,7 @@
 import { z } from "zod"
 import { levelOfTheorySchema, recordReviewSchema } from "./scientificSchemas"
+import { listMetaOf, listRequestEchoSchema, paginationSchema, type ListMeta } from "./listEnvelope"
+import { pageQuery, type PageRequest } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 /**
@@ -242,27 +244,37 @@ const siblingRecordSchema = z.object({
 
 const siblingsResponseSchema = z.object({
     records: z.array(siblingRecordSchema),
+    // Optional only so a response without the window (a stub) still parses; the live route always sends both.
+    pagination: paginationSchema.optional(),
+    request: listRequestEchoSchema.optional(),
 }).passthrough()
 
 export type TransitionStateSiblingRecord = z.infer<typeof siblingRecordSchema>
 
+export type TransitionStateSiblingPage = { records: TransitionStateSiblingRecord[]; meta: ListMeta }
+
 /**
- * Every TS-entry record attached to *reactionRef*, excluding
+ * One page of the TS-entry records attached to *reactionRef*, excluding
  * *excludeEntryRef* (the entry the caller is already showing) --
- * "Other saddle points deposited for this reaction". The default
- * `limit=50` on this search endpoint comfortably covers every reaction
- * sampled so far (the largest, hydrazine, has 4).
+ * "Other saddle points deposited for this reaction". The page is the server's
+ * (default 50 per page); `meta` carries its window, so a reaction with more
+ * saddle points than a page says so and can be paged. The server cannot leave
+ * the caller's own entry out, so `meta.pagination.total` counts it and the
+ * returned records do not.
  */
 export async function loadTransitionStateSiblings(
     reactionRef: string,
     excludeEntryRef: string,
     signal?: AbortSignal,
-): Promise<TransitionStateSiblingRecord[]> {
-    const query = new URLSearchParams()
+    request?: PageRequest,
+): Promise<TransitionStateSiblingPage> {
+    const query = request ? pageQuery(request) : new URLSearchParams()
     query.set("reaction_ref", reactionRef)
     query.append("include", "calculations")
     const endpoint = `/api/v1/scientific/transition-states/search?${query}`
     const payload = await requestScientificJson(endpoint, signal)
     const parsed = parseScientificResponse(siblingsResponseSchema, payload, "transition state siblings")
-    return parsed.records.filter((record) => record.transition_state_entry.transition_state_entry_ref !== excludeEntryRef)
+    const records = parsed.records.filter((record) => record.transition_state_entry.transition_state_entry_ref !== excludeEntryRef)
+    const pagination = parsed.pagination ?? { offset: 0, limit: 50, returned: parsed.records.length, total: parsed.records.length }
+    return { records, meta: listMetaOf({ pagination, request: parsed.request }) }
 }

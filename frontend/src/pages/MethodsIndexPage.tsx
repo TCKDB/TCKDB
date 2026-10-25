@@ -7,6 +7,7 @@ import { loadLevelOfTheoryBrowse, type CoreTreatmentValue, type LevelOfTheoryRec
 import { loadSoftwareNames, loadWorkflowToolNames, type VocabEntry } from "../api/vocabApi"
 import { CompositeSchemeLink } from "../components/CompositeSchemeLink"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
+import { ListPager } from "../components/ListPager"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import {
@@ -16,6 +17,7 @@ import {
     isLotFilterActive,
     type LevelOfTheoryFilter,
 } from "../domain/levelOfTheoryFilter"
+import type { PageRequest } from "../domain/paging"
 import { words } from "../domain/provenanceFormat"
 
 type LoadState<T> = { status: "loading" } | { status: "error" } | { status: "ready"; data: T }
@@ -57,9 +59,11 @@ export default function MethodsIndexPage() {
     const [lotFilter, setLotFilter] = useState<LevelOfTheoryFilter>(EMPTY_LOT_FILTER)
     // The core-treatment choice is the API's own `core_treatment` filter, so
     // changing it re-queries; the other facets narrow what is already here.
+    const [lotPage, setLotPage] = useState<{ filterKey: string; request: PageRequest | null }>({ filterKey: "", request: null })
+    const lotRequest = lotPage.filterKey === lotFilter.coreTreatment ? lotPage.request : null
     const lotState = useLoad(
-        (signal) => loadLevelOfTheoryBrowse(signal, { coreTreatment: lotFilter.coreTreatment }),
-        lotFilter.coreTreatment,
+        (signal) => loadLevelOfTheoryBrowse(signal, { coreTreatment: lotFilter.coreTreatment }, lotRequest ?? undefined),
+        `${lotFilter.coreTreatment}#${lotRequest ? `${lotRequest.offset}:${lotRequest.limit}` : ""}`,
     )
     const softwareState = useLoad((signal) => loadSoftwareNames(undefined, signal))
     const workflowToolState = useLoad((signal) => loadWorkflowToolNames(undefined, signal))
@@ -93,6 +97,15 @@ export default function MethodsIndexPage() {
                         list would leave no way back. */}
                     {((lotState.status === "ready" && lotState.data.records.length > 0) || lotFilter.coreTreatment !== "") && (
                         <LevelOfTheoryFilterFields filter={lotFilter} onChange={setLotFilter} />
+                    )}
+                    {lotState.status === "ready" && (
+                        <ListPager
+                            meta={lotState.data.meta}
+                            noun="level of theory"
+                            nounPlural="levels of theory"
+                            onPage={(request) => setLotPage({ filterKey: lotFilter.coreTreatment, request })}
+                            label="Levels of theory paging"
+                        />
                     )}
                     <LevelOfTheoryTable filter={lotFilter} state={lotState} />
                 </section>

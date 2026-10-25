@@ -1,5 +1,7 @@
 import { z } from "zod"
 import { levelOfTheorySchema } from "./scientificSchemas"
+import { listRequestEchoSchema, paginationSchema } from "./listEnvelope"
+import { pageQuery, parsePagedRef, type PageRequest } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 // ---------------------------------------------------------------------------
@@ -149,17 +151,11 @@ const reviewStatusSummarySchema = z.object({
     total: z.number(),
 }).passthrough()
 
-const paginationSchema = z.object({
-    offset: z.number(),
-    limit: z.number(),
-    returned: z.number(),
-    total: z.number(),
-}).passthrough()
-
 const transportListResponseSchema = z.object({
     review_summary: reviewStatusSummarySchema,
     records: z.array(transportRecordSchema),
     pagination: paginationSchema,
+    request: listRequestEchoSchema.optional(),
 }).passthrough()
 
 export type TransportRecord = z.infer<typeof transportRecordSchema>
@@ -167,12 +163,11 @@ export type TransportSupersession = z.infer<typeof supersessionSchema>
 export type TransportAvailableSections = z.infer<typeof availableSectionsSchema>
 export type TransportListResponse = z.infer<typeof transportListResponseSchema>
 
-function buildEndpoint(entryRef: string, tokens: readonly string[]): string {
+function buildEndpoint(entryRef: string, tokens: readonly string[], request?: PageRequest | null): string {
     const base = `/api/v1/scientific/species-entries/${encodeURIComponent(entryRef)}/transport`
-    if (tokens.length === 0) return base
-    const query = new URLSearchParams()
+    const query = request ? pageQuery(request) : new URLSearchParams()
     for (const token of tokens) query.append("include", token)
-    return `${base}?${query}`
+    return query.size === 0 ? base : `${base}?${query}`
 }
 
 /**
@@ -185,7 +180,10 @@ export async function loadEntryTransport(
     signal?: AbortSignal,
     onRateLimited?: (retryAfterSeconds: number) => void,
 ): Promise<TransportListResponse> {
-    const payload = await requestScientificJson(buildEndpoint(entryRef, []), signal, onRateLimited)
+    // `entryRef` may be a paged ref (`entryRef#offset:limit`, see `domain/paging.ts`) naming one page of the list;
+    // a plain ref names the first page.
+    const { ref, request } = parsePagedRef(entryRef)
+    const payload = await requestScientificJson(buildEndpoint(ref, [], request), signal, onRateLimited)
     return parseScientificResponse(transportListResponseSchema, payload, "transport")
 }
 
@@ -197,7 +195,8 @@ export async function loadEntryTransport(
 export async function loadEntryTransportSection(
     entryRef: string, token: TransportSectionToken, signal?: AbortSignal,
 ): Promise<TransportRecord[]> {
-    const payload = await requestScientificJson(buildEndpoint(entryRef, [token]), signal)
+    const { ref, request } = parsePagedRef(entryRef)
+    const payload = await requestScientificJson(buildEndpoint(ref, [token], request), signal)
     return parseScientificResponse(transportListResponseSchema, payload, "transport").records
 }
 
