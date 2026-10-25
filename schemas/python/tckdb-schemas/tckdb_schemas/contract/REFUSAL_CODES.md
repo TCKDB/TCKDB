@@ -192,6 +192,16 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Message: 'A bundle may carry at most {cap} records; this one carries {count}. Split it into several bundles.'
 - Note: POST /bundles/dry-run and /bundles/submit (#586).
 
+<a id="c-calculation-dependency-cycle"></a>
+
+#### `calculation_dependency_cycle`
+
+- Status: 409; client-facing; arrives as: response_literal; defined in `backend/app/api/errors.py`.
+- Any request can receive it.
+- The body's `context` names the things involved.
+- Message: not found by the static search.
+- Note: Raised by the calculation_dependency acyclicity trigger (revision e2f2b3fb6725), keyed on the constraint name the trigger reports. context names the refused edge's parent_calculation and child_calculation by public_ref.
+
 <a id="c-calculation-geometry-composition-mismatch"></a>
 
 #### `calculation_geometry_composition_mismatch`

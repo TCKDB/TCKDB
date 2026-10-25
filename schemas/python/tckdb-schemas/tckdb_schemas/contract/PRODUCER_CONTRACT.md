@@ -297,6 +297,7 @@ Codes any request can receive, traced from the application's exception handlers 
 - [`artifact_storage_full`](REFUSAL_CODES.md#c-artifact-storage-full) (507): see the code reference
 - [`artifact_storage_unavailable`](REFUSAL_CODES.md#c-artifact-storage-unavailable) (503): see the code reference
 - [`bundle_too_large`](REFUSAL_CODES.md#c-bundle-too-large) (413): see the code reference
+- [`calculation_dependency_cycle`](REFUSAL_CODES.md#c-calculation-dependency-cycle) (409): see the code reference
 - [`data_integrity_error`](REFUSAL_CODES.md#c-data-integrity-error) (500): see the code reference
 - [`database_error`](REFUSAL_CODES.md#c-database-error) (503): see the code reference
 - [`database_request_failed`](REFUSAL_CODES.md#c-database-request-failed) (500): see the code reference
@@ -9313,7 +9314,7 @@ Enums with more than 8 values, linked from the fields that take them.
 
 ## Refusal code reference
 
-The per-code reference (196 codes) is its own file, `REFUSAL_CODES.md`, beside this one in the installed package. Every code in a table above links to its entry there. Each entry gives the code's HTTP status, how it arrives, where it is defined, the sentence written beside it at its raise site, and the scientific check behind it; the file ends with the client-facing codes no producer route was traced to. Find it with `python -m tckdb_schemas.contract --codes` (prints the path) or `tckdb_schemas.contract.refusal_codes_path()`; read it with `refusal_codes_markdown()`.
+The per-code reference (197 codes) is its own file, `REFUSAL_CODES.md`, beside this one in the installed package. Every code in a table above links to its entry there. Each entry gives the code's HTTP status, how it arrives, where it is defined, the sentence written beside it at its raise site, and the scientific check behind it; the file ends with the client-facing codes no producer route was traced to. Find it with `python -m tckdb_schemas.contract --codes` (prints the path) or `tckdb_schemas.contract.refusal_codes_path()`; read it with `refusal_codes_markdown()`.
 
 ## Write routes that are not producer surfaces
 
