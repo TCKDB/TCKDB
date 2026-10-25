@@ -293,7 +293,7 @@ def test_the_scientific_origin_filter_is_matched_on_the_record(client, db_sessio
 @pytest.mark.parametrize("filters", [{"method_family": ["dft"]}, {"method": "b3lyp"}, {"dft_rung_min": 4}, {"software": "gaussian"}])
 def test_a_hidden_calculation_cannot_make_a_candidate_pass_a_filter_under_curated(client, db_session, world, filters):
     """Kills: select matching a filter through a calculation the curated profile hides."""
-    kinetics, _ = record(db_session, world, "a", status=S.approved, sources=[DFT_A, {**WF_B, "calc_status": S.approved}])
+    kinetics, _ = record(db_session, world, "a", status=S.approved, sources=[{**DFT_A, "calc_status": S.rejected}, {**WF_B, "calc_status": S.approved}])
     assert [c["kinetics_ref"] for c in post(client, world, {"filters": filters}).json()["candidates"]] == [kinetics.public_ref]
     assert post(client, world, {"filters": filters}, profile="curated").json()["candidates"] == []
     visible = post(client, world, {"filters": {"software": "orca"}}, profile="curated").json()

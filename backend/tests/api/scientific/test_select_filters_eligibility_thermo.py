@@ -453,7 +453,7 @@ def test_the_scientific_origin_filter_is_matched_on_the_record(client, db_sessio
 def test_a_hidden_calculation_cannot_make_a_candidate_pass_a_filter_under_curated(client, db_session, methane, filters):
     """Kills: select matching a filter through a calculation the curated profile hides."""
     thermo = g4(db_session, methane)
-    source(db_session, methane, thermo, **DFT_A)  # hidden under curated: never approved
+    source(db_session, methane, thermo, **DFT_A, calc_status=S.rejected)  # rejected: hidden under curated
     source(db_session, methane, thermo, **WF_B, role=ThermoCalculationRole.freq, calc_status=S.approved)
     set_review(db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id, status=S.approved)
     assert [c["thermo_ref"] for c in post(client, methane, {"filters": filters}).json()["candidates"]] == [thermo.public_ref]

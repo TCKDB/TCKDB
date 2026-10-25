@@ -189,7 +189,8 @@ def test_every_table_key_is_found_by_its_own_family_in_sql(db_session):
 def test_a_level_used_only_by_hidden_calculations_is_not_listed_under_curated_whatever_its_family(client, db_session):
     """Hidden equals unknown equals absent: the family filter cannot reveal a level the profile hides."""
     lot = make_lot(db_session, method="b3lyp", basis="def2tzvp")
-    _used(db_session, lot)  # never approved
+    rejected = _used(db_session, lot)
+    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=rejected.id, status=RecordReviewStatus.rejected)
     assert _methods(client.get(f"{BASE}/level-of-theories/browse", params={"method_family": "dft"}).json()) == ["b3lyp"]
     curated = client.get(f"{BASE}/level-of-theories/browse", params={"method_family": "dft", "profile": "curated"})
     assert _methods(curated.json()) == []
@@ -239,6 +240,7 @@ def test_species_browse_does_not_match_through_a_hidden_calculation_under_curate
     species, entry, a, b = _species_with_two_calculations(db_session)
     set_review(db_session, record_type=SubmissionRecordType.species_entry, record_id=entry.id, status=RecordReviewStatus.approved)
     set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=b.id, status=RecordReviewStatus.approved)
+    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=a.id, status=RecordReviewStatus.rejected)
 
     def refs(**params):
         return {r["species_ref"] for r in client.get(f"{BASE}/species/browse", params=params).json()["records"]}
