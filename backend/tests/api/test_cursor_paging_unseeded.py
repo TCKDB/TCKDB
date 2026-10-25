@@ -22,6 +22,7 @@ from tests.api.scientific.test_api_scientific_calculation_paths import (
 )
 from tests.api.test_cursor_paging import (
     API,
+    MAX_PAGES,
     UNSEEDED_ROUTES,
     _curator,  # noqa: F401  (autouse fixture of the sibling module)
     _flip,
@@ -38,7 +39,10 @@ def walk_url(client, url: str, key: str, limit: int, **params):
     body = client.get(with_params(url, limit=limit, **params)).json()
     pages = [body]
     items = list(body[key])
-    while body["next_cursor"] is not None:
+    for _guard in range(MAX_PAGES + 1):
+        assert _guard < MAX_PAGES, "the traversal does not end"
+        if body["next_cursor"] is None:
+            break
         assert len(pages) < 50
         response = client.get(with_params(url, limit=limit, cursor=body["next_cursor"], **params))
         assert response.status_code == 200, response.text
@@ -80,7 +84,8 @@ def test_the_point_series_page_by_cursor(make, point_model, suffix, first, clien
     cursor = pages[0]["next_cursor"]
     assert code_of(client.get(with_params(url, cursor=_flip(cursor)))) == "invalid_cursor"
     assert code_of(client.get(with_params(url, cursor=cursor, offset=1))) == "cursor_offset_conflict"
-    assert code_of(client.get(with_params(url, cursor=cursor, include_geometries="true"))) == "cursor_query_mismatch"
+    # include_geometries only shapes each point, so a cursor continues across it, like ``include``.
+    assert client.get(with_params(url, cursor=cursor, include_geometries="true")).status_code == 200
     assert code_of(client.get(with_params(url, cursor=cursor, profile="curated"))) == "cursor_query_mismatch"
     assert code_of(client.get(with_params(f"{API}/releases", cursor=cursor))) == "cursor_query_mismatch"
     old = encode({**decode(cursor), "v": keyset.CURSOR_VERSION - 1})
@@ -135,7 +140,10 @@ def test_the_custody_list_pages_by_cursor_as_of_its_snapshot(client, db_session,
 
     seen = list(delivered)
     body = first
-    while body["next_cursor"] is not None:
+    for _guard in range(MAX_PAGES + 1):
+        assert _guard < MAX_PAGES, "the traversal does not end"
+        if body["next_cursor"] is None:
+            break
         body = client.get(with_params(url, limit=1, cursor=body["next_cursor"])).json()
         seen.extend(r["sha256"] for r in body["records"])
     assert len(seen) == len(set(seen)) == 3
@@ -185,7 +193,10 @@ def test_releases_page_by_cursor(client, db_session, login_as, _api_curator_user
 
     tags = [r["tag"] for r in first["records"]]
     body = first
-    while body["next_cursor"] is not None:
+    for _guard in range(MAX_PAGES + 1):
+        assert _guard < MAX_PAGES, "the traversal does not end"
+        if body["next_cursor"] is None:
+            break
         body = client.get(with_params(url, limit=1, cursor=body["next_cursor"])).json()
         tags.extend(r["tag"] for r in body["records"])
     assert tags == ["2026.07.2", "2026.07.1", "2026.07.0"]
@@ -236,7 +247,10 @@ def test_a_release_ledger_pages_by_cursor(client, db_session, login_as, _api_cur
 
     seen = [r["selection_ref"] for r in first["records"]]
     body = first
-    while body["next_cursor"] is not None:
+    for _guard in range(MAX_PAGES + 1):
+        assert _guard < MAX_PAGES, "the traversal does not end"
+        if body["next_cursor"] is None:
+            break
         body = client.get(with_params(url, limit=2, cursor=body["next_cursor"])).json()
         seen.extend(r["selection_ref"] for r in body["records"])
     assert seen == refs[:4]

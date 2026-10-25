@@ -40,6 +40,7 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError
@@ -76,7 +77,7 @@ from app.services.scientific_read.hidden_by_default import hidden_by_default_fro
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-from app.services.scientific_read.keyset import InvalidCursorError, Page, Paging
+from app.services.scientific_read.keyset import InvalidCursorError, Page, Paging, check_key_values
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
 )
@@ -447,8 +448,7 @@ def _keyset_page(
     bind = dict(params)
     if paging.resume is not None:
         last = paging.resume.last_values
-        if len(last) != len(keys):
-            raise InvalidCursorError("invalid_cursor: the cursor payload is malformed.")
+        check_key_values(last, [float for _expr, _direction, _column in keys])  # rank, score and id are all numbers
         branches = []
         for i, (expr, direction, _column) in enumerate(keys):
             terms = [f"{keys[j][0]} = :cursor_k{j}" for j in range(i)]
@@ -475,7 +475,14 @@ def _keyset_page(
     bind["row_limit"] = paging.limit + 1
     if paging.resume is None:
         bind["row_offset"] = paging.offset
-    rows = list(session.execute(sql, bind).all())
+    if paging.resume is None:
+        rows = list(session.execute(sql, bind).all())
+    else:
+        try:
+            with session.begin_nested():
+                rows = list(session.execute(sql, bind).all())
+        except DBAPIError as exc:
+            raise InvalidCursorError("invalid_cursor: the cursor payload is malformed.") from exc
     more = len(rows) > paging.limit
     rows = rows[: paging.limit]
     last_values = [getattr(rows[-1], column) for _e, _d, column in keys] if rows else None

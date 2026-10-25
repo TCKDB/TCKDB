@@ -30,6 +30,9 @@ from tests.api.test_browse_order_echo import CASES, Seeded, review
 
 API = "/api/v1/scientific"
 
+#: No traversal in these tests is longer than this; a loop that reaches it is a cursor that does not advance.
+MAX_PAGES = 40
+
 #: Offset-taking routes that deliberately have no cursor, and why. Each is checked against the live OpenAPI document.
 EXCLUDED: dict[tuple[str, str], str] = {
     ("GET", f"{API}/export/ml/reactions.ndjson"): "a streamed export: the body is NDJSON and has no envelope to carry a cursor",
@@ -155,16 +158,14 @@ def with_params(url: str, **params: Any) -> str:
 
 
 def decode(token: str) -> dict:
-    return json.loads(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))
+    """A cursor's payload, opened with the server's key (a client cannot do this)."""
+    return json.loads(keyset.unseal(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4))))
 
 
 def encode(payload: dict, *, digest: bool = True) -> str:
-    payload = dict(payload)
-    payload.pop("k", None)
-    if digest:
-        payload["k"] = keyset._digest(payload)
-    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True)
-    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+    """Seal ``payload`` as the server would (``digest`` is kept for callers that built tokens before sealing)."""
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    return base64.urlsafe_b64encode(keyset.seal(raw)).decode().rstrip("=")
 
 
 def refs_of(seeded: Seeded, body: dict) -> list[str]:
@@ -182,7 +183,10 @@ def walk(client, seeded: Seeded, limit: int) -> tuple[list[str], list[dict]]:
     body = get_page(client, seeded, limit=limit)
     pages = [body]
     refs = refs_of(seeded, body)
-    while body["next_cursor"] is not None:
+    for _guard in range(MAX_PAGES + 1):
+        assert _guard < MAX_PAGES, "the traversal does not end"
+        if body["next_cursor"] is None:
+            break
         assert len(pages) < 50, "the traversal does not end"
         body = get_page(client, seeded, limit=limit, cursor=body["next_cursor"])
         pages.append(body)
@@ -318,11 +322,14 @@ def _order_and_review_target(seeded: Seeded, refs: list[str]) -> tuple[int, Any]
 #: Cases where deprecating a record does not remove it from the listing. A species is an identity record with no review
 #: status of its own: ``species/search`` keeps a species whose entries are all hidden, and ranks it by its visible entries,
 #: so an entry's deprecation moves the species to the end instead of removing it. That is the documented limit of the
-#: snapshot (curation is not frozen), and it is why the tests below skip this case.
+#: snapshot (curation is not frozen). The tests below are about records that leave the listing, so they exclude this
+#: case; ``test_cursor_paging_guarantees`` pins what it does instead (it delivers the species again).
 DEPRECATION_KEEPS_THE_ROW = {"species-search"}
 
 
-@pytest.mark.parametrize("case", [c for c in PAGED_CASES if c not in UNREVIEWED_CASES])
+@pytest.mark.parametrize(
+    "case", [c for c in PAGED_CASES if c not in UNREVIEWED_CASES and c not in DEPRECATION_KEEPS_THE_ROW]
+)
 def test_a_record_leaving_the_visible_set_mid_traversal_does_not_make_a_cursor_skip(case, client, db_session):
     """The documented behaviour for a deprecation: a record already delivered stays delivered, a record not yet
     delivered that is deprecated drops out, and nothing else moves. Offset paging does worse: the same event shifts every
@@ -330,8 +337,6 @@ def test_a_record_leaving_the_visible_set_mid_traversal_does_not_make_a_cursor_s
 
     Kills: a cursor built from a row count instead of a sort key.
     """
-    if case in DEPRECATION_KEEPS_THE_ROW:
-        pytest.skip("deprecating a record does not remove it from this listing; see DEPRECATION_KEEPS_THE_ROW")
     seeded = seed(case, db_session, client)
     before = full_list(client, seeded)
     first_page = get_page(client, seeded, limit=2)
@@ -344,7 +349,10 @@ def test_a_record_leaving_the_visible_set_mid_traversal_does_not_make_a_cursor_s
 
     rest = []
     body = first_page
-    while body["next_cursor"] is not None:
+    for _guard in range(MAX_PAGES + 1):
+        assert _guard < MAX_PAGES, "the traversal does not end"
+        if body["next_cursor"] is None:
+            break
         body = get_page(client, seeded, limit=2, cursor=body["next_cursor"])
         rest.extend(refs_of(seeded, body))
     assert delivered + rest == before, "a cursor walk lost or repeated a record when an earlier one was deprecated"
@@ -356,13 +364,13 @@ def test_a_record_leaving_the_visible_set_mid_traversal_does_not_make_a_cursor_s
     assert before[2] not in offset_page_two
 
 
-@pytest.mark.parametrize("case", [c for c in PAGED_CASES if c not in UNREVIEWED_CASES])
+@pytest.mark.parametrize(
+    "case", [c for c in PAGED_CASES if c not in UNREVIEWED_CASES and c not in DEPRECATION_KEEPS_THE_ROW]
+)
 def test_a_record_deprecated_before_it_is_reached_drops_out_without_a_gap(case, client, db_session):
     """The other half of the documented behaviour: curation is not frozen by the snapshot."""
     seeded = seed(case, db_session, client)
     before = full_list(client, seeded)
-    if case in DEPRECATION_KEEPS_THE_ROW:
-        pytest.skip("deprecating a record does not remove it from this listing")
     first_page = get_page(client, seeded, limit=2)
     row_refs = seeded.row_refs or [row.public_ref for row in seeded.rows]
     victim = before[-1]
@@ -371,7 +379,10 @@ def test_a_record_deprecated_before_it_is_reached_drops_out_without_a_gap(case, 
 
     refs = refs_of(seeded, first_page)
     body = first_page
-    while body["next_cursor"] is not None:
+    for _guard in range(MAX_PAGES + 1):
+        assert _guard < MAX_PAGES, "the traversal does not end"
+        if body["next_cursor"] is None:
+            break
         body = get_page(client, seeded, limit=2, cursor=body["next_cursor"])
         refs.extend(refs_of(seeded, body))
     assert refs == before[:-1]
@@ -397,14 +408,14 @@ def _flip(token: str) -> str:
 def test_a_tampered_cursor_is_a_422(case, client, db_session):
     seeded = seed(case, db_session, client)
     cursor = _first_cursor(client, seeded)
-    for bad in (_flip(cursor), cursor[:-6], "not-a-cursor", encode({"v": keyset.CURSOR_VERSION}, digest=False)):
+    for bad in (_flip(cursor), cursor[:-6], "not-a-cursor"):
         response = client.get(with_params(seeded.url, cursor=bad))
         assert code_of(response) == "invalid_cursor", bad
-    # An edited position with a stale digest is as bad as a corrupt token.
+    # A token sealed under another key (a forger without ours) is as bad as a corrupt one.
     payload = decode(cursor)
-    payload["last_values"] = [0 for _ in payload["last_values"]]
-    forged = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()).decode()
-    assert code_of(client.get(with_params(seeded.url, cursor=forged.rstrip("=")))) == "invalid_cursor"
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    plain = base64.urlsafe_b64encode(raw).decode().rstrip("=")
+    assert code_of(client.get(with_params(seeded.url, cursor=plain))) == "invalid_cursor"
 
 
 @pytest.mark.parametrize("case", PAGED_CASES)
@@ -496,12 +507,6 @@ def _cursor_numbers(payload: dict) -> list[int]:
     return found
 
 
-#: What each case's snapshot bound is the highest id of, when that is not the seeded row's own id.
-BOUND_ID_OF_ROW = {
-    "artifacts-search": lambda row: row.id,
-}
-
-
 @pytest.mark.parametrize(
     "case", [c for c in PAGED_CASES if c not in UNREVIEWED_CASES and c not in DEPRECATION_KEEPS_THE_ROW]
 )
@@ -541,7 +546,10 @@ def test_a_curated_cursor_holds_no_key_of_a_hidden_record(case, client, db_sessi
 
     # Walking the whole curated traversal never mentions the hidden record anywhere.
     body = curated_body
-    while body["next_cursor"] is not None:
+    for _guard in range(MAX_PAGES + 1):
+        assert _guard < MAX_PAGES, "the traversal does not end"
+        if body["next_cursor"] is None:
+            break
         assert hidden_id not in _cursor_numbers(decode(body["next_cursor"]))
         body = get_page(client, seeded, limit=1, profile="curated", cursor=body["next_cursor"])
         assert hidden_ref not in refs_of(seeded, body)
@@ -549,12 +557,12 @@ def test_a_curated_cursor_holds_no_key_of_a_hidden_record(case, client, db_sessi
     assert curated_body["pagination"]["total"] == len(curated_all)
 
 
-@pytest.mark.parametrize("case", [c for c in PAGED_CASES if c not in UNREVIEWED_CASES])
+@pytest.mark.parametrize(
+    "case", [c for c in PAGED_CASES if c not in UNREVIEWED_CASES and c not in DEPRECATION_KEEPS_THE_ROW]
+)
 def test_the_hidden_by_default_header_is_unchanged_on_a_cursor_page(case, client, db_session):
     """Deprecated records stay hidden by default on every page, and the header keeps saying so."""
     seeded = seed(case, db_session, client)
-    if case in DEPRECATION_KEEPS_THE_ROW:
-        pytest.skip("deprecating a record does not remove it from this listing")
     record_type, record_id = seeded.review_targets[4]
     set_review(db_session, record_type=record_type, record_id=record_id, status=RecordReviewStatus.deprecated)
     first = client.get(with_params(seeded.url, limit=2))
@@ -684,7 +692,10 @@ def test_an_insertion_above_the_reader_repeats_a_record_under_offset_and_not_und
 
     walked = list(delivered)
     body = first
-    while body["next_cursor"] is not None:
+    for _guard in range(MAX_PAGES + 1):
+        assert _guard < MAX_PAGES, "the traversal does not end"
+        if body["next_cursor"] is None:
+            break
         body = get_page(client, seeded, limit=2, cursor=body["next_cursor"])
         walked.extend(refs_of(seeded, body))
     assert walked == before

@@ -69,14 +69,19 @@ import binascii
 import hashlib
 import hmac
 import json
+import math
+import os
 from collections.abc import Callable, Mapping, Sequence
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import DBAPIError
 
+from app.api.config import settings
 from app.api.error_contract import CodedValueError
 from app.schemas.reads.scientific_common import WatermarkEcho
 from app.versioning import same_value
@@ -85,11 +90,41 @@ T = TypeVar("T")
 
 #: Bumped when the cursor payload's shape changes, so an old cursor is
 #: rejected with a clear error instead of being silently misread. Compared with :func:`same_value` (exact type and
-#: value), never ``==``, so a payload that spells the version ``true`` or ``3.0`` is refused. Version 3: every list
-#: endpoint pages through this module, and the payload carries an integrity digest.
-CURSOR_VERSION = 3
+#: value), never ``==``, so a payload that spells the version ``true`` or ``4.0`` is refused. Version 4: the token is
+#: sealed (encrypted and authenticated) under the server's cursor key, so it carries no readable id.
+CURSOR_VERSION = 4
 
 SortDirection = Literal["asc", "desc"]
+
+
+class PagingHolder:
+    """What the response boundary needs to know about this request's paging."""
+
+    resume: Cursor | None = None
+
+
+_HOLDER: ContextVar[PagingHolder | None] = ContextVar("tckdb_paging", default=None)
+
+
+def set_paging_holder() -> Token:
+    return _HOLDER.set(PagingHolder())
+
+
+def reset_paging_holder(token: Token) -> None:
+    _HOLDER.reset(token)
+
+
+def stamp_cursor_pagination(payload: object) -> None:
+    """Make a response to a cursor request say so, even when its page is empty (every record left the visible set
+    mid-traversal): ``pagination.mode`` is ``cursor`` and ``watermark`` is the traversal's snapshot."""
+    holder = _HOLDER.get()
+    pagination = getattr(payload, "pagination", None)
+    if holder is None or holder.resume is None or pagination is None or not hasattr(pagination, "mode"):
+        return
+    pagination.mode = "cursor"
+    if hasattr(payload, "watermark") and getattr(payload, "watermark", None) is None:
+        mark = holder.resume.watermark
+        payload.watermark = WatermarkEcho(taken_at=mark.taken_at, release_ref=mark.release_ref)  # type: ignore[attr-defined]
 
 
 class InvalidCursorError(ValueError):
@@ -121,16 +156,23 @@ class Watermark:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> Watermark:
-        return cls(
-            max_id=int(payload["max_id"]),
-            taken_at=datetime.fromisoformat(payload["taken_at"]),
-            release_ref=payload.get("release_ref"),
-            groups=(
-                {str(k): int(v) for k, v in payload["groups"].items()}
-                if payload.get("groups") is not None
-                else None
-            ),
-        )
+        max_id = payload["max_id"]
+        taken_at = payload["taken_at"]
+        release_ref = payload.get("release_ref")
+        groups = payload.get("groups")
+        if not _is_int(max_id) or max_id < 0 or not isinstance(taken_at, str):
+            raise ValueError("watermark")
+        if release_ref is not None and not isinstance(release_ref, str):
+            raise ValueError("watermark")
+        if groups is not None and not (
+            isinstance(groups, dict) and all(isinstance(k, str) and _is_int(v) and v >= 0 for k, v in groups.items())
+        ):
+            raise ValueError("watermark")
+        return cls(max_id=max_id, taken_at=datetime.fromisoformat(taken_at), release_ref=release_ref, groups=groups)
+
+
+def _is_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 @dataclass(frozen=True)
@@ -166,56 +208,94 @@ def _encode_value(value: Any) -> Any:
 
 
 def _decode_value(value: Any) -> Any:
-    if isinstance(value, dict) and "__dt__" in value:
-        return datetime.fromisoformat(value["__dt__"])
+    """A sort-key value read back from a cursor: only the scalar shapes a key can hold are accepted."""
+    if isinstance(value, dict):
+        if set(value) == {"__dt__"} and isinstance(value["__dt__"], str):
+            return datetime.fromisoformat(value["__dt__"])
+        raise ValueError("last_values")
     if isinstance(value, list):
         return tuple(_decode_value(v) for v in value)
-    return value
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, float) and math.isfinite(value):
+        return value
+    raise ValueError("last_values")
 
 
-def _digest(payload: Mapping[str, Any]) -> str:
-    """A short integrity digest over every field of the payload but the digest itself.
+#: What a local developer machine seals cursors with when ``PAGING_CURSOR_KEY`` is not set. It is public on purpose: a
+#: ``local`` deployment has no secrets worth protecting, and a hosted one refuses to start without its own key.
+_LOCAL_DEVELOPMENT_KEY = "tckdb-local-development-cursor-key-not-a-secret"
+_NONCE_BYTES = 16
+_TAG_BYTES = 16
 
-    It is not a secret and not authentication: it detects an edited or truncated token, so one that was altered is
-    refused rather than read as a different position. (A token cannot gain access by being edited: every page applies
-    the request's own visibility rules again.)
-    """
-    body = {k: v for k, v in payload.items() if k != "k"}
-    raw = json.dumps(body, separators=(",", ":"), sort_keys=True)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+def _cursor_keys() -> tuple[bytes, bytes]:
+    """The encryption key and the authentication key, both derived from the server's cursor key."""
+    secret = settings.paging_cursor_key
+    if not secret:
+        if settings.deployment_mode != "local":
+            raise RuntimeError("PAGING_CURSOR_KEY is not set; a hosted deployment must not issue cursors without it.")
+        secret = _LOCAL_DEVELOPMENT_KEY
+    root = secret.encode("utf-8")
+    return (
+        hmac.new(root, b"tckdb.cursor.encrypt", hashlib.sha256).digest(),
+        hmac.new(root, b"tckdb.cursor.authenticate", hashlib.sha256).digest(),
+    )
+
+
+def _keystream(key: bytes, nonce: bytes, length: int) -> bytes:
+    blocks = bytearray()
+    counter = 0
+    while len(blocks) < length:
+        blocks += hmac.new(key, nonce + counter.to_bytes(4, "big"), hashlib.sha256).digest()
+        counter += 1
+    return bytes(blocks[:length])
+
+
+def seal(plain: bytes) -> bytes:
+    """Encrypt and authenticate ``plain`` (encrypt-then-MAC: an HMAC-SHA256 counter stream under a random nonce, then a
+    truncated HMAC-SHA256 tag over nonce and ciphertext). The result reveals neither the content nor its edits."""
+    encryption_key, authentication_key = _cursor_keys()
+    nonce = os.urandom(_NONCE_BYTES)
+    body = bytes(a ^ b for a, b in zip(plain, _keystream(encryption_key, nonce, len(plain)), strict=True))
+    tag = hmac.new(authentication_key, nonce + body, hashlib.sha256).digest()[:_TAG_BYTES]
+    return nonce + body + tag
+
+
+def unseal(blob: bytes) -> bytes:
+    """Verify and decrypt a :func:`seal` result; ``ValueError`` when it was not sealed under this server's key."""
+    encryption_key, authentication_key = _cursor_keys()
+    if len(blob) < _NONCE_BYTES + _TAG_BYTES:
+        raise ValueError("short")
+    nonce, body, tag = blob[:_NONCE_BYTES], blob[_NONCE_BYTES:-_TAG_BYTES], blob[-_TAG_BYTES:]
+    expected = hmac.new(authentication_key, nonce + body, hashlib.sha256).digest()[:_TAG_BYTES]
+    if not hmac.compare_digest(tag, expected):
+        raise ValueError("tag")
+    return bytes(a ^ b for a, b in zip(body, _keystream(encryption_key, nonce, len(body)), strict=True))
 
 
 def encode_cursor(cursor: Cursor) -> str:
-    """Serialize a cursor to a URL-safe opaque token."""
-    payload = cursor.as_dict()
-    payload["k"] = _digest(payload)
-    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True)
-    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
+    """Serialize a cursor to an opaque URL-safe token: sealed under the server's cursor key, so it holds no readable
+    id, sort value or snapshot bound, and an edited token is refused."""
+    raw = json.dumps(cursor.as_dict(), separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return base64.urlsafe_b64encode(seal(raw)).decode("ascii").rstrip("=")
 
 
 def decode_cursor(token: str, *, expected_signature: str) -> Cursor:
     """Parse a cursor token, rejecting anything not from this exact query.
 
-    :raises InvalidCursorError: malformed, wrong version, or issued for a
-        different query shape.
+    :raises InvalidCursorError: malformed, forged, wrong version, or issued for a different query shape. Every way a
+        token can be wrong is this one error (a 422), never a server error.
     """
-    padding = "=" * (-len(token) % 4)
     try:
-        raw = base64.urlsafe_b64decode(token + padding).decode("utf-8")
-        payload = json.loads(raw)
-    except (binascii.Error, UnicodeDecodeError, ValueError) as exc:
-        raise InvalidCursorError(
-            "invalid_cursor: the cursor is not a token this API issued."
-        ) from exc
+        payload = json.loads(unseal(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4))).decode("utf-8"))
+    except (binascii.Error, UnicodeDecodeError, ValueError, TypeError) as exc:
+        raise InvalidCursorError("invalid_cursor: the cursor is not a token this API issued.") from exc
 
     if not isinstance(payload, dict) or not same_value(payload.get("v"), CURSOR_VERSION):
         raise InvalidCursorError(
-            "invalid_cursor: cursor version is not supported by this server; "
-            "restart the traversal without a cursor."
+            "invalid_cursor: cursor version is not supported by this server; restart the traversal without a cursor."
         )
-    recorded_digest = payload.get("k")
-    if not isinstance(recorded_digest, str) or not hmac.compare_digest(recorded_digest, _digest(payload)):
-        raise InvalidCursorError("invalid_cursor: the cursor was altered or is not a token this API issued.")
     signature = payload.get("query_signature")
     if signature != expected_signature:
         raise InvalidCursorError(
@@ -233,9 +313,7 @@ def decode_cursor(token: str, *, expected_signature: str) -> Cursor:
             query_signature=signature,
         )
     except (KeyError, TypeError, ValueError, AttributeError) as exc:
-        raise InvalidCursorError(
-            "invalid_cursor: the cursor payload is malformed."
-        ) from exc
+        raise InvalidCursorError("invalid_cursor: the cursor payload is malformed.") from exc
 
 
 def query_signature(endpoint: str, filters: dict[str, Any]) -> str:
@@ -423,6 +501,9 @@ class Paging:
         )
         self._watermark: Watermark | None = self.resume.watermark if self.resume is not None else None
         self._snapshotted = False
+        holder = _HOLDER.get()
+        if holder is not None and self.resume is not None:
+            holder.resume = self.resume
 
     @property
     def mode(self) -> Literal["offset", "cursor"]:
@@ -485,9 +566,12 @@ class Paging:
         total = len(keyed)
         if self.resume is not None:
             last = _as_key(self.resume.last_values)
-            if keyed and len(last) != len(keyed[0][0]):
+            if keyed and not _same_shape(last, keyed[0][0]):
                 raise InvalidCursorError("invalid_cursor: the cursor payload is malformed.")
-            keyed = [pair for pair in keyed if pair[0] > last]
+            try:
+                keyed = [pair for pair in keyed if pair[0] > last]
+            except TypeError as exc:
+                raise InvalidCursorError("invalid_cursor: the cursor payload is malformed.") from exc
             start = 0
         else:
             start = self.offset
@@ -554,6 +638,18 @@ class Paging:
         stmt = select(*columns).where(id_column <= self._watermark.max_id)  # type: ignore[union-attr]
         return self.sql_page(session, stmt, keys=keys, total=total)
 
+    def _run(self, session, stmt) -> list[Any]:
+        """Execute a page statement. Under a cursor a database error means the cursor's values did not fit the sort
+        (a forged or stale token), so it is the cursor's error, not a server error; a savepoint keeps the request's
+        transaction usable."""
+        if self.resume is None:
+            return list(session.execute(stmt).all())
+        try:
+            with session.begin_nested():
+                return list(session.execute(stmt).all())
+        except DBAPIError as exc:
+            raise InvalidCursorError("invalid_cursor: the cursor payload is malformed.") from exc
+
     def sql_page(
         self,
         session,
@@ -571,16 +667,72 @@ class Paging:
         assert watermark is not None, "Paging.begin() was not called"
         stmt = stmt.order_by(*[col.asc() if direction == "asc" else col.desc() for col, direction in keys])
         if self.resume is not None:
-            if len(self.resume.last_values) != len(keys):
-                raise InvalidCursorError("invalid_cursor: the cursor payload is malformed.")
+            check_key_values(self.resume.last_values, [_column_kind(col) for col, _direction in keys])
             stmt = stmt.where(keyset_predicate(list(keys), self.resume.last_values))
         else:
             stmt = stmt.offset(self.offset)
-        rows = list(session.execute(stmt.limit(self.limit + 1)).all())
+        rows = self._run(session, stmt.limit(self.limit + 1))
         more = len(rows) > self.limit
         rows = rows[: self.limit]
         last_values = [_plain(_key_value(rows[-1], col)) for col, _direction in keys] if rows else None
         return self.finish(rows, more=more, last_values=last_values, total=total)
+
+
+def _kind_of(value: Any) -> type | None:
+    if isinstance(value, bool):
+        return bool
+    if isinstance(value, (int, float)):
+        return float
+    if isinstance(value, (str, datetime)):
+        return type(value)
+    if isinstance(value, (tuple, list)):
+        return tuple
+    return None
+
+
+def _same_shape(last: Sequence[Any], sample: Sequence[Any]) -> bool:
+    """A cursor's key matches a real key of the sort: the same length, and the same kind of value in each place
+    (any number for a number; nested keys recursively). ``None`` in the sample accepts anything."""
+    if len(last) != len(sample):
+        return False
+    for got, want in zip(last, sample, strict=True):
+        if want is None:
+            continue
+        if _kind_of(got) is not _kind_of(want):
+            return False
+        if isinstance(want, (tuple, list)) and not _same_shape(got, want):
+            return False
+    return True
+
+
+def _column_kind(column) -> type | None:
+    """The Python kind a sort column holds, from its SQL type (``None`` when the type does not say)."""
+    try:
+        python_type = column.type.python_type
+    except (NotImplementedError, AttributeError):
+        return None
+    if python_type is bool:
+        return bool
+    if issubclass(python_type, (int, float)) or python_type.__name__ == "Decimal":
+        return float
+    if issubclass(python_type, (str, datetime)):
+        return str if issubclass(python_type, str) else datetime
+    if hasattr(python_type, "__members__"):  # an Enum column is carried by value
+        return str
+    return None
+
+
+def check_key_values(values: Sequence[Any], kinds: Sequence[type | None]) -> None:
+    """Refuse a cursor whose sort-key values are not of the kinds the sort holds (``InvalidCursorError``, a 422).
+
+    ``kinds`` has one entry per sort key: ``float`` stands for any number, ``str``, ``datetime`` or ``bool`` for
+    themselves, ``None`` for "the type does not say".
+    """
+    if len(values) != len(kinds):
+        raise InvalidCursorError("invalid_cursor: the cursor payload is malformed.")
+    for value, kind in zip(values, kinds, strict=True):
+        if kind is not None and _kind_of(value) is not kind:
+            raise InvalidCursorError("invalid_cursor: the cursor payload is malformed.")
 
 
 def _key_value(row, column) -> Any:
@@ -611,13 +763,20 @@ __all__ = [
     "InvalidCursorError",
     "Page",
     "Paging",
+    "PagingHolder",
     "SortDirection",
     "Watermark",
+    "check_key_values",
     "decode_cursor",
     "encode_cursor",
     "keyset_predicate",
     "query_signature",
     "request_scope",
+    "reset_paging_holder",
+    "seal",
+    "set_paging_holder",
     "signature_for",
+    "stamp_cursor_pagination",
+    "unseal",
     "watermark_predicate",
 ]

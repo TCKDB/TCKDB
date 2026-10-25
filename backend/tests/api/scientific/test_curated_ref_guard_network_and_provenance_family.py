@@ -508,7 +508,7 @@ def test_a_reference_to_a_hidden_solve_is_nulled_and_never_flagged(client, db_se
 
 
 def test_the_analytics_watermark_does_not_encode_the_id_of_a_hidden_record(client, db_session, login_as):
-    """The watermark travels in ``next_cursor``, which any caller can decode. Under curated its ``max_id`` is the largest
+    """The watermark travels in ``next_cursor``, sealed under the server's key. Under curated its ``max_id`` is the largest
     id the profile shows, not the largest id in the table.
 
     Kills: taking the maximum over the unfloored table (a hidden newest record shows up as a larger ``max_id``).
@@ -523,8 +523,10 @@ def test_the_analytics_watermark_does_not_encode_the_id_of_a_hidden_record(clien
         body = _get(client, "/analytics/kinetics", profile, limit=1).json()
         cursor = body["next_cursor"]
         assert cursor, "the world has fewer than two kinetics rows: no cursor to decode"
-        payload = cursor.split(".")[0] if "." in cursor else cursor
-        raw = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4))
+        from app.services.scientific_read.keyset import unseal
+
+        # The token is sealed, so a client cannot read the bound; the server's key opens it here.
+        raw = unseal(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
         return json.loads(raw)
 
     def find_max_id(node):

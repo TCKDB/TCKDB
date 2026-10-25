@@ -118,7 +118,7 @@ def get_calculation_scan(
     offset, limit = validate_pagination(offset, limit)
     paging = Paging(
         "/scientific/calculations/{calculation_ref_or_id}/scan",
-        {"cursor": cursor, "calculation": str(calculation_handle), "include_geometries": include_geometries},
+        {"cursor": cursor, "calculation": str(calculation_handle)},
         offset=offset,
         limit=limit,
     )
@@ -355,7 +355,7 @@ def get_calculation_irc(
     offset, limit = validate_pagination(offset, limit)
     paging = Paging(
         "/scientific/calculations/{calculation_ref_or_id}/irc",
-        {"cursor": cursor, "calculation": str(calculation_handle), "include_geometries": include_geometries},
+        {"cursor": cursor, "calculation": str(calculation_handle)},
         offset=offset,
         limit=limit,
     )
@@ -519,7 +519,7 @@ def get_calculation_path_search(
     offset, limit = validate_pagination(offset, limit)
     paging = Paging(
         "/scientific/calculations/{calculation_ref_or_id}/path-search",
-        {"cursor": cursor, "calculation": str(calculation_handle), "include_geometries": include_geometries},
+        {"cursor": cursor, "calculation": str(calculation_handle)},
         offset=offset,
         limit=limit,
     )

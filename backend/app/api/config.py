@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     # debugging. See ``docs/specs/internal_ids_visibility_policy.md``.
     allow_public_internal_ids: bool = False
 
+    # Secret that seals paging cursors (``next_cursor`` / ``cursor=``). A cursor holds record ids and sort values, which
+    # the internal-id policy keeps out of responses, so the token is encrypted and authenticated under this key and is
+    # opaque to clients. Required (at least 32 characters) in ``shared_private`` and ``hosted_public``; ``local`` falls
+    # back to a public development key. Rotating it invalidates every cursor in flight: a client gets 422
+    # ``invalid_cursor`` and restarts its traversal. Every process that serves the API must use the same value.
+    paging_cursor_key: str | None = None
+
     # -----------------------------------------------------------------
     # Hosted abuse-control settings (security phase 1).
     # See ``docs/specs/public_read_abuse_controls.md``.

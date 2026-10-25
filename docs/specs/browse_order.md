@@ -352,23 +352,44 @@ Every browse and list read takes two ways to move through its order, and they an
   reader skip one. Neither is visible in the response.
 - **`next_cursor` is the stable traversal.** Every list response carries `next_cursor` (null on the last page) and `watermark`.
   Pass `next_cursor` back as `cursor` for the following page. The cursor holds the sort key of the last record delivered, so
-  the next page asks for records strictly after it in the order above; a record inserted above the reader changes nothing.
+  the next page asks for records strictly after it in the order above; a record uploaded above the reader changes nothing.
   It also holds a snapshot bound (the highest record id the request was allowed to see when the traversal began), so uploads
   that arrive mid-traversal are outside it. `pagination.mode` says which contract served a page (`offset` or `cursor`).
 
 Rules of the cursor:
 
 - It is bound to its endpoint, its filters and the read profile. Replayed against another endpoint, or with different
-  filters or profile, it is a 422 `cursor_query_mismatch`. Only `limit` and `include` may change between pages.
-- A malformed, altered or old-version cursor is a 422 `invalid_cursor`. The version is compared for exact equality.
+  filters or profile, it is a 422 `cursor_query_mismatch`. Only `limit` and `include` (and, on a point series,
+  `include_geometries`) may change between pages.
+- A malformed, altered, forged, old-version or other-key cursor is a 422 `invalid_cursor`. The version is compared for
+  exact equality. Every value in it is checked against the sort before it is used, so a forged cursor is never a 500.
 - `cursor` and a non-zero `offset` cannot be combined: 422 `cursor_offset_conflict`.
-- It never names a record the read profile hides. It holds the key of a record already delivered, and its snapshot bound is the
-  highest id among records the request may see (under `curated`, the highest approved id, not the table's).
+- It is opaque: encrypted and authenticated under the server's `PAGING_CURSOR_KEY`, so it holds no readable id, sort
+  value or snapshot bound (the internal-id policy keeps those out of every response). Rotating the key invalidates
+  cursors in flight: clients get 422 `invalid_cursor` and restart. Nothing stored depends on the key.
+- It never names a record the read profile hides. It holds the key of a record already delivered, and its snapshot bound
+  is the highest id among records the request may see (under `curated`, the highest approved id, not the table's).
 
-What the snapshot does not freeze: review state. A record approved or deprecated mid-traversal can still enter or leave the
-visible set between pages; a record already delivered is never delivered again, and no record that stays visible is skipped.
-Nested content (a species' entries) is read at the time of each page. For an immutable, citable set, read a published dataset
-release's frozen `selected_records` artifact; live paging is reproducible, not immutable.
+What the cursor guarantees: **insertions are bounded.** A record uploaded after the traversal began is not delivered, and
+cannot shift the reader or change `total`.
+
+What it does not guarantee: **review state is not frozen.** `review_rank` leads the sort key, so a review change can move
+a record across the reader's position, and then:
+
+- approving a record the reader has not reached moves it ahead of the reader: it is **skipped**;
+- moving a delivered record from `approved` to `under_review` moves it behind the reader: it is delivered **again**;
+- a record deprecated or rejected before it is reached drops out, which is the intended outcome;
+- `species/search` keeps a species whose entries are all hidden and ranks it by its visible entries, so deprecating an
+  entry moves the species to the end rather than removing it: a species already delivered is delivered again.
+
+Nested and derived facts are bounded by the parent's id only. `species/browse` bounds species by `species.id`, so a new
+approved entry under an old, not-yet-reached species changes that species' rank and the traversal can skip it. A list
+that is eligible through child rows (a level of theory, a frequency scale factor or a correction scheme is listed once a
+calculation uses it) is bounded by its own id, not by the usage.
+
+So "every record exactly once" holds only while review state and eligibility do not change during the traversal. For an
+immutable, citable set, read a published dataset release's frozen `selected_records` artifact; live paging is
+reproducible against insertions, not immutable.
 
 Not paged by cursor, with the reason: the two NDJSON exports (a stream with no envelope), and the authenticated operations
 lists (admin users and curator tasks, submissions for review and mine, a submission's audit events and record links).
