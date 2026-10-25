@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
     LITERATURE_RECORDS_SECTIONS,
     SEARCH_SCOPE,
@@ -54,7 +54,8 @@ def scientific_literature_records(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Inverse records: list scientific records citing this literature.
@@ -71,6 +72,7 @@ def scientific_literature_records(
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = get_literature_records(

@@ -774,6 +774,7 @@ def test_every_expression_agrees_on_which_digests_are_currently_broken(db_sessio
     """The boolean each surface publishes, from all four expressions."""
     from app.db.models.calculation import CalculationArtifact
     from app.services.scientific_read.artifact_integrity_reads import _summaries
+    from app.services.scientific_read.keyset import Paging
 
     digests = _observation_population(db_session)
     owner = latest_integrity_observations(db_session, digests)
@@ -788,13 +789,12 @@ def test_every_expression_agrees_on_which_digests_are_currently_broken(db_sessio
 
     assert digests_with_recorded_breaks(db_session, digests) == expected
 
-    records, _total = _summaries(
+    records, _total, _page = _summaries(
         db_session,
         sha256=None,
         calculation_ref=None,
         only_currently_broken=False,
-        offset=0,
-        limit=200,
+        paging=Paging("/scientific/artifacts/integrity", {}, offset=0, limit=200),
     )
     summarised = {
         record.sha256: record for record in records if record.sha256 in owner
@@ -824,6 +824,7 @@ def test_a_digest_with_no_artifact_row_is_still_the_records_own_business(db_sess
     """
     from app.db.models.calculation import CalculationArtifact
     from app.services.scientific_read.artifact_integrity_reads import _summaries
+    from app.services.scientific_read.keyset import Paging
 
     digests = _observation_population(db_session)
     rowless = hashlib.sha256(b"rowless").hexdigest()
@@ -832,13 +833,12 @@ def test_a_digest_with_no_artifact_row_is_still_the_records_own_business(db_sess
     assert rowless in latest_integrity_observations(db_session, digests)
     assert rowless in digests_with_recorded_breaks(db_session, digests)
 
-    records, _total = _summaries(
+    records, _total, _page = _summaries(
         db_session,
         sha256=rowless,
         calculation_ref=None,
         only_currently_broken=False,
-        offset=0,
-        limit=10,
+        paging=Paging("/scientific/artifacts/integrity", {}, offset=0, limit=10),
     )
     assert [record.sha256 for record in records] == [rowless]
 

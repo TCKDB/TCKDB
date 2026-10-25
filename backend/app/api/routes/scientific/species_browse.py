@@ -26,7 +26,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
     ANYWHERE_SCOPE,
     SPECIES_BROWSE_SECTIONS,
@@ -168,7 +168,8 @@ def species_browse(
     include_deprecated: bool = Query(False),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ) -> ScientificSpeciesBrowseResponse:
     """List species with no identifier required, for a catalogue page.
@@ -222,6 +223,7 @@ def species_browse(
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = browse_species(session, request)

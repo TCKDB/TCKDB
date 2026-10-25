@@ -207,14 +207,14 @@ v0 sort policy.
 
 `offset` / `limit` behave exactly as on the other scientific searches.
 `pagination.total` is the post-filter, post-visibility count of the whole
-matching set. `request.pagination_mode` reports `"offset"`.
+matching set. `pagination.mode` reports `"offset"`.
 
 ### 5.3 Keyset (opt-in)
 
-Every response carries `next_cursor`. It is non-null whenever the page came
-back full (`returned == limit`); a short page means the traversal is complete.
+Every response carries `next_cursor`. It is non-null exactly when more records follow this page, and null on the last
+page (a full last page included). The cursor engine is shared by every list read; see `docs/specs/browse_order.md`.
 Passing it as `?cursor=` returns the next page and reports
-`request.pagination_mode == "cursor"`.
+`pagination.mode == "cursor"`.
 
 The contract:
 
@@ -228,31 +228,36 @@ The contract:
   accepting an offset alongside it and ignoring one of them is exactly the kind
   of silent wrongness keyset paging exists to remove.
 * **`limit` may change between pages.** It is not part of the signature.
-* Cursors are opaque, versioned tokens. An unparseable, truncated or
-  wrong-version token is `422 invalid_cursor`.
+* Cursors are opaque, versioned, encrypted and authenticated tokens (sealed under the server's `PAGING_CURSOR_KEY`).
+  An unparseable, truncated, altered, forged or wrong-version token is `422 invalid_cursor`; so is one sealed under a
+  previous key (rotating the key restarts traversals in flight, nothing else).
 
 ### 5.4 The watermark — what it guarantees, and what it does not
 
-A traversal takes a snapshot bound when it begins: the highest record id that
-existed at that moment. Every page — including the first, and including the
-`total` count — re-applies `id <= watermark`.
+A traversal takes a snapshot bound when it begins: the highest record id the request was allowed to see at that moment
+(under `profile=curated`, the highest id the profile shows). Every later page, and its `total` count, re-applies
+`id <= watermark`.
 
-**Guaranteed.** Record ids are monotonic, so the watermark is a complete bound
-on **insertions**. Uploading 10,000 kinetics records while a traversal is
-running cannot inject a row into it, cannot shift the reader's position, and
-cannot change `pagination.total` between pages. Combined with keyset ordering,
-a traversal visits every matching record exactly once, in a stable order.
+**Guaranteed.** Record ids are monotonic, so the watermark is a complete bound on **insertions**. Uploading 10,000
+kinetics records while a traversal is running cannot inject a row into it, cannot shift the reader's position, and
+cannot change `pagination.total` between pages.
 
-**Not guaranteed.** The watermark does **not** freeze curation. `record_review`
-rows are mutable: a record approved or deprecated mid-traversal can still enter
-or leave the visible set, and — because `review_rank` is the leading sort key —
-can move relative to the reader's position. Freezing that would require reading
-review state as-of a timestamp, which this path does not support.
+**Not guaranteed.** The watermark does **not** freeze curation. `record_review` rows are mutable, and `review_rank` is
+the leading sort key, so a review change can move a record across the reader's position:
 
-`watermark.taken_at` is echoed for the reader's own provenance record.
-`watermark.max_id` is deliberately **not** echoed: it is an internal record id,
-hidden by the same policy that hides every other one, and the authoritative
-copy travels inside the opaque cursor.
+* approving a record the reader has not reached moves it *ahead* of the reader, and the traversal **skips** it;
+* moving a delivered record from `approved` to `under_review` moves it *behind* the reader, and it is delivered **a
+  second time**;
+* a record deprecated or rejected before the reader reaches it drops out (the intended outcome).
+
+So "every matching record exactly once" holds only while review state does not change during the traversal. Nested or
+derived facts have the same limit: a list that is eligible through child rows (a level of theory is listed once a
+calculation uses it) is bounded by its own id, not by the children's.
+
+`watermark.taken_at` is echoed on cursor pages (not on the first, offset-served page), for the reader's own provenance
+record. `watermark.max_id` is deliberately **not** echoed: it is an internal record id, hidden by the same policy that
+hides every other one. The authoritative copy travels inside the cursor, which is encrypted and authenticated under the
+server's `PAGING_CURSOR_KEY`, so a client cannot read or edit it.
 
 **If you need an immutable, citable set, do not use this.** Read a published
 dataset release's frozen `selected_records` artifact, which Stage 3 guarantees

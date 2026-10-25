@@ -52,7 +52,6 @@ what makes the profile a property of this code rather than a convention.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import Select, and_, exists, func, select
@@ -96,9 +95,8 @@ from app.schemas.reads.scientific_analytics import (
     ThermoAnalyticsRecord,
     ThermoAnalyticsRequest,
     ThermoAnalyticsResponse,
-    WatermarkEcho,
 )
-from app.schemas.reads.scientific_common import ReviewStatusSummary, browse_order
+from app.schemas.reads.scientific_common import ReviewStatusSummary, WatermarkEcho, browse_order
 from app.services.scientific_read.common import (
     build_pagination,
     reject_client_sort,
@@ -114,18 +112,8 @@ from app.services.scientific_read.hidden_by_default import hidden_by_default_blo
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-from app.services.scientific_read.keyset import (
-    Cursor,
-    InvalidCursorError,
-    Watermark,
-    decode_cursor,
-    encode_cursor,
-    keyset_predicate,
-    query_signature,
-    watermark_predicate,
-)
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
-from app.services.scientific_read.profile import current_read_profile
 from app.services.scientific_read.sql_review import (
     join_review,
     review_rank_expr,
@@ -185,17 +173,8 @@ def _resolve_includes(request: AnalyticsPagingRequest, endpoint: str) -> set[str
 
 
 def _validate_paging(request: AnalyticsPagingRequest) -> tuple[int, int]:
-    """Shared sort / pagination / cursor-conflict validation."""
+    """Shared sort / pagination validation. The cursor-versus-offset check is :class:`Paging`'s."""
     reject_client_sort(request.sort)
-    if request.cursor is not None and request.offset:
-        raise CodedValueError(
-            "cursor_offset_conflict",
-            "cursor= and a non-zero offset= cannot be combined; a cursor "
-            "already encodes the traversal position. Re-issue with the "
-            "cursor alone, or drop the cursor to page by offset.",
-            context={"offset": request.offset},
-        )
-    # ``limit`` is validated even in cursor mode; ``offset`` is zero there.
     return validate_pagination(request.offset, request.limit)
 
 
@@ -219,38 +198,6 @@ class _Page:
     watermark: WatermarkEcho
 
 
-def _take_watermark(session: Session, id_column: Any, record_type: SubmissionRecordType) -> Watermark:
-    """Establish the snapshot bound for a new traversal.
-
-    Record ids are monotonic, so ``max(id)`` at this instant is a complete
-    bound on insertions without needing a clock or a serializable snapshot.
-    ``max(id)`` over a primary key is an index scan of one row.
-
-    Under ``profile=curated`` the maximum is over the records the profile shows (the same floor as the rows): the
-    watermark travels inside a cursor any caller can decode, and the id of a hidden newest record would otherwise
-    be readable from it.
-    """
-    max_id = session.scalar(where_visible(select(func.max(id_column)), review_floor_predicate(id_column, record_type)))
-    return Watermark(
-        max_id=int(max_id) if max_id is not None else 0,
-        taken_at=datetime.now(timezone.utc),
-    )
-
-
-def _signature(endpoint: str, filter_echo: dict[str, object]) -> str:
-    """Bind a cursor to this endpoint, these filters, and this read profile.
-
-    The profile is part of the signature because it changes the visible set:
-    a cursor issued mid-traversal under ``exploratory`` and then replayed
-    under ``curated`` would silently traverse a different corpus. Refusing it
-    is the honest outcome.
-    """
-    resolved = current_read_profile()
-    return query_signature(
-        endpoint, {**filter_echo, "__profile__": resolved.profile.value}
-    )
-
-
 def _run_page(
     session: Session,
     *,
@@ -259,33 +206,24 @@ def _run_page(
     id_column: Any,
     candidate_stmt: Select,
     request: AnalyticsPagingRequest,
-    filter_echo: dict[str, object],
     offset: int,
     limit: int,
 ) -> _Page:
-    """Filter, gate, rank, order and slice — all in SQL; return one page.
+    """Filter, gate, rank, order and slice -- all in SQL; return one page.
 
     ``candidate_stmt`` must select exactly the primary-key column of the
     record table, with every content filter already applied. Everything from
     review visibility onwards is identical for all four endpoints and lives
     here, so a new analytics endpoint cannot accidentally implement the
-    visibility gate differently from the other three.
+    visibility gate differently from the other three. The paging itself is
+    :class:`~app.services.scientific_read.keyset.Paging`, the engine every list read uses.
     """
-    signature = _signature(endpoint, filter_echo)
+    paging = Paging(endpoint, request, offset=offset, limit=limit)
 
-    cursor: Cursor | None = None
-    if request.cursor is not None:
-        cursor = decode_cursor(request.cursor, expected_signature=signature)
-        watermark = cursor.watermark
-        mode = "cursor"
-    else:
-        watermark = _take_watermark(session, id_column, record_type)
-        mode = "offset"
-
-    # The watermark applies to the count as well as to the page, so ``total``
-    # is stable across a traversal rather than drifting upward under
+    # The snapshot bounds the count and the summary as well as the page, so
+    # ``total`` is stable across a traversal rather than drifting upward under
     # concurrent uploads.
-    candidate_stmt = candidate_stmt.where(watermark_predicate(id_column, watermark))
+    candidate_stmt = paging.restrict(candidate_stmt, id_column)
 
     visible = visible_statuses(
         min_review_status=request.min_review_status,
@@ -319,9 +257,6 @@ def _run_page(
     )
 
     total = session.scalar(select(func.count()).select_from(ranked)) or 0
-    watermark_echo = WatermarkEcho(
-        taken_at=watermark.taken_at, release_ref=watermark.release_ref
-    )
     if total == 0:
         return _Page(
             ids=[],
@@ -330,64 +265,41 @@ def _run_page(
             summary=ReviewStatusSummary(),
             offset=offset,
             limit=limit,
-            mode=mode,
+            mode=paging.mode,
             next_cursor=None,
-            watermark=watermark_echo,
+            watermark=(
+                WatermarkEcho(taken_at=paging.resume.watermark.taken_at, release_ref=None) if paging.resume else None
+            ),
         )
 
     summary = summary_from_sql(session, ranked)
 
-    page_stmt = select(
-        ranked.c.id, ranked.c.review_rank, ranked.c.created_at, ranked.c.review_status
-    ).order_by(ranked.c.review_rank.asc(), ranked.c.created_at.desc(), ranked.c.id.desc())
-    if cursor is not None:
-        page_stmt = page_stmt.where(
-            keyset_predicate(
-                [(ranked.c.review_rank, "asc"), (ranked.c.created_at, "desc"), (ranked.c.id, "desc")],
-                cursor.last_values,
-            )
-        )
-    else:
-        page_stmt = page_stmt.offset(offset)
-    rows = session.execute(page_stmt.limit(limit)).all()
-
-    ids = [int(row.id) for row in rows]
-    statuses = {
-        int(row.id): status_from_sql(row.review_status) for row in rows
-    }
-
-    next_cursor: str | None = None
-    if rows and len(rows) == limit:
-        last = rows[-1]
-        next_cursor = encode_cursor(
-            Cursor(
-                watermark=watermark,
-                last_values=[int(last.review_rank), last.created_at, int(last.id)],
-                query_signature=signature,
-            )
-        )
-
+    window = paging.sql_window(
+        session,
+        ranked,
+        columns=[ranked.c.id, ranked.c.review_rank, ranked.c.created_at, ranked.c.review_status],
+        keys=[(ranked.c.review_rank, "asc"), (ranked.c.created_at, "desc"), (ranked.c.id, "desc")],
+        total=total,
+    )
+    rows = window.items
     return _Page(
-        ids=ids,
-        statuses=statuses,
+        ids=[int(row.id) for row in rows],
+        statuses={int(row.id): status_from_sql(row.review_status) for row in rows},
         total=total,
         summary=summary,
         offset=offset,
         limit=limit,
-        mode=mode,
-        next_cursor=next_cursor,
-        watermark=watermark_echo,
+        mode=window.mode,
+        next_cursor=window.next_cursor,
+        watermark=window.envelope()["watermark"],
     )
 
 
-def _echo(
-    filter_echo: dict[str, object], includes: set[str], mode: str
-) -> AnalyticsRequestEcho:
+def _echo(filter_echo: dict[str, object], includes: set[str]) -> AnalyticsRequestEcho:
     return AnalyticsRequestEcho(
         filter=filter_echo,
         sort=DEFAULT_SORT,
         include=sorted(includes),
-        pagination_mode=mode,
     )
 
 
@@ -602,14 +514,13 @@ def search_kinetics_analytics(
         id_column=Kinetics.id,
         candidate_stmt=stmt,
         request=request,
-        filter_echo=filter_echo,
         offset=offset,
         limit=limit,
     )
 
     records = _project_kinetics(session, page) if page.ids else []
     return KineticsAnalyticsResponse(
-        request=_echo(filter_echo, includes, page.mode),
+        request=_echo(filter_echo, includes),
         review_summary=page.summary,
         records=records,
         pagination=build_pagination(
@@ -617,6 +528,7 @@ def search_kinetics_analytics(
             limit=page.limit,
             returned=len(records),
             total=page.total,
+            page=page,
         ),
         next_cursor=page.next_cursor,
         watermark=page.watermark,
@@ -831,14 +743,13 @@ def search_thermo_analytics(
         id_column=Thermo.id,
         candidate_stmt=stmt,
         request=request,
-        filter_echo=filter_echo,
         offset=offset,
         limit=limit,
     )
 
     records = _project_thermo(session, page) if page.ids else []
     return ThermoAnalyticsResponse(
-        request=_echo(filter_echo, includes, page.mode),
+        request=_echo(filter_echo, includes),
         review_summary=page.summary,
         records=records,
         pagination=build_pagination(
@@ -846,6 +757,7 @@ def search_thermo_analytics(
             limit=page.limit,
             returned=len(records),
             total=page.total,
+            page=page,
         ),
         next_cursor=page.next_cursor,
         watermark=page.watermark,
@@ -1055,14 +967,13 @@ def search_statmech_analytics(
         id_column=Statmech.id,
         candidate_stmt=stmt,
         request=request,
-        filter_echo=filter_echo,
         offset=offset,
         limit=limit,
     )
 
     records = _project_statmech(session, page) if page.ids else []
     return StatmechAnalyticsResponse(
-        request=_echo(filter_echo, includes, page.mode),
+        request=_echo(filter_echo, includes),
         review_summary=page.summary,
         records=records,
         pagination=build_pagination(
@@ -1070,6 +981,7 @@ def search_statmech_analytics(
             limit=page.limit,
             returned=len(records),
             total=page.total,
+            page=page,
         ),
         next_cursor=page.next_cursor,
         watermark=page.watermark,
@@ -1302,14 +1214,13 @@ def search_calculation_analytics(
         id_column=Calculation.id,
         candidate_stmt=stmt,
         request=request,
-        filter_echo=filter_echo,
         offset=offset,
         limit=limit,
     )
 
     records = _project_calculations(session, page) if page.ids else []
     return CalculationAnalyticsResponse(
-        request=_echo(filter_echo, includes, page.mode),
+        request=_echo(filter_echo, includes),
         review_summary=page.summary,
         records=records,
         pagination=build_pagination(
@@ -1317,6 +1228,7 @@ def search_calculation_analytics(
             limit=page.limit,
             returned=len(records),
             total=page.total,
+            page=page,
         ),
         next_cursor=page.next_cursor,
         watermark=page.watermark,
@@ -1424,7 +1336,6 @@ def _between(stmt: Select, column: Any, low: Any, high: Any) -> Select:
 
 __all__ = [
     "DEFAULT_SORT",
-    "InvalidCursorError",
     "search_calculation_analytics",
     "search_kinetics_analytics",
     "search_statmech_analytics",

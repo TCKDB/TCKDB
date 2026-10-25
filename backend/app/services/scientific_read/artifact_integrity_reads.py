@@ -33,6 +33,7 @@ from app.services.scientific_read.common import (
     reject_client_sort,
     validate_pagination,
 )
+from app.services.scientific_read.keyset import Page, Paging
 
 #: The findings that assert a break, taken from the enum rather than
 #: restated, so a new finding cannot quietly count as clean here while
@@ -89,11 +90,13 @@ def _summaries(
     sha256: str | None,
     calculation_ref: str | None,
     only_currently_broken: bool,
-    offset: int,
-    limit: int,
-) -> tuple[list[ArtifactIntegrityDigestSummary], int]:
+    paging: Paging,
+) -> tuple[list[ArtifactIntegrityDigestSummary], int, Page]:
+    if paging.resume is None:
+        paging.begin(session.scalar(select(func.max(ArtifactIntegrityEvent.id))))
     stats = (
-        select(
+        paging.restrict(
+            select(
             ArtifactIntegrityEvent.sha256.label("sha256"),
             func.count().label("observation_count"),
             func.min(ArtifactIntegrityEvent.created_at).label("first_observed_at"),
@@ -102,6 +105,8 @@ def _summaries(
             func.count(
                 case((ArtifactIntegrityEvent.finding.in_(_BREAK_FINDINGS), 1))
             ).label("break_count"),
+            ),
+            ArtifactIntegrityEvent.id,
         )
         .group_by(ArtifactIntegrityEvent.sha256)
         .subquery()
@@ -131,11 +136,15 @@ def _summaries(
     total = session.scalar(
         select(func.count()).select_from(statement.subquery())
     )
-    rows = session.execute(
-        statement.order_by(stats.c.last_observed_at.desc(), stats.c.sha256)
-        .offset(offset)
-        .limit(limit)
-    ).all()
+    # A digest's summary is as of the snapshot: events recorded after it began are outside the traversal, so a digest
+    # observed again mid-traversal does not move in the order.
+    page = paging.sql_page(
+        session,
+        statement,
+        keys=[(stats.c.last_observed_at, "desc"), (stats.c.sha256, "asc")],
+        total=int(total or 0),
+    )
+    rows = page.items
 
     digests = [row.sha256 for row in rows]
     contexts = _contexts_by_digest(session, digests)
@@ -155,7 +164,7 @@ def _summaries(
         )
         for row in rows
     ]
-    return records, int(total or 0)
+    return records, int(total or 0), page
 
 
 def _contexts_by_digest(
@@ -216,6 +225,7 @@ def search_artifact_integrity(
     sort: str | None = None,
     offset: int = 0,
     limit: int = 50,
+    cursor: str | None = None,
 ) -> ScientificArtifactIntegrityResponse:
     """One record per digest that has ever been observed.
 
@@ -229,13 +239,23 @@ def search_artifact_integrity(
     # arrived uncoded even once the route stopped wrapping it.
     reject_client_sort(sort)
     offset, limit = validate_pagination(offset, limit)
-    records, total = _summaries(
+    paging = Paging(
+        "/scientific/artifacts/integrity",
+        {
+            "cursor": cursor,
+            "sha256": sha256,
+            "calculation_ref": calculation_ref,
+            "only_currently_broken": only_currently_broken,
+        },
+        offset=offset,
+        limit=limit,
+    )
+    records, total, page = _summaries(
         session,
         sha256=sha256,
         calculation_ref=calculation_ref,
         only_currently_broken=only_currently_broken,
-        offset=offset,
-        limit=limit,
+        paging=paging,
     )
     return ScientificArtifactIntegrityResponse(
         request=IntegrityRequestEcho(
@@ -252,7 +272,9 @@ def search_artifact_integrity(
             limit=limit,
             returned=len(records),
             total=total,
+            mode=page.mode,
         ),
+        **page.envelope(),
     )
 
 
@@ -262,6 +284,7 @@ def artifact_integrity_history(
     sha256: str,
     offset: int = 0,
     limit: int = 50,
+    cursor: str | None = None,
 ) -> ScientificArtifactIntegrityHistoryResponse:
     """Every observation recorded for one digest, oldest first.
 
@@ -271,29 +294,23 @@ def artifact_integrity_history(
     current-state summary cannot express at all.
     """
     offset, limit = validate_pagination(offset, limit)
-    summaries, _total = _summaries(
+    endpoint = "/scientific/artifacts/{sha256}/integrity"
+    paging = Paging(endpoint, {"cursor": cursor, "sha256": sha256}, offset=offset, limit=limit)
+    summaries, _total, _summary_page = _summaries(
         session,
         sha256=sha256,
         calculation_ref=None,
         only_currently_broken=False,
-        offset=0,
-        limit=1,
+        paging=Paging(endpoint, {"sha256": sha256}, offset=0, limit=1),
     )
-    total = int(
-        session.scalar(
-            select(func.count())
-            .select_from(ArtifactIntegrityEvent)
-            .where(ArtifactIntegrityEvent.sha256 == sha256)
-        )
-        or 0
+    if paging.resume is None:
+        paging.begin(session.scalar(select(func.max(ArtifactIntegrityEvent.id))))
+    bounded = paging.restrict(
+        select(ArtifactIntegrityEvent).where(ArtifactIntegrityEvent.sha256 == sha256), ArtifactIntegrityEvent.id
     )
-    rows = session.scalars(
-        select(ArtifactIntegrityEvent)
-        .where(ArtifactIntegrityEvent.sha256 == sha256)
-        .order_by(ArtifactIntegrityEvent.id)
-        .offset(offset)
-        .limit(limit)
-    ).all()
+    total = int(session.scalar(select(func.count()).select_from(bounded.subquery())) or 0)
+    page = paging.sql_page(session, bounded, keys=[(ArtifactIntegrityEvent.id, "asc")], total=total)
+    rows = [row[0] for row in page.items]
     return ScientificArtifactIntegrityHistoryResponse(
         request=IntegrityRequestEcho(filter={"sha256": sha256}, sort=browse_order(("id", "asc"))),
         sha256=sha256,
@@ -304,7 +321,9 @@ def artifact_integrity_history(
             limit=limit,
             returned=len(rows),
             total=total,
+            mode=page.mode,
         ),
+        **page.envelope(),
     )
 
 

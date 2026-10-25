@@ -51,6 +51,7 @@ from app.schemas.reads.scientific_calculation import (
     CalculationOwnerSummary,
 )
 from app.schemas.reads.scientific_common import (
+    CursorToken,
     LevelOfTheorySummary,
     OrderEcho,
     Pagination,
@@ -58,6 +59,7 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
     SoftwareReleaseSummary,
+    WatermarkEcho,
     WorkflowToolReleaseSummary,
 )
 
@@ -192,6 +194,7 @@ class ScientificArtifactSearchRequest(BaseModel):
     sort: str | None = None
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
 
 
@@ -210,6 +213,10 @@ class ScientificArtifactSearchResponse(BaseModel):
     review_summary: ReviewStatusSummary
     records: list[ScientificArtifactRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 __all__ = [

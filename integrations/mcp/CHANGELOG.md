@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.14.0 - 2026-10-25
+
+The paged search tools take `cursor`.
+
+- `tckdb_search_species`, `tckdb_get_species_entry_thermo`, `tckdb_search_reactions`, `tckdb_search_thermo`,
+  `tckdb_get_reaction_entry_kinetics`, `tckdb_search_kinetics` and the scientific search and literature-record tools accept `cursor`: the previous response's `next_cursor`.
+  The answer is returned unchanged, so `next_cursor` (null on the last page) and `pagination.mode` reach the agent.
+- `cursor` cannot be combined with a non-zero `offset`; the tool refuses it before calling the server. `offset` is random access and can
+  skip or repeat a record when the database changes between pages, so an agent that walks a whole list should follow the cursor.
+
 ## 0.13.0 - 2026-10-24
 
 The `tckdb_select_*` tools take `filters` and `eligibility`.

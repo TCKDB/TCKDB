@@ -112,6 +112,11 @@ dependencies:
   - boto3=1.42.76
   - requests=2.32.5
 
+  # Authenticated encryption of paging cursors (AES-GCM, HKDF) in
+  # app/services/scientific_read/keyset.py. Already present transitively in
+  # the image; declared so it is a requirement and not luck.
+  - cryptography=46.0.5
+
   # YAML I/O (ARC output.yml ingest, config).
   - pyyaml=6.0.3
 

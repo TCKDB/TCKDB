@@ -1098,10 +1098,6 @@
             "title": "Include",
             "type": "array"
           },
-          "pagination_mode": {
-            "title": "Pagination Mode",
-            "type": "string"
-          },
           "profile": {
             "$ref": "#/components/schemas/ReadProfile",
             "default": "exploratory"
@@ -1127,8 +1123,7 @@
         },
         "required": [
           "filter",
-          "sort",
-          "pagination_mode"
+          "sort"
         ],
         "title": "AnalyticsRequestEcho",
         "type": "object"
@@ -10429,6 +10424,19 @@
             ],
             "title": "Created Before"
           },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
+          },
           "dependency_role": {
             "anyOf": [
               {
@@ -15375,6 +15383,19 @@
             ],
             "title": "Conformer Observation Ref"
           },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
+          },
           "evidence_match": {
             "$ref": "#/components/schemas/ConformerEvidenceMatch",
             "default": "any_observation"
@@ -17679,6 +17700,19 @@
               }
             ],
             "title": "Basis"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
           },
           "energy_correction_scheme_ref": {
             "anyOf": [
@@ -20569,6 +20603,19 @@
             ],
             "title": "Basis"
           },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
+          },
           "frequency_scale_factor_ref": {
             "anyOf": [
               {
@@ -22059,6 +22106,19 @@
       "IRCRequestEcho": {
         "description": "Echoes the parsed knobs the caller supplied to ``/irc``.\n\nSame shape as :class:`ScanRequestEcho` so a generic client parser\ncan handle every per-point path-data endpoint with one set of code.",
         "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
+          },
           "hidden_by_default": {
             "anyOf": [
               {
@@ -25019,6 +25079,19 @@
             ],
             "title": "Coverage Temperature Min K"
           },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
+          },
           "direction": {
             "$ref": "#/components/schemas/ReactionDirectionQuery",
             "default": "either"
@@ -27973,6 +28046,19 @@
                 "type": "null"
               }
             ]
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
           },
           "dispersion": {
             "anyOf": [
@@ -33013,6 +33099,19 @@
             ],
             "title": "Basis"
           },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
+          },
           "has_chebyshev": {
             "anyOf": [
               {
@@ -34465,6 +34564,19 @@
               }
             ],
             "title": "Basis"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
           },
           "has_channels": {
             "anyOf": [
@@ -37280,6 +37392,19 @@
             ],
             "title": "Basis"
           },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
+          },
           "has_bath_gas": {
             "anyOf": [
               {
@@ -39733,13 +39858,22 @@
         "type": "object"
       },
       "Pagination": {
-        "description": "Echoed pagination block per L5.\n\n``total``     post-filter match count, before page slicing.\n``returned``  actual length of ``records``.",
+        "description": "Echoed pagination block per L5.\n\n``total``     post-filter match count, before page slicing.\n``returned``  actual length of ``records``.\n``mode``      which contract served this page: ``offset`` (random access) or ``cursor`` (stable traversal).\n\nTwo ways to move through a list\n-------------------------------\n``offset`` is random access: \"page N of M\". It is deterministic only for a static corpus. An upload that sorts\nabove the reader's position, or a record that leaves the visible set, shifts every later page, and the reader\nsilently skips or repeats a record. ``next_cursor`` (a field of the response, beside this block) is the stable\ntraversal: pass it back as ``cursor`` for the following page. It is ``null`` on the last page. A cursor pins the\ntraversal to the records that existed when it began; it does not freeze review state. For an immutable, citable\nset read a published dataset release. ``offset`` and ``cursor`` cannot be combined.",
         "properties": {
           "limit": {
             "maximum": 200.0,
             "minimum": 1.0,
             "title": "Limit",
             "type": "integer"
+          },
+          "mode": {
+            "default": "offset",
+            "enum": [
+              "offset",
+              "cursor"
+            ],
+            "title": "Mode",
+            "type": "string"
           },
           "offset": {
             "minimum": 0.0,
@@ -40096,6 +40230,19 @@
       "PathSearchRequestEcho": {
         "description": "Echoes the parsed knobs the caller supplied to ``/path-search``.\n\nSame shape as :class:`ScanRequestEcho` / :class:`IRCRequestEcho` so\na generic client parser can handle every per-point path-data\nendpoint with one set of code.",
         "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
+          },
           "hidden_by_default": {
             "anyOf": [
               {
@@ -41859,6 +42006,19 @@
       "ReactionSearchRequest": {
         "description": "Service-layer request model for reaction search.\n\nEvery matching record is returned in display order; ``collapse`` and ``selection_policy`` are refused (422).",
         "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
+          },
           "direction": {
             "$ref": "#/components/schemas/ReactionDirectionQuery",
             "default": "either"
@@ -46084,6 +46244,19 @@
       "ScanRequestEcho": {
         "description": "Echoes the parsed knobs the caller supplied to ``/scan``.\n\nMirrors the convention used by other ``/scientific/*`` envelopes\n(``request.include`` etc.) so callers can confirm the resolved\nfilter / pagination values. ``include`` carries opt-in tokens\nsuch as ``internal_ids`` that flow through the existing Phase D\nvisibility policy via ``apply_internal_ids_visibility``.",
         "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
+          },
           "hidden_by_default": {
             "anyOf": [
               {
@@ -46218,6 +46391,17 @@
       "ScientificArtifactIntegrityHistoryResponse": {
         "description": "Response envelope for ``/scientific/artifacts/{sha256}/integrity``.\n\nThe summary and the sequence together: a caller that only needs the\ncurrent verdict does not have to reconstruct it from the page, and a\ncaller reconstructing an incident gets the observations in the order\nthey were recorded.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "observations": {
             "items": {
               "$ref": "#/components/schemas/ArtifactIntegrityObservation"
@@ -46245,6 +46429,16 @@
                 "type": "null"
               }
             ]
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -46258,6 +46452,17 @@
       "ScientificArtifactIntegrityResponse": {
         "description": "Response envelope for ``/scientific/artifacts/integrity``.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -46270,6 +46475,16 @@
           },
           "request": {
             "$ref": "#/components/schemas/IntegrityRequestEcho"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -46418,6 +46633,19 @@
               }
             ],
             "title": "Created Before"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
           },
           "filename": {
             "anyOf": [
@@ -46626,6 +46854,17 @@
       "ScientificArtifactSearchResponse": {
         "description": "Response envelope for /api/v1/scientific/artifacts/search.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -46641,6 +46880,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -46682,6 +46931,17 @@
           "irc": {
             "$ref": "#/components/schemas/CalculationIRCSummary"
           },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "owner": {
             "$ref": "#/components/schemas/CalculationOwnerSummary"
           },
@@ -46697,6 +46957,16 @@
           },
           "request": {
             "$ref": "#/components/schemas/IRCRequestEcho"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -46716,6 +46986,17 @@
           "calculation": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_calculation__CalculationCoreBlock"
           },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "owner": {
             "$ref": "#/components/schemas/CalculationOwnerSummary"
           },
@@ -46734,6 +47015,16 @@
           },
           "request": {
             "$ref": "#/components/schemas/PathSearchRequestEcho"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -47127,6 +47418,17 @@
             "title": "Coordinates",
             "type": "array"
           },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "owner": {
             "$ref": "#/components/schemas/CalculationOwnerSummary"
           },
@@ -47145,6 +47447,16 @@
           },
           "scan": {
             "$ref": "#/components/schemas/CalculationScanSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -47162,6 +47474,17 @@
       "ScientificCalculationsSearchResponse": {
         "description": "Response envelope for /api/v1/scientific/calculations/search.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -47177,6 +47500,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -47532,6 +47865,17 @@
       "ScientificConformersSearchResponse": {
         "description": "Response envelope for /api/v1/scientific/conformers/search.\n\nRecords are at the conformer-group grain — one record per\nmatching ``conformer_group`` row.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -47547,6 +47891,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -47683,6 +48037,17 @@
       "ScientificEnergyCorrectionSchemeSearchResponse": {
         "description": "Response envelope for the ECS search endpoint.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -47698,6 +48063,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -47809,6 +48184,17 @@
       "ScientificFrequencyScaleFactorSearchResponse": {
         "description": "Response envelope for the FSF search endpoint.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -47824,6 +48210,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -47960,6 +48356,17 @@
       "ScientificKineticsSearchResponse": {
         "description": "Response envelope for /api/v1/scientific/kinetics/search.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -47975,6 +48382,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -48087,6 +48504,17 @@
       "ScientificLevelOfTheorySearchResponse": {
         "description": "Response envelope for the level-of-theory search endpoint.\n\nReused verbatim (not subclassed) for\n``/scientific/level-of-theories/browse`` -- the same relationship\n:func:`app.services.scientific_read.reactions.browse_reactions` has\nto :class:`~app.schemas.reads.scientific_reactions.ScientificReactionSearchResponse`.\nA search response and a browse response are the same envelope over\nthe same record type, so a caller's parser for one works unmodified\nagainst the other.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -48102,6 +48530,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -48301,6 +48739,17 @@
       "ScientificLiteratureRecordsResponse": {
         "description": "Response envelope for ``GET /scientific/literature/{handle}/records``.\n\nRecords are flattened across types and paginated. ``total`` is\nthe post-filter (review/visibility/record_type) count before\npagination.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -48316,6 +48765,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -48530,6 +48989,17 @@
       },
       "ScientificNetworkKineticsSearchResponse": {
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -48545,6 +49015,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -48730,6 +49210,17 @@
       "ScientificNetworkSearchResponse": {
         "description": "Response envelope for /api/v1/scientific/networks/search.\n\nReused verbatim (not subclassed) for\n``/scientific/networks/browse`` -- the same relationship\n:func:`app.services.scientific_read.reactions.browse_reactions` has\nto\n:class:`~app.schemas.reads.scientific_reactions.ScientificReactionSearchResponse`.\nA search response and a browse response are the same envelope over\nthe same record type, so a caller's parser for one works unmodified\nagainst the other.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -48745,6 +49236,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -48946,6 +49447,17 @@
       },
       "ScientificNetworkSolveSearchResponse": {
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -48961,6 +49473,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -49180,6 +49702,17 @@
       "ScientificReactionKineticsResponse": {
         "description": "Response envelope for /api/v1/scientific/reaction-entries/{id}/kinetics.\n\nPhase B: ``reaction_entry_ref`` mirrors ``reaction_entry_id`` as the\npublic stable handle for the response's path-parameter resource.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -49204,6 +49737,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -49219,6 +49762,17 @@
       "ScientificReactionSearchResponse": {
         "description": "Response envelope for /api/v1/scientific/reactions/search.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -49234,6 +49788,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -49352,6 +49916,17 @@
       "ScientificReleaseListResponse": {
         "description": "Response envelope for ``GET /scientific/releases``.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -49364,6 +49939,16 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_release__RequestEcho"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -49412,6 +49997,17 @@
       "ScientificReleaseSelectionsResponse": {
         "description": "Response envelope for ``GET /scientific/releases/{ref}/selections``.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -49432,6 +50028,16 @@
           "tag": {
             "title": "Tag",
             "type": "string"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -49496,6 +50102,17 @@
       "ScientificSpeciesBrowseResponse": {
         "description": "Response envelope for /api/v1/scientific/species/browse.\n\nField-for-field identical to :class:`ScientificSpeciesSearchResponse`\nby design (see the endpoint's module docstring for why): a client's\nparser for one search-response schema works unmodified against a\nbrowse response. Declared as its own class, not a bare alias, so the\nOpenAPI document and generated clients name the two surfaces\nseparately even though nothing about the shape differs.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -49511,6 +50128,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -49525,6 +50152,17 @@
       "ScientificSpeciesCalculationsSearchResponse": {
         "description": "Response envelope for /api/v1/scientific/species-calculations/search.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -49540,6 +50178,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -49554,6 +50202,17 @@
       "ScientificSpeciesObservationsResponse": {
         "description": "Response envelope for GET .../species-entries/{id}/observations.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -49569,6 +50228,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -49583,6 +50252,17 @@
       "ScientificSpeciesSearchResponse": {
         "description": "Response envelope for /api/v1/scientific/species/search.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -49598,6 +50278,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -49755,6 +50445,19 @@
       "ScientificSpeciesStructureSearchRequest": {
         "description": "Service-layer request for /scientific/species/structure-search.\n\nExactly one of ``query_smiles`` / ``query_smarts`` / ``query_inchi``\n/ ``query_inchi_key`` must be supplied. Combinations of query field\nand ``mode`` are validated in the service: e.g. ``mode=substructure``\nrejects ``query_inchi_key``; ``mode=similarity`` rejects\n``query_smarts`` and ``query_inchi_key``; ``mode=exact`` rejects\n``query_smarts``.",
         "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
+          },
           "include": {
             "items": {
               "type": "string"
@@ -49878,6 +50581,17 @@
       "ScientificSpeciesStructureSearchResponse": {
         "description": "Response envelope for /scientific/species/structure-search.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -49893,6 +50607,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -49907,6 +50631,17 @@
       "ScientificSpeciesThermoResponse": {
         "description": "Response envelope for /api/v1/scientific/species-entries/{id}/thermo.\n\nPhase B: ``species_entry_ref`` mirrors ``species_entry_id`` as the\npublic stable handle for the response's path-parameter resource.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -49931,6 +50666,16 @@
           "species_entry_ref": {
             "title": "Species Entry Ref",
             "type": "string"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -50169,6 +50914,17 @@
       "ScientificStatmechSearchResponse": {
         "description": "Response envelope for /api/v1/scientific/statmech/search.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -50184,6 +50940,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -50198,6 +50964,17 @@
       "ScientificThermoSearchResponse": {
         "description": "Response envelope for /api/v1/scientific/thermo/search.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -50213,6 +50990,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -50539,6 +51326,17 @@
       "ScientificTransitionStatesBrowseResponse": {
         "description": "Response envelope for /api/v1/scientific/transition-states/browse.\n\nField-for-field identical to\n:class:`ScientificTransitionStatesSearchResponse` (same reason\n``ScientificSpeciesBrowseResponse`` subclasses its search sibling in\n``scientific_species.py``): a client's parser for the search response\nworks unmodified against a browse response. Declared as its own class\nso the OpenAPI document and generated clients name the two surfaces\nseparately even though nothing about the shape differs.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -50554,6 +51352,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -50568,6 +51376,17 @@
       "ScientificTransitionStatesSearchResponse": {
         "description": "Response envelope for /api/v1/scientific/transition-states/search.\n\nRecords are at the transition-state-entry grain.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -50583,6 +51402,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -50735,6 +51564,17 @@
       "ScientificTransportSearchResponse": {
         "description": "Response envelope for /api/v1/scientific/transport/search.",
         "properties": {
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
@@ -50750,6 +51590,16 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
+          },
+          "watermark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatermarkEcho"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -51445,6 +52295,19 @@
               }
             ],
             "title": "Charge"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
           },
           "electronic_state_kind": {
             "anyOf": [
@@ -54177,6 +55040,19 @@
               }
             ],
             "title": "Conformer Observation Ref"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
           },
           "declared_conformer_group_ref": {
             "anyOf": [
@@ -62179,6 +63055,19 @@
             ],
             "title": "Coverage Temperature Min K"
           },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
+          },
           "electronic_state_kind": {
             "anyOf": [
               {
@@ -66798,6 +67687,19 @@
             ],
             "title": "Charge"
           },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
+          },
           "family": {
             "anyOf": [
               {
@@ -67612,6 +68514,19 @@
               }
             ],
             "title": "Basis"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "title": "Cursor"
           },
           "has_dipole_moment": {
             "anyOf": [
@@ -68754,7 +69669,7 @@
         "type": "string"
       },
       "WatermarkEcho": {
-        "description": "The snapshot bound in force for this traversal.\n\n``taken_at`` is when the traversal's snapshot was established — the\nmoment the first page was served, not the moment this page was. It is\ninformational: the authoritative bound travels inside the opaque cursor.\n\nThe bound itself is a record id and is therefore deliberately not echoed;\ninternal integer ids are hidden from public responses by policy, and the\ncaller never needs it.",
+        "description": "The snapshot bound in force for a cursor traversal.\n\n``taken_at`` is when the traversal's snapshot was established: the moment the first page was served, not the\nmoment this page was. It is informational: the authoritative bound travels inside the opaque cursor.\n\nThe bound itself is a record id and is therefore deliberately not echoed; internal integer ids are hidden from\npublic responses by policy, and the caller never needs it.",
         "properties": {
           "release_ref": {
             "anyOf": [
@@ -86181,11 +87096,13 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -86204,7 +87121,7 @@
             }
           },
           {
-            "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
             "in": "query",
             "name": "cursor",
             "required": false,
@@ -86218,7 +87135,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
               "title": "Cursor"
             }
           },
@@ -86748,11 +87665,13 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -86771,7 +87690,7 @@
             }
           },
           {
-            "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
             "in": "query",
             "name": "cursor",
             "required": false,
@@ -86785,7 +87704,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
               "title": "Cursor"
             }
           },
@@ -87217,11 +88136,13 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -87240,7 +88161,7 @@
             }
           },
           {
-            "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
             "in": "query",
             "name": "cursor",
             "required": false,
@@ -87254,7 +88175,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
               "title": "Cursor"
             }
           },
@@ -87666,11 +88587,13 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
@@ -87689,7 +88612,7 @@
             }
           },
           {
-            "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
             "in": "query",
             "name": "cursor",
             "required": false,
@@ -87703,7 +88626,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Opt-in keyset traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to a snapshot of the records that existed when it began. Cannot be combined with a non-zero offset. The snapshot bounds insertions, not curation — a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
               "title": "Cursor"
             }
           },
@@ -87831,14 +88754,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -88376,14 +89320,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -88656,14 +89621,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -89383,14 +90369,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -89721,14 +90728,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -89863,14 +90891,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -90005,14 +91054,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -90802,14 +91872,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -91222,14 +92313,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -92431,14 +93543,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -93117,14 +94250,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -93505,14 +94659,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -93822,14 +94997,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -94247,14 +95443,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -95287,14 +96504,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -96046,14 +97284,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -96751,14 +98010,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -97292,14 +98572,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -98282,14 +99583,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -98687,14 +100009,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -98948,14 +100291,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -99121,14 +100485,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -99459,14 +100844,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -99973,14 +101379,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -100292,14 +101719,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -100460,14 +101908,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -100724,14 +102193,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -100904,14 +102394,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -102217,14 +103728,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -102534,14 +104066,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -102782,14 +104335,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -103298,14 +104872,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -104021,14 +105616,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -104819,14 +106435,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -105349,14 +106986,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {
@@ -105910,14 +107568,35 @@
             }
           },
           {
+            "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
               "default": 0,
+              "description": "Random access ('page N of M'). Deterministic only for a static corpus: an upload or a review change between pages can skip or repeat a record. For a stable traversal follow next_cursor instead (cursor=). Cannot be combined with cursor.",
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4096,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
+              "title": "Cursor"
             }
           },
           {

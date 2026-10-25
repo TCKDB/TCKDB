@@ -526,16 +526,20 @@ def build_pagination(
     limit: int,
     returned: int,
     total: int,
+    page: Any = None,
 ) -> Pagination:
     """Construct the response Pagination block.
 
-    ``total`` is the post-filter count, before offset/limit slicing.
+    ``total`` is the post-filter count, before offset/limit slicing. Pass the
+    :class:`~app.services.scientific_read.keyset.Page` the records were cut from so the block says which paging
+    contract served it.
     """
     return Pagination(
         offset=offset,
         limit=limit,
         returned=returned,
         total=total,
+        mode=page.mode if page is not None else "offset",
     )
 
 

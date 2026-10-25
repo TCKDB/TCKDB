@@ -41,7 +41,6 @@ from app.services.scientific_read.common import (
     collect_bounded_pages,
     reject_client_sort,
     review_summary,
-    slice_for_pagination,
     validate_includes,
     validate_pagination,
     validate_temperature_range,
@@ -49,6 +48,7 @@ from app.services.scientific_read.common import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.public_assessments import attach_thermo_trust
 from app.services.scientific_read.species import search_species
 from app.services.scientific_read.thermo import get_species_thermo
@@ -106,6 +106,7 @@ def search_thermo(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/thermo/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -232,17 +233,16 @@ def search_thermo(
 
     # 3) Display order over the flat list: the record's own review rank, deposition time and id. Nothing about the
     # parent entry takes part.
-    flat.sort(
-        key=lambda rec: (
+    flat = paging.snapshot(flat, id_of=lambda rec: rec.thermo.thermo_id)
+    page = paging.window(
+        flat,
+        key_of=lambda rec: (
             REVIEW_RANK[rec.thermo.review.status],
             -rec.thermo.created_at.timestamp(),
             -rec.thermo.thermo_id,
-        )
+        ),
     )
-
-    # 4) Pagination on the flat list.
-    total = len(flat)
-    returned = slice_for_pagination(flat, offset=offset, limit=limit)
+    returned = page.items
 
     # Trust is resolved for the returned page and for nothing else.
     # Forwarding ``trust`` into ``get_species_thermo`` would have been the
@@ -270,8 +270,10 @@ def search_thermo(
             offset=offset,
             limit=limit,
             returned=len(returned),
-            total=total,
+            total=page.total,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 

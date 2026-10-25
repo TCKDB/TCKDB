@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import exists, select
+from sqlalchemy import Integer, exists, func, select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
@@ -65,6 +65,7 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.level_of_theory import (
     _INTERNAL_INCLUDE_TOKENS,
     _LEGAL_INCLUDE_TOKENS,
@@ -114,7 +115,9 @@ def search_levels_of_theory(
 
     _enforce_at_least_one_filter(request)
 
-    return _run_lot_query(session, request, includes=includes, offset=offset, limit=limit)
+    return _run_lot_query(
+        session, request, includes=includes, offset=offset, limit=limit, endpoint="/scientific/level-of-theories/search"
+    )
 
 
 def browse_levels_of_theory(
@@ -169,7 +172,9 @@ def browse_levels_of_theory(
     )
     includes = filter_internal_ids_from_resolved(includes)
 
-    return _run_lot_query(session, request, includes=includes, offset=offset, limit=limit)
+    return _run_lot_query(
+        session, request, includes=includes, offset=offset, limit=limit, endpoint="/scientific/level-of-theories/browse"
+    )
 
 
 def _run_lot_query(
@@ -179,6 +184,7 @@ def _run_lot_query(
     includes: set[str],
     offset: int,
     limit: int,
+    endpoint: str,
 ) -> ScientificLevelOfTheorySearchResponse:
     """Shared candidate-query + materialization pipeline.
 
@@ -188,6 +194,7 @@ def _run_lot_query(
     and a browse record cannot drift apart in shape or in which rows are
     usage-derived-eligible.
     """
+    paging = Paging(endpoint, request, offset=offset, limit=limit)
     lot_id, short_circuit = _resolve_ref(
         session, LevelOfTheory, request.level_of_theory_ref, "level_of_theory"
     )
@@ -199,7 +206,13 @@ def _run_lot_query(
 
     # Usage-derived eligibility rests on the calculations the profile shows: a level used only by hidden calculations
     # is not listed (owner decision D5). It stays addressable by its own ref, which is a vocabulary row with no gate.
-    stmt = select(LevelOfTheory.id).where(
+    stmt = select(
+        LevelOfTheory.id,
+        LevelOfTheory.method.label("method_key"),
+        # NULLS LAST as two keys (null flag, then the value), so a cursor can carry them.
+        LevelOfTheory.basis.is_(None).cast(Integer).label("basis_null"),
+        func.coalesce(LevelOfTheory.basis, "").label("basis_key"),
+    ).where(
         where_visible(
             exists().where(Calculation.lot_id == LevelOfTheory.id),
             review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
@@ -232,17 +245,19 @@ def _run_lot_query(
         )
         stmt = stmt.where(ex if request.has_frequency_scale_factors else ~ex)
 
-    stmt = stmt.order_by(
-        LevelOfTheory.method.asc(),
-        LevelOfTheory.basis.asc(),
-        LevelOfTheory.id.asc(),
-    )
-    candidate_ids = [row.id for row in session.execute(stmt).all()]
-    total = len(candidate_ids)
-    if not candidate_ids:
+    ranked = paging.restrict(stmt, LevelOfTheory.id).subquery("ranked_lot")
+    total = session.scalar(select(func.count()).select_from(ranked)) or 0
+    if not total:
         return _empty_response(request, includes, offset, limit)
 
-    page_ids = candidate_ids[offset : offset + limit]
+    keys = [
+        (ranked.c.method_key, "asc"),
+        (ranked.c.basis_null, "asc"),
+        (ranked.c.basis_key, "asc"),
+        (ranked.c.id, "asc"),
+    ]
+    page = paging.sql_window(session, ranked, columns=[col for col, _d in keys], keys=keys, total=total)
+    page_ids = [int(row.id) for row in page.items]
     records = _materialize_records(session, page_ids, includes)
 
     return ScientificLevelOfTheorySearchResponse(
@@ -254,8 +269,9 @@ def _run_lot_query(
         review_summary=ReviewStatusSummary(),
         records=records,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(records), total=total
+            offset=offset, limit=limit, returned=len(records), total=total, page=page
         ),
+        **page.envelope(),
     )
 
 

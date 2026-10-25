@@ -1340,7 +1340,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("curator_task_not_found", 404, Surface.coded_exception,
             "backend/app/services/machine_review/curator_task_lifecycle.py"),
     ApiCode("cursor_offset_conflict", 422, Surface.coded_exception,
-            "backend/app/services/scientific_read/analytics.py",
+            "backend/app/services/scientific_read/keyset.py",
             shape=Shape.relationship),
     ApiCode("cursor_query_mismatch", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/keyset.py",

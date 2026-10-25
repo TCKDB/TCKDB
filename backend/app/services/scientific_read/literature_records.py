@@ -63,6 +63,7 @@ from app.services.scientific_read.hidden_by_default import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "review",
@@ -127,6 +128,13 @@ def get_literature_records(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging(
+        "/scientific/literature/{literature_ref_or_id}/records",
+        request,
+        offset=offset,
+        limit=limit,
+        scope_extra={"literature_handle": literature_handle},
+    )
 
     includes = validate_includes(
         request.include,
@@ -183,23 +191,22 @@ def get_literature_records(
     ]
 
     # Deterministic ordering: record_type ASC, created_at DESC NULLS LAST,
-    # record_id DESC.
-    rows.sort(
-        key=lambda r: (
+    # record_id DESC. Record ids of different tables are not comparable, so the snapshot bounds each type by its own.
+    rows = paging.snapshot(rows, id_of=lambda r: r.record_id, group_of=lambda r: r.record_type)
+    page = paging.window(
+        rows,
+        key_of=lambda r: (
             r.record_type,
             r.created_at is None,
             -(r.created_at.timestamp() if r.created_at is not None else 0),
             -r.record_id,
-        )
+        ),
     )
-
-    total = len(rows)
-    page = rows[offset : offset + limit]
 
     want_review = "review" in includes
     summaries = [
         _to_summary(r, badge=badges.get((r.record_type, r.record_id)), want_review=want_review)
-        for r in page
+        for r in page.items
     ]
 
     rs = review_summary(
@@ -215,8 +222,9 @@ def get_literature_records(
         review_summary=rs,
         records=summaries,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(summaries), total=total
+            offset=offset, limit=limit, returned=len(summaries), total=page.total, page=page
         ),
+        **page.envelope(),
     )
 
 

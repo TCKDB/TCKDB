@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import reject_unsupported_filters
@@ -49,6 +49,7 @@ from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
@@ -84,6 +85,7 @@ def search_frequency_scale_factors(
     """Multi-axis FSF search."""
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/frequency-scale-factors/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -116,7 +118,7 @@ def search_frequency_scale_factors(
     if short_circuit:
         return _empty_response(request, includes, offset, limit)
 
-    stmt = select(FrequencyScaleFactor.id)
+    stmt = select(FrequencyScaleFactor.id, FrequencyScaleFactor.scale_kind.label("key_1"), FrequencyScaleFactor.value.label("key_2"))
     if fsf_id is not None:
         stmt = stmt.where(FrequencyScaleFactor.id == fsf_id)
     if literature_id is not None:
@@ -160,17 +162,14 @@ def search_frequency_scale_factors(
         )
         stmt = stmt.where(ex if request.used_by_statmech else ~ex)
 
-    stmt = stmt.order_by(
-        FrequencyScaleFactor.scale_kind.asc(),
-        FrequencyScaleFactor.value.asc(),
-        FrequencyScaleFactor.id.asc(),
-    )
-    candidate_ids = [row.id for row in session.execute(stmt).all()]
-    total = len(candidate_ids)
-    if not candidate_ids:
+    ranked = paging.restrict(stmt, FrequencyScaleFactor.id).subquery("ranked_fsf")
+    total = session.scalar(select(func.count()).select_from(ranked)) or 0
+    if not total:
         return _empty_response(request, includes, offset, limit)
 
-    page_ids = candidate_ids[offset : offset + limit]
+    keys = [(ranked.c.key_1, "asc"), (ranked.c.key_2, "asc"), (ranked.c.id, "asc")]
+    page = paging.sql_window(session, ranked, columns=[col for col, _d in keys], keys=keys, total=total)
+    page_ids = [int(row.id) for row in page.items]
     records = _materialize_records(session, page_ids, includes)
 
     return ScientificFrequencyScaleFactorSearchResponse(
@@ -182,8 +181,9 @@ def search_frequency_scale_factors(
         review_summary=ReviewStatusSummary(),
         records=records,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(records), total=total
+            offset=offset, limit=limit, returned=len(records), total=total, page=page
         ),
+        **page.envelope(),
     )
 
 

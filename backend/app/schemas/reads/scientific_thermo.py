@@ -23,6 +23,7 @@ from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
+    CursorToken,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
     OrderEcho,
@@ -34,6 +35,7 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     SupersessionNotice,
     TemperatureCoverage,
+    WatermarkEcho,
     WorkflowToolReleaseSummary,
 )
 from app.services.trust.models import TrustFragment
@@ -101,6 +103,7 @@ class ThermoReadRequest(BaseModel):
     sort: str | None = None  # rejected non-None per v0 sort policy.
     include: list[str] = Field(default_factory=list)
     offset: int = 0
+    cursor: CursorToken = None
     limit: int = 50
     #: Whether ``include=assessments`` compares each stored assessment's inputs with today's (opt-in; at most 10 records).
     check_inputs: bool = False
@@ -351,3 +354,7 @@ class ScientificSpeciesThermoResponse(BaseModel):
     review_summary: ReviewStatusSummary
     records: list[ThermoRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None

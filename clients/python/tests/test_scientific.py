@@ -219,10 +219,12 @@ def test_iter_species_browse_paginates_through_browse_species():
         {
             "records": [{"species_id": 1}, {"species_id": 2}],
             "pagination": {"offset": 0, "limit": 2, "returned": 2, "total": 3},
+            "next_cursor": "c2",
         },
         {
             "records": [{"species_id": 3}],
-            "pagination": {"offset": 2, "limit": 2, "returned": 1, "total": 3},
+            "pagination": {"offset": 0, "limit": 2, "returned": 1, "total": 3},
+            "next_cursor": None,
         },
     ]
     calls: list[dict] = []
@@ -237,6 +239,8 @@ def test_iter_species_browse_paginates_through_browse_species():
 
     assert [r["species_id"] for r in records] == [1, 2, 3]
     assert len(calls) == 2
+    assert "cursor" not in calls[0]
+    assert calls[1]["cursor"] == ["c2"] or calls[1]["cursor"] == "c2"
 
 
 # ===========================================================================

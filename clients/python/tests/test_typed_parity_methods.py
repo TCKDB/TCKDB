@@ -111,13 +111,15 @@ class TestStructureSearch:
                     "offset": 0, "limit": 1, "returned": 1,
                     "total": 2,
                 },
+                "next_cursor": "c1",
             },
             {
                 **_envelope([{"species_ref": "sp_b"}]),
                 "pagination": {
-                    "offset": 1, "limit": 1, "returned": 1,
+                    "offset": 0, "limit": 1, "returned": 1,
                     "total": 2,
                 },
+                "next_cursor": None,
             },
         ]
         calls: list[httpx.Request] = []
@@ -874,13 +876,15 @@ class TestLiterature:
                     "offset": 0, "limit": 1, "returned": 1,
                     "total": 2,
                 },
+                "next_cursor": "c1",
             },
             {
                 **_envelope([{"record_ref": "kin_2"}]),
                 "pagination": {
-                    "offset": 1, "limit": 1, "returned": 1,
+                    "offset": 0, "limit": 1, "returned": 1,
                     "total": 2,
                 },
+                "next_cursor": None,
             },
         ]
         seen: list[httpx.Request] = []

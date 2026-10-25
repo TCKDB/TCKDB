@@ -53,7 +53,7 @@ The response's `request.sort` is the authority for any one read; it names every 
 | Literature records | `record_type`, `created_at`, `id` | Records citing one paper, grouped by kind. |
 | Level of theory, frequency scale factor and energy correction scheme lists | Their own keys: method and basis; scale kind and value; scheme kind and name; then `id` ascending | Reference lists, not records with a review state. |
 | Artifact integrity, calculation paths | `last_observed_at` then `sha256`; `point_index` | Ordered by what they list. |
-| Analytics reads | `review_rank`, `created_at`, `id` | Behind a keyset cursor with a snapshot watermark. |
+| Analytics reads | `review_rank`, `created_at`, `id` | The same order as the other record lists. |
 
 An echo test (`backend/tests/api/test_browse_order_echo.py`) seeds rows whose review status, deposition time and id
 disagree, calls every list endpoint above, and requires the served order to equal the order the response echoed.
@@ -83,10 +83,9 @@ does not use this rank. A floor of `under_review` still admits `approved` and `u
 - **Echoed.** A browse or list response carries `request.sort` as a structured `display_order`: each key, its direction
   and its meaning, and a sentence saying the order is not a scientific preference. When the request itself asked for the
   order (`ranking=...`, `mode=...`), `requested_by` names the parameter and value; it is `null` for the default order.
-- **Not stable under new deposits.** A page is a slice of the live ordering. A new deposit can sort above your position
-  and shift an offset page by one (a record can be skipped or seen twice between pages). Keyset cursors with a snapshot
-  watermark (the analytics endpoints) are stable against new insertions; stable paging for the other lists is a later
-  change.
+- **Not stable under new deposits, by offset.** An offset page is a slice of the live ordering. A new deposit above your
+  position repeats a record on the next page, and a record leaving the visible set above it skips one. Every list also
+  takes a cursor, which is stable against both (see "Paging" below).
 
 ## Reads never pick
 
@@ -343,3 +342,54 @@ format is refused, not read as the defaults.
 Visibility and ordering are independent: hiding a record never reorders the rest, and ordering never reveals a hidden
 one.
 Every list that applies these defaults reports what they hid (`hidden_by_default`, above), under the exploratory profile only.
+
+## Paging: offset is random access, the cursor is the stable traversal
+
+Every browse and list read takes two ways to move through its order, and they answer different questions.
+
+- **`offset` is random access** ("page N of M"). It is deterministic only for a static corpus. An upload that sorts above the
+  reader's position repeats a record on the next page; a record that leaves the visible set (a deprecation, say) makes the
+  reader skip one. Neither is visible in the response.
+- **`next_cursor` is the stable traversal.** Every list response carries `next_cursor` (null on the last page) and `watermark`.
+  Pass `next_cursor` back as `cursor` for the following page. The cursor holds the sort key of the last record delivered, so
+  the next page asks for records strictly after it in the order above; a record uploaded above the reader changes nothing.
+  It also holds a snapshot bound (the highest record id the request was allowed to see when the traversal began), so uploads
+  that arrive mid-traversal are outside it. `pagination.mode` says which contract served a page (`offset` or `cursor`).
+
+Rules of the cursor:
+
+- It is bound to its endpoint, its filters and the read profile. Replayed against another endpoint, or with different
+  filters or profile, it is a 422 `cursor_query_mismatch`. Only `limit` and `include` (and, on a point series,
+  `include_geometries`) may change between pages.
+- A malformed, altered, forged, old-version or other-key cursor is a 422 `invalid_cursor`. The version is compared for
+  exact equality. Every value in it is checked against the sort before it is used, so a forged cursor is never a 500.
+- `cursor` and a non-zero `offset` cannot be combined: 422 `cursor_offset_conflict`.
+- It is opaque: encrypted and authenticated under the server's `PAGING_CURSOR_KEY`, so it holds no readable id, sort
+  value or snapshot bound (the internal-id policy keeps those out of every response). Rotating the key invalidates
+  cursors in flight: clients get 422 `invalid_cursor` and restart. Nothing stored depends on the key.
+- It never names a record the read profile hides. It holds the key of a record already delivered, and its snapshot bound
+  is the highest id among records the request may see (under `curated`, the highest approved id, not the table's).
+
+What the cursor guarantees: **insertions are bounded.** A record uploaded after the traversal began is not delivered, and
+cannot shift the reader or change `total`.
+
+What it does not guarantee: **review state is not frozen.** `review_rank` leads the sort key, so a review change can move
+a record across the reader's position, and then:
+
+- approving a record the reader has not reached moves it ahead of the reader: it is **skipped**;
+- moving a delivered record from `approved` to `under_review` moves it behind the reader: it is delivered **again**;
+- a record deprecated or rejected before it is reached drops out, which is the intended outcome;
+- `species/search` keeps a species whose entries are all hidden and ranks it by its visible entries, so deprecating an
+  entry moves the species to the end rather than removing it: a species already delivered is delivered again.
+
+Nested and derived facts are bounded by the parent's id only. `species/browse` bounds species by `species.id`, so a new
+approved entry under an old, not-yet-reached species changes that species' rank and the traversal can skip it. A list
+that is eligible through child rows (a level of theory, a frequency scale factor or a correction scheme is listed once a
+calculation uses it) is bounded by its own id, not by the usage.
+
+So "every record exactly once" holds only while review state and eligibility do not change during the traversal. For an
+immutable, citable set, read a published dataset release's frozen `selected_records` artifact; live paging is
+reproducible against insertions, not immutable.
+
+Not paged by cursor, with the reason: the two NDJSON exports (a stream with no envelope), and the authenticated operations
+lists (admin users and curator tasks, submissions for review and mine, a submission's audit events and record links).

@@ -62,7 +62,14 @@ def _page(*, offset: int = 0, limit: int = 50, total: int = 0) -> dict[str, Any]
             "returned": returned,
             "total": total,
         },
+        "next_cursor": f"c{offset + returned}" if offset + returned < total else None,
     }
+
+
+def _offset_of(params: dict[str, Any]) -> int:
+    """The position a request asks for: its cursor (``c<position>`` in these tests) or its offset."""
+    cursor = params.get("cursor")
+    return int(cursor[1:]) if cursor else int(params.get("offset", 0))
 
 
 def test_detail_and_composed_record_types_are_distinct_and_exported() -> None:
@@ -381,13 +388,11 @@ def test_every_supported_search_has_a_lazy_complete_iterator(
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         if request.method == "GET":
-            query = parse_qs(urlsplit(str(request.url)).query)
-            offset = int(query["offset"][0])
-            limit = int(query["limit"][0])
+            query = {k: v[0] for k, v in parse_qs(urlsplit(str(request.url)).query).items()}
         else:
-            payload = json.loads(request.content)
-            offset = payload["offset"]
-            limit = payload["limit"]
+            query = json.loads(request.content)
+        offset = _offset_of(query)
+        limit = int(query["limit"])
         return httpx.Response(200, json=_page(offset=offset, limit=limit, total=3))
 
     client, _recorder = make_client(handler)
@@ -398,7 +403,7 @@ def test_every_supported_search_has_a_lazy_complete_iterator(
     assert len(requests) == 2
 
 
-def test_iterator_keeps_filters_and_includes_stable_while_advancing_offset() -> None:
+def test_iterator_keeps_filters_and_includes_stable_while_following_the_cursor() -> None:
     bodies: list[dict[str, Any]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -406,7 +411,7 @@ def test_iterator_keeps_filters_and_includes_stable_while_advancing_offset() -> 
         bodies.append(payload)
         return httpx.Response(
             200,
-            json=_page(offset=payload["offset"], limit=payload["limit"], total=3),
+            json=_page(offset=_offset_of(payload), limit=payload["limit"], total=3),
         )
 
     client, _recorder = make_client(handler)
@@ -419,7 +424,8 @@ def test_iterator_keeps_filters_and_includes_stable_while_advancing_offset() -> 
     )
 
     assert len(records) == 3
-    assert [body["offset"] for body in bodies] == [0, 2]
+    assert [body.get("cursor") for body in bodies] == [None, "c2"]
+    assert all("offset" not in body or body["offset"] is None for body in bodies)
     assert all(body["limit"] == 2 for body in bodies)
     assert all(
         body["source_species_entry_refs"] == ["spe_a", "spe_a"] for body in bodies

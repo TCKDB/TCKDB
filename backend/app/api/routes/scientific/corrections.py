@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
     DETAIL_SCOPE,
@@ -107,7 +107,8 @@ def scientific_frequency_scale_factor_search_get(
     min_review_status: str | None = Query(None),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Frequency-scale-factor search.
@@ -136,6 +137,7 @@ def scientific_frequency_scale_factor_search_get(
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = search_frequency_scale_factors(session, request_obj)
@@ -237,7 +239,8 @@ def scientific_energy_correction_scheme_search_get(
     min_review_status: str | None = Query(None),
     sort: str | None = Query(None),
     include: list[str] | None = Query(None),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, description=OFFSET_DESCRIPTION),
+    cursor: CursorQuery = None,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Energy-correction-scheme search.
@@ -265,6 +268,7 @@ def scientific_energy_correction_scheme_search_get(
         sort=sort,
         include=parse_include(include),
         offset=offset,
+        cursor=cursor,
         limit=limit,
     )
     payload = search_energy_correction_schemes(session, request_obj)

@@ -603,7 +603,7 @@ def test_offset_pagination_still_works(client, kinetics_corpus):
     first = client.get(f"{KINETICS}?limit=2").json()
     assert first["pagination"]["total"] == 3
     assert first["pagination"]["returned"] == 2
-    assert first["request"]["pagination_mode"] == "offset"
+    assert first["pagination"]["mode"] == "offset"
 
     second = client.get(f"{KINETICS}?limit=2&offset=2").json()
     assert second["pagination"]["returned"] == 1
@@ -619,14 +619,15 @@ def test_keyset_traversal_returns_a_stable_complete_sequence(
 
     seen: list[str] = []
     body = client.get(f"{KINETICS}?limit=1").json()
-    assert body["watermark"]["taken_at"] is not None
+    assert body["watermark"] is None  # an offset page names no snapshot; the cursor carries it
     while True:
         seen.extend(_refs(body, "kinetics_ref"))
         cursor = body["next_cursor"]
         if cursor is None:
             break
         body = client.get(f"{KINETICS}?limit=1&cursor={cursor}").json()
-        assert body["request"]["pagination_mode"] == "cursor"
+        assert body["pagination"]["mode"] == "cursor"
+        assert body["watermark"]["taken_at"] is not None
 
     assert seen == offset_order
 

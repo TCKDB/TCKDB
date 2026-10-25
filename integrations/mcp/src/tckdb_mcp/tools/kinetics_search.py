@@ -106,6 +106,7 @@ _ACCEPTED_FIELDS: frozenset[str] = frozenset(
         "include_deprecated",
         # Pagination / framing
         "offset",
+        "cursor",
         "limit",
         "include",
     }
@@ -183,6 +184,7 @@ INPUT_SCHEMA: dict[str, Any] = {
         "include_rejected": {"type": "boolean"},
         "include_deprecated": {"type": "boolean"},
         "offset": {"type": "integer", "minimum": 0},
+        "cursor": {"type": "string", "minLength": 1, "maxLength": 4096, "description": "Stable paging: pass the previous response's next_cursor to get the next page (null on the last page). Do not combine with a non-zero offset. offset is random access and can skip or repeat records if the database changes between pages."},
         "limit": {
             "type": "integer",
             "minimum": 1,
@@ -299,6 +301,11 @@ def run(
     offset = args.get("offset", 0)
     if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
         raise invalid_input(f"offset must be a non-negative integer; got {offset!r}")
+    cursor = args.get("cursor")
+    if cursor is not None and (not isinstance(cursor, str) or not cursor):
+        raise invalid_input("cursor must be the next_cursor string of the previous page")
+    if cursor is not None and offset:
+        raise invalid_input("cursor and a non-zero offset cannot be combined; use the cursor alone")
 
     try:
         limit = config.cap_limit(args.get("limit"))
@@ -347,6 +354,7 @@ def run(
         "include_rejected": args.get("include_rejected"),
         "include_deprecated": args.get("include_deprecated"),
         "offset": offset,
+        "cursor": cursor,
         "limit": limit,
         "include": include,
     }

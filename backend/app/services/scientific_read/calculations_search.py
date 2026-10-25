@@ -107,6 +107,7 @@ from app.services.scientific_read.hidden_by_default import hidden_by_default_blo
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 from app.services.scientific_read.sql_review import (
     join_review,
@@ -177,6 +178,7 @@ def search_calculations(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/calculations/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -315,7 +317,7 @@ def search_calculations(
     # LEFT JOIN is load-bearing: a calculation with no ``record_review`` row
     # is ``not_reviewed`` and visible by default, and an inner join would
     # drop every one of them.
-    candidates = stmt.subquery("candidates")
+    candidates = paging.restrict(stmt, Calculation.id).subquery("candidates")
     record_hidden_by_default(
         hidden_by_default_block(
             session,
@@ -350,18 +352,14 @@ def search_calculations(
     # ``id`` desc is the tiebreak that makes this a total order — without it
     # two rows equal on rank and created_at (every row inserted in
     # one transaction shares ``created_at``) would page non-deterministically.
-    page_ids = list(
-        session.scalars(
-            select(ranked.c.id)
-            .order_by(
-                ranked.c.review_rank.asc(),
-                ranked.c.created_at.desc(),
-                ranked.c.id.desc(),
-            )
-            .offset(offset)
-            .limit(limit)
-        )
+    page = paging.sql_window(
+        session,
+        ranked,
+        columns=[ranked.c.id, ranked.c.review_rank, ranked.c.created_at],
+        keys=[(ranked.c.review_rank, "asc"), (ranked.c.created_at, "desc"), (ranked.c.id, "desc")],
+        total=total,
     )
+    page_ids = [int(row.id) for row in page.items]
 
     # Badges for the page only — bounded by ``limit``, never by the match.
     badges = fetch_review_badges(
@@ -426,8 +424,9 @@ def search_calculations(
         review_summary=summary,
         records=records,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(records), total=total
+            offset=offset, limit=limit, returned=len(records), total=total, page=page
         ),
+        **page.envelope(),
     )
 
 

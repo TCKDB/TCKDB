@@ -533,6 +533,39 @@ def test_offset_forwarded() -> None:
     client.close()
 
 
+def test_cursor_forwarded() -> None:
+    captured: list[dict[str, Any]] = []
+    client = _make_client(_ok_handler(captured))
+    ts_tool.run(client, _cfg(), {"smiles": "CCO", "cursor": "abc"})
+    assert captured[0]["body"]["cursor"] == "abc"
+    client.close()
+
+
+def test_no_cursor_is_sent_unless_given() -> None:
+    captured: list[dict[str, Any]] = []
+    client = _make_client(_ok_handler(captured))
+    ts_tool.run(client, _cfg(), {"smiles": "CCO"})
+    assert "cursor" not in captured[0]["body"]
+    client.close()
+
+
+@pytest.mark.parametrize("bad", ["", 5, ["x"]])
+def test_rejects_a_malformed_cursor(bad) -> None:
+    client = _make_client(_ok_handler([]))
+    with pytest.raises(MCPToolError):
+        ts_tool.run(client, _cfg(), {"smiles": "CCO", "cursor": bad})
+    client.close()
+
+
+def test_rejects_cursor_with_a_nonzero_offset_before_calling_the_server() -> None:
+    captured: list[dict[str, Any]] = []
+    client = _make_client(_ok_handler(captured))
+    with pytest.raises(MCPToolError, match="cannot be combined"):
+        ts_tool.run(client, _cfg(), {"smiles": "CCO", "cursor": "abc", "offset": 2})
+    assert captured == []
+    client.close()
+
+
 def test_review_filters_passed_as_json_booleans() -> None:
     captured: list[dict[str, Any]] = []
     client = _make_client(_ok_handler(captured))

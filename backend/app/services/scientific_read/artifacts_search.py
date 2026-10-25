@@ -72,6 +72,7 @@ from app.services.scientific_read.hidden_by_default import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
@@ -126,6 +127,7 @@ def search_artifacts(
     """
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
+    paging = Paging("/scientific/artifacts/search", request, offset=offset, limit=limit)
     includes = validate_includes(
         request.include,
         _LEGAL_INCLUDE_TOKENS,
@@ -219,6 +221,7 @@ def search_artifacts(
     visible_rows = [
         row for row in rows if badges[row.calculation_id].status in visible
     ]
+    visible_rows = paging.snapshot(visible_rows, id_of=lambda row: row.artifact_id)
     if not visible_rows:
         return _empty_response(request, includes, offset, limit)
 
@@ -242,9 +245,9 @@ def search_artifacts(
             -row.artifact_id,
         )
 
-    visible_rows.sort(key=sort_key)
-    total = len(visible_rows)
-    page_rows = visible_rows[offset : offset + limit]
+    page = paging.window(visible_rows, key_of=sort_key)
+    total = page.total
+    page_rows = page.items
 
     # Materialize each page row. Bulk-load the calculation rows we
     # actually need for the page (not the full visible set).
@@ -291,8 +294,9 @@ def search_artifacts(
         review_summary=summary,
         records=records,
         pagination=build_pagination(
-            offset=offset, limit=limit, returned=len(records), total=total
+            offset=offset, limit=limit, returned=len(records), total=total, page=page
         ),
+        **page.envelope(),
     )
 
 

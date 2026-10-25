@@ -22,6 +22,7 @@ from app.services.scientific_read.keyset import (
     encode_cursor,
     keyset_predicate,
     query_signature,
+    seal,
     watermark_predicate,
 )
 
@@ -112,21 +113,21 @@ def test_cursor_from_a_future_version_is_rejected():
             "query_signature": "sig-a",
         }
     )
-    token = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+    token = base64.urlsafe_b64encode(seal(payload.encode())).decode().rstrip("=")
     with pytest.raises(InvalidCursorError, match="cursor version"):
         decode_cursor(token, expected_signature="sig-a")
 
 
 def test_a_version_one_cursor_is_refused_as_an_old_cursor_version():
-    """Kills: leaving CURSOR_VERSION at 1 after the analytics order changed, so an old cursor resumes the new order."""
+    """Kills: leaving CURSOR_VERSION unchanged after the payload changed, so an old cursor resumes the new order."""
     import base64
     import json
 
-    assert CURSOR_VERSION == 2
+    assert CURSOR_VERSION == 4
     payload = json.dumps(
         {"v": 1, "watermark": _watermark().as_dict(), "last_values": [1], "query_signature": "sig-a"}
     )
-    token = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+    token = base64.urlsafe_b64encode(seal(payload.encode())).decode().rstrip("=")
     with pytest.raises(InvalidCursorError, match="cursor version"):
         decode_cursor(token, expected_signature="sig-a")
 
@@ -150,9 +151,155 @@ def test_a_cursor_whose_version_is_a_float_or_a_string_is_rejected(raw):
     )
     payload = good.replace(f'"v": {CURSOR_VERSION}', f'"v": {raw}')
     assert payload != good
-    token = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+    token = base64.urlsafe_b64encode(seal(payload.encode())).decode().rstrip("=")
     with pytest.raises(InvalidCursorError, match="cursor version"):
         decode_cursor(token, expected_signature="sig-a")
+
+
+# ---------------------------------------------------------------------------
+# Sealing: the token is opaque, and a forged one is a cursor error
+# ---------------------------------------------------------------------------
+
+
+def test_a_cursor_is_opaque_without_the_key():
+    """Kills: a token that is plain base64 JSON (it would hand out record ids and the snapshot bound)."""
+    import base64
+    import json
+
+    from app.services.scientific_read.keyset import Cursor, encode_cursor
+
+    token = encode_cursor(Cursor(watermark=_watermark(), last_values=[1234567, 7654321], query_signature="sig-a"))
+    raw = base64.urlsafe_b64decode(token + "=" * (-len(token) % 4))
+    with pytest.raises(ValueError):
+        json.loads(raw)
+    assert b"1234567" not in raw and b"7654321" not in raw
+    assert b"max_id" not in raw and b"last_values" not in raw
+
+
+def test_flipping_any_single_byte_of_a_token_is_refused():
+    """Kills: a seal that authenticates only part of the token (nonce, body or tag)."""
+    import base64
+
+    from app.services.scientific_read.keyset import Cursor, encode_cursor
+
+    token = encode_cursor(Cursor(watermark=_watermark(), last_values=[1, "x"], query_signature="sig-a"))
+    raw = bytearray(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))
+    assert len(raw) > 60
+    for index in range(len(raw)):
+        forged = bytearray(raw)
+        forged[index] ^= 0x01
+        bad = base64.urlsafe_b64encode(bytes(forged)).decode().rstrip("=")
+        with pytest.raises(InvalidCursorError, match="invalid_cursor"):
+            decode_cursor(bad, expected_signature="sig-a")
+    # Control: the untouched token still opens.
+    assert decode_cursor(token, expected_signature="sig-a").last_values == [1, "x"]
+
+
+def test_a_token_is_sealed_with_aes_gcm_and_the_version_as_associated_data():
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    from app.services.scientific_read import keyset
+
+    blob = keyset.seal(b"hello")
+    assert blob[: keyset._NONCE_BYTES] != keyset.seal(b"hello")[: keyset._NONCE_BYTES]  # a fresh nonce each time
+    assert len(blob) == keyset._NONCE_BYTES + len(b"hello") + 16
+    assert keyset.unseal(blob) == b"hello"
+    # The same bytes sealed as another version do not open as this one.
+    nonce, body = blob[: keyset._NONCE_BYTES], blob[keyset._NONCE_BYTES :]
+    other = AESGCM(_key_of(keyset)).encrypt(nonce, b"hello", b"tckdb-cursor-v999")
+    assert other != body
+    with pytest.raises(ValueError):
+        keyset.unseal(nonce + other)
+
+
+def _key_of(keyset) -> bytes:
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+    from app.api.config import settings
+
+    secret = settings.paging_cursor_key or keyset._LOCAL_DEVELOPMENT_KEY
+    return HKDF(algorithm=hashes.SHA256(), length=32, salt=None, info=keyset._KEY_INFO).derive(secret.encode())
+
+
+def test_the_same_cursor_is_sealed_differently_each_time():
+    from app.services.scientific_read.keyset import Cursor, encode_cursor
+
+    cursor = Cursor(watermark=_watermark(), last_values=[1], query_signature="sig-a")
+    assert encode_cursor(cursor) != encode_cursor(cursor)
+
+
+def test_a_cursor_sealed_under_another_key_is_refused(monkeypatch):
+    """A key rotation invalidates cursors in flight: a 422 and a restart, nothing worse."""
+    from app.api.config import settings
+    from app.services.scientific_read.keyset import Cursor, encode_cursor
+
+    monkeypatch.setattr(settings, "paging_cursor_key", "a" * 40)
+    token = encode_cursor(Cursor(watermark=_watermark(), last_values=[1], query_signature="sig-a"))
+    assert decode_cursor(token, expected_signature="sig-a").last_values == [1]
+    monkeypatch.setattr(settings, "paging_cursor_key", "b" * 40)
+    with pytest.raises(InvalidCursorError, match="invalid_cursor"):
+        decode_cursor(token, expected_signature="sig-a")
+
+
+def test_a_hosted_deployment_without_a_key_issues_no_cursor(monkeypatch):
+    from app.api.config import settings
+    from app.services.scientific_read.keyset import Cursor, encode_cursor
+
+    monkeypatch.setattr(settings, "paging_cursor_key", None)
+    monkeypatch.setattr(settings, "deployment_mode", "hosted_public")
+    with pytest.raises(RuntimeError, match="PAGING_CURSOR_KEY"):
+        encode_cursor(Cursor(watermark=_watermark(), last_values=[1], query_signature="sig-a"))
+
+
+def _sealed(payload: dict) -> str:
+    import base64
+    import json
+
+    return base64.urlsafe_b64encode(seal(json.dumps(payload).encode())).decode().rstrip("=")
+
+
+def _good_payload() -> dict:
+    return {
+        "v": CURSOR_VERSION,
+        "watermark": _watermark().as_dict(),
+        "last_values": [1],
+        "query_signature": "sig-a",
+    }
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"last_values": "x"},
+        {"last_values": []},
+        {"last_values": [{"a": 1}]},
+        {"last_values": [{"__dt__": 5}]},
+        {"last_values": [{"__dt__": "not a time"}]},
+        {"last_values": [float("nan")]},
+        {"watermark": "x"},
+        {"watermark": {"max_id": "9", "taken_at": "2026-01-01T00:00:00+00:00"}},
+        {"watermark": {"max_id": True, "taken_at": "2026-01-01T00:00:00+00:00"}},
+        {"watermark": {"max_id": -1, "taken_at": "2026-01-01T00:00:00+00:00"}},
+        {"watermark": {"max_id": 1, "taken_at": 5}},
+        {"watermark": {"max_id": 1, "taken_at": "2026-01-01T00:00:00+00:00", "groups": {"a": "b"}}},
+        {"watermark": {"max_id": 1, "taken_at": "2026-01-01T00:00:00+00:00", "release_ref": 5}},
+    ],
+    ids=repr,
+)
+def test_a_sealed_payload_of_the_wrong_shape_is_a_cursor_error(change):
+    """Kills: a bad value reaching the comparison or the database (a 500 where a 422 belongs)."""
+    with pytest.raises(InvalidCursorError, match="invalid_cursor"):
+        decode_cursor(_sealed({**_good_payload(), **change}), expected_signature="sig-a")
+
+
+def test_a_key_of_the_wrong_kind_is_refused_before_it_is_compared():
+    from app.services.scientific_read.keyset import check_key_values
+
+    check_key_values([1, 2.5, "a"], [float, float, str])  # numbers are numbers
+    for bad in ([1, 2.5, 3], ["x", 2.5, "a"], [True, 2.5, "a"], [1, 2.5], [1, 2.5, "a", 4]):
+        with pytest.raises(InvalidCursorError):
+            check_key_values(bad, [float, float, str])
 
 
 # ---------------------------------------------------------------------------

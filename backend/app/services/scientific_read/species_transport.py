@@ -45,7 +45,6 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     reject_client_sort,
     review_summary,
-    slice_for_pagination,
     validate_includes,
     validate_pagination,
     visible_statuses,
@@ -57,6 +56,7 @@ from app.services.scientific_read.hidden_by_default import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.transport import (
     _DETAIL_LEGAL_INCLUDE_TOKENS,
     _INTERNAL_INCLUDE_TOKENS,
@@ -79,6 +79,7 @@ def get_species_transport(
     sort: str | None = None,
     offset: int = 0,
     limit: int = 50,
+    cursor: str | None = None,
 ) -> ScientificTransportSearchResponse:
     """Return transport records for one species entry.
 
@@ -94,6 +95,18 @@ def get_species_transport(
     """
     reject_client_sort(sort)
     offset, limit = validate_pagination(offset, limit)
+    paging = Paging(
+        "/scientific/species-entries/{id}/transport",
+        {
+            "cursor": cursor,
+            "species_entry_id": species_entry_id,
+            "min_review_status": min_review_status.value if min_review_status is not None else None,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+        },
+        offset=offset,
+        limit=limit,
+    )
     includes = validate_includes(
         include or [],
         _DETAIL_LEGAL_INCLUDE_TOKENS,
@@ -142,17 +155,17 @@ def get_species_transport(
     if not visible_ids:
         return _empty_response(species_entry_ref, includes, offset, limit)
 
+    visible_ids = paging.snapshot(visible_ids, id_of=lambda cid: cid)
     summary = review_summary(badges[cid] for cid in visible_ids)
-    total = len(visible_ids)
-    ordered_ids = sorted(
+    page = paging.window(
         visible_ids,
-        key=lambda cid: (
+        key_of=lambda cid: (
             REVIEW_RANK[badges[cid].status],
             -created_at_by_id[cid].timestamp(),
             -cid,
         ),
     )
-    page_ids = slice_for_pagination(ordered_ids, offset=offset, limit=limit)
+    page_ids = page.items
     records = _materialize_records(session, page_ids, badges, includes)
 
     return ScientificTransportSearchResponse(
@@ -167,8 +180,10 @@ def get_species_transport(
             offset=offset,
             limit=limit,
             returned=len(records),
-            total=total,
+            total=page.total,
+            page=page,
         ),
+        **page.envelope(),
     )
 
 

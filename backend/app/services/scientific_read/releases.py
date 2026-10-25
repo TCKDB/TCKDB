@@ -47,6 +47,7 @@ from app.services.release.manifest import (
 )
 from app.services.release.records import encode_scalar, public_refs_for
 from app.services.scientific_read.common import validate_pagination
+from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.supersession import fetch_supersession_notices
 
 
@@ -200,6 +201,7 @@ def list_releases(
     status: DatasetReleaseStatus | None = None,
     offset: int = 0,
     limit: int = 50,
+    cursor: str | None = None,
 ) -> ScientificReleaseListResponse:
     """List releases, newest first. Withdrawn releases are listed, not hidden.
 
@@ -207,15 +209,23 @@ def list_releases(
         pagination bounds.
     """
     offset, limit = validate_pagination(offset, limit)
+    paging = Paging(
+        "/scientific/releases",
+        {"cursor": cursor, "status": status.value if status else None},
+        offset=offset,
+        limit=limit,
+    )
     stmt = select(DatasetRelease)
     if status is not None:
         stmt = stmt.where(DatasetRelease.status == status)
+    if paging.resume is None:
+        paging.begin(session.scalar(select(func.max(DatasetRelease.id))))
+    stmt = paging.restrict(stmt, DatasetRelease.id)
     total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
-    page = list(
-        session.scalars(
-            stmt.order_by(DatasetRelease.id.desc()).offset(offset).limit(limit)
-        )
+    window = paging.sql_page(
+        session, stmt.add_columns(DatasetRelease.id.label("release_id")), keys=[(DatasetRelease.id, "desc")], total=total
     )
+    page = [row[0] for row in window.items]
     return ScientificReleaseListResponse(
         request=RequestEcho(
             filter={"status": status.value if status else None},
@@ -226,7 +236,9 @@ def list_releases(
             limit=limit,
             returned=len(page),
             total=total,
+            mode=window.mode,
         ),
+        **window.envelope(),
     )
 
 
@@ -373,6 +385,7 @@ def get_release_selections(
     include_superseded: bool = True,
     offset: int = 0,
     limit: int = 50,
+    cursor: str | None = None,
 ) -> ScientificReleaseSelectionsResponse:
     """The release's attributed selection ledger.
 
@@ -394,6 +407,12 @@ def get_release_selections(
     """
     release = resolve_release(session, handle)
     offset, limit = validate_pagination(offset, limit)
+    paging = Paging(
+        "/scientific/releases/{release_handle}/selections",
+        {"cursor": cursor, "release": release.public_ref, "include_superseded": include_superseded},
+        offset=offset,
+        limit=limit,
+    )
 
     superseder = aliased(ReleaseSelection)
     stands = and_(
@@ -414,15 +433,21 @@ def get_release_selections(
     if not include_superseded:
         stmt = stmt.where(stands)
 
+    if paging.resume is None:
+        paging.begin(
+            session.scalar(
+                select(func.max(ReleaseSelection.id)).where(ReleaseSelection.dataset_release_id == release.id)
+            )
+        )
+    stmt = paging.restrict(stmt, ReleaseSelection.id)
     total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
-    page_rows = list(
-        session.execute(
-            stmt.add_columns(stands.label("stands"))
-            .order_by(ReleaseSelection.id)
-            .offset(offset)
-            .limit(limit)
-        ).all()
+    window = paging.sql_page(
+        session,
+        stmt.add_columns(stands.label("stands"), ReleaseSelection.id.label("selection_id")),
+        keys=[(ReleaseSelection.id, "asc")],
+        total=total,
     )
+    page_rows = [(row[0], row[1]) for row in window.items]
     rows = [row for row, _stands in page_rows]
     stands_by_id = {row.id: bool(flag) for row, flag in page_rows}
 
@@ -514,7 +539,9 @@ def get_release_selections(
             limit=limit,
             returned=len(rows),
             total=total,
+            mode=window.mode,
         ),
+        **window.envelope(),
     )
 
 

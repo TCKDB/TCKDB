@@ -44,6 +44,7 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    WatermarkEcho,
 )
 
 
@@ -145,6 +146,10 @@ class ScientificSpeciesObservationsResponse(BaseModel):
     review_summary: ReviewStatusSummary
     records: list[MolecularPropertyObservationRecord]
     pagination: Pagination
+    #: Where the next page starts: pass it back as ``cursor``. ``null`` on the last page. See ``Pagination``.
+    next_cursor: str | None = None
+    #: The snapshot a cursor traversal is pinned to (set on every page that can continue a traversal).
+    watermark: WatermarkEcho | None = None
 
 
 __all__ = [
