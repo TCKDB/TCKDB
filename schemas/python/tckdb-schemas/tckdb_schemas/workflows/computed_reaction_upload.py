@@ -62,6 +62,10 @@ from tckdb_schemas.fragments.calculation import (
     PathSearchResultPayload,
 )
 from tckdb_schemas.fragments.geometry import GeometryPayload
+from tckdb_schemas.fragments.kinetics_bath_gas import (
+    BundleKineticsBathGasIn,
+    check_kinetics_bath_gas,
+)
 from tckdb_schemas.fragments.kinetics_evidence import (
     T0_K_DESCRIPTION,
     T0_K_MAX,
@@ -1327,6 +1331,8 @@ class BundleKineticsIn(SchemaBase):
         ``1.0``.
     :param degeneracy_convention: Whether degeneracy is already included in
         the reported rate. Defaults to ``unknown`` for legacy producers.
+    :param bath_gas: Optional bath gas the rate was obtained for (species keys with mole
+        fractions summing to 1; not valid at ``pressure_context='high_p_limit'``).
     :param note: Optional note.
 
     :param t0_k: Reference temperature T0 in K, so that
@@ -1399,6 +1405,15 @@ class BundleKineticsIn(SchemaBase):
     network_kinetics_ref: str | None = Field(default=None, min_length=1)
     pressure_context: PressureContext | None = None
     pressure_bar: float | None = Field(default=None, gt=0)
+    bath_gas: list[BundleKineticsBathGasIn] = Field(
+        default_factory=list,
+        description=(
+            "The bath gas this rate was obtained for, where the depositor states it: each "
+            "component names a species of the bundle by key, with its mole fraction. The "
+            "fractions sum to 1 and the same species is named once. Meaningless for a "
+            "high-pressure-limit rate (refused). Empty means not stated; it is never inferred."
+        ),
+    )
     note: str | None = None
 
     source_calculations: list[KineticsSourceCalculationIn] = Field(
@@ -1455,6 +1470,21 @@ class BundleKineticsIn(SchemaBase):
             raise ValueError(
                 "pressure_context='apparent_at_pressure' requires pressure_bar."
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_bath_gas(self) -> Self:
+        """A stated bath gas is a composition the rate could have been obtained for.
+
+        Not at the ``high_p_limit`` pressure context (the limit has no collider), each species at most
+        once, and the mole fractions sum to 1.0 within 1e-9, as for a network solve's bath gas. An
+        empty list is "not stated" and is never refused or inferred.
+        """
+        check_kinetics_bath_gas(
+            pressure_context=self.pressure_context,
+            mole_fractions=[bg.mole_fraction for bg in self.bath_gas],
+            identities=[bg.species_key for bg in self.bath_gas],
+        )
         return self
 
     @model_validator(mode="after")
@@ -1955,6 +1985,16 @@ class ComputedReactionUploadRequest(SchemaBase):
                             key=key,
                             declared=species_keys,
                         )
+            for index, bath in enumerate(kin.bath_gas):
+                if bath.species_key not in species_keys:
+                    raise undeclared_key_error(
+                        W_SPECIES_KEY_UNDECLARED,
+                        f"Kinetics bath gas references species key '{bath.species_key}' "
+                        f"which is not defined in the species list.",
+                        field=f"kinetics[{kin_index}].bath_gas[{index}].species_key",
+                        key=bath.species_key,
+                        declared=species_keys,
+                    )
         return self
 
     @model_validator(mode="after")

@@ -50,6 +50,7 @@ from app.db.models.common import (
 from app.db.models.kinetics import (
     Kinetics,
     KineticsArrheniusEntry,
+    KineticsBathGas,
     KineticsDetermination,
     KineticsInterpretationAssignment,
     KineticsSourceCalculation,
@@ -85,6 +86,7 @@ from app.schemas.reads.scientific_kinetics import (
     ArrheniusParameters,
     ChebyshevBlock,
     FalloffBlock,
+    KineticsBathGasBlock,
     KineticsDeterminationBlock,
     KineticsDeterminationTargetBlock,
     KineticsInterpretationAssignmentBlock,
@@ -239,6 +241,7 @@ _PDEP_EAGER_LOADS = (
     selectinload(Kinetics.chebyshev),
     selectinload(Kinetics.falloff),
     selectinload(Kinetics.third_body_efficiencies),
+    selectinload(Kinetics.bath_gases).selectinload(KineticsBathGas.species_entry),
 )
 
 _DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
@@ -731,6 +734,7 @@ def get_reaction_kinetics(
                 chebyshev=_chebyshev_block(k),
                 falloff=_falloff_block(k),
                 third_body_efficiencies=_third_body_blocks(k, collider_refs),
+                bath_gas=_bath_gas_blocks(k),
                 uncertainty=KineticsUncertainty(
                     A_uncertainty=k.a_uncertainty,
                     A_uncertainty_kind=k.a_uncertainty_kind,
@@ -1720,6 +1724,21 @@ def _third_body_blocks(
         for tb in kinetics.third_body_efficiencies
     ]
     blocks.sort(key=lambda b: b.collider_ref)
+    return blocks
+
+
+def _bath_gas_blocks(kinetics: Kinetics) -> list[KineticsBathGasBlock] | None:
+    """The stated bath gas, with each component as a species-entry public ref.
+
+    Sorted by ``species_entry_ref`` for a deterministic read order across requests.
+    """
+    if not kinetics.bath_gases:
+        return None
+    blocks = [
+        KineticsBathGasBlock(species_entry_ref=bg.species_entry.public_ref, mole_fraction=bg.mole_fraction)
+        for bg in kinetics.bath_gases
+    ]
+    blocks.sort(key=lambda b: b.species_entry_ref)
     return blocks
 
 

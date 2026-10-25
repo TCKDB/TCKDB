@@ -25,10 +25,10 @@
       "1": "6e5103f9a711d2e75c5f7ed11e568a30f806515d78876cc3cc8227b994b42aa5"
     },
     "tckdb_reproducibility": {
-      "1": "40d960b64777de4bfa87b333f284cb7b9cc81e50dc6f2bfa6e4fff7a34035eea"
+      "1": "ebb46f9f2456c86d6b1f60c472a27c0ba77a9d21e4fc7bb70970f05cddf940a7"
     },
     "tckdb_reproducibility_ts_statmech": {
-      "1": "ba85c740cd95a1f5504e4daf22d5f3d359db859144272c97076a9bdb7db15a7c"
+      "1": "4041f6fcfc13d25e1e2d46eb89e8d7cb1598068023a186dce5e55b71f34f0682"
     }
   },
   "unbumped_overrides": [
@@ -62,6 +62,16 @@
       "name": "tckdb_reproducibility_ts_statmech",
       "version": 1,
       "reason": "dependency_cycle outcome removed; unreachable under the calculation_dependency acyclicity trigger"
+    },
+    {
+      "name": "tckdb_reproducibility",
+      "version": 1,
+      "reason": "evidence snapshot carries bath gas when stated; no verdict reads it"
+    },
+    {
+      "name": "tckdb_reproducibility_ts_statmech",
+      "version": 1,
+      "reason": "evidence snapshot carries bath gas when stated; no verdict reads it"
     }
   ]
 }

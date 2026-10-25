@@ -884,6 +884,7 @@ UNGATED_NULLABLE_FIELDS = (
     ("GET /reaction-entries/{ref}/kinetics", "records", "falloff"),
     ("GET /reaction-entries/{ref}/kinetics", "records", "multi_arrhenius"),
     ("GET /reaction-entries/{ref}/kinetics", "records", "third_body_efficiencies"),
+    ("GET /reaction-entries/{ref}/kinetics", "records", "bath_gas"),
     ("GET /statmech/{ref}", "record", "literature"),
     ("GET /statmech/{ref}", "record", "software_release"),
     ("GET /statmech/{ref}", "record", "workflow_tool_release"),

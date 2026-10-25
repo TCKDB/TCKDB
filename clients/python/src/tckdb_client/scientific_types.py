@@ -359,6 +359,7 @@ class KineticsDetailRecord(TypedDict, total=False):
     chebyshev: JSONDict | None
     falloff: JSONDict | None
     third_body_efficiencies: list[JSONDict] | None
+    bath_gas: list[JSONDict] | None
     temperature_coverage: JSONDict | None
     trust: JSONDict | None
     assessments: PublicAssessmentSummary | None

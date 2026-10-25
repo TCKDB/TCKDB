@@ -443,6 +443,9 @@ def _target_snapshot(target: Any, record_type: SubmissionRecordType) -> dict[str
     if isinstance(target, Kinetics) and target.determination is not None:
         # Added only when present: a record with no determination keeps the snapshot it had.
         relationships["determination"] = _mapped_columns(target.determination)
+    if isinstance(target, Kinetics) and target.bath_gases:
+        # Added only when stated: a record with no bath gas keeps the snapshot (and digest) it had.
+        relationships["bath_gases"] = _rows(target.bath_gases)
     if isinstance(target, NetworkSolve) and target.determinations:
         # Added only when the solve has determinations: a legacy solve keeps the snapshot it had.
         # The grouping of fits is part of what the declarations claim, so it is part of the digest.

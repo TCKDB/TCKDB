@@ -1562,6 +1562,7 @@ class ComputedReactionUpload:
                     reactant_keys=reactant_keys,
                     product_keys=product_keys,
                     calc_key_lookup=calc_keys.lookup,
+                    species_key_lookup=species_keys.lookup,
                 )
                 for kin in self.reaction.kinetics
             ]

@@ -158,10 +158,14 @@ class ChemReaction:
         Uses ``is``-identity to avoid relying on dataclass ``__eq__``
         (two ``Species(smiles="O")`` instances are still distinct
         builders, and the server canonicalises only at upload time).
-        Preserves first-seen order across reactants then products.
+        Preserves first-seen order across reactants then products, then
+        any species a kinetics record names as its bath gas (those are
+        identity-only members of the upload's species list).
         """
         seen: list[Species] = []
-        for source in (self.reactants, self.products):
+        sources: list[list[Any]] = [self.reactants, self.products]
+        sources.extend([sp for sp, _fraction in kin.bath_gas] for kin in self.kinetics)
+        for source in sources:
             for sp in source:
                 if not any(s is sp for s in seen):
                     seen.append(sp)

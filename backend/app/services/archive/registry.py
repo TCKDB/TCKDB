@@ -98,6 +98,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "group_additivity_scheme",
         "kinetics",
         "kinetics_arrhenius_entry",
+        "kinetics_bath_gas",
         "kinetics_chebyshev",
         # A complete determination of a rate: identity. A restore that dropped it would hand
         # back records whose determination_id points at nothing.

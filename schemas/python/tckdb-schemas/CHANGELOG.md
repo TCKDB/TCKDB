@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.136.0 - 2026-10-25
+
+A kinetics record can state the bath gas it was obtained for. Additive: an upload that sends none is unchanged.
+
+- `BundleKineticsIn.bath_gas` (`/uploads/computed-reaction`): a list of `{species_key, mole_fraction}`, each key naming a species of the bundle.
+  `KineticsUploadRequest.bath_gas` (`/uploads/kinetics` and a kinetics contribution bundle) is a list of `{species_entry, mole_fraction}`.
+- Three refusal codes (422): `kinetics_bath_gas_at_high_pressure_limit`, `kinetics_bath_gas_mole_fraction_sum` (fractions sum to 1 within 1e-9, as for a
+  network solve's bath gas) and `kinetics_bath_gas_duplicate_species`. The shared check is `tckdb_schemas.fragments.kinetics_bath_gas.check_kinetics_bath_gas`.
+
 ## 0.135.0 - 2026-10-25
 
 One refusal code joins the contract. No field is added or removed.

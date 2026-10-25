@@ -255,6 +255,18 @@ class ThirdBodyEfficiencyBlock(BaseModel):
     efficiency: float
 
 
+class KineticsBathGasBlock(BaseModel):
+    """One component of the bath gas a rate was obtained for.
+
+    ``null`` on the record means the depositor stated none; it is never inferred, and is
+    unrelated to a falloff's third-body efficiencies. The component is exposed as its species
+    entry's public ref, never the raw row id.
+    """
+
+    species_entry_ref: str
+    mole_fraction: float
+
+
 class PressureCoverage(BaseModel):
     """Why a returned rate is applicable at the requested pressure.
 
@@ -479,6 +491,8 @@ class KineticsRecord(BaseModel):
     chebyshev: ChebyshevBlock | None = None
     falloff: FalloffBlock | None = None
     third_body_efficiencies: list[ThirdBodyEfficiencyBlock] | None = None
+    #: The bath gas this rate was obtained for, where the depositor stated it; ``null`` otherwise.
+    bath_gas: list[KineticsBathGasBlock] | None = None
     uncertainty: KineticsUncertainty
     temperature_coverage: TemperatureCoverage | None = None
     evidence_completeness: EvidenceCompletenessBreakdown

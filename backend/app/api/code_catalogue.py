@@ -1677,6 +1677,28 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("irc_result_not_found", 404, Surface.coded_exception,
             "backend/app/services/scientific_read/calculation_paths.py"),
+    ApiCode("kinetics_bath_gas_at_high_pressure_limit", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/kinetics_bath_gas.py",
+            shape=Shape.relationship,
+            note=(
+                "A bath gas was given for a rate whose pressure_context is high_p_limit, where "
+                "it has no meaning. context.field names the bath gas."
+            )),
+    ApiCode("kinetics_bath_gas_duplicate_species", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/kinetics_bath_gas.py",
+            shape=Shape.relationship,
+            note=(
+                "Two bath-gas components name the same species (by content, by bundle key, or "
+                "after resolving to the same species entry). context.field and context.first "
+                "name the two components. Also raised by backend/app/services/kinetics_bath_gas.py."
+            )),
+    ApiCode("kinetics_bath_gas_mole_fraction_sum", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/kinetics_bath_gas.py",
+            shape=Shape.relationship,
+            note=(
+                "A kinetics bath gas whose mole fractions do not sum to 1 within 1e-9, the same "
+                "rule as a network solve's bath gas. context carries the sum and the tolerance."
+            )),
     ApiCode("kinetics_declaration_contradicts_record", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/kinetics_declarations.py",
             shape=Shape.relationship),
