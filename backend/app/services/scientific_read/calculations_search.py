@@ -93,6 +93,7 @@ from app.services.scientific_read.calculations import (
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     reject_client_sort,
     review_summary,
     validate_includes,
@@ -772,11 +773,15 @@ def _apply_dependency_filters(
         # is parameterless w.r.t. Calculation.id; pair it with
         # ``Calculation.id IN (parent, child)`` to scope the result to
         # the two endpoints.
+        # Evidence rule (ADR 0023): an edge with an end the rule withholds (rejected / deprecated under curated) is not
+        # an edge, whichever end the caller named.
         exact_edge_exists = exists().where(
             _and(
                 CalculationDependency.parent_calculation_id == parent_calc_id,
                 CalculationDependency.child_calculation_id == child_calc_id,
                 role_clause,
+                linked_evidence_predicate(CalculationDependency.parent_calculation_id, SubmissionRecordType.calculation),
+                linked_evidence_predicate(CalculationDependency.child_calculation_id, SubmissionRecordType.calculation),
             )
         )
         return stmt.where(
@@ -796,6 +801,10 @@ def _apply_dependency_filters(
                     CalculationDependency.child_calculation_id
                     == Calculation.id,
                     role_clause,
+                    # The named far end is linked evidence: a rejected / deprecated one matches nothing.
+                    linked_evidence_predicate(
+                        CalculationDependency.parent_calculation_id, SubmissionRecordType.calculation
+                    ),
                 )
             )
         )
@@ -810,6 +819,9 @@ def _apply_dependency_filters(
                     CalculationDependency.parent_calculation_id
                     == Calculation.id,
                     role_clause,
+                    linked_evidence_predicate(
+                        CalculationDependency.child_calculation_id, SubmissionRecordType.calculation
+                    ),
                 )
             )
         )
@@ -817,15 +829,23 @@ def _apply_dependency_filters(
     if dependency_role is not None:
         # Role-only filter: match any calc participating in an edge of
         # that role, on either side.
+        # An edge whose OTHER end the evidence rule withholds (rejected / deprecated under curated) is not an edge:
+        # matching through it would say such a calculation sits on the far side with this role.
+        child_shown = linked_evidence_predicate(
+            CalculationDependency.child_calculation_id, SubmissionRecordType.calculation
+        )
+        parent_shown = linked_evidence_predicate(
+            CalculationDependency.parent_calculation_id, SubmissionRecordType.calculation
+        )
+        as_parent = CalculationDependency.parent_calculation_id == Calculation.id
+        as_child = CalculationDependency.child_calculation_id == Calculation.id
         return stmt.where(
             exists().where(
                 and_(
                     CalculationDependency.dependency_role == dependency_role,
                     or_(
-                        CalculationDependency.parent_calculation_id
-                        == Calculation.id,
-                        CalculationDependency.child_calculation_id
-                        == Calculation.id,
+                        and_(as_parent, child_shown) if child_shown is not None else as_parent,
+                        and_(as_child, parent_shown) if parent_shown is not None else as_child,
                     ),
                 )
             )

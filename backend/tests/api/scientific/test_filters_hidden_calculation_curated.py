@@ -1,12 +1,15 @@
-"""A filter never matches through a calculation the profile hides (D6: hidden == unknown == absent).
+"""A filter matches through linked evidence unless the evidence rule withholds it (ADR 0023, step 4).
 
 The thermo and kinetics level-of-theory and software filters match when ANY linked source calculation matches. Under the
-``curated`` profile a calculation below the review floor is not a candidate for that match: a record whose only level-B
-(or ORCA) link is an unreviewed calculation must not be found by asking for level B (or ORCA). Each test names what it
-kills.
+``curated`` profile a REJECTED or DEPRECATED calculation is not a candidate for that match: a record whose only level-B
+(or ORCA) link is such a calculation must not be found by asking for level B (or ORCA). A not-reviewed (or under-review)
+calculation is evidence like any other and matches, with its badge. Exploratory withholds nothing. Each test names what
+it kills.
 """
 
 from __future__ import annotations
+
+import pytest
 
 from app.db.models.common import (
     CalculationType,
@@ -34,13 +37,26 @@ from tests.services.scientific_read._factories import (
 
 API = "/api/v1/scientific"
 
+#: Review state of the second link, and whether the curated profile lets it take part in a filter match.
+LINKS = [
+    pytest.param(None, True, id="not_reviewed"),
+    pytest.param(RecordReviewStatus.under_review, True, id="under_review"),
+    pytest.param(RecordReviewStatus.rejected, False, id="rejected"),
+    pytest.param(RecordReviewStatus.deprecated, False, id="deprecated"),
+]
+
 
 def _approve(db_session, record_type, record_id):
     set_review(db_session, record_type=record_type, record_id=record_id, status=RecordReviewStatus.approved)
 
 
-def _thermo_world(db_session):
-    """An approved thermo: sp at level A / gaussian (approved), freq at level B / orca (NOT reviewed, so hidden)."""
+def _mark(db_session, calculation, status):
+    if status is not None:
+        set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=calculation.id, status=status)
+
+
+def _thermo_world(db_session, freq_status=None):
+    """An approved thermo: sp at level A / gaussian (approved), freq at level B / orca (``freq_status``)."""
     species = make_species(db_session, smiles="CC", inchi_key=next_inchi_key("CH"))
     entry = make_species_entry(db_session, species)
     lot_a, lot_b = make_lot(db_session, method="ca-method"), make_lot(db_session, method="cb-method")
@@ -58,7 +74,8 @@ def _thermo_world(db_session):
     attach_thermo_source_calculation(db_session, thermo=thermo, calculation=freq, role=ThermoCalculationRole.freq)
     _approve(db_session, SubmissionRecordType.thermo, thermo.id)
     _approve(db_session, SubmissionRecordType.species_entry, entry.id)  # a curated search needs a shown entry
-    _approve(db_session, SubmissionRecordType.calculation, sp.id)  # the freq calculation stays not_reviewed
+    _approve(db_session, SubmissionRecordType.calculation, sp.id)
+    _mark(db_session, freq, freq_status)
     return entry, thermo, lot_a, lot_b
 
 
@@ -67,48 +84,58 @@ def _refs(response):
     return [r["thermo_ref"] if "thermo_ref" in r else r["thermo"]["thermo_ref"] for r in response.json()["records"]]
 
 
-def test_a_curated_thermo_read_does_not_match_a_level_through_a_hidden_calculation(client, db_session):
-    """Kills: the level filter reading every linked calculation, hidden ones included."""
-    entry, thermo, lot_a, lot_b = _thermo_world(db_session)
+def _expect(matches, thermo):
+    return [thermo.public_ref] if matches else []
+
+
+@pytest.mark.parametrize("freq_status,matches", LINKS)
+def test_a_curated_thermo_read_level_filter(client, db_session, freq_status, matches):
+    """Kills: matching through a rejected/deprecated link (leak), or refusing a not-reviewed one (the earlier rule)."""
+    entry, thermo, lot_a, lot_b = _thermo_world(db_session, freq_status)
     url = f"{API}/species-entries/{entry.public_ref}/thermo"
 
     assert _refs(client.get(url, params={"profile": "curated", "level_of_theory_id": lot_a.id})) == [thermo.public_ref]
-    assert _refs(client.get(url, params={"profile": "curated", "level_of_theory_id": lot_b.id})) == []
-    # Hidden equals absent: the exploratory profile, which shows the calculation, does find it.
+    assert _refs(client.get(url, params={"profile": "curated", "level_of_theory_id": lot_b.id})) == _expect(
+        matches, thermo
+    )
+    # Exploratory withholds nothing as evidence, so it finds the record whatever the link's state.
     assert _refs(client.get(url, params={"profile": "exploratory", "level_of_theory_id": lot_b.id})) == [
         thermo.public_ref
     ]
 
 
-def test_a_curated_thermo_read_does_not_match_a_software_through_a_hidden_calculation(client, db_session):
-    """Kills: the software filter reading every linked calculation, hidden ones included."""
-    entry, thermo, *_ = _thermo_world(db_session)
+@pytest.mark.parametrize("freq_status,matches", LINKS)
+def test_a_curated_thermo_read_software_filter(client, db_session, freq_status, matches):
+    """Kills: the software filter reading withheld links, or refusing visible not-reviewed ones."""
+    entry, thermo, *_ = _thermo_world(db_session, freq_status)
     url = f"{API}/species-entries/{entry.public_ref}/thermo"
 
     assert _refs(client.get(url, params={"profile": "curated", "software": "gaussian"})) == [thermo.public_ref]
-    assert _refs(client.get(url, params={"profile": "curated", "software": "orca"})) == []
+    assert _refs(client.get(url, params={"profile": "curated", "software": "orca"})) == _expect(matches, thermo)
     assert _refs(client.get(url, params={"profile": "exploratory", "software": "orca"})) == [thermo.public_ref]
 
 
-def test_a_curated_thermo_search_does_not_match_through_a_hidden_calculation(client, db_session):
-    """Kills: the same leak on /thermo/search, which composes the entry read."""
-    entry, thermo, lot_a, lot_b = _thermo_world(db_session)
+@pytest.mark.parametrize("freq_status,matches", LINKS)
+def test_a_curated_thermo_search_filters(client, db_session, freq_status, matches):
+    """Kills: the same on /thermo/search, which composes the entry read."""
+    entry, thermo, lot_a, lot_b = _thermo_world(db_session, freq_status)
     base = {"smiles": "CC"}
 
-    for filt, hidden_value, visible_value in (
+    for filt, other_value, approved_value in (
         ("level_of_theory_id", lot_b.id, lot_a.id),
         ("software", "orca", "gaussian"),
     ):
-        curated_hidden = client.get(f"{API}/thermo/search", params={**base, "profile": "curated", filt: hidden_value})
-        assert _refs(curated_hidden) == [], filt
-        curated_visible = client.get(f"{API}/thermo/search", params={**base, "profile": "curated", filt: visible_value})
-        assert _refs(curated_visible) == [thermo.public_ref], filt
-        exploratory = client.get(f"{API}/thermo/search", params={**base, "profile": "exploratory", filt: hidden_value})
+        curated_other = client.get(f"{API}/thermo/search", params={**base, "profile": "curated", filt: other_value})
+        assert _refs(curated_other) == _expect(matches, thermo), filt
+        curated_approved = client.get(f"{API}/thermo/search", params={**base, "profile": "curated", filt: approved_value})
+        assert _refs(curated_approved) == [thermo.public_ref], filt
+        exploratory = client.get(f"{API}/thermo/search", params={**base, "profile": "exploratory", filt: other_value})
         assert _refs(exploratory) == [thermo.public_ref], filt
 
 
-def test_a_curated_kinetics_read_does_not_match_through_a_hidden_calculation(client, db_session):
-    """The kinetics twin already filters hidden sources; this pins it so the two cannot drift apart again."""
+@pytest.mark.parametrize("freq_status,matches", LINKS)
+def test_a_curated_kinetics_read_filters(client, db_session, freq_status, matches):
+    """The kinetics twin: withheld links never match; not-reviewed ones do. Pinned so the two cannot drift apart."""
     rs = make_species(db_session, smiles="CC", inchi_key=next_inchi_key("CKR"))
     ps = make_species(db_session, smiles="CCC", inchi_key=next_inchi_key("CKP"))
     chem = make_chem_reaction(db_session, reactants=[rs], products=[ps])
@@ -120,11 +147,17 @@ def test_a_curated_kinetics_read_does_not_match_through_a_hidden_calculation(cli
     gaussian = make_software_release(db_session, name="gaussian", version="16")
     orca = make_software_release(db_session, name="orca", version="6")
     ts = make_calculation(
-        db_session, type=CalculationType.sp, species_entry_id=reactant_entry.id, lot_id=lot_a.id,
+        db_session,
+        type=CalculationType.sp,
+        species_entry_id=reactant_entry.id,
+        lot_id=lot_a.id,
         software_release_id=gaussian.id,
     )
     freq = make_calculation(
-        db_session, type=CalculationType.freq, species_entry_id=reactant_entry.id, lot_id=lot_b.id,
+        db_session,
+        type=CalculationType.freq,
+        species_entry_id=reactant_entry.id,
+        lot_id=lot_b.id,
         software_release_id=orca.id,
     )
     kinetics = make_kinetics(db_session, reaction_entry=entry)
@@ -133,23 +166,26 @@ def test_a_curated_kinetics_read_does_not_match_through_a_hidden_calculation(cli
             KineticsSourceCalculation(
                 kinetics_id=kinetics.id, calculation_id=ts.id, role=KineticsCalculationRole.ts_energy
             ),
-            KineticsSourceCalculation(
-                kinetics_id=kinetics.id, calculation_id=freq.id, role=KineticsCalculationRole.freq
-            ),
+            KineticsSourceCalculation(kinetics_id=kinetics.id, calculation_id=freq.id, role=KineticsCalculationRole.freq),
         ]
     )
     db_session.flush()
     _approve(db_session, SubmissionRecordType.kinetics, kinetics.id)
     _approve(db_session, SubmissionRecordType.calculation, ts.id)
+    _mark(db_session, freq, freq_status)
 
     def kinetics_refs(url, **params):
         response = client.get(url, params=params)
         assert response.status_code == 200, response.text
-        return [r["kinetics_ref"] if "kinetics_ref" in r else r["kinetics"]["kinetics_ref"] for r in response.json()["records"]]
+        return [
+            r["kinetics_ref"] if "kinetics_ref" in r else r["kinetics"]["kinetics_ref"]
+            for r in response.json()["records"]
+        ]
 
     read = f"{API}/reaction-entries/{entry.public_ref}/kinetics"
     search = f"{API}/kinetics/search"
     for url, extra in ((read, {}), (search, {"reactants": "CC"})):
-        for filt, hidden_value in (("level_of_theory_id", lot_b.id), ("software", "orca")):
-            assert kinetics_refs(url, profile="curated", **extra, **{filt: hidden_value}) == [], (url, filt)
-            assert kinetics_refs(url, profile="exploratory", **extra, **{filt: hidden_value}) == [kinetics.public_ref]
+        for filt, other_value in (("level_of_theory_id", lot_b.id), ("software", "orca")):
+            curated = kinetics_refs(url, profile="curated", **extra, **{filt: other_value})
+            assert curated == ([kinetics.public_ref] if matches else []), (url, filt)
+            assert kinetics_refs(url, profile="exploratory", **extra, **{filt: other_value}) == [kinetics.public_ref]

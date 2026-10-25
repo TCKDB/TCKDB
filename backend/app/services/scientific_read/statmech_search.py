@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import and_, exists, select
+from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
@@ -36,8 +36,6 @@ from app.db.models.common import (
     StatmechModelScopeKind,
     SubmissionRecordType,
 )
-from app.db.models.level_of_theory import LevelOfTheory
-from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import (
     ConformerGroup,
     ConformerObservation,
@@ -51,7 +49,6 @@ from app.db.models.statmech import (
 )
 from app.db.models.statmech_declaration import StatmechModelDeclaration
 from app.db.models.transition_state import TransitionStateEntry
-from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     SelectionPolicy,
@@ -66,15 +63,18 @@ from app.schemas.reads.scientific_statmech_search import (
     ScientificStatmechSearchResponse,
     StatmechSearchRequest,
 )
+from app.services.scientific_read.calculation_provenance_filters import apply_calculation_provenance_filter
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     reject_client_sort,
     review_summary,
     review_visibility_echo,
     validate_includes,
     validate_pagination,
     visible_statuses,
+    where_visible,
 )
 from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.hidden_by_default import (
@@ -85,7 +85,6 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.keyset import Paging
-from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 from app.services.scientific_read.statmech import (
     _INTERNAL_INCLUDE_TOKENS,
     _LEGAL_INCLUDE_TOKENS,
@@ -377,28 +376,23 @@ def _apply_scalar_filters(stmt, request: StatmechSearchRequest):
 
 def _apply_evidence_filters(stmt, request: StatmechSearchRequest):
     if request.has_source_calculations is not None:
-        ex = exists().where(
-            StatmechSourceCalculation.statmech_id == Statmech.id
-        )
+        ex = _shown_source_calculations().exists()
         stmt = stmt.where(ex if request.has_source_calculations else ~ex)
     if request.has_freq_calculation is not None:
-        ex = exists().where(
-            and_(
-                StatmechSourceCalculation.statmech_id == Statmech.id,
-                StatmechSourceCalculation.role == StatmechCalculationRole.freq,
-            )
-        )
+        ex = _shown_source_calculations().where(StatmechSourceCalculation.role == StatmechCalculationRole.freq).exists()
         stmt = stmt.where(ex if request.has_freq_calculation else ~ex)
     if request.has_torsions is not None:
         ex = exists().where(StatmechTorsion.statmech_id == Statmech.id)
         stmt = stmt.where(ex if request.has_torsions else ~ex)
     if request.has_rotor_scans is not None:
-        ex = exists().where(
-            and_(
-                StatmechTorsion.statmech_id == Statmech.id,
-                StatmechTorsion.source_scan_calculation_id.is_not(None),
-            )
+        # A scan whose calculation the evidence rule withholds (rejected / deprecated under curated) is not a scan.
+        scans = select(StatmechTorsion.id).where(
+            StatmechTorsion.statmech_id == Statmech.id,
+            StatmechTorsion.source_scan_calculation_id.is_not(None),
         )
+        ex = where_visible(
+            scans, linked_evidence_predicate(StatmechTorsion.source_scan_calculation_id, SubmissionRecordType.calculation)
+        ).exists()
         stmt = stmt.where(ex if request.has_rotor_scans else ~ex)
     return stmt
 
@@ -409,19 +403,15 @@ def _apply_method_basis_software_filters(
     """Method/basis/software/workflow filters narrow statmech rows to
     those whose source-calculation graph carries a row matching the
     supplied provenance. The match is OR-across-calc: at least one
-    linked source calculation must match.
+    linked source calculation the evidence rule leaves visible must match (a rejected or
+    deprecated one contributes nothing under curated, ADR 0023).
     """
-    method_or_basis = request.method is not None or request.basis is not None
-    sw_filter = (
-        request.software is not None or request.software_version is not None
-    )
-    wf_filter = (
-        request.workflow_tool is not None
-        or request.workflow_tool_version is not None
-    )
-    if not (method_or_basis or sw_filter or wf_filter):
-        return stmt
+    sub = _shown_source_calculations()
+    return apply_calculation_provenance_filter(stmt, request, sub)
 
+
+def _shown_source_calculations():
+    """``select(Calculation.id)`` over this statmech row's source calculations the active profile shows."""
     sub = (
         select(Calculation.id)
         .join(
@@ -430,38 +420,7 @@ def _apply_method_basis_software_filters(
         )
         .where(StatmechSourceCalculation.statmech_id == Statmech.id)
     )
-    if method_or_basis:
-        sub = sub.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
-        if request.method is not None:
-            sub = sub.where(method_matches(request.method))
-        if request.basis is not None:
-            sub = sub.where(basis_matches(request.basis))
-    if sw_filter:
-        sub = sub.join(
-            SoftwareRelease,
-            SoftwareRelease.id == Calculation.software_release_id,
-        ).join(Software, Software.id == SoftwareRelease.software_id)
-        if request.software is not None:
-            sub = sub.where(Software.name == request.software)
-        if request.software_version is not None:
-            sub = sub.where(
-                SoftwareRelease.version == request.software_version
-            )
-    if wf_filter:
-        sub = sub.join(
-            WorkflowToolRelease,
-            WorkflowToolRelease.id == Calculation.workflow_tool_release_id,
-        ).join(
-            WorkflowTool,
-            WorkflowTool.id == WorkflowToolRelease.workflow_tool_id,
-        )
-        if request.workflow_tool is not None:
-            sub = sub.where(WorkflowTool.name == request.workflow_tool)
-        if request.workflow_tool_version is not None:
-            sub = sub.where(
-                WorkflowToolRelease.version == request.workflow_tool_version
-            )
-    return stmt.where(sub.exists())
+    return where_visible(sub, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
 
 
 # ---------------------------------------------------------------------------

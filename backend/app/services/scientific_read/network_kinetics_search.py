@@ -53,8 +53,8 @@ from app.schemas.reads.scientific_network_kinetics_search import (
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     reject_client_sort,
-    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
@@ -368,7 +368,7 @@ def _apply_evidence_filters(stmt, request: NetworkKineticsSearchRequest):
     if request.has_source_calculations is not None:
         ex = where_visible(
             exists().where(NetworkSolveSourceCalculation.solve_id == NetworkKinetics.solve_id),
-            review_floor_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
+            linked_evidence_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
         )
         stmt = stmt.where(ex if request.has_source_calculations else ~ex)
     return stmt
@@ -410,7 +410,7 @@ def _apply_method_basis_software_filters(
             NetworkSolveSourceCalculation.solve_id == NetworkKinetics.solve_id
         )
     )
-    sub = where_visible(sub, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
+    sub = where_visible(sub, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
     if method_or_basis:
         sub = sub.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
         if request.method is not None:

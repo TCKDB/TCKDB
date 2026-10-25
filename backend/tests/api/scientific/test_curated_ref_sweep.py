@@ -264,7 +264,6 @@ STILL_ON_THE_EARLIER_RULE: dict[tuple[str, str], tuple[set[str], str]] = {
     ("GET", "/api/v1/scientific/network-solves/search"): ({'calc', 'tse'}, SERVICE_FLOOR),
     ("GET", "/api/v1/scientific/networks/search"): ({'calc', 'nsolve', 'tse'}, SERVICE_FLOOR),
     ("GET", "/api/v1/scientific/reaction-entries/{reaction_entry_id}/full"): ({'calc', 'cg', 'kin', 'ts', 'tse'}, SERVICE_FLOOR),
-    ("GET", "/api/v1/scientific/transition-states/search"): ({'calc'}, SERVICE_FLOOR),
     ("POST", "/api/v1/scientific/energy-correction-schemes/search"): ({'calc', 'tse'}, DERIVED),
     ("POST", "/api/v1/scientific/export/chemkin"): ({'calc', 'sm'}, EXPORTS_AND_LOADERS),
     ("POST", "/api/v1/scientific/frequency-scale-factors/search"): ({'sm', 'tse'}, DERIVED),

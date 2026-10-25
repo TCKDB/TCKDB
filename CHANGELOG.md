@@ -22,6 +22,18 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Curated profile: filters match through linked evidence (2026-10-26, step 4 of 8)
+
+Under `profile=curated`, a filter on linked records (method, basis, software, workflow tool, level of theory, `scientific_origin`,
+the `has_*` evidence flags, `dependency_role`) now matches through any linked calculation or conformer observation that is not
+`rejected` or `deprecated`, including not-reviewed and under-review ones. Rejected and deprecated evidence never takes part in a
+match, and no total or hidden-by-default count moves because it exists. The statmech, transport, conformer and calculation searches
+now do this too (they matched through every linked record before), through the shared `apply_calculation_provenance_filter`. Also
+moved to the rule: the thermo and kinetics filters, the select routes' `filters`, species browse, transition-state search and browse,
+and the network, solve and network-kinetics searches, and the energy-correction-scheme `used_by_calculation` filter. A filter ref that names
+rejected or deprecated linked evidence (`parent_calculation_ref`, `child_calculation_ref`, `conformer_observation_ref`) matches nothing. The record population stays on the approved floor, and exploratory is
+unchanged. Counts, flags and derived levels on a returned record follow in step 3. No migration; no manifest or rubric change.
+
 ## A kinetics record can state its bath gas (2026-10-25)
 
 A PLOG or Chebyshev fit, or an apparent rate at a stated pressure, is a statement about a collider: a table fitted for Ar is not one for N2. A reaction-level

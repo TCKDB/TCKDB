@@ -77,9 +77,9 @@ from app.services.scientific_read.calculation_provenance_filters import (
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     molecular_formula_expr,
     reject_client_sort,
-    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
@@ -1073,14 +1073,14 @@ def _apply_provenance_filters(stmt, request: SpeciesBrowseRequest):
     return apply_calculation_provenance_filter(
         stmt,
         request,
-        # Only the calculations the profile shows can match (D5): a filter that matched a hidden calculation would
-        # return a species whose served flags say it has none.
+        # Evidence rule (ADR 0023 step 4): a rejected or deprecated calculation cannot match under curated; a
+        # not-reviewed one can.
         where_visible(
             select(Calculation.id)
             .select_from(Calculation)
             .join(SpeciesEntry, SpeciesEntry.id == Calculation.species_entry_id)
             .where(SpeciesEntry.species_id == Species.id),
-            review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
+            linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
         ),
     )
 

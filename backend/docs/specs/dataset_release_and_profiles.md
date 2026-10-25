@@ -158,8 +158,10 @@ Resolved once, by an `async` router-level dependency
 > *record-floor set* is used only to fail loud when a response's subject is below the floor. The legacy entity reads and the ML
 > export's conformer refs follow the evidence set; the ML export's energy rows keep their calculations approved-only (a release
 > is unchanged). **Still the earlier rule (below the floor is hidden, evidence included), and the text below describes that
-> code:** counts, flags and derived levels (step 3), matching (step 4), trust and selection loaders (step 5), made-under
-> (step 6) and detail-by-ref (step 7; the second seam below still applies the floor until then).
+> code:** counts, flags and derived levels (step 3), trust and selection loaders (step 5), made-under
+> (step 6) and detail-by-ref (step 7; the second seam below still applies the floor until then). **Landed (step 4):** a filter
+> on linked records (search, browse, select) matches through any linked record the evidence rule leaves visible, that is, not
+> a rejected or deprecated one; a not-reviewed one matches.
 
 Behaviourally, `curated` is applied at exactly **two** seams, which between
 them cover the whole read surface:
