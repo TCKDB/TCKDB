@@ -104,6 +104,7 @@ from app.services.document_formats import ML_EXPORT, current_header
 from app.services.scientific_read import export as export_core
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    linked_evidence_predicate,
     review_floor_predicate,
     visible_statuses,
     where_visible,
@@ -633,10 +634,11 @@ def _conformer_refs(
 ) -> tuple[list[str], list[str]]:
     """Resolve conformer observation ids to (group_refs, observation_refs).
 
-    Only observations the profile shows are resolved, so a group is named only THROUGH a shown observation: a visible
-    group reached by a hidden observation would otherwise be named beside an empty observation list, which says the
-    hidden observation exists. (A hidden group reached by a shown observation still arrives here; the document withhold
-    drops its ref.)
+    A conformer observation is linked evidence of the calculation that ran it (ADR 0023), so under ``curated`` it is
+    resolved unless it is rejected or deprecated; not-reviewed observations are named. A group is named only THROUGH a
+    resolved observation: a visible group reached by a withheld observation would otherwise be named beside an empty
+    observation list, which says the withheld observation exists. (A withheld group reached by a resolved observation
+    still arrives here; the document withhold drops its ref.) The calculation itself keeps the record floor.
     """
     if not observation_ids:
         return [], []
@@ -651,7 +653,7 @@ def _conformer_refs(
                 ConformerGroup.id == ConformerObservation.conformer_group_id,
             )
             .where(ConformerObservation.id.in_(observation_ids)),
-            review_floor_predicate(
+            linked_evidence_predicate(
                 ConformerObservation.id, SubmissionRecordType.conformer_observation, profile=profile
             ),
         ).order_by(ConformerObservation.id)

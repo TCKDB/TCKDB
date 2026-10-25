@@ -99,7 +99,7 @@ def test_a_calculation_selection_reports_the_minimum_and_its_replayable_manifest
         "assessment": 1, "normalizer": 1, "decision": 1, "administrative_key": 2,
         "finding_semantics": [1],
     }
-    assert result.manifest["read_profile"] == {"profile": "exploratory", "review_floor": None}
+    assert result.manifest["read_profile"] == {"profile": "exploratory", "review_floor": None, "linked_evidence_withheld": []}
     assert result.manifest["snapshot_isolation"]
     assert replay_matches(result.manifest)
 
@@ -278,7 +278,7 @@ def test_a_manifest_that_contradicts_its_own_profile_or_floor_is_refused(db_sess
         curated_result = select(db_session, world, request())
     finally:
         reset_current_read_profile(token)
-    assert curated_result.manifest["read_profile"] == {"profile": "curated", "review_floor": "approved"}
+    assert curated_result.manifest["read_profile"] == {"profile": "curated", "review_floor": "approved", "linked_evidence_withheld": ["deprecated", "rejected"]}
     population = curated_result.manifest["population"]
     # Under a profile floor nothing below it is listed or counted (the redaction precedes the checksum, so it verifies).
     assert population["excluded_by_review_withheld"] is True and population["excluded_by_review"] == []
@@ -288,7 +288,7 @@ def test_a_manifest_that_contradicts_its_own_profile_or_floor_is_refused(db_sess
     assert replay_matches(curated_result.manifest)
     # Relabel the manifest as exploratory while it keeps a curated status set: the two disagree.
     edited = copy.deepcopy(curated_result.manifest)
-    edited["read_profile"] = {"profile": "exploratory", "review_floor": None}
+    edited["read_profile"] = {"profile": "exploratory", "review_floor": None, "linked_evidence_withheld": []}
     with pytest.raises(ReplayError) as exc:
         replay_structure_decision(reseal(edited))
     assert exc.value.code == "inconsistent_manifest"
@@ -313,7 +313,7 @@ def _exploratory_basin_manifest(db_session):
 
 
 def _relabel_curated(manifest):
-    manifest["read_profile"] = {"profile": "curated", "review_floor": "approved"}
+    manifest["read_profile"] = {"profile": "curated", "review_floor": "approved", "linked_evidence_withheld": ["deprecated", "rejected"]}
     manifest["effective_review_statuses"] = ["approved"]
     return manifest
 

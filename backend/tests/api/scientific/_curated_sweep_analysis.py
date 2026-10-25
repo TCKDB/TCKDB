@@ -207,6 +207,51 @@ def ref_leaks(text: str, hidden_refs: dict[str, str], request_text: str) -> set[
     return found
 
 
+#: Paths of the nodes that are the ANSWER of a response: the subject of a read, a row of a list, a candidate of a selection.
+SUBJECT_PATHS = frozenset({"record", "records[*]", "candidates[*]", "result.candidates[*]", "line"})
+
+
+#: ``(subject path, field)`` pairs whose ``<kind>_ref`` is NOT the row's own identity but a nullable link to a record it
+#: names for context, which follows the evidence rule (shown, badged). Each is a field declared ``str | None`` on a row whose
+#: identity is another ref. Grow this only with that reason.
+NULLABLE_CONTEXT_REFS: dict[tuple[str, str], str] = {
+    ("records[*]", "transition_state_entry_ref"): "StatmechAnalyticsRecord: the statmech record's optional entry",
+    ("records[*]", "network_ref"): "LiteratureLinkedRecordSummary: type-specific context beside record_ref",
+    ("candidates[*]", "network_solve_ref"): "a kinetics candidate's optional solve link",
+}
+
+
+def subject_leaks(text: str, hidden_refs: dict[str, str]) -> set[tuple[str, str]]:
+    """``(hidden key, json path)`` where an UNLISTED record is the subject of the answer (ADR 0023).
+
+    A record below the approved floor may be named nested, badged; it must never BE the answer: not ``record``, not a row of
+    ``records``, not a candidate. The subject's identity is its own ``<kind>_ref`` field, so that is the field looked at (a
+    nested ``calculation_ref`` on some other kind of row is a link, and is allowed).
+    """
+    present = {k: r for k, r in hidden_refs.items() if r in text}
+    if not present:
+        return set()
+    kind, obj = parse_body(text)
+    if kind == "text":
+        return set()
+    by_ref = {r: k for k, r in present.items()}
+    found: set[tuple[str, str]] = set()
+    for path, node in _dicts(_root(kind, obj)):
+        if path not in SUBJECT_PATHS:
+            continue
+        for key, value in node.items():
+            if (path, key) in NULLABLE_CONTEXT_REFS:
+                continue
+            if isinstance(value, str) and value in by_ref and key.endswith("_ref"):
+                if ID_STEM_TO_KIND.get(key[: -len("_ref")]) == _kind_of_key(by_ref[value]):
+                    found.add((by_ref[value], f"{path}.{key}"))
+    return found
+
+
+def _kind_of_key(key: str) -> str:
+    return key.split("_", 1)[0]
+
+
 def id_leaks(text: str, world: SweepWorld) -> set[tuple[str, str]]:
     """``("id:<hidden key>", path)`` where a hidden record's integer pk is the value of a key naming its type."""
     kind, obj = parse_body(text)

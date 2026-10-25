@@ -31,6 +31,24 @@ calculations by public reference, if the table already holds a cycle; it never e
 the `cycle_detected` evidence key of the reproducibility rubric's `upstream_dependency_snapshot`); traversals keep a visited set. No verdict
 can change. The three affected rubric pins were re-pinned without a version bump. A bundle whose `depends_on` forms a ring is refused at validation with a 422 naming the depositor's own keys. The lock the trigger takes is statement-level, so it is acquired before the accepted-science row locks (no deadlock); it is held to the end of the transaction. Async job errors are now a code and public sentence (or a generic one), never a raw exception string, and a deterministic refusal is not retried. The accepted-science immutability message names the record by public reference. `tckdb-client` 0.168.0 gains the rejection code.
 
+## Curated profile: nested refs follow the evidence rule (2026-10-25, step 2 of 8)
+
+Under `curated`, a nested ref is now withheld only when the record it names is `rejected` or `deprecated` ([ADR 0023](docs/adr/0023-curated-profile-floor-applies-to-records-linked-evidence-is-badged.md)).
+A ref to a not-reviewed or under-review record is shown, with its badge where the model has one. This flips nested display in
+responses, selection documents and the export streams in one go. The `ref_guard` is split into the evidence set
+(`withheld_evidence_refs`, drives every nested withhold) and the record-floor set (`below_floor_refs`, used only to fail loud when
+a response's subject is below the floor). The legacy entity reads follow the evidence set for pointer columns, embedded records and
+id filters; the ML export's conformer refs do too, while its energy rows keep their calculations approved-only. Lists, counts,
+levels, matching, the trust and selection loaders' own populations, made-under comparisons and detail-by-ref are unchanged and
+arrive in later steps.
+
+Version effects. A curated selection document now names the not-reviewed and under-review evidence it used to replace with a
+placeholder or leave out, so the thermo, kinetics, statmech, structure and network selection manifests move to **format 4**. Each
+records its `read_profile` and, in it, `linked_evidence_withheld` (`["deprecated", "rejected"]` under `curated`, `[]` otherwise); a
+format-3 manifest is refused on replay, not read as the new rule. The relative-energy manifests are not bumped in this step. The
+`computed_transition_state` rubric is re-pinned without a version bump (curated linked-evidence visibility; stored and exploratory
+verdicts unchanged): the grading code is untouched, only the evidence a curated read supplies to it differs.
+
 ## Curated profile: records are floored, linked evidence is badged (2026-10-25, step 1 of 8)
 
 Owner decision, recorded as [ADR 0023](docs/adr/0023-curated-profile-floor-applies-to-records-linked-evidence-is-badged.md): under

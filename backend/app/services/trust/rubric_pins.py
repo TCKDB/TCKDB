@@ -140,7 +140,7 @@ DYNAMIC_ATTRIBUTE_READS: dict[str, str] = {
         "reads each declared field of a response dataclass (data traversal)",
     "app.services.scientific_read.ref_guard:_transform :: getattr(node, name)":
         "reads each field of a response model (data traversal)",
-    "app.services.scientific_read.ref_guard:hidden_refs :: getattr(model, gated.parent_fk)":
+    "app.services.scientific_read.ref_guard:_review_statuses :: getattr(model, gated.parent_fk)":
         "reads the foreign-key column a fixed declaration names",
     "app.services.scientific_read.trust_floor:_swapped :: getattr(obj, attr)":
         "swaps loaded collections named by the callers' literal tuples",

@@ -1430,7 +1430,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -1452,6 +1452,11 @@
      },
      "thermo_rows_for_entry": 3,
      "visible_candidates": 3
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -1750,7 +1755,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -1772,6 +1777,11 @@
      },
      "thermo_rows_for_entry": 4,
      "visible_candidates": 4
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -2020,7 +2030,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -2042,6 +2052,11 @@
      },
      "thermo_rows_for_entry": 3,
      "visible_candidates": 3
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -2271,7 +2286,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -2293,6 +2308,11 @@
      },
      "thermo_rows_for_entry": 3,
      "visible_candidates": 3
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -2485,7 +2505,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -2507,6 +2527,11 @@
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -2697,7 +2722,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -2719,6 +2744,11 @@
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -2799,7 +2829,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "no_applicable_candidate",
     "policy": {
@@ -2821,6 +2851,11 @@
      },
      "thermo_rows_for_entry": 0,
      "visible_candidates": 0
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -3002,7 +3037,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -3024,6 +3059,11 @@
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -3268,7 +3308,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -3290,6 +3330,11 @@
      },
      "thermo_rows_for_entry": 3,
      "visible_candidates": 3
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -3484,7 +3529,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -3506,6 +3551,11 @@
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -3698,7 +3748,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -3720,6 +3770,11 @@
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -3912,7 +3967,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -3934,6 +3989,11 @@
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -4126,7 +4186,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -4148,6 +4208,11 @@
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -4444,7 +4509,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -4466,6 +4531,11 @@
      },
      "thermo_rows_for_entry": 4,
      "visible_candidates": 4
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -4766,7 +4836,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -4788,6 +4858,11 @@
      },
      "thermo_rows_for_entry": 4,
      "visible_candidates": 4
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -5088,7 +5163,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -5110,6 +5185,11 @@
      },
      "thermo_rows_for_entry": 4,
      "visible_candidates": 4
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -5251,7 +5331,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "sole_eligible_candidate",
     "policy": {
@@ -5273,6 +5353,11 @@
      },
      "thermo_rows_for_entry": 1,
      "visible_candidates": 1
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -5460,7 +5545,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -5482,6 +5567,11 @@
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -5778,7 +5868,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -5800,6 +5890,11 @@
      },
      "thermo_rows_for_entry": 4,
      "visible_candidates": 4
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -6048,7 +6143,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -6070,6 +6165,11 @@
      },
      "thermo_rows_for_entry": 3,
      "visible_candidates": 3
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",
@@ -6264,7 +6364,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 3
+     "version": 4
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -6286,6 +6386,11 @@
      },
      "thermo_rows_for_entry": 2,
      "visible_candidates": 2
+    },
+    "read_profile": {
+     "linked_evidence_withheld": [],
+     "profile": "exploratory",
+     "review_floor": null
     },
     "request": {
      "administrative_policy": "default",

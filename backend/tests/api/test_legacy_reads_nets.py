@@ -267,8 +267,9 @@ def test_the_entry_detail_routes_are_ungated_on_purpose(routes, client, db_sessi
 # --- a world with a hidden record of every gated kind ---------------------------------------------------------------
 
 
-def _hidden_world(db_session):
-    w = _world(db_session)
+def _hidden_world(db_session, withheld=False):
+    """A world of approved records beside hidden ones: never reviewed, or with ``withheld`` rejected (ADR 0023)."""
+    w = _world(db_session, withheld)
     hidden_thermo = make_thermo_scalar(db_session, species_entry=w["entry"], h298_kj_mol=-99.0)
     hidden_calc = make_calculation(db_session, species_entry_id=w["entry"].id)
     network = make_network(db_session, name="hidden-world-net")
@@ -281,6 +282,19 @@ def _hidden_world(db_session):
     hidden_transport = make_transport(db_session, species_entry=w["entry"])
     scheme = make_energy_correction_scheme(db_session, name="hidden-world", lot=make_lot(db_session, method="hw", basis="b"))
     hidden_applied = make_applied_energy_correction(db_session, target_species_entry=w["entry"], scheme=scheme)
+    if withheld:
+        for record_type, row in (
+            (T.kinetics, hidden_kinetics),
+            (T.transport, hidden_transport),
+            (T.applied_energy_correction, hidden_applied),
+            (T.thermo, hidden_thermo),
+            (T.calculation, hidden_calc),
+            (T.network, hidden_network),
+            (T.network_solve, hidden_solve),
+            (T.transition_state, hidden_ts),
+            (T.statmech, hidden_statmech),
+        ):
+            set_review(db_session, record_type=record_type, record_id=row.id, status=S.rejected)
     db_session.flush()
     hidden = {
         T.kinetics: hidden_kinetics.id,
@@ -349,8 +363,10 @@ def test_every_gated_detail_route_answers_a_hidden_record_as_an_unknown_id(route
 
 def test_every_id_typed_filter_naming_a_hidden_record_answers_as_a_missing_one(routes, client, db_session):
     """For every GET route and every query parameter that is a pointer at a gated kind: a hidden id and a missing id
-    give the same answer under the curated profile. Kills: a filter that reveals a hidden record by what it returns."""
-    w, hidden, network = _hidden_world(db_session)
+    give the same answer under the curated profile. Kills: a filter that reveals a withheld record by what it returns.
+    The world's hidden records are rejected: a filter naming one that is only unreviewed is kept (a filter is not a
+    subject, ADR 0023; the hardening tests pin that half)."""
+    w, hidden, network = _hidden_world(db_session, withheld=True)
     hidden_ids = _hidden_sets(w, hidden)
     tested = 0
     for route in _legacy(routes):
@@ -387,8 +403,9 @@ def test_no_legacy_payload_names_a_record_below_the_floor(routes, client, db_ses
     """Calls every legacy list and every detail/sub-list it can fill with the visible records of the world, under the
     curated profile, and walks each JSON body against the INDEPENDENT tables: a pointer column of a gated kind never
     carries the id of a hidden record of that kind (including an approved child of a hidden parent), and no list
-    embedded under ``entries`` / ``observations`` / ``groups`` holds one."""
-    w, hidden, network = _hidden_world(db_session)
+    embedded under ``entries`` / ``observations`` / ``groups`` holds one. The world's hidden records are rejected (ADR 0023:
+    a pointer to an unreviewed record is named, one to a rejected record is not)."""
+    w, hidden, network = _hidden_world(db_session, withheld=True)
     hidden_ids = _hidden_sets(w, hidden)
     entry_params = {
         "/api/v1/species-entries": w["entry"].id,

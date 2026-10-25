@@ -100,6 +100,7 @@ def test_network_and_provenance_routes_name_no_hidden_record_under_curated(clien
     hidden = world.hidden_refs()
 
     exploratory = run_pass(client, db_session, specs, world, spy, profile="exploratory")
+    world.withhold_hidden(db_session)  # the crawl above saw the records unlisted; from here they are withheld (ADR 0023)
     curated = run_pass(client, db_session, specs, world, spy, profile="curated")
     monkeypatch.setattr(settings, "allow_public_internal_ids", True)
     curated_ids = run_pass(client, db_session, specs, world, spy, profile="curated", with_ids=True)
@@ -137,7 +138,7 @@ def test_both_evaluate_routes_reach_the_boundary(client, db_session, login_as, m
 
     Kills: removing the hook call from either route (the sweep's KNOWN_UNGUARDED check says the same).
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     spy = install_spy(monkeypatch)
     nkin = world.visible["nkin_v"].public_ref
@@ -163,7 +164,7 @@ def test_a_visible_solve_or_fit_of_a_hidden_network_stays_visible_with_the_owner
     Kills: hiding the child (404 or dropped from search); leaving the owner named; blanking an owner that is visible;
     touching exploratory.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     hidden_net = world.hidden["net_h"].public_ref
     solve = world.visible["nsolve_v_under_hidden_net"].public_ref
@@ -212,7 +213,7 @@ def test_widening_the_owner_field_alone_still_fails_closed(
 
     Kills: treating the nullable field as enough; dropping a D1 registration.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     model = next(m for m in ref_guard.POINTER_MODELS if m.__name__ == owner_model)
     monkeypatch.setattr(ref_guard, "POINTER_MODELS", ref_guard.POINTER_MODELS - {model})
@@ -271,7 +272,7 @@ def test_every_block_the_families_register_is_placed_by_the_guard(db_session, mo
 
     Kills: removing any one of these registrations; a block the world no longer builds.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     hidden = set(world.hidden_refs().values())
     registry = ref_guard.POINTER_MODELS
 
@@ -316,7 +317,7 @@ def test_the_batch_evaluate_evaluates_only_the_fits_of_visible_solves(client, db
     """
     from app.services.scientific_read import network_kinetics_batch_evaluate as module
 
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     net = world.visible["net_v"].public_ref
     visible_fits = {world.visible["nkin_v"].public_ref, world.visible["nkin_v_hidden_sources"].public_ref}
@@ -352,7 +353,7 @@ def test_network_counts_flags_and_blocks_agree_with_what_is_served(client, db_se
     Kills: counting hidden solves, fits or source calculations; an envelope that reaches past the visible solves;
     ``has_plog`` or a channel's ``has_kinetics`` resting on a hidden fit; listing a microreaction of a hidden entry.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     net = world.visible["net_v"].public_ref
     hidden_entry = world.hidden["tse_h"].public_ref
@@ -400,7 +401,7 @@ def test_solve_counts_flags_and_blocks_agree_with_what_is_served(client, db_sess
     Kills: counting the hidden barrier or source calculation; serving a state-energy source whose calculation (or
     zero-point calculation) is hidden; the older single slot naming a hidden calculation; a stale ``partial_sources``.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     solve = world.visible["nsolve_v"].public_ref
     hidden_calc = world.hidden["calc_h"].public_ref
@@ -465,7 +466,7 @@ def test_a_channel_whose_only_microreaction_is_hidden_keeps_its_mechanism_and_se
 
     Kills: dropping the channel; rewriting its mechanism; leaving the hidden path named.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     net = world.visible["net_v"].public_ref
     key = "ch-only-hidden-entry"
@@ -490,7 +491,7 @@ def test_a_reference_to_a_hidden_solve_is_nulled_and_never_flagged(client, db_se
 
     Kills: setting the flag when a reference is hidden; leaving the reference.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     solve = world.visible["nsolve_v"].public_ref
     hidden = world.hidden["nsolve_h"].public_ref
@@ -552,7 +553,7 @@ def test_fit_detail_counts_agree_with_its_source_calculations(client, db_session
 
     Kills: counting the solve's hidden source calculations in the fit's evidence.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     for key in ("nkin_v", "nkin_v_hidden_sources"):
         ref = world.visible[key].public_ref
@@ -603,7 +604,7 @@ def test_every_network_search_filter_agrees_with_the_flag_each_served_record_car
 
     Kills: any filter that looks at records the profile hides.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     checked = 0
     for name, block, field in filters:
@@ -622,7 +623,7 @@ def test_network_searches_do_not_find_a_network_by_what_only_a_hidden_record_has
     Kills: ``temperature_min`` matching the hidden solve's wider envelope; ``method`` matching a level that only a hidden
     calculation carries; ``has_plog`` matching the hidden PLOG fit.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     net = world.visible["net_v"].public_ref
     solves = {world.visible["nsolve_v"].public_ref, world.visible["nsolve_v_hidden_sources"].public_ref}
@@ -681,7 +682,7 @@ def test_level_of_theory_usage_follows_the_floor(client, db_session, login_as):
     Kills: counting or listing a hidden calculation; listing a hidden-only level in browse or search; a ``used_by`` limit
     applied before the floor; leaving the hidden owner of a visible calculation named.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     only = world.extra["lot_hidden_only"].public_ref
     shared = world.extra["lot"].public_ref
@@ -736,7 +737,7 @@ def test_correction_scheme_usage_follows_the_floor(client, db_session, login_as)
     Kills: counting or listing an application to a hidden entry; naming a hidden source calculation; filtering
     ``used_by_calculation`` on a hidden calculation or target.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     ecs, only = world.extra["ecs"].public_ref, world.extra["ecs_hidden_only"].public_ref
     hidden_calc = world.hidden["calc_h"].public_ref
@@ -775,7 +776,7 @@ def test_frequency_scale_factor_usage_follows_the_floor(client, db_session, logi
     Kills: counting hidden statmech in ``statmech_usage_count``; listing the hidden user; ``used_by_statmech`` matching
     a hidden statmech.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     fsf, only = world.extra["fsf"].public_ref, world.extra["fsf_hidden_only"].public_ref
 
@@ -813,7 +814,7 @@ def test_a_hidden_user_of_a_scale_factor_does_not_displace_a_shown_one_under_the
     """
     from app.services.scientific_read import frequency_scale_factors
 
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     ref = world.extra["fsf_limit"].public_ref
     monkeypatch.setattr(frequency_scale_factors, "_USAGE_LIMIT", 2)
@@ -868,7 +869,7 @@ def test_a_solve_listed_under_literature_keeps_its_row_with_the_hidden_network_b
 
     Kills: dropping the row; leaving the hidden network named (a nullable sibling field, not a pointer).
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     ref = world.extra["literature"].public_ref
     solve = world.visible["nsolve_v_under_hidden_net"].public_ref
@@ -895,7 +896,7 @@ def test_analytics_provenance_flags_and_filters_agree(client, db_session, login_
     Kills: a flag resting on a hidden statmech or entry; a filter that matches a hidden one; a statmech row naming a hidden
     transition-state entry.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
 
     def rows(profile, endpoint, ref_key, **params):
@@ -950,7 +951,7 @@ def test_free_text_that_names_a_hidden_record_is_blanked(client, db_session, log
 
     Kills: leaving the text; blanking the neighbours with it.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     solve = world.visible["nsolve_v"].public_ref
     exp = _get(client, f"/network-solves/{solve}", "exploratory").json()["record"]["network_solve"]
@@ -970,7 +971,7 @@ def test_a_composite_scheme_is_served_whole_under_curated(client, db_session, lo
 
     Kills: a guard that blanks vocabulary; a scheme route left out of the crawl.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     ref = world.extra["composite_scheme"].public_ref
     cur = _get(client, f"/composite-schemes/{ref}", "curated")

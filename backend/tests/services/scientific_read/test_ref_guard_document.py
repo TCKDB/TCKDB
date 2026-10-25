@@ -1,6 +1,6 @@
 """The guard's placeholder mode for captured selection facts (``withhold_in_document``), on synthetic facts.
 
-``hidden_refs`` is replaced by a fixed answer, so what is under test is the walk and the tokens: where a ref is found,
+``withheld_evidence_refs`` is replaced by a fixed answer, so what is under test is the walk and the tokens: where a ref is found,
 what it becomes, how the numbers are assigned and what is left alone. Each test names the mutation it kills. The seam
 (``withhold_selection_facts``) and the database resolution have their own tests at the end.
 """
@@ -68,7 +68,7 @@ def hidden(monkeypatch):
             assert unknown_is_hidden, "a document treats an unknown ref as hidden"
             return {r for r in refs_in if r in refs}
 
-        monkeypatch.setattr(ref_guard, "hidden_refs", fake)
+        monkeypatch.setattr(ref_guard, "withheld_evidence_refs", fake)
         return asked
 
     return install
@@ -215,7 +215,7 @@ def test_exploratory_reads_nothing(monkeypatch):
     def boom(*a, **k):
         raise AssertionError("a lookup under a profile with no review floor")
 
-    monkeypatch.setattr(ref_guard, "hidden_refs", boom)
+    monkeypatch.setattr(ref_guard, "withheld_evidence_refs", boom)
     facts = Fact(ref=A)
     report = ref_guard.withhold_in_document(None, facts, profile=EXPLORATORY, mode="placeholder")
     assert report.facts is facts and not report.tokens
@@ -267,7 +267,7 @@ def test_the_seam_reads_visibility_from_the_session_it_is_given_not_the_request_
         seen_sessions.append(session)
         return {r for r in refs_in if r == A}
 
-    monkeypatch.setattr(ref_guard, "hidden_refs", fake)
+    monkeypatch.setattr(ref_guard, "withheld_evidence_refs", fake)
     engine_session, context_session = object(), Recorder()
     ctx = ref_guard.RefGuardContext(session=context_session, route_path="/api/v1/scientific/species-entries/x")
     ctx_token = ref_guard.set_ref_guard_context(ctx)
@@ -286,7 +286,7 @@ def test_the_seam_does_nothing_without_a_floor_and_for_a_release_backed_profile(
     def boom(*a, **k):
         raise AssertionError("looked up")
 
-    monkeypatch.setattr(ref_guard, "hidden_refs", boom)
+    monkeypatch.setattr(ref_guard, "withheld_evidence_refs", boom)
     facts = Fact(ref=A)
     for profile in (EXPLORATORY, RELEASE):
         token = set_current_read_profile(profile)
@@ -309,12 +309,16 @@ def test_an_unknown_ref_is_hidden_for_a_document_and_not_for_the_response_guard(
     from tests.api.scientific._curated_sweep_world import build_sweep_world
 
     world = build_sweep_world(db_session)
+    world.withhold_hidden(db_session)  # a rejected / deprecated calculation: withheld as evidence
     hidden_ref = world.hidden["calc_h"].public_ref
     visible_ref = world.visible["calc_vopt"].public_ref
     unknown_ref = ref("calc", 12345678)
     refs = {hidden_ref, visible_ref, unknown_ref}
-    assert ref_guard.hidden_refs(db_session, refs, profile=CURATED) == {hidden_ref}
-    assert ref_guard.hidden_refs(db_session, refs, profile=CURATED, unknown_is_hidden=True) == {hidden_ref, unknown_ref}
+    assert ref_guard.withheld_evidence_refs(db_session, refs, profile=CURATED) == {hidden_ref}
+    assert ref_guard.withheld_evidence_refs(db_session, refs, profile=CURATED, unknown_is_hidden=True) == {
+        hidden_ref,
+        unknown_ref,
+    }
     report = ref_guard.withhold_in_document(
         db_session, (hidden_ref, visible_ref, unknown_ref), profile=CURATED, mode="placeholder"
     )

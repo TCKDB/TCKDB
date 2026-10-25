@@ -49,6 +49,7 @@ from app.services.manifest_formats import (
     new_format_registry,
     read_manifest_format,
 )
+from app.services.scientific_read.common import check_read_profile_block
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 from app.services.selection_kernel import assessment_semantics as semantics
 from app.services.selection_kernel.requested import expected_candidate_statuses
@@ -77,8 +78,10 @@ from app.versioning import same_value
 #: with rules, rule matches, pair checks, edges, conflicts or undecided comparisons (it holds ``ordering``), and the
 #: request no longer holds a comparison objective or a reference model. Version 3: the request records its filters and its
 #: eligibility settings, the manifest records which review statuses a candidate itself may have and each candidate's
-#: verdict under those settings, and the population records the funnel.
-MANIFEST_FORMAT_VERSION = 3
+#: verdict under those settings, and the population records the funnel. Version 4: ``read_profile`` records the review statuses whose linked
+#: evidence the profile withheld (ADR 0023); under ``curated`` a not-reviewed or under-review record is shown as
+#: evidence and only a rejected or deprecated one is a token.
+MANIFEST_FORMAT_VERSION = 4
 MANIFEST_FORMAT_NAME = "statmech_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "statmech_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -296,6 +299,9 @@ def _check_consistency(
     profile = manifest.get("read_profile") or {}
     name = profile.get("profile")
     floor_raw = profile.get("review_floor")
+    problem = check_read_profile_block(profile)
+    if problem is not None:
+        raise ReplayError("inconsistent_manifest", problem)
     if name not in ("exploratory", "curated"):
         raise ReplayError("inconsistent_manifest", f"unknown read profile {name!r}")
     floor = RecordReviewStatus(floor_raw) if floor_raw is not None else None

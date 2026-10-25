@@ -725,8 +725,11 @@ def where_visible(stmt: Any, predicate: Any) -> Any:
 # cannot be lifted by request. Under exploratory nothing is withheld as evidence, so every function here answers
 # "visible" and issues no query.
 #
-# STATUS: nothing calls this section yet. It lands ahead of its callers; the code still applies the earlier rule
-# (D6: below the floor is hidden, evidence included) until the follow-up steps move each site over.
+# STATUS (step 2 of ADR 0023): the response-level ref guard (``ref_guard.py``: pointers in responses, the document modes, the
+# selection loaders' unavailable-evidence seam, the export batcher), the legacy entity reads, and the ML export's conformer
+# refs call this section. Still on the earlier rule (D6: below the floor is hidden, evidence included) until their steps land:
+# service counts and derived levels (step 3), matching in search and select (step 4), the trust and selection loaders'
+# own populations (step 5), made-under comparisons (step 6), and detail-by-ref (step 7).
 
 #: Review statuses whose linked evidence is withheld under a profile with a review floor.
 WITHHELD_EVIDENCE_STATUSES: frozenset[RecordReviewStatus] = frozenset(
@@ -745,6 +748,46 @@ def evidence_withheld_under_profile(status: RecordReviewStatus, *, profile: Any 
     if profile.review_floor is None:
         return False
     return status in WITHHELD_EVIDENCE_STATUSES
+
+
+def linked_evidence_withheld_values(*, profile: Any = None) -> list[str]:
+    """The review statuses, as sorted tokens, whose linked evidence the profile withholds (``[]`` without a floor).
+
+    What a recorded selection manifest says about the evidence rule it was made under, so a reader of the manifest does not
+    have to know which release wrote it.
+    """
+    profile = profile if profile is not None else current_read_profile()
+    return sorted(s.value for s in RecordReviewStatus if evidence_withheld_under_profile(s, profile=profile))
+
+
+def read_profile_block(*, profile: Any = None) -> dict[str, Any]:
+    """The ``read_profile`` block of a selection manifest: the profile, its review floor, and the evidence rule it applied.
+
+    ``linked_evidence_withheld`` is what ADR 0023 adds in manifest format 4: the review statuses whose linked evidence the
+    profile withheld (``["deprecated", "rejected"]`` under ``curated``, ``[]`` otherwise).
+    """
+    profile = profile if profile is not None else current_read_profile()
+    floor = profile.review_floor
+    return {
+        "profile": profile.profile.value,
+        "review_floor": floor.value if floor is not None else None,
+        "linked_evidence_withheld": linked_evidence_withheld_values(profile=profile),
+    }
+
+
+def check_read_profile_block(block: Any) -> str | None:
+    """Why a recorded ``read_profile`` block is not one this release writes, or ``None``.
+
+    The block names the profile and its floor; the evidence rule it records must be the one that profile applies, so a
+    manifest relabelled by hand (or recorded under another rule) is refused rather than read as this one.
+    """
+    if not isinstance(block, dict):
+        return "the manifest records no read profile"
+    recorded = block.get("linked_evidence_withheld")
+    expected = ["deprecated", "rejected"] if block.get("review_floor") is not None else []
+    if recorded != expected:
+        return f"the recorded linked-evidence rule {recorded!r} is not what the recorded read profile applies ({expected!r})"
+    return None
 
 
 def evidence_visible_statuses(*, profile: Any = None) -> frozenset[RecordReviewStatus]:

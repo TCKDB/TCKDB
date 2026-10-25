@@ -138,13 +138,20 @@ are listed by label, never ordered by energy.
 the ML export's is `tckdb.ml` version 2.
 
 > **Rule change in progress (owner decision 2026-10-25, [ADR 0023](../adr/0023-curated-profile-floor-applies-to-records-linked-evidence-is-badged.md)).**
-> Every passage below that describes what the `curated` profile hides or shows (the legacy reads, "hidden by default", the select
-> rules, and "Visibility defaults") describes the earlier rule, decision D6: below the floor is hidden, evidence included, and
-> "hidden equals unknown equals absent". Under the new rule, the floor decides which *records* a list, search or select returns; a
-> returned record's linked evidence (source calculations, levels derived from them, conformer observations in a group, evidence
-> counts, nested refs) is shown with its review badge, and only `rejected` and `deprecated` evidence is withheld. Select matches
-> through unreviewed evidence under `curated` but never through rejected or deprecated evidence. This is being rolled out in steps;
-> **until they land, the code still applies D6, and the passages below describe that code.**
+> Under the new rule, the `curated` floor decides which *records* a list, search or select returns; a returned record's linked
+> evidence (source calculations, levels derived from them, conformer observations in a group, evidence counts, nested refs) is
+> shown with its review badge, and only `rejected` and `deprecated` evidence is withheld.
+>
+> **Already true (step 2):** a nested ref in a response, in a selection document or in an export is withheld only when the record
+> it names is `rejected` or `deprecated`; a ref to a not-reviewed or under-review record stays, with its badge where the model has
+> one. The legacy entity reads follow the same split for their pointer columns and embedded records (a conformer group's
+> observations), and an id filter is rewritten to name nothing only when it names a withheld record. A returned record that is
+> itself below the floor still fails loud.
+>
+> **Still the earlier rule (decision D6: below the floor is hidden, evidence included), and described as it is:** list counts,
+> availability flags and derived levels of theory (step 3), matching in search and select (step 4), the trust and selection
+> loaders (step 5), made-under comparisons (step 6), and detail-by-ref (step 7). Every passage below that describes what `curated`
+> hides or shows is therefore the earlier rule except where it concerns a nested ref.
 
 ## Other lists, and where their order is documented
 

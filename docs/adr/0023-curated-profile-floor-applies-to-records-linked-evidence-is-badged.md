@@ -6,8 +6,11 @@ amends its detail-page seam**, see Q1),
 [0007](0007-curated-selections-are-a-release-overlay-not-a-column.md) (curated selections are a release overlay),
 [0016](0016-review-approves-a-claim-and-does-not-cascade.md) (review approves a claim and does not cascade).
 Supersedes the read-side rule known as D6 ("hidden == unknown == absent") for linked evidence. The rule is being rolled out in
-steps; until they land, the code still applies D6. The helper that will hold the rule
-(`evidence_withheld_under_profile` and its siblings in `app/services/scientific_read/common.py`) exists but has no callers yet.
+steps; a site that has not been moved yet still applies D6. The helper that holds the rule (`evidence_withheld_under_profile` and
+its siblings in `app/services/scientific_read/common.py`) is called, from step 2, by the response-level ref guard
+(`ref_guard.py`), the selection documents, the export streams, the legacy entity reads and the ML export's conformer refs. Still on
+D6: service counts and derived levels, matching, the trust and selection loaders' own populations, made-under comparisons, and
+detail-by-ref.
 
 Under the `curated` profile, the `approved` floor decides which **records** a list, search or select returns. The **linked
 evidence** of a returned record is always shown with its review badge. Only `rejected` and `deprecated` evidence is withheld.
@@ -71,11 +74,13 @@ does not link to. TCKDB ships no built-in method ranking.
 - A curated reader sees what an approved record rests on, and the badge says how much of it anyone has checked.
 - Counts of evidence under `curated` include unreviewed evidence and exclude rejected and deprecated evidence.
 
-## Version effects planned for later steps
+## Version effects
 
-None of these has happened. They are listed so each step names its own bump.
+Step 2 (nested refs in responses, selection documents and exports) moved five selection manifests to format 4:
 
-- Selection manifest formats move to 4 and record `linked_evidence_withheld`. A manifest in an earlier format is refused, not
-  read as the new rule.
-- The `computed_kinetics` and `computed_transition_state` rubric pins are re-pinned without a version bump. The grading code
-  is unchanged; only the inputs a curated read supplies to it change.
+- The thermo, kinetics, statmech, structure and network selection manifests are format 4 and record
+  `linked_evidence_withheld` (`["deprecated", "rejected"]` under `curated`, `[]` otherwise) in `read_profile` (`visibility` for the
+  network manifest). A manifest in an earlier format is refused, not read as the new rule. The relative-energy manifests are not
+  bumped by step 2.
+- The `computed_transition_state` rubric is re-pinned without a version bump. The grading code is unchanged; only the inputs a
+  curated read supplies to it change. The `computed_kinetics` pin follows when its inputs move (step 5).

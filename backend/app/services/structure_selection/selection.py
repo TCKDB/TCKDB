@@ -17,7 +17,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.services.scientific_read.profile import current_read_profile
+from app.services.scientific_read.common import read_profile_block
 from app.services.structure_selection.decision import StructureDecision, decide_structures
 from app.services.structure_selection.manifest import build_manifest
 from app.services.structure_selection.models import (
@@ -63,11 +63,7 @@ def select_entry_structures(
         assessments=assessment.assessments,
         calculations=calculations,
     )
-    resolved = current_read_profile()
-    profile = {
-        "profile": resolved.profile.value,
-        "review_floor": resolved.review_floor.value if resolved.review_floor is not None else None,
-    }
+    profile = read_profile_block()
     manifest = build_manifest(assessment, decision, profile=profile)
     return StructureSelection(
         outcome=decision.outcome,

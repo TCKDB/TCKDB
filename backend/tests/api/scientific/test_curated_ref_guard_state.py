@@ -83,8 +83,11 @@ def test_guard_leaves_exploratory_alone_and_costs_at_most_one_statement(client, 
 
     Kills: the guard running under the exploratory profile (exploratory bytes change or it costs a statement); a
     second statement per response; an inert guard that never withholds; a route whose registry has a gap.
+
+    The world's hidden records are withheld (rejected / deprecated): that is the state in which the guard removes anything
+    (ADR 0023), so an inert guard is detectable. Records that are merely unlisted are covered by the sweep.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     specs = enumerate_routes(client.app)
 

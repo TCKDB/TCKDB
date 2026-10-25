@@ -116,6 +116,7 @@ def test_species_side_routes_name_no_hidden_record_under_curated(client, db_sess
     hidden = world.hidden_refs()
 
     exploratory = run_pass(client, db_session, specs, world, spy, profile="exploratory")
+    world.withhold_hidden(db_session)  # the crawl above saw the records unlisted; from here they are withheld (ADR 0023)
     curated = run_pass(client, db_session, specs, world, spy, profile="curated")
     monkeypatch.setattr(settings, "allow_public_internal_ids", True)
     curated_ids = run_pass(client, db_session, specs, world, spy, profile="curated", with_ids=True)
@@ -164,7 +165,7 @@ def test_a_visible_observation_of_a_hidden_group_stays_visible_with_the_group_bl
     Kills: hiding the child (404 or dropped); leaving the group named; blanking the group when it is visible;
     touching exploratory.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     hidden_group = world.hidden["cg_h"].public_ref
     visible_group = world.visible["cg_v"].public_ref
@@ -192,7 +193,7 @@ def test_widening_the_owner_field_alone_still_fails_closed(client, db_session, l
 
     Kills: the guard emitting the ref when it cannot place it; treating the nullable field as enough.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     from app.schemas.reads.scientific_conformer import ConformerGroupCoreBlock
 
@@ -308,7 +309,7 @@ def test_species_search_flags_follow_the_floor_over_http(client, db_session, log
 
     Kills: applying the floor in the service helper but not on the route that serialises it.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     entry, _ = _entry_with(db_session, approved=False)
     # The entry itself must pass the curated floor to be listed; only its records are hidden.
@@ -362,7 +363,7 @@ def test_a_withheld_ref_takes_its_id_and_its_endpoint_with_it(client, db_session
     """
     from app.api.config import settings
 
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     monkeypatch.setattr(settings, "allow_public_internal_ids", True)
     ref = world.visible["calc_vopt"].public_ref
@@ -433,7 +434,7 @@ def test_a_url_naming_a_hidden_record_is_withheld_like_the_ref(client, db_sessio
     for short paths; decoding once; not splitting ``;params``; ``$`` instead of ``\\Z`` and not splitting on
     whitespace; a length cap or a whitespace shortcut applied to a URL-valued field.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     hidden = world.hidden["tse_h"].public_ref
     for form, url in _url_forms(hidden).items():
         assert _withhold_one(db_session, url) is None, f"{form}: {url!r} was kept"
@@ -449,7 +450,7 @@ def test_a_url_valued_field_that_cannot_be_read_fails_closed(client, db_session)
     Kills: swallowing the parse error in a URL-valued field; raising on free text; a percent-encoding that never settles
     being kept (seven layers deep is refused, three is read).
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     hidden = world.hidden["tse_h"].public_ref
     for url in ("http://[::1", f"/x/%{'25' * 7}2F{hidden}"):
         with pytest.raises(ref_guard.RefGuardUnplaceable):
@@ -463,7 +464,7 @@ def test_a_url_or_text_that_names_only_visible_records_is_kept(client, db_sessio
     Kills: nulling every URL or every string; matching a ref-shaped token with the wrong prefix, length or a trailing
     suffix; treating a visible ref in a note as hidden; blanking text only because it contains ``%``.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     hidden, visible = world.hidden["tse_h"].public_ref, world.visible["tse_v"].public_ref
     kept = [
         f"{BASE}/transition-state-entries/{visible}",
@@ -526,7 +527,7 @@ def test_free_text_naming_a_hidden_record_is_blanked_whole(client, db_session):
         review: RecordReviewBadge
         label: str  # required free text
 
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     hidden = world.hidden["calc_h"].public_ref
     for form, body in _hidden_text_forms(hidden).items():
         row = Row(review=RecordReviewBadge(status="approved", note=body), label=body)
@@ -543,7 +544,7 @@ def test_a_review_note_naming_a_hidden_record_is_blanked_over_http(client, db_se
 
     Kills: a boundary hook that does not reach free text; blanking the note under exploratory.
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     hidden = world.hidden["calc_h"].public_ref
     sm = world.visible["sm_v"]
@@ -577,7 +578,7 @@ def test_text_whose_encoding_never_settles_is_blanked_not_refused(client, db_ses
         note: str | None = None
         label: str = ""
 
-    build_sweep_world(db_session)
+    build_sweep_world(db_session, withheld=True)
     odd = f"odd %{'25' * 7}2F text"
     row = Row(note=odd, label=odd)
     ref_guard.withhold_in_model(db_session, row, profile=CURATED)
@@ -595,7 +596,7 @@ def test_a_literature_url_is_free_text_not_a_url_valued_field(client, db_session
     """
     from app.schemas.reads.scientific_literature import LiteratureIdentifiers
 
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     hidden, visible = world.hidden["calc_h"].public_ref, world.visible["calc_vf"].public_ref
     for url in (f"calculations/{hidden}", f"/x/{hidden} y", f"https://example.org/p?q=a b&r={hidden}", f"see {hidden}"):
         ids = LiteratureIdentifiers(doi="10.1/x", url=url)
@@ -616,7 +617,7 @@ def test_an_empty_identity_with_nowhere_to_go_fails_closed(client, db_session):
 
     from app.schemas.reads.scientific_geometry import GeometryIdentity, GeometryIdentityOwnerRef
 
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     hidden = world.hidden["tse_h"].public_ref
 
     def identity():
@@ -652,7 +653,7 @@ def test_a_dry_run_reports_collapses_and_changes_nothing(client, db_session):
     class Holder(BaseModel):
         identity: GeometryIdentity | None = None
 
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     hidden = world.hidden["tse_h"].public_ref
     owner = GeometryIdentityOwnerRef(kind="transition_state_entry", ref=hidden)
     payload = Holder(identity=GeometryIdentity(ambiguous_owners=[owner]))
@@ -678,7 +679,7 @@ def test_an_identity_with_no_owner_left_is_not_emitted_at_all(client, db_session
     """
     from tests.services.scientific_read._factories import make_geometry, make_transition_state_entry
 
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     tse_h2 = make_transition_state_entry(db_session, transition_state=world.visible["ts_v"], multiplicity=6)
     shared = make_geometry(db_session)
@@ -688,6 +689,8 @@ def test_an_identity_with_no_owner_left_is_not_emitted_at_all(client, db_session
         calc = make_calculation(db_session, type=CalculationType.sp, transition_state_entry_id=tse.id)
         attach_output_geometry(db_session, calculation=calc, geometry=shared)
         set_review(db_session, record_type=R.calculation, record_id=calc.id, status=APPROVED)
+    # The second owner is created after the world: withheld like the first, so every owner of the shared geometry is.
+    set_review(db_session, record_type=R.transition_state_entry, record_id=tse_h2.id, status=RecordReviewStatus.rejected)
 
     def identity(geometry, profile):
         r = client.get(f"{BASE}/geometries/{geometry.public_ref}", params={"profile": profile})
@@ -721,7 +724,7 @@ def test_ids_are_dropped_with_their_own_row_not_with_the_same_index(client, db_s
     class Env(BaseModel):
         provenance: CalculationProvenanceBlock
 
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     h, v = world.hidden["calc_h"], world.visible["calc_vf"]
 
     def block(ids):
@@ -749,7 +752,7 @@ def test_the_review_shapes_each_build_a_hidden_link_and_none_fails_closed(client
     Kills: removing any of the seven pointer registrations (the request fails closed); a world that stops building a
     shape (the exploratory control no longer names the hidden record).
     """
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     login_as(world.extra["curator"].id)
     hid = world.hidden
     shapes = [
@@ -789,7 +792,7 @@ def test_a_required_field_that_is_exactly_a_hidden_ref_fails_closed(client, db_s
     class Nullable(BaseModel):
         label: str | None = None
 
-    world = build_sweep_world(db_session)
+    world = build_sweep_world(db_session, withheld=True)
     hidden = world.hidden["calc_h"].public_ref
     with pytest.raises(ref_guard.RefGuardUnplaceable):
         ref_guard.withhold_in_model(db_session, Required(label=hidden), profile=CURATED)

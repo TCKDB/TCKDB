@@ -1,9 +1,11 @@
 """Closing the ways around the curated floor on the legacy entity reads.
 
 * B1  a path id spelled ``+5`` / ``5.0`` / `` 5`` / ``5_0`` is still the id 5 to FastAPI; the gate sees the same id.
-* B2  a record the profile shows does not name a record of ANY gated kind that the profile hides: pointer columns are
-      blanked, embedded collections are filtered, a child of a hidden parent is hidden with it, and an id-typed query
-      filter naming a hidden record answers as an unknown id does.
+* B2  a record the profile shows does not name a record of ANY gated kind that the profile WITHHOLDS (ADR 0023: rejected
+      or deprecated linked evidence): pointer columns are blanked, embedded collections are filtered, a child of a
+      withheld parent is withheld with it, and an id-typed query filter naming a withheld record answers as an unknown
+      id does. A record that is merely below the floor (never reviewed) is linked evidence and is named as it always was;
+      each B2 test runs over both states.
 * B3  ``?solve_id=`` on a channel's kinetics answers a hidden solve exactly as a missing one.
 """
 
@@ -66,8 +68,8 @@ def test_a_respelled_id_is_gated_like_the_id(case, client, db_session):
 # --- B2 --------------------------------------------------------------------------------------------------------------
 
 
-def _world(db_session):
-    """Approved records that point at hidden (never reviewed) records of other kinds."""
+def _world(db_session, withheld=False):
+    """Approved records that point at hidden records of other kinds: never reviewed, or with ``withheld`` rejected."""
     species = make_species(db_session, smiles="C=O", inchi_key=next_inchi_key("HW"))
     entry = make_species_entry(db_session, species)
     set_review(db_session, record_type=T.species_entry, record_id=entry.id, status=S.approved)
@@ -111,6 +113,15 @@ def _world(db_session):
     set_review(db_session, record_type=T.transition_state_entry, record_id=orphan_ts_entry.id, status=S.approved)
     orphan_ts_calc = make_calculation(db_session, transition_state_entry_id=orphan_ts_entry.id)
     set_review(db_session, record_type=T.calculation, record_id=orphan_ts_calc.id, status=S.approved)
+    if withheld:
+        for record_type, row in (
+            (T.conformer_group, group),
+            (T.conformer_observation, hidden_observation),
+            (T.statmech, hidden_statmech),
+            (T.transition_state_entry, hidden_ts_entry),
+            (T.transition_state, hidden_ts),
+        ):
+            set_review(db_session, record_type=record_type, record_id=row.id, status=S.rejected)
     db_session.flush()
     return {
         "orphan_calc": orphan_calc,
@@ -135,48 +146,67 @@ def _curated(client, path, **params):
     return client.get(f"{LEGACY}{path}", params={"profile": "curated", **params})
 
 
-def test_an_approved_thermo_does_not_name_a_hidden_statmech_or_conformer_group(client, db_session):
-    w = _world(db_session)
+@pytest.mark.parametrize("withheld", [False, True], ids=["unlisted", "withheld"])
+def test_an_approved_thermo_does_not_name_a_withheld_statmech_or_conformer_group(client, db_session, withheld):
+    """Unlisted (never reviewed): the pointers are kept. Withheld (rejected): they are blanked."""
+    w = _world(db_session, withheld)
     for body in (
         _curated(client, f"/thermo/{w['thermo'].id}").json(),
         _curated(client, "/thermo").json()["items"][0],
         _curated(client, f"/species-entries/{w['entry'].id}/thermo").json()[0],
     ):
-        assert body["statmech_id"] is None, body
-        assert body["target_conformer_group_id"] is None, body
+        if withheld:
+            assert body["statmech_id"] is None, body
+            assert body["target_conformer_group_id"] is None, body
+        else:
+            assert body["statmech_id"] == w["statmech"].id, body
+            assert body["target_conformer_group_id"] == w["group"].id, body
     # Exploratory still shows both: nothing is removed without a floor.
     assert client.get(f"{LEGACY}/thermo/{w['thermo'].id}").json()["statmech_id"] == w["statmech"].id
 
 
-def test_an_approved_calculation_does_not_name_a_hidden_observation_or_ts_entry(client, db_session):
-    w = _world(db_session)
-    assert _curated(client, f"/calculations/{w['calc'].id}").json()["conformer_observation_id"] is None
-    assert _curated(client, f"/calculations/{w['ts_calc'].id}").json()["transition_state_entry_id"] is None
+@pytest.mark.parametrize("withheld", [False, True], ids=["unlisted", "withheld"])
+def test_an_approved_calculation_does_not_name_a_withheld_observation_or_ts_entry(client, db_session, withheld):
+    w = _world(db_session, withheld)
+    observation = _curated(client, f"/calculations/{w['calc'].id}").json()["conformer_observation_id"]
+    ts_entry = _curated(client, f"/calculations/{w['ts_calc'].id}").json()["transition_state_entry_id"]
+    assert observation == (None if withheld else w["hidden_observation"].id)
+    assert ts_entry == (None if withheld else w["ts_entry"].id)
     assert client.get(f"{LEGACY}/calculations/{w['calc'].id}").json()["conformer_observation_id"] == w["hidden_observation"].id
 
 
-def test_an_id_filter_naming_a_hidden_record_answers_as_an_unknown_id_does(client, db_session):
-    """Kills: ``/calculations?conformer_observation_id=<hidden>`` returning the approved calculation (total 1)."""
-    w = _world(db_session)
+@pytest.mark.parametrize("withheld", [False, True], ids=["unlisted", "withheld"])
+def test_an_id_filter_naming_a_withheld_record_answers_as_an_unknown_id_does(client, db_session, withheld):
+    """Kills: ``/calculations?conformer_observation_id=<withheld>`` returning the approved calculation (total 1). A filter
+    is not a subject: one naming a record that is merely unreviewed is kept and finds the approved calculation."""
+    w = _world(db_session, withheld)
     for param, hidden_id in [
         ("conformer_observation_id", w["hidden_observation"].id),
         ("transition_state_entry_id", w["ts_entry"].id),
     ]:
-        hidden = _curated(client, "/calculations", **{param: hidden_id}).json()
+        named = _curated(client, "/calculations", **{param: hidden_id}).json()
         unknown = _curated(client, "/calculations", **{param: 999999999}).json()
-        assert hidden == unknown, param
-        assert hidden["total"] == 0
+        if withheld:
+            assert named == unknown, param
+            assert named["total"] == 0
+        else:
+            assert named["total"] == 1, param
 
 
-def test_an_approved_ts_does_not_list_a_hidden_entry(client, db_session):
-    w = _world(db_session)
+@pytest.mark.parametrize("withheld", [False, True], ids=["unlisted", "withheld"])
+def test_an_approved_ts_does_not_list_a_withheld_entry(client, db_session, withheld):
+    """An entry embedded in its transition state is linked evidence of it: listed while unreviewed, dropped once rejected.
+    Its own detail route stays on the record floor either way."""
+    w = _world(db_session, withheld)
+    count = 0 if withheld else 1
     detail = _curated(client, f"/transition-states/{w['ts'].id}").json()
-    assert detail["entries"] == [], detail
+    assert len(detail["entries"]) == count, detail
     listed = _curated(client, "/transition-states").json()["items"][0]
-    assert listed["entries"] == []
+    assert len(listed["entries"]) == count
     via_entry = _curated(client, f"/reaction-entries/{w['reaction_entry'].id}/transition-states").json()[0]
-    assert via_entry["entries"] == []
-    assert len(client.get(f"{LEGACY}/transition-states/{w['ts'].id}").json()["entries"]) == 1
+    assert len(via_entry["entries"]) == count
+    exploratory = client.get(f"{LEGACY}/transition-states/{w['ts'].id}", params={"include_rejected": "true"})
+    assert len(exploratory.json()["entries"]) == 1
     assert _curated(client, f"/transition-states/entries/{w['ts_entry'].id}").status_code == 404
 
 
@@ -479,27 +509,35 @@ def test_a_channels_kinetics_discloses_what_the_default_hid_in_a_header(client, 
 # --- N1: a child of a hidden parent is hidden everywhere it can be named ------------------------------------------------
 
 
-def test_an_approved_child_of_a_hidden_parent_is_not_named_by_a_pointer(client, db_session):
+@pytest.mark.parametrize("withheld", [False, True], ids=["unlisted", "withheld"])
+def test_an_approved_child_of_a_withheld_parent_is_not_named_by_a_pointer(client, db_session, withheld):
     """Kills: judging a pointer by the child's own review only. The detail route of the observation / the entry answers
-    404 (its parent is hidden); a calculation must not name it either."""
-    w = _world(db_session)
+    404 while its parent is below the floor (step 7 changes that); a calculation must not name it once the parent is
+    withheld, and does name it while the parent is merely unreviewed."""
+    w = _world(db_session, withheld)
     assert _curated(client, f"/conformer-observations/{w['orphaned_observation'].id}").status_code == 404
     assert _curated(client, f"/transition-states/entries/{w['orphan_ts_entry'].id}").status_code == 404
-    assert _curated(client, f"/calculations/{w['orphan_calc'].id}").json()["conformer_observation_id"] is None
-    assert _curated(client, f"/calculations/{w['orphan_ts_calc'].id}").json()["transition_state_entry_id"] is None
+    observation = _curated(client, f"/calculations/{w['orphan_calc'].id}").json()["conformer_observation_id"]
+    ts_entry = _curated(client, f"/calculations/{w['orphan_ts_calc'].id}").json()["transition_state_entry_id"]
+    assert observation == (None if withheld else w["orphaned_observation"].id)
+    assert ts_entry == (None if withheld else w["orphan_ts_entry"].id)
     # exploratory: nothing removed
     assert client.get(f"{LEGACY}/calculations/{w['orphan_calc'].id}").json()["conformer_observation_id"] == w["orphaned_observation"].id
 
 
-def test_an_id_filter_naming_a_child_of_a_hidden_parent_answers_as_an_unknown_id(client, db_session):
-    w = _world(db_session)
+@pytest.mark.parametrize("withheld", [False, True], ids=["unlisted", "withheld"])
+def test_an_id_filter_naming_a_child_of_a_withheld_parent_answers_as_an_unknown_id(client, db_session, withheld):
+    w = _world(db_session, withheld)
     for param, child in [
         ("conformer_observation_id", w["orphaned_observation"].id),
         ("transition_state_entry_id", w["orphan_ts_entry"].id),
     ]:
-        hidden = _curated(client, "/calculations", **{param: child}).json()
-        assert hidden == _curated(client, "/calculations", **{param: 999999999}).json(), param
-        assert hidden["total"] == 0
+        named = _curated(client, "/calculations", **{param: child}).json()
+        if withheld:
+            assert named == _curated(client, "/calculations", **{param: 999999999}).json(), param
+            assert named["total"] == 0
+        else:
+            assert named["total"] == 1, param
 
 
 def test_exploratory_hides_a_child_with_its_parent_by_default(client, db_session):
