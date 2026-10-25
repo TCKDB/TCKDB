@@ -55,7 +55,7 @@ REGISTRIES: dict[str, Callable[[], VersionRegistry]] = {
 #: changed the decision documents these formats describe. A select request then gained filters and named eligibility
 #: defaults (2026-10): a recorded decision now carries them, so the format moved again, and the assessment semantics
 #: moved because the recorded ``eligible`` flag is the verdict under the request's own settings. The curated evidence rule
-#: (ADR 0023, step 2) moved the thermo, kinetics, statmech, structure and network formats to 4: a manifest records the
+#: (ADR 0023, step 2) moved the thermo, kinetics, statmech, structure, network and relative-energy formats to 4: a manifest records the
 #: review statuses whose linked evidence its profile withheld, and one recorded before that is refused.
 EXPECTED: dict[str, int] = {
     "thermo_formats": 4,
@@ -66,7 +66,7 @@ EXPECTED: dict[str, int] = {
     "statmech_semantics": 2,
     "structure_formats": 4,
     "network_formats": 4,
-    "relative_energy_formats": 3,
+    "relative_energy_formats": 4,
 }
 
 #: Names above the baseline inside a registry whose other names are at it. The transition-state badge lists its

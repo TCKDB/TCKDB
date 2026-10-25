@@ -43,6 +43,7 @@ from app.schemas.reads.scientific_common import (
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
     WatermarkEcho,
 )
 from app.schemas.reads.scientific_network import (
@@ -122,7 +123,7 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificNetworkSolveSearchResponse(BaseModel):
+class ScientificNetworkSolveSearchResponse(ScientificResponse):
     request: RequestEcho
     review_summary: ReviewStatusSummary
     records: list[ScientificNetworkSolveRecord]

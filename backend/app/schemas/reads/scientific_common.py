@@ -49,6 +49,20 @@ class HiddenByDefault(BaseModel):
     counted: str = "records"
 
 
+class ScientificResponse(BaseModel):
+    """Base class for every ``/scientific/*`` response envelope (a block with a ``request`` echo).
+
+    ``review_status_by_ref`` is the review badge of every gated record the response names (ADR 0023: linked evidence is shown
+    WITH its badge). It exists because most nested pointers are bare refs with no badge field of their own. Under the
+    ``curated`` profile it maps each such ref still present in the finished response to its review status (a record with no
+    review row reads as ``not_reviewed``); a ref the evidence rule withheld is not in the response and so not in the map.
+    It is ``null`` under the exploratory profile, where no review lookup is made. The record floor, not the badge, decides
+    which records a list returns.
+    """
+
+    review_status_by_ref: dict[str, RecordReviewStatus] | None = None
+
+
 class ProfiledRequestEcho(BaseModel):
     """Base class for every ``/scientific/*`` response's ``request`` echo.
 

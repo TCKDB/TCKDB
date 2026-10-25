@@ -37,6 +37,7 @@ from app.schemas.reads.scientific_common import (
     CompositeSchemeSummary,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
@@ -305,7 +306,7 @@ class ScientificLevelOfTheoryRecord(BaseModel):
     software: LevelOfTheorySoftwareBreakdown | None = None
 
 
-class ScientificLevelOfTheoryDetailResponse(BaseModel):
+class ScientificLevelOfTheoryDetailResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/level-of-theories/{handle}``."""
 
     request: RequestEcho

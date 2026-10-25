@@ -34,7 +34,7 @@ def reseal(manifest):
 
 def test_a_manifest_is_plain_json_and_replays_to_the_recorded_answer(manifest):
     assert json.loads(canonical(manifest)) == manifest
-    assert manifest["format"] == {"name": "relative_conformer_energy_manifest", "version": 3}
+    assert manifest["format"] == {"name": "relative_conformer_energy_manifest", "version": 4}
     assert replay_matches(manifest) is True
     assert replay_relative_energies(manifest)["outcome"] == "relative_energies"
     assert len(manifest["determinations"]) == 2 and len(manifest["population"]["groups"]) == 3

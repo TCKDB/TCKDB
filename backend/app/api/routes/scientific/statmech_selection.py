@@ -33,6 +33,7 @@ from app.schemas.reads.scientific_statmech_selection import (
     StatmechSelectionResponse,
 )
 from app.services.scientific_read.profile import stamp_read_profile
+from app.services.scientific_read.ref_guard import attach_review_statuses
 from app.services.statmech_selection.public import build_response, run_selection
 
 router = APIRouter(prefix="/statmech")
@@ -81,6 +82,7 @@ def select_statmech_models(
     selection = run_selection(session, body=body)
     payload = build_response(selection)
     stamp_read_profile(payload)
+    attach_review_statuses(payload)
     return payload
 
 

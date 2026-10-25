@@ -356,7 +356,7 @@ def test_one_visibility_statement_per_batch(client, world, monkeypatch):
 
     # and each call is one statement: withheld_evidence_refs once per call
     statements: list[int] = []
-    real_hidden = ref_guard.withheld_evidence_refs
+    real_hidden = ref_guard.classify_refs
     inside = {"on": False}
 
     def spying_hidden(session, refs, *, profile, **kwargs):
@@ -371,7 +371,7 @@ def test_one_visibility_statement_per_batch(client, world, monkeypatch):
         finally:
             inside["on"] = False
 
-    monkeypatch.setattr(ref_guard, "withheld_evidence_refs", spying_hidden)
+    monkeypatch.setattr(ref_guard, "classify_refs", spying_hidden)
     monkeypatch.setattr(ref_guard, "withhold_in_document", wrapped)
     monkeypatch.setattr(export_withhold, "EXPORT_BATCH_SIZE", 200)
     _get(client, "/export/ml/reactions.ndjson", "curated", _query(w))
@@ -572,7 +572,8 @@ def test_the_batcher_releases_the_withheld_copy_and_not_its_input(db_session, wo
     record = {"calculation_ref": hidden_calc, "value": 1.0}
     assert batcher.add(record) == []
     lines = batcher.flush()
-    assert [json.loads(line) for line in lines] == [{"calculation_ref": None, "value": 1.0}]
+    # The withheld ref is null, and it is not in the badge map either (nothing withheld can leak through it).
+    assert [json.loads(line) for line in lines] == [{"calculation_ref": None, "review_status_by_ref": {}, "value": 1.0}]
     assert hidden_calc not in "".join(lines)
     assert record["calculation_ref"] == hidden_calc  # the input is the caller's, untouched
 

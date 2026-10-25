@@ -148,6 +148,15 @@ the ML export's is `tckdb.ml` version 2.
 > observations), and an id filter is rewritten to name nothing only when it names a withheld record. A returned record that is
 > itself below the floor still fails loud.
 >
+> **Badges.** Under `curated` every scientific response carries `review_status_by_ref`: the review status of each gated ref it
+> names (null under the default profile). The export streams carry the same map on each line; a selection manifest does not (it
+> is hashed and replayed) and records each candidate's review status instead. The legacy entity reads carry raw ids and have no
+> badge.
+>
+> **Known interim state until steps 3 to 5.** A response can name an unreviewed calculation, nested and badged, beside a count or
+> a derived level of theory that leaves it out, because those are still floored in the service. The two disagree until their
+> steps land; the sweep lists every route where this happens (`STILL_ON_THE_EARLIER_RULE`), and the list can only shrink.
+>
 > **Still the earlier rule (decision D6: below the floor is hidden, evidence included), and described as it is:** list counts,
 > availability flags and derived levels of theory (step 3), matching in search and select (step 4), the trust and selection
 > loaders (step 5), made-under comparisons (step 6), and detail-by-ref (step 7). Every passage below that describes what `curated`

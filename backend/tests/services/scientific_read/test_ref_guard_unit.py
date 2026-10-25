@@ -352,6 +352,7 @@ def test_the_subject_of_a_response_is_never_deleted_as_a_pointer(monkeypatch):
     """Kills: treating ``record`` / ``records[*]`` as removable. A subject below the record floor means a service forgot
     its population filter, and the guard fails loud whether or not the evidence rule would withhold the ref."""
     monkeypatch.setattr(ref_guard, "POINTER_MODELS", frozenset({SubjectRow}))
+    monkeypatch.setattr(ref_guard, "SUBJECT_IDENTITY", {"SubjectRow": ("calculation_ref",)})
     for evidence in (True, False):
         # Below the floor, and withheld as evidence or merely not reviewed: both fail loud.
         hide(monkeypatch, *([HIDDEN_CALC] if evidence else []))
@@ -376,6 +377,55 @@ def test_the_subject_of_a_response_is_never_deleted_as_a_pointer(monkeypatch):
     kept = SubjectEnvelope(block=SubjectRow(calculation_ref=HIDDEN_CALC))
     run(kept)
     assert kept.block is not None
+
+
+class CalcBlock(BaseModel):
+    calculation_ref: str
+
+
+class TsBlock(BaseModel):
+    transition_state_entry_ref: str
+
+
+class DeepSubject(BaseModel):
+    """A subject whose identity sits one level down, with a parent beside it that is context."""
+
+    calculation: CalcBlock
+    parent: TsBlock | None = None
+
+
+class DeepEnvelope(BaseModel):
+    record: DeepSubject | None = None
+    records: list[DeepSubject] = []
+
+
+def test_a_subject_whose_identity_is_one_level_down_is_checked_there_and_only_there(monkeypatch):
+    """Kills: a net that checks only direct fields (the earlier rule missed every ``record.calculation.calculation_ref``
+    model), and one that infers identity from a child named after the kind (a parent beside the identity is context)."""
+    monkeypatch.setattr(ref_guard, "POINTER_MODELS", frozenset())
+    monkeypatch.setattr(ref_guard, "SUBJECT_IDENTITY", {"DeepSubject": ("calculation", "calculation_ref")})
+    hide(monkeypatch)
+    below_floor(monkeypatch, HIDDEN_CALC, HIDDEN_TSE)
+
+    for envelope in (
+        DeepEnvelope(record=DeepSubject(calculation=CalcBlock(calculation_ref=HIDDEN_CALC))),
+        DeepEnvelope(records=[DeepSubject(calculation=CalcBlock(calculation_ref=HIDDEN_CALC))]),
+    ):
+        with pytest.raises(ref_guard.RefGuardUnplaceable):
+            run(envelope)
+
+    # The parent below the floor is context beside a visible identity: shown, not refused.
+    context = DeepEnvelope(
+        record=DeepSubject(
+            calculation=CalcBlock(calculation_ref=VISIBLE_CALC), parent=TsBlock(transition_state_entry_ref=HIDDEN_TSE)
+        )
+    )
+    run(context)
+    assert context.record.parent.transition_state_entry_ref == HIDDEN_TSE
+
+    # A model with no registered identity is not guessed at.
+    monkeypatch.setattr(ref_guard, "SUBJECT_IDENTITY", {})
+    run(DeepEnvelope(record=DeepSubject(calculation=CalcBlock(calculation_ref=HIDDEN_CALC))))
 
 
 def test_a_nested_ref_below_the_floor_but_not_withheld_is_kept_with_its_subject(monkeypatch):

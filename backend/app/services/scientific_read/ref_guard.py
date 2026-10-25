@@ -10,11 +10,14 @@ Two sets, never one
 -------------------
 * The **evidence set** (:func:`withheld_evidence_refs`): refs whose record is ``rejected`` or ``deprecated``. It drives
   EVERY nested withhold below: the typed hook, the document modes, the selection loaders and the export batcher. A nested
-  pointer to a ``not_reviewed`` or ``under_review`` record is not in it, so it stays, with its badge where the model has
-  one. (A pointer model with no badge field names the record and nothing more.)
+  pointer to a ``not_reviewed`` or ``under_review`` record is not in it, so it stays. Its badge travels in the response's
+  ``review_status_by_ref`` map (:func:`attach_review_statuses`), because most pointer models have no badge field of their own.
 * The **record-floor set** (:func:`below_floor_refs`): refs below ``approved``. It is used for one thing only: to fail
-  loud when the SUBJECT of a response (a required ``<kind>_ref`` of ``record`` / an element of ``records``) is below the
-  floor, which means a service forgot its population filter. That safety net is not a rule about nested refs.
+  loud when the SUBJECT of a response is below the floor, which means a service forgot its population filter. The
+  subject's identity is declared per response model in :data:`SUBJECT_IDENTITY` (a path such as
+  ``calculation.calculation_ref``), never inferred from a child named after the kind: a parent transition state or a
+  solve's network is context. A test fails for a subject model with no entry. That safety net is not a rule about nested
+  refs.
 
 What it does, and refuses to do
 -------------------------------
@@ -400,6 +403,8 @@ class RefGuardContext:
     #: Selection documents that passed the loader to engine seam (:func:`withhold_selection_facts`), and what it did.
     documents: int = 0
     document_reports: list[WithholdReport] = field(default_factory=list)
+    #: The review status of every gated ref any lookup of this request fetched (:func:`classify_refs`).
+    statuses: dict[str, RecordReviewStatus] = field(default_factory=dict)
 
 
 _CURRENT_CONTEXT: ContextVar[RefGuardContext | None] = ContextVar("tckdb_ref_guard_context", default=None)
@@ -483,6 +488,9 @@ class RefSets:
 
     evidence: set[str]
     subject_below_floor: set[str]
+    #: The review status of every gated ref the lookup found (a missing review row reads as ``not_reviewed``). It is what the
+    #: lookup fetched anyway: it feeds the badge map (:func:`attach_review_statuses`) without another statement.
+    statuses: dict[str, RecordReviewStatus] = field(default_factory=dict)
 
 
 def classify_refs(
@@ -519,7 +527,10 @@ def classify_refs(
     }
     if unknown_is_hidden:
         evidence |= {ref for ref in gated if ref not in statuses}
-    return RefSets(evidence, below)
+    ctx = _CURRENT_CONTEXT.get()
+    if ctx is not None:
+        ctx.statuses.update(statuses)
+    return RefSets(evidence, below, dict(statuses))
 
 
 def withheld_evidence_refs(
@@ -575,6 +586,8 @@ class WithholdReport:
     blanked: list[WithheldSite] = field(default_factory=list)
     refs_seen: int = 0
     hidden: set[str] = field(default_factory=set)
+    #: Statuses of the gated refs the lookup found (the badge map's source for the export streams).
+    statuses: dict[str, RecordReviewStatus] = field(default_factory=dict)
     sites: list[WithheldSite] = field(default_factory=list)
 
 
@@ -791,23 +804,83 @@ def _is_subject(path: tuple[_Frame, ...], i: int) -> bool:
     return i == 1 and path[0][1] == "records"
 
 
+#: The identity of each response model that is the SUBJECT of a scientific read (the model of ``record`` or of an element of
+#: ``records``): the field path from the subject to the ref that says which record the row IS. A subject whose identity ref is
+#: below the record floor means a service forgot its population filter, and the guard fails loud (:func:`classify_refs`).
+#:
+#: Keyed by class name. The path is declared, never inferred from a child named after the kind: on a transition-state
+#: entry record ``transition_state.transition_state_ref`` is the entry's parent (context, shown badged), and on a solve row
+#: ``network.network_ref`` is the solve's network (context). ``test_every_subject_model_has_a_registered_identity`` fails for
+#: a response model that appears as ``record`` / ``records`` and is in neither this table nor :data:`UNGATED_SUBJECTS`.
+SUBJECT_IDENTITY: dict[str, tuple[str, ...]] = {
+    "CalculationAnalyticsRecord": ("calculation_ref",),
+    "KineticsAnalyticsRecord": ("kinetics_ref",),
+    "KineticsRecord": ("kinetics_ref",),
+    "KineticsSearchRecord": ("kinetics", "kinetics_ref"),
+    #: Identity is ``record_ref`` whatever kind of record the row is; the ref's own prefix says which gate applies.
+    "LiteratureLinkedRecordSummary": ("record_ref",),
+    "MolecularPropertyObservationRecord": ("observation_ref",),
+    #: An artifact is served under its calculation's floor (the artifact itself has no review row).
+    "ScientificArtifactRecord": ("calculation", "calculation_ref"),
+    "ScientificCalculationRecord": ("calculation", "calculation_ref"),
+    "ScientificConformerGroupRecord": ("conformer_group", "conformer_group_ref"),
+    "ScientificConformerObservationRecord": ("conformer_observation", "conformer_observation_ref"),
+    "ScientificNetworkKineticsRecord": ("network_kinetics", "network_kinetics_ref"),
+    "ScientificNetworkRecord": ("network", "network_ref"),
+    "ScientificNetworkSolveRecord": ("network_solve", "network_solve_ref"),
+    "ScientificStatmechRecord": ("statmech", "statmech_ref"),
+    "ScientificTransitionStateEntryRecord": ("transition_state_entry", "transition_state_entry_ref"),
+    "ScientificTransitionStateRecord": ("transition_state", "transition_state_ref"),
+    "ScientificTransportRecord": ("transport", "transport_ref"),
+    "SpeciesCalculationsSearchRecord": ("calculation", "calculation_ref"),
+    "StatmechAnalyticsRecord": ("statmech_ref",),
+    "ThermoAnalyticsRecord": ("thermo_ref",),
+    "ThermoRecord": ("thermo_ref",),
+    "ThermoSearchRecord": ("thermo", "thermo_ref"),
+}
+
+#: Subject models whose identity is not a review-gated record, each with the reason.
+UNGATED_SUBJECTS: dict[str, str] = {
+    **dict.fromkeys(
+        ("SpeciesScientificRecord", "ReactionScientificRecord", "ScientificSpeciesStructureSearchRecord"),
+        "species and reaction identity rows are scoping parents and never gate (ADR 0023)",
+    ),
+    **dict.fromkeys(
+        (
+            "ScientificCompositeSchemeRecord",
+            "ScientificEnergyCorrectionSchemeRecord",
+            "ScientificFrequencyScaleFactorRecord",
+            "ScientificLevelOfTheoryRecord",
+            "ScientificLiteratureRecord",
+        ),
+        "reference or provenance row with no review state of its own",
+    ),
+    **dict.fromkeys(
+        ("DatasetReleaseSummary", "ReleaseSelectionRecord"),
+        "dataset releases are exempt from the record floor and the evidence rule (ADR 0023, Q7)",
+    ),
+    "ArtifactIntegrityDigestSummary": "an integrity digest of a stored file; not a reviewed record",
+}
+
+
+def subject_identity_site(path: tuple[_Frame, ...]) -> tuple[str, ...] | None:
+    """The identity path of the subject model a site sits under, when the site IS at that path; else ``None``."""
+    for i in (0, 1):
+        if not _is_subject(path, i) or len(path) <= i + 1:
+            continue
+        identity = SUBJECT_IDENTITY.get(type(path[i + 1][0]).__name__)
+        keys = tuple(key for _, key in path[i + 1 :])
+        return identity if identity is not None and keys == identity else None
+    return None
+
+
 def _is_subject_own_ref(path: tuple[_Frame, ...], ref: str) -> bool:
-    """Is this site the subject's OWN identity ref: a REQUIRED direct field of ``record`` / ``records[*]`` named ``<kind>_ref``?
+    """Is this site the subject's identity ref, as the registry (:data:`SUBJECT_IDENTITY`) declares it?
 
-    Required, because a nullable ``<kind>_ref`` is context on a row that names several records (a literature summary's
-    ``network_ref`` beside its ``solve_ref``): that is linked evidence, and it follows the evidence rule.
-
-    The subject is what the route returns as its answer; a nested pointer on it (a source calculation, a transition state)
-    is evidence and follows the evidence rule. The subject's own ref is the one place a record below the floor must never
-    appear, whatever its badge would say.
+    The subject is what the route returns as its answer. Every other ref on it (a source calculation, a parent transition
+    state, a network) is linked evidence and follows the evidence rule.
     """
-    if len(path) < 2 or not _is_subject(path, len(path) - 2):
-        return False
-    gated = GATED_TYPES.get(ref.split("_", 1)[0])
-    if gated is None or path[-1][1] != f"{gated.record_type.value}_ref":
-        return False
-    holder = path[-1][0]
-    return isinstance(holder, BaseModel) and not _field_traits(type(holder), path[-1][1])[0]
+    return subject_identity_site(path) is not None and ref.split("_", 1)[0] in GATED_TYPES
 
 
 #: Pointer lists that travel with a bare list of integer ids, in step: ``(model, list field) -> (id list field,
@@ -1011,6 +1084,7 @@ def withhold_in_model(
     subject_refs = {ref for path, ref in sites if _is_subject_own_ref(path, ref)}
     found = classify_refs(session, {ref for _, ref in sites}, profile=profile, subject_refs=subject_refs)
     report.hidden = found.evidence
+    report.statuses = found.statuses
     report.hidden |= {ref for _, ref in sites if ref == UNSETTLED_TEXT}
     # The safety net: a subject's own ref below the record floor means a service forgot its population filter, whatever its
     # badge would say. Only the evidence set says what a nested pointer does.
@@ -1124,7 +1198,9 @@ def withhold_in_document(
     report.refs_seen = len(sites)
     if not sites:
         return report
-    report.hidden = withheld_evidence_refs(session, {ref for _, ref in sites}, profile=profile, unknown_is_hidden=True)
+    found = classify_refs(session, {ref for _, ref in sites}, profile=profile, unknown_is_hidden=True)
+    report.hidden = found.evidence
+    report.statuses = found.statuses
     report.hidden |= {ref for _, ref in sites if ref == UNSETTLED_TEXT}
     if not report.hidden:
         return report
@@ -1247,7 +1323,8 @@ def _withhold_placeholders(session: Session, facts: Any, *, profile: ResolvedRea
     report.refs_seen = len(seen)
     if not seen:
         return report
-    hidden = withheld_evidence_refs(session, set(seen), profile=profile, unknown_is_hidden=True)
+    found = classify_refs(session, set(seen), profile=profile, unknown_is_hidden=True)
+    hidden = found.evidence
     if not hidden:
         return report
     report.hidden = set(hidden)
@@ -1361,6 +1438,33 @@ def refuse_hidden_refs_in_text(session: Session, texts: Mapping[str, str], *, pr
 # ---------------------------------------------------------------------------
 
 
+def refs_present(payload: Any) -> set[str]:
+    """Every gated ref a response (or a plain document) names as a whole value, the request echo excepted."""
+    return {ref for _, ref in _collect_sites(payload) if not isinstance(ref, _FreeRef)}
+
+
+def badges_for(refs: Collection[str], statuses: Mapping[str, RecordReviewStatus]) -> dict[str, RecordReviewStatus]:
+    """The badge map for ``refs``: those with a fetched status, sorted. A ref the lookup did not fetch has no entry."""
+    return {ref: statuses[ref] for ref in sorted(refs) if ref in statuses}
+
+
+def attach_review_statuses(payload: BaseModel) -> None:
+    """Fill ``payload.review_status_by_ref`` with the review badge of every gated ref the finished response names.
+
+    Called AFTER the response was withheld from, so a withheld ref is no longer in the payload and can never reach the map.
+    The statuses are the ones the guard's lookups already fetched for this request (no statement of its own). Under the
+    exploratory profile, a release-backed profile, an exempt route or a payload without the field, nothing is attached and the
+    field stays null.
+    """
+    ctx = _CURRENT_CONTEXT.get()
+    if ctx is None or not hasattr(payload, "review_status_by_ref"):
+        return
+    profile = current_read_profile()
+    if not guard_active(profile) or route_matches(ctx.route_path, EXEMPT_ROUTE_PREFIXES):
+        return
+    payload.review_status_by_ref = badges_for(refs_present(payload), ctx.statuses)
+
+
 def route_matches(route_path: str, prefixes: Collection[str]) -> bool:
     """Prefix match on whole path segments: ``/meta`` covers ``/meta/x`` but not ``/metadata``."""
     return any(route_path == p or route_path.startswith(p + "/") for p in prefixes)
@@ -1394,6 +1498,7 @@ def withhold_for_current_request(payload: BaseModel) -> None:
         raise
     ctx.applied += 1
     ctx.reports.append(report)
+    attach_review_statuses(payload)
 
 
 __all__ = [
@@ -1404,7 +1509,9 @@ __all__ = [
     "GATED_TYPES",
     "POINTER_FIELDS",
     "POINTER_MODELS",
+    "SUBJECT_IDENTITY",
     "UNGATED_REVIEWABLE",
+    "UNGATED_SUBJECTS",
     "WITHHELD_TOKEN_PREFIX",
     "WITHHELD_TOKEN_RE",
     "GatedType",
@@ -1413,11 +1520,14 @@ __all__ = [
     "RefSets",
     "WithheldSite",
     "WithholdReport",
+    "attach_review_statuses",
+    "badges_for",
     "below_floor_refs",
     "classify_refs",
     "current_ref_guard_context",
     "guard_active",
     "is_withheld_token",
+    "refs_present",
     "refuse_hidden_refs_in_text",
     "reset_ref_guard_context",
     "route_matches",

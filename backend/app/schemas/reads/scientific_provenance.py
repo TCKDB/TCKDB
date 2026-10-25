@@ -29,6 +29,7 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
 )
 from app.schemas.reads.scientific_conformer import (
     AvailableConformerSections,
@@ -520,7 +521,7 @@ class RequestEcho(ProfiledRequestEcho):
     include_review: ReviewDetail
 
 
-class ScientificReactionFullResponse(BaseModel):
+class ScientificReactionFullResponse(ScientificResponse):
     """Response envelope for /api/v1/scientific/reaction-entries/{id}/full.
 
     Sections that are not in the ``include`` set are omitted entirely.

@@ -38,6 +38,7 @@ from app.schemas.reads.scientific_relative_conformer_energy import (
 )
 from app.services.relative_conformer_energy import public
 from app.services.scientific_read.profile import stamp_read_profile
+from app.services.scientific_read.ref_guard import attach_review_statuses
 
 router = APIRouter(prefix="/species-entries")
 
@@ -82,6 +83,7 @@ def relative_conformer_energies(
     entry_id = public.resolve_entry(session, species_entry_ref)
     payload = public.build_response(public.run(session, entry_id=entry_id, body=body), entry_ref=species_entry_ref)
     stamp_read_profile(payload)
+    attach_review_statuses(payload)
     return payload
 
 
@@ -136,6 +138,7 @@ def relative_conformer_energies_compare(
         public.run_compare(session, entry_id=entry_id, body=body), entry_ref=species_entry_ref
     )
     stamp_read_profile(payload)
+    attach_review_statuses(payload)
     return payload
 
 

@@ -33,6 +33,7 @@ from tests.api.scientific._curated_sweep_analysis import (
     order_independent,
     parse_body,
     ref_leaks,
+    route_subject_identities,
     subject_leaks,
     withholding_violations,
 )
@@ -235,6 +236,51 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
 }
 
 
+#: Why a route still leaves out an unlisted record that exploratory names (ADR 0023): its service applies the earlier rule.
+SERVICE_FLOOR = "a search or detail service applies the record floor to evidence it lists or counts (steps 3 and 4)"
+DERIVED = "levels, usage lists and counts derived from records are floored in the service (step 3)"
+EXPORTS_AND_LOADERS = "export populations and the relative-energy loader floor their evidence (step 5)"
+
+#: Routes where, under curated-unlisted, exploratory names a nested unlisted record that curated does not. EVERY other route
+#: must show every nested unlisted ref exploratory shows, so a guard that blanks evidence again fails the sweep on the routes
+#: that were already moved. An entry whose route now shows everything is stale and fails too: the list can only shrink.
+STILL_ON_THE_EARLIER_RULE: dict[tuple[str, str], str] = {
+    ("GET", "/api/v1/scientific/calculations/search"): SERVICE_FLOOR,
+    ("GET", "/api/v1/scientific/energy-correction-schemes/{energy_correction_scheme_ref_or_id}"): DERIVED,
+    ("GET", "/api/v1/scientific/energy-correction-schemes/search"): DERIVED,
+    ("GET", "/api/v1/scientific/export/ml/reactions.ndjson"): EXPORTS_AND_LOADERS,
+    ("GET", "/api/v1/scientific/export/ml/species.ndjson"): EXPORTS_AND_LOADERS,
+    ("GET", "/api/v1/scientific/export/ndjson"): EXPORTS_AND_LOADERS,
+    ("GET", "/api/v1/scientific/frequency-scale-factors/{frequency_scale_factor_ref_or_id}"): DERIVED,
+    ("GET", "/api/v1/scientific/frequency-scale-factors/search"): DERIVED,
+    ("GET", "/api/v1/scientific/level-of-theories/browse"): DERIVED,
+    ("GET", "/api/v1/scientific/level-of-theories/{level_of_theory_ref_or_id}"): DERIVED,
+    ("GET", "/api/v1/scientific/level-of-theories/search"): DERIVED,
+    ("GET", "/api/v1/scientific/network-kinetics/search"): SERVICE_FLOOR,
+    ("GET", "/api/v1/scientific/networks/browse"): SERVICE_FLOOR,
+    ("GET", "/api/v1/scientific/network-solves/{network_solve_ref_or_id}"): SERVICE_FLOOR,
+    ("GET", "/api/v1/scientific/network-solves/search"): SERVICE_FLOOR,
+    ("GET", "/api/v1/scientific/networks/search"): SERVICE_FLOOR,
+    ("GET", "/api/v1/scientific/reaction-entries/{reaction_entry_id}/full"): SERVICE_FLOOR,
+    ("GET", "/api/v1/scientific/transition-states/browse"): SERVICE_FLOOR,
+    ("GET", "/api/v1/scientific/transition-states/search"): SERVICE_FLOOR,
+    ("POST", "/api/v1/scientific/calculations/search"): SERVICE_FLOOR,
+    ("POST", "/api/v1/scientific/energy-correction-schemes/search"): DERIVED,
+    ("POST", "/api/v1/scientific/export/chemkin"): EXPORTS_AND_LOADERS,
+    ("POST", "/api/v1/scientific/frequency-scale-factors/search"): DERIVED,
+    ("POST", "/api/v1/scientific/level-of-theories/search"): DERIVED,
+    ("POST", "/api/v1/scientific/network-kinetics/search"): SERVICE_FLOOR,
+    ("POST", "/api/v1/scientific/networks/{network_ref_or_id}/kinetics/evaluate"): SERVICE_FLOOR,
+    ("POST", "/api/v1/scientific/network-solves/search"): SERVICE_FLOOR,
+    ("POST", "/api/v1/scientific/networks/search"): SERVICE_FLOOR,
+    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies"): EXPORTS_AND_LOADERS,
+    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare"): EXPORTS_AND_LOADERS,
+    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare/manifest"): EXPORTS_AND_LOADERS,
+    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/manifest"): EXPORTS_AND_LOADERS,
+    ("POST", "/api/v1/scientific/transition-states/search"): SERVICE_FLOOR,
+}
+
+
 def _hidden_world_refs(world):
     return world.hidden_refs()
 
@@ -341,6 +387,7 @@ def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypa
     specs = enumerate_routes(client.app)
     spy = install_spy(monkeypatch)
     hidden = _hidden_world_refs(world)
+    identities = route_subject_identities(client.app)
 
     exploratory = run_pass(client, db_session, specs, world, spy, profile="exploratory")
     curated = run_pass(client, db_session, specs, world, spy, profile="curated")
@@ -392,10 +439,29 @@ def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypa
             if row.public_ref not in curated_text:
                 failures.append(f"curated crawl ({name}) never names visible record {key}: the pass may be vacuous")
 
-    # -- unlisted records are linked evidence somewhere: curated names at least one of them nested ----------------------
-    unlisted_text = "\n".join(r.text for r in curated.values())
-    if not any(ref in unlisted_text for ref in hidden.values()):
-        failures.append("curated names no unlisted record nested: the evidence rule is not exercised")
+    # -- unlisted records are linked evidence: PER ROUTE, curated names every nested hidden ref that exploratory names -------
+    # (the records exploratory names as the answer itself are the floor's, not evidence). What a route still leaves out is on
+    # the earlier rule until its step lands and is listed in STILL_ON_THE_EARLIER_RULE, so the list can only shrink.
+    missing_routes: set[tuple[str, str]] = set()
+    shown_routes = 0
+    for (route, label), e in exploratory.items():
+        c = curated[(route, label)]
+        if route in SELECTION_DOCUMENT_ROUTES or route in EXPECTED_CURATED_STATUS:
+            continue
+        as_answer = {k for k, _ in subject_leaks(e.text, hidden, identities.get(route))}
+        named = [k for k, ref in hidden.items() if k not in as_answer and ref in e.text]
+        if not named:
+            continue
+        if any(hidden[k] not in c.text for k in named):
+            missing_routes.add(route)
+        else:
+            shown_routes += 1
+    for route in sorted(missing_routes - set(STILL_ON_THE_EARLIER_RULE)):
+        failures.append(fmt(route, "exploratory names unlisted records that curated leaves out (evidence must be shown)"))
+    for route in sorted(set(STILL_ON_THE_EARLIER_RULE) - missing_routes):
+        failures.append(fmt(route, "now shows every unlisted record exploratory shows: remove it from STILL_ON_THE_EARLIER_RULE"))
+    if shown_routes < 15:
+        failures.append(f"only {shown_routes} request variants show unlisted evidence in full: the evidence rule is not exercised")
 
     # -- 6. guard reached: every crawled route passes the boundary, or is listed as bypassing it ---------------------
     reached_by_route = {route: any(r.reached for _, r in rs) for route, rs in _by_route(curated).items()}
@@ -410,7 +476,7 @@ def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypa
     # -- 4a. unlisted: never the answer. Withheld: named nowhere, by ref or by id -------------------------------------
     subject_found: set[str] = set()
     for (route, _label), r in curated.items():
-        for key, path in subject_leaks(r.text, hidden):
+        for key, path in subject_leaks(r.text, hidden, identities.get(route)):
             subject_found.add(fmt(route, f"{key} @ {path}"))
     ref_found: set[str] = set()
     for (route, label), r in withheld.items():

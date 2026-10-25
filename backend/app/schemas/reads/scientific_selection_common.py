@@ -29,6 +29,7 @@ from app.schemas.reads._field_bounds import (
     MAX_SOFTWARE_NAME_LENGTH,
     MAX_WORKFLOW_TOOL_LENGTH,
 )
+from app.schemas.reads.scientific_common import ScientificResponse
 
 #: The stable machine names of the eligibility defaults, in the order they are echoed.
 ELIGIBILITY_REJECTED: Final = "rejected_review_status"
@@ -174,7 +175,7 @@ class SelectionFilterAnswer(BaseModel):
     )
 
 
-class SelectionStepsAnswer(BaseModel):
+class SelectionStepsAnswer(ScientificResponse):
     """Steps 1 and 2 of a select call as the answer states them. Every select response inherits these fields."""
 
     filters: SelectionFilterAnswer = Field(

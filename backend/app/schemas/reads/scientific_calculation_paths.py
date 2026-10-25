@@ -28,6 +28,7 @@ from app.schemas.reads.scientific_common import (
     OrderEcho,
     Pagination,
     ProfiledRequestEcho,
+    ScientificResponse,
     WatermarkEcho,
 )
 
@@ -168,7 +169,7 @@ class IRCPointDetail(BaseModel):
     geometry_link: PointGeometryLink | None = None
 
 
-class ScientificCalculationIRCResponse(BaseModel):
+class ScientificCalculationIRCResponse(ScientificResponse):
     """Full-data IRC response for one calculation.
 
     Reuses ``CalculationCoreBlock`` / ``CalculationOwnerSummary`` /
@@ -246,7 +247,7 @@ class PathSearchPointDetail(BaseModel):
     geometry_link: PointGeometryLink | None = None
 
 
-class ScientificCalculationPathSearchResponse(BaseModel):
+class ScientificCalculationPathSearchResponse(ScientificResponse):
     """Full-data path-search response for one calculation.
 
     Reuses ``CalculationCoreBlock`` / ``CalculationOwnerSummary`` /
@@ -270,7 +271,7 @@ class ScientificCalculationPathSearchResponse(BaseModel):
     watermark: WatermarkEcho | None = None
 
 
-class ScientificCalculationScanResponse(BaseModel):
+class ScientificCalculationScanResponse(ScientificResponse):
     """Full-data scan response for one calculation.
 
     Reuses ``CalculationCoreBlock`` / ``CalculationOwnerSummary`` /

@@ -76,11 +76,10 @@ does not link to. TCKDB ships no built-in method ranking.
 
 ## Version effects
 
-Step 2 (nested refs in responses, selection documents and exports) moved five selection manifests to format 4:
+Step 2 (nested refs in responses, selection documents and exports) moved the selection manifests to format 4:
 
-- The thermo, kinetics, statmech, structure and network selection manifests are format 4 and record
+- The thermo, kinetics, statmech, structure, network and relative-energy (with its comparison) manifests are format 4 and record
   `linked_evidence_withheld` (`["deprecated", "rejected"]` under `curated`, `[]` otherwise) in `read_profile` (`visibility` for the
-  network manifest). A manifest in an earlier format is refused, not read as the new rule. The relative-energy manifests are not
-  bumped by step 2.
+  network manifest). A manifest in an earlier format is refused, not read as the new rule.
 - The `computed_transition_state` rubric is re-pinned without a version bump. The grading code is unchanged; only the inputs a
   curated read supplies to it change. The `computed_kinetics` pin follows when its inputs move (step 5).

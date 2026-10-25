@@ -29,6 +29,7 @@ from app.services.relative_conformer_energy.models import (
     RelativeEnergyResult,
 )
 from app.services.relative_conformer_energy.population import Population
+from app.services.scientific_read.common import check_read_profile_block
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 from app.services.structure_selection.assessment import assess_unit
 from app.services.structure_selection.bounds import check_manifest_size
@@ -55,7 +56,10 @@ from app.services.structure_selection.models import (
 from app.versioning import same_value
 
 MANIFEST_FORMAT = "relative_conformer_energy_manifest"
-MANIFEST_FORMAT_VERSION = 3
+#: Version 4: ``read_profile`` records the review statuses whose linked evidence the profile withheld (ADR 0023); under
+#: ``curated`` a not-reviewed or under-review record is shown as evidence and only a rejected or deprecated one is a
+#: token. A manifest of an earlier format is refused.
+MANIFEST_FORMAT_VERSION = 4
 
 
 def _canon(value: Any) -> Any:
@@ -157,6 +161,9 @@ def _check_consistency(
     manifest: dict[str, Any], request: StructureRequest, dets: list[NormalizedDetermination], calcs: list[NormalizedCalculation]
 ) -> None:
     profile = manifest.get("read_profile") or {}
+    problem = check_read_profile_block(profile)
+    if problem is not None:
+        raise ReplayError("inconsistent_manifest", problem)
     name, floor_raw = profile.get("profile"), profile.get("review_floor")
     if name not in ("exploratory", "curated"):
         raise ReplayError("inconsistent_manifest", f"unknown read profile {name!r}")
@@ -279,7 +286,7 @@ def replay_matches(manifest: dict[str, Any]) -> bool:
 # ---------------------------------------------------------------------------
 
 COMPARISON_MANIFEST_FORMAT = "relative_conformer_energy_comparison_manifest"
-COMPARISON_MANIFEST_FORMAT_VERSION = 3
+COMPARISON_MANIFEST_FORMAT_VERSION = 4
 _RUNS = ("candidate", "reference")
 
 #: The two manifest documents this module writes and reads, each under its stable name. The reader looks up the

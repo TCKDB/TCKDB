@@ -22,7 +22,7 @@ from app.services.relative_conformer_energy.compute import compute_relative_ener
 from app.services.relative_conformer_energy.manifest import build_comparison_manifest, build_manifest
 from app.services.relative_conformer_energy.models import RelativeEnergyRequest, RelativeEnergyResult
 from app.services.relative_conformer_energy.population import Population, effective_statuses, scan_population
-from app.services.scientific_read.profile import current_read_profile
+from app.services.scientific_read.common import read_profile_block
 from app.services.scientific_read.ref_guard import withhold_selection_facts
 from app.services.structure_selection.loader import load_subject
 from app.services.structure_selection.models import (
@@ -119,11 +119,7 @@ def assess_and_compute(
 
 
 def current_profile() -> dict[str, Any]:
-    resolved = current_read_profile()
-    return {
-        "profile": resolved.profile.value,
-        "review_floor": resolved.review_floor.value if resolved.review_floor is not None else None,
-    }
+    return read_profile_block()
 
 
 def run_relative_energies(

@@ -34,6 +34,7 @@ from app.db.models.common import (
 from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
 )
 from app.schemas.reads.scientific_network import (
     NetworkDeterminationRead,
@@ -285,7 +286,7 @@ class ScientificNetworkKineticsRecord(BaseModel):
     review_history: list[NetworkReviewEntry] | None = None
 
 
-class ScientificNetworkKineticsDetailResponse(BaseModel):
+class ScientificNetworkKineticsDetailResponse(ScientificResponse):
     """Response envelope for
     ``GET /scientific/network-kinetics/{handle}``."""
 

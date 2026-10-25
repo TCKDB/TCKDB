@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from app.schemas.reads.scientific_common import (
     OrderEcho,
     ProfiledRequestEcho,
+    ScientificResponse,
 )
 
 
@@ -202,7 +203,7 @@ class GeometryIdentity(BaseModel):
     ambiguous_owners: list[GeometryIdentityOwnerRef] = Field(default_factory=list)
 
 
-class ScientificGeometryResponse(BaseModel):
+class ScientificGeometryResponse(ScientificResponse):
     """Response envelope for ``/api/v1/scientific/geometries/{geometry_handle}``.
 
     Phase D: ``geometry_id`` is hidden in the default response (Phase D

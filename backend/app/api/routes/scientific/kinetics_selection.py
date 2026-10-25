@@ -40,6 +40,7 @@ from app.services.kinetics_selection.public import (
     run_selection,
 )
 from app.services.scientific_read.profile import stamp_read_profile
+from app.services.scientific_read.ref_guard import attach_review_statuses
 
 router = APIRouter(prefix="/reaction-entries")
 
@@ -93,6 +94,7 @@ def select_reaction_kinetics(
     manifest = redact_manifest(selection.manifest, withhold_excluded=profile_has_floor())
     payload = build_response(selection, body=body, reaction_entry_ref=reaction_entry_ref, manifest=manifest)
     stamp_read_profile(payload)
+    attach_review_statuses(payload)
     return payload
 
 

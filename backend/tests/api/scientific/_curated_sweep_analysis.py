@@ -16,7 +16,7 @@ def fmt(route: tuple[str, str], text: str) -> str:
 
 
 #: Top-level and nested keys that describe the request or the page, not the records. Compared by key name.
-REQUEST_KEYS = frozenset({"request", "review_visibility", "pagination", "review_summary"})
+REQUEST_KEYS = frozenset({"request", "review_visibility", "pagination", "review_summary", "review_status_by_ref"})
 
 #: Counts that legitimately differ between profiles because they answer "what would the list return" (owner decision
 #: D5: population summaries follow the floor in the service). They are not facts about a visible record, so the
@@ -207,49 +207,80 @@ def ref_leaks(text: str, hidden_refs: dict[str, str], request_text: str) -> set[
     return found
 
 
-#: Paths of the nodes that are the ANSWER of a response: the subject of a read, a row of a list, a candidate of a selection.
-SUBJECT_PATHS = frozenset({"record", "records[*]", "candidates[*]", "result.candidates[*]", "line"})
+#: Direct identity keys of a selection candidate (the node under ``candidates[*]``): the ref that says which record it is.
+CANDIDATE_IDENTITY_KEYS = frozenset({"thermo_ref", "kinetics_ref", "candidate_ref", "unit_ref", "solve_ref"})
+CANDIDATE_PATHS = frozenset({"candidates[*]", "result.candidates[*]"})
 
 
-#: ``(subject path, field)`` pairs whose ``<kind>_ref`` is NOT the row's own identity but a nullable link to a record it
-#: names for context, which follows the evidence rule (shown, badged). Each is a field declared ``str | None`` on a row whose
-#: identity is another ref. Grow this only with that reason.
-NULLABLE_CONTEXT_REFS: dict[tuple[str, str], str] = {
-    ("records[*]", "transition_state_entry_ref"): "StatmechAnalyticsRecord: the statmech record's optional entry",
-    ("records[*]", "network_ref"): "LiteratureLinkedRecordSummary: type-specific context beside record_ref",
-    ("candidates[*]", "network_solve_ref"): "a kinetics candidate's optional solve link",
-}
+def route_subject_identities(app) -> dict[tuple[str, str], tuple[str, ...] | None]:
+    """``(method, path) -> identity path`` of the subject model of every scientific route that returns ``record`` / ``records``.
+
+    Read from the app's own response models and the guard's registry (:data:`ref_guard.SUBJECT_IDENTITY`), so the sweep
+    and the guard's subject net agree on what a subject's identity is. ``None`` marks an ungated subject (no check).
+    """
+    import typing
+
+    from pydantic import BaseModel
+
+    def models(annotation):
+        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            yield annotation
+        for arg in typing.get_args(annotation):
+            yield from models(arg)
+
+    out: dict[tuple[str, str], tuple[str, ...] | None] = {}
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        if not path.startswith("/api/v1/scientific"):
+            continue
+        for envelope in models(getattr(route, "response_model", None)):
+            for field_name in ("record", "records"):
+                field = envelope.model_fields.get(field_name)
+                if field is None:
+                    continue
+                for model in models(field.annotation):
+                    identity = ref_guard.SUBJECT_IDENTITY.get(model.__name__)
+                    for method in getattr(route, "methods", ()) or ():
+                        out[(method, path)] = identity
+    return out
 
 
-def subject_leaks(text: str, hidden_refs: dict[str, str]) -> set[tuple[str, str]]:
+def _at(node: Any, keys: tuple[str, ...]) -> Any:
+    for key in keys:
+        if not isinstance(node, dict):
+            return None
+        node = node.get(key)
+    return node
+
+
+def subject_leaks(
+    text: str, hidden_refs: dict[str, str], identity: tuple[str, ...] | None = None
+) -> set[tuple[str, str]]:
     """``(hidden key, json path)`` where an UNLISTED record is the subject of the answer (ADR 0023).
 
     A record below the approved floor may be named nested, badged; it must never BE the answer: not ``record``, not a row of
-    ``records``, not a candidate. The subject's identity is its own ``<kind>_ref`` field, so that is the field looked at (a
-    nested ``calculation_ref`` on some other kind of row is a link, and is allowed).
+    ``records``, not a candidate. The subject's identity is the path the guard's registry declares for its model
+    (``identity``, from :func:`route_subject_identities`); a ref anywhere else on the row is linked evidence and is allowed.
+    A candidate of a selection is checked by :data:`CANDIDATE_IDENTITY_KEYS`.
     """
     present = {k: r for k, r in hidden_refs.items() if r in text}
     if not present:
         return set()
     kind, obj = parse_body(text)
-    if kind == "text":
+    if kind != "json":
         return set()
     by_ref = {r: k for k, r in present.items()}
     found: set[tuple[str, str]] = set()
-    for path, node in _dicts(_root(kind, obj)):
-        if path not in SUBJECT_PATHS:
-            continue
-        for key, value in node.items():
-            if (path, key) in NULLABLE_CONTEXT_REFS:
-                continue
-            if isinstance(value, str) and value in by_ref and key.endswith("_ref"):
-                if ID_STEM_TO_KIND.get(key[: -len("_ref")]) == _kind_of_key(by_ref[value]):
-                    found.add((by_ref[value], f"{path}.{key}"))
+    for path, node in _dicts(obj):
+        if identity is not None and path in ("record", "records[*]"):
+            value = _at(node, identity)
+            if isinstance(value, str) and value in by_ref:
+                found.add((by_ref[value], f"{path}.{'.'.join(identity)}"))
+        elif path in CANDIDATE_PATHS:
+            for key in CANDIDATE_IDENTITY_KEYS & set(node):
+                if isinstance(node[key], str) and node[key] in by_ref:
+                    found.add((by_ref[node[key]], f"{path}.{key}"))
     return found
-
-
-def _kind_of_key(key: str) -> str:
-    return key.split("_", 1)[0]
 
 
 def id_leaks(text: str, world: SweepWorld) -> set[tuple[str, str]]:

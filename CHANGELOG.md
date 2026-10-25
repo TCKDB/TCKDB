@@ -42,10 +42,16 @@ id filters; the ML export's conformer refs do too, while its energy rows keep th
 levels, matching, the trust and selection loaders' own populations, made-under comparisons and detail-by-ref are unchanged and
 arrive in later steps.
 
+Badges. Under `curated` every scientific response envelope has `review_status_by_ref`, the review status of each gated ref it
+still names (a withheld ref is not in it; null under the default profile; no extra statement). Export lines carry the same map.
+The subject net now knows each response model's identity path (`SUBJECT_IDENTITY`, with a completeness test), so a service that
+forgets its floor fails closed whatever the model. Until steps 3 to 5 a response can name an unreviewed calculation beside a
+count or level that leaves it out.
+
 Version effects. A curated selection document now names the not-reviewed and under-review evidence it used to replace with a
-placeholder or leave out, so the thermo, kinetics, statmech, structure and network selection manifests move to **format 4**. Each
+placeholder or leave out, so the thermo, kinetics, statmech, structure, network and relative-energy manifests move to **format 4**. Each
 records its `read_profile` and, in it, `linked_evidence_withheld` (`["deprecated", "rejected"]` under `curated`, `[]` otherwise); a
-format-3 manifest is refused on replay, not read as the new rule. The relative-energy manifests are not bumped in this step. The
+format-3 manifest is refused on replay, not read as the new rule. The relative-energy manifests (and their comparison) move to format 4 too. The
 `computed_transition_state` rubric is re-pinned without a version bump (curated linked-evidence visibility; stored and exploratory
 verdicts unchanged): the grading code is untouched, only the evidence a curated read supplies to it differs.
 

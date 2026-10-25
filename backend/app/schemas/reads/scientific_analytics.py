@@ -60,6 +60,7 @@ from app.schemas.reads.scientific_common import (
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
     WatermarkEcho,
 )
 
@@ -203,7 +204,7 @@ class KineticsAnalyticsRecord(BaseModel):
     created_at: datetime | None = None
 
 
-class KineticsAnalyticsResponse(BaseModel):
+class KineticsAnalyticsResponse(ScientificResponse):
     """Response envelope for ``/scientific/analytics/kinetics``."""
 
     request: AnalyticsRequestEcho
@@ -280,7 +281,7 @@ class ThermoAnalyticsRecord(BaseModel):
     created_at: datetime | None = None
 
 
-class ThermoAnalyticsResponse(BaseModel):
+class ThermoAnalyticsResponse(ScientificResponse):
     """Response envelope for ``/scientific/analytics/thermo``."""
 
     request: AnalyticsRequestEcho
@@ -359,7 +360,7 @@ class StatmechAnalyticsRecord(BaseModel):
     created_at: datetime | None = None
 
 
-class StatmechAnalyticsResponse(BaseModel):
+class StatmechAnalyticsResponse(ScientificResponse):
     """Response envelope for ``/scientific/analytics/statmech``."""
 
     request: AnalyticsRequestEcho
@@ -443,7 +444,7 @@ class CalculationAnalyticsRecord(BaseModel):
     created_at: datetime | None = None
 
 
-class CalculationAnalyticsResponse(BaseModel):
+class CalculationAnalyticsResponse(ScientificResponse):
     """Response envelope for ``/scientific/analytics/calculations``."""
 
     request: AnalyticsRequestEcho

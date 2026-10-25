@@ -34,6 +34,7 @@ from app.schemas.reads.scientific_common import (
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
     WatermarkEcho,
 )
 from app.schemas.reads.scientific_level_of_theory import (
@@ -157,7 +158,7 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificLevelOfTheorySearchResponse(BaseModel):
+class ScientificLevelOfTheorySearchResponse(ScientificResponse):
     """Response envelope for the level-of-theory search endpoint.
 
     Reused verbatim (not subclassed) for

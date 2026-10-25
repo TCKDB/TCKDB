@@ -41,6 +41,7 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
     WatermarkEcho,
 )
 
@@ -211,7 +212,7 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificSpeciesStructureSearchResponse(BaseModel):
+class ScientificSpeciesStructureSearchResponse(ScientificResponse):
     """Response envelope for /scientific/species/structure-search."""
 
     request: RequestEcho

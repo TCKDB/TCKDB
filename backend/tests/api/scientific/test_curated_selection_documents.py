@@ -432,13 +432,17 @@ def test_the_current_format_version_of_every_engine_is_written(client, world):
         "network": (4, None),
         "structure": (4, None),
         "statmech": (4, None),
-        "relative_energy": (3, 1),
+        "relative_energy": (4, 1),
     }
 
 
 @pytest.mark.parametrize(
     ("name", "previous"),
-    [(engine, previous) for engine in ("thermo", "kinetics", "network", "structure", "statmech") for previous in (1, 3)],
+    [
+        (engine, previous)
+        for engine in ("thermo", "kinetics", "network", "structure", "statmech", "relative_energy")
+        for previous in (1, 3)
+    ],
 )
 def test_a_manifest_of_another_format_version_is_refused(client, world, name, previous):
     """Kills: another format version added to an engine's registry. Format 3 is the one ADR 0023 retired: a manifest
@@ -455,6 +459,8 @@ def test_a_manifest_of_another_format_version_is_refused(client, world, name, pr
         _reseal_integrity(manifest, structure_manifest.digest)
     elif name == "statmech":
         _reseal_integrity(manifest, statmech_manifest.digest)
+    elif name == "relative_energy":
+        _reseal_integrity(manifest, relative_manifest.digest)
     with pytest.raises(Exception, match="manifest format|unsupported_manifest_format"):
         _replay(name, manifest)
 

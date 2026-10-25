@@ -34,6 +34,7 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
@@ -661,7 +662,7 @@ class ScientificTransitionStateRecord(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ScientificTransitionStateDetailResponse(BaseModel):
+class ScientificTransitionStateDetailResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/transition-states/{handle}``."""
 
     request: RequestEcho
@@ -669,7 +670,7 @@ class ScientificTransitionStateDetailResponse(BaseModel):
     record: ScientificTransitionStateRecord
 
 
-class ScientificTransitionStateEntryDetailResponse(BaseModel):
+class ScientificTransitionStateEntryDetailResponse(ScientificResponse):
     """Response envelope for
     ``GET /scientific/transition-state-entries/{handle}``."""
 

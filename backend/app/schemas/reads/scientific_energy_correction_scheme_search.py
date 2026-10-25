@@ -29,6 +29,7 @@ from app.schemas.reads.scientific_common import (
     Pagination,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    ScientificResponse,
     WatermarkEcho,
 )
 from app.schemas.reads.scientific_energy_correction_scheme import (
@@ -102,7 +103,7 @@ class RequestEcho(ProfiledRequestEcho):
     include: list[str] = Field(default_factory=list)
 
 
-class ScientificEnergyCorrectionSchemeSearchResponse(BaseModel):
+class ScientificEnergyCorrectionSchemeSearchResponse(ScientificResponse):
     """Response envelope for the ECS search endpoint."""
 
     request: RequestEcho

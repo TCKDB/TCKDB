@@ -31,6 +31,7 @@ from app.schemas.reads.scientific_thermo_selection import (
     ThermoSelectionResponse,
 )
 from app.services.scientific_read.profile import stamp_read_profile
+from app.services.scientific_read.ref_guard import attach_review_statuses
 from app.services.thermo_selection.public import (
     build_response,
     profile_has_floor,
@@ -85,6 +86,7 @@ def select_species_thermo(
     manifest = redact_manifest(selection.manifest, withhold_excluded=profile_has_floor())
     payload = build_response(selection, body=body, species_entry_ref=species_entry_ref, manifest=manifest)
     stamp_read_profile(payload)
+    attach_review_statuses(payload)
     return payload
 
 

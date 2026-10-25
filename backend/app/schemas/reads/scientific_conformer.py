@@ -45,6 +45,7 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
@@ -659,7 +660,7 @@ class ScientificConformerGroupRecord(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ScientificConformerGroupDetailResponse(BaseModel):
+class ScientificConformerGroupDetailResponse(ScientificResponse):
     """Response envelope for
     ``GET /scientific/conformer-groups/{handle}``."""
 
@@ -668,7 +669,7 @@ class ScientificConformerGroupDetailResponse(BaseModel):
     record: ScientificConformerGroupRecord
 
 
-class ScientificConformerObservationDetailResponse(BaseModel):
+class ScientificConformerObservationDetailResponse(ScientificResponse):
     """Response envelope for
     ``GET /scientific/conformer-observations/{handle}``."""
 

@@ -54,6 +54,7 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificResponse,
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
@@ -389,7 +390,7 @@ class ScientificNetworkRecord(BaseModel):
     review_history: list[NetworkReviewEntry] | None = None
 
 
-class ScientificNetworkDetailResponse(BaseModel):
+class ScientificNetworkDetailResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/networks/{handle}``."""
 
     request: RequestEcho
@@ -650,7 +651,7 @@ class ScientificNetworkSolveRecord(BaseModel):
     review_history: list[NetworkReviewEntry] | None = None
 
 
-class ScientificNetworkSolveDetailResponse(BaseModel):
+class ScientificNetworkSolveDetailResponse(ScientificResponse):
     """Response envelope for
     ``GET /scientific/network-solves/{handle}``."""
 
