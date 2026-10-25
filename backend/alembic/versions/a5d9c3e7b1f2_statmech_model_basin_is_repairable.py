@@ -38,7 +38,7 @@ Anything else raises the same message as before. No trigger is disabled and none
 Downgrade restores the unconditional refusal.
 
 Revision ID: a5d9c3e7b1f2
-Revises: c7d4a9e2b6f1
+Revises: e2f2b3fb6725
 Create Date: 2026-10-26
 """
 
@@ -47,7 +47,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "a5d9c3e7b1f2"
-down_revision: Union[str, Sequence[str], None] = "c7d4a9e2b6f1"
+down_revision: Union[str, Sequence[str], None] = "e2f2b3fb6725"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
