@@ -78,7 +78,6 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     linked_evidence_predicate,
     reject_client_sort,
-    review_floor_predicate,
     review_summary,
     validate_includes,
     validate_pagination,
@@ -879,9 +878,9 @@ def _software_index_for_entries(
         .where(Calculation.transition_state_entry_id.in_(entry_ids))
         .distinct()
     )
-    # Owner decision D5: a calculation the active profile hides contributes neither its type nor its software.
-    # This is a displayed list, so it stays on the earlier rule until step 3 of ADR 0023 moves it with the flags.
-    stmt = where_visible(stmt, review_floor_predicate(Calculation.id, SubmissionRecordType.calculation))
+    # Evidence rule (ADR 0023): a calculation the profile withholds (rejected or deprecated under ``curated``) contributes
+    # neither its type nor its software; an unreviewed one does.
+    stmt = where_visible(stmt, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
 
     collected: dict[int, dict[str, dict[int, SoftwareReleaseSummary]]] = {}
     for row in session.execute(stmt):

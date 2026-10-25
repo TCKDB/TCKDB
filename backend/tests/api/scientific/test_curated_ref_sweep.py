@@ -239,8 +239,14 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
 
 
 #: Why a route still leaves out an unlisted record that exploratory names (ADR 0023): its service applies the earlier rule.
-SERVICE_FLOOR = "a search or detail service applies the record floor to evidence it lists or counts (steps 3 and 4)"
-DERIVED = "levels, usage lists and counts derived from records are floored in the service (step 3)"
+SERVICE_FLOOR = (
+    "a search or detail service applies the record floor to a RECORD it lists or counts (a network solve, a kinetics record, "
+    "a transition state or entry: ADR 0023 Q3/Q5), or to a matching filter (step 4)"
+)
+DERIVED = (
+    "a reference row's usage list, usage count or used-by filter names the RECORDS that cite it (a calculation, a statmech), "
+    "not its evidence, so it keeps the record floor; the used-by filters are matching (step 4)"
+)
 EXPORTS_AND_LOADERS = "export populations and the relative-energy loader floor their evidence (step 5)"
 
 #: Per route, the KINDS of unlisted record (the prefix of the world's key: ``calc``, ``tse``, ...) that exploratory names as
@@ -253,23 +259,22 @@ STILL_ON_THE_EARLIER_RULE: dict[tuple[str, str], tuple[set[str], str]] = {
     ("GET", "/api/v1/scientific/energy-correction-schemes/search"): ({'calc', 'tse'}, DERIVED),
     ("GET", "/api/v1/scientific/export/ml/reactions.ndjson"): ({'calc', 'kin', 'ts', 'tse'}, EXPORTS_AND_LOADERS),
     ("GET", "/api/v1/scientific/export/ml/species.ndjson"): ({'calc', 'thm'}, EXPORTS_AND_LOADERS),
-    ("GET", "/api/v1/scientific/export/ndjson"): ({'calc', 'kin', 'sm', 'thm', 'trn'}, EXPORTS_AND_LOADERS),
+    ("GET", "/api/v1/scientific/export/ndjson"): ({'kin', 'thm', 'trn'}, EXPORTS_AND_LOADERS),
     ("GET", "/api/v1/scientific/frequency-scale-factors/{frequency_scale_factor_ref_or_id}"): ({'sm', 'tse'}, DERIVED),
     ("GET", "/api/v1/scientific/frequency-scale-factors/search"): ({'sm', 'tse'}, DERIVED),
     ("GET", "/api/v1/scientific/level-of-theories/browse"): ({'calc'}, DERIVED),
     ("GET", "/api/v1/scientific/level-of-theories/{level_of_theory_ref_or_id}"): ({'calc'}, DERIVED),
     ("GET", "/api/v1/scientific/level-of-theories/search"): ({'calc'}, DERIVED),
     ("GET", "/api/v1/scientific/networks/browse"): ({'nsolve'}, SERVICE_FLOOR),
-    ("GET", "/api/v1/scientific/network-solves/{network_solve_ref_or_id}"): ({'calc', 'tse'}, SERVICE_FLOOR),
-    ("GET", "/api/v1/scientific/network-solves/search"): ({'calc', 'tse'}, SERVICE_FLOOR),
+    ("GET", "/api/v1/scientific/network-solves/{network_solve_ref_or_id}"): ({'tse'}, SERVICE_FLOOR),
+    ("GET", "/api/v1/scientific/network-solves/search"): ({'tse'}, SERVICE_FLOOR),
     ("GET", "/api/v1/scientific/networks/search"): ({'calc', 'nsolve', 'tse'}, SERVICE_FLOOR),
     ("GET", "/api/v1/scientific/reaction-entries/{reaction_entry_id}/full"): ({'calc', 'cg', 'kin', 'ts', 'tse'}, SERVICE_FLOOR),
     ("POST", "/api/v1/scientific/energy-correction-schemes/search"): ({'calc', 'tse'}, DERIVED),
-    ("POST", "/api/v1/scientific/export/chemkin"): ({'calc', 'sm'}, EXPORTS_AND_LOADERS),
     ("POST", "/api/v1/scientific/frequency-scale-factors/search"): ({'sm', 'tse'}, DERIVED),
     ("POST", "/api/v1/scientific/level-of-theories/search"): ({'calc'}, DERIVED),
     ("POST", "/api/v1/scientific/networks/{network_ref_or_id}/kinetics/evaluate"): ({'nkin', 'nsolve'}, SERVICE_FLOOR),
-    ("POST", "/api/v1/scientific/network-solves/search"): ({'calc', 'tse'}, SERVICE_FLOOR),
+    ("POST", "/api/v1/scientific/network-solves/search"): ({'tse'}, SERVICE_FLOOR),
     ("POST", "/api/v1/scientific/networks/search"): ({'calc', 'nsolve', 'tse'}, SERVICE_FLOOR),
     ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies"): ({'cg'}, EXPORTS_AND_LOADERS),
     ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare"): ({'cg'}, EXPORTS_AND_LOADERS),

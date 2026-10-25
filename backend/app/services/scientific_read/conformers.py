@@ -83,9 +83,11 @@ from app.schemas.reads.scientific_conformer import (
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    linked_evidence_predicate,
     molecular_formula_expr,
     review_summary,
     validate_includes,
+    where_visible,
 )
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summaries,
@@ -990,16 +992,17 @@ def _build_group_evidence_summary(
     # ``tests/services/scientific_read/test_record_builder_statement_cost.py``
     # fails on.
     type_rows = session.execute(
-        select(
-            Calculation.type,
-            func.count(Calculation.id),
-            func.count(func.distinct(Calculation.conformer_observation_id)),
-            func.count(Calculation.id).filter(
-                ~_feeds_a_refinement_on_the_same_observation()
-            ),
-        )
-        .where(Calculation.conformer_observation_id.in_(observation_ids))
-        .group_by(Calculation.type)
+        where_visible(
+            select(
+                Calculation.type,
+                func.count(Calculation.id),
+                func.count(func.distinct(Calculation.conformer_observation_id)),
+                func.count(Calculation.id).filter(
+                    ~_feeds_a_refinement_on_the_same_observation()
+                ),
+            ).where(Calculation.conformer_observation_id.in_(observation_ids)),
+            linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
+        ).group_by(Calculation.type)
     ).all()
     calc_counts: dict[CalculationType, int] = {
         row[0]: row[1] for row in type_rows
@@ -1070,14 +1073,17 @@ def _observation_coverage_via_join(
     """
     return int(
         session.scalar(
-            select(
-                func.count(
-                    func.distinct(Calculation.conformer_observation_id)
+            where_visible(
+                select(
+                    func.count(
+                        func.distinct(Calculation.conformer_observation_id)
+                    )
                 )
+                .select_from(Calculation)
+                .join(joined, onclause)
+                .where(Calculation.conformer_observation_id.in_(observation_ids)),
+                linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
             )
-            .select_from(Calculation)
-            .join(joined, onclause)
-            .where(Calculation.conformer_observation_id.in_(observation_ids))
         )
         or 0
     )
@@ -1088,16 +1094,19 @@ def _distinct_geometry_count(
 ) -> int:
     return int(
         session.scalar(
-            select(
-                func.count(func.distinct(CalculationOutputGeometry.geometry_id))
-            )
-            .select_from(CalculationOutputGeometry)
-            .join(
-                Calculation,
-                Calculation.id == CalculationOutputGeometry.calculation_id,
-            )
-            .where(
-                Calculation.conformer_observation_id.in_(observation_ids)
+            where_visible(
+                select(
+                    func.count(func.distinct(CalculationOutputGeometry.geometry_id))
+                )
+                .select_from(CalculationOutputGeometry)
+                .join(
+                    Calculation,
+                    Calculation.id == CalculationOutputGeometry.calculation_id,
+                )
+                .where(
+                    Calculation.conformer_observation_id.in_(observation_ids)
+                ),
+                linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
             )
         )
         or 0
@@ -1119,24 +1128,31 @@ def _build_observation_evidence_summary(
     :class:`ConformerGroupEvidenceSummary`).
     """
     observation_ids = [observation_id]
+    calc_shown = linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation)
     type_rows = session.execute(
-        select(Calculation.type, func.count(Calculation.id))
-        .where(Calculation.conformer_observation_id.in_(observation_ids))
-        .group_by(Calculation.type)
+        where_visible(
+            select(Calculation.type, func.count(Calculation.id)).where(
+                Calculation.conformer_observation_id.in_(observation_ids)
+            ),
+            calc_shown,
+        ).group_by(Calculation.type)
     ).all()
     type_counts: dict[CalculationType, int] = {row[0]: row[1] for row in type_rows}
 
     has_geom_val = bool(
         session.scalar(
             select(
-                exists().where(
-                    and_(
-                        CalculationGeometryValidation.calculation_id
-                        == Calculation.id,
-                        Calculation.conformer_observation_id.in_(
-                            observation_ids
-                        ),
-                    )
+                where_visible(
+                    exists().where(
+                        and_(
+                            CalculationGeometryValidation.calculation_id
+                            == Calculation.id,
+                            Calculation.conformer_observation_id.in_(
+                                observation_ids
+                            ),
+                        )
+                    ),
+                    calc_shown,
                 )
             )
         )
@@ -1144,14 +1160,17 @@ def _build_observation_evidence_summary(
     has_scf = bool(
         session.scalar(
             select(
-                exists().where(
-                    and_(
-                        CalculationSCFStability.calculation_id
-                        == Calculation.id,
-                        Calculation.conformer_observation_id.in_(
-                            observation_ids
-                        ),
-                    )
+                where_visible(
+                    exists().where(
+                        and_(
+                            CalculationSCFStability.calculation_id
+                            == Calculation.id,
+                            Calculation.conformer_observation_id.in_(
+                                observation_ids
+                            ),
+                        )
+                    ),
+                    calc_shown,
                 )
             )
         )
@@ -1196,12 +1215,16 @@ def _build_available_sections(
     """
     has_calcs = False
     has_geoms = False
+    calc_shown = linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation)
     if obs_ids:
         has_calcs = bool(
             session.scalar(
                 select(
-                    exists().where(
-                        Calculation.conformer_observation_id.in_(obs_ids)
+                    where_visible(
+                        exists().where(
+                            Calculation.conformer_observation_id.in_(obs_ids)
+                        ),
+                        calc_shown,
                     )
                 )
             )
@@ -1210,14 +1233,17 @@ def _build_available_sections(
             has_geoms = bool(
                 session.scalar(
                     select(
-                        exists().where(
-                            and_(
-                                CalculationOutputGeometry.calculation_id
-                                == Calculation.id,
-                                Calculation.conformer_observation_id.in_(
-                                    obs_ids
-                                ),
-                            )
+                        where_visible(
+                            exists().where(
+                                and_(
+                                    CalculationOutputGeometry.calculation_id
+                                    == Calculation.id,
+                                    Calculation.conformer_observation_id.in_(
+                                        obs_ids
+                                    ),
+                                )
+                            ),
+                            calc_shown,
                         )
                     )
                 )

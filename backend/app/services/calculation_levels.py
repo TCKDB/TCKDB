@@ -97,7 +97,7 @@ from __future__ import annotations
 
 import math
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from typing import Literal, NamedTuple
 
@@ -333,6 +333,88 @@ def derive_levels(
         geometry_source=geometry_source,
         frequency_source=frequency_source,
     )
+
+
+def withhold_levels_from_calculations(
+    derived: DerivedLevels,
+    *,
+    withheld: "Collection[int]",
+    opts: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+    freqs: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+    sps: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+    composites: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+    importeds: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+    legacy_composites: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+) -> DerivedLevels:
+    """Null each derived level whose supplying calculations are ALL withheld (the evidence rule, ADR 0023).
+
+    ``derived`` is the answer :func:`derive_levels` gave for the record's FULL set of links, and the role lists here are
+    the same links with their calculation ids. A level is a fact about the calculation that supplied it, so when every
+    calculation that could have supplied it is withheld (rejected or deprecated under ``curated``) the level and its source
+    go together. Nothing is re-derived from what is left: dropping a withheld single point and deriving again would put the
+    optimisation's level in its place, which is borrowing provenance from a calculation the record did not offer for that
+    role. A level that a calculation still shown also supplies (another ``sp`` at the same level) is a fact about that
+    calculation too, and stays.
+
+    The suppliers of a level are the calculations of the supplying role at the derived level (every calculation of the role
+    when the energy is ``"ambiguous"``, since they all disagreed). With ``withheld`` empty ``derived`` is returned as it is.
+    """
+    if not withheld:
+        return derived
+
+    def gone(suppliers: "Sequence[tuple[int, RoleCalcInfo]]") -> bool:
+        return bool(suppliers) and all(cid in withheld for cid, _ in suppliers)
+
+    def at(group: "Sequence[tuple[int, RoleCalcInfo]]", lot_id: int | None) -> "list[tuple[int, RoleCalcInfo]]":
+        return [(cid, info) for cid, info in group if info.lot_id == lot_id]
+
+    update: dict[str, object] = {}
+
+    geometry_lot = derived.geometry_lot_id
+    if derived.geometry_source == "opt":
+        geometry_suppliers = at(opts, geometry_lot)
+    elif derived.geometry_source == "composite_recipe":
+        geometry_suppliers = [
+            (cid, info) for cid, info in composites if info.has_output_geometry and info.recipe_geometry_lot_id == geometry_lot
+        ]
+    else:
+        geometry_suppliers = []
+    if gone(geometry_suppliers):
+        update.update(geometry_lot_id=None, geometry_source=None)
+
+    frequency_lot = derived.frequency_lot_id
+    if derived.frequency_source == "freq":
+        frequency_suppliers = at(freqs, frequency_lot)
+    elif derived.frequency_source == "opt":
+        frequency_suppliers = [(cid, info) for cid, info in at(opts, frequency_lot) if info.carries_frequencies]
+    elif derived.frequency_source == "composite_recipe":
+        frequency_suppliers = [
+            (cid, info) for cid, info in composites if info.has_output_geometry and info.recipe_frequency_lot_id == frequency_lot
+        ]
+    else:
+        frequency_suppliers = []
+    if gone(frequency_suppliers):
+        update.update(frequency_lot_id=None, frequency_source=None)
+
+    energy_lot = derived.energy_lot_id
+    source = derived.energy_source
+    if source == "composite":
+        energy_suppliers = at(composites or legacy_composites, energy_lot)
+    elif source == "sp":
+        energy_suppliers = at(sps, energy_lot)
+    elif source == "opt":
+        energy_suppliers = at(opts, energy_lot)
+    elif source == "imported":
+        energy_suppliers = at(importeds, energy_lot)
+    elif source == "ambiguous":
+        distinct_composite_lots = {info.lot_id for _, info in composites if info.lot_id is not None}
+        energy_suppliers = list(composites) if len(distinct_composite_lots) > 1 else list(sps)
+    else:
+        energy_suppliers = []
+    if gone(energy_suppliers):
+        update.update(energy_lot_id=None, energy_source=None)
+
+    return derived._replace(**update) if update else derived
 
 
 @dataclass(frozen=True)

@@ -213,14 +213,17 @@ def test_curated_names_an_approved_scan_calculation(client, db_session):
 
 
 def test_no_calculation_statement_when_no_naming_block_is_requested(client, db_session):
-    """Kills: running the profile filter on every record (it must run only for the blocks that name a calculation)."""
+    """Kills: a SEPARATE review lookup for the source calculations on every record. Since step 3 (ADR 0023) the counts and
+    levels of every read follow the evidence rule, so the verdict is read inside the statement that loads the links
+    (``statmech_source_calculation``, ``statmech_torsion`` for the scan); no statement of its own may be issued for it, or a page of records pays one each."""
     from sqlalchemy import event
 
     _, sm, *_ = _world(db_session)
     seen = []
 
     def count(conn, cursor, statement, *a):
-        if "record_review" in statement and "calculation" in str(a):
+        folded = "statmech_source_calculation" in statement or "statmech_torsion" in statement
+        if "record_review" in statement and "calculation" in str(a) and not folded:
             seen.append(statement)
 
     bind = db_session.get_bind()

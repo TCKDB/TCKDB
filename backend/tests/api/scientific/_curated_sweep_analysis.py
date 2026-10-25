@@ -82,6 +82,16 @@ POPULATION_KEYS = frozenset(
         "distinct_software_count",
         "partial_sources",
         "has_channel_barriers",
+        # ADR 0023 (step 3): the counts and flags of a returned record's linked evidence follow the evidence rule, so a
+        # rejected or deprecated calculation is not counted. Each is pinned against the withheld calculation in
+        # test_curated_evidence_counts_and_levels.py, because this comparator cannot hold a count to "equal or null".
+        "geometry_count",
+        "optimization_chain_count",
+        "has_rotor_scans",
+        "has_frequencies",
+        "has_opt_calculation",
+        "has_freq_calculation",
+        "has_sp_calculation",
         # A candidate's ordinal among the population's own (guard PR-3): it stands in for the database id as the last
         # tie-break. The population is the profile's, so the same record has another ordinal under curated.
         "id_rank",

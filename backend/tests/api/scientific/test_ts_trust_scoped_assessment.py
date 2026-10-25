@@ -699,13 +699,15 @@ def _box(client, entry, *, profile=None):
 
 
 def test_under_curated_a_hidden_pinned_result_is_absent_for_the_box_and_the_check_alike(client, db_session):
-    """Hidden == absent (D6): the box and the trust check both read the newest visible result, and say nothing of the hidden one.
+    """A WITHHELD pinned result is absent: the box and the trust check both read the newest shown result, and say nothing of it.
 
-    The expected answer is what exploratory gives on a world where the hidden calculation does not exist.
-    Kills: the box going blank, or still describing/naming the hidden pinned result.
+    The pinned witness is REJECTED (ADR 0023, step 3: the box follows the evidence rule, which withholds rejected and
+    deprecated evidence; an unreviewed pinned witness is shown, see the next test). The expected answer is what exploratory
+    gives on a world where the withheld calculation does not exist.
+    Kills: the box going blank, or still describing/naming the withheld pinned result.
     """
     hidden_world = make_ts_world(db_session)
-    d, opt, sp, f = saddle(hidden_world, statuses={"freq": None})  # the pinned witness is below the curated floor
+    d, opt, sp, f = saddle(hidden_world, statuses={"freq": RecordReviewStatus.rejected})  # the pinned witness is withheld
     visible = hidden_world.freq("visible", frequencies=THREE)
     hidden_world.settle()
 
@@ -741,6 +743,23 @@ def test_under_curated_a_hidden_pinned_result_is_absent_for_the_box_and_the_chec
     # and a list agrees with the entry's own page
     listed = _record_in(search(client, profile="curated"), hidden_world.entry.public_ref)["saddle_point"]
     assert listed == curated
+
+
+def test_under_curated_an_unreviewed_pinned_result_is_the_one_the_box_describes(client, db_session):
+    """Step 3 of ADR 0023: the box describes the declared (pinned) frequency result when it is merely unreviewed, as the
+    entry's calculation list names it, instead of falling back to the newest other result.
+
+    Interim: the trust check's own population still applies the record floor until step 5, so the two can differ for an
+    unreviewed pin. This pins the box only.
+    Kills: the box keeping the record floor and describing the newest other result (``latest_direct_frequency``).
+    """
+    world = make_ts_world(db_session)
+    d, opt, sp, f = saddle(world, statuses={"freq": None})
+    world.freq("visible", frequencies=THREE)
+    world.settle()
+    box = _box(client, world.entry, profile="curated")
+    assert box["basis"] == "declared_curvature_witness" and box["calculation_ref"] == f.public_ref
+    assert _box(client, world.entry)["calculation_ref"] == f.public_ref  # exploratory: the same pin
 
 
 def test_a_deprecated_declared_entry_has_the_same_counts_on_its_page_and_on_a_list(client, db_session):

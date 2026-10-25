@@ -43,6 +43,8 @@ NOT_REVIEWED = RecordReviewStatus.not_reviewed
 
 @pytest.fixture
 def world(db_session, client, login_as):
+    """Every hidden record is UNLISTED (no review row). A test of what the evidence rule withholds takes the exploratory read
+    first and then calls ``withhold_hidden`` (rejected / deprecated alternately); the rule shows an unlisted record."""
     w = build_sweep_world(db_session)
     login_as(w.extra["curator"].id)
     return w
@@ -105,16 +107,19 @@ def _hidden(w) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
-def test_native_ndjson_names_no_hidden_record_and_keeps_the_visible_ones(client, world):
-    """Kills: no withhold on /export/ndjson; a hidden linearity witness or conflict member; a hidden thermo candidate.
+def test_native_ndjson_names_no_hidden_record_and_keeps_the_visible_ones(client, db_session, world):
+    """Kills: no withhold on /export/ndjson; a withheld linearity witness or conflict member; a withheld thermo candidate.
 
-    Species: ``sx`` (hidden collinear calculation is its only witness), ``sy`` (a hidden and a visible statmech
-    disagree), ``sz`` (the only link is a hidden calculation), ``sg`` (only a hidden thermo).
+    Species: ``sx`` (the collinear calculation is its only witness), ``sy`` (a statmech and a visible one disagree), ``sz``
+    (the only link is a calculation), ``sg`` (only a thermo). The records are withheld after the exploratory control is taken
+    (an unreviewed witness is linked evidence and is used: see the witness test below).
     """
     w = world
     hidden = _hidden(w)
-    curated = _get(client, "/export/ndjson", "curated", _query(w))
     exploratory = _get(client, "/export/ndjson", "exploratory", _query(w))
+    ex_first = _lines(exploratory)
+    w.withhold_hidden(db_session)
+    curated = _get(client, "/export/ndjson", "curated", _query(w))
     for key, ref in hidden.items():
         assert ref not in curated, f"curated names {key}"
     # positive control: the world meets the positions
@@ -122,7 +127,6 @@ def test_native_ndjson_names_no_hidden_record_and_keeps_the_visible_ones(client,
         assert hidden[key] in exploratory, f"exploratory does not name {key}: the world is vacuous"
 
     first = _lines(_get(client, "/export/ndjson", "curated", _query(w)))
-    ex_first = _lines(_get(client, "/export/ndjson", "exploratory", _query(w)))
     sx, sy, sz = (
         w.extra[k].public_ref for k in ("species_entry_export", "species_entry_conflict", "species_entry_hidden_link")
     )
@@ -270,12 +274,13 @@ def test_ml_reactions_barrier_comes_from_shown_energies_and_a_hidden_owner_is_nu
     assert _by(_lines(curated), "reaction_entry_ref", all_hidden)["transition_states"] == []
 
 
-def test_chemkin_files_and_manifest_name_no_hidden_record(client, world):
-    """Kills: no withhold on /export/chemkin; the CHEMKIN transport comment naming a hidden witness."""
+def test_chemkin_files_and_manifest_name_no_hidden_record(client, db_session, world):
+    """Kills: no withhold on /export/chemkin; the CHEMKIN transport comment naming a withheld witness."""
     w = world
     hidden = _hidden(w)
-    curated = _chemkin(client, w, "curated")
     exploratory = _chemkin(client, w, "exploratory")
+    w.withhold_hidden(db_session)
+    curated = _chemkin(client, w, "curated")
     joined_curated = "\n".join(curated.values())
     joined_exploratory = "\n".join(exploratory.values())
     for key, ref in hidden.items():
@@ -293,7 +298,8 @@ def test_chemkin_files_and_manifest_name_no_hidden_record(client, world):
 
 
 def test_the_linearity_witness_leaves_out_hidden_records(db_session, world):
-    """Kills: ``_transport_linearity_witness`` without ``hidden_refs`` (a hidden calculation or statmech as a witness)."""
+    """Kills: ``_transport_linearity_witness`` without the withheld set (a rejected/deprecated calculation or statmech as a
+    witness). The records are withheld after the exploratory control is taken."""
     w = world
     hidden = _hidden(w)
     s = db_session
@@ -302,20 +308,43 @@ def test_the_linearity_witness_leaves_out_hidden_records(db_session, world):
         entry, transport = w.extra[entry_key], w.visible[transport_key]
         return export_core._transport_linearity_witness(s, entry.id, transport.id, profile=profile)
 
-    # sx: the hidden collinear calculation is the only witness
+    # sx: the collinear calculation is the only witness
     exploratory = witness("species_entry_export", "trn_xv", EXPLORATORY)
     assert exploratory[0] is not None and exploratory[0].source_ref == hidden["calc_h_xlin"]
-    assert witness("species_entry_export", "trn_xv", CURATED) == (None, None)
-    # sy: the conflict shrinks to the one shown record, which then decides
+    # sy: the conflict names both records
     witness_y, conflict_y = witness("species_entry_conflict", "trn_yv", EXPLORATORY)
     assert witness_y is None and set(conflict_y.refs) == {hidden["sm_h_y"], w.visible["sm_v_y"].public_ref}
+    # sz: a shown statmech, a calculation linking it
+    assert witness("species_entry_hidden_link", "trn_zv", EXPLORATORY)[0] is not None
+    w.withhold_hidden(db_session)
+    assert witness("species_entry_export", "trn_xv", CURATED) == (None, None)
+    # sy: the conflict shrinks to the one shown record, which then decides
     witness_y, conflict_y = witness("species_entry_conflict", "trn_yv", CURATED)
     assert (
         conflict_y is None and witness_y.source_ref == w.visible["sm_v_y"].public_ref and witness_y.is_linear is False
     )
-    # sz: a shown statmech, a hidden calculation linking it
-    assert witness("species_entry_hidden_link", "trn_zv", EXPLORATORY)[0] is not None
     assert witness("species_entry_hidden_link", "trn_zv", CURATED) == (None, None)
+
+
+def test_the_linearity_witness_uses_unreviewed_records(db_session, world):
+    """ADR 0023, step 3: the transport's own calculation, or the statmech that cites it, is linked evidence. Merely unreviewed,
+    it is still the witness (the line then names it, with its badge); only a withheld one is left out (the test above).
+
+    Kills: leaving the witness population on the record floor (an unreviewed calculation read as no witness).
+    """
+    w = world
+    hidden = _hidden(w)
+
+    def witness(entry_key, transport_key, profile):
+        return export_core._transport_linearity_witness(
+            db_session, w.extra[entry_key].id, w.visible[transport_key].id, profile=profile
+        )
+
+    assert witness("species_entry_export", "trn_xv", CURATED) == witness("species_entry_export", "trn_xv", EXPLORATORY)
+    assert witness("species_entry_export", "trn_xv", CURATED)[0].source_ref == hidden["calc_h_xlin"]
+    # The conflict between an unreviewed and a shown statmech stands, as exploratory has it.
+    assert witness("species_entry_conflict", "trn_yv", CURATED) == witness("species_entry_conflict", "trn_yv", EXPLORATORY)
+    assert witness("species_entry_hidden_link", "trn_zv", CURATED) == witness("species_entry_hidden_link", "trn_zv", EXPLORATORY)
 
 
 # ---------------------------------------------------------------------------

@@ -153,15 +153,21 @@ the ML export's is `tckdb.ml` version 2.
 > is hashed and replayed) and records each candidate's review status instead. The legacy entity reads carry raw ids and have no
 > badge.
 >
-> **Known interim state until steps 3 to 5.** A response can name an unreviewed calculation, nested and badged, beside a count or
-> a derived level of theory that leaves it out, because those are still floored in the service. The two disagree until their
-> steps land; the sweep lists every route where this happens (`STILL_ON_THE_EARLIER_RULE`), and the list can only shrink.
+> **Already true (step 3):** the counts, flags and derived levels of a returned record follow the same split. A calculation that is
+> `rejected` or `deprecated` is not counted, sets no flag and supplies no level; an unreviewed or under-review one is counted and
+> supplies its level, as the response names it. A level only a withheld calculation supplied is null together with its source,
+> and no other calculation is put in its place. This covers transition-state, conformer, network, statmech, thermo and kinetics
+> summaries, the per-type level maps, the analytics provenance flags and the CHEMKIN transport linearity witness. A record that is
+> itself a record in the list (a transition-state entry, a network solve) still has to clear the floor to be counted.
 >
-> **Still the earlier rule (decision D6: below the floor is hidden, evidence included), and described as it is:** list counts,
-> availability flags and derived levels of theory (step 3), the trust and selection
-> loaders (step 5), made-under comparisons (step 6), and detail-by-ref (step 7). Matching in search and select (step 4) now follows
-> the evidence rule: see the filter paragraph below. Every passage below that describes what `curated`
-> hides or shows is therefore the earlier rule except where it concerns a nested ref.
+> **Known interim state until step 5.** Usage lists on reference rows (what uses a level of theory, a scale factor or a
+> correction scheme) and the relative-energy and export populations are unchanged. The sweep lists every route where this
+> happens (`STILL_ON_THE_EARLIER_RULE`), and the list can only shrink.
+>
+> **Still the earlier rule (decision D6: below the floor is hidden, evidence included), and described as it is:** the trust and
+> selection loaders (step 5), made-under comparisons (step 6), and detail-by-ref (step 7). Matching in search and select (step 4)
+> follows the evidence rule: see the filter paragraph below. Every passage below that describes what `curated` hides or shows for
+> those is therefore the earlier rule.
 
 ## Other lists, and where their order is documented
 

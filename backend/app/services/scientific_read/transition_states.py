@@ -93,8 +93,10 @@ from app.schemas.reads.scientific_transition_state import (
 )
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
+    evidence_visible_statuses,
     fetch_review_badges,
     ids_below_review_floor,
+    linked_evidence_predicate,
     review_floor_predicate,
     review_summary,
     validate_includes,
@@ -1054,7 +1056,7 @@ def _build_concept_evidence_summary(
                 func.count(Calculation.id),
                 func.count(func.distinct(Calculation.transition_state_entry_id)),
             ).where(Calculation.transition_state_entry_id.in_(entry_ids)),
-            review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
+            linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
         ).group_by(Calculation.type)
     ).all()
     calc_counts: dict[CalculationType, int] = {row[0]: row[1] for row in type_rows}
@@ -1120,7 +1122,7 @@ def _entry_coverage_via_join(
                 .select_from(Calculation)
                 .join(joined, onclause)
                 .where(Calculation.transition_state_entry_id.in_(entry_ids)),
-                review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
+                linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
             )
         )
         or 0
@@ -1142,7 +1144,7 @@ def _build_entry_evidence_summary(
     :class:`TransitionStateEvidenceSummary`).
     """
     entry_ids = [entry_id]
-    calc_visible = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation)
+    calc_visible = linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation)
     type_rows = session.execute(
         where_visible(
             select(Calculation.type, func.count(Calculation.id)).where(
@@ -1231,7 +1233,7 @@ def _build_available_sections(
     """
     has_calcs = False
     has_geoms = False
-    calc_visible = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation)
+    calc_visible = linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation)
     if entry_ids:
         has_calcs = bool(
             session.scalar(
@@ -1287,14 +1289,15 @@ def _build_available_sections(
 
 
 def _evidence_visible():
-    """The review-floor condition on a validation evidence row, for the flags and the descriptor built from it.
+    """The evidence-rule condition on a validation evidence row, for the flags and the descriptor built from it.
 
-    An evidence row rests on the calculation that reconstructed it (the IRC, the frequency job). When that calculation
-    is below the floor, the flag "this entry has IRC evidence" would say a hidden record exists (D5), so the row is not
-    counted. A row with no source calculation (``energy_ordering``) is a deposited claim and is always counted. The
-    LISTS of evidence are left whole: the ref guard removes the rows and energies that name a hidden calculation.
+    An evidence row rests on the calculation that reconstructed it (the IRC, the frequency job). Under ``curated`` that
+    calculation is evidence (ADR 0023): the row is counted unless the calculation is rejected or deprecated, so an
+    unreviewed IRC still makes the flag "this entry has IRC evidence" true, as the list of evidence shows it. A row with
+    no source calculation (``energy_ordering``) is a deposited claim and is always counted. The LISTS of evidence are
+    left whole: the ref guard removes the rows and energies that name a withheld calculation.
     """
-    visible = review_floor_predicate(
+    visible = linked_evidence_predicate(
         TransitionStateValidationEvidence.reconstruction_calculation_id, SubmissionRecordType.calculation
     )
     if visible is None:
@@ -1625,9 +1628,10 @@ def _build_saddle_point_index(
         )
         .exists()
     )
-    # Hidden == absent (D6): a frequency calculation the read profile hides is not a candidate, so it is neither
-    # described nor counted as a pin; the block then describes the newest visible result, with no trace of the hidden one.
-    shown = visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
+    # A frequency calculation the evidence rule withholds (rejected or deprecated under ``curated``) is not a candidate, so
+    # it is neither described nor counted as a pin; the block then describes the newest shown result, with no trace of the
+    # withheld one. An unreviewed one is shown (ADR 0023).
+    shown = evidence_visible_statuses()
     rows = session.execute(
         select(Calculation, CalculationFreqResult, pinned_by_declaration)
         .join(

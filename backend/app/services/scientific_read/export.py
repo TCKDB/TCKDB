@@ -82,7 +82,7 @@ from app.services.frequency_geometry_linearity import (
 )
 from app.services.scientific_read.common import (
     fetch_review_badges,
-    review_floor_predicate,
+    linked_evidence_predicate,
     visible_statuses,
     where_visible,
 )
@@ -971,19 +971,20 @@ def _transport_linearity_witness(
     statmech record the transport does not link to. Returns ``(None, None)``
     when neither source states it.
 
-    **Hidden records are not witnesses.** The answer names its source, and the
-    source can be a calculation or statmech record the profile hides (its own
-    route answers 404). Such a record is left out before anything is derived
-    from it, so neither its ref nor the linearity it states reaches the export:
-    hidden equals unknown. ``profile`` is the read profile whose floor applies
-    (a streaming caller passes the one it captured); ``None`` reads the
-    request's. Under the exploratory profile nothing is left out.
+    **Withheld records are not witnesses.** The answer names its source, and the
+    source can be a calculation or statmech record the evidence rule withholds
+    (ADR 0023: rejected or deprecated under ``curated``). Such a record is left
+    out before anything is derived from it, so neither its ref nor the linearity
+    it states reaches the export. A source that is merely unreviewed is linked
+    evidence of the transport and is a witness. ``profile`` is the read profile
+    whose rule applies (a streaming caller passes the one it captured); ``None``
+    reads the request's. Under the exploratory profile nothing is left out.
     """
     floor_profile = profile if profile is not None else current_read_profile()
-    # The floor is a subquery of the statements that read the sources, never a statement of its own (a lookup per
+    # The rule is a subquery of the statements that read the sources, never a statement of its own (a lookup per
     # transport would be one visibility statement per record, outside the batch). No floor: ``None``, nothing added.
-    calc_shown = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation, profile=floor_profile)
-    statmech_shown = review_floor_predicate(Statmech.id, SubmissionRecordType.statmech, profile=floor_profile)
+    calc_shown = linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation, profile=floor_profile)
+    statmech_shown = linked_evidence_predicate(Statmech.id, SubmissionRecordType.statmech, profile=floor_profile)
     calc_rows = session.execute(
         where_visible(
             select(Calculation.id, Calculation.public_ref, Calculation.type)
