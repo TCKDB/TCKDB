@@ -510,8 +510,7 @@ class CalculationDependency(Base):
     two concurrent transactions cannot each add half of a cycle. The refusal is
     SQLSTATE 23514 with constraint name ``calculation_dependency_acyclic``,
     surfaced by the API as the 409 ``calculation_dependency_cycle``. Diamonds
-    are legal. Reader-side ``dependency_cycle`` handling remains as defence in
-    depth for rows written before the trigger. Stronger role-specific
+    are legal. Readers rely on that guarantee and keep only a visited set. Stronger role-specific
     parent-count rules belong in application logic unless the policy is
     narrowed enough for partial unique indexes. Selected roles currently
     enforce at most one parent per child: `optimized_from`, `freq_on`,

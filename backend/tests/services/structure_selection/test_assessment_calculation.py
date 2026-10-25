@@ -240,11 +240,6 @@ def test_a_finding_kind_or_version_this_release_does_not_read_is_disclosed_never
     assert b.physically_eligible and "finding_kind_unsupported" in b.advisory
 
 
-def test_a_dependency_cycle_is_unresolved():
-    a = assess(calc(lineage_cyclic=True))
-    assert a.applicability is A.unresolved and "dependency_cycle" in codes(a)
-
-
 def test_curvature_facts_play_no_part_in_a_recorded_value():
     unit = calc(curvature=CurvatureFacts(has_freq_result=True, n_imag=3))
     assert assess(unit).physically_eligible

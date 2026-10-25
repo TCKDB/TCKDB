@@ -63,7 +63,6 @@ REASONS: dict[str, ReasonSpec] = {
     "witness_ambiguous": ReasonSpec(_U, _C.unresolved_applicability),
     "rotor_replacement_unstated": ReasonSpec(_U, _C.unresolved_applicability),
     "ambiguous_fact": ReasonSpec(_U, _C.unresolved_applicability),
-    "dependency_cycle": ReasonSpec(_U, _C.unresolved_applicability),
     "curvature_witnesses_disagree": ReasonSpec(_U, _C.evidence_conflict),
     "finding_unresolved": ReasonSpec(_U, _C.evidence_conflict),
     # --- known failures ---------------------------------------------------------------------------------------

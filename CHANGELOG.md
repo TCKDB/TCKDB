@@ -27,8 +27,9 @@ dataset must never require a code release.
 A new Alembic revision (`e2f2b3fb6725`) adds a row trigger on `calculation_dependency` that refuses an INSERT, or an UPDATE of either
 endpoint, whose parent is already reachable from its child. No column changes. The refusal is a coded 409, `calculation_dependency_cycle`,
 naming the two calculations by public reference. Diamonds stay legal; self-edges stay the `not_self` CHECK's. The upgrade stops, listing the
-calculations by public reference, if the table already holds a cycle; it never edits an edge. Reader-side `dependency_cycle` handling is
-unchanged and now only reachable from rows that predate the trigger. `tckdb-client` 0.168.0 gains the rejection code.
+calculations by public reference, if the table already holds a cycle; it never edits an edge. Because a cycle can no longer be written, the readers' `dependency_cycle` outcome is removed (structure and statmech selection, and
+the `cycle_detected` evidence key of the reproducibility rubric's `upstream_dependency_snapshot`); traversals keep a visited set. No verdict
+can change. The three affected rubric pins were re-pinned without a version bump. `tckdb-client` 0.168.0 gains the rejection code.
 
 ## Curated profile: records are floored, linked evidence is badged (2026-10-25, step 1 of 8)
 

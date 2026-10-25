@@ -606,46 +606,14 @@ def _level_facts(session: Session, calcs: list[Calculation]) -> dict[int, LevelF
     return out
 
 
-def _has_cycle(start: int, edges: list[tuple[int, int, str]]) -> bool:
-    """Whether the explored edges contain a directed cycle reachable from ``start``.
-
-    A *diamond* (one calculation that is the parent of two others on the path) is not a cycle: only an edge back
-    to a node still on the current path is. Iterative depth-first search with the usual three colours.
-    """
-    parents: dict[int, list[int]] = defaultdict(list)
-    for child, parent, _ in edges:
-        parents[child].append(parent)
-    on_path: set[int] = {start}
-    done: set[int] = set()
-    stack: list[tuple[int, Any]] = [(start, iter(sorted(parents.get(start, ()))))]
-    while stack:
-        node, remaining = stack[-1]
-        advanced = False
-        for parent in remaining:
-            if parent in on_path:
-                return True
-            if parent in done:
-                continue
-            on_path.add(parent)
-            stack.append((parent, iter(sorted(parents.get(parent, ())))))
-            advanced = True
-            break
-        if not advanced:
-            stack.pop()
-            on_path.discard(node)
-            done.add(node)
-    return False
-
-
 def _lineage(
     session: Session, calc_ids: set[int], *, depth_limit: int, profile: frozenset[RecordReviewStatus]
-) -> tuple[dict[int, list[tuple[int, int, str]]], set[int], set[int]]:
+) -> tuple[dict[int, list[tuple[int, int, str]]], set[int]]:
     """Typed parents of each calculation, breadth first, ``depth_limit`` hops.
 
-    Returns ``(edges_by_start, truncated_starts, cyclic_starts)`` where an edge is ``(child_id, parent_id, role)``.
-    A start whose frontier is still non-empty after ``depth_limit`` hops is *truncated*; a start whose explored
-    edges contain a real directed cycle is *cyclic* (a shared parent reached by two paths is not). Both are
-    reported, never silently cut.
+    Returns ``(edges_by_start, truncated_starts)`` where an edge is ``(child_id, parent_id, role)``.
+    A start whose frontier is still non-empty after ``depth_limit`` hops is *truncated*; that is reported, never
+    silently cut. The graph is acyclic (database trigger), and the ``seen`` set keeps the walk from revisiting a node.
 
     A parent the read profile hides is treated as absent: its edge is not recorded, it is not walked past, and it
     cannot make the traversal exceed the depth bound, so the result is the one a caller who could not see it would
@@ -653,7 +621,6 @@ def _lineage(
     """
     edges_by_start: dict[int, list[tuple[int, int, str]]] = {i: [] for i in calc_ids}
     truncated: set[int] = set()
-    cyclic: set[int] = set()
     parents_cache: dict[int, list[tuple[int, str]]] = {}
     shown: dict[int, bool] = dict.fromkeys(calc_ids, True)
 
@@ -691,9 +658,7 @@ def _lineage(
             parents_of(frontier)
             if any(parents_cache[n] for n in frontier):
                 truncated.add(start)
-        if _has_cycle(start, edges_by_start[start]):
-            cyclic.add(start)
-    return edges_by_start, truncated, cyclic
+    return edges_by_start, truncated
 
 
 def _finding_facts(
@@ -782,10 +747,9 @@ def _normalize_calculations(
     ids = {c.id for c in calcs}
     edges: dict[int, list[tuple[int, int, str]]] = {}
     truncated: set[int] = set()
-    cyclic: set[int] = set()
     ref_by_id: dict[int, str] = {c.id: c.public_ref for c in calcs}
     if with_lineage and ids:
-        edges, truncated, cyclic = _lineage(session, ids, depth_limit=request.bounds.dependency_depth, profile=profile)
+        edges, truncated = _lineage(session, ids, depth_limit=request.bounds.dependency_depth, profile=profile)
         if truncated:
             raise traversal_too_deep(request.bounds)
         parent_ids = {p for lst in edges.values() for _, p, _ in lst} | {c for lst in edges.values() for c, _, _ in lst}
@@ -868,7 +832,6 @@ def _normalize_calculations(
                 LineageEdge(ref_by_id[child], ref_by_id[parent], role) for child, parent, role in edges.get(c.id, [])
             ),
             lineage_truncated=c.id in truncated,
-            lineage_cyclic=c.id in cyclic,
             findings=_to_finding_facts(session, related, refs_for_findings),
         )
     return out

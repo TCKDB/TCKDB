@@ -16,7 +16,7 @@
       "1": "28e638f09e687fce82fcc274d372e97cdcc938dad8acbafa2b598c6d803a0c91"
     },
     "computed_transition_state": {
-      "2": "3309765ea034a1505a3d0a65734aebee1c73ea9c2ca12468211c2719cd0b62ba"
+      "2": "fa441e1b22e0f5428a9f0924c3ca1a62f5460b99bde6196de2ffc8bf06f870a1"
     },
     "computed_transport": {
       "1": "1b5a1f833dc867aff540eddc5e123a5d6fa3cb0d320e90b7a931e94f7a158676"
@@ -25,10 +25,10 @@
       "1": "6e5103f9a711d2e75c5f7ed11e568a30f806515d78876cc3cc8227b994b42aa5"
     },
     "tckdb_reproducibility": {
-      "1": "66d92e40dd34aed8d5774cc14d5b92efcd81018cea1e46b7c480ca312789c4b4"
+      "1": "40d960b64777de4bfa87b333f284cb7b9cc81e50dc6f2bfa6e4fff7a34035eea"
     },
     "tckdb_reproducibility_ts_statmech": {
-      "1": "c98f432d74d732be91155c42be988954f391909fdf44876ca9cdd99ca8889965"
+      "1": "ba85c740cd95a1f5504e4daf22d5f3d359db859144272c97076a9bdb7db15a7c"
     }
   },
   "unbumped_overrides": [
@@ -47,6 +47,21 @@
       "name": "computed_transition_state",
       "version": 2,
       "reason": "select filters and eligibility defaults: structure selection gains request options that are off by default, species-entry and conformer-group gating moved, and a rejected-quality source in a role the request does not need no longer blocks the verdict; the transition-state grading verdicts under default settings are unchanged (a TS entry still gates its evidence)"
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "dependency_cycle outcome removed; unreachable under the calculation_dependency acyclicity trigger"
+    },
+    {
+      "name": "tckdb_reproducibility",
+      "version": 1,
+      "reason": "dependency_cycle outcome removed; unreachable under the calculation_dependency acyclicity trigger"
+    },
+    {
+      "name": "tckdb_reproducibility_ts_statmech",
+      "version": 1,
+      "reason": "dependency_cycle outcome removed; unreachable under the calculation_dependency acyclicity trigger"
     }
   ]
 }

@@ -7,10 +7,9 @@ the per-test transaction in conftest rolls back at end of test.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 from datetime import datetime, timezone
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.app_user import AppUser
@@ -1294,22 +1293,6 @@ def attach_artifact(
     session.add(row)
     session.flush()
     return row
-
-
-@contextmanager
-def legacy_dependency_cycles_allowed(session: Session):
-    """Let the block store a dependency cycle, as data written before the acyclicity trigger could.
-
-    Writes now refuse a cycle (revision ``e2f2b3fb6725``), so the reader-side ``dependency_cycle``
-    branches are reachable only from rows that predate it. A reader test that needs such a row says
-    so by using this; the trigger is disabled and re-enabled inside the test's transaction, so the
-    fixture's rollback undoes it either way.
-    """
-    session.execute(text("ALTER TABLE calculation_dependency DISABLE TRIGGER trg_calculation_dependency_acyclic"))
-    try:
-        yield
-    finally:
-        session.execute(text("ALTER TABLE calculation_dependency ENABLE TRIGGER trg_calculation_dependency_acyclic"))
 
 
 def attach_dependency(
