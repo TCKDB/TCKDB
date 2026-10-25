@@ -16,7 +16,7 @@
       "1": "28e638f09e687fce82fcc274d372e97cdcc938dad8acbafa2b598c6d803a0c91"
     },
     "computed_transition_state": {
-      "2": "fa441e1b22e0f5428a9f0924c3ca1a62f5460b99bde6196de2ffc8bf06f870a1"
+      "2": "e03bd9a77a637b31db483a67e9dd16209ee27c8dcb87b65fbde92f16fb395cbf"
     },
     "computed_transport": {
       "1": "1b5a1f833dc867aff540eddc5e123a5d6fa3cb0d320e90b7a931e94f7a158676"
@@ -82,6 +82,11 @@
       "name": "tckdb_reproducibility_ts_statmech",
       "version": 1,
       "reason": "snapshot_defaults lists the new statmech_model_member.relative_energy_convention (NULL). No check or grade changes: a stored member cannot hold an energy without a convention (the upgrade refuses), and a member with no energy keeps its digest, so no stored assessment reads stale and no verdict changes."
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "curated linked-evidence visibility (ADR 0023): stored and exploratory verdicts are unchanged; curated read-time verdicts may change, because a curated read now supplies not-reviewed and under-review evidence to the grading, which it used to leave out"
     }
   ]
 }
