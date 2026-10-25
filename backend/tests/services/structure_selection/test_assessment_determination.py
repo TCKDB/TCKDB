@@ -253,11 +253,6 @@ def test_a_source_the_typed_edges_do_not_tie_to_the_optimisation_is_disclosed_an
     assert not assess(det(), opt(), calc("calc_a", input_geometry_refs=(G2,), lineage=(LineageEdge("calc_a", "calc_o", "single_point_on"),)), freq("calc_f")).physically_eligible
 
 
-def test_a_dependency_cycle_makes_the_energy_source_unresolved():
-    a = assess(det(), opt(), calc("calc_a", lineage_cyclic=True), freq("calc_f"))
-    assert a.applicability is A.unresolved and "dependency_cycle" in codes(a)
-
-
 # -- findings at their own subject and role ------------------------------------------------------------------
 
 

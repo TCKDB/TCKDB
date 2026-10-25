@@ -341,8 +341,6 @@ def assess_calculation(c: NormalizedCalculation, *, request: StructureRequest, s
     _recipe_findings(recipe, request, f, declaration_state=c.declaration_state)
     _root_check(recipe, subject, f)
     _subject_findings(c, request, f)
-    if c.lineage_cyclic:
-        f.unresolved("dependency_cycle")
     for finding in live_findings(c.findings):
         _apply_finding(f, finding, blocks=True, role_needed=True, lift=request.eligibility.include_confirmed_findings)
     verdict = f.verdict()
@@ -724,8 +722,6 @@ def assess_determination(
         _recipe_findings(recipe, request, f, declaration_state=energy_calc.declaration_state)
         _root_check(recipe, subject, f)
         _subject_findings(energy_calc, request, f)
-        if energy_calc.lineage_cyclic:
-            f.unresolved("dependency_cycle")
 
     # --- the structural claim ---------------------------------------------------------------------------------
     claims: list[ClaimSupport] = []

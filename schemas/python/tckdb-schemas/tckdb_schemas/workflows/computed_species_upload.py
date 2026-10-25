@@ -15,6 +15,8 @@ from typing import Any, Literal, Self, TypeAlias
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from tckdb_schemas.bundle_source_rules import (
+    dependency_cycle_message,
+    find_dependency_cycle,
     find_scf_source_cycle,
     scf_source_cycle_error,
     scf_source_geometry_error,
@@ -1038,6 +1040,13 @@ class ComputedSpeciesUploadRequest(SchemaBase):
                             key=dep.parent_calculation_key,
                             declared=defined,
                         )
+        edges: dict[str, list[str]] = {}
+        for conf in self.conformers:
+            for calc in (conf.primary_calculation, *conf.additional_calculations):
+                edges.setdefault(calc.key, []).extend(d.parent_calculation_key for d in calc.depends_on)
+        cycle = find_dependency_cycle(edges)
+        if cycle is not None:
+            raise ValueError(dependency_cycle_message(cycle))
         return self
 
     def stationary_point_findings(self) -> list[StationaryPointFinding]:

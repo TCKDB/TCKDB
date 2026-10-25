@@ -979,8 +979,6 @@ def assess_candidate(
         evidence["absolute_energy"] = tuple(sorted(ev.energy))
     if ev.parameters:
         evidence["parameters"] = tuple(sorted(ev.parameters))
-    if any(c.lineage_cyclic for c in ev.curvature):
-        f.add("dependency_cycle")
 
     # 6. the TS owner's own treatment
     if request.target.scope.kind is ScopeKind.ts_determination:

@@ -25,6 +25,8 @@ from tckdb_schemas.bundle_source_rules import (
     assert_conformer_primaries_agree,
     assert_transition_state_calculations_unanchored,
     conformer_key_by_unique_geometry_key,
+    dependency_cycle_message,
+    find_dependency_cycle,
     find_scf_source_cycle,
     owner_mismatch_error,
     scf_source_cycle_error,
@@ -2040,6 +2042,24 @@ class ComputedReactionUploadRequest(SchemaBase):
             _check_depends_on(self.transition_state.calculation)
             for calc in self.transition_state.calculations:
                 _check_depends_on(calc)
+
+        dependency_edges: dict[str, list[str]] = {}
+
+        def _collect_depends_on(calc: ComputedReactionCalculationIn) -> None:
+            dependency_edges.setdefault(calc.key, []).extend(d.parent_calculation_key for d in calc.depends_on)
+
+        for sp in self.species:
+            for conf in sp.conformers:
+                _collect_depends_on(conf.calculation)
+            for calc in sp.calculations:
+                _collect_depends_on(calc)
+        if self.transition_state:
+            _collect_depends_on(self.transition_state.calculation)
+            for calc in self.transition_state.calculations:
+                _collect_depends_on(calc)
+        dependency_cycle = find_dependency_cycle(dependency_edges)
+        if dependency_cycle is not None:
+            raise ValueError(dependency_cycle_message(dependency_cycle))
 
         for kin in self.kinetics:
             for entry_index, entry in enumerate(kin.source_calculations):

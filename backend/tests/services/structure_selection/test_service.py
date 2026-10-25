@@ -349,18 +349,6 @@ def test_a_required_traversal_past_the_depth_bound_is_refused_rather_than_claime
     assert exc.value.code == "structure_selection_traversal_too_deep"
 
 
-def test_a_dependency_cycle_is_reported_and_never_walked_forever(db_session):
-    world = make_world(db_session)
-    o = world.opt("o", -76.4, declared=declaration())
-    sp = world.sp("sp", -76.41, declared=declaration())
-    f = world.freq("f", declared=declaration())
-    attach_dependency(db_session, parent=o, child=sp, role=CalculationDependencyRole.single_point_on)
-    attach_dependency(db_session, parent=sp, child=o, role=CalculationDependencyRole.optimized_from)
-    d = world.determination([("geometry_optimization", o), ("energy", sp), ("curvature", f)])
-    a = by_ref(run(db_session, world, minimum_request()))[d.public_ref]
-    assert a.applicability is A.unresolved and any(r.code == "dependency_cycle" for r in a.reasons)
-
-
 # ---------------------------------------------------------------------------
 # Snapshot
 # ---------------------------------------------------------------------------

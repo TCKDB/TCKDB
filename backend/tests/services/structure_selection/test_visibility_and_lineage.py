@@ -259,23 +259,8 @@ def test_a_shared_parent_under_two_paths_is_a_diamond_not_a_cycle(db_session):
     a = by_ref(result)[d.public_ref]
     assert a.physically_eligible and "dependency_cycle" not in {r.code for r in a.reasons}
     sp_facts = next(c for c in result.calculations if c.calculation_ref == sp.public_ref)
-    assert sp_facts.lineage_cyclic is False
     assert {e.parent_ref for e in sp_facts.lineage} >= {bottom.public_ref, left.public_ref, right.public_ref, root.public_ref}
 
-
-def test_a_real_cycle_is_still_a_cycle(db_session):
-    world = make_world(db_session)
-    a = world.opt("a", -76.4, declared=declaration())
-    b = world.opt("b", -76.3, declared=declaration())
-    sp = world.sp("s", -76.41, declared=declaration())
-    freq = world.freq("f", declared=declaration())
-    attach_dependency(db_session, parent=a, child=b, role=CalculationDependencyRole.optimized_from)
-    attach_dependency(db_session, parent=b, child=a, role=CalculationDependencyRole.optimized_from)
-    attach_dependency(db_session, parent=a, child=sp, role=CalculationDependencyRole.single_point_on)
-    d = world.determination([("geometry_optimization", a), ("energy", sp), ("curvature", freq)])
-    result = run(db_session, world, minimum_request())
-    assessment = by_ref(result)[d.public_ref]
-    assert assessment.applicability.value == "unresolved" and any(r.code == "dependency_cycle" for r in assessment.reasons)
 
 
 # ---------------------------------------------------------------------------

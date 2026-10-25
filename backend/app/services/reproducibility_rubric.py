@@ -534,30 +534,27 @@ def _source_refs(target: Any) -> list[tuple[Calculation, str]]:
     return [unique[key] for key in sorted(unique)]
 
 
-def _calculation_closure(roots: list[Calculation]) -> tuple[list[Calculation], bool]:
+def _calculation_closure(roots: list[Calculation]) -> list[Calculation]:
+    """Every calculation reachable from ``roots`` through parent dependencies, ordered by id.
+
+    The dependency graph is acyclic (``trg_calculation_dependency_acyclic``); the visited set only stops a
+    shared parent being walked twice.
+    """
     rows: dict[int, Calculation] = {}
-    visiting: set[int] = set()
-    cycle = False
 
     def visit(calculation: Calculation) -> None:
-        nonlocal cycle
-        if calculation.id in visiting:
-            cycle = True
-            return
         if calculation.id in rows:
             return
-        visiting.add(calculation.id)
         rows[calculation.id] = calculation
         for edge in sorted(
             calculation.child_dependencies,
             key=lambda item: (item.dependency_role.value, item.parent_calculation_id),
         ):
             visit(edge.parent_calculation)
-        visiting.remove(calculation.id)
 
     for root in roots:
         visit(root)
-    return [rows[key] for key in sorted(rows)], cycle
+    return [rows[key] for key in sorted(rows)]
 
 
 def _typed_output_snapshot(calculation: Calculation) -> tuple[bool, dict[str, Any]]:
@@ -1125,7 +1122,7 @@ def evaluate_reproducibility(
     target_evidence = _target_snapshot(target, resolved_type)
     source_refs = _source_refs(target)
     roots = sorted({calculation.id: calculation for calculation, _ in source_refs}.values(), key=lambda row: row.id)
-    closure, dependency_cycle = _calculation_closure(roots)
+    closure = _calculation_closure(roots)
     # One query for the whole closure. The rubric does not decide whether
     # an artifact's bytes are sound -- ``artifact_integrity_event`` does
     # (ADR 0008) -- so it fetches that verdict once and defers to it for
@@ -1333,8 +1330,8 @@ def evaluate_reproducibility(
         _check(
             "upstream_dependency_snapshot",
             CheckLevel.rerunnable,
-            bool(direct_calculation is not None and not dependency_cycle),
-            {"cycle_detected": dependency_cycle, "calculation_ids": sorted(calculations)},
+            bool(direct_calculation is not None),
+            {"calculation_ids": sorted(calculations)},
         ),
         # A rerun claim is only as strong as *all* the evidence. Warnings are
         # emitted specifically when artifact bytes could not be verified, so

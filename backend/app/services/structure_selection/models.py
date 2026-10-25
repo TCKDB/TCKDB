@@ -529,8 +529,6 @@ class NormalizedCalculation:
     lineage: tuple[LineageEdge, ...] = ()
     #: True when the traversal stopped at the depth bound with parents unexplored.
     lineage_truncated: bool = False
-    #: True when the walk met a calculation it had already passed through (a dependency cycle).
-    lineage_cyclic: bool = False
     findings: tuple[FindingFacts, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -557,7 +555,6 @@ class NormalizedCalculation:
             "conformer_observation_ref": self.conformer_observation_ref,
             "lineage": [e.to_dict() for e in self.lineage],
             "lineage_truncated": self.lineage_truncated,
-            "lineage_cyclic": self.lineage_cyclic,
             "findings": [f.to_dict() for f in self.findings],
         }
 

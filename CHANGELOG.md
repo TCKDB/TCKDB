@@ -22,6 +22,15 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Calculation dependencies are acyclic, enforced by the database (2026-10-25)
+
+A new Alembic revision (`e2f2b3fb6725`) adds a row trigger on `calculation_dependency` that refuses an INSERT, or an UPDATE of either
+endpoint, whose parent is already reachable from its child. No column changes. The refusal is a coded 409, `calculation_dependency_cycle`,
+naming the two calculations by public reference. Diamonds stay legal; self-edges stay the `not_self` CHECK's. The upgrade stops, listing the
+calculations by public reference, if the table already holds a cycle; it never edits an edge. Because a cycle can no longer be written, the readers' `dependency_cycle` outcome is removed (structure and statmech selection, and
+the `cycle_detected` evidence key of the reproducibility rubric's `upstream_dependency_snapshot`); traversals keep a visited set. No verdict
+can change. The three affected rubric pins were re-pinned without a version bump. A bundle whose `depends_on` forms a ring is refused at validation with a 422 naming the depositor's own keys. The lock the trigger takes is statement-level, so it is acquired before the accepted-science row locks (no deadlock); it is held to the end of the transaction. Async job errors are now a code and public sentence (or a generic one), never a raw exception string, and a deterministic refusal is not retried. The accepted-science immutability message names the record by public reference. `tckdb-client` 0.168.0 gains the rejection code.
+
 ## Curated profile: records are floored, linked evidence is badged (2026-10-25, step 1 of 8)
 
 Owner decision, recorded as [ADR 0023](docs/adr/0023-curated-profile-floor-applies-to-records-linked-evidence-is-badged.md): under

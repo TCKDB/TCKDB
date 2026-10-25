@@ -101,6 +101,7 @@ class RejectionCode(str, Enum):
     BROWSE_PARAMETER_REMOVED = "browse_parameter_removed"
     BUNDLE_TOO_LARGE = "bundle_too_large"
     BUNDLE_TOO_MANY_RECORDS = "bundle_too_many_records"
+    CALCULATION_DEPENDENCY_CYCLE = "calculation_dependency_cycle"
     CALCULATION_GEOMETRY_COMPOSITION_MISMATCH = "calculation_geometry_composition_mismatch"
     CALCULATION_GEOMETRY_CONFORMER_MISMATCH = "calculation_geometry_conformer_mismatch"
     CALCULATION_GEOMETRY_ISOTOPE_MISMATCH = "calculation_geometry_isotope_mismatch"
@@ -714,6 +715,7 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
     {
         RejectionCode.ATOM_MAP_ELEMENT_NOT_CONSERVED,
         RejectionCode.ATOM_MAP_NOT_A_BIJECTION,
+        RejectionCode.CALCULATION_DEPENDENCY_CYCLE,
         RejectionCode.CURATION_POLICY_VERSION_CONFLICT,
         RejectionCode.DOI_ALREADY_RECORDED,
         RejectionCode.EMAIL_TAKEN,
@@ -771,6 +773,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.BROWSE_PARAMETER_REMOVED: frozenset({422}),
     RejectionCode.BUNDLE_TOO_LARGE: frozenset({413}),
     RejectionCode.BUNDLE_TOO_MANY_RECORDS: frozenset({422}),
+    RejectionCode.CALCULATION_DEPENDENCY_CYCLE: frozenset({409}),
     RejectionCode.CALCULATION_GEOMETRY_COMPOSITION_MISMATCH: frozenset({422}),
     RejectionCode.CALCULATION_GEOMETRY_CONFORMER_MISMATCH: frozenset({422}),
     RejectionCode.CALCULATION_GEOMETRY_ISOTOPE_MISMATCH: frozenset({422}),

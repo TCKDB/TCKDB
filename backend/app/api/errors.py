@@ -34,6 +34,26 @@ from app.workflows.rehearsal import RehearsalContended
 
 logger = logging.getLogger(__name__)
 
+#: Constraint name the ``calculation_dependency`` acyclicity trigger reports
+#: (revision ``e2f2b3fb6725``). A trigger is not in the scientific check
+#: register's constraint table, so it is keyed here, as the idempotency
+#: constraint is.
+CALCULATION_DEPENDENCY_CYCLE_CONSTRAINT = "calculation_dependency_acyclic"
+
+
+def _cycle_refs(orig: Any) -> dict[str, str]:
+    """Public references the trigger put in ``DETAIL`` (``parent=...;child=...``).
+
+    Only ``public_ref`` values travel; the trigger never selects a row id.
+    """
+    detail = getattr(getattr(orig, "diag", None), "message_detail", None) or ""
+    pairs = dict(part.split("=", 1) for part in detail.split(";") if "=" in part)
+    return {
+        key: pairs[wire]
+        for key, wire in (("parent_calculation", "parent"), ("child_calculation", "child"))
+        if pairs.get(wire)
+    }
+
 
 class DomainError(Exception):
     """Business logic violation (valid payload, invalid operation)."""
@@ -361,20 +381,19 @@ def _classify_integrity_error(exc: IntegrityError) -> tuple[str, str]:
     return _FALLBACK
 
 
-def _integrity_error_handler(
-    request: Request, exc: IntegrityError
-) -> JSONResponse:
-    code, message = _classify_integrity_error(exc)
+def public_integrity_error(exc: IntegrityError) -> tuple[str, str, dict[str, Any], bool]:
+    """``(code, public message, context, specific)`` for an IntegrityError.
 
-    diag: dict[str, Any] = {}
+    ``specific`` is True when a named rule fired (a registered constraint or the
+    dependency-cycle trigger) rather than a SQLSTATE bucket: such a refusal is
+    deterministic, so retrying the same request cannot succeed. No row id is ever
+    returned; the raw driver text stays in the log.
+    """
+    code, message = _classify_integrity_error(exc)
     orig = getattr(exc, "orig", None)
-    sqlstate = getattr(orig, "sqlstate", None)
-    if sqlstate is not None:
-        diag["sqlstate"] = sqlstate
     constraint = getattr(getattr(orig, "diag", None), "constraint_name", None)
-    if constraint:
-        diag["constraint"] = constraint
     context: dict[str, Any] = {}
+    specific = False
     # Named before classified. A constraint that encodes chemistry is a
     # stronger guarantee than any Python check -- no write path can get
     # around it -- and until the register began naming these constraints
@@ -413,11 +432,42 @@ def _integrity_error_handler(
     rejection = _constraint_rejections().get(constraint) if constraint else None
     if rejection is not None:
         code, message = rejection
+        specific = True
+    elif constraint == CALCULATION_DEPENDENCY_CYCLE_CONSTRAINT:
+        code = "calculation_dependency_cycle"
+        specific = True
+        context = _cycle_refs(orig)
+        message = (
+            "This dependency would make a calculation depend on itself through a chain of "
+            "other calculations. The calculation dependency graph must stay acyclic; "
+            "drop or reverse the dependency that points back"
+            + (
+                f" (parent {context['parent_calculation']}, child {context['child_calculation']})."
+                if len(context) == 2
+                else "."
+            )
+        )
     elif constraint == IDEMPOTENCY_UNIQUE_CONSTRAINT:
         code = "idempotency_conflict"
         message = (
             "Idempotency key was used concurrently for a different request."
         )
+    return code, message, context, specific
+
+
+def _integrity_error_handler(
+    request: Request, exc: IntegrityError
+) -> JSONResponse:
+    code, message, context, _specific = public_integrity_error(exc)
+
+    diag: dict[str, Any] = {}
+    orig = getattr(exc, "orig", None)
+    sqlstate = getattr(orig, "sqlstate", None)
+    if sqlstate is not None:
+        diag["sqlstate"] = sqlstate
+    constraint = getattr(getattr(orig, "diag", None), "constraint_name", None)
+    if constraint:
+        diag["constraint"] = constraint
     logger.warning(
         "IntegrityError on %s %s: code=%s diag=%s orig=%r",
         request.method,
