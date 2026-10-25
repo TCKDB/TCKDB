@@ -14,7 +14,7 @@ Three tables, children of ``statmech``:
 ``statmech_model_member``
     One member of an explicit ensemble: an existing statmech record of the same species entry (its own statistical
     interpretation), optionally assigned to a conformer basin, with an attributed counting multiplicity and a relative
-    energy in kJ/mol. A record can be a member once per declaration, so a repeated observation is evidence and never
+    energy in kJ/mol that states its convention (electronic only, zero-point corrected, ...). A record can be a member once per declaration, so a repeated observation is evidence and never
     another state. ``counting_multiplicity`` NULL means "not stated", never one.
 
 ``statmech_model_source``
@@ -46,7 +46,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
-from app.db.models.common import StatmechModelScopeKind, StatmechModelSourceRole
+from app.db.models.common import EnergyCorrectionConvention, StatmechModelScopeKind, StatmechModelSourceRole
 
 if TYPE_CHECKING:
     from app.db.models.statmech import Statmech
@@ -179,6 +179,11 @@ class StatmechModelMember(Base):
     #: The depositor's attributed multiplicity. NULL: not stated (never one).
     counting_multiplicity: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
     relative_energy_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
+    #: What is already folded into ``relative_energy_kj_mol`` (the vocabulary network state energies use). Present if and
+    #: only if the energy is; never assumed. ``other`` is not allowed here: a member carries no note to explain it.
+    relative_energy_convention: Mapped[Optional[EnergyCorrectionConvention]] = mapped_column(
+        SAEnum(EnergyCorrectionConvention, name="energy_correction_convention", create_type=False), nullable=True
+    )
     region_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     declaration: Mapped["StatmechModelDeclaration"] = relationship(back_populates="members")
@@ -195,6 +200,14 @@ class StatmechModelMember(Base):
             "relative_energy_kj_mol IS NULL OR "
             "(relative_energy_kj_mol <> 'NaN' AND abs(relative_energy_kj_mol) < 'Infinity')",
             name="relative_energy_finite",
+        ),
+        CheckConstraint(
+            "(relative_energy_kj_mol IS NULL) = (relative_energy_convention IS NULL)",
+            name="relative_energy_convention_with_energy",
+        ),
+        CheckConstraint(
+            "relative_energy_convention IS DISTINCT FROM 'other'",
+            name="relative_energy_convention_not_other",
         ),
         # A key names one member and a statmech record is a member once. Two members may sit in one basin: nothing here
         # asserts one observation per basin as a chemical uniqueness rule.

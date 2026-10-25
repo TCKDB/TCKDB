@@ -110,6 +110,14 @@ trans and gauche, syn and anti acetic acid, a hydrogen-bonded and a free hydroxy
 - **Not changed:** the both-terminal ("ethane") rule, methyl folding, the rigid-molecule RMSD fallback, trust rubrics (the rubric pin check is
   unchanged).
 
+## Ensemble members state the convention of their relative energy (2026-10-25)
+
+- `statmech_model_member` gains `relative_energy_convention` (migration `f3a8c5d1e947`, existing `energy_correction_convention` enum).
+  It is present if and only if `relative_energy_kj_mol` is, and `other` is not allowed on a member (no note column; the network
+  energy tables pair `other` with a note, a member has none). An energy without a convention is refused at upload.
+- No backfill, no default: the upgrade refuses to run if a stored member already carries an energy without a convention.
+- `tckdb-schemas` 0.137.0, `tckdb-client` 0.170.0 (dependency floor only). No new refusal code.
+
 ## Curated profile: records are floored, linked evidence is badged (2026-10-25, step 1 of 8)
 
 Owner decision, recorded as [ADR 0023](docs/adr/0023-curated-profile-floor-applies-to-records-linked-evidence-is-badged.md): under

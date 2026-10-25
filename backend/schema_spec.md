@@ -2358,7 +2358,10 @@ A statmech row is an interpretation container. A declaration says which model th
   repeated record is never another state. Several members may sit in one basin: one observation per basin is not a chemical
   uniqueness rule.
 - `counting_multiplicity` is the depositor's attributed multiplicity; NULL is "not stated", never one.
-  `relative_energy_kj_mol` is finite. `region_key` names the configurational region it covers.
+  `relative_energy_kj_mol` is finite. `relative_energy_convention` (`energy_correction_convention`, the vocabulary network
+  state energies use) is present if and only if the energy is (`relative_energy_convention_with_energy`); `other` is not
+  allowed (`relative_energy_convention_not_other`) because a member has no note column. `region_key` names the
+  configurational region it covers.
 
 ### `statmech_model_source`
 

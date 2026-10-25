@@ -22,6 +22,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from app.db.base import Base
 from app.db.models.common import (
     CalculationType,
+    EnergyCorrectionConvention,
     StatmechModelScopeKind,
     StatmechModelSourceRole,
     StructureDeterminationTargetKind,
@@ -306,9 +307,87 @@ def test_member_numbers_are_bounded_and_finite(db_session, ensemble):
     entry, _, declaration = ensemble
     s = make_statmech(db_session, species_entry=entry)
     _refused(db_session, lambda: _member(db_session, declaration, s, counting_multiplicity=0), error=IntegrityError)
-    _refused(db_session, lambda: _member(db_session, declaration, s, relative_energy_kj_mol=float("nan")), error=IntegrityError)
-    _refused(db_session, lambda: _member(db_session, declaration, s, relative_energy_kj_mol=float("inf")), error=IntegrityError)
-    assert _member(db_session, declaration, s, relative_energy_kj_mol=-3.5).relative_energy_kj_mol == -3.5
+    _refused(db_session, lambda: _member(db_session, declaration, s, **_energy(float("nan"))), error=IntegrityError)
+    _refused(db_session, lambda: _member(db_session, declaration, s, **_energy(float("inf"))), error=IntegrityError)
+    assert _member(db_session, declaration, s, **_energy(-3.5)).relative_energy_kj_mol == -3.5
+
+
+def _energy(value, convention=EnergyCorrectionConvention.electronic_plus_zpe) -> dict:
+    return {"relative_energy_kj_mol": value, "relative_energy_convention": convention}
+
+
+def test_a_member_energy_states_its_convention_and_a_convention_belongs_to_an_energy(db_session, ensemble):
+    entry, _, declaration = ensemble
+    s = [make_statmech(db_session, species_entry=entry) for _ in range(6)]
+    # an energy without a convention, and a convention without an energy
+    _refused(db_session, lambda: _member(db_session, declaration, s[0], "a", relative_energy_kj_mol=1.0), "relative_energy_convention_with_energy", IntegrityError)
+    _refused(
+        db_session,
+        lambda: _member(db_session, declaration, s[1], "b", relative_energy_convention=EnergyCorrectionConvention.electronic_only),
+        "relative_energy_convention_with_energy",
+        IntegrityError,
+    )
+    # `other` would need a note, and a member has none
+    _refused(db_session, lambda: _member(db_session, declaration, s[2], "c", **_energy(1.0, EnergyCorrectionConvention.other)), "relative_energy_convention_not_other", IntegrityError)
+    # neither is fine (not stated), and every other convention is accepted and read back
+    assert _member(db_session, declaration, s[3], "d").relative_energy_convention is None
+    stated = [c for c in EnergyCorrectionConvention if c is not EnergyCorrectionConvention.other]
+    rows = [
+        _member(db_session, declaration, make_statmech(db_session, species_entry=entry), f"k{i}", **_energy(float(i), c))
+        for i, c in enumerate(stated)
+    ]
+    db_session.expire_all()
+    assert [r.relative_energy_convention for r in rows] == stated
+
+
+_CONVENTION_MIGRATION = Path(__file__).resolve().parents[2] / "alembic/versions/f3a8c5d1e947_state_member_energy_convention.py"
+
+
+@pytest.fixture
+def convention_migration(db_session, monkeypatch):
+    spec = spec_from_file_location("member_energy_convention_migration", _CONVENTION_MIGRATION)
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(
+        module,
+        "op",
+        Operations(MigrationContext.configure(db_session.connection(), opts={"target_metadata": Base.metadata})),
+    )
+    return module
+
+
+def _has_convention_column(db_session) -> bool:
+    return bool(
+        db_session.scalar(
+            text(
+                "SELECT count(*) FROM information_schema.columns "
+                "WHERE table_name = 'statmech_model_member' AND column_name = 'relative_energy_convention'"
+            )
+        )
+    )
+
+
+def test_the_convention_migration_round_trips_and_refuses_to_guess_a_stored_energys_convention(
+    db_session, convention_migration, ensemble
+):
+    entry, _, declaration = ensemble
+    assert _has_convention_column(db_session)
+    convention_migration.downgrade()
+    assert not _has_convention_column(db_session)
+    convention_migration.upgrade()
+    assert _has_convention_column(db_session)
+
+    # A member stored with an energy before the revision has no convention to be given: nothing is backfilled.
+    convention_migration.downgrade()
+    db_session.execute(
+        text(
+            "INSERT INTO statmech_model_member (declaration_id, member_key, member_statmech_id, relative_energy_kj_mol) "
+            "VALUES (:d, 'old', :s, 1.0)"
+        ),
+        {"d": declaration.id, "s": make_statmech(db_session, species_entry=entry).id},
+    )
+    with pytest.raises(RuntimeError, match="no stated convention"):
+        convention_migration.upgrade()
 
 
 # --- sources -------------------------------------------------------------------------------------------------------
@@ -374,7 +453,7 @@ def full(db_session):
     host = make_statmech(db_session, species_entry=entry)
     declaration = _declaration(db_session, host, StatmechModelScopeKind.explicit_equilibrium_ensemble)
     sibling = make_statmech(db_session, species_entry=entry)
-    member = _member(db_session, declaration, sibling)
+    member = _member(db_session, declaration, sibling, **_energy(1.0))
     source = _source(db_session, declaration, literature_id=make_literature(db_session).id)
     return host, sibling, declaration, member, source
 
@@ -386,6 +465,7 @@ def test_approving_the_declaring_record_freezes_its_declaration_members_and_sour
     _refused(db_session, lambda: setattr(declaration, "recipe", {"changed": True}), "is immutable")
     _refused(db_session, lambda: setattr(member, "counting_multiplicity", 2), "is immutable")
     _refused(db_session, lambda: setattr(source, "source_key", "renamed"), "is immutable")
+    _refused(db_session, lambda: setattr(member, "relative_energy_convention", EnergyCorrectionConvention.electronic_only), "is immutable")
     _refused(db_session, lambda: db_session.delete(member), "is immutable")
     _refused(db_session, lambda: db_session.delete(source), "is immutable")
     _refused(db_session, lambda: db_session.delete(declaration), "is immutable")

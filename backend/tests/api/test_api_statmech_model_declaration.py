@@ -189,6 +189,90 @@ def test_an_ensemble_cites_existing_records_of_the_same_species_and_a_repeat_is_
     assert stray.status_code == 422
 
 
+def test_a_member_energy_is_stored_with_its_convention_and_refused_without_one(client, db_session):
+    ref = _ref(db_session, _post(client, _water()).json()["id"])
+
+    def ensemble(**member) -> dict:
+        return _water(
+            model_declaration=_declaration(
+                scope_kind="explicit_equilibrium_ensemble",
+                members=[{"member_key": "m", "statmech_ref": ref, **member}],
+            )
+        )
+
+    ok = _post(client, ensemble(relative_energy_kj_mol=2.5, relative_energy_convention="electronic_only"))
+    assert ok.status_code == 201, ok.text[:600]
+    (member,) = db_session.scalars(select(StatmechModelMember)).all()
+    assert member.relative_energy_kj_mol == 2.5 and member.relative_energy_convention.value == "electronic_only"
+    (declaration,) = _declarations(db_session)
+
+    refusals = {
+        "energy without a convention": {"relative_energy_kj_mol": 2.5},
+        "convention without an energy": {"relative_energy_convention": "electronic_plus_zpe"},
+        "other": {"relative_energy_kj_mol": 2.5, "relative_energy_convention": "other"},
+        "unknown convention": {"relative_energy_kj_mol": 2.5, "relative_energy_convention": "zpe-ish"},
+    }
+    for label, member_fields in refusals.items():
+        refused = _post(client, ensemble(**member_fields))
+        assert refused.status_code == 422 and refused.json()["code"] == "request_validation_error", label
+        assert "relative_energy_convention" in refused.text, label
+    assert [d.id for d in _declarations(db_session)] == [declaration.id]  # nothing was written by a refusal
+
+
+def test_a_member_without_an_energy_hashes_without_the_convention_key(client, db_session, monkeypatch):
+    """A declaration's checksum is unchanged for a member that states no energy: the key is present only when stated."""
+    from app.services import statmech_declaration_resolution as resolution
+
+    seen: list[list[dict]] = []
+    real = resolution.declaration_content_hash
+
+    def spy(**kw):
+        seen.append(kw["members"])
+        return real(**kw)
+
+    monkeypatch.setattr(resolution, "declaration_content_hash", spy)
+    ref = _ref(db_session, _post(client, _water()).json()["id"])
+
+    def ensemble(**member):
+        return _water(
+            model_declaration=_declaration(
+                scope_kind="explicit_equilibrium_ensemble", members=[{"member_key": "m", "statmech_ref": ref, **member}]
+            )
+        )
+
+    assert _post(client, ensemble()).status_code == 201
+    (row,) = _declarations(db_session)
+    db_session.refresh(row)
+    assert resolution.recompute_content_hash(db_session, row) == row.content_hash
+    assert len(seen) == 2 and all("relative_energy_convention" not in m for members in seen for m in members)
+    assert _post(client, ensemble(relative_energy_kj_mol=1.0, relative_energy_convention="electronic_only")).status_code == 201
+    assert seen[-1][0]["relative_energy_convention"] == "electronic_only"
+
+
+def test_an_ensembles_energies_share_one_convention_that_agrees_with_the_recipe(client, db_session):
+    a = _ref(db_session, _post(client, _water()).json()["id"])
+    b = _ref(db_session, _post(client, _water()).json()["id"])
+
+    def ensemble(first, second, energy_zero=None):
+        recipe = {"energy_zero": energy_zero} if energy_zero else {}
+        members = [
+            {"member_key": "a", "statmech_ref": a, **first},
+            {"member_key": "b", "statmech_ref": b, **second},
+        ]
+        return _water(model_declaration=_declaration(scope_kind="explicit_equilibrium_ensemble", members=members, recipe=recipe))
+
+    zpe = {"relative_energy_kj_mol": 1.0, "relative_energy_convention": "electronic_plus_zpe"}
+    elec = {"relative_energy_kj_mol": 2.0, "relative_energy_convention": "electronic_only"}
+    mixed = _post(client, ensemble(zpe, elec))
+    contradicting = _post(client, ensemble(zpe, {}, energy_zero="electronic"))
+    corrected = _post(client, ensemble(zpe, {}, energy_zero="e0"))
+    for refused in (mixed, contradicting):
+        assert refused.status_code == 422 and refused.json()["code"] == "request_validation_error"
+    assert "one relative_energy_convention" in mixed.text and "contradicts" in contradicting.text
+    assert corrected.status_code == 201, corrected.text[:400]  # agreeing; the member with no energy is unaffected
+    assert _post(client, ensemble(elec, {}, energy_zero="electronic")).status_code == 201
+
+
 def test_a_conformer_deposit_declares_its_own_basin_without_naming_it(client, db_session):
     from tests.api.test_api_provenance_warnings import _statmech_payload as _conformer_statmech  # noqa: F401
 
@@ -296,7 +380,7 @@ def test_the_stored_hash_is_a_recomputable_checksum_of_what_was_stored(client, d
     member_ref = _ref(db_session, _post(client, _water()).json()["id"])
     declared = _declaration(
         scope_kind="explicit_equilibrium_ensemble",
-        members=[{"member_key": "m", "statmech_ref": member_ref, "counting_multiplicity": 2, "relative_energy_kj_mol": 1.0}],
+        members=[{"member_key": "m", "statmech_ref": member_ref, "counting_multiplicity": 2, "relative_energy_kj_mol": 1.0, "relative_energy_convention": "electronic_plus_zpe"}],
         recipe={"energy_zero": "e0", "scale_application": "applied", "scale_contributions": ["fundamental"]},
         sources=[
             {"source_key": "imp", "role": "parameters", "literature": {"kind": "article", "title": "P", "year": 2021}},

@@ -62,12 +62,18 @@ these records, and no others, are the members; a filtered conformer list is not 
     "scope_kind": "explicit_equilibrium_ensemble",
     "literature": {"kind": "article", "title": "Conformer ensemble of the species", "year": 2026},
     "members": [
-      {"member_key": "anti", "statmech_ref": "sm_abcdefghijklmnopqrstuvwxyz", "relative_energy_kj_mol": 0.0},
-      {"member_key": "gauche", "statmech_ref": "sm_bcdefghijklmnopqrstuvwxyza", "counting_multiplicity": 2, "relative_energy_kj_mol": 2.9}
+      {"member_key": "anti", "statmech_ref": "sm_abcdefghijklmnopqrstuvwxyz", "relative_energy_kj_mol": 0.0, "relative_energy_convention": "electronic_plus_zpe"},
+      {"member_key": "gauche", "statmech_ref": "sm_bcdefghijklmnopqrstuvwxyza", "counting_multiplicity": 2, "relative_energy_kj_mol": 2.9, "relative_energy_convention": "electronic_plus_zpe"}
     ]
   }
 }
 ```
+
+A member's `relative_energy_kj_mol` always states what is already folded into it, as `relative_energy_convention`: `electronic_only`,
+`electronic_plus_zpe`, `atom_and_bond_corrected` or `thermal_enthalpy_298k` (the vocabulary network state energies use). The two go
+together: an energy without a convention is refused, and so is a convention without an energy. All members that state an energy share one convention, and when the recipe states `energy_zero` the convention agrees with it (`electronic` with `electronic_only`, `e0` with `electronic_plus_zpe`); anything else is refused. Nothing is assumed, so two ensembles
+built from the same members can be told apart by this field. `other` is not accepted for a member (it would need an explanatory note,
+and a member has none): leave the energy out, or ask for a new enum value.
 
 ## Sources
 

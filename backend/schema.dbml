@@ -3774,6 +3774,7 @@ Table statmech_model_member {
   conformer_group_id bigint [ref: > conformer_group.id]
   counting_multiplicity int
   relative_energy_kj_mol double
+  relative_energy_convention EnergyCorrectionConvention
   region_key text
 
   indexes {
@@ -3786,6 +3787,8 @@ Table statmech_model_member {
   checks {
     `counting_multiplicity IS NULL OR counting_multiplicity >= 1` [name: 'ck_statmech_model_member_counting_multiplicity_ge_1']
     `length(btrim(member_key)) > 0 AND length(member_key) <= 64` [name: 'ck_statmech_model_member_member_key_bounded']
+    `relative_energy_convention IS DISTINCT FROM 'other'` [name: 'ck_statmech_model_member_relative_energy_convention_not_other']
+    `(relative_energy_kj_mol IS NULL) = (relative_energy_convention IS NULL)` [name: 'ck_statmech_model_member_relative_energy_convention_with_energy']
     `relative_energy_kj_mol IS NULL OR (relative_energy_kj_mol <> 'NaN' AND abs(relative_energy_kj_mol) < 'Infinity')` [name: 'ck_statmech_model_member_relative_energy_finite']
   }
 

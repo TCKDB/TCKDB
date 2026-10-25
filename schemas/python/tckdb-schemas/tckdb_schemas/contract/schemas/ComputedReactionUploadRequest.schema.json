@@ -5702,7 +5702,7 @@
     },
     "ModelMember": {
       "additionalProperties": false,
-      "description": "One member of an explicit equilibrium ensemble: an existing statmech record, in a basin.\n\n:param statmech_ref: The member's own statistical interpretation (an existing record of the same species entry).\n:param conformer_group_ref: The basin the member is assigned to.\n:param counting_multiplicity: The depositor's attributed multiplicity; omitted means not stated, never one.\n:param relative_energy_kj_mol: The member's energy relative to the ensemble's reference, in kJ/mol.\n:param region_key: The configurational region the member covers, to diagnose overlap with a rotor's integral.",
+      "description": "One member of an explicit equilibrium ensemble: an existing statmech record, in a basin.\n\n:param statmech_ref: The member's own statistical interpretation (an existing record of the same species entry).\n:param conformer_group_ref: The basin the member is assigned to.\n:param counting_multiplicity: The depositor's attributed multiplicity; omitted means not stated, never one.\n:param relative_energy_kj_mol: The member's energy relative to the ensemble's reference, in kJ/mol.\n:param relative_energy_convention: What is already folded into that energy: ``electronic_only``,\n    ``electronic_plus_zpe``, ``atom_and_bond_corrected`` or ``thermal_enthalpy_298k``. Required with an energy and\n    refused without one; never assumed. All members of one declaration share one convention, and it agrees with the\n    recipe's ``energy_zero`` when that is stated. The shared enum lists ``other``, but it is always refused on a member,\n    because a member carries no note to explain it.\n:param region_key: The configurational region the member covers, to diagnose overlap with a rotor's integral.",
       "properties": {
         "conformer_group_ref": {
           "anyOf": [
@@ -5752,6 +5752,17 @@
           ],
           "default": null,
           "title": "Region Key"
+        },
+        "relative_energy_convention": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnergyCorrectionConvention"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "relative_energy_kj_mol": {
           "anyOf": [

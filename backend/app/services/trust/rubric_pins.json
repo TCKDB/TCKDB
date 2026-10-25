@@ -16,7 +16,7 @@
       "1": "28e638f09e687fce82fcc274d372e97cdcc938dad8acbafa2b598c6d803a0c91"
     },
     "computed_transition_state": {
-      "2": "e03bd9a77a637b31db483a67e9dd16209ee27c8dcb87b65fbde92f16fb395cbf"
+      "2": "fa441e1b22e0f5428a9f0924c3ca1a62f5460b99bde6196de2ffc8bf06f870a1"
     },
     "computed_transport": {
       "1": "1b5a1f833dc867aff540eddc5e123a5d6fa3cb0d320e90b7a931e94f7a158676"
@@ -25,10 +25,10 @@
       "1": "6e5103f9a711d2e75c5f7ed11e568a30f806515d78876cc3cc8227b994b42aa5"
     },
     "tckdb_reproducibility": {
-      "1": "ebb46f9f2456c86d6b1f60c472a27c0ba77a9d21e4fc7bb70970f05cddf940a7"
+      "1": "2336d7c82155eadec0f24c32ee99f266179bfa1f33ef8df531cec992e9f9607c"
     },
     "tckdb_reproducibility_ts_statmech": {
-      "1": "4041f6fcfc13d25e1e2d46eb89e8d7cb1598068023a186dce5e55b71f34f0682"
+      "1": "c066b8a4362f17c55d1422f293dac76f25a8c6faf7b72e4794250b926afa7cb1"
     }
   },
   "unbumped_overrides": [
@@ -74,9 +74,14 @@
       "reason": "evidence snapshot carries bath gas when stated; no verdict reads it"
     },
     {
-      "name": "computed_transition_state",
-      "version": 2,
-      "reason": "curated linked-evidence visibility (ADR 0023): stored and exploratory verdicts are unchanged; curated read-time verdicts may change, because a curated read now supplies not-reviewed and under-review evidence to the grading, which it used to leave out"
+      "name": "tckdb_reproducibility",
+      "version": 1,
+      "reason": "snapshot_defaults lists the new statmech_model_member.relative_energy_convention (NULL). No check or grade changes: a stored member cannot hold an energy without a convention (the upgrade refuses), and a member with no energy keeps its digest, so no stored assessment reads stale and no verdict changes."
+    },
+    {
+      "name": "tckdb_reproducibility_ts_statmech",
+      "version": 1,
+      "reason": "snapshot_defaults lists the new statmech_model_member.relative_energy_convention (NULL). No check or grade changes: a stored member cannot hold an energy without a convention (the upgrade refuses), and a member with no energy keeps its digest, so no stored assessment reads stale and no verdict changes."
     }
   ]
 }
