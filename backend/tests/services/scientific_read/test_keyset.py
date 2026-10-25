@@ -176,6 +176,52 @@ def test_a_cursor_is_opaque_without_the_key():
     assert b"max_id" not in raw and b"last_values" not in raw
 
 
+def test_flipping_any_single_byte_of_a_token_is_refused():
+    """Kills: a seal that authenticates only part of the token (nonce, body or tag)."""
+    import base64
+
+    from app.services.scientific_read.keyset import Cursor, encode_cursor
+
+    token = encode_cursor(Cursor(watermark=_watermark(), last_values=[1, "x"], query_signature="sig-a"))
+    raw = bytearray(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))
+    assert len(raw) > 60
+    for index in range(len(raw)):
+        forged = bytearray(raw)
+        forged[index] ^= 0x01
+        bad = base64.urlsafe_b64encode(bytes(forged)).decode().rstrip("=")
+        with pytest.raises(InvalidCursorError, match="invalid_cursor"):
+            decode_cursor(bad, expected_signature="sig-a")
+    # Control: the untouched token still opens.
+    assert decode_cursor(token, expected_signature="sig-a").last_values == [1, "x"]
+
+
+def test_a_token_is_sealed_with_aes_gcm_and_the_version_as_associated_data():
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    from app.services.scientific_read import keyset
+
+    blob = keyset.seal(b"hello")
+    assert blob[: keyset._NONCE_BYTES] != keyset.seal(b"hello")[: keyset._NONCE_BYTES]  # a fresh nonce each time
+    assert len(blob) == keyset._NONCE_BYTES + len(b"hello") + 16
+    assert keyset.unseal(blob) == b"hello"
+    # The same bytes sealed as another version do not open as this one.
+    nonce, body = blob[: keyset._NONCE_BYTES], blob[keyset._NONCE_BYTES :]
+    other = AESGCM(_key_of(keyset)).encrypt(nonce, b"hello", b"tckdb-cursor-v999")
+    assert other != body
+    with pytest.raises(ValueError):
+        keyset.unseal(nonce + other)
+
+
+def _key_of(keyset) -> bytes:
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+    from app.api.config import settings
+
+    secret = settings.paging_cursor_key or keyset._LOCAL_DEVELOPMENT_KEY
+    return HKDF(algorithm=hashes.SHA256(), length=32, salt=None, info=keyset._KEY_INFO).derive(secret.encode())
+
+
 def test_the_same_cursor_is_sealed_differently_each_time():
     from app.services.scientific_read.keyset import Cursor, encode_cursor
 

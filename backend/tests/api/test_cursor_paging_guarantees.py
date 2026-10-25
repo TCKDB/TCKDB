@@ -79,6 +79,18 @@ def test_a_cursor_decoded_without_the_key_reveals_no_integer(case, client, db_se
     assert mark["max_id"] > 0 or any(mark["groups"].values()), "the check cannot see an id in a cursor it opens"
 
 
+def test_flipping_any_single_byte_of_a_cursor_is_a_422(client, db_session):
+    """Over HTTP: every one-byte edit of a real token is refused (nonce, ciphertext and tag all authenticate)."""
+    seeded = seed("thermo-entry", db_session, client)
+    token = _first_cursor(client, seeded)
+    raw = bytearray(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))
+    for index in range(len(raw)):
+        forged = bytearray(raw)
+        forged[index] ^= 0x80
+        bad = base64.urlsafe_b64encode(bytes(forged)).decode().rstrip("=")
+        assert code_of(client.get(with_params(seeded.url, cursor=bad))) == "invalid_cursor", index
+
+
 @pytest.mark.parametrize("case", PAGED_CASES)
 def test_rotating_the_key_makes_cursors_in_flight_a_422(case, client, db_session, monkeypatch):
     seeded = seed(case, db_session, client)

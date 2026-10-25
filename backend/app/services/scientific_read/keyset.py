@@ -67,7 +67,6 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
-import hmac
 import json
 import math
 import os
@@ -77,6 +76,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Generic, Literal, TypeVar
 
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from pydantic import BaseModel
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import DBAPIError
@@ -225,53 +228,40 @@ def _decode_value(value: Any) -> Any:
 #: What a local developer machine seals cursors with when ``PAGING_CURSOR_KEY`` is not set. It is public on purpose: a
 #: ``local`` deployment has no secrets worth protecting, and a hosted one refuses to start without its own key.
 _LOCAL_DEVELOPMENT_KEY = "tckdb-local-development-cursor-key-not-a-secret"
-_NONCE_BYTES = 16
-_TAG_BYTES = 16
+_NONCE_BYTES = 12
+_KEY_INFO = b"tckdb.paging-cursor.aes-256-gcm"
 
 
-def _cursor_keys() -> tuple[bytes, bytes]:
-    """The encryption key and the authentication key, both derived from the server's cursor key."""
+def _cursor_aead() -> AESGCM:
+    """AES-256-GCM keyed from ``PAGING_CURSOR_KEY`` with HKDF-SHA256 (so any 32+ character secret works)."""
     secret = settings.paging_cursor_key
     if not secret:
         if settings.deployment_mode != "local":
             raise RuntimeError("PAGING_CURSOR_KEY is not set; a hosted deployment must not issue cursors without it.")
         secret = _LOCAL_DEVELOPMENT_KEY
-    root = secret.encode("utf-8")
-    return (
-        hmac.new(root, b"tckdb.cursor.encrypt", hashlib.sha256).digest(),
-        hmac.new(root, b"tckdb.cursor.authenticate", hashlib.sha256).digest(),
-    )
+    key = HKDF(algorithm=hashes.SHA256(), length=32, salt=None, info=_KEY_INFO).derive(secret.encode("utf-8"))
+    return AESGCM(key)
 
 
-def _keystream(key: bytes, nonce: bytes, length: int) -> bytes:
-    blocks = bytearray()
-    counter = 0
-    while len(blocks) < length:
-        blocks += hmac.new(key, nonce + counter.to_bytes(4, "big"), hashlib.sha256).digest()
-        counter += 1
-    return bytes(blocks[:length])
+def _associated_data() -> bytes:
+    return b"tckdb-cursor-v%d" % CURSOR_VERSION
 
 
 def seal(plain: bytes) -> bytes:
-    """Encrypt and authenticate ``plain`` (encrypt-then-MAC: an HMAC-SHA256 counter stream under a random nonce, then a
-    truncated HMAC-SHA256 tag over nonce and ciphertext). The result reveals neither the content nor its edits."""
-    encryption_key, authentication_key = _cursor_keys()
+    """Encrypt and authenticate ``plain``: a random 12-byte nonce, then AES-GCM ciphertext and tag, with the cursor
+    version as associated data (a token cannot be replayed as another version)."""
     nonce = os.urandom(_NONCE_BYTES)
-    body = bytes(a ^ b for a, b in zip(plain, _keystream(encryption_key, nonce, len(plain)), strict=True))
-    tag = hmac.new(authentication_key, nonce + body, hashlib.sha256).digest()[:_TAG_BYTES]
-    return nonce + body + tag
+    return nonce + _cursor_aead().encrypt(nonce, plain, _associated_data())
 
 
 def unseal(blob: bytes) -> bytes:
     """Verify and decrypt a :func:`seal` result; ``ValueError`` when it was not sealed under this server's key."""
-    encryption_key, authentication_key = _cursor_keys()
-    if len(blob) < _NONCE_BYTES + _TAG_BYTES:
+    if len(blob) < _NONCE_BYTES + 16:
         raise ValueError("short")
-    nonce, body, tag = blob[:_NONCE_BYTES], blob[_NONCE_BYTES:-_TAG_BYTES], blob[-_TAG_BYTES:]
-    expected = hmac.new(authentication_key, nonce + body, hashlib.sha256).digest()[:_TAG_BYTES]
-    if not hmac.compare_digest(tag, expected):
-        raise ValueError("tag")
-    return bytes(a ^ b for a, b in zip(body, _keystream(encryption_key, nonce, len(body)), strict=True))
+    try:
+        return _cursor_aead().decrypt(blob[:_NONCE_BYTES], blob[_NONCE_BYTES:], _associated_data())
+    except InvalidTag as exc:
+        raise ValueError("tag") from exc
 
 
 def encode_cursor(cursor: Cursor) -> str:
@@ -318,7 +308,6 @@ def decode_cursor(token: str, *, expected_signature: str) -> Cursor:
 
 def query_signature(endpoint: str, filters: dict[str, Any]) -> str:
     """A stable fingerprint of the endpoint plus its filter set."""
-    import hashlib
 
     canonical = json.dumps(
         {"endpoint": endpoint, "filters": filters},

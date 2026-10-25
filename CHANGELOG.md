@@ -40,8 +40,9 @@ A cursor holds the sort key of the last record delivered and a snapshot bound, s
   exact version equality). Every value in it is checked against the sort first, so a forged cursor is a 422, never a 500.
 - The cursor is opaque: encrypted and authenticated under a new setting, `PAGING_CURSOR_KEY` (32+ characters; required in `shared_private`
   and `hosted_public`, where the API refuses to start without it; `local` uses a public development key). It holds no readable record id. Rotating it
-  invalidates cursors in flight (422 `invalid_cursor`; clients restart); nothing stored depends on it. No new dependency: the seal is
-  encrypt-then-MAC from the standard library (HMAC-SHA256).
+  invalidates cursors in flight (422 `invalid_cursor`; clients restart); nothing stored depends on it. The seal is AES-256-GCM (random 12-byte nonce, the cursor
+  version as associated data) keyed from it with HKDF-SHA256, from `cryptography`, which is now a declared backend dependency
+  (`pyproject.toml`, `environment.yml`, `uv.lock`).
 - Under `profile=curated` a cursor names no hidden record: its key is a record already delivered, and its snapshot bound is the highest id the
   profile shows. The snapshot bounds insertions and does not freeze review state: `review_rank` leads the key, so approving a record the reader
   has not reached **skips** it, moving a delivered record from approved to under review delivers it **again**, and `species/search` delivers a species
