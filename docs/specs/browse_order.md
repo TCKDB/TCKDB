@@ -332,6 +332,14 @@ judged by the review defaults like the observation)
 under `curated`. A decision records its filters and eligibility settings, so replay reproduces it; a manifest in an earlier
 format is refused, not read as the defaults.
 
+> **Rule change in progress (owner decision 2026-10-25, [ADR 0023](../adr/0023-curated-profile-floor-applies-to-records-linked-evidence-is-badged.md)).**
+> The statements on this page that cite decision D6 ("hidden == unknown == absent") are the earlier rule. Under `curated`, the
+> floor decides which *records* a list, search or select returns; a returned record's linked evidence (source calculations, levels
+> derived from them, conformer observations in a group, evidence counts, nested refs) is shown with its review badge, and only
+> `rejected` and `deprecated` evidence is withheld. Select matches through unreviewed evidence under `curated` but never through
+> rejected or deprecated evidence. This is being rolled out in steps; **until they land, the code still applies D6, and the D6
+> passages on this page describe that code.**
+
 ## Visibility defaults
 
 - `rejected` and `deprecated` records are hidden by default; a request opts in with `include_rejected` or

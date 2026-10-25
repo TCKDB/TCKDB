@@ -699,3 +699,97 @@ def review_floor_predicate(id_column: Any, record_type: SubmissionRecordType, *,
 def where_visible(stmt: Any, predicate: Any) -> Any:
     """``stmt`` restricted by ``predicate`` (from :func:`review_floor_predicate`); untouched when it is ``None``."""
     return stmt if predicate is None else stmt.where(predicate)
+
+
+# ---------------------------------------------------------------------------
+# The evidence rule (owner decision 2026-10-25, DR/ADR 0023)
+# ---------------------------------------------------------------------------
+#
+# Two rules decide what the curated profile shows. They are different rules and must not be mixed up.
+#
+#   RECORD FLOOR   ``review_floor_predicate`` / ``ids_below_review_floor`` / ``status_hidden_under_profile``.
+#                  Decides which RECORDS a list, search or select returns. Under ``curated`` anything below
+#                  ``approved`` is not returned.
+#
+#   EVIDENCE RULE  this section. Decides which LINKED EVIDENCE of a returned record is shown (source calculations,
+#                  levels derived from them, conformer observations inside a group, evidence counts, nested refs).
+#                  Under ``curated`` such evidence is shown with its review badge, whatever its status, except
+#                  ``rejected`` and ``deprecated`` evidence, which is withheld ("absent" semantics). A missing review
+#                  row reads as ``not_reviewed`` and is therefore visible.
+#
+# Curated withholds evidence exactly as the default (exploratory) profile withholds records. Under exploratory
+# nothing is withheld as evidence (the profile shows everything with badges), so every function here answers
+# "visible" and issues no query.
+#
+# STATUS: nothing calls this section yet. It lands ahead of its callers; the code still applies the earlier rule
+# (D6: below the floor is hidden, evidence included) until the follow-up steps move each site over.
+
+#: Review statuses whose linked evidence is withheld under a profile with a review floor.
+WITHHELD_EVIDENCE_STATUSES: frozenset[RecordReviewStatus] = frozenset(
+    {RecordReviewStatus.rejected, RecordReviewStatus.deprecated}
+)
+
+
+def evidence_withheld_under_profile(status: RecordReviewStatus, *, profile: Any = None) -> bool:
+    """Whether linked evidence at ``status`` is withheld by the evidence rule under the profile.
+
+    The evidence-rule counterpart of ``status_hidden_under_profile`` (the record floor). Without a review floor
+    (exploratory, or outside a scientific request) nothing is withheld. ``profile`` defaults to the request's; a
+    caller that outlives the request passes the one it captured.
+    """
+    profile = profile if profile is not None else current_read_profile()
+    if profile.review_floor is None:
+        return False
+    return status in WITHHELD_EVIDENCE_STATUSES
+
+
+def evidence_visible_statuses(*, profile: Any = None) -> frozenset[RecordReviewStatus]:
+    """The review statuses at which linked evidence is shown (badged) under the profile."""
+    profile = profile if profile is not None else current_read_profile()
+    return frozenset(s for s in RecordReviewStatus if not evidence_withheld_under_profile(s, profile=profile))
+
+
+def linked_evidence_predicate(id_column: Any, record_type: SubmissionRecordType, *, profile: Any = None) -> Any:
+    """A SQL condition true for the rows of ``record_type`` whose evidence the profile leaves visible.
+
+    ``id_column`` holds the evidence record id, as for :func:`review_floor_predicate`. The condition is "no review
+    row of ``rejected`` or ``deprecated`` status exists", so a record with no review row is visible. Returns ``None``
+    when the profile has no floor (exploratory), so a caller adds no condition and its statement is unchanged.
+    """
+    profile = profile if profile is not None else current_read_profile()
+    if profile.review_floor is None:
+        return None
+    return ~(
+        select(RecordReview.id)
+        .where(
+            RecordReview.record_type == record_type,
+            RecordReview.record_id == id_column,
+            RecordReview.status.in_(WITHHELD_EVIDENCE_STATUSES),
+        )
+        .exists()
+    )
+
+
+def ids_withheld_as_evidence(
+    session: Session,
+    *,
+    record_type: SubmissionRecordType,
+    record_ids: Iterable[int],
+    profile: Any = None,
+) -> set[int]:
+    """Which of ``record_ids`` the evidence rule withholds under the profile.
+
+    No floor, or no ids: nothing is withheld and no query is made. Otherwise one statement.
+    """
+    ids = set(record_ids)
+    profile = profile if profile is not None else current_read_profile()
+    if not ids or profile.review_floor is None:
+        return set()
+    rows = session.scalars(
+        select(RecordReview.record_id).where(
+            RecordReview.record_type == record_type,
+            RecordReview.record_id.in_(ids),
+            RecordReview.status.in_(WITHHELD_EVIDENCE_STATUSES),
+        )
+    )
+    return set(rows)
