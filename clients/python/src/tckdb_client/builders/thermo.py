@@ -223,7 +223,7 @@ _UNSET = _Unset.value
 
 #: The declaration the factories fill in when the argument is omitted and the
 #: record carries enthalpy content: formation enthalpy at 298.15 K, plus the
-#: species' own increment above it at other temperatures.
+#: species' own increment from 298.15 K at other temperatures.
 DEFAULT_ENTHALPY_REFERENCE_KIND = "formation_298k"
 
 
@@ -270,10 +270,11 @@ class Thermo:
     omitted and the record carries enthalpy content (an H298 scalar, a NASA
     fit, or points with H or G -- judged by the shared rule in
     ``tckdb_schemas.enthalpy_reference``), it is set to ``"formation_298k"``:
-    formation enthalpy at 298.15 K plus the species' own increment above it.
-    The built payload carries the field. An explicit value wins, and an
-    explicit ``None`` stays ``None`` (the server then refuses with
-    ``enthalpy_declaration_absent``). With no enthalpy content nothing is set.
+    formation enthalpy at 298.15 K plus the species' own increment from
+    298.15 K (negative below it). The built payload carries the field. An
+    explicit value wins, and an explicit ``None`` stays ``None``, so the
+    builder refuses at construction with ``enthalpy_declaration_absent``.
+    With no enthalpy content nothing is set.
 
     ``source_calculations`` is held on the builder for forward
     compatibility; the computed-reaction endpoint does not consume

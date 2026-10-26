@@ -2,7 +2,8 @@
 
 One page for whoever is building a deposit. It states what a thermo record
 must contain, what belongs somewhere else, what TCKDB refuses and why, and
-what it will never guess on your behalf.
+what the server will never guess on your behalf. (TCKDB's own Python
+builders do default one omitted declaration, visibly; see below.)
 
 ## What a thermo record is
 
@@ -54,8 +55,8 @@ Gibbs energies and entropies must still declare `formation_298k`.
 content above, the builder fills in `formation_298k` for you, and the built
 payload contains the field, so what is stored is still an explicit claim.
 That default means exactly what this section says: formation enthalpy at
-298.15 K, plus the species' own increment above it at other temperatures.
-Check that your numbers really are on that convention before you rely on it.
+298.15 K, plus the species' own increment from 298.15 K at other
+temperatures (negative below it). Check that your numbers really are on that convention before you rely on it.
 Only an omitted argument triggers the default. An explicit value is kept, and
 an explicit `enthalpy_reference_kind=None` stays `None` (the builder then
 refuses with `enthalpy_declaration_absent`). A record with no enthalpy gets no
@@ -283,7 +284,7 @@ no declaration:
 }
 ```
 
-## What TCKDB will never do for you
+## What the TCKDB server will never do for you
 
 - Infer an enthalpy reference from the size of a number, from which program
   produced it, from a neighbouring record, or from whether the record is
@@ -296,10 +297,15 @@ no declaration:
 - Derive a 298.15 K scalar from a fit and store it as though you deposited it.
 - Change what an already-approved record says.
 
-If a producer has not been told which convention it emits, the honest move is
-for that producer to refuse to build the thermo block rather than send an
-enthalpy with no declaration. The ARC and SDF adapters shipped here behave
-that way: pass no `enthalpy_reference_kind` and either refuses before it
+The server never guesses. TCKDB's own Python builders do default an omitted
+declaration to `formation_298k`, and the field is visible in the built
+payload. An adapter author building on the builders whose source uses another
+convention must pass `enthalpy_reference_kind` explicitly (or refuse), because
+otherwise the record is stored as `formation_298k`. If a producer has not been
+told which convention it emits and does not use the builders' default, the
+honest move is for that producer to refuse to build the thermo block rather
+than send an enthalpy with no declaration. The ARC and SDF adapters shipped
+here behave that way: pass no `enthalpy_reference_kind` and either refuses before it
 builds a thermo block. The CHEMKIN adapter is the one exception, and
 deliberately so: CHEMKIN's NASA-7 thermodynamic format is
 formation-referenced by definition, so that adapter asserts the declaration
