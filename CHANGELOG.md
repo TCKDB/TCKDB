@@ -52,7 +52,7 @@ dataset must never require a code release.
 
 ## The species key is the constitution; stereo lives on the entry (2026-10-26)
 
-- **Backend, `tckdb-schemas` 0.138.0, `tckdb-client` 0.173.0.** A species is its stereo-blind canonical SMILES plus charge and multiplicity; which
+- **Backend, `tckdb-schemas` 0.138.0, `tckdb-client` 0.174.0.** A species is its stereo-blind canonical SMILES plus charge and multiplicity; which
   stereoisomer a deposit is lives on the species entry as a canonical stereo descriptor (`E`, `R,S`, `E,?`; `?` for an element nothing pinned down). The first
   geometry, the marks in the SMILES and a supplied label each fill the elements the earlier ones left unknown, and any element two of them state
   differently is refused (`species_stereo_contradiction`). `stereo_label` becomes display text; free text is refused.

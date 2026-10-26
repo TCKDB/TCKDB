@@ -363,12 +363,14 @@ the gap.
 | `charge` | SMALLINT | no | — | — | — | not documented |
 | `multiplicity` | SMALLINT | no | — | — | — | not documented |
 | `stereo_kind` | StereoKind (enum) | no | — | — | `unspecified`, `achiral`, `enantiomer`, `diastereomer`, `ez_isomer` | not documented |
+| `merged_into_species_id` | BIGINT | yes | — | species.id | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
 
 **Check constraints:**
 
 - `ck_species_multiplicity_ge_1`: `multiplicity >= 1`
+- `ck_species_not_merged_into_itself`: `merged_into_species_id IS NULL OR merged_into_species_id <> id`
 
 ### `species_entry`
 
@@ -387,6 +389,7 @@ the gap.
 | `stereo_descriptor` | TEXT | yes | — | — | — | not documented |
 | `stereo_resolution` | StereoResolution (enum) | yes | — | — | `resolved`, `partial`, `unresolved` | not documented |
 | `stereo_smiles` | TEXT | yes | — | — | — | not documented |
+| `merged_into_species_entry_id` | BIGINT | yes | — | species_entry.id | — | not documented |
 | `electronic_state_kind` | SpeciesEntryStateKind (enum) | no | ground | — | `ground`, `excited` | not documented |
 | `electronic_state_label` | VARCHAR(8) | yes | — | — | — | not documented |
 | `term_symbol_raw` | VARCHAR(64) | yes | — | — | — | not documented |
@@ -399,7 +402,8 @@ the gap.
 
 **Check constraints:**
 
-- `ck_species_entry_stereo_descriptor_vocabulary`: `stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSEZ?](,[RSEZ?])*$'`
+- `ck_species_entry_not_merged_into_itself`: `merged_into_species_entry_id IS NULL OR merged_into_species_entry_id <> id`
+- `ck_species_entry_stereo_descriptor_vocabulary`: `stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSrsEZ?-](,[RSrsEZ?-])*$'`
 - `ck_species_entry_stereo_resolution_iff_descriptor`: `(stereo_descriptor IS NULL) = (stereo_resolution IS NULL)`
 
 ### `workflow_tool`
@@ -1583,6 +1587,7 @@ the gap.
 |---|---|---|---|---|---|---|
 | `id` | BIGINT | no | — | — | — | not documented |
 | `stoichiometry_hash` | CHAR(64) | yes | — | — | — | not documented |
+| `merged_into_chem_reaction_id` | BIGINT | yes | — | chem_reaction.id | — | not documented |
 | `reversible` | BOOLEAN | no | — | — | — | not documented |
 | `reaction_family_id` | BIGINT | yes | — | reaction_family.id | — | not documented |
 | `reaction_family_raw` | TEXT | yes | — | — | — | not documented |
@@ -1592,6 +1597,7 @@ the gap.
 
 **Check constraints:**
 
+- `ck_chem_reaction_not_merged_into_itself`: `merged_into_chem_reaction_id IS NULL OR merged_into_chem_reaction_id <> id`
 - `ck_chem_reaction_reaction_family_raw_requires_source_note`: `reaction_family_raw IS NULL OR reaction_family_source_note IS NOT NULL`
 
 ### `dataset_release`

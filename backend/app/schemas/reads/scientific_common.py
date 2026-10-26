@@ -95,6 +95,11 @@ class ProfiledRequestEcho(BaseModel):
     #: What the default visibility hid (exploratory only; see :class:`HiddenByDefault`). ``None`` when nothing was
     #: excluded by default, on every read that applies no default visibility, and always under ``curated``.
     hidden_by_default: HiddenByDefault | None = None
+    #: Public refs this request named that belong to a species, species entry or reaction that was merged into another
+    #: (DR-0038), each mapped to the ref of the row it stands for and whose results the response shows. Empty when
+    #: no named ref was merged. A merged row keeps its ref, so a citation of it still resolves; this says that it did so
+    #: by forwarding.
+    merged_refs: dict[str, str] = Field(default_factory=dict)
 
 
 class SelectionPolicy(str, Enum):

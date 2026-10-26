@@ -310,6 +310,7 @@ class RejectionCode(str, Enum):
     SPECIES_SMILES_CHARGE_MISMATCH = "species_smiles_charge_mismatch"
     SPECIES_STEREO_CONTRADICTION = "species_stereo_contradiction"
     SPECIES_STEREO_LABEL_INVALID = "species_stereo_label_invalid"
+    SPECIES_STEREO_UNSUPPORTED = "species_stereo_unsupported"
     STATE_CONFLICT = "state_conflict"
     STATMECH_CALCULATION_KEY_UNDECLARED = "statmech_calculation_key_undeclared"
     STATMECH_ENERGY_LEVEL_AMBIGUOUS = "statmech_energy_level_ambiguous"
@@ -626,6 +627,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.SPECIES_SMILES_CHARGE_MISMATCH,
         RejectionCode.SPECIES_STEREO_CONTRADICTION,
         RejectionCode.SPECIES_STEREO_LABEL_INVALID,
+        RejectionCode.SPECIES_STEREO_UNSUPPORTED,
         RejectionCode.STATMECH_CALCULATION_KEY_UNDECLARED,
         RejectionCode.STATMECH_ENERGY_LEVEL_AMBIGUOUS,
         RejectionCode.STATMECH_ENERGY_LEVEL_CONTRADICTION,
@@ -992,6 +994,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.SPECIES_SMILES_CHARGE_MISMATCH: frozenset({422}),
     RejectionCode.SPECIES_STEREO_CONTRADICTION: frozenset({422}),
     RejectionCode.SPECIES_STEREO_LABEL_INVALID: frozenset({422}),
+    RejectionCode.SPECIES_STEREO_UNSUPPORTED: frozenset({422}),
     RejectionCode.STATE_CONFLICT: frozenset({409}),
     RejectionCode.STATMECH_CALCULATION_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.STATMECH_ENERGY_LEVEL_AMBIGUOUS: frozenset({422}),

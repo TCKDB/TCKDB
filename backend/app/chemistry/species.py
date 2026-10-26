@@ -366,13 +366,13 @@ def derive_stereo_label_from_3d(smiles: str, xyz_text: str) -> str | None:
         when the molecule has no stereo element or the geometry resolves none.
     """
 
-    frame = stereo.frame_from_mol(strip_isotopes(identity_mol_from_smiles(smiles)))
+    frame = stereo.frame_from_mol(identity_mol_from_smiles(smiles))
     if not frame.is_stereo_capable:
         return None
     tokens = stereo.geometry_tokens(frame, xyz_text)
     if tokens is None or all(token == stereo.UNKNOWN for token in tokens):
         return None
-    return stereo.finish(frame, stereo.combine_sources(frame, [("geometry", tokens)])).descriptor
+    return stereo.finish(frame, stereo.refine(frame, tokens), with_smiles=False).descriptor
 
 
 # Totally symmetric irreducible representation for common point groups.

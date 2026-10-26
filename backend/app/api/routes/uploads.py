@@ -733,7 +733,9 @@ def upload_computed_species(
     artifacts + optional thermo, atomic in one transaction (DR-0029)."""
     if (replay := idem.maybe_replay()) is not None:
         return replay
-    warnings = reconcile_species_entry(request.species_entry)
+    warnings = reconcile_species_entry(
+        request.species_entry, geometries=[conf.geometry for conf in request.conformers]
+    )
     warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
     # The sharper half of the completeness question, which needs the
     # geometry's coordinates and a collinearity tolerance and therefore

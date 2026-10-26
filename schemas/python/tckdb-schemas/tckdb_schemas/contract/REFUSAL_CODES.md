@@ -1128,7 +1128,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/chemistry/stereo.py`.
 - The body's `context` names the things involved.
-- Message: "The stereochemistry given by the {owners.get(key, 'earlier source')} contradicts the {name} at stereo element {position} of the species entry: {_describe(have)} against {_describe(bring)}. A contradiction is refused rather than resolved in either direction; correct the SMILES marks, the geometry or the label so they describe one configuration."
+- Message: 'The stereochemistry the sources state together does not describe any stereoisomer of this molecule (an element that is not stereogenic in the configuration the others fix cannot carry a label). Correct the SMILES marks, the geometry or the label.'
 
 <a id="c-species-stereo-label-invalid"></a>
 
@@ -1136,7 +1136,15 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/chemistry/stereo.py`.
 - The body's `context` names the things involved.
-- Message: "species_entry.stereo_label does not fit the molecule: {problem}. Tokens are R, S, E, Z or ? (unknown), one per stereo element in canonical order; this molecule's elements are, in order: {expected}."
+- Message: "species_entry.stereo_label does not fit the molecule: {problem}. Tokens are R, S, r, s, E, Z, - (not stereogenic here) or ? (unknown), one per stereo element in canonical order; this molecule's elements are, in order: {expected}."
+
+<a id="c-species-stereo-unsupported"></a>
+
+#### `species_stereo_unsupported`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/chemistry/stereo.py`.
+- The body's `context` names the things involved.
+- Message: "This molecule's stereochemistry cannot be represented: {problem}. Axial stereo of a cumulene has no token in the stereo descriptor vocabulary, and treating it as two E/Z double bonds would be wrong."
 
 <a id="c-statmech-calculation-key-undeclared"></a>
 

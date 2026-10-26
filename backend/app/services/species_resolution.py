@@ -36,6 +36,7 @@ from app.scientific_checks import (
     PythonCheck,
     ScientificCheck,
 )
+from app.services.species_merge import canonical_species_entry, live
 
 #: Raised when a geometry is not made of the atoms its own SMILES declares.
 W_SPECIES_GEOMETRY_COMPOSITION_MISMATCH = "species_geometry_composition_mismatch"
@@ -58,6 +59,46 @@ def null_safe_equals(column: ColumnElement, value: str | None) -> ColumnElement[
     """
 
     return column.is_(None) if value is None else column == value
+
+
+def find_species(session: Session, payload: SpeciesEntryIdentityPayload) -> Species | None:
+    """The live species row ``payload`` resolves to, or ``None``. Read-only; the lookup submit performs.
+
+    A species merged into another keeps its row and forwards (DR-0038); it is never what an upload resolves to.
+    """
+
+    canonical_smiles, _inchi_key = canonical_species_identity(payload)
+    return session.scalar(
+        select(Species).where(
+            Species.smiles == canonical_smiles,
+            Species.charge == payload.charge,
+            Species.multiplicity == payload.multiplicity,
+            live(Species),
+        )
+    )
+
+
+def find_species_entry(
+    session: Session,
+    species: Species,
+    payload: SpeciesEntryIdentityPayload,
+    resolved_stereo: stereo.ResolvedStereo,
+) -> SpeciesEntry | None:
+    """The live entry of ``species`` that ``payload`` and its resolved stereo name, or ``None``. Read-only."""
+
+    isotope_key = None if is_electron(payload) else canonical_isotope_key(payload.smiles)
+    return session.scalar(
+        select(SpeciesEntry).where(
+            live(SpeciesEntry),
+            SpeciesEntry.species_id == species.id,
+            SpeciesEntry.kind == payload.species_entry_kind,
+            null_safe_equals(SpeciesEntry.stereo_descriptor, resolved_stereo.descriptor),
+            SpeciesEntry.electronic_state_kind == payload.electronic_state_kind,
+            null_safe_equals(SpeciesEntry.electronic_state_label, payload.electronic_state_label),
+            null_safe_equals(SpeciesEntry.term_symbol, payload.term_symbol),
+            null_safe_equals(SpeciesEntry.isotope_key, isotope_key),
+        )
+    )
 
 
 def resolve_species(
@@ -119,12 +160,7 @@ def resolve_species(
     # inchi_key is stored for cross-notation search but is NOT the dedup
     # key: it cannot distinguish spin states (singlet vs triplet CH2) and
     # wrongly merges some tautomers (2-pyridone vs 2-hydroxypyridine).
-    identity_filter = (
-        Species.smiles == canonical_smiles,
-        Species.charge == payload.charge,
-        Species.multiplicity == payload.multiplicity,
-    )
-    species = session.scalar(select(Species).where(*identity_filter))
+    species = find_species(session, payload)
     if species is None:
         try:
             with session.begin_nested():
@@ -139,7 +175,7 @@ def resolve_species(
                 session.add(species)
                 session.flush()
         except IntegrityError:
-            species = session.scalar(select(Species).where(*identity_filter))
+            species = find_species(session, payload)
 
     assert_declared_kind_matches_stored(payload, species)
     return species
@@ -562,6 +598,32 @@ CHECK_GEOMETRY_COMPOSITION_MATCHES_IDENTITY = ScientificCheck(
 )
 
 
+def resolve_entry_stereo(
+    payload: SpeciesEntryIdentityPayload,
+    geometries: Sequence[GeometryPayload] = (),
+) -> stereo.ResolvedStereo:
+    """The stereo an entry deposited with ``payload`` and ``geometries`` resolves to. Pure: no database.
+
+    The one resolution that submit, the request-derived warnings and the bundle dry run share, so none of them can
+    predict something submit does not do. Order of authority: every linked geometry, then the marks in the SMILES,
+    then a supplied label; each fills only what the earlier ones left unknown, and any element two of them state
+    differently is refused. Torsional conformers share one configuration, so every geometry takes part: a conformer
+    deposited as the other isomer is a contradiction, not something to ignore.
+
+    :raises CodedValueError: ``species_stereo_contradiction``, ``species_stereo_label_invalid`` or
+        ``species_stereo_unsupported``.
+    """
+
+    if is_electron(payload):
+        return stereo.ResolvedStereo(None, None, None)
+    frame = stereo.frame_from_mol(identity_mol_from_smiles(payload.smiles))
+    return stereo.resolve_stereo(
+        frame,
+        geometries=[(g.xyz_text, dict(parse_xyz(g).isotopes)) for g in geometries],
+        supplied_label=payload.stereo_label,
+    )
+
+
 def resolve_species_entry(
     session: Session,
     payload: SpeciesEntryIdentityPayload,
@@ -613,19 +675,10 @@ def resolve_species_entry(
         assert_geometry_isotopes_match_identity(payload, candidate_geometry)
 
     # Stereo is resolved before the species row is touched: a contradiction is a
-    # refusal, and a refused deposit should leave nothing behind. Order of
-    # authority is geometry, then the marks in the SMILES, then a supplied label;
-    # each fills only what the earlier ones left unknown, and any element two of
-    # them state differently is refused (DR-0038).
-    if is_electron(payload):
-        resolved_stereo = stereo.ResolvedStereo(None, None, None)
-    else:
-        frame = stereo.frame_from_mol(strip_isotopes(identity_mol_from_smiles(payload.smiles)))
-        resolved_stereo = stereo.resolve_stereo(
-            frame,
-            geometry_xyz=(geometry.xyz_text if geometry is not None else None),
-            supplied_label=payload.stereo_label,
-        )
+    # refusal, and a refused deposit should leave nothing behind (DR-0038).
+    resolved_stereo = resolve_entry_stereo(
+        payload, [*(() if geometry is None else (geometry,)), *additional_geometries]
+    )
 
     species = resolve_species(session, payload)
 
@@ -635,20 +688,7 @@ def resolve_species_entry(
     # a structure search should ever return).
     isotope_key = None if is_electron(payload) else canonical_isotope_key(payload.smiles)
 
-    species_entry = session.scalar(
-        select(SpeciesEntry).where(
-            SpeciesEntry.species_id == species.id,
-            SpeciesEntry.kind == payload.species_entry_kind,
-            null_safe_equals(SpeciesEntry.stereo_descriptor, resolved_stereo.descriptor),
-            SpeciesEntry.electronic_state_kind == payload.electronic_state_kind,
-            null_safe_equals(
-                SpeciesEntry.electronic_state_label,
-                payload.electronic_state_label,
-            ),
-            null_safe_equals(SpeciesEntry.term_symbol, payload.term_symbol),
-            null_safe_equals(SpeciesEntry.isotope_key, isotope_key),
-        )
-    )
+    species_entry = find_species_entry(session, species, payload, resolved_stereo)
     if species_entry is None:
         # Auto-derive unmapped_smiles and mol SMILES for the RDKit cartridge
         unmapped = payload.unmapped_smiles
@@ -685,20 +725,7 @@ def resolve_species_entry(
                 session.add(species_entry)
                 session.flush()
         except IntegrityError:
-            species_entry = session.scalar(
-                select(SpeciesEntry).where(
-                    SpeciesEntry.species_id == species.id,
-                    SpeciesEntry.kind == payload.species_entry_kind,
-                    null_safe_equals(SpeciesEntry.stereo_descriptor, resolved_stereo.descriptor),
-                    SpeciesEntry.electronic_state_kind == payload.electronic_state_kind,
-                    null_safe_equals(
-                        SpeciesEntry.electronic_state_label,
-                        payload.electronic_state_label,
-                    ),
-                    null_safe_equals(SpeciesEntry.term_symbol, payload.term_symbol),
-                    null_safe_equals(SpeciesEntry.isotope_key, isotope_key),
-                )
-            )
+            species_entry = find_species_entry(session, species, payload, resolved_stereo)
 
     return species_entry
 
@@ -729,40 +756,38 @@ def resolve_species_entry_reference(
         species_entry = session.get(SpeciesEntry, species_entry_id)
         if species_entry is None:
             raise ValueError("Unknown species_entry")
-        return species_entry
+        # A merged-away entry resolves to the entry it was merged into: results belong to the survivor.
+        return canonical_species_entry(session, species_entry)
 
     assert payload is not None
     return resolve_species_entry(session, payload, created_by=created_by)
 
 
-def species_entry_stereo_warning(
-    species_entry: SpeciesEntry,
+def stereo_unresolved_warning(
+    resolved: stereo.ResolvedStereo,
     *,
     field: str = "species_entry",
 ) -> UploadWarning | None:
     """Warn when a stereo-capable entry ends with a stereo element still unknown.
 
     The entry is accepted: ``E,?`` and ``?`` are honest entries of their own
-    (DR-0038), and a later, fully specified deposit does not merge into them.
+    (DR-0038), and a later, fully specified deposit does not merge into it.
     The warning tells the depositor the configuration was not pinned down by
     geometry, marks or label, so they can supply it.
 
-    :param species_entry: The resolved entry.
+    :param resolved: What the entry's stereo resolves to.
     :param field: Dot-path of the entry in the request, for the warning.
     :returns: A warning, or ``None`` when the entry is resolved or has no stereo element.
     """
 
-    if species_entry.stereo_resolution not in (
-        StereoResolution.partial,
-        StereoResolution.unresolved,
-    ):
+    if resolved.resolution not in (StereoResolution.partial, StereoResolution.unresolved):
         return None
     return UploadWarning(
         field=field,
         code=stereo.W_SPECIES_ENTRY_STEREO_UNRESOLVED,
         message=(
-            f"The stereochemistry of this species entry is {species_entry.stereo_resolution.value} "
-            f"(descriptor {species_entry.stereo_descriptor!r}): at least one stereo element "
+            f"The stereochemistry of this species entry is {resolved.resolution.value} "
+            f"(descriptor {resolved.descriptor!r}): at least one stereo element "
             "(R/S centre or E/Z double bond) is unknown, because no geometry resolved it, "
             "the SMILES carries no mark for it and no stereo_label was supplied. The entry was "
             "stored as its own entry; a later deposit that specifies the configuration will "

@@ -39,7 +39,7 @@ def list_reactions(
     reaction_family_id: int | None = Query(None),
     reaction_family_raw: str | None = Query(None),
 ):
-    base = select(ChemReaction.id)
+    base = select(ChemReaction.id).where(ChemReaction.merged_into_chem_reaction_id.is_(None))
     if reversible is not None:
         base = base.where(ChemReaction.reversible == reversible)
     if reaction_family_id is not None:

@@ -1,13 +1,6 @@
 # Changelog
 
-## 0.173.0 - 2026-10-26
-
-`MadeUnder` no longer carries `inputs_unchecked_reason`.
-
-- **Behaviour change.** A curated read that asks for `check_inputs` now compares a stored assessment's inputs exactly as an exploratory one does,
-  so `state` is `current` or `stale` (`stale_reason` `inputs_changed`) with `inputs_checked` true, the same under both profiles. The `curated_profile`
-  reason had no other use, so the field and its `Literal` are removed from the `MadeUnder` typed dict. A reader that tested for it should drop the test.
-
+## 0.174.0 - 2026-10-26
 
 A species entry's stereo is a descriptor; the species is the constitution.
 
@@ -16,6 +9,15 @@ A species entry's stereo is a descriptor; the species is the constitution.
 - Reads: the species-entry types gain `stereo_descriptor`, `stereo_resolution` and `stereo_smiles`; `stereo_label` is now the display text of the descriptor
   (null while nothing is resolved). Exact structure search takes `isomeric`.
 - Two refusal codes are published (`species_stereo_contradiction`, `species_stereo_label_invalid`).
+
+## 0.173.0 - 2026-10-26
+
+`MadeUnder` no longer carries `inputs_unchecked_reason`.
+
+- **Behaviour change.** A curated read that asks for `check_inputs` now compares a stored assessment's inputs exactly as an exploratory one does,
+  so `state` is `current` or `stale` (`stale_reason` `inputs_changed`) with `inputs_checked` true, the same under both profiles. The `curated_profile`
+  reason had no other use, so the field and its `Literal` are removed from the `MadeUnder` typed dict. A reader that tested for it should drop the test.
+
 ## 0.172.0 - 2026-10-26
 
 The thermo builders default the enthalpy declaration.

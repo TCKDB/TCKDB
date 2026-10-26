@@ -53,6 +53,8 @@ from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.transport import Transport
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
 from app.services.public_refs import PREFIXES
+from app.services.scientific_read.hidden_by_default import record_forwarded_ref
+from app.services.species_merge import MERGE_COLUMNS
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +153,33 @@ def prefix_for(model_cls: type) -> str:
     fixed in ``app.services.public_refs``.
     """
     return PREFIXES[model_cls.__name__]
+
+
+# ---------------------------------------------------------------------------
+# Merged rows forward one hop (DR-0038)
+# ---------------------------------------------------------------------------
+
+
+def forward_merged(session: Session, model_cls: type, row_id: int) -> int:
+    """The row a species, species entry or reaction stands for: itself, or the row it was merged into.
+
+    A merged row is kept with its public ref, so a citation of it still resolves; it forwards one hop
+    (a trigger refuses a chain) to the survivor, which holds the results. The forwarding is reported in the
+    response's ``request.merged_refs``. Any other model is returned unchanged.
+    """
+    column_name = MERGE_COLUMNS.get(model_cls)
+    if column_name is None:
+        return row_id
+    into = session.scalar(select(getattr(model_cls, column_name)).where(model_cls.id == row_id))
+    if into is None:
+        return row_id
+    refs = dict(
+        session.execute(
+            select(model_cls.id, model_cls.public_ref).where(model_cls.id.in_([row_id, into]))
+        ).all()
+    )
+    record_forwarded_ref(refs[row_id], refs[into])
+    return into
 
 
 # ---------------------------------------------------------------------------
@@ -371,6 +400,7 @@ def resolve_path_handle(
                 row_id,
             )
             raise not_found(kind_label, code="handle_not_found")
+        row_id = forward_merged(session, model_cls, row_id)
         _enforce_handle_gate(session, model_cls, row_id, kind_label, floor=floor)
         return row_id
 
@@ -396,6 +426,7 @@ def resolve_path_handle(
         # above already carries more than the helper would, and the ref
         # is the half a 404 may echo.
         raise not_found(kind_label, ref=ref, code="handle_not_found")
+    row_id = forward_merged(session, model_cls, row_id)
     _enforce_handle_gate(session, model_cls, row_id, kind_label, ref=ref, floor=floor)
     return row_id
 
@@ -445,9 +476,10 @@ def resolve_filter_ref(
         raise handle_type_mismatch_error(
             kind_label, expected_prefix, prefix, noun="ref"
         )
-    return session.scalar(
+    row_id = session.scalar(
         select(model_cls.id).where(model_cls.public_ref == ref)
     )
+    return forward_merged(session, model_cls, row_id) if row_id is not None else None
 
 
 # ---------------------------------------------------------------------------
@@ -495,6 +527,10 @@ def reconcile_id_ref(
     """
     if id_value is None and ref_value is None:
         return None
+    if canonicalize is None and model_cls in MERGE_COLUMNS:
+        def canonicalize(row_id: int) -> int:
+            return forward_merged(session, model_cls, row_id)
+
     if canonicalize is not None and id_value is not None:
         id_value = canonicalize(int(id_value))
     if ref_value is None:

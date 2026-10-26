@@ -80,13 +80,37 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
 }
 
 
-def is_unchanged_default(table: str, column: str, value: Any) -> bool:
-    """True when ``value`` is the pre-existing default of a listed column.
+#: Columns a digest NEVER includes, whatever they hold (DR-0038). They are not something a record
+#: claims; they are derived from, or bookkeeping about, columns the digest already covers:
+#:
+#: * ``species_entry.stereo_descriptor`` / ``stereo_resolution`` / ``stereo_smiles`` are derived
+#:   from the entry's own configuration, and ``stereo_label`` (already hashed) is their display
+#:   text, so an entry whose stereo changes still changes its digest through the label, while an
+#:   entry whose stereo did not change keeps the digest it had. Without this every stored review
+#:   of every record naming a species entry would read as stale the day the columns appeared.
+#: * ``merged_into_*``: forwarding bookkeeping of a row that was merged into another, written only
+#:   by a migration; the row's own review history stays on it and does not restale.
+DERIVED_COLUMNS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("species_entry", "stereo_descriptor"),
+        ("species_entry", "stereo_resolution"),
+        ("species_entry", "stereo_smiles"),
+        ("species_entry", "merged_into_species_entry_id"),
+        ("species", "merged_into_species_id"),
+        ("chem_reaction", "merged_into_chem_reaction_id"),
+    }
+)
 
-    ``None`` counts: a transient row that has not been flushed has no value
+
+def is_unchanged_default(table: str, column: str, value: Any) -> bool:
+    """True when a column is left out of a digest: a derived column, or a listed column holding its default.
+
+    ``None`` counts as the default: a transient row that has not been flushed has no value
     yet, and is what a row without the column amounted to.
     """
     key = (table, column)
+    if key in DERIVED_COLUMNS:
+        return True
     if key not in UNCHANGED_DEFAULTS:
         return False
     return value is None or value == UNCHANGED_DEFAULTS[key]

@@ -416,7 +416,14 @@ def _summary_from_counts(counts: dict[str, int]) -> ReviewStatusSummary:
 
 
 def _bound(paging: Paging, match_expr: str, params: dict[str, Any]) -> str:
-    """Under a cursor, add "existed when the traversal began" to the match (and its parameter)."""
+    """Keep live rows only; under a cursor, add "existed when the traversal began" to the match (and its parameter).
+
+    A species or entry that was merged into another keeps its row (DR-0038) and forwards; the search returns
+    the survivor, which holds the results, never the kept row beside it.
+    """
+    match_expr = (
+        f"({match_expr}) AND se.merged_into_species_entry_id IS NULL AND sp.merged_into_species_id IS NULL"
+    )
     if paging.resume is None:
         return match_expr
     params["watermark_id"] = paging.resume.watermark.max_id

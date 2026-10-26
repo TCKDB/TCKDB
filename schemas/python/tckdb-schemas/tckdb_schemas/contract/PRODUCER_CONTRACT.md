@@ -617,7 +617,7 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 
 ### Code group 81aa34
 
-7 codes on 12 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundle`](#s-contributionbundle).
+8 codes on 12 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundle`](#s-contributionbundle).
 
 | Code | Status | Traced via |
 |---|---|---|
@@ -628,6 +628,7 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`species_smiles_charge_mismatch`](REFUSAL_CODES.md#c-species-smiles-charge-mismatch) | 422 | route handler |
 | [`species_stereo_contradiction`](REFUSAL_CODES.md#c-species-stereo-contradiction) | 422 | route handler |
 | [`species_stereo_label_invalid`](REFUSAL_CODES.md#c-species-stereo-label-invalid) | 422 | route handler |
+| [`species_stereo_unsupported`](REFUSAL_CODES.md#c-species-stereo-unsupported) | 422 | route handler |
 
 <a id="cg-ffcf73"></a>
 
@@ -1747,7 +1748,7 @@ Nested models (110; fields and rules in the [model reference](#model-reference))
 - [Code group cf7c13](#cg-cf7c13): 3 codes, returned on 16 surfaces
 - [Code group d9a7ea](#cg-d9a7ea): 4 codes, returned on 14 surfaces
 - [Code group af2230](#cg-af2230): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group 81aa34](#cg-81aa34): 7 codes, returned on 12 surfaces
+- [Code group 81aa34](#cg-81aa34): 8 codes, returned on 12 surfaces
 - [Code group ffcf73](#cg-ffcf73): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
 - [Code group 5b0b15](#cg-5b0b15): 7 codes, returned on 10 surfaces
 - [Code group 691678](#cg-691678): 2 codes, returned on 10 surfaces
@@ -1948,7 +1949,7 @@ Nested models (94; fields and rules in the [model reference](#model-reference)):
 - [Code group cf7c13](#cg-cf7c13): 3 codes, returned on 16 surfaces
 - [Code group d9a7ea](#cg-d9a7ea): 4 codes, returned on 14 surfaces
 - [Code group af2230](#cg-af2230): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group 81aa34](#cg-81aa34): 7 codes, returned on 12 surfaces
+- [Code group 81aa34](#cg-81aa34): 8 codes, returned on 12 surfaces
 - [Code group ffcf73](#cg-ffcf73): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
 - [Code group 5b0b15](#cg-5b0b15): 7 codes, returned on 10 surfaces
 - [Code group 691678](#cg-691678): 2 codes, returned on 10 surfaces
@@ -2118,7 +2119,7 @@ Nested models (79; fields and rules in the [model reference](#model-reference)):
 - [Code group cf7c13](#cg-cf7c13): 3 codes, returned on 16 surfaces
 - [Code group d9a7ea](#cg-d9a7ea): 4 codes, returned on 14 surfaces
 - [Code group af2230](#cg-af2230): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group 81aa34](#cg-81aa34): 7 codes, returned on 12 surfaces
+- [Code group 81aa34](#cg-81aa34): 8 codes, returned on 12 surfaces
 - [Code group ffcf73](#cg-ffcf73): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
 - [Code group 5b0b15](#cg-5b0b15): 7 codes, returned on 10 surfaces
 - [Code group 691678](#cg-691678): 2 codes, returned on 10 surfaces
@@ -2333,7 +2334,7 @@ Nested models (26; fields and rules in the [model reference](#model-reference)):
 - [Code group cf7c13](#cg-cf7c13): 3 codes, returned on 16 surfaces
 - [Code group d9a7ea](#cg-d9a7ea): 4 codes, returned on 14 surfaces
 - [Code group af2230](#cg-af2230): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group 81aa34](#cg-81aa34): 7 codes, returned on 12 surfaces
+- [Code group 81aa34](#cg-81aa34): 8 codes, returned on 12 surfaces
 - [Code group ffcf73](#cg-ffcf73): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
 - [Code group 5b0b15](#cg-5b0b15): 7 codes, returned on 10 surfaces
 - [Code group 6b005c](#cg-6b005c): 3 codes, returned on 8 surfaces
@@ -2451,7 +2452,7 @@ Nested models (9; fields and rules in the [model reference](#model-reference)):
 - [Code group cf7c13](#cg-cf7c13): 3 codes, returned on 16 surfaces
 - [Code group d9a7ea](#cg-d9a7ea): 4 codes, returned on 14 surfaces
 - [Code group af2230](#cg-af2230): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group 81aa34](#cg-81aa34): 7 codes, returned on 12 surfaces
+- [Code group 81aa34](#cg-81aa34): 8 codes, returned on 12 surfaces
 - [Code group 31a411](#cg-31a411): 3 codes, returned on 7 surfaces
 - [Code group 463521](#cg-463521): [`reaction_reversible_required`](REFUSAL_CODES.md#c-reaction-reversible-required), returned on 3 surfaces
 
@@ -2692,7 +2693,7 @@ Nested models (94; fields and rules in the [model reference](#model-reference)):
 - [Code group cf7c13](#cg-cf7c13): 3 codes, returned on 16 surfaces
 - [Code group d9a7ea](#cg-d9a7ea): 4 codes, returned on 14 surfaces
 - [Code group af2230](#cg-af2230): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group 81aa34](#cg-81aa34): 7 codes, returned on 12 surfaces
+- [Code group 81aa34](#cg-81aa34): 8 codes, returned on 12 surfaces
 - [Code group ffcf73](#cg-ffcf73): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
 - [Code group 5b0b15](#cg-5b0b15): 7 codes, returned on 10 surfaces
 - [Code group 691678](#cg-691678): 2 codes, returned on 10 surfaces
@@ -2803,7 +2804,7 @@ Nested models (3; fields and rules in the [model reference](#model-reference)):
 - [Code group cf7c13](#cg-cf7c13): 3 codes, returned on 16 surfaces
 - [Code group d9a7ea](#cg-d9a7ea): 4 codes, returned on 14 surfaces
 - [Code group af2230](#cg-af2230): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group 81aa34](#cg-81aa34): 7 codes, returned on 12 surfaces
+- [Code group 81aa34](#cg-81aa34): 8 codes, returned on 12 surfaces
 - [Code group ffcf73](#cg-ffcf73): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
 - [Code group 31a411](#cg-31a411): 3 codes, returned on 7 surfaces
 
@@ -3004,7 +3005,7 @@ Nested models (68; fields and rules in the [model reference](#model-reference)):
 - [Code group cf7c13](#cg-cf7c13): 3 codes, returned on 16 surfaces
 - [Code group d9a7ea](#cg-d9a7ea): 4 codes, returned on 14 surfaces
 - [Code group af2230](#cg-af2230): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group 81aa34](#cg-81aa34): 7 codes, returned on 12 surfaces
+- [Code group 81aa34](#cg-81aa34): 8 codes, returned on 12 surfaces
 - [Code group ffcf73](#cg-ffcf73): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
 - [Code group 5b0b15](#cg-5b0b15): 7 codes, returned on 10 surfaces
 - [Code group 691678](#cg-691678): 2 codes, returned on 10 surfaces
@@ -3217,7 +3218,7 @@ Nested models (80; fields and rules in the [model reference](#model-reference)):
 - [Code group cf7c13](#cg-cf7c13): 3 codes, returned on 16 surfaces
 - [Code group d9a7ea](#cg-d9a7ea): 4 codes, returned on 14 surfaces
 - [Code group af2230](#cg-af2230): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group 81aa34](#cg-81aa34): 7 codes, returned on 12 surfaces
+- [Code group 81aa34](#cg-81aa34): 8 codes, returned on 12 surfaces
 - [Code group ffcf73](#cg-ffcf73): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
 - [Code group 5b0b15](#cg-5b0b15): 7 codes, returned on 10 surfaces
 - [Code group 691678](#cg-691678): 2 codes, returned on 10 surfaces
@@ -3526,7 +3527,7 @@ Nested models (75; fields and rules in the [model reference](#model-reference)):
 - [Code group cf7c13](#cg-cf7c13): 3 codes, returned on 16 surfaces
 - [Code group d9a7ea](#cg-d9a7ea): 4 codes, returned on 14 surfaces
 - [Code group af2230](#cg-af2230): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group 81aa34](#cg-81aa34): 7 codes, returned on 12 surfaces
+- [Code group 81aa34](#cg-81aa34): 8 codes, returned on 12 surfaces
 - [Code group ffcf73](#cg-ffcf73): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
 - [Code group 5b0b15](#cg-5b0b15): 7 codes, returned on 10 surfaces
 - [Code group 691678](#cg-691678): 2 codes, returned on 10 surfaces
@@ -3720,7 +3721,7 @@ Nested models (59; fields and rules in the [model reference](#model-reference)):
 - [Code group cf7c13](#cg-cf7c13): 3 codes, returned on 16 surfaces
 - [Code group d9a7ea](#cg-d9a7ea): 4 codes, returned on 14 surfaces
 - [Code group af2230](#cg-af2230): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group 81aa34](#cg-81aa34): 7 codes, returned on 12 surfaces
+- [Code group 81aa34](#cg-81aa34): 8 codes, returned on 12 surfaces
 - [Code group ffcf73](#cg-ffcf73): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
 - [Code group 5b0b15](#cg-5b0b15): 7 codes, returned on 10 surfaces
 - [Code group 691678](#cg-691678): 2 codes, returned on 10 surfaces
@@ -3903,7 +3904,7 @@ Nested models (105; fields and rules in the [model reference](#model-reference))
 - [Code group cf7c13](#cg-cf7c13): 3 codes, returned on 16 surfaces
 - [Code group d9a7ea](#cg-d9a7ea): 4 codes, returned on 14 surfaces
 - [Code group af2230](#cg-af2230): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
-- [Code group 81aa34](#cg-81aa34): 7 codes, returned on 12 surfaces
+- [Code group 81aa34](#cg-81aa34): 8 codes, returned on 12 surfaces
 - [Code group ffcf73](#cg-ffcf73): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 11 surfaces
 - [Code group 5b0b15](#cg-5b0b15): 7 codes, returned on 10 surfaces
 - [Code group 691678](#cg-691678): 2 codes, returned on 10 surfaces
@@ -8162,7 +8163,7 @@ Unknown keys are refused.
 | `species_entry_kind` | `StationaryPointKind` | no | `"minimum"` | `minimum`, `vdw_complex` | Stationary-point kind for the resolved entry.
 | `unmapped_smiles` | string \| null | no |  |  | Optional display/search SMILES for the resolved entry.
 | `stereo_kind` | `StereoKind` | no | `"unspecified"` | `unspecified`, `achiral`, `enantiomer`, `diastereomer`, `ez_isomer` | Stereo classification for the resolved entry.
-| `stereo_label` | string \| null | no |  | length <= 512 | Optional stereo descriptor in the closed vocabulary ``R``/``S``/``E``/``Z``/``?``, one comma-separated token per potential stereo element in canonical order (``E``, ``R,S``, ``E,?``). Free text such as ``"trans"`` is refused. It fills only the elements the geometry and the SMILES marks leave unresolved and is cross-checked where they exist; the server decides whether it fits the molecule.
+| `stereo_label` | string \| null | no |  | length <= 512 | Optional stereo descriptor in the closed vocabulary ``R``/``S``/``r``/``s`` (lower case: a pseudo-asymmetric centre)/``E``/``Z``/``-`` (an element that is not stereogenic in this configuration)/``?``, one comma-separated token per potential stereo element in canonical order (``E``, ``R,S``, ``E,?``). Free text such as ``"trans"`` is refused. It fills only the elements the geometry and the SMILES marks leave unresolved and is cross-checked where they exist; the server decides whether it fits the molecule.
 | `electronic_state_kind` | `SpeciesEntryStateKind` | no | `"ground"` | `ground`, `excited` | Electronic-state classification.
 | `electronic_state_label` | string \| null | no |  | length <= 8 | Optional state label such as ``X`` or ``A``.
 | `term_symbol_raw` | string \| null | no |  | length <= 64 | Optional raw uploaded term symbol.
@@ -9370,7 +9371,7 @@ Enums with more than 8 values, linked from the fields that take them.
 
 ## Refusal code reference
 
-The per-code reference (202 codes) is its own file, `REFUSAL_CODES.md`, beside this one in the installed package. Every code in a table above links to its entry there. Each entry gives the code's HTTP status, how it arrives, where it is defined, the sentence written beside it at its raise site, and the scientific check behind it; the file ends with the client-facing codes no producer route was traced to. Find it with `python -m tckdb_schemas.contract --codes` (prints the path) or `tckdb_schemas.contract.refusal_codes_path()`; read it with `refusal_codes_markdown()`.
+The per-code reference (203 codes) is its own file, `REFUSAL_CODES.md`, beside this one in the installed package. Every code in a table above links to its entry there. Each entry gives the code's HTTP status, how it arrives, where it is defined, the sentence written beside it at its raise site, and the scientific check behind it; the file ends with the client-facing codes no producer route was traced to. Find it with `python -m tckdb_schemas.contract --codes` (prints the path) or `tckdb_schemas.contract.refusal_codes_path()`; read it with `refusal_codes_markdown()`.
 
 ## Write routes that are not producer surfaces
 

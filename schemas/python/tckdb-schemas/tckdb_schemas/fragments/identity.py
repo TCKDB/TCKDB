@@ -31,7 +31,7 @@ from tckdb_schemas.enums import (
 from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
 
 #: The closed vocabulary of a stereo descriptor (and of ``stereo_label``).
-STEREO_DESCRIPTOR_PATTERN = re.compile(r"[RSEZ?](,[RSEZ?])*")
+STEREO_DESCRIPTOR_PATTERN = re.compile(r"[RSrsEZ?-](,[RSrsEZ?-])*")
 
 _IDENTITY_TEXT_FIELDS = (
     "unmapped_smiles",
@@ -252,8 +252,9 @@ class SpeciesEntryIdentityPayload(
     :param unmapped_smiles: Optional display/search SMILES for the resolved entry.
     :param stereo_kind: Stereo classification for the resolved entry.
     :param stereo_label: Optional stereo descriptor in the closed vocabulary
-        ``R``/``S``/``E``/``Z``/``?``, one comma-separated token per potential
-        stereo element in canonical order (``E``, ``R,S``, ``E,?``). Free text
+        ``R``/``S``/``r``/``s`` (lower case: a pseudo-asymmetric centre)/``E``/``Z``/``-`` (an
+        element that is not stereogenic in this configuration)/``?``, one comma-separated
+        token per potential stereo element in canonical order (``E``, ``R,S``, ``E,?``). Free text
         such as ``"trans"`` is refused. It fills only the elements the geometry
         and the SMILES marks leave unresolved and is cross-checked where they
         exist; the server decides whether it fits the molecule.
@@ -291,9 +292,9 @@ class SpeciesEntryIdentityPayload(
             return value
         if not STEREO_DESCRIPTOR_PATTERN.fullmatch(value.strip()):
             raise ValueError(
-                "stereo_label must be stereo descriptor tokens R, S, E, Z or ? "
-                "(unknown), comma-separated, one per stereo element in canonical "
-                "order (for example 'E' or 'R,S' or 'E,?'); free text such as "
-                "'trans' is not accepted"
+                "stereo_label must be stereo descriptor tokens R, S, r, s, E, Z, - "
+                "(not stereogenic here) or ? (unknown), comma-separated, one per stereo "
+                "element in canonical order (for example 'E' or 'R,S' or 'E,?'); free "
+                "text such as 'trans' is not accepted"
             )
         return value

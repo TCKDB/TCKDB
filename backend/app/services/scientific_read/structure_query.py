@@ -27,6 +27,7 @@ from __future__ import annotations
 from rdkit import Chem
 from rdkit.Chem import inchi as _inchi
 
+from app.api.error_contract import CodedValueError
 from app.chemistry.species import identity_mol_from_smiles, strip_isotopes
 from app.chemistry.stereo import constitution_mol, descriptor_of_mol
 from app.schemas.reads.scientific_structure_search import (
@@ -120,10 +121,13 @@ def entry_stereo_descriptor_of_query(kind: StructureQueryKind, value: str) -> st
     if kind is not StructureQueryKind.smiles:
         return None
     try:
-        mol = strip_isotopes(identity_mol_from_smiles(value))
+        mol = identity_mol_from_smiles(value)
     except ValueError:
         return None
-    return descriptor_of_mol(mol)
+    try:
+        return descriptor_of_mol(mol)
+    except CodedValueError:
+        return None
 
 
 def parse_smarts(smarts: str) -> Chem.Mol:

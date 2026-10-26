@@ -77,7 +77,7 @@ def list_species(
     multiplicity: int | None = Query(None),
     kind: MoleculeKind | None = Query(None),
 ):
-    base = select(Species.id)
+    base = select(Species.id).where(Species.merged_into_species_id.is_(None))
     if smiles is not None:
         base = base.where(Species.smiles == constitution_smiles(smiles))
     if inchi_key is not None:

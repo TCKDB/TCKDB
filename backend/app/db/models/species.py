@@ -13,6 +13,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
@@ -61,9 +62,23 @@ class Species(Base, TimestampMixin, PublicRefMixin):
         nullable=False,
     )
 
+    #: The species this row was merged into, or ``NULL`` for a live row (DR-0038).
+    #: A species keyed on stereo marks (``C/C=C/C``, ``CC=CC``) and another keyed on
+    #: the constitution are one species; the rows that lose are KEPT, with their
+    #: public ref and their own curation history, and forward one hop to the survivor.
+    #: Results (entries, reaction participants, third-body colliders) were moved to
+    #: the survivor. Never set by the application; written by migration
+    #: ``c7e2a9f4d138`` and refused to chain by ``trg_species_merge_marker``.
+    merged_into_species_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("species.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+    )
+
     entries: Mapped[list["SpeciesEntry"]] = relationship(
         back_populates="species",
         cascade="save-update, merge",
+        foreign_keys="SpeciesEntry.species_id",
     )
 
     reaction_participants: Mapped[list["ReactionParticipant"]] = relationship(
@@ -75,13 +90,25 @@ class Species(Base, TimestampMixin, PublicRefMixin):
         # Canonical SMILES distinguishes tautomers that standard InChIKey
         # merges; multiplicity distinguishes spin states that SMILES/InChI
         # cannot encode (singlet vs triplet CH2, O2 states).
-        UniqueConstraint(
-            "smiles", "charge", "multiplicity", name="uq_species_identity"
+        # Unique over LIVE rows only: a merged-away row keeps the SMILES it had and
+        # forwards to its survivor (DR-0038).
+        Index(
+            "uq_species_identity",
+            "smiles",
+            "charge",
+            "multiplicity",
+            unique=True,
+            postgresql_where=text("merged_into_species_id IS NULL"),
         ),
         # inchi_key stays for cross-notation / external-DB lookup but is
         # non-unique: one InChIKey may map to several species.
         Index("ix_species_inchi_key", "inchi_key"),
+        Index("ix_species_merged_into_species_id", "merged_into_species_id"),
         CheckConstraint("multiplicity >= 1", name="multiplicity_ge_1"),
+        CheckConstraint(
+            "merged_into_species_id IS NULL OR merged_into_species_id <> id",
+            name="not_merged_into_itself",
+        ),
     )
 
     @property
@@ -149,6 +176,17 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     #: stripped) of a fully resolved configuration, where one can be written. A
     #: sigma-vinyl radical's E/Z cannot be, so this is NULL there. Not the key.
     stereo_smiles: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    #: The entry this row was merged into, or ``NULL`` for a live row (DR-0038).
+    #: Two entries that name one configuration of one species are one entry. The
+    #: row that loses is KEPT -- public ref, reviews, machine reviews, release
+    #: selections, supersession edges stay on it -- and forwards one hop to the
+    #: survivor, which holds the results (thermo, statmech, calculations, ...).
+    merged_into_species_entry_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("species_entry.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+    )
 
     electronic_state_kind: Mapped[SpeciesEntryStateKind] = mapped_column(
         SAEnum(SpeciesEntryStateKind, name="species_entry_state_kind"),
@@ -228,22 +266,30 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         Index("ix_species_entry_species_id", "species_id"),
         Index("ix_species_entry_stereo_smiles", "stereo_smiles"),
         CheckConstraint(
-            "stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSEZ?](,[RSEZ?])*$'",
+            "stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSrsEZ?-](,[RSrsEZ?-])*$'",
             name="stereo_descriptor_vocabulary",
         ),
         CheckConstraint(
             "(stereo_descriptor IS NULL) = (stereo_resolution IS NULL)",
             name="stereo_resolution_iff_descriptor",
         ),
-        UniqueConstraint(
+        # Unique over LIVE entries; a merged-away entry keeps its key and forwards.
+        Index(
+            "uq_species_entry_species_id",
             "species_id",
             "stereo_descriptor",
             "electronic_state_kind",
             "electronic_state_label",
             "term_symbol",
             "isotope_key",
-            name="uq_species_entry_species_id",
+            unique=True,
             postgresql_nulls_not_distinct=True,
+            postgresql_where=text("merged_into_species_entry_id IS NULL"),
+        ),
+        Index("ix_species_entry_merged_into_species_entry_id", "merged_into_species_entry_id"),
+        CheckConstraint(
+            "merged_into_species_entry_id IS NULL OR merged_into_species_entry_id <> id",
+            name="not_merged_into_itself",
         ),
     )
 

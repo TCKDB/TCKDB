@@ -8,9 +8,11 @@ exact search sees the species and isomeric search sees the entry.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.chemistry.stereo import W_SPECIES_ENTRY_STEREO_UNRESOLVED
 from app.db.models.common import StereoResolution
@@ -142,11 +144,18 @@ def test_torsional_rotamers_do_not_split_an_entry(db_session) -> None:
 def test_a_contradiction_is_a_422_with_its_code_and_no_row_ids(
     client: TestClient, db_session, smiles: str, xyz_smiles: str, label: str | None
 ) -> None:
+    # Move the key sequences far past anything the detail text could contain by accident, then look for the ids.
+    for sequence in ("species_id_seq", "species_entry_id_seq", "geometry_id_seq"):
+        db_session.execute(text(f"SELECT setval('{sequence}', 8675309)"))
+    known = _resolve(db_session, "CCCCC")
     response = _post(client, _bundle(smiles, embed_xyz(xyz_smiles), label=label))
     assert response.status_code == 422, response.text
     body = response.json()
     assert body["code"] == "species_stereo_contradiction"
-    assert "id=" not in str(body["detail"])
+    detail = str(body["detail"])
+    assert str(known.id) not in detail and str(known.species_id) not in detail
+    assert not re.search(r"\b\d{5,}\b", detail), detail
+    assert "id=" not in detail
     # Refused whole: the contradictory deposit left no species behind.
     assert db_session.scalar(select(Species.id).where(Species.smiles.in_(["CC=CC", "CCC(C)O"]))) is None
 

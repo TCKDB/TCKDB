@@ -1158,8 +1158,10 @@ def _species_entry_payload(species_entry: SpeciesEntry) -> dict[str, Any]:
     }
     if species_entry.unmapped_smiles is not None:
         payload["unmapped_smiles"] = species_entry.unmapped_smiles
-    if species_entry.stereo_label is not None:
-        payload["stereo_label"] = species_entry.stereo_label
+    # The entry's stereo key (DR-0038), never the display label: a re-import must land on the same entry, and the
+    # descriptor is the one string every deposit accepts as a label. ``?`` per element exports as ``?``.
+    if species_entry.stereo_descriptor is not None:
+        payload["stereo_label"] = species_entry.stereo_descriptor
     if species_entry.electronic_state_label is not None:
         payload["electronic_state_label"] = species_entry.electronic_state_label
     if species_entry.term_symbol_raw is not None:

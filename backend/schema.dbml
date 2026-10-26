@@ -1824,6 +1824,7 @@ Table calculation_parameter_vocab {
 Table chem_reaction {
   id bigint [pk, not null]
   stoichiometry_hash varchar(64)
+  merged_into_chem_reaction_id bigint [ref: > chem_reaction.id]
   reversible boolean [not null]
   reaction_family_id bigint [ref: > reaction_family.id]
   reaction_family_raw text
@@ -1832,11 +1833,13 @@ Table chem_reaction {
   public_ref string [not null]
 
   indexes {
+    merged_into_chem_reaction_id [name: 'ix_chem_reaction_merged_into_chem_reaction_id']
     public_ref [unique, name: 'ix_chem_reaction_public_ref']
     stoichiometry_hash [unique, name: 'uq_chem_reaction_stoichiometry_hash']
   }
 
   checks {
+    `merged_into_chem_reaction_id IS NULL OR merged_into_chem_reaction_id <> id` [name: 'ck_chem_reaction_not_merged_into_itself']
     `reaction_family_raw IS NULL OR reaction_family_source_note IS NOT NULL` [name: 'ck_chem_reaction_reaction_family_raw_requires_source_note']
   }
 }
@@ -3618,17 +3621,20 @@ Table species {
   charge int [not null]
   multiplicity int [not null]
   stereo_kind StereoKind [not null]
+  merged_into_species_id bigint [ref: > species.id]
   created_at timestamp [not null, default: 'now']
   public_ref string [not null]
 
   indexes {
     inchi_key [name: 'ix_species_inchi_key']
+    merged_into_species_id [name: 'ix_species_merged_into_species_id']
     public_ref [unique, name: 'ix_species_public_ref']
     (smiles, charge, multiplicity) [unique, name: 'uq_species_identity']
   }
 
   checks {
     `multiplicity >= 1` [name: 'ck_species_multiplicity_ge_1']
+    `merged_into_species_id IS NULL OR merged_into_species_id <> id` [name: 'ck_species_not_merged_into_itself']
   }
 
   Note: 'Store graph-defined species identities without resolved stereo or 3D conformers.'
@@ -3644,6 +3650,7 @@ Table species_entry {
   stereo_descriptor text
   stereo_resolution StereoResolution
   stereo_smiles text
+  merged_into_species_entry_id bigint [ref: > species_entry.id]
   electronic_state_kind SpeciesEntryStateKind [not null, default: 'ground']
   electronic_state_label string
   term_symbol_raw string
@@ -3655,6 +3662,7 @@ Table species_entry {
   public_ref string [not null]
 
   indexes {
+    merged_into_species_entry_id [name: 'ix_species_entry_merged_into_species_entry_id']
     public_ref [unique, name: 'ix_species_entry_public_ref']
     species_id [name: 'ix_species_entry_species_id']
     stereo_smiles [name: 'ix_species_entry_stereo_smiles']
@@ -3662,7 +3670,8 @@ Table species_entry {
   }
 
   checks {
-    `stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSEZ?](,[RSEZ?])*$'` [name: 'ck_species_entry_stereo_descriptor_vocabulary']
+    `merged_into_species_entry_id IS NULL OR merged_into_species_entry_id <> id` [name: 'ck_species_entry_not_merged_into_itself']
+    `stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSrsEZ?-](,[RSrsEZ?-])*$'` [name: 'ck_species_entry_stereo_descriptor_vocabulary']
     `(stereo_descriptor IS NULL) = (stereo_resolution IS NULL)` [name: 'ck_species_entry_stereo_resolution_iff_descriptor']
   }
 
