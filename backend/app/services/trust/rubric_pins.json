@@ -16,7 +16,7 @@
       "1": "28e638f09e687fce82fcc274d372e97cdcc938dad8acbafa2b598c6d803a0c91"
     },
     "computed_transition_state": {
-      "2": "ca806f32afeb69873823fa062cf46172d1a882794ea1500586ba5b5fe40e0268"
+      "2": "6b6a095cd6d9a9dda1609c574def11836df27d1970f7070094ae6000ca3dc79e"
     },
     "computed_transport": {
       "1": "1b5a1f833dc867aff540eddc5e123a5d6fa3cb0d320e90b7a931e94f7a158676"
@@ -112,6 +112,11 @@
       "name": "computed_transition_state",
       "version": 2,
       "reason": "ADR 0023 step 5 review fixes: the structure loader (_scan_determinations, NormalizedDetermination) records a basin's conformer group and observation statuses apart, judges the group as a record and the observation as evidence, and excludes a basin unless every terminal status among them is lifted by the request. Stored and exploratory verdicts are unchanged under default settings; curated read-time verdicts may change."
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "method_stem_key_sql rebuilt as fenced derived tables; same matches, smaller SQL; stored and read-time verdicts unchanged"
     }
   ]
 }
