@@ -308,6 +308,23 @@ class TestAStructureAgainstItsOwnLabel:
         body = _assert_code(response, "species_kind_conflict")
         assert "already stored as molecule_kind" in str(body["detail"])
 
+    def test_marks_and_geometry_that_describe_different_stereoisomers_name_the_stereo_check(
+        self, client
+    ):
+        """``C/C=C/C`` is trans-2-butene; a cis geometry under it is one molecule described twice."""
+        from tests.services.test_stereo_descriptor import embed_xyz
+
+        response = client.post(
+            "/api/v1/uploads/conformers",
+            json=_conformer_payload(
+                species_entry={"smiles": "C/C=C/C", "charge": 0, "multiplicity": 1},
+                xyz_text=embed_xyz("C/C=C\\C"),
+            ),
+        )
+        body = _assert_code(response, "species_stereo_contradiction")
+        assert body["context"]["sources"] == ["geometry", "SMILES stereo marks"]
+        assert "id=" not in str(body["detail"])
+
 
 # ---------------------------------------------------------------------------
 # Stationary points

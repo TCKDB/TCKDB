@@ -336,16 +336,6 @@ A species entry's declared charge equals the summed formal charge of its own SMI
 
 If your chemistry is legitimate: A free electron short-circuits before the comparison, returning a pinned identity pair. Multiplicity is deliberately **not** validated against the SMILES at all: standard SMILES does not encode spin state, so RDKit's inferred radical count is only a hint and the uploaded multiplicity is authoritative — which is what lets singlet CH2 (whose SMILES ``[CH2]`` implies a triplet) and the singlet and triplet states of O2 be represented.
 
-<a id="k-combine-sources"></a>
-
-### `combine_sources`
-
-`app.chemistry.stereo:combine_sources`. block; codes [`species_stereo_contradiction`](REFUSAL_CODES.md#c-species-stereo-contradiction). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ConformerUploadRequest`](#s-conformeruploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`StatmechUploadRequest`](#s-statmechuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`TransportUploadRequest`](#s-transportuploadrequest), [`ContributionBundle`](#s-contributionbundle).
-
-For every stereo element of a species entry, the configuration given by the geometry, the SMILES stereo marks and a supplied stereo_label agree wherever more than one of them states it.
-
-If your chemistry is legitimate: None: correct the marks, the geometry or the label so they describe one configuration, or omit the source that is wrong. Absence is not a contradiction; an element no source states stays ``?``.
-
 <a id="k-record-integrity-observation"></a>
 
 ### `record_integrity_observation`
@@ -1727,7 +1717,6 @@ Nested models (110; fields and rules in the [model reference](#model-reference))
 ### Rules the workflow applies
 
 - [`canonical_species_identity`](#k-canonical-species-identity) (block)
-- [`combine_sources`](#k-combine-sources) (block)
 - [`record_integrity_observation`](#k-record-integrity-observation) (label)
 - [`load_artifact_bytes`](#k-load-artifact-bytes) (label)
 - [`assert_calculation_geometry_composition`](#k-assert-calculation-geometry-composition) (block)
@@ -1942,7 +1931,6 @@ Nested models (94; fields and rules in the [model reference](#model-reference)):
 ### Rules the workflow applies
 
 - [`canonical_species_identity`](#k-canonical-species-identity) (block)
-- [`combine_sources`](#k-combine-sources) (block)
 - [`record_integrity_observation`](#k-record-integrity-observation) (label)
 - [`load_artifact_bytes`](#k-load-artifact-bytes) (label)
 - [`assert_calculation_geometry_composition`](#k-assert-calculation-geometry-composition) (block)
@@ -2026,9 +2014,9 @@ Payload model `tckdb_schemas.workflows.conformer_upload.ConformerUploadRequest`;
 - [`species_geometry_isotope_mismatch`](REFUSAL_CODES.md#c-species-geometry-isotope-mismatch) (422): Isotope substitution declared in species_entry.smiles does not match the uploaded geometry. smiles={smiles_text}…
 - [`species_kind_conflict`](REFUSAL_CODES.md#c-species-kind-conflict) (422): This deposit declares molecule_kind={payload.molecule_kind.value}, but the species identity it resolves to (smiles={species.smiles}…
 - [`species_smiles_charge_mismatch`](REFUSAL_CODES.md#c-species-smiles-charge-mismatch) (422): species_entry.charge={payload.charge} does not match SMILES charge {charge}
-- [`species_stereo_contradiction`](REFUSAL_CODES.md#c-species-stereo-contradiction) (422): The stereochemistry given by the {owners.get(key, 'earlier source')} contradicts the {name} at stereo element {position} of the species…
 - [`statmech_calculation_key_undeclared`](REFUSAL_CODES.md#c-statmech-calculation-key-undeclared) (422): source_calculations references undefined calculation_key '{sc.calculation_key}'.
 - [`structure_determination_invalid`](REFUSAL_CODES.md#c-structure-determination-invalid) (422): A zero_kelvin_energy determination states its energy_convention (how the zero-point energy was obtained); it is never assumed.
+- [`structure_determination_mismatch`](REFUSAL_CODES.md#c-structure-determination-mismatch) (422)
 
 ### Routes
 
@@ -2119,7 +2107,6 @@ Nested models (79; fields and rules in the [model reference](#model-reference)):
 ### Rules the workflow applies
 
 - [`canonical_species_identity`](#k-canonical-species-identity) (block)
-- [`combine_sources`](#k-combine-sources) (block)
 - [`assert_calculation_geometry_composition`](#k-assert-calculation-geometry-composition) (block)
 - [`evaluate_frequency_list_linearity`](#k-evaluate-frequency-list-linearity) (warn)
 - [`assert_declared_kind_matches_stored`](#k-assert-declared-kind-matches-stored) (block)
@@ -2188,7 +2175,7 @@ Payload model `app.schemas.workflows.kinetics_upload.KineticsUploadRequest`; JSO
 - [`species_geometry_isotope_mismatch`](REFUSAL_CODES.md#c-species-geometry-isotope-mismatch) (422): Isotope substitution declared in species_entry.smiles does not match the uploaded geometry. smiles={smiles_text}…
 - [`species_kind_conflict`](REFUSAL_CODES.md#c-species-kind-conflict) (422): This deposit declares molecule_kind={payload.molecule_kind.value}, but the species identity it resolves to (smiles={species.smiles}…
 - [`species_smiles_charge_mismatch`](REFUSAL_CODES.md#c-species-smiles-charge-mismatch) (422): species_entry.charge={payload.charge} does not match SMILES charge {charge}
-- [`species_stereo_contradiction`](REFUSAL_CODES.md#c-species-stereo-contradiction) (422): The stereochemistry given by the {owners.get(key, 'earlier source')} contradicts the {name} at stereo element {position} of the species…
+- [`arrhenius_a_units_molecularity_mismatch`](REFUSAL_CODES.md#c-arrhenius-a-units-molecularity-mismatch) (422): a_units '{a_units.value}' matches neither the reactant side (order {reactant_order}) nor the product side (order {product_order}) of this…
 
 ### Routes
 
@@ -2334,7 +2321,6 @@ Nested models (26; fields and rules in the [model reference](#model-reference)):
 ### Rules the workflow applies
 
 - [`canonical_species_identity`](#k-canonical-species-identity) (block)
-- [`combine_sources`](#k-combine-sources) (block)
 - [`validate_reaction_charge_conservation`](#k-validate-reaction-charge-conservation) (block)
 - [`validate_reaction_elemental_balance`](#k-validate-reaction-elemental-balance) (block)
 - [`assert_declared_kind_matches_stored`](#k-assert-declared-kind-matches-stored) (block)
@@ -2414,8 +2400,8 @@ Payload model `app.schemas.workflows.network_upload.NetworkUploadRequest`; JSON 
 - [`species_geometry_isotope_mismatch`](REFUSAL_CODES.md#c-species-geometry-isotope-mismatch) (422): Isotope substitution declared in species_entry.smiles does not match the uploaded geometry. smiles={smiles_text}…
 - [`species_kind_conflict`](REFUSAL_CODES.md#c-species-kind-conflict) (422): This deposit declares molecule_kind={payload.molecule_kind.value}, but the species identity it resolves to (smiles={species.smiles}…
 - [`species_smiles_charge_mismatch`](REFUSAL_CODES.md#c-species-smiles-charge-mismatch) (422): species_entry.charge={payload.charge} does not match SMILES charge {charge}
-- [`species_stereo_contradiction`](REFUSAL_CODES.md#c-species-stereo-contradiction) (422): The stereochemistry given by the {owners.get(key, 'earlier source')} contradicts the {name} at stereo element {position} of the species…
 - [`reaction_reversible_required`](REFUSAL_CODES.md#c-reaction-reversible-required) (422): reaction.reversible was not stated, and there is no single stored reaction with these participants to take it from (none is stored, or…
+- [`stored_species_smiles_unparseable`](REFUSAL_CODES.md#c-stored-species-smiles-unparseable) (422): Cannot parse the stored SMILES {species.smiles} of participant {species.public_ref} while validating reaction elemental balance.
 
 ### Routes
 
@@ -2454,7 +2440,6 @@ Nested models (9; fields and rules in the [model reference](#model-reference)):
 ### Rules the workflow applies
 
 - [`canonical_species_identity`](#k-canonical-species-identity) (block)
-- [`combine_sources`](#k-combine-sources) (block)
 - [`validate_reaction_charge_conservation`](#k-validate-reaction-charge-conservation) (block)
 - [`validate_reaction_elemental_balance`](#k-validate-reaction-elemental-balance) (block)
 - [`assert_declared_kind_matches_stored`](#k-assert-declared-kind-matches-stored) (block)
@@ -2664,7 +2649,6 @@ Nested models (94; fields and rules in the [model reference](#model-reference)):
 ### Rules the workflow applies
 
 - [`canonical_species_identity`](#k-canonical-species-identity) (block)
-- [`combine_sources`](#k-combine-sources) (block)
 - [`record_integrity_observation`](#k-record-integrity-observation) (label)
 - [`load_artifact_bytes`](#k-load-artifact-bytes) (label)
 - [`assert_calculation_geometry_composition`](#k-assert-calculation-geometry-composition) (block)
@@ -2768,7 +2752,7 @@ Payload model `app.schemas.workflows.reaction_upload.ReactionUploadRequest`; JSO
 - [`species_geometry_isotope_mismatch`](REFUSAL_CODES.md#c-species-geometry-isotope-mismatch) (422): Isotope substitution declared in species_entry.smiles does not match the uploaded geometry. smiles={smiles_text}…
 - [`species_kind_conflict`](REFUSAL_CODES.md#c-species-kind-conflict) (422): This deposit declares molecule_kind={payload.molecule_kind.value}, but the species identity it resolves to (smiles={species.smiles}…
 - [`species_smiles_charge_mismatch`](REFUSAL_CODES.md#c-species-smiles-charge-mismatch) (422): species_entry.charge={payload.charge} does not match SMILES charge {charge}
-- [`species_stereo_contradiction`](REFUSAL_CODES.md#c-species-stereo-contradiction) (422): The stereochemistry given by the {owners.get(key, 'earlier source')} contradicts the {name} at stereo element {position} of the species…
+- [`stored_species_smiles_unparseable`](REFUSAL_CODES.md#c-stored-species-smiles-unparseable) (422): Cannot parse the stored SMILES {species.smiles} of participant {species.public_ref} while validating reaction elemental balance.
 
 ### Routes
 
@@ -2807,7 +2791,6 @@ Nested models (3; fields and rules in the [model reference](#model-reference)):
 ### Rules the workflow applies
 
 - [`canonical_species_identity`](#k-canonical-species-identity) (block)
-- [`combine_sources`](#k-combine-sources) (block)
 - [`validate_reaction_charge_conservation`](#k-validate-reaction-charge-conservation) (block)
 - [`validate_reaction_elemental_balance`](#k-validate-reaction-elemental-balance) (block)
 - [`assert_declared_kind_matches_stored`](#k-assert-declared-kind-matches-stored) (block)
@@ -2874,9 +2857,9 @@ Payload model `app.schemas.workflows.statmech_upload.StatmechUploadRequest`; JSO
 - [`species_geometry_isotope_mismatch`](REFUSAL_CODES.md#c-species-geometry-isotope-mismatch) (422): Isotope substitution declared in species_entry.smiles does not match the uploaded geometry. smiles={smiles_text}…
 - [`species_kind_conflict`](REFUSAL_CODES.md#c-species-kind-conflict) (422): This deposit declares molecule_kind={payload.molecule_kind.value}, but the species identity it resolves to (smiles={species.smiles}…
 - [`species_smiles_charge_mismatch`](REFUSAL_CODES.md#c-species-smiles-charge-mismatch) (422): species_entry.charge={payload.charge} does not match SMILES charge {charge}
-- [`species_stereo_contradiction`](REFUSAL_CODES.md#c-species-stereo-contradiction) (422): The stereochemistry given by the {owners.get(key, 'earlier source')} contradicts the {name} at stereo element {position} of the species…
 - [`statmech_calculation_key_undeclared`](REFUSAL_CODES.md#c-statmech-calculation-key-undeclared) (422): source_calculations references undefined calculation_key '{sc.calculation_key}'.
 - [`statmech_energy_level_ambiguous`](REFUSAL_CODES.md#c-statmech-energy-level-ambiguous) (422)
+- [`statmech_energy_level_contradiction`](REFUSAL_CODES.md#c-statmech-energy-level-contradiction) (422)
 
 ### Routes
 
@@ -3010,7 +2993,6 @@ Nested models (68; fields and rules in the [model reference](#model-reference)):
 ### Rules the workflow applies
 
 - [`canonical_species_identity`](#k-canonical-species-identity) (block)
-- [`combine_sources`](#k-combine-sources) (block)
 - [`assert_calculation_geometry_composition`](#k-assert-calculation-geometry-composition) (block)
 - [`evaluate_frequency_list_linearity`](#k-evaluate-frequency-list-linearity) (warn)
 - [`assert_declared_kind_matches_stored`](#k-assert-declared-kind-matches-stored) (block)
@@ -3222,7 +3204,6 @@ Nested models (80; fields and rules in the [model reference](#model-reference)):
 ### Rules the workflow applies
 
 - [`canonical_species_identity`](#k-canonical-species-identity) (block)
-- [`combine_sources`](#k-combine-sources) (block)
 - [`assert_calculation_geometry_composition`](#k-assert-calculation-geometry-composition) (block)
 - [`evaluate_frequency_list_linearity`](#k-evaluate-frequency-list-linearity) (warn)
 - [`assert_declared_kind_matches_stored`](#k-assert-declared-kind-matches-stored) (block)
@@ -3524,7 +3505,6 @@ Nested models (75; fields and rules in the [model reference](#model-reference)):
 ### Rules the workflow applies
 
 - [`canonical_species_identity`](#k-canonical-species-identity) (block)
-- [`combine_sources`](#k-combine-sources) (block)
 - [`assert_calculation_geometry_composition`](#k-assert-calculation-geometry-composition) (block)
 - [`evaluate_frequency_list_linearity`](#k-evaluate-frequency-list-linearity) (warn)
 - [`_warn_absent`](#k-warn-absent) (warn)
@@ -3633,9 +3613,9 @@ Payload model `app.schemas.workflows.transport_upload.TransportUploadRequest`; J
 - [`species_geometry_isotope_mismatch`](REFUSAL_CODES.md#c-species-geometry-isotope-mismatch) (422): Isotope substitution declared in species_entry.smiles does not match the uploaded geometry. smiles={smiles_text}…
 - [`species_kind_conflict`](REFUSAL_CODES.md#c-species-kind-conflict) (422): This deposit declares molecule_kind={payload.molecule_kind.value}, but the species identity it resolves to (smiles={species.smiles}…
 - [`species_smiles_charge_mismatch`](REFUSAL_CODES.md#c-species-smiles-charge-mismatch) (422): species_entry.charge={payload.charge} does not match SMILES charge {charge}
-- [`species_stereo_contradiction`](REFUSAL_CODES.md#c-species-stereo-contradiction) (422): The stereochemistry given by the {owners.get(key, 'earlier source')} contradicts the {name} at stereo element {position} of the species…
 - [`calculation_key_undeclared`](REFUSAL_CODES.md#c-calculation-key-undeclared) (422): Transition state '{ts.key}' validation evidence references undefined calculation_key '{evidence.source_calculation_key}'.
 - [`transport_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-transport-source-calculation-owner-mismatch) (422)
+- [`calculation_software_is_workflow_tool`](REFUSAL_CODES.md#c-calculation-software-is-workflow-tool) (422): software_release.name={software_release.name} names {tool}, a workflow tool, not the electronic-structure program that ran this calculation.
 
 ### Routes
 
@@ -3729,7 +3709,6 @@ Nested models (59; fields and rules in the [model reference](#model-reference)):
 ### Rules the workflow applies
 
 - [`canonical_species_identity`](#k-canonical-species-identity) (block)
-- [`combine_sources`](#k-combine-sources) (block)
 - [`assert_calculation_geometry_composition`](#k-assert-calculation-geometry-composition) (block)
 - [`evaluate_frequency_list_linearity`](#k-evaluate-frequency-list-linearity) (warn)
 - [`assert_declared_kind_matches_stored`](#k-assert-declared-kind-matches-stored) (block)
@@ -3905,7 +3884,6 @@ Nested models (105; fields and rules in the [model reference](#model-reference))
 ### Rules the workflow applies
 
 - [`canonical_species_identity`](#k-canonical-species-identity) (block)
-- [`combine_sources`](#k-combine-sources) (block)
 - [`assert_calculation_geometry_composition`](#k-assert-calculation-geometry-composition) (block)
 - [`evaluate_frequency_list_linearity`](#k-evaluate-frequency-list-linearity) (warn)
 - [`validate_reaction_charge_conservation`](#k-validate-reaction-charge-conservation) (block)

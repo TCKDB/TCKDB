@@ -33,7 +33,6 @@ from tests.db.test_accepted_science_immutability import _actor, _approve
 from tests.services.scientific_read._factories import (
     make_calculation,
     make_species,
-    make_species_entry,
     next_inchi_key,
 )
 
@@ -51,8 +50,14 @@ def _migration_module():
 
 
 def _calcs(session, n, label="ACYC"):
-    entry = make_species_entry(session, make_species(session, inchi_key=next_inchi_key(label)))
-    return [make_calculation(session, species_entry_id=entry.id, type=CalculationType.opt) for _ in range(n)]
+    # The entry is inserted by SQL, not through the ORM: the race fixture's database stands at the revision under
+    # test, and an ORM insert of ``SpeciesEntry`` names columns a later revision added.
+    species = make_species(session, inchi_key=next_inchi_key(label))
+    entry_id = session.scalar(
+        text("INSERT INTO species_entry (species_id, public_ref) VALUES (:s, :r) RETURNING id"),
+        {"s": species.id, "r": f"spe_acyc_{species.id}_{label.lower()}"[:30]},
+    )
+    return [make_calculation(session, species_entry_id=entry_id, type=CalculationType.opt) for _ in range(n)]
 
 
 def _edge(session, parent, child, role=Role.arkane_source):

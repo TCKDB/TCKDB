@@ -1129,7 +1129,6 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/chemistry/stereo.py`.
 - The body's `context` names the things involved.
 - Message: "The stereochemistry given by the {owners.get(key, 'earlier source')} contradicts the {name} at stereo element {position} of the species entry: {_describe(have)} against {_describe(bring)}. A contradiction is refused rather than resolved in either direction; correct the SMILES marks, the geometry or the label so they describe one configuration."
-- Scientific check: [`combine_sources`](PRODUCER_CONTRACT.md#k-combine-sources).
 
 <a id="c-species-stereo-label-invalid"></a>
 

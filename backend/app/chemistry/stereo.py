@@ -54,7 +54,6 @@ from rdkit.Chem.EnumerateStereoisomers import (
 
 from app.api.error_contract import CodedValueError
 from app.db.models.common import StereoResolution
-from app.scientific_checks import CheckTier, CodeChannel, PythonCheck, ScientificCheck
 
 logger = logging.getLogger(__name__)
 
@@ -565,37 +564,3 @@ def stereo_smiles_for(frame: StereoFrame, descriptor: str) -> str | None:
             continue
     return None
 
-
-CHECK_SPECIES_STEREO_SOURCES_AGREE = ScientificCheck(
-    group="A structure against its own label",
-    sort_key=5,
-    code=W_SPECIES_STEREO_CONTRADICTION,
-    asserts=(
-        "For every stereo element of a species entry, the configuration given by the geometry, the SMILES stereo "
-        "marks and a supplied stereo_label agree wherever more than one of them states it."
-    ),
-    tier=CheckTier.block,
-    channel=CodeChannel.error_envelope,
-    tier_rationale=(
-        "Definitional. A geometry that is the cis isomer under a SMILES that marks the trans isomer is one molecule "
-        "described twice, and no correct deposit can do that. Accepting it would make one source silently win, and "
-        "the entry's stereo is the key everything attached to it is filed under, so the wrong winner files "
-        "thermochemistry under the wrong stereoisomer with nothing to show for it."
-    ),
-    adr="0008",
-    enforced_by=(
-        PythonCheck(
-            combine_sources,
-            note=(
-                "Runs from ``resolve_species_entry`` on every upload path, before any row is written. Only the "
-                "first linked geometry takes part; further conformer geometries are checked for composition and "
-                "isotopes only. Agreement is decided per symmetry class, so two equivalent elements cannot "
-                "contradict each other by position."
-            ),
-        ),
-    ),
-    escape_hatch=(
-        "None: correct the marks, the geometry or the label so they describe one configuration, or omit the "
-        "source that is wrong. Absence is not a contradiction; an element no source states stays ``?``."
-    ),
-)
