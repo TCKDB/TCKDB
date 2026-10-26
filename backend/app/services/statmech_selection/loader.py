@@ -36,7 +36,7 @@ from app.db.models.common import RecordReviewStatus, ScientificOriginKind, Statm
 from app.db.models.energy_correction import FrequencyScaleFactor
 from app.db.models.geometry import Geometry
 from app.db.models.literature import Literature
-from app.db.models.species import ConformerGroup, ConformerObservation, Species, SpeciesEntry
+from app.db.models.species import ConformerGroup, Species, SpeciesEntry
 from app.db.models.statmech import Statmech, StatmechElectronicLevel, StatmechSourceCalculation, StatmechTorsion
 from app.db.models.statmech_declaration import StatmechModelDeclaration, StatmechModelMember, StatmechModelSource
 from app.db.models.structure_determination import StructureDetermination, StructureDeterminationSource
@@ -49,7 +49,6 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     visible_statuses,
 )
-from app.services.scientific_read.profile import current_read_profile
 from app.services.scientific_read.ref_guard import unavailable_refs
 from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.selection_filters import filter_by_provenance
@@ -583,52 +582,12 @@ def load_population(session: Session, scan: PopulationScan, request: StatmechReq
     notices = fetch_supersession_notices(session, record_type=SubmissionRecordType.statmech, record_ids=ids)
     torsion_scan_refs = _refs(session, Calculation, {t.source_scan_calculation_id for r in rows for t in r.torsions if t.source_scan_calculation_id is not None and t.source_scan_calculation_id in visible_calcs})
 
-    with_floor = current_read_profile().review_floor is not None
-    basin_statuses: dict[int, tuple[RecordReviewStatus | None, RecordReviewStatus | None]] = {}
-    if with_floor and determinations:
-        observation_of = {d.id: d.conformer_observation_id for d in determinations.values() if d.conformer_observation_id}
-        if observation_of:
-            group_of = dict(
-                session.execute(
-                    select(ConformerObservation.id, ConformerObservation.conformer_group_id).where(
-                        ConformerObservation.id.in_(set(observation_of.values()))
-                    )
-                ).tuples().all()
-            )
-            observation_badges = fetch_review_badges(
-                session, record_type=SubmissionRecordType.conformer_observation, record_ids=set(observation_of.values())
-            )
-            group_badges = fetch_review_badges(
-                session, record_type=SubmissionRecordType.conformer_group, record_ids={g for g in group_of.values() if g}
-            )
-            for det_id, observation_id in observation_of.items():
-                group_id = group_of.get(observation_id)
-                basin_statuses[det_id] = (
-                    observation_badges[observation_id].status,
-                    group_badges[group_id].status if group_id else None,
-                )
-
     def det_facts(det_id: int | None) -> DeterminationFacts | None:
         if det_id is None or det_id not in determinations:
             return None
         d = determinations[det_id]
         geometry_ref = _refs(session, Geometry, {d.evaluated_geometry_id}).get(d.evaluated_geometry_id, "")
-        if not with_floor:
-            return DeterminationFacts(d.public_ref, subject.entry_ref, d.target_kind.value, geometry_ref, owner_status)
-        # ADR 0023: a species entry is a scoping parent and never gates; a transition-state entry is a record and does (Q3).
-        # The declared basin is linked evidence of the statmech record: its conformer observation follows the evidence rule
-        # and so does the group it sits in, so their statuses are recorded for the assessment.
-        observation, group = basin_statuses.get(d.id, (None, None))
-        return DeterminationFacts(
-            d.public_ref,
-            subject.entry_ref,
-            d.target_kind.value,
-            geometry_ref,
-            owner_status,
-            owner_gates=scan.owner_kind is OwnerKind.transition_state_entry,
-            observation_review_status=observation,
-            group_review_status=group,
-        )
+        return DeterminationFacts(d.public_ref, subject.entry_ref, d.target_kind.value, geometry_ref, owner_status)
 
     for rank, r in enumerate(rows, start=1):
         decl_row = r.model_declaration

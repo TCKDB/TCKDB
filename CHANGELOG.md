@@ -72,9 +72,9 @@ loaders: an unreviewed or under-review calculation, declared member or conformer
   releases are unchanged.
 - **Replay.** A replay judges a source calculation, a lineage parent, a declared member and a basin's observation by the evidence rule and
   the records themselves by the record floor, so a curated manifest with an unreviewed source replays and one with a rejected or
-  deprecated input is refused. The structure, relative-energy and statmech manifests move to format 5: a basin determination records its
+  deprecated input is refused. The structure and relative-energy manifests move to format 5: a basin determination records its
   conformer observation's and that observation's group's status apart (the group is a record, the observation is evidence), and
-  a replay judges each by its own rule. Formats 4 and earlier are refused. In statmech select a declared determination records whether its owner gates it and, under a floor, its basin's conformer statuses (evidence rule); a species-entry owner no longer gates it under curated. The other manifests keep their formats.
+  a replay judges each by its own rule. Formats 4 and earlier are refused. The other manifests keep their formats.
 - **Rubrics.** `computed_kinetics` and `computed_transition_state` are re-pinned without a version bump (recorded in the pins file):
   stored and exploratory verdicts are unchanged; curated read-time verdicts may change.
 

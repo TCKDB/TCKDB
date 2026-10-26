@@ -12,7 +12,6 @@ from app.services.statmech_selection.vocabulary import OwnerKind
 from tests.services.statmech_selection._support import (
     APPROVED,
     CG,
-    EFFECTIVE,
     G1,
     SDET,
     SMD,
@@ -260,65 +259,3 @@ def test_every_candidate_keeps_all_its_reasons_when_categories_coexist():
     assert {"scale_application_unknown", "required_recipe_unknown:optical_factor", "treatment_not_supported:anharmonic"} <= set(codes(a))
     assert a.applicability is S  # unsupported outranks unresolved on the candidate; every reason is still listed
     assert RecordReviewStatus.approved is APPROVED
-
-
-# --- the declared determination under the evidence rule (ADR 0023, step 5) -----------------------------------------------------
-
-#: The statuses the evidence rule admits under curated with no caller floor: everything but rejected and deprecated.
-CURATED_EFFECTIVE = frozenset({RecordReviewStatus.approved})
-CURATED_EVIDENCE = frozenset({RecordReviewStatus.approved, RecordReviewStatus.under_review, RecordReviewStatus.not_reviewed})
-
-
-def assess_under_curated(determination):
-    from app.services.statmech_selection.assessment import assess_candidate
-
-    candidate = replace(ts_declared(), determination=determination)
-    return assess_candidate(
-        candidate,
-        request=ts_req(),
-        subject=ts_subject(),
-        calculations=saddle_calcs(),
-        effective_statuses=CURATED_EFFECTIVE,
-        evidence_statuses=CURATED_EVIDENCE,
-    )
-
-
-def determination(**changes):
-    return replace(DeterminationFacts(SDET, TSE, "saddle_point", G1, APPROVED), **changes)
-
-
-def test_a_declared_determination_whose_group_is_unreviewed_is_used_and_whose_group_is_withheld_is_not():
-    """The determination is linked evidence of the statmech record: unreviewed is used, rejected or deprecated is withheld.
-
-    Kills: ignoring the group (a withheld group changing nothing) and holding the record floor on it (an unreviewed group
-    making the determination unavailable).
-    """
-    used = assess_under_curated(determination(group_review_status=RecordReviewStatus.not_reviewed, observation_review_status=RecordReviewStatus.under_review))
-    assert used.applicability is A, codes(used)
-    for status in (RecordReviewStatus.rejected, RecordReviewStatus.deprecated):
-        for field in ("group_review_status", "observation_review_status"):
-            withheld = assess_under_curated(determination(**{field: status}))
-            assert withheld.applicability is U and "required_evidence_unavailable:determination" in codes(withheld), field
-
-
-def test_a_species_entry_owner_never_gates_its_determination_but_a_transition_state_entry_does():
-    """Species and reaction entries are scoping parents (ADR 0023); a transition-state entry is a record (Q3).
-
-    Kills: gating a determination on a species owner's status under curated; and not gating on a TS entry's.
-    """
-    below = RecordReviewStatus.not_reviewed
-    species_owned = assess_under_curated(determination(review_status=below, owner_gates=False))
-    assert species_owned.applicability is A, codes(species_owned)
-    ts_owned = assess_under_curated(determination(review_status=below, owner_gates=True))
-    assert ts_owned.applicability is U and "required_evidence_unavailable:determination" in codes(ts_owned)
-
-
-def test_an_exploratory_determination_is_judged_exactly_as_before():
-    """Without a floor the facts carry no conformer statuses and the owner gates, so the old rule is the only rule."""
-    from app.services.statmech_selection.assessment import assess_candidate
-
-    candidate = replace(ts_declared(), determination=determination(review_status=RecordReviewStatus.rejected))
-    a = assess_candidate(
-        candidate, request=ts_req(), subject=ts_subject(), calculations=saddle_calcs(), effective_statuses=EFFECTIVE
-    )
-    assert a.applicability is U and "required_evidence_unavailable:determination" in codes(a)
