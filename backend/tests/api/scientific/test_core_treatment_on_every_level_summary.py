@@ -105,7 +105,7 @@ def test_reaction_full_calculation_evidence_reads_null_for_an_unstated_level(db_
 
 @pytest.mark.parametrize("state", STATES)
 def test_species_calculation_search_reads_the_stated_core_treatment(client, db_session, state):
-    species = make_species(db_session, smiles="C[CH2]", inchi_key=next_inchi_key("CTSR"))
+    species = make_species(db_session, smiles="[CH2]C", inchi_key=next_inchi_key("CTSR"))
     entry = make_species_entry(db_session, species)
     make_calculation(
         db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=_level(db_session, state).id

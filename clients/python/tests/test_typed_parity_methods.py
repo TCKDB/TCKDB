@@ -103,6 +103,14 @@ class TestStructureSearch:
         assert query["mode"] == ["similarity"]
         assert query["similarity_threshold"] == ["0.7"]
 
+    def test_isomeric_exact_search_is_sent_on_the_wire(self):
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.search_species_structures(query_smiles="C/C=C/C", mode="exact", isomeric=True, method_http="GET")
+
+        assert _query_of(str(seen[0].url))["isomeric"] == ["true"]
+
     def test_iterator_walks_pages_and_yields_records(self):
         pages = [
             {

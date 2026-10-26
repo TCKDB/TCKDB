@@ -1313,6 +1313,20 @@ class StereoKind(str, Enum):
     ez_isomer = "ez_isomer"
 
 
+class StereoResolution(str, Enum):
+    """How completely a species entry's stereo descriptor is pinned down.
+
+    Derived from ``species_entry.stereo_descriptor`` and never uploaded:
+    ``resolved`` when no element is ``?``, ``unresolved`` when every element
+    is, ``partial`` otherwise. An entry with no stereo element at all
+    (``stereo_descriptor IS NULL``) carries no resolution.
+    """
+
+    resolved = "resolved"
+    partial = "partial"
+    unresolved = "unresolved"
+
+
 class SpeciesEntryStateKind(str, Enum):
     ground = "ground"
     excited = "excited"

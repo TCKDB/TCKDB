@@ -84,6 +84,7 @@ from app.services.scientific_read.species_identity import (
 from app.services.scientific_read.sql_review import review_rank_case_sql
 from app.services.scientific_read.structure_query import (
     enforce_mode_query_compatibility,
+    entry_stereo_descriptor_of_query,
     inchi_key_from_query,
     parse_inchi_to_canonical_smiles,
     parse_smarts,
@@ -165,6 +166,7 @@ def search_species_by_structure(
             session,
             query_kind=query_kind,
             query_value=query_value,
+            isomeric=request.isomeric,
             visible=visible,
             paging=paging,
         )
@@ -610,6 +612,7 @@ def _run_exact_query(
     *,
     query_kind: StructureQueryKind,
     query_value: str,
+    isomeric: bool = False,
     visible: set[RecordReviewStatus],
     paging: Paging,
 ) -> tuple[dict[str, int], Page]:
@@ -626,6 +629,14 @@ def _run_exact_query(
         "inchi_key": target_key,
         "visible_statuses": _visible_status_values(visible),
     }
+    if isomeric:
+        # The species key is stereo-blind; narrow to the entries whose stereo
+        # descriptor is the one the query's marks name. A query with no stereo
+        # element (or no marks to read) leaves the species-level match alone.
+        descriptor = entry_stereo_descriptor_of_query(query_kind, query_value)
+        if descriptor is not None:
+            match_expr += " AND se.stereo_descriptor = :stereo_descriptor"
+            params["stereo_descriptor"] = descriptor
     match_expr = _bound(paging, match_expr, params)
     counts = _aggregate_status_counts(
         session, match_expr=match_expr, params=params
@@ -698,6 +709,9 @@ def _build_record(
         # species come back as two byte-identical rows differing only in
         # an opaque ref.
         stereo_label=entry.stereo_label,
+        stereo_descriptor=entry.stereo_descriptor,
+        stereo_resolution=entry.stereo_resolution,
+        stereo_smiles=entry.stereo_smiles,
         electronic_state_label=entry.electronic_state_label,
         term_symbol=entry.term_symbol,
         isotope_key=entry.isotope_key,

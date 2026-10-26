@@ -50,6 +50,17 @@ dataset must never require a code release.
   frontend. Pre-release; no compatibility shim. The cost guard is unchanged: only the routes that bound their page compare inputs.
 - No schema or migration impact. No rubric pin changed.
 
+## The species key is the constitution; stereo lives on the entry (2026-10-26)
+
+- **Backend, `tckdb-schemas` 0.138.0, `tckdb-client` 0.173.0.** A species is its stereo-blind canonical SMILES plus charge and multiplicity; which
+  stereoisomer a deposit is lives on the species entry as a canonical stereo descriptor (`E`, `R,S`, `E,?`; `?` for an element nothing pinned down). The first
+  geometry, the marks in the SMILES and a supplied label each fill the elements the earlier ones left unknown, and any element two of them state
+  differently is refused (`species_stereo_contradiction`). `stereo_label` becomes display text; free text is refused.
+- **Migration `c7e2a9f4d138`** recomputes every species key, merges the species, reactions and entries that now collide (oldest id survives), re-points every
+  foreign key to them, and derives each entry's descriptor. Approved rows change only through declared repairs; a collision it cannot express stops the
+  migration with the table named. It cannot be un-merged by the downgrade.
+- New refusal codes `species_stereo_contradiction` and `species_stereo_label_invalid`; new warning `species_entry_stereo_unresolved`.
+
 ## The client defaults the enthalpy reference declaration (2026-10-26)
 
 - **`tckdb-client` 0.172.0.** The thermo builders (`Thermo.scalar`, `Thermo.nasa`, `Thermo.points`) set `enthalpy_reference_kind="formation_298k"` when the

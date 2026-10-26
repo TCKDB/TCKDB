@@ -8,6 +8,14 @@
   so `state` is `current` or `stale` (`stale_reason` `inputs_changed`) with `inputs_checked` true, the same under both profiles. The `curated_profile`
   reason had no other use, so the field and its `Literal` are removed from the `MadeUnder` typed dict. A reader that tested for it should drop the test.
 
+
+A species entry's stereo is a descriptor; the species is the constitution.
+
+- Requires `tckdb-schemas>=0.138.0`: `stereo_label` accepts descriptor tokens only (`R`/`S`/`E`/`Z`/`?`, one per stereo element). Free text such as `"trans"`
+  is refused before the request is sent.
+- Reads: the species-entry types gain `stereo_descriptor`, `stereo_resolution` and `stereo_smiles`; `stereo_label` is now the display text of the descriptor
+  (null while nothing is resolved). Exact structure search takes `isomeric`.
+- Two refusal codes are published (`species_stereo_contradiction`, `species_stereo_label_invalid`).
 ## 0.172.0 - 2026-10-26
 
 The thermo builders default the enthalpy declaration.

@@ -14,6 +14,7 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
     StereoKind,
+    StereoResolution,
 )
 from app.schemas.reads._field_bounds import (
     MAX_BASIS_LENGTH as _MAX_BASIS_LENGTH,
@@ -313,10 +314,10 @@ class SpeciesEntryScientificRecord(BaseModel):
 
     Identity fields
     ---------------
-    ``stereo_label``, ``electronic_state_label``, ``term_symbol`` and
-    ``isotope_key`` are the columns of ``uq_species_entry_species_id``
-    other than ``electronic_state_kind`` (already served above) and the
-    species itself. Together those five are what makes one entry a
+    ``stereo_descriptor`` (the key; ``stereo_label`` is its display text),
+    ``electronic_state_label``, ``term_symbol`` and ``isotope_key`` are the
+    columns of ``uq_species_entry_species_id`` other than
+    ``electronic_state_kind`` (already served above) and the species itself. Together those five are what makes one entry a
     different row from another under the same ``species``.
 
     They are in the **default** projection, not behind an ``include=``
@@ -354,6 +355,13 @@ class SpeciesEntryScientificRecord(BaseModel):
     species_entry_kind: StationaryPointKind
     electronic_state_kind: SpeciesEntryStateKind
     stereo_label: str | None = None
+    #: The entry's stereo key (DR-0038): ``R``/``S``/``E``/``Z``/``?`` per potential
+    #: stereo element, ``null`` only when the species is achiral. ``stereo_label`` is
+    #: its display text (``null`` while nothing is resolved); this is the key.
+    stereo_descriptor: str | None = None
+    stereo_resolution: StereoResolution | None = None
+    #: Canonical isomeric SMILES of a fully resolved configuration, where one can be written.
+    stereo_smiles: str | None = None
     electronic_state_label: str | None = None
     term_symbol: str | None = None
     isotope_key: str | None = None

@@ -383,7 +383,10 @@ the gap.
 | `kind` | StationaryPointKind (enum) | no | minimum | — | `minimum`, `vdw_complex` | not documented |
 | `mol` | mol (RDKit cartridge structure) | yes | — | — | — | not documented |
 | `unmapped_smiles` | TEXT | yes | — | — | — | not documented |
-| `stereo_label` | VARCHAR(64) | yes | — | — | — | not documented |
+| `stereo_label` | TEXT | yes | — | — | — | not documented |
+| `stereo_descriptor` | TEXT | yes | — | — | — | not documented |
+| `stereo_resolution` | StereoResolution (enum) | yes | — | — | `resolved`, `partial`, `unresolved` | not documented |
+| `stereo_smiles` | TEXT | yes | — | — | — | not documented |
 | `electronic_state_kind` | SpeciesEntryStateKind (enum) | no | ground | — | `ground`, `excited` | not documented |
 | `electronic_state_label` | VARCHAR(8) | yes | — | — | — | not documented |
 | `term_symbol_raw` | VARCHAR(64) | yes | — | — | — | not documented |
@@ -393,6 +396,11 @@ the gap.
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_species_entry_stereo_descriptor_vocabulary`: `stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSEZ?](,[RSEZ?])*$'`
+- `ck_species_entry_stereo_resolution_iff_descriptor`: `(stereo_descriptor IS NULL) = (stereo_resolution IS NULL)`
 
 ### `workflow_tool`
 

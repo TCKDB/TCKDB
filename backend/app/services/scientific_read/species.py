@@ -112,6 +112,7 @@ from app.services.scientific_read.sql_review import (
     visible_review_filter,
 )
 from app.services.scientific_read.structure_query import (
+    constitution_smiles,
     enforce_mode_query_compatibility,
     inchi_key_from_query,
     parse_smarts,
@@ -913,7 +914,7 @@ def _candidate_species_stmt(
     """
     stmt = select(Species.id, Species.created_at)
     if request.smiles is not None:
-        stmt = stmt.where(Species.smiles == request.smiles)
+        stmt = stmt.where(Species.smiles == constitution_smiles(request.smiles))
     if request.inchi_key is not None:
         stmt = stmt.where(Species.inchi_key == request.inchi_key)
     if request.charge is not None:
@@ -1742,6 +1743,9 @@ def _build_entry_record(
         # SpeciesEntryScientificRecord for why they are in the default
         # projection rather than behind an include token.
         stereo_label=entry.stereo_label,
+        stereo_descriptor=entry.stereo_descriptor,
+        stereo_resolution=entry.stereo_resolution,
+        stereo_smiles=entry.stereo_smiles,
         electronic_state_label=entry.electronic_state_label,
         term_symbol=entry.term_symbol,
         isotope_key=entry.isotope_key,

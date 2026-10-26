@@ -26,7 +26,11 @@ from __future__ import annotations
 
 from app.db.models.common import SpeciesEntryStateKind
 
-#: The columns of ``uq_species_entry_species_id`` other than ``species_id``.
+#: The display counterparts of the columns of ``uq_species_entry_species_id`` other than
+#: ``species_id``: ``stereo_label`` is the injective display text of the key column
+#: ``stereo_descriptor`` (it is NULL only for the one entry of a species whose descriptor is
+#: all ``?``, or for an achiral species, and a species has only one such entry), so two entries
+#: that differ in the key differ in this label too.
 #: Named here because the guarantee this module makes is a restatement of
 #: that constraint: two entries of one species differ in at least one of
 #: these by construction.

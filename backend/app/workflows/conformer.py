@@ -32,7 +32,7 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
-from app.services.species_resolution import resolve_species_entry
+from app.services.species_resolution import resolve_species_entry, species_entry_stereo_warning
 from app.services.statmech_resolution import (
     collect_frequency_scale_factor_software_mismatch_warnings,
     resolve_or_create_statmech,
@@ -210,6 +210,9 @@ def persist_conformer_upload(
             calculations_by_key[payload_calc.key] = calc_row.id
 
     provenance_warnings: list[UploadWarning] = []
+    stereo_warning = species_entry_stereo_warning(species_entry, field="species_entry")
+    if stereo_warning is not None:
+        provenance_warnings.append(stereo_warning)
 
     statmech_row = None
     if request.statmech is not None:

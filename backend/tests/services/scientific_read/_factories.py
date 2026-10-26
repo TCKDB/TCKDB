@@ -58,6 +58,7 @@ from app.db.models.common import (
     StatmechCalculationRole,
     StatmechTreatmentKind,
     StereoKind,
+    StereoResolution,
     SubmissionRecordType,
     ThermoCalculationRole,
     TorsionTreatmentKind,
@@ -237,7 +238,7 @@ def make_species_entry(
     almost always called as a pair, and once ``make_species`` returns a row
     another suite has already committed, a blind ``INSERT`` here violates
     ``uq_species_entry_species_id`` — which is unique on
-    ``(species_id, stereo_label, electronic_state_kind, electronic_state_label,
+    ``(species_id, stereo_descriptor, electronic_state_kind, electronic_state_label,
     term_symbol, isotope_key)`` with ``NULLS NOT DISTINCT``. Every one of
     those discriminators is a parameter here and every one participates in the
     get-or-create lookup, so two calls that differ in any of them produce two
@@ -258,12 +259,35 @@ def make_species_entry(
     the migration backfill behavior and the structure-search service
     treats NULL ``mol`` rows as un-searchable.
     """
+    import re
+
     from rdkit import Chem
+
+    # ``stereo_label`` is display text; the entry's key is ``stereo_descriptor`` (DR-0038), whose vocabulary is
+    # closed. A caller that passes a descriptor-shaped label means that configuration. A caller that passes free text
+    # only wants two entries of one species to be different rows, so it is carried on ``term_symbol``, a key column
+    # with no vocabulary, and kept as the label too.
+    stereo_descriptor = (
+        stereo_label if stereo_label is not None and re.fullmatch(r"[RSEZ?](,[RSEZ?])*", stereo_label) else None
+    )
+    if stereo_label is not None and stereo_descriptor is None and term_symbol is None:
+        term_symbol = stereo_label[:64]
+    stereo_resolution = (
+        None
+        if stereo_descriptor is None
+        else (
+            StereoResolution.resolved
+            if "?" not in stereo_descriptor
+            else StereoResolution.partial
+            if stereo_descriptor.replace("?", "").replace(",", "")
+            else StereoResolution.unresolved
+        )
+    )
 
     existing = session.scalar(
         select(SpeciesEntry).where(
             SpeciesEntry.species_id == species.id,
-            null_safe_equals(SpeciesEntry.stereo_label, stereo_label),
+            null_safe_equals(SpeciesEntry.stereo_descriptor, stereo_descriptor),
             SpeciesEntry.electronic_state_kind == electronic_state_kind,
             null_safe_equals(
                 SpeciesEntry.electronic_state_label, electronic_state_label
@@ -286,6 +310,8 @@ def make_species_entry(
         kind=kind,
         electronic_state_kind=electronic_state_kind,
         stereo_label=stereo_label,
+        stereo_descriptor=stereo_descriptor,
+        stereo_resolution=stereo_resolution,
         electronic_state_label=electronic_state_label,
         term_symbol=term_symbol,
         isotope_key=isotope_key,
@@ -668,7 +694,7 @@ def attach_kinetics_plog_entry(
     n: float | None = None,
     ea_kj_mol: float | None = None,
 ):
-    """Attach one PLOG pressure entry to a kinetics row (DR-0032 Part C)."""
+    """Attach one PLOG pressure entry to a kinetics row (DR-0038 Part C)."""
     from app.db.models.kinetics import KineticsPlog
 
     row = KineticsPlog(
@@ -697,7 +723,7 @@ def attach_kinetics_chebyshev(
     pmin_bar: float | None = None,
     pmax_bar: float | None = None,
 ):
-    """Attach a Chebyshev k(T,P) surface to a kinetics row (DR-0032 Part C)."""
+    """Attach a Chebyshev k(T,P) surface to a kinetics row (DR-0038 Part C)."""
     from app.db.models.kinetics import KineticsChebyshev
 
     row = KineticsChebyshev(

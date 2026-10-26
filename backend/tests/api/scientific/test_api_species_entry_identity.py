@@ -423,7 +423,10 @@ def test_derivation_covers_the_whole_unique_constraint():
         for c in SpeciesEntry.__table__.constraints
         if c.name == "uq_species_entry_species_id"
     )
-    columns = {c.name for c in constraint.columns} - {"species_id"}
+    # ``stereo_label`` is the injective display text of the key column ``stereo_descriptor`` (DR-0038).
+    columns = {"stereo_label" if c.name == "stereo_descriptor" else c.name for c in constraint.columns} - {
+        "species_id"
+    }
     assert columns == set(IDENTITY_COLUMNS), (
         "uq_species_entry_species_id and species_entry_label disagree about "
         "what makes one entry a different row from another"

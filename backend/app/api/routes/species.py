@@ -53,6 +53,7 @@ from app.schemas.entities.species_entry_review import (
 from app.schemas.entities.statmech import StatmechRead
 from app.schemas.entities.thermo import ThermoRead
 from app.schemas.entities.transport import TransportRead
+from app.services.scientific_read.structure_query import constitution_smiles
 from app.services.species_entry_review import (
     create_species_entry_review,
     list_species_entry_reviews,
@@ -78,7 +79,7 @@ def list_species(
 ):
     base = select(Species.id)
     if smiles is not None:
-        base = base.where(Species.smiles == smiles)
+        base = base.where(Species.smiles == constitution_smiles(smiles))
     if inchi_key is not None:
         base = base.where(Species.inchi_key == inchi_key)
     if charge is not None:

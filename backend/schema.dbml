@@ -709,6 +709,12 @@ enum StereoKind {
   ez_isomer
 }
 
+enum StereoResolution {
+  resolved
+  partial
+  unresolved
+}
+
 enum StructureDeterminationQuantity {
   electronic_energy
   zero_kelvin_energy
@@ -3634,7 +3640,10 @@ Table species_entry {
   kind StationaryPointKind [not null, default: 'minimum']
   mol mol
   unmapped_smiles text
-  stereo_label string
+  stereo_label text
+  stereo_descriptor text
+  stereo_resolution StereoResolution
+  stereo_smiles text
   electronic_state_kind SpeciesEntryStateKind [not null, default: 'ground']
   electronic_state_label string
   term_symbol_raw string
@@ -3648,7 +3657,13 @@ Table species_entry {
   indexes {
     public_ref [unique, name: 'ix_species_entry_public_ref']
     species_id [name: 'ix_species_entry_species_id']
-    (species_id, stereo_label, electronic_state_kind, electronic_state_label, term_symbol, isotope_key) [unique, name: 'uq_species_entry_species_id']
+    stereo_smiles [name: 'ix_species_entry_stereo_smiles']
+    (species_id, stereo_descriptor, electronic_state_kind, electronic_state_label, term_symbol, isotope_key) [unique, name: 'uq_species_entry_species_id']
+  }
+
+  checks {
+    `stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSEZ?](,[RSEZ?])*$'` [name: 'ck_species_entry_stereo_descriptor_vocabulary']
+    `(stereo_descriptor IS NULL) = (stereo_resolution IS NULL)` [name: 'ck_species_entry_stereo_resolution_iff_descriptor']
   }
 
   Note: 'Store one stereochemically, electronically, or isotopically resolved species form.'

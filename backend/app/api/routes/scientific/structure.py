@@ -62,6 +62,14 @@ def species_structure_search_get(
     query_inchi_key: str | None = Query(None),
     mode: StructureSearchMode = Query(StructureSearchMode.substructure),
     similarity_threshold: float | None = Query(None, ge=0.0, le=1.0),
+    isomeric: bool = Query(
+        False,
+        description=(
+            "Exact mode with query_smiles: return only entries whose stereo "
+            "descriptor matches the stereo marks of the query (C/C=C/C finds "
+            "the E entries). Species identity itself is stereo-blind."
+        ),
+    ),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
@@ -85,6 +93,7 @@ def species_structure_search_get(
         query_inchi_key=query_inchi_key,
         mode=mode,
         similarity_threshold=similarity_threshold,
+        isomeric=isomeric,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,

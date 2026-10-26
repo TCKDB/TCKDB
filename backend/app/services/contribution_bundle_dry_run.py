@@ -27,7 +27,15 @@ from typing import Mapping, Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.chemistry.species import canonical_isotope_key, canonical_species_identity
+from app.api.error_contract import CodedValueError
+from app.chemistry.species import (
+    canonical_isotope_key,
+    canonical_species_identity,
+    identity_mol_from_smiles,
+    is_electron,
+    strip_isotopes,
+)
+from app.chemistry.stereo import frame_from_mol, resolve_stereo
 from app.db.models.literature import Literature
 from app.db.models.reaction import ChemReaction
 from app.db.models.software import Software, SoftwareRelease
@@ -377,11 +385,38 @@ def _preview_species_entry_identity(
         )
         return [species_item, species_entry_item], None
 
+    # The preview has no geometry of its own; marks and a supplied label are what
+    # it can resolve (DR-0038). A contradiction between them is an error item.
+    try:
+        previewed_stereo = (
+            resolve_stereo(
+                frame_from_mol(strip_isotopes(identity_mol_from_smiles(payload.smiles))),
+                supplied_label=payload.stereo_label,
+            )
+            if not is_electron(payload)
+            else None
+        )
+    except CodedValueError as exc:
+        return (
+            [
+                ContributionBundleDryRunItem(
+                    record_type=DryRunRecordType.species_entry,
+                    action=DryRunAction.error,
+                    reason=f"Could not resolve species-entry stereochemistry: {exc}",
+                    local_ref=local_ref,
+                )
+            ],
+            species,
+        )
+
     species_entry = session.scalar(
         select(SpeciesEntry).where(
             SpeciesEntry.species_id == species.id,
             SpeciesEntry.kind == payload.species_entry_kind,
-            null_safe_equals(SpeciesEntry.stereo_label, payload.stereo_label),
+            null_safe_equals(
+                SpeciesEntry.stereo_descriptor,
+                previewed_stereo.descriptor if previewed_stereo is not None else None,
+            ),
             SpeciesEntry.electronic_state_kind == payload.electronic_state_kind,
             null_safe_equals(
                 SpeciesEntry.electronic_state_label,

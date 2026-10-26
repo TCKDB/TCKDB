@@ -15,6 +15,7 @@ Backend-only read/CRUD species-entry schemas remain in the backend
 package and continue to import the mixin from this module via the shim.
 """
 
+import re
 from collections.abc import Sequence
 from typing import Self
 
@@ -28,6 +29,9 @@ from tckdb_schemas.enums import (
     StereoKind,
 )
 from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
+
+#: The closed vocabulary of a stereo descriptor (and of ``stereo_label``).
+STEREO_DESCRIPTOR_PATTERN = re.compile(r"[RSEZ?](,[RSEZ?])*")
 
 _IDENTITY_TEXT_FIELDS = (
     "unmapped_smiles",
@@ -247,7 +251,12 @@ class SpeciesEntryIdentityPayload(
     :param species_entry_kind: Stationary-point kind for the resolved entry.
     :param unmapped_smiles: Optional display/search SMILES for the resolved entry.
     :param stereo_kind: Stereo classification for the resolved entry.
-    :param stereo_label: Optional stereo label such as ``R`` or ``E``.
+    :param stereo_label: Optional stereo descriptor in the closed vocabulary
+        ``R``/``S``/``E``/``Z``/``?``, one comma-separated token per potential
+        stereo element in canonical order (``E``, ``R,S``, ``E,?``). Free text
+        such as ``"trans"`` is refused. It fills only the elements the geometry
+        and the SMILES marks leave unresolved and is cross-checked where they
+        exist; the server decides whether it fits the molecule.
     :param electronic_state_kind: Electronic-state classification.
     :param electronic_state_label: Optional state label such as ``X`` or ``A``.
     :param term_symbol_raw: Optional raw uploaded term symbol.
@@ -265,10 +274,26 @@ class SpeciesEntryIdentityPayload(
     unmapped_smiles: str | None = None
 
     stereo_kind: StereoKind = StereoKind.unspecified
-    stereo_label: str | None = Field(default=None, max_length=64)
+    stereo_label: str | None = Field(default=None, max_length=512)
 
     electronic_state_kind: SpeciesEntryStateKind = SpeciesEntryStateKind.ground
     electronic_state_label: str | None = Field(default=None, max_length=8)
 
     term_symbol_raw: str | None = Field(default=None, max_length=64)
     term_symbol: str | None = Field(default=None, max_length=64)
+
+    @field_validator("stereo_label")
+    @classmethod
+    def stereo_label_uses_descriptor_vocabulary(cls, value: str | None) -> str | None:
+        """Accept only descriptor tokens; a blank label is "not given"."""
+
+        if value is None or not value.strip():
+            return value
+        if not STEREO_DESCRIPTOR_PATTERN.fullmatch(value.strip()):
+            raise ValueError(
+                "stereo_label must be stereo descriptor tokens R, S, E, Z or ? "
+                "(unknown), comma-separated, one per stereo element in canonical "
+                "order (for example 'E' or 'R,S' or 'E,?'); free text such as "
+                "'trans' is not accepted"
+            )
+        return value

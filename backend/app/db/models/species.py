@@ -29,6 +29,7 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
     StereoKind,
+    StereoResolution,
 )
 from app.db.types import RDKitMol
 
@@ -125,7 +126,29 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     mol: Mapped[Optional[str]] = mapped_column(RDKitMol(), nullable=True)
     unmapped_smiles: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    stereo_label: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    #: Derived display text for the configuration (DR-0038): the descriptor,
+    #: or ``NULL`` when the entry has no stereo element or none is resolved.
+    #: Not part of identity and never accepted as a key.
+    stereo_label: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    #: Canonical stereo descriptor -- the entry's stereo key (DR-0038): one
+    #: token per potential stereo element (``R``/``S``/``E``/``Z``/``?``),
+    #: ordered by canonical atom rank of the stereo-stripped constitution.
+    #: ``NULL`` only when the species is achiral (no stereo element). Partial and
+    #: unknown configurations are their own entries (``E,?`` is not ``E,E``).
+    stereo_descriptor: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    #: Derived: ``resolved`` / ``partial`` / ``unresolved`` from the descriptor's
+    #: ``?`` tokens; ``NULL`` iff ``stereo_descriptor`` is.
+    stereo_resolution: Mapped[Optional[StereoResolution]] = mapped_column(
+        SAEnum(StereoResolution, name="stereo_resolution"),
+        nullable=True,
+    )
+
+    #: Derived search/display text: canonical isomeric SMILES (isotopes
+    #: stripped) of a fully resolved configuration, where one can be written. A
+    #: sigma-vinyl radical's E/Z cannot be, so this is NULL there. Not the key.
+    stereo_smiles: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     electronic_state_kind: Mapped[SpeciesEntryStateKind] = mapped_column(
         SAEnum(SpeciesEntryStateKind, name="species_entry_state_kind"),
@@ -203,9 +226,18 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 
     __table_args__ = (
         Index("ix_species_entry_species_id", "species_id"),
+        Index("ix_species_entry_stereo_smiles", "stereo_smiles"),
+        CheckConstraint(
+            "stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSEZ?](,[RSEZ?])*$'",
+            name="stereo_descriptor_vocabulary",
+        ),
+        CheckConstraint(
+            "(stereo_descriptor IS NULL) = (stereo_resolution IS NULL)",
+            name="stereo_resolution_iff_descriptor",
+        ),
         UniqueConstraint(
             "species_id",
-            "stereo_label",
+            "stereo_descriptor",
             "electronic_state_kind",
             "electronic_state_label",
             "term_symbol",

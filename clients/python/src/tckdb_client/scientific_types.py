@@ -148,8 +148,8 @@ class SpeciesRecord(TypedDict, total=False):
 
     ``canonical_smiles``, ``inchi_key``, ``charge`` and ``multiplicity`` are
     the *graph* identity and are shared by every entry beneath it. What
-    separates one entry from another lives on the entry: ``stereo_label``,
-    ``electronic_state_kind``, ``electronic_state_label``, ``term_symbol``
+    separates one entry from another lives on the entry: ``stereo_descriptor``
+    (``stereo_label`` is its display text), ``electronic_state_kind``, ``electronic_state_label``, ``term_symbol``
     and ``isotope_key``, plus the one-string ``species_entry_label`` derived
     from them. Never pick an entry by position or by the species-level
     fields -- ``N=N`` carries a ``Z`` entry (cis-diazene) and an ``E`` entry
@@ -157,9 +157,9 @@ class SpeciesRecord(TypedDict, total=False):
     species-level field there is.
 
     ``stereo_kind`` is the species' own: ``achiral`` means a null
-    ``stereo_label`` on an entry has nothing to label, while ``ez_isomer``
-    or ``enantiomer`` means stereoisomers exist and this entry has simply
-    not been labelled.
+    ``stereo_descriptor`` on an entry has nothing to describe, while ``ez_isomer``
+    or ``enantiomer`` means stereoisomers exist and the entry's descriptor
+    says which one (``?`` per element nothing pinned down).
     """
 
     species_ref: Required[str]
@@ -816,6 +816,9 @@ class SpeciesStructureRecord(TypedDict, total=False):
     species_entry_kind: Required[str]
     electronic_state_kind: Required[str]
     stereo_label: str | None
+    stereo_descriptor: str | None
+    stereo_resolution: str | None
+    stereo_smiles: str | None
     electronic_state_label: str | None
     term_symbol: str | None
     isotope_key: str | None

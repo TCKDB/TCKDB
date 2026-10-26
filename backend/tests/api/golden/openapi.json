@@ -51451,6 +51451,17 @@
             "title": "Species Ref",
             "type": "string"
           },
+          "stereo_descriptor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Descriptor"
+          },
           "stereo_kind": {
             "$ref": "#/components/schemas/StereoKind"
           },
@@ -51464,6 +51475,27 @@
               }
             ],
             "title": "Stereo Label"
+          },
+          "stereo_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StereoResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stereo_smiles": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Smiles"
           },
           "term_symbol": {
             "anyOf": [
@@ -51525,6 +51557,11 @@
           "include_rejected": {
             "default": false,
             "title": "Include Rejected",
+            "type": "boolean"
+          },
+          "isomeric": {
+            "default": false,
+            "title": "Isomeric",
             "type": "boolean"
           },
           "limit": {
@@ -53964,7 +54001,7 @@
       },
       "SpeciesEntryIdentityPayload": {
         "additionalProperties": false,
-        "description": "Reusable upload fragment for resolved species-entry identity.\n\n:param species_entry_kind: Stationary-point kind for the resolved entry.\n:param unmapped_smiles: Optional display/search SMILES for the resolved entry.\n:param stereo_kind: Stereo classification for the resolved entry.\n:param stereo_label: Optional stereo label such as ``R`` or ``E``.\n:param electronic_state_kind: Electronic-state classification.\n:param electronic_state_label: Optional state label such as ``X`` or ``A``.\n:param term_symbol_raw: Optional raw uploaded term symbol.\n:param term_symbol: Optional canonicalized term symbol.\n\nIsotopic resolution is *not* a field on this payload. It is derived\nserver-side from the atom-resolved isotope labels in ``smiles`` (see\n``SpeciesIdentityPayload.smiles``). The former free-text\n``isotopologue_label`` has been removed: an arbitrary string could mint\ntwo species identities that no scientific content distinguished, and a\nderived key may never be accepted from an uploader.",
+        "description": "Reusable upload fragment for resolved species-entry identity.\n\n:param species_entry_kind: Stationary-point kind for the resolved entry.\n:param unmapped_smiles: Optional display/search SMILES for the resolved entry.\n:param stereo_kind: Stereo classification for the resolved entry.\n:param stereo_label: Optional stereo descriptor in the closed vocabulary\n    ``R``/``S``/``E``/``Z``/``?``, one comma-separated token per potential\n    stereo element in canonical order (``E``, ``R,S``, ``E,?``). Free text\n    such as ``\"trans\"`` is refused. It fills only the elements the geometry\n    and the SMILES marks leave unresolved and is cross-checked where they\n    exist; the server decides whether it fits the molecule.\n:param electronic_state_kind: Electronic-state classification.\n:param electronic_state_label: Optional state label such as ``X`` or ``A``.\n:param term_symbol_raw: Optional raw uploaded term symbol.\n:param term_symbol: Optional canonicalized term symbol.\n\nIsotopic resolution is *not* a field on this payload. It is derived\nserver-side from the atom-resolved isotope labels in ``smiles`` (see\n``SpeciesIdentityPayload.smiles``). The former free-text\n``isotopologue_label`` has been removed: an arbitrary string could mint\ntwo species identities that no scientific content distinguished, and a\nderived key may never be accepted from an uploader.",
         "properties": {
           "charge": {
             "title": "Charge",
@@ -54011,7 +54048,7 @@
           "stereo_label": {
             "anyOf": [
               {
-                "maxLength": 64,
+                "maxLength": 512,
                 "type": "string"
               },
               {
@@ -54348,7 +54385,7 @@
         "type": "string"
       },
       "SpeciesEntryScientificRecord": {
-        "description": "Per-entry block embedded in a SpeciesScientificRecord.\n\nPhase B: ``species_entry_ref`` is the public stable handle alongside\nthe integer ``species_entry_id``.\n\nIdentity fields\n---------------\n``stereo_label``, ``electronic_state_label``, ``term_symbol`` and\n``isotope_key`` are the columns of ``uq_species_entry_species_id``\nother than ``electronic_state_kind`` (already served above) and the\nspecies itself. Together those five are what makes one entry a\ndifferent row from another under the same ``species``.\n\nThey are in the **default** projection, not behind an ``include=``\ntoken, because their absence is not a missing convenience — it is a\nwrong answer. Two entries of one species that agree on every served\nfield are indistinguishable on the wire, and a reader picking a ref\nfrom a list of two identical records has a 50% chance of citing the\nother molecule. The live database has exactly that shape: ``N=N``\ncarries a ``Z`` entry (cis-diazene) and an ``E`` entry\n(trans-diazene), with different thermochemistry. A reader who does\nnot know to ask for an include token is precisely the reader who gets\nthe wrong molecule, so asking cannot be the price of correctness.\n\n``species_entry_label`` is those five columns rendered as one short\nstring — ``\"E\"``, ``\"excited T1\"`` — derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`,\nthe same function the pressure-dependent network surface uses. One\ndefinition, so a species entry reads the same way in a species search,\na structure search, and a network state label.\n\nEvery one of these is ``None`` when the column is ``NULL``, never\n``\"\"``. 51 of the 60 entries on the deployed database have no stereo\nlabel at all, and \"no label\" must render as no label rather than as a\nlabel that happens to be blank.\n\n``isotopologue_label`` is deliberately **not** served. It is a\ndeprecated free-text column, is no longer part of the entry's unique\nidentity, is never written by the application, and therefore cannot\ndiscriminate between two entries; serving it would advertise an\nidentity component that is not one.",
+        "description": "Per-entry block embedded in a SpeciesScientificRecord.\n\nPhase B: ``species_entry_ref`` is the public stable handle alongside\nthe integer ``species_entry_id``.\n\nIdentity fields\n---------------\n``stereo_descriptor`` (the key; ``stereo_label`` is its display text),\n``electronic_state_label``, ``term_symbol`` and ``isotope_key`` are the\ncolumns of ``uq_species_entry_species_id`` other than\n``electronic_state_kind`` (already served above) and the species itself. Together those five are what makes one entry a\ndifferent row from another under the same ``species``.\n\nThey are in the **default** projection, not behind an ``include=``\ntoken, because their absence is not a missing convenience — it is a\nwrong answer. Two entries of one species that agree on every served\nfield are indistinguishable on the wire, and a reader picking a ref\nfrom a list of two identical records has a 50% chance of citing the\nother molecule. The live database has exactly that shape: ``N=N``\ncarries a ``Z`` entry (cis-diazene) and an ``E`` entry\n(trans-diazene), with different thermochemistry. A reader who does\nnot know to ask for an include token is precisely the reader who gets\nthe wrong molecule, so asking cannot be the price of correctness.\n\n``species_entry_label`` is those five columns rendered as one short\nstring — ``\"E\"``, ``\"excited T1\"`` — derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`,\nthe same function the pressure-dependent network surface uses. One\ndefinition, so a species entry reads the same way in a species search,\na structure search, and a network state label.\n\nEvery one of these is ``None`` when the column is ``NULL``, never\n``\"\"``. 51 of the 60 entries on the deployed database have no stereo\nlabel at all, and \"no label\" must render as no label rather than as a\nlabel that happens to be blank.\n\n``isotopologue_label`` is deliberately **not** served. It is a\ndeprecated free-text column, is no longer part of the entry's unique\nidentity, is never written by the application, and therefore cannot\ndiscriminate between two entries; serving it would advertise an\nidentity component that is not one.",
         "properties": {
           "availability": {
             "$ref": "#/components/schemas/SpeciesEntryAvailability"
@@ -54426,6 +54463,17 @@
             ],
             "x-tckdb-include-gated": "statmech"
           },
+          "stereo_descriptor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Descriptor"
+          },
           "stereo_label": {
             "anyOf": [
               {
@@ -54436,6 +54484,27 @@
               }
             ],
             "title": "Stereo Label"
+          },
+          "stereo_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StereoResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stereo_smiles": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Smiles"
           },
           "term_symbol": {
             "anyOf": [
@@ -58728,6 +58797,16 @@
           "ez_isomer"
         ],
         "title": "StereoKind",
+        "type": "string"
+      },
+      "StereoResolution": {
+        "description": "How completely a species entry's stereo descriptor is pinned down.\n\nDerived from ``species_entry.stereo_descriptor`` and never uploaded:\n``resolved`` when no element is ``?``, ``unresolved`` when every element\nis, ``partial`` otherwise. An entry with no stereo element at all\n(``stereo_descriptor IS NULL``) carries no resolution.",
+        "enum": [
+          "resolved",
+          "partial",
+          "unresolved"
+        ],
+        "title": "StereoResolution",
         "type": "string"
       },
       "StereochemicalScope": {
@@ -106685,6 +106764,18 @@
                 }
               ],
               "title": "Similarity Threshold"
+            }
+          },
+          {
+            "description": "Exact mode with query_smiles: return only entries whose stereo descriptor matches the stereo marks of the query (C/C=C/C finds the E entries). Species identity itself is stereo-blind.",
+            "in": "query",
+            "name": "isomeric",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Exact mode with query_smiles: return only entries whose stereo descriptor matches the stereo marks of the query (C/C=C/C finds the E entries). Species identity itself is stereo-blind.",
+              "title": "Isomeric",
+              "type": "boolean"
             }
           },
           {

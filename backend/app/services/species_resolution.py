@@ -10,24 +10,26 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
 
 from app.api.error_contract import CodedValueError
+from app.chemistry import stereo
 from app.chemistry.geometry import parse_xyz, resolve_element_symbol
 from app.chemistry.isotopes import render_isotope_substitutions
 from app.chemistry.species import (
     canonical_isotope_key,
     canonical_species_identity,
     classify_stereo_kind,
-    derive_stereo_label_from_3d,
     derive_unmapped_smiles,
     element_counts_from_smiles,
     format_element_counts,
     identity_mol_from_smiles,
     is_electron,
     isotope_substitutions,
+    strip_isotopes,
 )
-from app.db.models.common import MoleculeKind, StereoKind
+from app.db.models.common import MoleculeKind, StereoKind, StereoResolution
 from app.db.models.species import Species, SpeciesEntry
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
+from app.schemas.upload_warning import UploadWarning
 from app.scientific_checks import (
     CheckTier,
     CodeChannel,
@@ -107,10 +109,13 @@ def resolve_species(
             # one — not "unspecified pending better data".
             stereo_kind = StereoKind.achiral
         else:
-            ident_mol = identity_mol_from_smiles(payload.smiles)
+            ident_mol = stereo.constitution_mol(
+                strip_isotopes(identity_mol_from_smiles(payload.smiles))
+            )
             stereo_kind, _auto_label = classify_stereo_kind(ident_mol)
 
-    # Identity is (canonical_smiles, charge, multiplicity) — see DR-0031.
+    # Identity is (constitution smiles, charge, multiplicity) — DR-0031, with the
+    # key stereo-blind per DR-0038.
     # inchi_key is stored for cross-notation search but is NOT the dedup
     # key: it cannot distinguish spin states (singlet vs triplet CH2) and
     # wrongly merges some tautomers (2-pyridone vs 2-hydroxypyridine).
@@ -607,13 +612,22 @@ def resolve_species_entry(
         assert_geometry_composition_matches_identity(payload, candidate_geometry)
         assert_geometry_isotopes_match_identity(payload, candidate_geometry)
 
-    species = resolve_species(session, payload)
+    # Stereo is resolved before the species row is touched: a contradiction is a
+    # refusal, and a refused deposit should leave nothing behind. Order of
+    # authority is geometry, then the marks in the SMILES, then a supplied label;
+    # each fills only what the earlier ones left unknown, and any element two of
+    # them state differently is refused (DR-0038).
+    if is_electron(payload):
+        resolved_stereo = stereo.ResolvedStereo(None, None, None)
+    else:
+        frame = stereo.frame_from_mol(strip_isotopes(identity_mol_from_smiles(payload.smiles)))
+        resolved_stereo = stereo.resolve_stereo(
+            frame,
+            geometry_xyz=(geometry.xyz_text if geometry is not None else None),
+            supplied_label=payload.stereo_label,
+        )
 
-    # Derive R/S or E/Z label from 3D geometry when available
-    xyz_text = geometry.xyz_text if geometry is not None else None
-    stereo_label = payload.stereo_label
-    if stereo_label is None and species.stereo_kind != StereoKind.achiral and xyz_text:
-        stereo_label = derive_stereo_label_from_3d(payload.smiles, xyz_text)
+    species = resolve_species(session, payload)
 
     # A free electron has no molecular graph, so every graph-derived column
     # stays NULL: no isotope key (no nuclei to label), no ``mol`` and no
@@ -625,7 +639,7 @@ def resolve_species_entry(
         select(SpeciesEntry).where(
             SpeciesEntry.species_id == species.id,
             SpeciesEntry.kind == payload.species_entry_kind,
-            null_safe_equals(SpeciesEntry.stereo_label, stereo_label),
+            null_safe_equals(SpeciesEntry.stereo_descriptor, resolved_stereo.descriptor),
             SpeciesEntry.electronic_state_kind == payload.electronic_state_kind,
             null_safe_equals(
                 SpeciesEntry.electronic_state_label,
@@ -657,7 +671,10 @@ def resolve_species_entry(
                     kind=payload.species_entry_kind,
                     mol=mol_smiles,
                     unmapped_smiles=unmapped,
-                    stereo_label=stereo_label,
+                    stereo_label=resolved_stereo.label,
+                    stereo_descriptor=resolved_stereo.descriptor,
+                    stereo_resolution=resolved_stereo.resolution,
+                    stereo_smiles=resolved_stereo.stereo_smiles,
                     electronic_state_kind=payload.electronic_state_kind,
                     electronic_state_label=payload.electronic_state_label,
                     term_symbol_raw=payload.term_symbol_raw,
@@ -672,7 +689,7 @@ def resolve_species_entry(
                 select(SpeciesEntry).where(
                     SpeciesEntry.species_id == species.id,
                     SpeciesEntry.kind == payload.species_entry_kind,
-                    null_safe_equals(SpeciesEntry.stereo_label, stereo_label),
+                    null_safe_equals(SpeciesEntry.stereo_descriptor, resolved_stereo.descriptor),
                     SpeciesEntry.electronic_state_kind == payload.electronic_state_kind,
                     null_safe_equals(
                         SpeciesEntry.electronic_state_label,
@@ -716,3 +733,39 @@ def resolve_species_entry_reference(
 
     assert payload is not None
     return resolve_species_entry(session, payload, created_by=created_by)
+
+
+def species_entry_stereo_warning(
+    species_entry: SpeciesEntry,
+    *,
+    field: str = "species_entry",
+) -> UploadWarning | None:
+    """Warn when a stereo-capable entry ends with a stereo element still unknown.
+
+    The entry is accepted: ``E,?`` and ``?`` are honest entries of their own
+    (DR-0038), and a later, fully specified deposit does not merge into them.
+    The warning tells the depositor the configuration was not pinned down by
+    geometry, marks or label, so they can supply it.
+
+    :param species_entry: The resolved entry.
+    :param field: Dot-path of the entry in the request, for the warning.
+    :returns: A warning, or ``None`` when the entry is resolved or has no stereo element.
+    """
+
+    if species_entry.stereo_resolution not in (
+        StereoResolution.partial,
+        StereoResolution.unresolved,
+    ):
+        return None
+    return UploadWarning(
+        field=field,
+        code=stereo.W_SPECIES_ENTRY_STEREO_UNRESOLVED,
+        message=(
+            f"The stereochemistry of this species entry is {species_entry.stereo_resolution.value} "
+            f"(descriptor {species_entry.stereo_descriptor!r}): at least one stereo element "
+            "(R/S centre or E/Z double bond) is unknown, because no geometry resolved it, "
+            "the SMILES carries no mark for it and no stereo_label was supplied. The entry was "
+            "stored as its own entry; a later deposit that specifies the configuration will "
+            "not merge into it."
+        ),
+    )

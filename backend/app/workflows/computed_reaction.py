@@ -152,7 +152,7 @@ from app.services.software_banner_extraction import (
 from app.services.sp_energy_extraction import (
     try_reconcile_sp_energy_from_output_upload,
 )
-from app.services.species_resolution import resolve_species_entry
+from app.services.species_resolution import resolve_species_entry, species_entry_stereo_warning
 from app.services.statmech_declaration_resolution import persist_statmech_model_declaration
 from app.services.statmech_resolution import (
     assert_statmech_role_compatible,
@@ -621,6 +621,11 @@ def persist_computed_reaction_upload(
             additional_geometries=conformer_geometries[1:],
         )
         species_key_to_entry[sp.key] = species_entry
+        stereo_warning = species_entry_stereo_warning(
+            species_entry, field=f"species[{sp.key!r}].species_entry"
+        )
+        if stereo_warning is not None:
+            sp_energy_warnings.append(stereo_warning)
         review_targets.append(
             RecordRef(SubmissionRecordType.species_entry, species_entry.id)
         )

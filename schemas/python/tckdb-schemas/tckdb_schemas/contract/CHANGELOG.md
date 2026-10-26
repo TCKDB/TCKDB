@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.138.0 - 2026-10-26
+
+`stereo_label` on a species entry is a stereo descriptor, not free text. Species identity no longer includes stereochemistry (DR-0038).
+
+- **Behaviour change.** `SpeciesEntryIdentityPayload.stereo_label` accepts only descriptor tokens: `R`, `S`, `E`, `Z` or `?` (unknown), comma-separated,
+  one per potential stereo element of the molecule in canonical order (`E`, `R,S`, `E,?`). Free text such as `"trans"` is refused at validation. The field
+  is no longer a key that wins over everything: the server fills it only into elements the geometry and the SMILES stereo marks leave unresolved, and
+  cross-checks it where they exist. `max_length` widens from 64 to 512 (one token per element).
+- Server behaviour a depositor sees (no field change): `C/C=C/C` and `CC=CC` are one species and the stereoisomers are entries of it; SMILES marks,
+  geometry and label that name different configurations are refused with `species_stereo_contradiction` (422); a label that does not fit the molecule is
+  refused with `species_stereo_label_invalid` (422); an entry with any element still unknown is accepted with the `species_entry_stereo_unresolved` warning.
+- Read models: `SpeciesEntryScientificRecord` and the structure-search record carry `stereo_descriptor`, `stereo_resolution` and `stereo_smiles` beside
+  `stereo_label`. Structure search takes `isomeric` (exact mode) to match an entry's configuration.
+- The descriptor follows CIP codes: for a sigma-vinyl radical the unpaired electron ranks lowest, so `Z` has the hydrogen on the radical carbon cis to the
+  substituent on the other carbon. A name taken from the precursor halide can carry the opposite letter.
 ## 0.137.0 - 2026-10-25
 
 An ensemble member's relative energy states its convention.

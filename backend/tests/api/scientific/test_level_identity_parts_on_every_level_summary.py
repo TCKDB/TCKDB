@@ -107,7 +107,7 @@ def test_reaction_full_calculation_evidence_reads_the_part(db_session, part):
 
 @pytest.mark.parametrize("part", PARTS)
 def test_species_calculation_search_reads_the_part(client, db_session, part):
-    species = make_species(db_session, smiles="C[CH2]", inchi_key=next_inchi_key("IDSR"))
+    species = make_species(db_session, smiles="[CH2]C", inchi_key=next_inchi_key("IDSR"))
     entry = make_species_entry(db_session, species)
     make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=_full_level(db_session).id)
     [record] = client.get("/api/v1/scientific/species-calculations/search?smiles=C[CH2]").json()["records"]

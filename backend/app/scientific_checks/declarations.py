@@ -66,6 +66,7 @@ from tckdb_schemas.stationary_point import (
 )
 
 from app.chemistry import species as chemistry_species
+from app.chemistry import stereo as chemistry_stereo
 from app.chemistry import units as chemistry_units
 from app.scientific_checks import (
     CheckTier,
@@ -1301,6 +1302,7 @@ CHECK_REPRODUCIBILITY_IS_ITS_OWN_JUDGEMENT = ScientificCheck(
 DECLARING_MODULES: tuple[ModuleType, ...] = (
     calculation_geometry_composition,
     chemistry_species,
+    chemistry_stereo,
     chemistry_units,
     charge_multiplicity_reconciliation,
     external_comparison_checks,
