@@ -313,8 +313,10 @@ def build_symmetry_model(
         quartet = (slot.terminal_a, slot.bond_begin, slot.bond_end, slot.terminal_d)
         quartets[s] = quartet
         # A two-hydrogen top's quartet holds exactly one of its hydrogens; the other is its alternative.
+        alternative = slot.alt_terminal_h
         quartets_alt[s] = tuple(
-            slot.alt_terminal_h if slot.top_kind == "two_h" and atom not in heavy_set else atom for atom in quartet
+            alternative if alternative is not None and slot.top_kind == "two_h" and atom not in heavy_set else atom
+            for atom in quartet
         )
         for m, sigma in enumerate(automorphisms):
             first = [0, 0, 0, 0]
