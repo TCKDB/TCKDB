@@ -180,8 +180,12 @@ Resolved once, by an `async` router-level dependency
 > calculations approved-only (`ml_dataset.ml_energy_row_floor`); a release is unchanged. The sweep keeps the exports and the
 > relative-energy routes listed only for the RECORDS they list or compare.
 >
+> **Already true (step 6):** a route that asks for `check_inputs` compares a stored assessment's inputs under `curated` exactly as under
+> `exploratory`. The stamp was made from the full set of inputs without a profile, so the comparison is profile-free and the answer
+> (`state`, `stale_reason`, `inputs_checked`) is the same for both.
+>
 > **Still the earlier rule (below the floor is hidden, evidence included), and the text below describes that code:**
-> made-under (step 6) and detail-by-ref (step 7; the second seam below still applies the floor until then).
+> detail-by-ref (step 7; the second seam below still applies the floor until then).
 
 Behaviourally, `curated` is applied at exactly **two** seams, which between
 them cover the whole read surface:

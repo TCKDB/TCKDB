@@ -21,8 +21,8 @@ class MadeUnder(TypedDict):
     ``assessed_version`` 0 means "stamped before the 2026-10 versioning reset" and is never current.
     ``stale_reason`` is ``rubric_version``, ``prompt_version`` (a stored machine review) or ``inputs_changed`` when
     ``state`` is ``stale``. ``inputs_checked`` is true only on a route that compares the inputs, ``None`` when
-    there is nothing to compare. ``inputs_unchecked_reason`` is ``curated_profile`` when a curated read withholds
-    the comparison (a hidden record's edit must not move a visible verdict).
+    there is nothing to compare. The comparison is the same under the ``curated`` and ``exploratory`` profiles: whether
+    a stamp is current is a property of the record and its stamp, not of the reader.
     """
 
     state: Literal["current", "stale", "unassessed", "inputs_unchecked"]
@@ -32,7 +32,6 @@ class MadeUnder(TypedDict):
     current_version: int | None
     stale_reason: Literal["rubric_version", "prompt_version", "inputs_changed"] | None
     inputs_checked: bool | None
-    inputs_unchecked_reason: Literal["curated_profile"] | None
 
 
 class ReproducibilityAssessmentSummary(TypedDict):

@@ -10,7 +10,7 @@ steps; a site that has not been moved yet still applies D6. The helper that hold
 its siblings in `app/services/scientific_read/common.py`) is called, from step 2, by the response-level ref guard
 (`ref_guard.py`), the selection documents, the export streams, the legacy entity reads and the ML export's conformer refs, and, from
 step 3, by the service counts, flags and derived levels of a returned record, and, from step 5, by the trust evaluators and the
-selection loaders' own evidence populations. Still on D6: made-under comparisons, and detail-by-ref. Matching in search, browse and select moved in step 4 (filters match through
+selection loaders' own evidence populations. Still on D6: detail-by-ref (step 7). Matching in search, browse and select moved in step 4 (filters match through
 linked evidence unless it is rejected or deprecated; a filter ref that names such evidence matches nothing).
 
 Under the `curated` profile, the `approved` floor decides which **records** a list, search or select returns. The **linked
@@ -104,3 +104,11 @@ Step 2 (nested refs in responses, selection documents and exports) moved the sel
   version bump: the checks and grading are unchanged, only the calculations a curated read hands them change (an unreviewed one is
   read), so stored and exploratory verdicts are unchanged and curated read-time verdicts may change. The ML export's energy rows
   keep their calculations approved-only (Q7); that is a named function, `ml_dataset.ml_energy_row_floor`, with its own test.
+- Step 6 (made-under comparisons) changed no manifest content and no rubric. A stored assessment's stamp was computed from the full set of
+  inputs, without a read profile, so whether it is current is a property of the record and its stamp, not of the reader. Under `curated`, a
+  route that asks for `check_inputs` (the thermo and kinetics entry-scoped lists with `include=assessments`, and the statmech and transport
+  by-ref reads) now recomputes and compares exactly as `exploratory` does, and `state`, `stale_reason` and `inputs_checked` are identical under
+  both. The recomputation (`evaluate_reproducibility`) reads no request profile. The answer is a state and a reason, never a ref; "stale because
+  a rejected input changed" is accepted (Q8). The cost guard is unchanged: only the routes that bound their page compare. The read model's
+  `made_under.inputs_unchecked_reason` (it only ever said `curated_profile`) is removed, with `tckdb-client` 0.173.0. The stored machine-review
+  `made_under` compares stamps only (`inputs_checked` false) under every profile and is unchanged. `generate_rubric_pins.py --check` stays clean.

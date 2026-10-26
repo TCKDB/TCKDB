@@ -735,8 +735,9 @@ def where_visible(stmt: Any, predicate: Any) -> Any:
 # the trust evaluators (``trust_floor.py``) and the selection loaders' own evidence populations (``evidence_usable_statuses``
 # and ``evidence_visible_statuses`` in the structure, statmech, network and relative-energy loaders and the source-finding
 # gate) call this section. Named exception: the ML export's energy rows keep their calculations approved-only (owner decision
-# Q7, ``ml_dataset.ml_energy_row_floor``). Still on the earlier rule (D6: below the floor is hidden, evidence included) until
-# their steps land: made-under comparisons (step 6), and detail-by-ref (step 7).
+# Q7, ``ml_dataset.ml_energy_row_floor``), and the made-under comparisons (step 6: a stored stamp is compared with a
+# profile-free recomputation, so the answer is the same under every profile; ``public_assessments._reproducibility_summary``).
+# Still on the earlier rule (D6: below the floor is hidden, evidence included) until its step lands: detail-by-ref (step 7).
 
 #: Review statuses whose linked evidence is withheld under a profile with a review floor.
 WITHHELD_EVIDENCE_STATUSES: frozenset[RecordReviewStatus] = frozenset(
