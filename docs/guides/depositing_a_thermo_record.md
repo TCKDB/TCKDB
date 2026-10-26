@@ -48,6 +48,20 @@ enthalpy zero, so it means nothing until that zero is declared. This holds
 even when the points carry no enthalpy of their own: a record with only
 Gibbs energies and entropies must still declare `formation_298k`.
 
+**If you use the Python client builders** (`Thermo.scalar`, `Thermo.nasa`,
+`Thermo.points`), you do not have to type this. When you leave
+`enthalpy_reference_kind` out and the record carries any of the enthalpy
+content above, the builder fills in `formation_298k` for you, and the built
+payload contains the field, so what is stored is still an explicit claim.
+That default means exactly what this section says: formation enthalpy at
+298.15 K, plus the species' own increment above it at other temperatures.
+Check that your numbers really are on that convention before you rely on it.
+Only an omitted argument triggers the default. An explicit value is kept, and
+an explicit `enthalpy_reference_kind=None` stays `None` (the builder then
+refuses with `enthalpy_declaration_absent`). A record with no enthalpy gets no
+default. The server does not default anything: a payload written by hand, or
+by any tool that does not default, must state the declaration itself.
+
 A record that carries only entropy and heat capacity has no enthalpy, so it
 must leave the declaration out. Declaring a reference for a quantity the
 record does not contain is refused.
@@ -274,9 +288,11 @@ no declaration:
 - Infer an enthalpy reference from the size of a number, from which program
   produced it, from a neighbouring record, or from whether the record is
   computed or experimental.
-- Fill in a default reference. There is no default, deliberately, because a
-  wrong one is a several-hundred-kilojoule error that looks entirely
-  plausible.
+- Fill in a default reference. The server has no default, deliberately,
+  because a wrong one is a several-hundred-kilojoule error that looks entirely
+  plausible. The Python client builders default an *omitted* argument to
+  `formation_298k` on the depositor's side (see above), so the payload that
+  reaches the server always states it.
 - Derive a 298.15 K scalar from a fit and store it as though you deposited it.
 - Change what an already-approved record says.
 

@@ -22,6 +22,14 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The client defaults the enthalpy reference declaration (2026-10-26)
+
+- **`tckdb-client` 0.172.0.** The thermo builders (`Thermo.scalar`, `Thermo.nasa`, `Thermo.points`) set `enthalpy_reference_kind="formation_298k"` when the
+  argument is omitted and the record carries enthalpy content, so most depositors never type it. An explicit value (including an explicit `None`) is kept,
+  and a record with no enthalpy gets no default. The payload carries the field, so every stored record still holds an explicit claim.
+- **The server is unchanged**: no server-side default, and a deposit that bypasses the builders must still state the declaration or is refused with
+  `enthalpy_declaration_absent`. No schema or migration impact.
+
 ## Method family and DFT rung; thermo and kinetics take the full provenance filters (2026-10-26)
 
 - **A method family and a DFT rung classify a level of theory's method.** `family` is one of `dft`, `wavefunction`, `composite`,

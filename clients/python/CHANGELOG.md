@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.172.0 - 2026-10-26
+
+The thermo builders default the enthalpy declaration.
+
+- **Behaviour change.** `Thermo.scalar`, `Thermo.nasa` and `Thermo.points` set `enthalpy_reference_kind="formation_298k"` when the argument is
+  omitted and the record carries enthalpy content (an `h298_kj_mol`, a NASA fit, or points with `h_kj_mol` or `g_kj_mol`, as judged by
+  `tckdb_schemas.enthalpy_reference`). That is formation enthalpy at 298.15 K plus the species' own increment above it. The built payload carries the field.
+- Only an omitted argument triggers the default. An explicit value is kept; an explicit `None` stays `None` (the builder refuses with
+  `enthalpy_declaration_absent`, as before). A record with no enthalpy content gets no default. The server is unchanged and still refuses a deposit
+  that carries enthalpies without the declaration.
+- The `enthalpy_reference_kind` parameter of the three factories is now typed `str | None | _Unset`; the bare `Thermo(...)` constructor is unchanged.
+
 ## 0.171.0 - 2026-10-26
 
 Thermo and kinetics take the full provenance filter set, and a level of theory carries a method family and DFT rung.
