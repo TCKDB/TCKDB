@@ -396,6 +396,27 @@ def _neutralize_radicals_for_template(template: Chem.Mol) -> Chem.Mol:
     return neutralized
 
 
+def _restore_radicals(mol: Chem.Mol) -> None:
+    """Re-perceive unpaired electrons on ``mol`` in place, before stereo perception.
+
+    ``AssignBondOrdersFromTemplate`` is given a neutralised template, so the
+    molecule it returns carries whatever radical bookkeeping RDKit's sanitiser
+    happened to leave: a vinyl radical keeps its unpaired electron, while
+    ``[O][O]``, ``[CH3]`` and the pyramidal ``C[C](F)Cl`` lose theirs. Stereo
+    perception must not depend on that accident, so the unpaired electrons are
+    re-derived from valence (every atom already carries explicit Hs and
+    ``NoImplicit``), which is exactly what a radical SMILES states.
+
+    This is what keeps a sigma-vinyl radical's double bond stereogenic: with
+    its unpaired electron accounted for, the radical carbon is a two-substituent
+    sp2 end of the C=C (H plus the electron), the same as the N-H end of
+    diazene.
+    """
+
+    mol.UpdatePropertyCache(strict=False)
+    Chem.AssignRadicals(mol)
+
+
 def derive_stereo_label_from_3d(smiles: str, xyz_text: str) -> str | None:
     """Assign R/S and E/Z labels from 3D geometry.
 
@@ -415,7 +436,11 @@ def derive_stereo_label_from_3d(smiles: str, xyz_text: str) -> str | None:
     Open-shell / radical species are supported: the SMILES template's radical
     electrons are neutralized on a copy (see
     ``_neutralize_radicals_for_template``) so ``AssignBondOrdersFromTemplate``
-    accepts it, while the geometry-derived stereo result is unchanged. Radical
+    accepts it, and the unpaired electrons are restored on the mapped molecule
+    (``_restore_radicals``) before stereo is read from the coordinates. A
+    sigma-vinyl radical's E/Z therefore comes from geometry alone, which is the
+    only place it exists; a collinear H-C=C geometry leaves it undefined and
+    yields no label. A pyramidal radical centre never gets R/S. Radical
     stereoisomers (e.g. E/Z crotyl, a chiral radical R/S) are therefore now
     distinguished. If a particular radical geometry still cannot be resolved,
     the function falls back to ``None`` (safe) rather than a wrong label.
@@ -447,6 +472,9 @@ def derive_stereo_label_from_3d(smiles: str, xyz_text: str) -> str | None:
         rdDetermineBonds.DetermineConnectivity(raw_mol)
 
         mol = AllChem.AssignBondOrdersFromTemplate(template, raw_mol)
+        # Neutralisation was for bond-order mapping only; put the unpaired
+        # electrons back before stereo is read from the coordinates.
+        _restore_radicals(mol)
         Chem.AssignStereochemistryFrom3D(mol)
 
         # Canonical, input-order-independent ranking of atoms. Keying each label

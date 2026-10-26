@@ -1695,6 +1695,16 @@ wrapper over a contract that is itself still moving.
 
 ## Unreleased
 
+### sigma-vinyl radical E/Z is read from geometry, with the radical count restored
+
+- `derive_stereo_label_from_3d` neutralises the template's radicals only to map bond orders. The mapped
+  molecule's unpaired electrons are now re-derived before stereo is read from the coordinates, instead of
+  depending on what RDKit's sanitiser happened to leave (it dropped them for `[O][O]`, `[CH3]`, `C[C](F)Cl`).
+  A bent sigma-vinyl radical such as 1-propenyl resolves to `E` or `Z` from geometry; a collinear H-C=C
+  geometry, a pyramidal radical centre, a biradical and a charged species still yield no label.
+- No schema or migration impact; existing rows are not re-derived. On the RDKit pinned here the labels of all
+  inputs tried are unchanged, so no stored value would differ for a new deposit.
+
 ### Owner-scoped reproducibility rubric for transition-state statmech (#760)
 
 - A transition-state-owned statmech was graded `insufficient` whatever its evidence, because the
