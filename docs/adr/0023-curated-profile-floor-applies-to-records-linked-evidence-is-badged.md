@@ -10,7 +10,7 @@ steps; a site that has not been moved yet still applies D6. The helper that hold
 its siblings in `app/services/scientific_read/common.py`) is called, from step 2, by the response-level ref guard
 (`ref_guard.py`), the selection documents, the export streams, the legacy entity reads and the ML export's conformer refs, and, from
 step 3, by the service counts, flags and derived levels of a returned record, and, from step 5, by the trust evaluators and the
-selection loaders' own evidence populations. Still on D6: made-under comparisons, and detail-by-ref. Matching in search, browse and select moved in step 4 (filters match through
+selection loaders' own evidence populations. Still on D6: detail-by-ref (step 7). Matching in search, browse and select moved in step 4 (filters match through
 linked evidence unless it is rejected or deprecated; a filter ref that names such evidence matches nothing).
 
 Under the `curated` profile, the `approved` floor decides which **records** a list, search or select returns. The **linked
