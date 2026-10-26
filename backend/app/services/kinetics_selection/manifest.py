@@ -48,7 +48,11 @@ from app.versioning import same_value
 #: and the population records the funnel. Version 4: the manifest records its ``read_profile`` and, in it, the review
 #: statuses whose linked evidence that profile withheld (ADR 0023); under ``curated`` a not-reviewed or under-review
 #: record is shown as evidence and only a rejected or deprecated one is a token.
-MANIFEST_FORMAT_VERSION = 4
+#: Version 5: the filters are the browse's full provenance set (method, basis,
+#: software version, workflow tool, method family, DFT rung, scientific origin), and the provenance fields are matched
+#: through ONE source calculation (version 4 matched level of theory and software through any, independently). A
+#: decision recorded under version 4 means something else and is not replayable.
+MANIFEST_FORMAT_VERSION = 5
 MANIFEST_FORMAT_NAME = "kinetics_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "kinetics_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION

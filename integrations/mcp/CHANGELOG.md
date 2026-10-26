@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.15.0 - 2026-10-26
+
+The thermo and kinetics select tools take the full provenance filters.
+
+- `tckdb_select_species_thermo` and `tckdb_select_reaction_kinetics` accept `filters` of `model_kind`, `scientific_origin`, `level_of_theory_ref`,
+  `method`, `basis`, `software`, `software_version`, `workflow_tool` and `workflow_tool_version`. ONE source calculation has to match every provenance
+  field supplied (until now level of theory and software were matched through any calculation each, independently). They also take
+  `method_family` (one family name or a list) and `dft_rung_min` / `dft_rung_max` (integers 1 to 5), a classification of the method and not an accuracy measure.
+- `tckdb_select_statmech_models` accepts `filters.scientific_origin`.
+- `tckdb_statmech_search` accepts `scientific_origin` (`computed`, `experimental` or `estimated`), matched on the record itself.
+
 ## 0.14.0 - 2026-10-25
 
 The paged search tools take `cursor`.

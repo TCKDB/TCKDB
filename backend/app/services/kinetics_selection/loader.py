@@ -32,6 +32,7 @@ from app.db.models.common import (
     KineticsModelKind,
     ReactionRole,
     RecordReviewStatus,
+    ScientificOriginKind,
     SubmissionRecordType,
 )
 from app.db.models.kinetics import Kinetics, KineticsDetermination, KineticsSourceCalculation
@@ -53,7 +54,7 @@ from app.services.scientific_read.common import fetch_review_badges, visible_sta
 from app.services.scientific_read.handles import canonical_level_of_theory_id
 from app.services.scientific_read.kinetics import KINETICS_TRUST_EAGER_LOADS
 from app.services.scientific_read.ref_guard import unavailable_refs
-from app.services.selection_filters import filter_by_level_and_software
+from app.services.selection_filters import filter_by_provenance, resolve_level_of_theory_ref
 from app.services.selection_kernel.requested import review_default
 
 CODE_POPULATION_TOO_LARGE = "kinetics_selection_population_too_large"
@@ -123,17 +124,26 @@ def apply_filters(session: Session, ids: list[int], filters: KineticsFilters) ->
                 select(Kinetics.id).where(Kinetics.id.in_(keep), Kinetics.model_kind == KineticsModelKind(filters.model_kind))
             )
         )
-    if keep and (filters.level_of_theory_ref is not None or filters.software is not None):
-        links: dict[int, set[int]] = {i: set() for i in keep}
-        for kinetics_id, calculation_id in session.execute(
-            select(KineticsSourceCalculation.kinetics_id, KineticsSourceCalculation.calculation_id).where(
-                KineticsSourceCalculation.kinetics_id.in_(keep)
+    if keep and filters.scientific_origin is not None:
+        keep = set(
+            session.scalars(
+                select(Kinetics.id).where(
+                    Kinetics.id.in_(keep), Kinetics.scientific_origin == ScientificOriginKind(filters.scientific_origin)
+                )
             )
-        ):
-            links[kinetics_id].add(calculation_id)
-        keep = filter_by_level_and_software(
-            session, links, level_of_theory_ref=filters.level_of_theory_ref, software=filters.software
         )
+    if keep and filters.has_source_constraint:
+        lot_id = None
+        if filters.level_of_theory_ref is not None:
+            lot_id = resolve_level_of_theory_ref(session, filters.level_of_theory_ref)
+            if lot_id is None:
+                return []  # an unknown level of theory keeps nothing
+        links: dict[int, set[int]] = {i: set() for i in keep}
+        for record_id, calculation_id in session.execute(
+            select(KineticsSourceCalculation.kinetics_id, KineticsSourceCalculation.calculation_id).where(KineticsSourceCalculation.kinetics_id.in_(keep))
+        ):
+            links[record_id].add(calculation_id)
+        keep = filter_by_provenance(session, links, level_of_theory_id=lot_id, **filters.provenance())
     return [i for i in ids if i in keep]
 
 

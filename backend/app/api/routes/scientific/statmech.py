@@ -32,6 +32,7 @@ from app.api.routes.scientific._response import (
 )
 from app.db.models.common import (
     RecordReviewStatus,
+    ScientificOriginKind,
     StatmechTreatmentKind,
 )
 from app.schemas.reads.scientific_statmech import (
@@ -76,6 +77,7 @@ def scientific_statmech_search_get(
     transition_state_entry_ref: str | None = Query(None),
     declared_conformer_group_ref: str | None = Query(None),
     model_kind: StatmechTreatmentKind | None = Query(None),
+    scientific_origin: ScientificOriginKind | None = Query(None),
     has_source_calculations: bool | None = Query(None),
     has_freq_calculation: bool | None = Query(None),
     has_rotor_scans: bool | None = Query(None),
@@ -122,6 +124,7 @@ def scientific_statmech_search_get(
         transition_state_entry_ref=transition_state_entry_ref,
         declared_conformer_group_ref=declared_conformer_group_ref,
         model_kind=model_kind,
+        scientific_origin=scientific_origin,
         has_source_calculations=has_source_calculations,
         has_freq_calculation=has_freq_calculation,
         has_rotor_scans=has_rotor_scans,

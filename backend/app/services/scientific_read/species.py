@@ -47,6 +47,7 @@ from app.db.models.transport import Transport
 from app.schemas.reads._field_bounds import (
     MAX_ELEMENT_SYMBOLS as _MAX_ELEMENT_SYMBOLS,
 )
+from app.schemas.reads._method_family import echo_method_class
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     OrderEcho,
@@ -1854,6 +1855,7 @@ def _browse_filter_echo(
         value = getattr(request, field)
         if value is not None:
             echo[field] = value
+    echo_method_class(request, echo)
     if structure_query is not None:
         kind, value = structure_query
         echo[f"query_{kind.value}"] = value

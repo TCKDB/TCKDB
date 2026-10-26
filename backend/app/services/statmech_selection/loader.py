@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.error_contract import CodedValueError
 from app.api.errors import NotFoundError, not_found
 from app.db.models.calculation import Calculation
-from app.db.models.common import RecordReviewStatus, StatmechTreatmentKind, SubmissionRecordType
+from app.db.models.common import RecordReviewStatus, ScientificOriginKind, StatmechTreatmentKind, SubmissionRecordType
 from app.db.models.energy_correction import FrequencyScaleFactor
 from app.db.models.geometry import Geometry
 from app.db.models.literature import Literature
@@ -167,7 +167,15 @@ def apply_filters(session: Session, ids: list[int], filters: StatmechFilters) ->
                 )
             )
         )
-    provenance = {k: v for k, v in asdict(filters).items() if k != "model_kind"}
+    if keep and filters.scientific_origin is not None:
+        keep = set(
+            session.scalars(
+                select(Statmech.id).where(
+                    Statmech.id.in_(keep), Statmech.scientific_origin == ScientificOriginKind(filters.scientific_origin)
+                )
+            )
+        )
+    provenance = {k: v for k, v in asdict(filters).items() if k not in ("model_kind", "scientific_origin")}
     if keep and any(v is not None for v in provenance.values()):
         links: dict[int, set[int]] = {i: set() for i in keep}
         for statmech_id, calculation_id in session.execute(

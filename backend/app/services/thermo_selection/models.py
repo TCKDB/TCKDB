@@ -17,6 +17,7 @@ from app.schemas.reads.scientific_common import SelectionPolicy
 from app.services.manifest_formats import new_current_only_registry, new_format_registry
 from app.services.selection_kernel import Applicability, Outcome
 from app.services.selection_kernel.requested import Eligibility
+from app.services.selection_kernel.source_filters import SourceFilters
 
 #: The one quantity this selector answers.
 QUANTITY = "formation_enthalpy_298k"
@@ -52,7 +53,11 @@ ASSESSMENT_SEMANTICS = new_current_only_registry(
 #: records the funnel. Version 4: the manifest records its ``read_profile`` and, in it, the review statuses whose
 #: linked evidence that profile withheld (ADR 0023); under ``curated`` a not-reviewed or under-review record is shown
 #: as evidence and only a rejected or deprecated one is a token.
-MANIFEST_FORMAT_VERSION = 4
+#: Version 5: the filters are the browse's full provenance set (method, basis, software version,
+#: workflow tool, method family, DFT rung, scientific origin), and the provenance fields are matched through ONE source
+#: calculation (version 4 matched level of theory and software through any, independently). A decision recorded
+#: under version 4 means something else and is not replayable.
+MANIFEST_FORMAT_VERSION = 5
 MANIFEST_FORMAT_NAME = "thermo_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "thermo_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -60,28 +65,12 @@ MANIFEST_FORMATS = new_format_registry(
 
 
 @dataclass(frozen=True)
-class ThermoFilters:
+class ThermoFilters(SourceFilters):
     """The caller's filters, with the per-entry thermo browse's vocabulary and meaning (public refs only).
 
-    :param model_kind: The stored model form (``scalar``, ``nasa``, ``nasa9``, ``wilhoit``, ``points``).
-    :param level_of_theory_ref: ANY shown source calculation ran at this level of theory.
-    :param software: ANY shown source calculation ran in a software of this name.
+    The provenance fields (level of theory, software, method, basis, workflow tool, method family, DFT rung) are matched
+    through ONE shown source calculation: it has to satisfy every one supplied (``SourceFilters``).
     """
-
-    model_kind: str | None = None
-    level_of_theory_ref: str | None = None
-    software: str | None = None
-
-    def to_record(self) -> dict[str, Any]:
-        return {k: v for k, v in self.__dict__.items() if v is not None}
-
-    @classmethod
-    def from_record(cls, raw: dict[str, Any]) -> ThermoFilters:
-        return cls(**raw)
-
-    @property
-    def active(self) -> bool:
-        return any(v is not None for v in self.__dict__.values())
 
 
 @dataclass(frozen=True)

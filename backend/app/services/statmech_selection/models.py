@@ -327,6 +327,7 @@ class StatmechFilters:
     """
 
     model_kind: str | None = None
+    scientific_origin: str | None = None
     method: str | None = None
     basis: str | None = None
     software: str | None = None

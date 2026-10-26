@@ -10492,6 +10492,32 @@
               }
             ]
           },
+          "dft_rung_max": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Max"
+          },
+          "dft_rung_min": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Min"
+          },
           "geometry_validation_status": {
             "anyOf": [
               {
@@ -10615,6 +10641,20 @@
               }
             ],
             "title": "Method"
+          },
+          "method_family": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MethodFamily"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method Family"
           },
           "min_review_status": {
             "anyOf": [
@@ -25170,6 +25210,18 @@
       "KineticsSearchRequest": {
         "description": "Service-layer request for chemistry-first kinetics search.\n\nReactants and/or products are required; reaction identity is resolved by\ndelegating to ``search_reactions``, so ``direction`` and ``match`` mean\nexactly what they mean there — ``match`` defaults to ``contains`` (set\ncontainment per role), and ``match=exact`` asks for one whole equation.\n``direction=exact`` is **not** supported in v0.\n\nEvery matching record is returned in display order; ``collapse`` is refused (422).",
         "properties": {
+          "basis": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
           "coverage_temperature_max_k": {
             "anyOf": [
               {
@@ -25204,6 +25256,32 @@
             ],
             "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
             "title": "Cursor"
+          },
+          "dft_rung_max": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Max"
+          },
+          "dft_rung_min": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Min"
           },
           "direction": {
             "$ref": "#/components/schemas/ReactionDirectionQuery",
@@ -25269,6 +25347,32 @@
           "match": {
             "$ref": "#/components/schemas/ReactionMatchMode",
             "default": "contains"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "method_family": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MethodFamily"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method Family"
           },
           "min_review_status": {
             "anyOf": [
@@ -25362,6 +25466,16 @@
             ],
             "title": "Reaction Ref"
           },
+          "scientific_origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScientificOriginKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "software": {
             "anyOf": [
               {
@@ -25374,6 +25488,18 @@
             ],
             "title": "Software"
           },
+          "software_version": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Version"
+          },
           "sort": {
             "anyOf": [
               {
@@ -25384,6 +25510,30 @@
               }
             ],
             "title": "Sort"
+          },
+          "workflow_tool": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool"
+          },
+          "workflow_tool_version": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool Version"
           }
         },
         "title": "KineticsSearchRequest",
@@ -25726,8 +25876,46 @@
       },
       "KineticsSelectionFilters": {
         "additionalProperties": false,
-        "description": "The filters the kinetics browse and search offer, with their meaning: rate-law form, level of theory, software.\n\nApplied before eligibility. A filter excludes on a fact and ranks nothing.",
+        "description": "The filters the kinetics browse and search offer, with their meaning: rate-law form, origin and the provenance set.\n\nApplied before eligibility. A filter excludes on a fact and ranks nothing.",
         "properties": {
+          "basis": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "dft_rung_max": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Max"
+          },
+          "dft_rung_min": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Min"
+          },
           "level_of_theory_ref": {
             "anyOf": [
               {
@@ -25740,10 +25928,46 @@
             ],
             "title": "Level Of Theory Ref"
           },
+          "method": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "method_family": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MethodFamily"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method Family"
+          },
           "model_kind": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/KineticsModelKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scientific_origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScientificOriginKind"
               },
               {
                 "type": "null"
@@ -25761,6 +25985,42 @@
               }
             ],
             "title": "Software"
+          },
+          "software_version": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Version"
+          },
+          "workflow_tool": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool"
+          },
+          "workflow_tool_version": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool Version"
           }
         },
         "title": "KineticsSelectionFilters",
@@ -27696,6 +27956,19 @@
             "title": "Created At",
             "type": "string"
           },
+          "dft_rung": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The DFT rung, 1 (LDA) to 5 (double hybrid); ``None`` for a method that is not a density functional.\n\nThe ladder covers DFT only and is not an accuracy ranking.",
+            "readOnly": true,
+            "title": "Dft Rung"
+          },
           "dispersion": {
             "anyOf": [
               {
@@ -27748,6 +28021,16 @@
             "title": "Method",
             "type": "string"
           },
+          "method_classification": {
+            "$ref": "#/components/schemas/VersionRef",
+            "description": "The versioned classification that produced ``method_family`` and ``dft_rung``.",
+            "readOnly": true
+          },
+          "method_family": {
+            "$ref": "#/components/schemas/MethodFamily",
+            "description": "The kind of method this is, derived from ``method`` (``unclassified`` when the table does not name it).\n\nA classification, not a measure of accuracy. See :mod:`app.chemistry.method_families`.",
+            "readOnly": true
+          },
           "solvent": {
             "anyOf": [
               {
@@ -27786,7 +28069,10 @@
           "method",
           "lot_hash",
           "created_at",
-          "label"
+          "label",
+          "method_family",
+          "dft_rung",
+          "method_classification"
         ],
         "title": "LevelOfTheoryCoreBlock",
         "type": "object"
@@ -28201,6 +28487,32 @@
             "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
             "title": "Cursor"
           },
+          "dft_rung_max": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Max"
+          },
+          "dft_rung_min": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Min"
+          },
           "dispersion": {
             "anyOf": [
               {
@@ -28292,6 +28604,20 @@
               }
             ],
             "title": "Method"
+          },
+          "method_family": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MethodFamily"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method Family"
           },
           "min_review_status": {
             "anyOf": [
@@ -29926,6 +30252,19 @@
           "mol_corr"
         ],
         "title": "MeliusBacComponentKind",
+        "type": "string"
+      },
+      "MethodFamily": {
+        "enum": [
+          "dft",
+          "wavefunction",
+          "composite",
+          "multireference",
+          "semiempirical",
+          "force_field",
+          "unclassified"
+        ],
+        "title": "MethodFamily",
         "type": "string"
       },
       "MicroReactionParticipantUpload": {
@@ -53188,6 +53527,32 @@
             "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
             "title": "Cursor"
           },
+          "dft_rung_max": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Max"
+          },
+          "dft_rung_min": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Min"
+          },
           "electronic_state_kind": {
             "anyOf": [
               {
@@ -53295,6 +53660,20 @@
               }
             ],
             "title": "Method"
+          },
+          "method_family": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MethodFamily"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method Family"
           },
           "min_review_status": {
             "anyOf": [
@@ -56062,6 +56441,16 @@
             "title": "Offset",
             "type": "integer"
           },
+          "scientific_origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScientificOriginKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "software": {
             "anyOf": [
               {
@@ -56325,6 +56714,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/StatmechTreatmentKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scientific_origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScientificOriginKind"
               },
               {
                 "type": "null"
@@ -63957,6 +64356,18 @@
       "ThermoSearchRequest": {
         "description": "Service-layer request for chemistry-first thermo search.\n\nAt least one species identifier (``smiles`` / ``inchi`` / ``inchi_key`` /\n``formula``) must be supplied; multiple identifiers AND-combine.\nInconsistent identifiers return an empty result set, not a 422. Every matching record is returned in display\norder; ``collapse`` and ``selection_policy`` are refused (422).",
         "properties": {
+          "basis": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
           "charge": {
             "anyOf": [
               {
@@ -64002,6 +64413,32 @@
             ],
             "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
             "title": "Cursor"
+          },
+          "dft_rung_max": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Max"
+          },
+          "dft_rung_min": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Min"
           },
           "electronic_state_kind": {
             "anyOf": [
@@ -64094,6 +64531,32 @@
             "title": "Limit",
             "type": "integer"
           },
+          "method": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "method_family": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MethodFamily"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method Family"
+          },
           "min_review_status": {
             "anyOf": [
               {
@@ -64130,6 +64593,16 @@
             "title": "Offset",
             "type": "integer"
           },
+          "scientific_origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScientificOriginKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "smiles": {
             "anyOf": [
               {
@@ -64153,6 +64626,18 @@
               }
             ],
             "title": "Software"
+          },
+          "software_version": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Version"
           },
           "sort": {
             "anyOf": [
@@ -64198,6 +64683,30 @@
               }
             ],
             "title": "Species Ref"
+          },
+          "workflow_tool": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool"
+          },
+          "workflow_tool_version": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool Version"
           }
         },
         "title": "ThermoSearchRequest",
@@ -64525,8 +65034,46 @@
       },
       "ThermoSelectionFilters": {
         "additionalProperties": false,
-        "description": "The filters the thermo browse and search offer, with their meaning: model form, level of theory, software.\n\nApplied before eligibility. A filter excludes on a fact and ranks nothing.",
+        "description": "The filters the thermo browse and search offer, with their meaning: model form, origin and the provenance set.\n\nApplied before eligibility. A filter excludes on a fact and ranks nothing.",
         "properties": {
+          "basis": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "dft_rung_max": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Max"
+          },
+          "dft_rung_min": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Min"
+          },
           "level_of_theory_ref": {
             "anyOf": [
               {
@@ -64539,10 +65086,46 @@
             ],
             "title": "Level Of Theory Ref"
           },
+          "method": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "method_family": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MethodFamily"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method Family"
+          },
           "model_kind": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ThermoModelKindQuery"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scientific_origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScientificOriginKind"
               },
               {
                 "type": "null"
@@ -64560,6 +65143,42 @@
               }
             ],
             "title": "Software"
+          },
+          "software_version": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Version"
+          },
+          "workflow_tool": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool"
+          },
+          "workflow_tool_version": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool Version"
           }
         },
         "title": "ThermoSelectionFilters",
@@ -68655,6 +69274,32 @@
             "description": "Stable traversal. Pass the previous response's next_cursor to get the following page; the cursor pins the traversal to the records that existed when it began and is bound to this endpoint, these filters and this read profile (a cursor replayed elsewhere is a 422). Cannot be combined with a non-zero offset. offset is random access and is deterministic only for a static corpus. The snapshot bounds insertions, not curation: a record whose review status changes mid-traversal can still enter or leave the visible set. For an immutable, citable set use a published dataset release.",
             "title": "Cursor"
           },
+          "dft_rung_max": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Max"
+          },
+          "dft_rung_min": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dft Rung Min"
+          },
           "family": {
             "anyOf": [
               {
@@ -68788,6 +69433,20 @@
               }
             ],
             "title": "Method"
+          },
+          "method_family": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MethodFamily"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method Family"
           },
           "min_review_status": {
             "anyOf": [
@@ -91023,6 +91682,61 @@
           },
           {
             "in": "query",
+            "name": "method_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/MethodFamily"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method Family"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Max"
+            }
+          },
+          {
+            "in": "query",
             "name": "software",
             "required": false,
             "schema": {
@@ -95135,6 +95849,157 @@
           },
           {
             "in": "query",
+            "name": "method",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method"
+            }
+          },
+          {
+            "in": "query",
+            "name": "basis",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Basis"
+            }
+          },
+          {
+            "in": "query",
+            "name": "software_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Software Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflow_tool",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Tool"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflow_tool_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Tool Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "method_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/MethodFamily"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method Family"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scientific_origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ScientificOriginKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scientific Origin"
+            }
+          },
+          {
+            "in": "query",
             "name": "min_review_status",
             "required": false,
             "schema": {
@@ -95480,6 +96345,61 @@
           },
           {
             "in": "query",
+            "name": "method_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/MethodFamily"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method Family"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Max"
+            }
+          },
+          {
+            "in": "query",
             "name": "spin_treatment",
             "required": false,
             "schema": {
@@ -95814,6 +96734,61 @@
                 }
               ],
               "title": "Solvent"
+            }
+          },
+          {
+            "in": "query",
+            "name": "method_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/MethodFamily"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method Family"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Max"
             }
           },
           {
@@ -100468,6 +101443,157 @@
           },
           {
             "in": "query",
+            "name": "method",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method"
+            }
+          },
+          {
+            "in": "query",
+            "name": "basis",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Basis"
+            }
+          },
+          {
+            "in": "query",
+            "name": "software_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Software Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflow_tool",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Tool"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflow_tool_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Tool Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "method_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/MethodFamily"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method Family"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scientific_origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ScientificOriginKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scientific Origin"
+            }
+          },
+          {
+            "in": "query",
             "name": "min_review_status",
             "required": false,
             "schema": {
@@ -102213,6 +103339,61 @@
           },
           {
             "in": "query",
+            "name": "method_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/MethodFamily"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method Family"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Max"
+            }
+          },
+          {
+            "in": "query",
             "name": "scientific_origin",
             "required": false,
             "schema": {
@@ -103074,6 +104255,157 @@
                 }
               ],
               "title": "Software"
+            }
+          },
+          {
+            "in": "query",
+            "name": "method",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method"
+            }
+          },
+          {
+            "in": "query",
+            "name": "basis",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Basis"
+            }
+          },
+          {
+            "in": "query",
+            "name": "software_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Software Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflow_tool",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Tool"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflow_tool_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Tool Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "method_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/MethodFamily"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method Family"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scientific_origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ScientificOriginKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scientific Origin"
             }
           },
           {
@@ -104545,6 +105877,67 @@
             }
           },
           {
+            "description": "Classification of the calculation's method (not a measure of accuracy); repeat the parameter for several. Matched on the same calculation as method=/basis=/software=.",
+            "in": "query",
+            "name": "method_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/MethodFamily"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Classification of the calculation's method (not a measure of accuracy); repeat the parameter for several. Matched on the same calculation as method=/basis=/software=.",
+              "title": "Method Family"
+            }
+          },
+          {
+            "description": "Lowest DFT rung (1 LDA .. 5 double hybrid). Implies method_family=dft.",
+            "in": "query",
+            "name": "dft_rung_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Lowest DFT rung (1 LDA .. 5 double hybrid). Implies method_family=dft.",
+              "title": "Dft Rung Min"
+            }
+          },
+          {
+            "description": "Highest DFT rung. Implies method_family=dft.",
+            "in": "query",
+            "name": "dft_rung_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Highest DFT rung. Implies method_family=dft.",
+              "title": "Dft Rung Max"
+            }
+          },
+          {
             "description": "Structure filter: species with >=1 entry whose stored molecule matches this SMILES under mode=. Browse-only, a bounded projection of /species/structure-search's own vocabulary -- see SpeciesBrowseRequest for the full rationale. Mutually exclusive with query_smarts (422 multiple_structure_queries if both are supplied).",
             "in": "query",
             "name": "query_smiles",
@@ -105597,6 +106990,22 @@
           },
           {
             "in": "query",
+            "name": "scientific_origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ScientificOriginKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scientific Origin"
+            }
+          },
+          {
+            "in": "query",
             "name": "has_source_calculations",
             "required": false,
             "schema": {
@@ -106501,6 +107910,157 @@
           },
           {
             "in": "query",
+            "name": "method",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method"
+            }
+          },
+          {
+            "in": "query",
+            "name": "basis",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Basis"
+            }
+          },
+          {
+            "in": "query",
+            "name": "software_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Software Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflow_tool",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Tool"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflow_tool_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Tool Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "method_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/MethodFamily"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method Family"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dft_rung_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dft Rung Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scientific_origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ScientificOriginKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scientific Origin"
+            }
+          },
+          {
+            "in": "query",
             "name": "min_review_status",
             "required": false,
             "schema": {
@@ -107283,6 +108843,67 @@
             }
           },
           {
+            "description": "Classification of the calculation's method (not a measure of accuracy); repeat the parameter for several. Matched on the same calculation as method=/basis=/software=.",
+            "in": "query",
+            "name": "method_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/MethodFamily"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Classification of the calculation's method (not a measure of accuracy); repeat the parameter for several. Matched on the same calculation as method=/basis=/software=.",
+              "title": "Method Family"
+            }
+          },
+          {
+            "description": "Lowest DFT rung (1 LDA .. 5 double hybrid). Implies method_family=dft.",
+            "in": "query",
+            "name": "dft_rung_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Lowest DFT rung (1 LDA .. 5 double hybrid). Implies method_family=dft.",
+              "title": "Dft Rung Min"
+            }
+          },
+          {
+            "description": "Highest DFT rung. Implies method_family=dft.",
+            "in": "query",
+            "name": "dft_rung_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Highest DFT rung. Implies method_family=dft.",
+              "title": "Dft Rung Max"
+            }
+          },
+          {
             "description": "Exact match against the seeded reaction_family vocabulary (see /meta/reaction-families for the discoverable set of values). Unknown values return an empty result, not a 422.",
             "in": "query",
             "name": "family",
@@ -107831,6 +109452,67 @@
                 }
               ],
               "title": "Workflow Tool Version"
+            }
+          },
+          {
+            "description": "Classification of the calculation's method (not a measure of accuracy); repeat the parameter for several. Matched on the same calculation as method=/basis=/software=.",
+            "in": "query",
+            "name": "method_family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/MethodFamily"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Classification of the calculation's method (not a measure of accuracy); repeat the parameter for several. Matched on the same calculation as method=/basis=/software=.",
+              "title": "Method Family"
+            }
+          },
+          {
+            "description": "Lowest DFT rung (1 LDA .. 5 double hybrid). Implies method_family=dft.",
+            "in": "query",
+            "name": "dft_rung_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Lowest DFT rung (1 LDA .. 5 double hybrid). Implies method_family=dft.",
+              "title": "Dft Rung Min"
+            }
+          },
+          {
+            "description": "Highest DFT rung. Implies method_family=dft.",
+            "in": "query",
+            "name": "dft_rung_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Highest DFT rung. Implies method_family=dft.",
+              "title": "Dft Rung Max"
             }
           },
           {

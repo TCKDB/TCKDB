@@ -48,7 +48,7 @@ def test_a_manifest_built_now_records_the_structured_block():
         "source_findings": {"name": "structure_source_findings", "version": 1},
     }
     assert manifest["policy"]["version"] == POLICY_VERSION == 1
-    assert manifest["format"]["version"] == MANIFEST_FORMAT_VERSION == 4
+    assert manifest["format"]["version"] == MANIFEST_FORMAT_VERSION == 5
 
 
 @pytest.mark.parametrize("block", [{"version": 3}, {"version": "1"}, {"version": True}, "two", {}], ids=["future", "string", "bool", "not_a_block", "empty"])

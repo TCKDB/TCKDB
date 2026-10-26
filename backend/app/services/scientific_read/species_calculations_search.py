@@ -41,6 +41,7 @@ from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError, reject_unsupported_filters
 from app.api.errors import NotFoundError, not_found
+from app.chemistry.method_families import MethodClassFilter
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -75,6 +76,7 @@ from app.db.models.species import (
     SpeciesEntry,
 )
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from app.schemas.reads._method_family import echo_method_class
 from app.schemas.reads.scientific_calculation import (
     CalculationFreqModeSummary,
     CalculationFreqResultSummary,
@@ -139,7 +141,7 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.keyset import Paging
-from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_family_matches, method_matches
 from app.services.scientific_read.species import search_species
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
@@ -704,6 +706,9 @@ def _query_candidate_calculations(
         stmt = stmt.where(method_matches(request.method))
     if request.basis is not None:
         stmt = stmt.where(basis_matches(request.basis))
+    classification = MethodClassFilter.from_request(request)
+    if classification.active:
+        stmt = stmt.where(method_family_matches(classification))
     if request.software is not None:
         stmt = stmt.where(Software.name == request.software)
     if request.workflow_tool is not None:
@@ -1409,6 +1414,7 @@ def _filter_echo(request: SpeciesCalculationsSearchRequest) -> dict[str, object]
         echo["species_entry_kind"] = request.species_entry_kind.value
     if request.calculation_type is not None:
         echo["calculation_type"] = request.calculation_type.value
+    echo_method_class(request, echo)
     if request.scientific_origin is not None:
         echo["scientific_origin"] = request.scientific_origin.value
     if request.calculation_quality is not None:

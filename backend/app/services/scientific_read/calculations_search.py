@@ -43,6 +43,7 @@ from typing import Any
 from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.orm import Session
 
+from app.chemistry.method_families import MethodClassFilter
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -109,7 +110,7 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.keyset import Paging
-from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_family_matches, method_matches
 from app.services.scientific_read.sql_review import (
     join_review,
     review_rank_expr,
@@ -141,6 +142,9 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "basis",
     "lot_ref",
     "lot_hash",
+    "method_family",
+    "dft_rung_min",
+    "dft_rung_max",
     "software",
     "software_version",
     "workflow_tool",
@@ -633,14 +637,18 @@ def _apply_exists_filter(stmt, table, *, want: bool):
 
 
 def _apply_lot_filters(stmt, request: CalculationsSearchRequest):
+    classification = MethodClassFilter.from_request(request)
     if (
         request.method is None
         and request.basis is None
         and request.lot_ref is None
         and request.lot_hash is None
+        and not classification.active
     ):
         return stmt
     stmt = stmt.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
+    if classification.active:
+        stmt = stmt.where(method_family_matches(classification))
     if request.method is not None:
         stmt = stmt.where(method_matches(request.method))
     if request.basis is not None:
@@ -945,6 +953,8 @@ def _request_filter_echo(request: CalculationsSearchRequest) -> dict[str, Any]:
             continue
         if isinstance(value, datetime):
             out[name] = value.isoformat()
+        elif isinstance(value, list):
+            out[name] = sorted({getattr(v, "value", v) for v in value})
         else:
             out[name] = value.value if hasattr(value, "value") else value
     return out

@@ -143,7 +143,7 @@ def test_search_thermo_get_form_uses_query_params():
         smiles="O",
         coverage_temperature_min_k=300,
         include=["provenance"],
-        method="GET",
+        method_http="GET",
     )
 
     assert seen[0].method == "GET"
@@ -236,7 +236,7 @@ def test_search_kinetics_get_form_uses_repeated_query_params():
         reactants=["A1", "A2"],
         products=["B1"],
         direction="forward",
-        method="GET",
+        method_http="GET",
     )
 
     assert seen[0].method == "GET"
@@ -459,3 +459,24 @@ def test_search_species_calculations_post_omits_none_keys():
 
     payload = json.loads(seen[0].content.decode("utf-8"))
     assert payload == {"smiles": "C"}
+
+
+def test_search_thermo_and_kinetics_send_method_as_the_method_name_filter_and_method_http_as_the_verb():
+    """Kills: the HTTP verb still taking the name ``method``, so the method-name filter could not be sent."""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return _ok()
+
+    client, _ = make_client(handler)
+    client.search_thermo(smiles="O", method="b3lyp", method_family=["dft"], dft_rung_min=4, scientific_origin="computed")
+    client.search_kinetics(reactants=["O"], method="b3lyp", method_http="GET", method_family="dft")
+
+    assert seen[0].method == "POST"
+    assert json.loads(seen[0].content.decode("utf-8")) == {
+        "smiles": "O", "method": "b3lyp", "method_family": ["dft"], "dft_rung_min": 4, "scientific_origin": "computed",
+    }
+    assert seen[1].method == "GET"
+    qs = _split_qs(str(seen[1].url))
+    assert qs["method"] == ["b3lyp"] and qs["method_family"] == ["dft"]

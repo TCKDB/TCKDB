@@ -242,9 +242,9 @@ def test_omitting_profile_sends_no_profile_parameter(method_name):
 # ---------------------------------------------------------------------------
 
 _POST_SEARCHES = (
-    ("search_reactions", "method"),
-    ("search_thermo", "method"),
-    ("search_kinetics", "method"),
+    ("search_reactions", "method_http"),
+    ("search_thermo", "method_http"),
+    ("search_kinetics", "method_http"),
     ("search_species_calculations", "method_http"),
     ("search_species_structures", "method_http"),
     ("search_conformers", "method_http"),

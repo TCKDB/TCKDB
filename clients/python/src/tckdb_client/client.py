@@ -1748,13 +1748,13 @@ class TCKDBClient:
         cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
-        method: str = "POST",
+        method_http: str = "POST",
     ) -> ReactionSearchResponse:
         """``GET|POST /scientific/reactions/search`` — discover reaction entries.
 
         Defaults to ``POST`` because reactant/product SMILES often contain
         characters (``[`` ``]`` ``+``) that round-trip awkwardly through
-        query strings. Pass ``method="GET"`` to force the GET form. Returns
+        query strings. Pass ``method_http='GET'`` to force the GET form. Returns
         the parsed ``ScientificReactionSearchResponse`` JSON envelope.
 
         Phase C: ``reaction_ref`` / ``reaction_entry_ref`` may be supplied
@@ -1785,7 +1785,7 @@ class TCKDBClient:
             "cursor": cursor,
             "limit": limit,
         }
-        if method.upper() == "GET":
+        if method_http.upper() == "GET":
             return self.request_json(
                 "GET",
                 "/scientific/reactions/search",
@@ -1901,6 +1901,15 @@ class TCKDBClient:
         level_of_theory_id: int | None = None,
         level_of_theory_ref: str | None = None,
         software: str | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
+        scientific_origin: str | None = None,
         min_review_status: str | None = None,
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
@@ -1934,6 +1943,15 @@ class TCKDBClient:
             "level_of_theory_id": level_of_theory_id,
             "level_of_theory_ref": level_of_theory_ref,
             "software": software,
+            "method": method,
+            "basis": basis,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
+            "scientific_origin": scientific_origin,
             "min_review_status": min_review_status,
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
@@ -1958,6 +1976,15 @@ class TCKDBClient:
         level_of_theory_id: int | None = None,
         level_of_theory_ref: str | None = None,
         software: str | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
+        scientific_origin: str | None = None,
         min_review_status: str | None = None,
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
@@ -1987,6 +2014,15 @@ class TCKDBClient:
             "level_of_theory_id": level_of_theory_id,
             "level_of_theory_ref": level_of_theory_ref,
             "software": software,
+            "method": method,
+            "basis": basis,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
+            "scientific_origin": scientific_origin,
             "min_review_status": min_review_status,
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
@@ -2748,6 +2784,15 @@ class TCKDBClient:
         level_of_theory_id: int | None = None,
         level_of_theory_ref: str | None = None,
         software: str | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
+        scientific_origin: str | None = None,
         min_review_status: str | None = None,
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
@@ -2756,16 +2801,21 @@ class TCKDBClient:
         cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
-        method: str = "POST",
+        method_http: str = "POST",
     ) -> ThermoSearchResponse:
         """``GET|POST /scientific/thermo/search`` — chemistry-first thermo search.
 
         Returns thermo records along with the resolved species/species_entry
         identity context, so callers don't have to chain
         ``search_species`` → ``get_species_thermo`` themselves. Defaults to
-        POST (mirrors ``search_reactions``); pass ``method="GET"`` for the
+        POST (mirrors ``search_reactions``); pass ``method_http='GET'`` for the
         query-string form. Phase C: ``species_ref``, ``species_entry_ref``,
         and ``level_of_theory_ref`` may be supplied as filter handles.
+
+
+        The provenance filters (``method``, ``basis``, ``software``, ``software_version``, ``workflow_tool``,
+        ``workflow_tool_version``, ``method_family``, ``dft_rung_min``, ``dft_rung_max``) are matched through ONE source
+        calculation.
         """
         body = {
             "smiles": smiles,
@@ -2784,6 +2834,15 @@ class TCKDBClient:
             "level_of_theory_id": level_of_theory_id,
             "level_of_theory_ref": level_of_theory_ref,
             "software": software,
+            "method": method,
+            "basis": basis,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
+            "scientific_origin": scientific_origin,
             "min_review_status": min_review_status,
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
@@ -2792,7 +2851,7 @@ class TCKDBClient:
             "cursor": cursor,
             "limit": limit,
         }
-        if method.upper() == "GET":
+        if method_http.upper() == "GET":
             return self.request_json(
                 "GET",
                 "/scientific/thermo/search",
@@ -2825,6 +2884,15 @@ class TCKDBClient:
         level_of_theory_id: int | None = None,
         level_of_theory_ref: str | None = None,
         software: str | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
+        scientific_origin: str | None = None,
         min_review_status: str | None = None,
         include_deprecated: bool | None = None,
         include_rejected: bool | None = None,
@@ -2833,19 +2901,23 @@ class TCKDBClient:
         cursor: str | None = None,
         limit: int | None = None,
         profile: str | None = None,
-        method: str = "POST",
+        method_http: str = "POST",
     ) -> KineticsSearchResponse:
         """``GET|POST /scientific/kinetics/search`` — chemistry-first kinetics search.
 
         Returns kinetics records along with the resolved reaction/reaction_entry
         identity context. Defaults to POST because reactant/product SMILES
-        encode awkwardly in URL query strings; pass ``method="GET"`` for the
+        encode awkwardly in URL query strings; pass ``method_http='GET'`` for the
         repeated-query-param form. Non-TS-backed kinetics surface with null
         TS-chain provenance fields, exactly like the entry-id detail endpoint.
         ``pressure_bar`` is canonical; ``pressure`` is a deprecated alias.
         ``match`` means what it means on :meth:`search_reactions` — reaction
         identity here is resolved by that same service — and defaults
         server-side to ``"contains"``.
+
+        The provenance filters (``method``, ``basis``, ``software``, ``software_version``, ``workflow_tool``,
+        ``workflow_tool_version``, ``method_family``, ``dft_rung_min``, ``dft_rung_max``) are matched through ONE source
+        calculation.
         """
         body = {
             "reactants": reactants,
@@ -2863,6 +2935,15 @@ class TCKDBClient:
             "level_of_theory_id": level_of_theory_id,
             "level_of_theory_ref": level_of_theory_ref,
             "software": software,
+            "method": method,
+            "basis": basis,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
+            "scientific_origin": scientific_origin,
             "min_review_status": min_review_status,
             "include_deprecated": include_deprecated,
             "include_rejected": include_rejected,
@@ -2871,7 +2952,7 @@ class TCKDBClient:
             "cursor": cursor,
             "limit": limit,
         }
-        if method.upper() == "GET":
+        if method_http.upper() == "GET":
             return self.request_json(
                 "GET",
                 "/scientific/kinetics/search",
@@ -2908,6 +2989,9 @@ class TCKDBClient:
         basis: str | None = None,
         software: str | None = None,
         workflow_tool: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
         scientific_origin: str | None = None,
         calculation_quality: str | None = None,
         min_review_status: str | None = None,
@@ -2957,6 +3041,9 @@ class TCKDBClient:
             "basis": basis,
             "software": software,
             "workflow_tool": workflow_tool,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
             "scientific_origin": scientific_origin,
             "calculation_quality": calculation_quality,
             "min_review_status": min_review_status,
@@ -3503,6 +3590,7 @@ class TCKDBClient:
         transition_state_entry_ref: str | None = None,
         declared_conformer_group_ref: str | None = None,
         model_kind: str | None = None,
+        scientific_origin: str | None = None,
         has_source_calculations: bool | None = None,
         has_freq_calculation: bool | None = None,
         has_rotor_scans: bool | None = None,
@@ -3540,6 +3628,7 @@ class TCKDBClient:
             "transition_state_entry_ref": transition_state_entry_ref,
             "declared_conformer_group_ref": declared_conformer_group_ref,
             "model_kind": model_kind,
+            "scientific_origin": scientific_origin,
             "has_source_calculations": has_source_calculations,
             "has_freq_calculation": has_freq_calculation,
             "has_rotor_scans": has_rotor_scans,
@@ -3867,6 +3956,9 @@ class TCKDBClient:
         software_version: str | None = None,
         workflow_tool: str | None = None,
         workflow_tool_version: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
         min_review_status: str | None = None,
         include_rejected: bool | None = None,
         include_deprecated: bool | None = None,
@@ -3907,6 +3999,9 @@ class TCKDBClient:
             "software_version": software_version,
             "workflow_tool": workflow_tool,
             "workflow_tool_version": workflow_tool_version,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
             "min_review_status": min_review_status,
             "include_rejected": include_rejected,
             "include_deprecated": include_deprecated,
@@ -4046,6 +4141,9 @@ class TCKDBClient:
         basis: str | None = None,
         dispersion: str | None = None,
         solvent: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
         spin_treatment: str | None = None,
         has_correction_schemes: bool | None = None,
         has_frequency_scale_factors: bool | None = None,
@@ -4075,6 +4173,9 @@ class TCKDBClient:
             "basis": basis,
             "dispersion": dispersion,
             "solvent": solvent,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
             "spin_treatment": spin_treatment,
             "has_correction_schemes": has_correction_schemes,
             "has_frequency_scale_factors": has_frequency_scale_factors,
@@ -4103,6 +4204,9 @@ class TCKDBClient:
         basis: str | None = None,
         dispersion: str | None = None,
         solvent: str | None = None,
+        method_family: str | list[str] | None = None,
+        dft_rung_min: int | None = None,
+        dft_rung_max: int | None = None,
         spin_treatment: str | None = None,
         has_correction_schemes: bool | None = None,
         has_frequency_scale_factors: bool | None = None,
@@ -4143,6 +4247,9 @@ class TCKDBClient:
             "basis": basis,
             "dispersion": dispersion,
             "solvent": solvent,
+            "method_family": method_family,
+            "dft_rung_min": dft_rung_min,
+            "dft_rung_max": dft_rung_max,
             "spin_treatment": spin_treatment,
             "has_correction_schemes": has_correction_schemes,
             "has_frequency_scale_factors": has_frequency_scale_factors,

@@ -386,7 +386,7 @@ rxns = client.search_reactions(
 )
 # Force GET if you prefer query-string encoding:
 rxns_get = client.search_reactions(
-    reactants=["A"], products=["B"], method="GET",
+    reactants=["A"], products=["B"], method_http="GET",
 )
 ```
 

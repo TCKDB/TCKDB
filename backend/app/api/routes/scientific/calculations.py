@@ -23,6 +23,7 @@ from app.api.routes.scientific._response import (
     omit_trust_unless_requested,
     omit_unrequested_calculation_sections,
 )
+from app.chemistry.method_families import MethodFamily
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     ArtifactKind,
@@ -92,6 +93,9 @@ def scientific_calculations_search_get(
     basis: str | None = Query(None),
     lot_ref: str | None = Query(None),
     lot_hash: str | None = Query(None),
+    method_family: list[MethodFamily] | None = Query(None),
+    dft_rung_min: int | None = Query(None, ge=1, le=5),
+    dft_rung_max: int | None = Query(None, ge=1, le=5),
     software: str | None = Query(None),
     software_version: str | None = Query(None),
     workflow_tool: str | None = Query(None),
@@ -142,6 +146,9 @@ def scientific_calculations_search_get(
         basis=basis,
         lot_ref=lot_ref,
         lot_hash=lot_hash,
+        method_family=method_family,
+        dft_rung_min=dft_rung_min,
+        dft_rung_max=dft_rung_max,
         software=software,
         software_version=software_version,
         workflow_tool=workflow_tool,

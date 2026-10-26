@@ -21,7 +21,8 @@ from app.api.routes.scientific._response import (
     prepare_assessment_response,
     require_bounded_input_check,
 )
-from app.db.models.common import KineticsModelKind, RecordReviewStatus
+from app.chemistry.method_families import MethodFamily
+from app.db.models.common import KineticsModelKind, RecordReviewStatus, ScientificOriginKind
 from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
 from app.schemas.reads.removed_parameters import reject_removed_query_params
 from app.schemas.reads.scientific_kinetics import (
@@ -64,6 +65,15 @@ def reaction_kinetics(
     level_of_theory_id: int | None = Query(None),
     level_of_theory_ref: str | None = Query(None),
     software: str | None = Query(None),
+    method: str | None = Query(None),
+    basis: str | None = Query(None),
+    software_version: str | None = Query(None),
+    workflow_tool: str | None = Query(None),
+    workflow_tool_version: str | None = Query(None),
+    method_family: list[MethodFamily] | None = Query(None),
+    dft_rung_min: int | None = Query(None, ge=1, le=5),
+    dft_rung_max: int | None = Query(None, ge=1, le=5),
+    scientific_origin: ScientificOriginKind | None = Query(None),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
@@ -102,6 +112,15 @@ def reaction_kinetics(
         level_of_theory_id=level_of_theory_id,
         level_of_theory_ref=level_of_theory_ref,
         software=software,
+        method=method,
+        basis=basis,
+        software_version=software_version,
+        workflow_tool=workflow_tool,
+        workflow_tool_version=workflow_tool_version,
+        method_family=method_family,
+        dft_rung_min=dft_rung_min,
+        dft_rung_max=dft_rung_max,
+        scientific_origin=scientific_origin,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,

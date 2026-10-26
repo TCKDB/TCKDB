@@ -30,8 +30,10 @@ from __future__ import annotations
 from datetime import datetime
 
 from pydantic import BaseModel, Field, computed_field
+from tckdb_schemas.fragments.version import VersionRef
 
 from app.chemistry.level_label import render_level_label
+from app.chemistry.method_families import CLASSIFICATION_REF, MethodFamily, classify_method
 from app.db.models.common import CalculationType, CoreTreatment, FrequencyScaleKind, SpinTreatment
 from app.schemas.reads.scientific_common import (
     CompositeSchemeSummary,
@@ -122,6 +124,30 @@ class LevelOfTheoryCoreBlock(BaseModel):
             spin_treatment=self.spin_treatment,
             core_treatment=self.core_treatment,
         )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def method_family(self) -> MethodFamily:
+        """The kind of method this is, derived from ``method`` (``unclassified`` when the table does not name it).
+
+        A classification, not a measure of accuracy. See :mod:`app.chemistry.method_families`.
+        """
+        return classify_method(self.method).family
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def dft_rung(self) -> int | None:
+        """The DFT rung, 1 (LDA) to 5 (double hybrid); ``None`` for a method that is not a density functional.
+
+        The ladder covers DFT only and is not an accuracy ranking.
+        """
+        return classify_method(self.method).dft_rung
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def method_classification(self) -> VersionRef:
+        """The versioned classification that produced ``method_family`` and ``dft_rung``."""
+        return CLASSIFICATION_REF
 
 
 # ---------------------------------------------------------------------------

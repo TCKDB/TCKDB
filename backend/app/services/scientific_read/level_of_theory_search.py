@@ -35,6 +35,7 @@ from typing import Any
 from sqlalchemy import Integer, exists, func, select
 from sqlalchemy.orm import Session
 
+from app.chemistry.method_families import MethodClassFilter
 from app.db.models.calculation import Calculation
 from app.db.models.common import SubmissionRecordType
 from app.db.models.energy_correction import EnergyCorrectionScheme, FrequencyScaleFactor
@@ -74,6 +75,7 @@ from app.services.scientific_read.level_of_theory import (
 from app.services.scientific_read.lot_identity_filters import (
     basis_matches,
     dispersion_matches,
+    method_family_matches,
     method_matches,
     solvent_matches,
 )
@@ -85,6 +87,9 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "basis",
     "dispersion",
     "solvent",
+    "method_family",
+    "dft_rung_min",
+    "dft_rung_max",
     "spin_treatment",
     "core_treatment",
     "has_correction_schemes",
@@ -232,6 +237,9 @@ def _run_lot_query(
         stmt = stmt.where(dispersion_matches(request.dispersion))
     if request.solvent is not None:
         stmt = stmt.where(solvent_matches(request.solvent))
+    classification = MethodClassFilter.from_request(request)
+    if classification.active:
+        stmt = stmt.where(method_family_matches(classification))
     if request.spin_treatment is not None:
         stmt = stmt.where(LevelOfTheory.spin_treatment == request.spin_treatment)
     if request.core_treatment is not None:
@@ -365,7 +373,10 @@ def _request_filter_echo(
         value = getattr(request, name)
         if value is None:
             continue
-        out[name] = value.value if hasattr(value, "value") else value
+        if isinstance(value, list):
+            out[name] = sorted({getattr(v, "value", v) for v in value})
+        else:
+            out[name] = value.value if hasattr(value, "value") else value
     return out
 
 

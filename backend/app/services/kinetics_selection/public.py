@@ -142,8 +142,7 @@ def to_service_request(body: KineticsSelectionRequest) -> KineticsRequest:
         max_candidates=MAX_CANDIDATES,
         filters=KineticsFilters(
             model_kind=body.filters.model_kind.value if body.filters.model_kind is not None else None,
-            level_of_theory_ref=body.filters.level_of_theory_ref,
-            software=body.filters.software,
+            **body.filters.source_filter_values(),
         ),
         eligibility=Eligibility.from_request(body.eligibility),
     )

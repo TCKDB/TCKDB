@@ -37,12 +37,12 @@ def _ok(body: dict | None = None) -> httpx.Response:
 
 ANONYMOUS_READ_CALLS = [
     ("search_species", lambda c: c.search_species(smiles="O")),
-    ("search_reactions_get", lambda c: c.search_reactions(reactants=["O"], method="GET")),
-    ("search_reactions_post", lambda c: c.search_reactions(reactants=["O"], method="POST")),
-    ("search_thermo_get", lambda c: c.search_thermo(smiles="O", method="GET")),
-    ("search_thermo_post", lambda c: c.search_thermo(smiles="O", method="POST")),
-    ("search_kinetics_get", lambda c: c.search_kinetics(reactants=["O"], method="GET")),
-    ("search_kinetics_post", lambda c: c.search_kinetics(reactants=["O"], method="POST")),
+    ("search_reactions_get", lambda c: c.search_reactions(reactants=["O"], method_http="GET")),
+    ("search_reactions_post", lambda c: c.search_reactions(reactants=["O"], method_http="POST")),
+    ("search_thermo_get", lambda c: c.search_thermo(smiles="O", method_http="GET")),
+    ("search_thermo_post", lambda c: c.search_thermo(smiles="O", method_http="POST")),
+    ("search_kinetics_get", lambda c: c.search_kinetics(reactants=["O"], method_http="GET")),
+    ("search_kinetics_post", lambda c: c.search_kinetics(reactants=["O"], method_http="POST")),
     (
         "search_species_calculations_get",
         lambda c: c.search_species_calculations(smiles="O", method="GET"),

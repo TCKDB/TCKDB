@@ -20,7 +20,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from tckdb_schemas.fragments.version import VersionRef
 
-from app.db.models.common import RecordReviewStatus, StatmechTreatmentKind
+from app.db.models.common import RecordReviewStatus, ScientificOriginKind, StatmechTreatmentKind
 from app.schemas.reads.scientific_common import ProfiledRequestEcho, SelectionPolicy
 from app.schemas.reads.scientific_selection_common import (
     CalculationProvenanceFilters,
@@ -189,6 +189,7 @@ class StatmechSelectionFilters(CalculationProvenanceFilters):
     model_config = ConfigDict(extra="forbid")
 
     model_kind: StatmechTreatmentKind | None = None
+    scientific_origin: ScientificOriginKind | None = None
 
 
 class StatmechSelectionRequest(_Strict):
@@ -284,6 +285,9 @@ class StatmechSelectionRequest(_Strict):
             min_review_status=self.min_review_status,
             filters=StatmechFilters(
                 model_kind=self.filters.model_kind.value if self.filters.model_kind is not None else None,
+                scientific_origin=(
+                    self.filters.scientific_origin.value if self.filters.scientific_origin is not None else None
+                ),
                 method=self.filters.method,
                 basis=self.filters.basis,
                 software=self.filters.software,

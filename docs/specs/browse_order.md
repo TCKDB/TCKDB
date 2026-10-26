@@ -103,12 +103,60 @@ transport, kinetics, species calculations, and the thermo and kinetics searches)
 
 `pagination` carries `offset`, `limit`, `returned` and `total`; there is no second, post-collapse total because nothing collapses.
 
-### Filters match any linked calculation
+### Provenance filters: ONE calculation matches all of them
 
-`level_of_theory_id`, `level_of_theory_ref` and `software` on the thermo and kinetics reads keep a record when **any**
-source calculation linked to it ran at that level or in that software. There is no "primary" calculation for a filter and
-no role priority (a record's displayed `primary_calculation` is a display choice, and it decides no filter). A thermo
-record's calculations are its own source links; a kinetics record's are its own source links the profile shows.
+A record rests on source calculations, and a provenance filter restricts by what one of them recorded. Every route that
+offers these filters reads them the same way:
+
+- **One calculation, every field.** The record is kept when at least one source calculation it links to matches **every**
+  supplied provenance field at once (AND across the fields, OR across the record's calculations). A record whose
+  calculation A ran at level X in software P and whose calculation B ran at level Y in software Q is not matched by level
+  X with software Q: no single calculation did both.
+- **Only linked calculations.** A record matches through the calculations it actually links to, never through a sibling's,
+  its species entry's or the level's other uses (no borrowed provenance). A record that links no calculation matches no
+  provenance filter, an `unclassified` family filter included.
+- **Below the read profile's floor.** Under `curated` a calculation below the floor contributes nothing to a match, so a
+  filter on `method=b3lyp` cannot keep a record because of a calculation the reader cannot open. (ADR 0023 step 4 will change
+  how linked evidence is matched, in the shared helpers; a rejected or deprecated calculation will still never match.)
+- **No primary calculation.** A record's displayed `primary_calculation` is a display choice and decides no filter.
+
+The provenance fields are `level_of_theory_ref` / `level_of_theory_id` (where a route offers it), `method`, `basis`,
+`software`, `software_version`, `workflow_tool`, `workflow_tool_version`, `method_family`, `dft_rung_min` and `dft_rung_max`.
+The thermo and kinetics reads (per entry and search) offer all of them; the transition-state search and browse and the species
+browse offer `method`, `basis`, the software and workflow-tool fields and the family and rung fields; the calculation search
+and the species-calculation search offer the family and rung fields beside `method` and `basis`; the level-of-theory
+search and browse offer them too. Until 2026-10-25 the thermo and kinetics
+reads and selects matched level of theory and software through *any* calculation each, independently; that reading is gone,
+and a select decision recorded under it (manifest format 3) is refused on replay.
+
+`scientific_origin` (`computed`, `experimental`, `estimated`) is a different kind of filter: it is matched on the record's own
+column, not through a calculation. Thermo, kinetics and statmech search, the per-entry thermo and kinetics reads, and the
+thermo, kinetics and statmech selects offer it.
+
+### Method family and DFT rung: a classification, not an accuracy measure
+
+A level of theory's `method` is classified into a **family** (`dft`, `wavefunction`, `composite`, `multireference`,
+`semiempirical`, `force_field`, `unclassified`) and, for DFT, a **rung** from 1 to 5 (LDA 1, GGA 2, meta-GGA 3, hybrid 4,
+double hybrid 5). Level-of-theory reads carry `method_family`, `dft_rung` (null unless `dft`) and `method_classification`
+(`{name: "method_family_classification", version}`, the registered, versioned table that produced them).
+
+- **It says what kind of method a name is. It does not say how good the method is.** The ladder covers density functionals
+  only, so a coupled-cluster or composite method has no rung and sits on no scale. Which method is more accurate depends on
+  the property and the system; a rung-5 functional is not thereby better than a rung-4 one for a given quantity.
+- **It is a filter fact and nothing else.** It is never a sort key, a tie-breaker, a select default, a "best" label or part of
+  any order echo. A guard test scans for it.
+- **It is derived, not stored.** The table is code (`app/chemistry/method_families.py`) applied to the method's identity key
+  (case, whitespace and the curated aliases), so no column holds a class and changing the table needs no migration; it is a
+  new version of `method_family_classification`.
+- **Spin prefixes.** A leading `u`, `r` or `ro` is read through only when what remains is a classified method and the whole
+  name is not a table row of its own (`UM062X`, `uccsd`; `rm1` and `rpbe` are rows).
+- **A dispersion suffix or a basis never changes the class.** `-D2`, `-D3`, `-D3BJ`, `-D3(BJ)`, `-D4` and the like are stripped
+  before the lookup (a bare `-D` is not: `wB97X-D`, `B97-D`, `B3LYP-D` are rows). A row that itself ends in a suffix wins over its stem: `B97` (Becke 1997) is a
+  hybrid, rung 4, but `B97-D`, `B97-D3`, `B97-D3BJ` are Grimme's GGA, rung 2. A name the table does not hold is
+  `unclassified`; nothing is guessed from a substring.
+- **Filters.** `method_family` takes one family or a list (any of them matches). `dft_rung_min` / `dft_rung_max` are inclusive
+  and imply `method_family=dft`: with a bound, only a DFT method can match, so a bound beside a family list without `dft`
+  matches nothing, and a lower bound above the upper matches nothing.
 
 ### Coverage windows are not filters
 
@@ -347,10 +395,12 @@ under each of them, so they can sum to more than `removed_by_eligibility`.
 | `rejected_calculation_quality` | a calculation whose quality is `rejected`, or a determination resting on one | list `rejected` in `permitted_quality` | every structure grain |
 | `entry_review_status` | a determination or candidate whose **transition-state** entry is rejected, deprecated or below the floor | not liftable | structure TS evidence, statmech TS target |
 
-Filter vocabulary by route: thermo and kinetics `model_kind`, `level_of_theory_ref`, `software` (any shown source calculation
-matches, each field independently); network and statmech `model_kind` plus `method`, `basis`, `software`, `software_version`,
-`workflow_tool`, `workflow_tool_version` (one source calculation matches all supplied fields); the structure selections
-the six provenance fields (the calculation itself, or the calculations a determination pins as sources).
+Filter vocabulary by route: thermo and kinetics `model_kind`, `scientific_origin`, `level_of_theory_ref`, `method`, `basis`,
+`software`, `software_version`, `workflow_tool`, `workflow_tool_version`, `method_family`, `dft_rung_min`, `dft_rung_max` (ONE
+shown source calculation matches every provenance field supplied); network and statmech `model_kind` plus `method`, `basis`,
+`software`, `software_version`, `workflow_tool`, `workflow_tool_version` (one source calculation matches all supplied fields),
+and statmech `scientific_origin` too; the structure selections the six provenance fields (the calculation itself, or the
+calculations a determination pins as sources). The family and rung fields are offered where the matching search offers them.
 **A filter on a linked record matches through linked evidence unless the evidence rule withholds it (ADR 0023, step 4).** This holds
 on every search, list and select route, not only on select. Under `curated`, the approved record floor decides which records a
 search returns; the calculations and conformer observations they link to are evidence, and a rejected or deprecated one

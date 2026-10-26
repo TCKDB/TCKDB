@@ -1208,12 +1208,20 @@ class SelectionEligibilityIn(TypedDict, total=False):
 class SelectionFilters(TypedDict, total=False):
     """The filters a select request may carry, with the matching search's vocabulary (a route accepts its own subset).
 
-    thermo and kinetics: ``model_kind``, ``level_of_theory_ref``, ``software``. network and statmech: ``model_kind`` and
-    the provenance fields. structure: the provenance fields. An unknown filter is a 422, never ignored.
+    thermo and kinetics: ``model_kind``, ``scientific_origin``, ``level_of_theory_ref`` and the provenance fields
+    (``method``, ``basis``, ``software``, ``software_version``, ``workflow_tool``, ``workflow_tool_version``,
+    ``method_family``, ``dft_rung_min``, ``dft_rung_max``): ONE source calculation has to match all the supplied
+    provenance fields. network: ``model_kind`` and the six provenance fields. statmech: also ``scientific_origin``.
+    structure: the six provenance fields. ``method_family`` and the DFT rung are a classification of the method, not a
+    measure of accuracy. An unknown filter is a 422, never ignored.
     """
 
     model_kind: str
+    scientific_origin: str
     level_of_theory_ref: str
+    method_family: list[str]
+    dft_rung_min: int
+    dft_rung_max: int
     method: str
     basis: str
     software: str

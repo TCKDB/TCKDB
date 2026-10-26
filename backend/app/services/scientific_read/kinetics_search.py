@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.schemas.reads._method_family import echo_source_provenance
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     ReviewStatusSummary,
@@ -202,6 +203,15 @@ def search_kinetics(
                     level_of_theory_id=request.level_of_theory_id,
                     level_of_theory_ref=request.level_of_theory_ref,
                     software=request.software,
+                    method=request.method,
+                    basis=request.basis,
+                    software_version=request.software_version,
+                    workflow_tool=request.workflow_tool,
+                    workflow_tool_version=request.workflow_tool_version,
+                    method_family=request.method_family,
+                    dft_rung_min=request.dft_rung_min,
+                    dft_rung_max=request.dft_rung_max,
+                    scientific_origin=request.scientific_origin,
                     min_review_status=request.min_review_status,
                     include_rejected=request.include_rejected,
                     include_deprecated=request.include_deprecated,
@@ -295,6 +305,7 @@ def _filter_echo(request: KineticsSearchRequest) -> dict[str, object]:
         echo["reaction_entry_ref"] = request.reaction_entry_ref
     if request.software is not None:
         echo["software"] = request.software
+    echo_source_provenance(request, echo)
     if request.min_review_status is not None:
         echo["min_review_status"] = request.min_review_status.value
     if request.include_rejected:

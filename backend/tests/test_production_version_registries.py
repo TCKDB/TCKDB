@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.chemistry.method_families import CLASSIFICATIONS
 from app.services.kinetics_selection.manifest import MANIFEST_FORMATS as KINETICS_FORMATS
 from app.services.machine_review.admin_trigger import SUPPORTED_RECORD_TYPES
 from app.services.manifest_formats import ManifestFormat, read_manifest_format
@@ -38,6 +39,7 @@ REGISTRIES: tuple[VersionRegistry, ...] = (
     STRUCTURE_FORMATS,
     NETWORK_FORMATS,
     RELATIVE_ENERGY_FORMATS,
+    CLASSIFICATIONS,
 )
 
 EXPECTED_FAMILIES = {
@@ -48,6 +50,7 @@ EXPECTED_FAMILIES = {
     "structure_selection_manifest_formats",
     "network_selection_manifest_formats",
     "relative_conformer_energy_manifest_formats",
+    "method_family_classifications",
 }
 
 

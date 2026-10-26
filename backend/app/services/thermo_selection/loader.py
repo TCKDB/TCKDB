@@ -26,7 +26,7 @@ from tckdb_schemas.thermo_declarations import StoredThermoProtocolDeclaration
 
 from app.api.errors import not_found
 from app.chemistry.composite_methods import composite_method_for
-from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+from app.db.models.common import RecordReviewStatus, ScientificOriginKind, SubmissionRecordType
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.species import ConformerGroup, Species, SpeciesEntry
 from app.db.models.thermo import (
@@ -40,7 +40,7 @@ from app.db.models.thermo import (
 from app.services.scientific_read.common import fetch_review_badges, visible_statuses
 from app.services.scientific_read.ref_guard import unavailable_refs
 from app.services.scientific_read.thermo import THERMO_TRUST_EAGER_LOADS, _classify_model_kind
-from app.services.selection_filters import filter_by_level_and_software
+from app.services.selection_filters import filter_by_provenance, resolve_level_of_theory_ref
 from app.services.selection_kernel.requested import review_default
 from app.services.thermo_selection.models import H298Request, NormalizedCandidate, Subject, ThermoFilters
 
@@ -120,17 +120,26 @@ def apply_filters(session: Session, ids: list[int], filters: ThermoFilters) -> l
     if filters.model_kind is not None:
         kinds = model_kinds(session, ids)
         keep = {i for i in keep if kinds.get(i) == filters.model_kind}
-    if keep and (filters.level_of_theory_ref is not None or filters.software is not None):
-        links: dict[int, set[int]] = {i: set() for i in keep}
-        for thermo_id, calculation_id in session.execute(
-            select(ThermoSourceCalculation.thermo_id, ThermoSourceCalculation.calculation_id).where(
-                ThermoSourceCalculation.thermo_id.in_(keep)
+    if keep and filters.scientific_origin is not None:
+        keep = set(
+            session.scalars(
+                select(Thermo.id).where(
+                    Thermo.id.in_(keep), Thermo.scientific_origin == ScientificOriginKind(filters.scientific_origin)
+                )
             )
-        ):
-            links[thermo_id].add(calculation_id)
-        keep = filter_by_level_and_software(
-            session, links, level_of_theory_ref=filters.level_of_theory_ref, software=filters.software
         )
+    if keep and filters.has_source_constraint:
+        lot_id = None
+        if filters.level_of_theory_ref is not None:
+            lot_id = resolve_level_of_theory_ref(session, filters.level_of_theory_ref)
+            if lot_id is None:
+                return []  # an unknown level of theory keeps nothing
+        links: dict[int, set[int]] = {i: set() for i in keep}
+        for record_id, calculation_id in session.execute(
+            select(ThermoSourceCalculation.thermo_id, ThermoSourceCalculation.calculation_id).where(ThermoSourceCalculation.thermo_id.in_(keep))
+        ):
+            links[record_id].add(calculation_id)
+        keep = filter_by_provenance(session, links, level_of_theory_id=lot_id, **filters.provenance())
     return [i for i in ids if i in keep]
 
 

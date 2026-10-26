@@ -238,7 +238,7 @@ a single thermo schema regardless of which discovery path it took.
 
 `search_thermo` defaults to **POST** because species filters often
 include identifiers with characters that don't survive query strings
-cleanly (e.g. `inchi`). Pass `method="GET"` to force a query-string
+cleanly (e.g. `inchi`). Pass `method_http="GET"` to force a query-string
 form.
 
 ## Chemistry-first kinetics search (recommended for hosted workflow tools)
@@ -263,7 +263,7 @@ Each record carries a `reaction` block (`reaction_id`,
 and a `kinetics` block (the same `KineticsRecord` shape as
 `get_reaction_kinetics`).
 
-`search_kinetics` defaults to **POST**; pass `method="GET"` for the
+`search_kinetics` defaults to **POST**; pass `method_http="GET"` for the
 repeated-query-param form (`?reactants=A&reactants=B&products=C`).
 
 `direction="exact"` is **not** supported in v0 — the backend rejects it
@@ -443,10 +443,10 @@ tested in both orientations and `matched_direction` reports which one
 matched.
 
 If you prefer the GET form (e.g. for a quick interactive lookup with
-plain identifiers), pass `method="GET"`:
+plain identifiers), pass `method_http="GET"`:
 
 ```python
-client.search_reactions(reactants=["A"], products=["B"], method="GET")
+client.search_reactions(reactants=["A"], products=["B"], method_http="GET")
 ```
 
 ## Reaction kinetics retrieval (entry-id detail / follow-up)

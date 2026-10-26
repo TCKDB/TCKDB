@@ -40,6 +40,7 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
+from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
 from app.schemas.reads.scientific_common import (
     CursorToken,
     OrderEcho,
@@ -102,6 +103,11 @@ class TransitionStatesSearchRequest(BaseModel):
         default=None, max_length=_MAX_WORKFLOW_TOOL_LENGTH
     )
     workflow_tool_version: str | None = Field(default=None, max_length=128)
+    #: A classification of the calculation's method (not a measure of accuracy); matched on the same calculation as
+    #: the fields above. See ``app/schemas/reads/_method_family.py``.
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
 
     # --- reaction context filters -----------------------------------------
     #: Exact match against the seeded ``reaction_family`` vocabulary
@@ -212,6 +218,11 @@ class TransitionStatesBrowseRequest(BaseModel):
         default=None, max_length=_MAX_WORKFLOW_TOOL_LENGTH
     )
     workflow_tool_version: str | None = Field(default=None, max_length=128)
+    #: A classification of the calculation's method (not a measure of accuracy); matched on the same calculation as
+    #: the fields above. See ``app/schemas/reads/_method_family.py``.
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
 
     # --- reaction context filters -----------------------------------------
     # Same fields, same semantics, as ``TransitionStatesSearchRequest``

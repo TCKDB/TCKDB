@@ -28,6 +28,7 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_SOLVENT_LENGTH as _MAX_SOLVENT_LENGTH,
 )
+from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
 from app.schemas.reads.scientific_common import (
     CursorToken,
     OrderEcho,
@@ -69,6 +70,10 @@ class LevelOfTheorySearchRequest(BaseModel):
         default=None, max_length=_MAX_DISPERSION_LENGTH
     )
     solvent: str | None = Field(default=None, max_length=_MAX_SOLVENT_LENGTH)
+    #: A classification of the method (not a measure of accuracy); see ``app/schemas/reads/_method_family.py``.
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
     spin_treatment: SpinTreatment | None = None
     #: Frozen-core or all-electron (ADR 0021). Matches only levels that *state* it; a level whose
     #: producer did not say is never "frozen core by default", so it matches neither value.
@@ -128,6 +133,10 @@ class LevelOfTheoryBrowseRequest(BaseModel):
         default=None, max_length=_MAX_DISPERSION_LENGTH
     )
     solvent: str | None = Field(default=None, max_length=_MAX_SOLVENT_LENGTH)
+    #: A classification of the method (not a measure of accuracy); see ``app/schemas/reads/_method_family.py``.
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
     spin_treatment: SpinTreatment | None = None
     #: Frozen-core or all-electron (ADR 0021). Matches only levels that *state* it; a level whose
     #: producer did not say is never "frozen core by default", so it matches neither value.

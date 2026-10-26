@@ -53,6 +53,7 @@ from app.schemas.reads._field_bounds import (
 from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
+from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
 from app.schemas.reads.removed_parameters import SPECIES_CALCULATIONS as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_calculation import (
     CalculationFreqModeSummary,
@@ -143,6 +144,10 @@ class SpeciesCalculationsSearchRequest(BaseModel):
     workflow_tool: str | None = Field(
         default=None, max_length=_MAX_WORKFLOW_TOOL_LENGTH
     )
+    #: A classification of the calculation's method (not a measure of accuracy); see ``app/schemas/reads/_method_family.py``.
+    method_family: MethodFamilyFilter = None
+    dft_rung_min: DftRungBound = None
+    dft_rung_max: DftRungBound = None
     scientific_origin: ScientificOriginKind | None = None
     calculation_quality: CalculationQuality | None = None
 
