@@ -980,3 +980,40 @@ def test_a_declaration_covering_a_superset_of_the_columns_is_used(db_session) ->
     reassign_conformer_groups(session, repair_revision=_REVISION, species_entry_ids=[entry.id])
     session.expire_all()
     assert session.get(Thermo, thermo_id).target_conformer_group_id != group_id
+
+
+# ---------------------------------------------------------------------------
+# An approved structure that defines nothing follows the same rule
+# ---------------------------------------------------------------------------
+
+
+def test_an_approved_non_defining_observation_that_must_move_is_owed_not_moved(db_session) -> None:
+    """opt 0, sp 25 (too far from 0: a provisional basin), opt 12, opt 24: the medoid of the optimised basin becomes
+    12, which the sp matches, so the sp belongs there. It was approved, so this role may not move it."""
+    from app.services.conformer_basin_store import entries_with_pending_merges
+    from tests.services.test_conformer_basin_linkage import _BUTANE, butane, deposit_observations
+
+    session = db_session
+    first = deposit_observations(session, _BUTANE, [butane("opt0", 0.0), butane("sp25", 25.0, "sp")])
+    sp = first["sp25"]
+    sp_group = session.get(ConformerObservation, sp).conformer_group_id
+    opt_group = session.get(ConformerObservation, first["opt0"]).conformer_group_id
+    assert sp_group != opt_group
+    entry_id = session.get(ConformerGroup, sp_group).species_entry_id
+    _approve(session, SubmissionRecordType.conformer_observation, sp)
+
+    deposit_observations(session, _BUTANE, [butane("opt12", 12.0), butane("opt24", 24.0)])
+    session.expire_all()
+    assert session.get(ConformerObservation, sp).conformer_group_id == sp_group, "an approved row is not moved live"
+    owed = session.scalars(select(ConformerGroupMergePending)).all()
+    assert [(p.kept_conformer_group_id, p.absorbed_conformer_group_id, p.conformer_observation_id) for p in owed] == [
+        (opt_group, sp_group, sp)
+    ]
+    assert entries_with_pending_merges(session) == [entry_id]
+
+    reassign_conformer_groups(session, repair_revision=_REVISION, species_entry_ids=[entry_id])
+    session.expire_all()
+    assert session.get(ConformerObservation, sp).conformer_group_id == opt_group
+    assert entries_with_pending_merges(session) == []
+    again = reassign_conformer_groups(session, repair_revision=_REVISION, species_entry_ids=[entry_id])
+    assert again.entries_changed == 0
