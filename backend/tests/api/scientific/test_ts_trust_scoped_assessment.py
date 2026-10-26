@@ -23,7 +23,7 @@ import pathlib
 import re
 
 import pytest
-from sqlalchemy import event
+from sqlalchemy import event, update
 
 from app.api.error_contract import CodedValueError
 from app.db.models.common import (
@@ -31,7 +31,9 @@ from app.db.models.common import (
     StructureDeterminationTargetKind,
     StructureFindingKind,
     StructureSourceRole,
+    SubmissionRecordType,
 )
+from app.db.models.record_review import RecordReview
 from app.services.structure_selection import ADMIN_KEY_VERSION, DECISION_VERSION
 from app.services.structure_selection.models import (
     ASSESSMENT_VERSION,
@@ -50,7 +52,7 @@ from app.services.trust.models import (
     TransitionStateScopedAssessmentStatus,
 )
 from app.services.trust.rubrics import TS_SCOPED_STRUCTURE_VERSIONS
-from tests.services.scientific_read._factories import make_geometry
+from tests.services.scientific_read._factories import make_geometry, set_review
 from tests.services.structure_selection._support import make_ts_world
 from tests.services.structure_selection.test_service import build_basin
 
@@ -666,10 +668,11 @@ def test_without_a_declaration_the_saddle_point_block_describes_the_newest_attac
 def test_a_target_resting_on_a_hidden_calculation_is_unresolved_under_curated_and_warns(client, db_session):
     """Kills: the assessment run under the wrong profile, or cached across profiles."""
     world = make_ts_world(db_session)
-    d, opt, sp, f = saddle(world, statuses={"freq": None})  # the curvature witness is below the curated floor
+    d, opt, sp, f = saddle(world, statuses={"freq": None})  # the curvature witness has no review yet
     world.settle()
-    exploratory = detail(client, world.entry)
-    curated = detail(client, world.entry, profile="curated")
+    exploratory = detail(client, world.entry)  # read while the witness is merely unreviewed: the control
+    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=f.id, status=RecordReviewStatus.rejected)
+    curated = detail(client, world.entry, profile="curated")  # now withheld as evidence
     assert exploratory["structure_assessment"]["outcome"] == "qualified_evidence"
     assert WARNING not in exploratory["evidence"]["checks"]
     block = curated["structure_assessment"]
@@ -678,19 +681,28 @@ def test_a_target_resting_on_a_hidden_calculation_is_unresolved_under_curated_an
     assert curated["evidence"]["checks"][WARNING] == "warning"
     text = json.dumps(curated)
     assert f.public_ref not in text  # nothing names the hidden calculation
-    # And back again: nothing was kept from the curated read.
+    # And back again: nothing was kept from the curated read (the control, with the witness unreviewed again).
+    db_session.execute(
+        update(RecordReview)
+        .where(RecordReview.record_type == SubmissionRecordType.calculation, RecordReview.record_id == f.id)
+        .values(status=RecordReviewStatus.under_review)
+    )
+    db_session.expire_all()
     assert detail(client, world.entry)["structure_assessment"]["outcome"] == "qualified_evidence"
 
 
-def test_the_hidden_pin_falls_back_to_the_newest_attached_visible_result_under_curated(client, db_session):
+def test_the_withheld_pin_falls_back_to_the_newest_attached_visible_result_under_curated(client, db_session):
     world = make_ts_world(db_session)
-    saddle(world, statuses={"freq": None})
+    d, opt, sp, f = saddle(world, statuses={"freq": None})
     world.freq("visible", frequencies=THREE)
     world.settle()
-    # The hidden pinned witness is out of the shown graph, so the rule falls back; the visible undesignated result is read.
+    key = "reaction_coordinate_designated_for_ts"
     # (exploratory: the pin is visible and chosen.)
-    assert detail(client, world.entry, profile="curated")["evidence"]["checks"]["reaction_coordinate_designated_for_ts"] == "missing"
-    assert detail(client, world.entry)["evidence"]["checks"]["reaction_coordinate_designated_for_ts"] == "passed"
+    assert detail(client, world.entry)["evidence"]["checks"][key] == "passed"
+    # Withheld (rejected) under curated, the pinned witness is out of the shown graph, so the rule falls back; the visible
+    # undesignated result is read. Unreviewed, it would have been read (the test above).
+    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=f.id, status=RecordReviewStatus.rejected)
+    assert detail(client, world.entry, profile="curated")["evidence"]["checks"][key] == "missing"
 
 
 def _box(client, entry, *, profile=None):
@@ -749,9 +761,10 @@ def test_under_curated_an_unreviewed_pinned_result_is_the_one_the_box_describes(
     """Step 3 of ADR 0023: the box describes the declared (pinned) frequency result when it is merely unreviewed, as the
     entry's calculation list names it, instead of falling back to the newest other result.
 
-    Interim: the trust check's own population still applies the record floor until step 5, so the two can differ for an
-    unreviewed pin. This pins the box only.
-    Kills: the box keeping the record floor and describing the newest other result (``latest_direct_frequency``).
+    Since step 5 the trust check's own population reads the same pin (the assessment and the checklist follow the
+    evidence rule too), so the box and the check agree for an unreviewed pin: both read the pin, not the newest other result.
+    Kills: the box keeping the record floor and describing the newest other result (``latest_direct_frequency``); the
+    checklist or the scoped assessment keeping the record floor and reading the other (undesignated) result.
     """
     world = make_ts_world(db_session)
     d, opt, sp, f = saddle(world, statuses={"freq": None})
@@ -760,6 +773,13 @@ def test_under_curated_an_unreviewed_pinned_result_is_the_one_the_box_describes(
     box = _box(client, world.entry, profile="curated")
     assert box["basis"] == "declared_curvature_witness" and box["calculation_ref"] == f.public_ref
     assert _box(client, world.entry)["calculation_ref"] == f.public_ref  # exploratory: the same pin
+    # The check reads the same population as the box (step 5): the unreviewed pin is read, so the designation check
+    # passes exactly as it does under exploratory, and the scoped assessment is not left unresolved by the unreviewed pin.
+    curated_detail, exploratory_detail = detail(client, world.entry, profile="curated"), detail(client, world.entry)
+    key = "reaction_coordinate_designated_for_ts"
+    assert curated_detail["evidence"]["checks"][key] == exploratory_detail["evidence"]["checks"][key] == "passed"
+    assert curated_detail["structure_assessment"]["outcome"] == exploratory_detail["structure_assessment"]["outcome"]
+    assert curated_detail["evidence"]["checks"].get(WARNING) == exploratory_detail["evidence"]["checks"].get(WARNING)
 
 
 def test_a_deprecated_declared_entry_has_the_same_counts_on_its_page_and_on_a_list(client, db_session):

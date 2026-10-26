@@ -728,12 +728,15 @@ def where_visible(stmt: Any, predicate: Any) -> Any:
 # cannot be lifted by request. Under exploratory nothing is withheld as evidence, so every function here answers
 # "visible" and issues no query.
 #
-# STATUS (steps 2, 3 and 4 of ADR 0023): matching in search, browse and select (``linked_evidence_predicate`` and
+# STATUS (steps 2 to 5 of ADR 0023): matching in search, browse and select (``linked_evidence_predicate`` and
 # ``ids_withheld_as_evidence`` in every filter on linked calculations and observations), the service counts, flags and derived
 # levels of a returned record, the response-level ref guard (``ref_guard.py``: pointers in responses, the document modes, the
-# selection loaders' unavailable-evidence seam, the export batcher), the legacy entity reads, and the ML export's conformer
-# refs call this section. Still on the earlier rule (D6: below the floor is hidden, evidence included) until their steps land:
-# the trust and selection loaders' own populations (step 5), made-under comparisons (step 6), and detail-by-ref (step 7).
+# selection loaders' unavailable-evidence seam, the export batcher), the legacy entity reads, the ML export's conformer refs,
+# the trust evaluators (``trust_floor.py``) and the selection loaders' own evidence populations (``evidence_usable_statuses``
+# and ``evidence_visible_statuses`` in the structure, statmech, network and relative-energy loaders and the source-finding
+# gate) call this section. Named exception: the ML export's energy rows keep their calculations approved-only (owner decision
+# Q7, ``ml_dataset.ml_energy_row_floor``). Still on the earlier rule (D6: below the floor is hidden, evidence included) until
+# their steps land: made-under comparisons (step 6), and detail-by-ref (step 7).
 
 #: Review statuses whose linked evidence is withheld under a profile with a review floor.
 WITHHELD_EVIDENCE_STATUSES: frozenset[RecordReviewStatus] = frozenset(
@@ -798,6 +801,22 @@ def evidence_visible_statuses(*, profile: Any = None) -> frozenset[RecordReviewS
     """The review statuses at which linked evidence is shown (badged) under the profile."""
     profile = profile if profile is not None else current_read_profile()
     return frozenset(s for s in RecordReviewStatus if not evidence_withheld_under_profile(s, profile=profile))
+
+
+def evidence_usable_statuses(min_review_status: RecordReviewStatus | None = None) -> frozenset[RecordReviewStatus]:
+    """The review statuses at which a selection engine USES linked evidence (a source calculation, a member, an observation).
+
+    The evidence-rule counterpart of ``visible_statuses(min_review_status=..., include_rejected=False,
+    include_deprecated=False)``: the same set without the profile's record floor, because the floor decides which RECORDS a
+    select returns, not what a returned record rests on (ADR 0023). Terminal statuses are out; the caller's own
+    ``min_review_status`` still narrows. It does not read the request's profile, so it is the same pure function of the
+    caller's floor under every profile; under ``exploratory`` it equals ``visible_statuses(...)``, so an exploratory
+    selection is unchanged. A replay judges a recorded manifest by this function, not by the process's own profile.
+    """
+    base = default_visible_statuses(include_rejected=False, include_deprecated=False)
+    if min_review_status is not None:
+        base = base & status_at_or_above(min_review_status)
+    return frozenset(base)
 
 
 def evidence_withheld_predicate(id_column: Any, record_type: SubmissionRecordType, *, profile: Any = None) -> Any:

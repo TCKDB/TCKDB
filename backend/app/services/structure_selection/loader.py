@@ -21,7 +21,7 @@ one generic code that does not distinguish "hidden" from "absent".
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, cast
 
 from sqlalchemy import func, select
@@ -54,9 +54,15 @@ from app.db.models.structure_determination import (
 from app.db.models.transition_state import TransitionStateEntry, TransitionStateValidationEvidence
 from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER
 from app.schemas.reads.scientific_selection_common import ELIGIBILITY_ENTRY_STATUS, ELIGIBILITY_REJECTED_QUALITY
-from app.services.scientific_read.common import fetch_review_badges, visible_statuses
+from app.services.scientific_read.common import (
+    evidence_usable_statuses,
+    evidence_visible_statuses,
+    fetch_review_badges,
+    visible_statuses,
+)
 from app.services.scientific_read.composite_binding import composite_scheme_summaries
 from app.services.scientific_read.handles import canonical_level_of_theory_id
+from app.services.scientific_read.profile import current_read_profile
 from app.services.selection_filters import filter_by_provenance
 from app.services.selection_kernel.requested import review_default
 from app.services.structure_selection.bounds import check_candidates, check_nested_rows, traversal_too_deep
@@ -122,6 +128,16 @@ class PopulationScan:
     removed_by_filters: int = 0
     removed_by_floor: int = 0
     terminal_excluded: dict[str, int] = field(default_factory=dict)
+    #: The evidence rule (ADR 0023). ``evidence_shown``: the statuses at which linked evidence is not withheld under the profile
+    #: (a source calculation, a lineage parent, an anchoring observation, a validation-evidence calculation).
+    #: ``evidence_usable``: the statuses a pinned source may have to be USED (the caller's own floor over the non-terminal
+    #: ones). Neither carries the profile's record floor, which decides the units only. Under exploratory they equal
+    #: ``profile_statuses`` and ``effective_statuses``.
+    evidence_shown: frozenset[RecordReviewStatus] = frozenset()
+    evidence_usable: frozenset[RecordReviewStatus] = frozenset()
+    #: What a determination's conformer OBSERVATION may be (an observation is evidence inside its group): the evidence rule
+    #: under a profile with a floor, ``candidate_statuses`` otherwise (so a request can still lift a terminal observation).
+    observation_statuses: frozenset[RecordReviewStatus] = frozenset()
 
 
 @dataclass
@@ -282,7 +298,11 @@ def scan_population(session: Session, *, entry_id: int, request: StructureReques
         scan = _scan_calculations(session, entry_id, request, effective, profile)
     else:
         scan = _scan_determinations(session, entry_id, request, effective, profile)
-    return scan
+    return replace(
+        scan,
+        evidence_shown=evidence_visible_statuses(),
+        evidence_usable=evidence_usable_statuses(request.min_review_status),
+    )
 
 
 def _scan_calculations(
@@ -417,18 +437,28 @@ def _scan_determinations(
         record_ids={g for g in group_of.values() if g is not None},
     )
 
+    evidence_shown = evidence_visible_statuses()
+
+    def observation_status(observation_id: int | None) -> RecordReviewStatus | None:
+        return None if observation_id is None else observation_badges[observation_id].status
+
+    def group_status(observation_id: int | None) -> RecordReviewStatus | None:
+        group_id = group_of.get(observation_id) if observation_id is not None else None
+        return None if group_id is None else group_badges[group_id].status
+
     def chain(observation_id: int | None) -> list[RecordReviewStatus]:
         """The statuses a determination is judged by: its observation's and that observation's group's."""
-        if observation_id is None:
-            return []
-        out = [observation_badges[observation_id].status]
-        group_id = group_of.get(observation_id)
-        if group_id is not None:
-            out.append(group_badges[group_id].status)
-        return out
+        return [s for s in (observation_status(observation_id), group_status(observation_id)) if s is not None]
 
-    # A determination whose own observation or group the profile hides is not part of this request's world.
-    ids = [i for i in ids if all(s in profile for s in chain(observation_of[i]))]
+    # ADR 0023 (Q2, Q4): the basin is the record and its conformer GROUP is the record that gates it; the conformer
+    # OBSERVATION inside the group is evidence, so under ``curated`` it is used and badged unless it is rejected or deprecated.
+    # A determination whose group the profile floor hides, or whose observation is withheld as evidence, is not part of this
+    # request's world.
+    def in_world(i: int) -> bool:
+        obs, grp = observation_status(observation_of[i]), group_status(observation_of[i])
+        return (obs is None or obs in evidence_shown) and (grp is None or grp in profile)
+
+    ids = [i for i in ids if in_world(i)]
     considered = len(ids)
     if request.member_refs is not None:
         wanted = set(request.member_refs)
@@ -453,7 +483,16 @@ def _scan_determinations(
             pinned_by[determination_id].add(calculation_id)
     kept = apply_filters(session, pinned_by, request.filters)
     own = candidate_statuses(request)
+    observation_own = evidence_usable_statuses(request.min_review_status) if current_read_profile().review_floor is not None else own
     elig = request.eligibility
+    with_floor = current_read_profile().review_floor is not None
+
+    def below_floor(i: int, gate: RecordReviewStatus) -> bool:
+        if not with_floor:
+            return gate not in own  # exploratory: the weakest of the chain, exactly as before
+        obs, grp = observation_status(observation_of[i]), group_status(observation_of[i])
+        return (grp is not None and grp not in own) or (obs is not None and obs not in observation_own)
+
     population: list[int] = []
     excluded: list[tuple[int, RecordReviewStatus | None, str]] = []
     unit_status: dict[int, RecordReviewStatus | None] = {}
@@ -482,7 +521,7 @@ def _scan_determinations(
         if default is not None and not elig.lifts(default):
             excluded.append((i, gate, REASON_TERMINAL))
             terminal_excluded[default] = terminal_excluded.get(default, 0) + 1
-        elif gate is not None and gate not in own:
+        elif gate is not None and below_floor(i, gate):
             excluded.append((i, gate, REASON_BELOW_FLOOR))
             removed_by_floor += 1
         elif entry_gates and owner_badge.status in _TERMINAL:
@@ -503,7 +542,7 @@ def _scan_determinations(
     )
     pinned_badges = fetch_review_badges(session, record_type=SubmissionRecordType.calculation, record_ids=set(pinned))
     # A pinned calculation the profile hides is not counted: it reads as absent everywhere.
-    shown = [c for c in pinned if pinned_badges[c].status in profile]
+    shown = [c for c in pinned if pinned_badges[c].status in evidence_shown]
     source_calc_ids = set(shown)
     nested = _count_nested(session, source_calc_ids, set(population), source_rows=len(shown))
     check_nested_rows(request.bounds, nested)
@@ -524,6 +563,7 @@ def _scan_determinations(
         total_units=len(ids),
         nested_rows=nested,
         observation_of=observation_of,
+        observation_statuses=observation_own,
     )
 
 
@@ -901,7 +941,7 @@ def load_population(session: Session, scan: PopulationScan, request: StructureRe
             with_lineage=False,
             findings=findings,
             geometry_refs=geometry_refs,
-            profile=scan.profile_statuses,
+            profile=scan.evidence_shown,
         )
         return loaded
     _load_determinations(session, scan, request, subject, loaded)
@@ -931,11 +971,11 @@ def _load_determinations(
     for cid in source_calc_ids:
         status = badges[cid].status
         calc = by_id[cid]
-        if status not in scan.profile_statuses:
+        if status not in scan.evidence_shown:
             usable_status[cid] = REASON_EVIDENCE_UNAVAILABLE
         elif status in _TERMINAL:
             usable_status[cid] = REASON_SOURCE_TERMINAL
-        elif status not in scan.effective_statuses:
+        elif status not in scan.evidence_usable:
             usable_status[cid] = REASON_SOURCE_BELOW_FLOOR
         elif calc.quality not in request.quality_set:
             usable_status[cid] = REASON_SOURCE_QUALITY
@@ -960,7 +1000,7 @@ def _load_determinations(
         with_lineage=True,
         findings=findings,
         geometry_refs=geometry_refs,
-        profile=scan.profile_statuses,
+        profile=scan.evidence_shown,
     )
     calc_ref = {c.id: c.public_ref for c in usable_calcs}
 
@@ -999,7 +1039,7 @@ def _load_determinations(
             dict(
                 session.execute(
                     select(Calculation.id, Calculation.public_ref).where(
-                        Calculation.id.in_([c for c in outside if outside_badges[c].status in scan.profile_statuses])
+                        Calculation.id.in_([c for c in outside if outside_badges[c].status in scan.evidence_shown])
                     )
                 ).tuples().all()
             )

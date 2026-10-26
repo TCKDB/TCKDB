@@ -29,7 +29,7 @@ from app.services.relative_conformer_energy.models import (
     RelativeEnergyResult,
 )
 from app.services.relative_conformer_energy.population import Population
-from app.services.scientific_read.common import check_read_profile_block
+from app.services.scientific_read.common import check_read_profile_block, evidence_usable_statuses
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 from app.services.structure_selection.assessment import assess_unit
 from app.services.structure_selection.bounds import check_manifest_size
@@ -178,23 +178,33 @@ def _check_consistency(
         )
     if name == "curated" and recorded != frozenset({RecordReviewStatus.approved}):
         raise ReplayError("inconsistent_manifest", "a curated profile admits approved records only")
+    # ADR 0023: the compared GROUPS are the records (the floor above); a determination rests on a conformer observation and on
+    # calculations, which are evidence, so they may be any status the evidence rule uses (everything but rejected and
+    # deprecated, over the caller's own floor). Computed from the recorded request alone, so a manifest cannot widen it.
+    usable = evidence_usable_statuses(request.min_review_status)
     refs_by_status = [(c.calculation_ref, c.review_status) for c in calcs] + [(d.determination_ref, d.review_status) for d in dets]
     for ref, status in refs_by_status:
-        if status not in recorded:
+        if status not in usable:
             raise ReplayError("inconsistent_manifest", f"{ref} has a review status its own request cannot see")
     population = manifest.get("population", {})
     if population.get("visible_units") != len(dets) or sorted(population.get("determinations", [])) != sorted(
         d.determination_ref for d in dets
     ):
         raise ReplayError("inconsistent_manifest", "the recorded determinations are not the ones the population names")
-    _check_population_claims(population, dets, curated=name == "curated", floor_set=floor is not None or request.min_review_status is not None)
+    _check_population_claims(
+        population,
+        dets,
+        curated=name == "curated",
+        floor_set=floor is not None or request.min_review_status is not None,
+        caller_floor=request.min_review_status is not None,
+    )
 
 
 _GROUP_EXCLUSION_CODES = frozenset({GROUP_BELOW_REVIEW_FLOOR, GROUP_TERMINAL_REVIEW_STATUS})
 
 
 def _check_population_claims(
-    population: dict[str, Any], dets: list[NormalizedDetermination], *, curated: bool, floor_set: bool
+    population: dict[str, Any], dets: list[NormalizedDetermination], *, curated: bool, floor_set: bool, caller_floor: bool
 ) -> None:
     """Refuse a population that contradicts itself: the claims about which groups were held out must agree with each
     other, with the groups compared, with the determinations recorded and with the profile."""
@@ -206,8 +216,10 @@ def _check_population_claims(
     excluded: dict[str, str] = population.get("excluded_groups", {})
     floor_held = set(population.get("floor_excluded_groups", []))
     terminal_held = set(population.get("terminal_excluded_groups", []))
-    if curated and (excluded or floor_held or terminal_held):
-        refuse("a curated profile shows approved records only, so it has no excluded or held-out groups")
+    # Under curated the groups are approved records, so none is excluded; an observation inside a group is evidence, so
+    # only the caller's own floor can hold one out (a rejected or deprecated one is withheld, never held).
+    if curated and (excluded or terminal_held or (floor_held and not caller_floor)):
+        refuse("a curated profile shows approved groups only, so it has no excluded groups and holds out none the caller's own floor does not")
     if not set(excluded) <= groups:
         refuse("an excluded group is not among the compared groups")
     if not set(excluded.values()) <= _GROUP_EXCLUSION_CODES:

@@ -41,7 +41,7 @@ from sqlalchemy.orm import Session
 from app.db.models.calculation import CalculationInputGeometry, CalculationOutputGeometry
 from app.db.models.common import SubmissionRecordType
 from app.db.models.structure_determination import StructureDetermination, StructureDeterminationSource
-from app.services.scientific_read.common import fetch_review_badges, visible_statuses
+from app.services.scientific_read.common import evidence_visible_statuses, fetch_review_badges, visible_statuses
 from app.services.scientific_read.profile import current_read_profile
 from app.services.structure_selection.assessment import (
     CURVATURE_SIDE,
@@ -176,13 +176,16 @@ def _determinations_the_profile_shows(session: Session, rows) -> set[int]:
 
     A determination the profile hides is no evidence about its source calculation: a live finding on it must not block a
     visible record that merely shares that calculation. A determination belongs to its conformer observation (a basin)
-    or its transition-state entry (a saddle); either being hidden hides it, the same rule the structure loader and the
-    relative-energy population apply. Without a review floor every determination is shown (nothing is queried).
+    or its transition-state entry (a saddle). The observation is linked evidence (ADR 0023, Q2), so it hides the
+    determination only when it is withheld (rejected or deprecated); the transition-state entry is a record (Q3) and still
+    gates its own evidence, so an entry below the profile's record floor hides it. Without a review floor every
+    determination is shown (nothing is queried).
     """
     everything = {determination_id for _, determination_id, *_ in rows}
     if current_read_profile().review_floor is None:
         return everything
     shown = frozenset(visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True))
+    evidence_shown = evidence_visible_statuses()
     observations = {o for *_, o, _ in rows if o is not None}
     entries = {e for *_, e in rows if e is not None}
     seen_observation = (
@@ -197,7 +200,7 @@ def _determinations_the_profile_shows(session: Session, rows) -> set[int]:
     )
     out: set[int] = set()
     for _, determination_id, _role, _evaluated, observation, entry in rows:
-        if observation is not None and seen_observation[observation].status not in shown:
+        if observation is not None and seen_observation[observation].status not in evidence_shown:
             continue
         if entry is not None and seen_entry[entry].status not in shown:
             continue

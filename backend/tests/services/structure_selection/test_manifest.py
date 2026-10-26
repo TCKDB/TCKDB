@@ -339,16 +339,22 @@ def test_a_genuinely_curated_determination_manifest_with_a_source_flipped_is_ref
         reset_current_read_profile(token)
     assert genuine["read_profile"]["profile"] == "curated" and replay_matches(genuine)
     assert all(c["review_status"] == "approved" for c in genuine["calculations"])
-    flipped = copy.deepcopy(genuine)
-    flipped["calculations"][0]["review_status"] = "not_reviewed"
-    with pytest.raises(ReplayError) as exc:
-        replay_structure_decision(reseal(flipped))
-    assert exc.value.code == "inconsistent_manifest"
-    determination = copy.deepcopy(genuine)
-    determination["determinations"][0]["review_status"] = "under_review"
-    with pytest.raises(ReplayError) as exc:
-        replay_structure_decision(reseal(determination))
-    assert exc.value.code == "inconsistent_manifest"
+    # ADR 0023: a source calculation is evidence, so an unreviewed one is a status a curated request may use and the replay
+    # accepts it; a rejected or deprecated one is withheld, so no curated request could have used it and the replay refuses.
+    unreviewed = copy.deepcopy(genuine)
+    unreviewed["calculations"][0]["review_status"] = "not_reviewed"
+    assert replay_matches(reseal(unreviewed))
+    for withheld in ("rejected", "deprecated"):
+        flipped = copy.deepcopy(genuine)
+        flipped["calculations"][0]["review_status"] = withheld
+        with pytest.raises(ReplayError) as exc:
+            replay_structure_decision(reseal(flipped))
+        assert exc.value.code == "inconsistent_manifest"
+        determination = copy.deepcopy(genuine)
+        determination["determinations"][0]["review_status"] = withheld
+        with pytest.raises(ReplayError) as exc:
+            replay_structure_decision(reseal(determination))
+        assert exc.value.code == "inconsistent_manifest"
 
 
 def test_a_forged_duplicate_assessment_is_refused_not_shadowed(basin_selection):

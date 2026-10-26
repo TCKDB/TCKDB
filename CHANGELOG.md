@@ -53,6 +53,31 @@ dataset must never require a code release.
 - `tckdb-client` 0.171.0. OpenAPI golden regenerated. The `computed_transition_state` rubric pin is re-pinned without a version bump
   (recorded override: the shared provenance filter it reaches gained optional parameters that no existing call passes).
 
+## Curated profile: trust and selection follow the evidence rule (2026-10-26, step 5 of 8)
+
+Under `profile=curated`, what a returned record rests on is now read by the evidence rule in the trust checklists and in the selection
+loaders: an unreviewed or under-review calculation, declared member or conformer observation is used and shown with its badge, and only a
+`rejected` or `deprecated` one is withheld. The record floor still decides which records a list, search or select returns or compares.
+
+- **Trust.** A kinetics record's and a transition-state entry's checklist reads the calculations the evidence rule leaves visible, so the
+  badge, the saddle-point box and the scoped assessment behind them read the same population (they could differ for an unreviewed
+  frequency result). Exploratory is unchanged.
+- **Selection.** Structure select (the calculations a basin rests on, their lineage, validation evidence, and the conformer observation
+  inside a group), statmech select (source calculations and declared members), network select (a validation entry's reference solve),
+  relative energies (the observations inside a compared group) and the source-finding gate of thermo and kinetics select. A
+  transition-state entry stays a record and still gates its own evidence; the caller's own `min_review_status` still holds unreviewed
+  evidence out.
+- **Exports.** No export population moved: the export and relative-energy routes list or compare records. The ML export's energy rows keep
+  their calculations approved-only, now a named exception (owner decision Q7, `ml_dataset.ml_energy_row_floor`) with its own test. Dataset
+  releases are unchanged.
+- **Replay.** A replay judges a source calculation, a lineage parent, a declared member and a basin's observation by the evidence rule and
+  the records themselves by the record floor, so a curated manifest with an unreviewed source replays and one with a rejected or
+  deprecated input is refused. No manifest format change.
+- **Rubrics.** `computed_kinetics` and `computed_transition_state` are re-pinned without a version bump (recorded in the pins file):
+  stored and exploratory verdicts are unchanged; curated read-time verdicts may change.
+
+No migration; no schema change.
+
 ## Curated profile: filters match through linked evidence (2026-10-26, step 4 of 8)
 
 Under `profile=curated`, a filter on linked records (method, basis, software, workflow tool, level of theory, `scientific_origin`,

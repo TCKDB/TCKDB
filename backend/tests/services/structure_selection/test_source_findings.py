@@ -12,6 +12,7 @@ import pytest
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     CalculationType,
+    StructureDeterminationTargetKind,
     StructureFindingAuthority,
     StructureFindingKind,
     StructureFindingVerdict,
@@ -201,3 +202,64 @@ def test_one_batch_answers_each_product_by_its_own_sources(db_session, world, sp
     db_session.flush()
     out = assess_source_findings(db_session, {"bad": [use(calc, "sp")], "good": [use(clean, "sp")], "none": []})
     assert out["bad"].blocking and not out["good"].blocking and not out["none"].blocking
+
+
+# ---------------------------------------------------------------------------
+# Which determinations count as evidence about a source (ADR 0023, step 5)
+# ---------------------------------------------------------------------------
+
+
+def _verdict_under(session, profile_token_factory, *uses):
+    from tests.services.structure_selection._support import reset_current_read_profile
+
+    token = profile_token_factory()
+    try:
+        return verdict(session, *uses)
+    finally:
+        reset_current_read_profile(token)
+
+
+def _determination_finding_world(db_session, world, sp, *, observation_status=None):
+    """A source calculation with a determination of a conformer observation that carries a confirmed finding."""
+    from app.db.models.common import SubmissionRecordType
+    from tests.services.scientific_read._factories import make_conformer_group, make_conformer_observation, set_review
+
+    calc, geometry = sp
+    observation = make_conformer_observation(db_session, conformer_group=make_conformer_group(db_session, world.entry))
+    calc.conformer_observation_id = observation.id  # a basin determination's sources are anchored to its observation
+    db_session.flush()
+    if observation_status is not None:
+        set_review(
+            db_session, record_type=SubmissionRecordType.conformer_observation, record_id=observation.id, status=observation_status
+        )
+    determination = world.determination(
+        [("energy", calc)],
+        evaluated=geometry,
+        observation=observation,
+        target=StructureDeterminationTargetKind.conformer_basin,
+    )
+    world.finding(determination=determination, kind=K.identity_incompatibility)
+    return calc
+
+
+def test_a_finding_on_a_determination_of_an_unreviewed_observation_blocks_under_curated(db_session, world, sp):
+    """The observation a determination rests on is evidence (Q2): unreviewed, it still counts as a witness about the source.
+
+    Kills: ``_determinations_the_profile_shows`` keeping the record floor for the observation (the finding silently dropped
+    under curated while exploratory is blocked by it).
+    """
+    from tests.services.structure_selection._support import curated
+
+    calc = _determination_finding_world(db_session, world, sp)  # the observation has no review row
+    assert verdict(db_session, use(calc, "sp")).blocking  # exploratory: the control
+    assert _verdict_under(db_session, curated, use(calc, "sp")).blocking
+
+
+def test_a_finding_on_a_determination_of_a_rejected_observation_is_not_a_witness_under_curated(db_session, world, sp):
+    """Kills: dropping the withholding (a rejected observation's determination still blocking a visible product)."""
+    from app.db.models.common import RecordReviewStatus
+    from tests.services.structure_selection._support import curated
+
+    calc = _determination_finding_world(db_session, world, sp, observation_status=RecordReviewStatus.rejected)
+    assert verdict(db_session, use(calc, "sp")).blocking  # exploratory withholds nothing as evidence
+    assert _verdict_under(db_session, curated, use(calc, "sp")).blocking == ()

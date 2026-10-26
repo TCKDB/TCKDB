@@ -56,6 +56,7 @@ import logging
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -629,6 +630,19 @@ def _species_thermo_blocks(
     return blocks
 
 
+def ml_energy_row_floor(profile: ResolvedReadProfile) -> Any:
+    """The review floor on the ML export's ENERGY ROWS: a named exception to the evidence rule (owner decision Q7, ADR 0023).
+
+    The ML export's rows are calculations (a geometry with the energies, frequencies and Hessian computed at it), so a
+    calculation is a RECORD of the dataset, not linked evidence of another record, and it keeps the ``approved`` floor under
+    ``curated``: a row is left out whatever its review state below it, and the barrier and reactant sums read only those rows.
+    Everything else nested in an ML record follows the evidence rule (conformer observations and groups:
+    :func:`_conformer_refs`; the listed thermo, kinetics and transition-state records keep the record floor as in every list).
+    Dataset releases are unchanged. ``None`` without a review floor (exploratory), so nothing is added to the statement.
+    """
+    return review_floor_predicate(Calculation.id, SubmissionRecordType.calculation, profile=profile)
+
+
 def _conformer_refs(
     session: Session, observation_ids: list[int], profile: ResolvedReadProfile
 ) -> tuple[list[str], list[str]]:
@@ -687,7 +701,7 @@ def _build_species_records(
     calcs = session.scalars(
         where_visible(
             select(Calculation).where(Calculation.species_entry_id == species_entry_id),
-            review_floor_predicate(Calculation.id, SubmissionRecordType.calculation, profile=profile),
+            ml_energy_row_floor(profile),
         ).order_by(Calculation.id)
     ).all()
     if not calcs:
@@ -1019,7 +1033,7 @@ def _species_entry_energy_at_lot(
     assemble a same-level reactant energy sum for the electronic barrier; the barrier record carries the calculation
     each reactant energy came from.
     """
-    shown = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation, profile=profile)
+    shown = ml_energy_row_floor(profile)
     sp_rows = session.execute(
         where_visible(
             select(CalculationSPResult.electronic_energy_hartree, Calculation.public_ref)
@@ -1064,7 +1078,7 @@ def _ts_calculation_energies(
     used.
     """
     # Hidden calculations are not candidates: their energies would otherwise set the barrier.
-    shown = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation, profile=profile)
+    shown = ml_energy_row_floor(profile)
     sp_rows = session.execute(
         where_visible(
             select(CalculationSPResult.electronic_energy_hartree, Calculation)

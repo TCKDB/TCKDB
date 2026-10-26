@@ -150,6 +150,7 @@ def qualify_target(
             assess_candidate(
                 c, request=request, subject=subject, calculations=by_ref,
                 effective_statuses=scan.effective_statuses, candidate_statuses=scan.candidate_statuses,
+                evidence_statuses=scan.evidence_usable,
             )
             for c in candidates
         )

@@ -1,11 +1,16 @@
-"""Trust verdicts that rest only on the evidence the active read profile shows (owner decision D5).
+"""Trust verdicts that rest only on the evidence the active read profile does not withhold (owner decision D5, ADR 0023).
 
 A trust fragment is a checklist over the evidence graph of one record ("is there a transition-state optimisation, an
 IRC, a geometry validation?"). The evaluators are pure over the ORM graph they are handed, and that graph includes
-calculations below the review floor. Handed as it is, a curated fragment would say ``ts_optimization_present: passed``
-for an entry whose only optimisation is hidden: the same existence oracle the ``has_opt`` flag was.
+calculations the evidence rule withholds. Handed as it is, a curated fragment would say ``ts_optimization_present: passed``
+for an entry whose only optimisation is withheld: the same existence oracle the ``has_opt`` flag was.
 
-Under a floor the evaluators are therefore run on the same graph with the hidden calculations taken out of the
+The calculations a record's checklist reads are its linked evidence, so since step 5 of ADR 0023 only a ``rejected`` or
+``deprecated`` one is taken out; an unreviewed one is read, as the box and the evidence counts beside the badge already read it.
+(The record floor still decides which entries and kinetics records a list returns; it does not decide what a returned one
+rests on.)
+
+Under a profile with a floor the evaluators are therefore run on the same graph with the withheld calculations taken out of the
 collections they walk, and the collections are put back afterwards (``set_committed_value`` records no change, so
 nothing is flushed and the session's objects are exactly as they were). With no floor nothing is looked up and nothing
 is swapped, so the exploratory verdict is the one it always was.
@@ -23,7 +28,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 from app.db.models.common import SubmissionRecordType
 from app.db.models.kinetics import Kinetics
 from app.db.models.transition_state import TransitionStateEntry
-from app.services.scientific_read.common import ids_below_review_floor
+from app.services.scientific_read.common import ids_withheld_as_evidence
 from app.services.scientific_read.profile import current_read_profile
 from app.services.trust import (
     EvidenceEvaluation,
@@ -37,7 +42,7 @@ def _hidden_calculation_ids(session: Session | None, calculations: Iterator[Any]
     if session is None:
         return set()
     ids = {c.id for c in calculations if c is not None}
-    return ids_below_review_floor(session, record_type=SubmissionRecordType.calculation, record_ids=ids)
+    return ids_withheld_as_evidence(session, record_type=SubmissionRecordType.calculation, record_ids=ids)
 
 
 @contextmanager

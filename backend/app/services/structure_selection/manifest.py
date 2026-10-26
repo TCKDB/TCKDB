@@ -35,7 +35,7 @@ from typing import Any
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import default_visible_statuses, status_at_or_above
 from app.services.manifest_formats import manifest_header, new_format_registry, read_manifest_format
-from app.services.scientific_read.common import check_read_profile_block
+from app.services.scientific_read.common import check_read_profile_block, evidence_usable_statuses
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 from app.services.selection_kernel.requested import (
     OFFER_FINDINGS,
@@ -270,9 +270,9 @@ def _check_consistency(
             "inconsistent_manifest",
             "the effective review statuses are not what the recorded profile and request floor allow",
         )
-    # Belt and braces: the expected-statuses comparison above already pins a curated profile to approved-only, so this
-    # cannot fire on its own; it states the curated invariant where a reader looks for it and survives a change to
-    # ``expected_effective_statuses``.
+    # Belt and braces: the expected-statuses comparison above already pins a curated profile's RECORD floor to approved
+    # only, so this cannot fire on its own; it states the curated invariant where a reader looks for it and survives a
+    # change to ``expected_effective_statuses``. (Linked evidence follows the evidence rule instead: see below.)
     if name == "curated" and recorded != frozenset({RecordReviewStatus.approved}):
         raise ReplayError("inconsistent_manifest", "a curated profile admits approved records only")
     try:
@@ -289,10 +289,17 @@ def _check_consistency(
     # manifest relabelled curated (or a curated one with a source quietly flipped) must not pass on its units alone. A
     # unit is judged against what a unit may have; a source calculation, by the effective statuses. A determination's
     # verdict also records the status a request can lift (its observation's).
+    #
+    # ADR 0023: under a profile with a floor the floor decides the units (a record), not what a unit rests on. A source
+    # calculation, a lineage parent and a basin's conformer observation are evidence, so they may be any status the evidence
+    # rule uses (everything but rejected and deprecated, over the caller's own floor), and a basin's own status, the weakest
+    # of its group's and its observation's, may be one of those too. A rejected or deprecated input is still refused.
+    usable = evidence_usable_statuses(request.min_review_status) if floor is not None else recorded
     unit_refs = {getattr(u, "calculation_ref", None) or u.determination_ref for u in units}
     for item in recorded_inputs:
         ref = getattr(item, "calculation_ref", None) or item.determination_ref
-        allowed = recorded_candidate if ref in unit_refs else recorded
+        is_basin = hasattr(item, "determination_ref") and request.grain is not Grain.calculation
+        allowed = (recorded_candidate | usable if is_basin else recorded_candidate) if ref in unit_refs else usable
         if item.review_status is None and hasattr(item, "determination_ref"):
             continue  # a determination with no review of its own (see NormalizedDetermination.review_status)
         if item.review_status not in allowed:
@@ -302,7 +309,9 @@ def _check_consistency(
         raise ReplayError("verdict_mismatch", "the recorded verdicts do not cover exactly the recorded units")
     for ref, record in verdicts.items():
         gate = record.get("gate_review_status") if isinstance(record, dict) else None
-        if gate is not None and RecordReviewStatus(gate) not in recorded_candidate:
+        if gate is not None and RecordReviewStatus(gate) not in (
+            recorded_candidate | usable if request.grain is not Grain.calculation else recorded_candidate
+        ):
             raise ReplayError("inconsistent_manifest", f"{ref} was judged by a review status its own request cannot see")
     if manifest.get("population", {}).get("visible_units") != len(units):
         raise ReplayError("inconsistent_manifest", "the recorded visible-unit count is not the number of recorded units")

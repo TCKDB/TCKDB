@@ -247,16 +247,17 @@ def test_unlisted_evidence_is_named_in_a_selection_document_and_holds_no_token(c
     evidence. Its ref stands in the curated document as it does in the exploratory one, and no position holds a token.
 
     This is the flip of the pin above (which now runs over rejected / deprecated records): the same world, with its hidden
-    records left unlisted. Thermo, kinetics and statmech name the records the positions held tokens for; the network and
-    structure documents name none of them (their loaders still apply the floor to the evidence they read, step 5), but hold
-    no token either.
+    records left unlisted. Thermo, kinetics, statmech and the network name the records the positions held tokens for. The
+    structure and relative-energy documents name none of their ``hidden`` keys because those are conformer GROUPS, which are
+    records there (Q4) and which the floor still holds out; the calculations and observations inside a group are evidence and
+    are named (see the next test). No document holds a token.
 
     Kills: the earlier rule (a token or a gap for every record below the floor); a token for an unlisted record.
     """
     unlisted = build_sweep_world(db_session)
     login_as(unlisted.extra["curator"].id)
     hidden_refs = unlisted.hidden_refs()
-    named_now = {"thermo", "kinetics", "statmech"}
+    named_now = {"thermo", "kinetics", "statmech", "network"}
     for route in _routes(unlisted):
         curated = _post(client, route.path, route.body, "curated")
         text = json.dumps(curated)
@@ -264,6 +265,44 @@ def test_unlisted_evidence_is_named_in_a_selection_document_and_holds_no_token(c
         if route.name in named_now:
             for key in route.hidden:
                 assert hidden_refs[key] in text, f"{route.name}: the unlisted {key} is not named"
+
+
+#: Per route, the unlisted EVIDENCE the loader's own population reads (ADR 0023 step 5), by world key.
+LOADER_EVIDENCE = {
+    "structure": ("calc_h",),
+    "statmech": ("calc_h", "co_h"),
+    "relative_energy": ("calc_h",),
+}
+
+
+def test_the_loaders_own_populations_use_unreviewed_evidence_and_drop_rejected(client, db_session, login_as):
+    """Step 5 of ADR 0023: the calculations and observations a selection reads are evidence of the record it returns.
+
+    In the world as built (hidden records unlisted: not reviewed or under review) the structure, statmech and
+    relative-energy documents name the unlisted calculation (and the statmech document the unlisted observation) under
+    ``curated`` exactly as ``exploratory`` does. In the same world with those records rejected or deprecated the curated
+    documents name none of them, and ``exploratory`` still does.
+
+    Kills: a loader that keeps the record floor for the evidence it reads (the unlisted ref absent from the curated
+    document), and one that stops withholding rejected evidence (the withheld ref present).
+    """
+    unlisted = build_sweep_world(db_session)
+    login_as(unlisted.extra["curator"].id)
+    refs = unlisted.hidden_refs()
+    routes = {r.name: r for r in _routes(unlisted)}
+    for name, keys in LOADER_EVIDENCE.items():
+        route = routes[name]
+        exploratory = json.dumps(_post(client, route.path, route.body, "exploratory"))
+        curated = json.dumps(_post(client, route.path, route.body, "curated"))
+        for key in keys:
+            assert refs[key] in exploratory, f"{name}: the world never puts {key} in the exploratory document"
+            assert refs[key] in curated, f"{name}: the unlisted {key} is not named under curated"
+    unlisted.withhold_hidden(db_session)
+    for name, keys in LOADER_EVIDENCE.items():
+        route = routes[name]
+        curated = json.dumps(_post(client, route.path, route.body, "curated"))
+        for key in keys:
+            assert refs[key] not in curated, f"{name}: the withheld {key} is named under curated"
 
 
 def test_a_composite_ref_field_keeps_its_key_after_the_ref_is_a_token(client, world):

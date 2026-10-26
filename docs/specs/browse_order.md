@@ -208,15 +208,22 @@ the ML export's is `tckdb.ml` version 2.
 > summaries, the per-type level maps, the analytics provenance flags and the CHEMKIN transport linearity witness. A record that is
 > itself a record in the list (a transition-state entry, a network solve) still has to clear the floor to be counted.
 >
-> **Known interim state until step 5.** Usage lists on reference rows (what uses a level of theory, a scale factor or a
-> correction scheme) and the relative-energy and export populations are unchanged. The level-of-theory `used_by`,
+> **Known state, not moved by step 5.** Usage lists on reference rows (what uses a level of theory, a scale factor or a
+> correction scheme) are unchanged. The level-of-theory `used_by`,
 > `evidence_summary.calculation_usage_count` and the usage-eligibility filter of the level-of-theory search stay on the record
 > floor together: they preview the calculation record list, so a level used only by calculations below `approved` is not listed
 > and its count says so. A species entry's availability `calculation_count` previews the same list and also keeps the floor. The sweep lists every route where this
-> happens (`STILL_ON_THE_EARLIER_RULE`), and the list can only shrink.
+> happens (`STILL_ON_THE_EARLIER_RULE`), and the list can only shrink. The export and relative-energy routes stay in that list
+> only for the RECORDS they list or compare, and for the ML export's energy rows, a named exception (owner decision Q7: the
+> calculations that are its rows keep the approved floor).
 >
-> **Still the earlier rule (decision D6: below the floor is hidden, evidence included), and described as it is:** the trust and
-> selection loaders (step 5), made-under comparisons (step 6), and detail-by-ref (step 7). Matching in search and select (step 4)
+> **Already true (step 5):** the trust checklists and the selection loaders (structure, statmech, network, relative energies, and
+> the source-finding gate of thermo and kinetics select) read a returned record's linked evidence by the evidence rule: an
+> unreviewed calculation, declared member or conformer observation is used, a `rejected` or `deprecated` one is absent. The record
+> they return or compare (a candidate, a compared conformer group, the owning transition-state entry) still has to clear the floor.
+>
+> **Still the earlier rule (decision D6: below the floor is hidden, evidence included), and described as it is:** made-under
+> comparisons (step 6), and detail-by-ref (step 7). Matching in search and select (step 4)
 > follows the evidence rule: see the filter paragraph below. Every passage below that describes what `curated` hides or shows for
 > those is therefore the earlier rule.
 
