@@ -469,9 +469,9 @@ def test_the_current_format_version_of_every_engine_is_written(client, world):
         "thermo": (5, None),
         "kinetics": (5, None),
         "network": (4, None),
-        "structure": (4, None),
+        "structure": (5, None),
         "statmech": (4, None),
-        "relative_energy": (4, 1),
+        "relative_energy": (5, 1),
     }
 
 
@@ -481,7 +481,9 @@ def test_the_current_format_version_of_every_engine_is_written(client, world):
         (engine, previous)
         for engine in ("thermo", "kinetics", "network", "structure", "statmech", "relative_energy")
         for previous in (1, 3)
-    ],
+    ]
+    # Format 4 is retired for the two engines whose recorded inputs now carry a basin's group and observation statuses apart.
+    + [("structure", 4), ("relative_energy", 4)],
 )
 def test_a_manifest_of_another_format_version_is_refused(client, world, name, previous):
     """Kills: another format version added to an engine's registry. Format 3 is the one ADR 0023 retired: a manifest
@@ -545,7 +547,7 @@ def test_a_format_3_relative_energy_manifest_and_comparison_are_refused(client, 
     path = f"/species-entries/{world.extra['species_entry'].public_ref}/conformers/relative-energies/compare/manifest"
     (variant,) = inputs._RELATIVE_ENERGIES_COMPARE(world)
     comparison = _post(client, path, variant["json"], "exploratory")
-    assert comparison["format"]["version"] == 4
+    assert comparison["format"]["version"] == 5
     comparison["format"]["version"] = 3
     with pytest.raises(Exception, match="manifest format|unsupported_manifest_format"):
         relative_manifest.replay_comparison_matches(_reseal_integrity(comparison, relative_manifest.digest))

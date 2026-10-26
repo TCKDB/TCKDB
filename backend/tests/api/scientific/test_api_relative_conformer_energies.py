@@ -452,7 +452,7 @@ def test_compare_manifest_downloads_equals_the_response_and_replays(client, two_
     download = client.post(compare_url(world.entry, manifest=True), json=req)
     assert download.status_code == 200 and "attachment" in download.headers["content-disposition"]
     manifest = download.json()
-    assert manifest["format"] == {"name": "relative_conformer_energy_comparison_manifest", "version": 4}
+    assert manifest["format"] == {"name": "relative_conformer_energy_comparison_manifest", "version": 5}
     assert out["pairs"] == manifest["result"]["pairs"] and out["statistics"] == manifest["result"]["statistics"]
     assert out["integrity"]["manifest_sha256"] == manifest["integrity"]["manifest_sha256"]
     assert replay_comparison_matches(manifest)

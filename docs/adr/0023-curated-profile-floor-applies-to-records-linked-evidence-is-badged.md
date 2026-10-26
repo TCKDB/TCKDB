@@ -87,13 +87,20 @@ Step 2 (nested refs in responses, selection documents and exports) moved the sel
 - Step 3 (counts, flags and derived levels of a returned record) changed no manifest content and no rubric. The selection loaders
   and the trust evaluators do not read those summaries, so the format-4 `linked_evidence_withheld` field already describes the
   rule a recorded manifest was made under, and `generate_rubric_pins.py --check` stays clean without a re-pin.
-- Step 5 (the trust evaluators and the selection loaders' own evidence populations) changed no manifest format. The format-4
-  `linked_evidence_withheld` field already names the evidence rule a manifest was made under, and every status a loader now
-  admits as evidence is recorded in the manifest as the input's own `review_status`. What a replay accepts moved: it judges a
-  source calculation, a lineage parent, a declared member and a basin's conformer observation by the evidence rule (every status
-  but `rejected` and `deprecated`, over the caller's own floor), computed from the recorded request alone, and still judges the
-  records themselves (the candidates, the compared groups, the owning entry) by the record floor; a recorded `rejected` or
-  `deprecated` input is still refused. The `computed_kinetics` and `computed_transition_state` rubrics are re-pinned without a
+- Step 5 (the trust evaluators and the selection loaders' own evidence populations) moved two manifests to format 5: the
+  structure manifest and the relative-energy manifest (single and comparison). A basin determination used to record one combined
+  `review_status`, the weaker of its conformer observation's and that observation's group's. The group is the record that gates the
+  basin (Q4) and keeps the record floor; the observation is evidence (Q2) and follows the evidence rule; one combined status cannot
+  tell a `not_reviewed` that came from the group from one that came from the observation. Format 5 records
+  `observation_review_status` and `group_review_status` apart beside the combined status, and a replay judges the group by the
+  record floor, the observation by the evidence rule, and the combined status as the weaker of the two. Formats 4 and earlier are
+  refused. The thermo, kinetics, statmech and network manifests keep their formats: they record each input's own `review_status`.
+  What every replay accepts moved: it judges a source calculation, a lineage parent, a declared member and a basin's conformer
+  observation by the evidence rule (every status but `rejected` and `deprecated`, over the caller's own floor), computed from the
+  recorded request alone, and still judges the records themselves (the candidates, the compared groups, the owning
+  transition-state entry) by the record floor; a recorded `rejected` or `deprecated` input is still refused. Manifests made in
+  steps 2 to 4 captured only approved inputs, which the new check still accepts, so a replay of one gives no silent wrong verdict;
+  the `linked_evidence_withheld` field they carry names the rule at the time and does not by itself tell step 4 from step 5. The `computed_kinetics` and `computed_transition_state` rubrics are re-pinned without a
   version bump: the checks and grading are unchanged, only the calculations a curated read hands them change (an unreviewed one is
   read), so stored and exploratory verdicts are unchanged and curated read-time verdicts may change. The ML export's energy rows
   keep their calculations approved-only (Q7); that is a named function, `ml_dataset.ml_energy_row_floor`, with its own test.

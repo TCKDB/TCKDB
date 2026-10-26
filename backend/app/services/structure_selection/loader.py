@@ -135,9 +135,11 @@ class PopulationScan:
     #: ``profile_statuses`` and ``effective_statuses``.
     evidence_shown: frozenset[RecordReviewStatus] = frozenset()
     evidence_usable: frozenset[RecordReviewStatus] = frozenset()
-    #: What a determination's conformer OBSERVATION may be (an observation is evidence inside its group): the evidence rule
-    #: under a profile with a floor, ``candidate_statuses`` otherwise (so a request can still lift a terminal observation).
-    observation_statuses: frozenset[RecordReviewStatus] = frozenset()
+    #: A determination's conformer observation's and that observation's group's own review statuses (a basin only), kept
+    #: apart so the manifest can record them and a replay can judge the group (a record) and the observation (evidence) by
+    #: their own rules.
+    observation_review: dict[int, RecordReviewStatus | None] = field(default_factory=dict)
+    group_review: dict[int, RecordReviewStatus | None] = field(default_factory=dict)
 
 
 @dataclass
@@ -563,7 +565,8 @@ def _scan_determinations(
         total_units=len(ids),
         nested_rows=nested,
         observation_of=observation_of,
-        observation_statuses=observation_own,
+        observation_review={i: observation_status(observation_of[i]) for i in ids},
+        group_review={i: group_status(observation_of[i]) for i in ids},
     )
 
 
@@ -1121,6 +1124,8 @@ def _load_determinations(
             conformer_group_ref=group_refs.get(obs.conformer_group_id) if obs is not None else None,
             evaluated_geometry_ref=geometry_refs.get(d.evaluated_geometry_id) or _geometry_ref_of(session, d.evaluated_geometry_id) or "",
             review_status=scan.unit_status[d.id],
+            observation_review_status=scan.observation_review.get(d.id),
+            group_review_status=scan.group_review.get(d.id),
             created_at=d.created_at,
             id_rank=rank,
             entry_kind=subject.stationary_point_kind,

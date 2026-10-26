@@ -318,15 +318,28 @@ def _relabel_curated(manifest):
     return manifest
 
 
-def test_a_determination_grain_manifest_relabelled_curated_is_refused_while_its_sources_are_not_approved(db_session):
+def test_a_determination_grain_manifest_relabelled_curated_is_refused_unless_its_unit_statuses_are_relabelled_too(db_session):
+    """The relabel changes the profile and the effective statuses but not the statuses a unit may have, which the manifest
+    records separately (``candidate_review_statuses``): the three disagree, so the replay refuses it. This is the check that
+    refuses it, not the sources' statuses: an unreviewed source is evidence, and a curated request may use it (ADR 0023).
+
+    Kills: dropping the ``candidate_review_statuses`` comparison (the half-relabelled manifest passing).
+    """
     manifest = _exploratory_basin_manifest(db_session)
     assert replay_matches(manifest)
     assert any(c["review_status"] == "not_reviewed" for c in manifest["calculations"])
+    assert manifest["candidate_review_statuses"] != ["approved"]
     relabelled = _relabel_curated(copy.deepcopy(manifest))
     with pytest.raises(ReplayError) as exc:
         replay_structure_decision(reseal(relabelled))
     assert exc.value.code == "inconsistent_manifest"
+    assert "review statuses a unit may have" in str(exc.value)
     assert replay_matches(reseal(copy.deepcopy(manifest)))  # resealing alone changes nothing; the relabel does
+    # The whole relabel, unit statuses included, describes a request a curated profile could have answered: the unit is
+    # approved and its unreviewed source is evidence, so it replays.
+    complete = _relabel_curated(copy.deepcopy(manifest))
+    complete["candidate_review_statuses"] = ["approved"]
+    assert replay_matches(reseal(complete))
 
 
 def test_a_genuinely_curated_determination_manifest_with_a_source_flipped_is_refused(db_session):
@@ -437,3 +450,71 @@ def test_the_writer_stamps_the_registered_format_and_every_reader_refuses_a_floa
         for read in (replay_structure_assessment, replay_structure_decision, replay_matches):
             with pytest.raises(ReplayError, match="unknown manifest format"):
                 read(tampered)
+
+
+@pytest.mark.parametrize("status", ["not_reviewed", "under_review"])
+def test_a_curated_transition_state_unit_below_the_floor_is_refused_on_replay(db_session, status):
+    """ADR 0023 (Q3): at transition-state grain a unit's recorded status is the owning entry's, a RECORD, so a curated
+    request could never have returned a unit below the floor. Evidence inputs (the sources) may be unreviewed; the unit may not.
+
+    Kills: the replay judging a transition-state unit by the evidence rule (``is_basin`` true at every non-calculation grain).
+    """
+    from app.db.models.common import StructureDeterminationTargetKind
+    from tests.services.structure_selection._support import make_ts_world, saddle_request
+
+    world = make_ts_world(db_session)
+    build_basin(world, target=StructureDeterminationTargetKind.saddle_point, geometry=make_geometry(db_session))
+    token = curated()
+    try:
+        genuine = select(db_session, world, saddle_request()).manifest
+    finally:
+        reset_current_read_profile(token)
+    assert genuine["read_profile"]["profile"] == "curated" and len(genuine["determinations"]) == 1
+    assert genuine["determinations"][0]["review_status"] == "approved" and replay_matches(genuine)
+    edited = copy.deepcopy(genuine)
+    edited["determinations"][0]["review_status"] = status
+    with pytest.raises(ReplayError) as exc:
+        replay_structure_decision(reseal(edited))
+    assert exc.value.code == "inconsistent_manifest"
+
+
+def test_a_conformer_manifest_records_the_group_and_the_observation_apart_and_replay_judges_each(db_session):
+    """ADR 0023 (Q2, Q4): a basin's group is the record that gates it and its observation is evidence. The manifest records the
+    two statuses apart, so a ``not_reviewed`` that came from the group (which a curated request cannot return) is told from one
+    that came from the observation (which it can use).
+
+    Kills: a replay that reads only the combined status (the group's ``not_reviewed`` passing as the observation's).
+    """
+    from app.db.models.common import StructureDeterminationTargetKind
+    from tests.services.scientific_read._factories import make_conformer_group, make_conformer_observation
+
+    world = make_world(db_session)
+    group = make_conformer_group(db_session, world.entry)
+    obs = make_conformer_observation(db_session, conformer_group=group)  # no review row: not_reviewed
+    set_review(db_session, record_type=SubmissionRecordType.conformer_group, record_id=group.id, status=RecordReviewStatus.approved)
+    build_basin(world, observation=obs, geometry=make_geometry(db_session), target=StructureDeterminationTargetKind.conformer_basin)
+    token = curated()
+    try:
+        genuine = select(db_session, world, minimum_request()).manifest
+    finally:
+        reset_current_read_profile(token)
+    [recorded] = genuine["determinations"]
+    assert (recorded["group_review_status"], recorded["observation_review_status"], recorded["review_status"]) == (
+        "approved",
+        "not_reviewed",
+        "not_reviewed",
+    )
+    assert replay_matches(genuine)
+
+    def refused(**changes):
+        forged = copy.deepcopy(genuine)
+        forged["determinations"][0].update(changes)
+        with pytest.raises(ReplayError) as exc:
+            replay_structure_decision(reseal(forged))
+        assert exc.value.code == "inconsistent_manifest"
+
+    refused(group_review_status="not_reviewed")  # the group is a record: below the floor, never returned
+    refused(group_review_status="under_review", review_status="under_review")
+    refused(observation_review_status="rejected", review_status="rejected")  # withheld evidence is never an input
+    refused(review_status="approved")  # not the weaker of the two
+    refused(observation_review_status=None)  # a conformer status without its conformer, or the reverse

@@ -255,7 +255,7 @@ EXPORTED_RECORDS = (
 )
 ML_ENERGY_ROWS = (
     "owner decision Q7 (ADR 0023), a named exception: the ML export's ENERGY ROWS are its calculations, and an energy row "
-    "is a record of the dataset, so the calculations stay approved-only (``ml_dataset.ML_ENERGY_ROWS_APPROVED_ONLY``); "
+    "is a record of the dataset, so the calculations stay approved-only (``ml_dataset.ml_energy_row_floor``); "
     "the dataset's other nested evidence (conformer observations, linearity witnesses) follows the evidence rule. The "
     "records it lists are under EXPORTED_RECORDS"
 )

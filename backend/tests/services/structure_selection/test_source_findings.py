@@ -219,19 +219,24 @@ def _verdict_under(session, profile_token_factory, *uses):
         reset_current_read_profile(token)
 
 
-def _determination_finding_world(db_session, world, sp, *, observation_status=None):
-    """A source calculation with a determination of a conformer observation that carries a confirmed finding."""
+def _determination_finding_world(db_session, world, sp, *, observation_status=None, group_status=None):
+    """A source calculation with a determination of a conformer observation that carries a confirmed finding.
+
+    ``None`` leaves the record with no review row (``not_reviewed``)."""
     from app.db.models.common import SubmissionRecordType
     from tests.services.scientific_read._factories import make_conformer_group, make_conformer_observation, set_review
 
     calc, geometry = sp
-    observation = make_conformer_observation(db_session, conformer_group=make_conformer_group(db_session, world.entry))
+    group = make_conformer_group(db_session, world.entry)
+    observation = make_conformer_observation(db_session, conformer_group=group)
     calc.conformer_observation_id = observation.id  # a basin determination's sources are anchored to its observation
     db_session.flush()
-    if observation_status is not None:
-        set_review(
-            db_session, record_type=SubmissionRecordType.conformer_observation, record_id=observation.id, status=observation_status
-        )
+    for kind, row, status in (
+        (SubmissionRecordType.conformer_observation, observation, observation_status),
+        (SubmissionRecordType.conformer_group, group, group_status),
+    ):
+        if status is not None:
+            set_review(db_session, record_type=kind, record_id=row.id, status=status)
     determination = world.determination(
         [("energy", calc)],
         evaluated=geometry,
@@ -242,17 +247,50 @@ def _determination_finding_world(db_session, world, sp, *, observation_status=No
     return calc
 
 
-def test_a_finding_on_a_determination_of_an_unreviewed_observation_blocks_under_curated(db_session, world, sp):
-    """The observation a determination rests on is evidence (Q2): unreviewed, it still counts as a witness about the source.
+def _visible_basins_under_curated(db_session, world):
+    """How many basins the structure selection itself returns under curated (the world the gate must agree with)."""
+    from app.services.structure_selection import assess_entry_structures
+    from tests.services.structure_selection._support import curated, minimum_request, reset_current_read_profile
+
+    world.settle()
+    token = curated()
+    try:
+        return assess_entry_structures(
+            db_session, entry_id=world.entry.id, request=minimum_request(), require_snapshot=False
+        ).visible_units
+    finally:
+        reset_current_read_profile(token)
+
+
+def test_a_finding_on_a_basin_of_an_approved_group_and_an_unreviewed_observation_blocks_under_curated(db_session, world, sp):
+    """The observation a basin rests on is evidence (Q2): unreviewed, it still counts as a witness about the source, because
+    the basin's group (the record that gates it) is approved and the structure selection returns the basin.
 
     Kills: ``_determinations_the_profile_shows`` keeping the record floor for the observation (the finding silently dropped
     under curated while exploratory is blocked by it).
     """
+    from app.db.models.common import RecordReviewStatus
     from tests.services.structure_selection._support import curated
 
-    calc = _determination_finding_world(db_session, world, sp)  # the observation has no review row
+    calc = _determination_finding_world(db_session, world, sp, group_status=RecordReviewStatus.approved)
     assert verdict(db_session, use(calc, "sp")).blocking  # exploratory: the control
     assert _verdict_under(db_session, curated, use(calc, "sp")).blocking
+    assert _visible_basins_under_curated(db_session, world) == 1  # the gate and the selection agree: the basin is in the world
+
+
+def test_a_finding_on_a_basin_of_an_unreviewed_group_is_not_a_witness_under_curated(db_session, world, sp):
+    """ADR 0023 (Q4): the conformer group is the record that gates a basin. A basin whose group is below the floor is not
+    returned by the structure selection, so it is no witness about a source either; the two must agree.
+
+    Kills: the gate checking only the observation and the entry, never the group (a finding blocking a visible product through
+    a basin the selection itself does not return).
+    """
+    from tests.services.structure_selection._support import curated
+
+    calc = _determination_finding_world(db_session, world, sp)  # neither the group nor the observation has a review row
+    assert verdict(db_session, use(calc, "sp")).blocking  # exploratory: the control, the finding binds
+    assert _visible_basins_under_curated(db_session, world) == 0
+    assert _verdict_under(db_session, curated, use(calc, "sp")).blocking == ()
 
 
 def test_a_finding_on_a_determination_of_a_rejected_observation_is_not_a_witness_under_curated(db_session, world, sp):
@@ -260,6 +298,8 @@ def test_a_finding_on_a_determination_of_a_rejected_observation_is_not_a_witness
     from app.db.models.common import RecordReviewStatus
     from tests.services.structure_selection._support import curated
 
-    calc = _determination_finding_world(db_session, world, sp, observation_status=RecordReviewStatus.rejected)
+    calc = _determination_finding_world(
+        db_session, world, sp, observation_status=RecordReviewStatus.rejected, group_status=RecordReviewStatus.approved
+    )
     assert verdict(db_session, use(calc, "sp")).blocking  # exploratory withholds nothing as evidence
     assert _verdict_under(db_session, curated, use(calc, "sp")).blocking == ()

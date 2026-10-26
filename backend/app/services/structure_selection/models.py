@@ -617,6 +617,11 @@ class NormalizedDetermination:
     #: of its transition-state entry's. ``None`` for a determination with none of those: it has no review of its own, and
     #: its species entry is a scoping parent whose status is never copied onto it.
     review_status: RecordReviewStatus | None
+    #: The two statuses ``review_status`` combines for a conformer basin, recorded apart (manifest format 5, ADR 0023): the
+    #: conformer GROUP is the record that gates the basin and keeps the record floor; the conformer OBSERVATION inside it is
+    #: linked evidence and follows the evidence rule. ``None`` when the determination has no observation (and so no group).
+    observation_review_status: RecordReviewStatus | None
+    group_review_status: RecordReviewStatus | None
     created_at: datetime
     id_rank: int
     entry_kind: str | None
@@ -640,6 +645,10 @@ class NormalizedDetermination:
             "conformer_group_ref": self.conformer_group_ref,
             "evaluated_geometry_ref": self.evaluated_geometry_ref,
             "review_status": self.review_status.value if self.review_status is not None else None,
+            "observation_review_status": (
+                self.observation_review_status.value if self.observation_review_status is not None else None
+            ),
+            "group_review_status": self.group_review_status.value if self.group_review_status is not None else None,
             "created_at": self.created_at.isoformat(),
             "id_rank": self.id_rank,
             "entry_kind": self.entry_kind,
@@ -654,6 +663,14 @@ class NormalizedDetermination:
             **{
                 **raw,
                 "review_status": RecordReviewStatus(raw["review_status"]) if raw["review_status"] is not None else None,
+                "observation_review_status": (
+                    RecordReviewStatus(raw["observation_review_status"])
+                    if raw["observation_review_status"] is not None
+                    else None
+                ),
+                "group_review_status": (
+                    RecordReviewStatus(raw["group_review_status"]) if raw["group_review_status"] is not None else None
+                ),
                 "created_at": datetime.fromisoformat(raw["created_at"]),
                 "sources": tuple(NormalizedSource.from_dict(s) for s in raw["sources"]),
                 "findings": tuple(FindingFacts.from_dict(f) for f in raw["findings"]),

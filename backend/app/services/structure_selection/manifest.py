@@ -33,7 +33,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from app.db.models.common import RecordReviewStatus
-from app.schemas.reads.scientific_common import default_visible_statuses, status_at_or_above
+from app.schemas.reads.scientific_common import REVIEW_FLOOR_ORDER, default_visible_statuses, status_at_or_above
 from app.services.manifest_formats import manifest_header, new_format_registry, read_manifest_format
 from app.services.scientific_read.common import check_read_profile_block, evidence_usable_statuses
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
@@ -73,8 +73,11 @@ from app.versioning import same_value
 #: settings, the manifest records which review statuses a unit itself may have and each unit's verdict under those
 #: settings (with the status it was judged by), and the population records the funnel. Version 4: ``read_profile`` records the review statuses whose linked evidence
 #: the profile withheld (ADR 0023); under ``curated`` a not-reviewed or under-review record is shown as evidence and
-#: only a rejected or deprecated one is a token.
-MANIFEST_FORMAT_VERSION = 4
+#: only a rejected or deprecated one is a token. Version 5: a determination records its conformer observation's status
+#: and that observation's group's status apart (``observation_review_status``, ``group_review_status``) beside the combined
+#: ``review_status``, so a replay judges the group (a record) by the record floor and the observation (evidence) by the
+#: evidence rule; a manifest of an earlier format is refused.
+MANIFEST_FORMAT_VERSION = 5
 MANIFEST_FORMAT_NAME = "structure_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "structure_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -296,10 +299,13 @@ def _check_consistency(
     # of its group's and its observation's, may be one of those too. A rejected or deprecated input is still refused.
     usable = evidence_usable_statuses(request.min_review_status) if floor is not None else recorded
     unit_refs = {getattr(u, "calculation_ref", None) or u.determination_ref for u in units}
+    observation_allowed = usable if floor is not None else recorded_candidate
     for item in recorded_inputs:
         ref = getattr(item, "calculation_ref", None) or item.determination_ref
-        is_basin = hasattr(item, "determination_ref") and request.grain is not Grain.calculation
-        allowed = (recorded_candidate | usable if is_basin else recorded_candidate) if ref in unit_refs else usable
+        allowed = recorded_candidate if ref in unit_refs else usable
+        if hasattr(item, "determination_ref") and request.grain is Grain.conformer:
+            check_basin_statuses(item, ref, recorded_candidate, observation_allowed)
+            continue
         if item.review_status is None and hasattr(item, "determination_ref"):
             continue  # a determination with no review of its own (see NormalizedDetermination.review_status)
         if item.review_status not in allowed:
@@ -309,12 +315,34 @@ def _check_consistency(
         raise ReplayError("verdict_mismatch", "the recorded verdicts do not cover exactly the recorded units")
     for ref, record in verdicts.items():
         gate = record.get("gate_review_status") if isinstance(record, dict) else None
-        if gate is not None and RecordReviewStatus(gate) not in (
-            recorded_candidate | usable if request.grain is not Grain.calculation else recorded_candidate
+        if gate is not None and RecordReviewStatus(gate) not in recorded_candidate | (
+            observation_allowed if request.grain is Grain.conformer else frozenset()
         ):
             raise ReplayError("inconsistent_manifest", f"{ref} was judged by a review status its own request cannot see")
     if manifest.get("population", {}).get("visible_units") != len(units):
         raise ReplayError("inconsistent_manifest", "the recorded visible-unit count is not the number of recorded units")
+
+
+def check_basin_statuses(item: Any, ref: str, record_statuses: frozenset, observation_statuses: frozenset) -> None:
+    """A conformer basin's recorded statuses: its group is a record, its observation is evidence, the unit status combines them.
+
+    The group must be a status a unit may have (the record floor, with the request's lifts); the observation one the
+    evidence rule admits (or the same set when the profile has no floor); and the combined ``review_status`` the weaker of the
+    two, so a ``not_reviewed`` that came from the group cannot pass as one that came from the observation.
+    """
+    observation, group = item.observation_review_status, item.group_review_status
+    if (observation is None) != (item.conformer_observation_ref is None) or (group is None) != (
+        item.conformer_group_ref is None
+    ):
+        raise ReplayError("inconsistent_manifest", f"{ref} records a conformer status without its conformer, or the reverse")
+    if group is not None and group not in record_statuses:
+        raise ReplayError("inconsistent_manifest", f"{ref} has a conformer group status its own request cannot see")
+    if observation is not None and observation not in observation_statuses:
+        raise ReplayError("inconsistent_manifest", f"{ref} has a conformer observation status its own request cannot see")
+    chain = [s for s in (observation, group) if s is not None]
+    weakest = max(chain, key=lambda s: REVIEW_FLOOR_ORDER[s]) if chain else None
+    if item.review_status != weakest:
+        raise ReplayError("inconsistent_manifest", f"{ref} has a review status that is not the weaker of its observation's and group's")
 
 
 def _parse(

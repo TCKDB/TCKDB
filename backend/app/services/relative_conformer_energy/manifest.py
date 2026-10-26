@@ -38,6 +38,7 @@ from app.services.structure_selection.manifest import (
     INTEGRITY_NOTE,
     ReplayError,
     canonical,
+    check_basin_statuses,
     digest,
     expected_effective_statuses,
     population_block,
@@ -58,8 +59,10 @@ from app.versioning import same_value
 MANIFEST_FORMAT = "relative_conformer_energy_manifest"
 #: Version 4: ``read_profile`` records the review statuses whose linked evidence the profile withheld (ADR 0023); under
 #: ``curated`` a not-reviewed or under-review record is shown as evidence and only a rejected or deprecated one is a
-#: token. A manifest of an earlier format is refused.
-MANIFEST_FORMAT_VERSION = 4
+#: token. Version 5: a recorded basin determination carries its conformer observation's and that observation's group's
+#: status apart (``observation_review_status``, ``group_review_status``), so a replay judges the group (a compared record) by
+#: the record floor and the observation (evidence) by the evidence rule. A manifest of an earlier format is refused.
+MANIFEST_FORMAT_VERSION = 5
 
 
 def _canon(value: Any) -> Any:
@@ -182,10 +185,11 @@ def _check_consistency(
     # calculations, which are evidence, so they may be any status the evidence rule uses (everything but rejected and
     # deprecated, over the caller's own floor). Computed from the recorded request alone, so a manifest cannot widen it.
     usable = evidence_usable_statuses(request.min_review_status)
-    refs_by_status = [(c.calculation_ref, c.review_status) for c in calcs] + [(d.determination_ref, d.review_status) for d in dets]
-    for ref, status in refs_by_status:
-        if status not in usable:
-            raise ReplayError("inconsistent_manifest", f"{ref} has a review status its own request cannot see")
+    for calc in calcs:
+        if calc.review_status not in usable:
+            raise ReplayError("inconsistent_manifest", f"{calc.calculation_ref} has a review status its own request cannot see")
+    for det in dets:
+        check_basin_statuses(det, det.determination_ref, recorded, usable)
     population = manifest.get("population", {})
     if population.get("visible_units") != len(dets) or sorted(population.get("determinations", [])) != sorted(
         d.determination_ref for d in dets
@@ -298,7 +302,7 @@ def replay_matches(manifest: dict[str, Any]) -> bool:
 # ---------------------------------------------------------------------------
 
 COMPARISON_MANIFEST_FORMAT = "relative_conformer_energy_comparison_manifest"
-COMPARISON_MANIFEST_FORMAT_VERSION = 4
+COMPARISON_MANIFEST_FORMAT_VERSION = 5
 _RUNS = ("candidate", "reference")
 
 #: The two manifest documents this module writes and reads, each under its stable name. The reader looks up the

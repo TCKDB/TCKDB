@@ -491,12 +491,13 @@ def _moved_by(monkeypatch, module_name: str, function_name: str, old: str, new: 
     return {name for name in before if before[name] != after[name]}
 
 
-def test_a_local_import_is_followed_status_hidden_under_profile(monkeypatch) -> None:
-    """``>`` to ``>=`` in handles.py, reached through ``from ... import`` inside the structure loader's callees.
+def test_status_hidden_under_profile_moves_the_transition_state_rubric(monkeypatch) -> None:
+    """``>`` to ``>=`` in handles.py, reached by the transition-state rubric through ``ref_guard.classify_refs``, which imports
+    it at module level (``ref_guard.py``), on the scoped assessment's path.
 
     Since step 5 of ADR 0023 the trust evaluators read the evidence rule, not the record floor, so the kinetics rubric no
-    longer reaches this function; the transition-state rubric still does, through the owning entry's record floor in the scoped
-    assessment.
+    longer reaches this function. (A function-local import being followed is pinned by
+    ``test_a_local_import_is_followed_visible_statuses``.)
     """
     moved = _moved_by(
         monkeypatch,
