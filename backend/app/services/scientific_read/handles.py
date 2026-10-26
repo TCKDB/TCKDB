@@ -170,7 +170,7 @@ def _id_and_marker(model_cls: type):
     return model_cls.id, marker
 
 
-def forward_merged(session: Session, model_cls: type, row_id: int, *, into: int | None | object = _UNSET) -> int:
+def forward_merged(session: Session, model_cls: type, row_id: int, *, into: object = _UNSET) -> int:
     """The row a species, species entry or reaction stands for: itself, or the row it was merged into.
 
     A merged row is kept with its public ref, so a citation of it still resolves; it forwards one hop
