@@ -148,7 +148,9 @@ def _smiles_for(n: int) -> str:
     if n <= _LINEAR_LIMIT:
         return "C" * n
     left, right = divmod(n - _LINEAR_LIMIT, 1000)
-    return "C" * left + "[Si]" + "C" * right
+    # The arms differ (right arm longer by at least one): the species key is canonical, and ``C..C[Si]C..C`` with equal
+    # or swapped arms canonicalises to the same SMILES, which would make two n one species.
+    return "C" * left + "[Si]" + "C" * (left + 1 + right)
 
 
 def unique_smiles(session: Session | None = None) -> str:
@@ -168,7 +170,11 @@ def unique_smiles(session: Session | None = None) -> str:
     global _SMILES_COUNTER
     while True:
         _SMILES_COUNTER += 1
-        candidate = _smiles_for(_SMILES_COUNTER)
+        # Canonical, as stored: a search flattens its query to the species key (DR-0038), so a spelling that is not
+        # already canonical (``C...C[Si]C...C`` with unequal arms) would never match the row made from it.
+        from app.services.scientific_read.structure_query import constitution_smiles
+
+        candidate = constitution_smiles(_smiles_for(_SMILES_COUNTER))
         if session is None or session.scalar(select(Species.id).where(Species.smiles == candidate).limit(1)) is None:
             return candidate
 
