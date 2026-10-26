@@ -204,6 +204,8 @@ def det(
         "conformer_group_ref": None,
         "evaluated_geometry_ref": G1,
         "review_status": RecordReviewStatus.approved,
+        "observation_review_status": None,
+        "group_review_status": None,
         "created_at": T0,
         "id_rank": rank,
         "entry_kind": entry_kind,

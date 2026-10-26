@@ -249,7 +249,20 @@ DERIVED = (
     "calculation, a statmech) and keep the record floor; a correction scheme's or scale factor's calculation kind is lost "
     "only when it rides with an application to a transition-state entry below the floor"
 )
-EXPORTS_AND_LOADERS = "export populations and the relative-energy loader floor their evidence (step 5)"
+EXPORTED_RECORDS = (
+    "an export lists a RECORD (a thermo, kinetics or transport row, or a reaction's transition state or entry) and the "
+    "record floor decides which records it lists; the linked evidence of a listed record already follows the evidence rule"
+)
+ML_ENERGY_ROWS = (
+    "owner decision Q7 (ADR 0023), a named exception: the ML export's ENERGY ROWS are its calculations, and an energy row "
+    "is a record of the dataset, so the calculations stay approved-only (``ml_dataset.ml_energy_row_floor``); "
+    "the dataset's other nested evidence (conformer observations, linearity witnesses) follows the evidence rule. The "
+    "records it lists are under EXPORTED_RECORDS"
+)
+COMPARED_RECORDS = (
+    "a relative-energy request compares conformer GROUPS, which are records, so the record floor decides the compared set; "
+    "the observations and calculations inside a group are evidence and follow the evidence rule (step 5)"
+)
 
 #: Per route, the KINDS of unlisted record (the prefix of the world's key: ``calc``, ``tse``, ...) that exploratory names as
 #: evidence and curated still leaves out, with the reason. Every other route, and every other kind on a listed route, must
@@ -259,9 +272,9 @@ EXPORTS_AND_LOADERS = "export populations and the relative-energy loader floor t
 STILL_ON_THE_EARLIER_RULE: dict[tuple[str, str], tuple[set[str], str]] = {
     ("GET", "/api/v1/scientific/energy-correction-schemes/{energy_correction_scheme_ref_or_id}"): ({'calc', 'tse'}, DERIVED),
     ("GET", "/api/v1/scientific/energy-correction-schemes/search"): ({'calc', 'tse'}, DERIVED),
-    ("GET", "/api/v1/scientific/export/ml/reactions.ndjson"): ({'calc', 'kin', 'ts', 'tse'}, EXPORTS_AND_LOADERS),
-    ("GET", "/api/v1/scientific/export/ml/species.ndjson"): ({'calc', 'thm'}, EXPORTS_AND_LOADERS),
-    ("GET", "/api/v1/scientific/export/ndjson"): ({'kin', 'thm', 'trn'}, EXPORTS_AND_LOADERS),
+    ("GET", "/api/v1/scientific/export/ml/reactions.ndjson"): ({'calc', 'kin', 'ts', 'tse'}, ML_ENERGY_ROWS),
+    ("GET", "/api/v1/scientific/export/ml/species.ndjson"): ({'calc', 'thm'}, ML_ENERGY_ROWS),
+    ("GET", "/api/v1/scientific/export/ndjson"): ({'kin', 'thm', 'trn'}, EXPORTED_RECORDS),
     ("GET", "/api/v1/scientific/frequency-scale-factors/{frequency_scale_factor_ref_or_id}"): ({'sm', 'tse'}, DERIVED),
     ("GET", "/api/v1/scientific/frequency-scale-factors/search"): ({'sm', 'tse'}, DERIVED),
     ("GET", "/api/v1/scientific/level-of-theories/browse"): ({'calc'}, DERIVED),
@@ -278,10 +291,10 @@ STILL_ON_THE_EARLIER_RULE: dict[tuple[str, str], tuple[set[str], str]] = {
     ("POST", "/api/v1/scientific/networks/{network_ref_or_id}/kinetics/evaluate"): ({'nkin', 'nsolve'}, SERVICE_FLOOR),
     ("POST", "/api/v1/scientific/network-solves/search"): ({'tse'}, SERVICE_FLOOR),
     ("POST", "/api/v1/scientific/networks/search"): ({'calc', 'nsolve', 'tse'}, SERVICE_FLOOR),
-    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies"): ({'cg'}, EXPORTS_AND_LOADERS),
-    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare"): ({'cg'}, EXPORTS_AND_LOADERS),
-    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare/manifest"): ({'calc', 'cg'}, EXPORTS_AND_LOADERS),
-    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/manifest"): ({'calc', 'cg'}, EXPORTS_AND_LOADERS),
+    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies"): ({'cg'}, COMPARED_RECORDS),
+    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare"): ({'cg'}, COMPARED_RECORDS),
+    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/compare/manifest"): ({'cg'}, COMPARED_RECORDS),
+    ("POST", "/api/v1/scientific/species-entries/{species_entry_ref}/conformers/relative-energies/manifest"): ({'cg'}, COMPARED_RECORDS),
 }
 
 

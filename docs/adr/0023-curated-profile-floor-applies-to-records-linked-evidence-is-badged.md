@@ -9,8 +9,8 @@ Supersedes the read-side rule known as D6 ("hidden == unknown == absent") for li
 steps; a site that has not been moved yet still applies D6. The helper that holds the rule (`evidence_withheld_under_profile` and
 its siblings in `app/services/scientific_read/common.py`) is called, from step 2, by the response-level ref guard
 (`ref_guard.py`), the selection documents, the export streams, the legacy entity reads and the ML export's conformer refs, and, from
-step 3, by the service counts, flags and derived levels of a returned record. Still on D6: the trust and selection loaders' own
-populations, made-under comparisons, and detail-by-ref. Matching in search, browse and select moved in step 4 (filters match through
+step 3, by the service counts, flags and derived levels of a returned record, and, from step 5, by the trust evaluators and the
+selection loaders' own evidence populations. Still on D6: made-under comparisons, and detail-by-ref. Matching in search, browse and select moved in step 4 (filters match through
 linked evidence unless it is rejected or deprecated; a filter ref that names such evidence matches nothing).
 
 Under the `curated` profile, the `approved` floor decides which **records** a list, search or select returns. The **linked
@@ -83,7 +83,24 @@ Step 2 (nested refs in responses, selection documents and exports) moved the sel
   `linked_evidence_withheld` (`["deprecated", "rejected"]` under `curated`, `[]` otherwise) in `read_profile` (`visibility` for the
   network manifest). A manifest in an earlier format is refused, not read as the new rule.
 - The `computed_transition_state` rubric is re-pinned without a version bump. The grading code is unchanged; only the inputs a
-  curated read supplies to it change. The `computed_kinetics` pin follows when its inputs move (step 5).
+  curated read supplies to it change. The `computed_kinetics` pin followed when its inputs moved (step 5).
 - Step 3 (counts, flags and derived levels of a returned record) changed no manifest content and no rubric. The selection loaders
   and the trust evaluators do not read those summaries, so the format-4 `linked_evidence_withheld` field already describes the
   rule a recorded manifest was made under, and `generate_rubric_pins.py --check` stays clean without a re-pin.
+- Step 5 (the trust evaluators and the selection loaders' own evidence populations) moved two manifests to format 5: the
+  structure manifest and the relative-energy manifest (single and comparison). A basin determination used to record one combined
+  `review_status`, the weaker of its conformer observation's and that observation's group's. The group is the record that gates the
+  basin (Q4) and keeps the record floor; the observation is evidence (Q2) and follows the evidence rule; one combined status cannot
+  tell a `not_reviewed` that came from the group from one that came from the observation. Format 5 records
+  `observation_review_status` and `group_review_status` apart beside the combined status, and a replay judges the group by the
+  record floor, the observation by the evidence rule, and the combined status as the weaker of the two. Formats 4 and earlier are
+  refused. The thermo, kinetics, statmech and network manifests keep their formats: they record each input's own `review_status`.
+  What every replay accepts moved: it judges a source calculation, a lineage parent, a declared member and a basin's conformer
+  observation by the evidence rule (every status but `rejected` and `deprecated`, over the caller's own floor), computed from the
+  recorded request alone, and still judges the records themselves (the candidates, the compared groups, the owning
+  transition-state entry) by the record floor; a recorded `rejected` or `deprecated` input is still refused. Manifests made in
+  steps 2 to 4 captured only approved inputs, which the new check still accepts, so a replay of one gives no silent wrong verdict;
+  the `linked_evidence_withheld` field they carry names the rule at the time and does not by itself tell step 4 from step 5. The `computed_kinetics` and `computed_transition_state` rubrics are re-pinned without a
+  version bump: the checks and grading are unchanged, only the calculations a curated read hands them change (an unreviewed one is
+  read), so stored and exploratory verdicts are unchanged and curated read-time verdicts may change. The ML export's energy rows
+  keep their calculations approved-only (Q7); that is a named function, `ml_dataset.ml_energy_row_floor`, with its own test.

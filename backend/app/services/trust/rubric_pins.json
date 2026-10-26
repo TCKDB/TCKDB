@@ -7,7 +7,7 @@
       "1": "d31242c449c123d139929275cf14d35a6ed6df6f81f4cf1b6be4545b1ee67dbb"
     },
     "computed_kinetics": {
-      "1": "a5874d4b42efdc48cfc74e4b8b8f04e96af355945f96ba9691b88b1eb8652336"
+      "1": "6bbfb7306edf07e3530f924b64673b53c129edc3791582a29b14e596934ff0a5"
     },
     "computed_statmech": {
       "1": "c19590c56e1e1bc806afa368cb79408364ebac4066c641624984a792ef70f04c"
@@ -16,7 +16,7 @@
       "1": "28e638f09e687fce82fcc274d372e97cdcc938dad8acbafa2b598c6d803a0c91"
     },
     "computed_transition_state": {
-      "2": "2b10127fe67b2b06e254fffc29d9b8bf3d917126e717d63c9da9b5535bff3abe"
+      "2": "ca806f32afeb69873823fa062cf46172d1a882794ea1500586ba5b5fe40e0268"
     },
     "computed_transport": {
       "1": "1b5a1f833dc867aff540eddc5e123a5d6fa3cb0d320e90b7a931e94f7a158676"
@@ -97,6 +97,21 @@
       "name": "computed_transition_state",
       "version": 2,
       "reason": "filter_by_provenance and calculations_matching, which the rubric's fingerprint walk reaches, gained optional keyword parameters (level of theory id, method family, DFT rung bounds) whose default is no constraint. Every existing call passes none of them and runs the same statements, so no verdict of this rubric can change; the unbumped override records that."
+    },
+    {
+      "name": "computed_kinetics",
+      "version": 1,
+      "reason": "ADR 0023 step 5: the trust checklist and the scoped structure assessment read a returned record's linked calculations by the evidence rule (only rejected and deprecated are withheld; an unreviewed one is read) instead of the record floor. Stored and exploratory verdicts are unchanged; curated read-time verdicts may change."
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "ADR 0023 step 5: the trust checklist and the scoped structure assessment read a returned record's linked calculations by the evidence rule (only rejected and deprecated are withheld; an unreviewed one is read) instead of the record floor. Stored and exploratory verdicts are unchanged; curated read-time verdicts may change."
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "ADR 0023 step 5 review fixes: the structure loader (_scan_determinations, NormalizedDetermination) records a basin's conformer group and observation statuses apart, judges the group as a record and the observation as evidence, and excludes a basin unless every terminal status among them is lifted by the request. Stored and exploratory verdicts are unchanged under default settings; curated read-time verdicts may change."
     }
   ]
 }

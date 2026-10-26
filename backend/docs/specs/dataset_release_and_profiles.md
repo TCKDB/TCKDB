@@ -151,8 +151,7 @@ Resolved once, by an `async` router-level dependency
 > statuses the default hides by default (`rejected`, `deprecated`); unlike the default, this cannot be lifted by request.
 >
 > **Badges (step 2):** every scientific response has `review_status_by_ref` under `curated` (null otherwise); the exports carry it
-> per line. **Interim state until steps 4 and 5:** a search or select filter on evidence still uses the record floor, so it can
-> disagree with a count or flag that now includes an unreviewed calculation.
+> per line.
 >
 > **Landed (step 2):** the response-level ref guard (`ref_guard.py`) is split into two sets. The *evidence set* (rejected and
 > deprecated records) drives every nested withhold: pointers in responses, selection documents, and the export streams. The
@@ -168,9 +167,21 @@ Resolved once, by an `async` router-level dependency
 > **Landed (step 4):** a filter on linked records (search, browse, select) matches through any linked record the evidence rule
 > leaves visible, that is, not a rejected or deprecated one; a not-reviewed one matches.
 >
-> **Still the earlier rule (below the floor is hidden, evidence included), and the text below describes that code:** trust and
-> selection loaders (step 5), made-under (step 6) and detail-by-ref (step 7; the second seam below still applies the floor
-> until then).
+> **Landed (step 5):** the trust checklists (a kinetics record's source calculations, a transition-state entry's calculations and
+> the scoped structure assessment behind its badge) and the selection loaders' own evidence populations read a returned record's
+> linked evidence by the evidence rule. Structure select: the calculations a basin rests on, their dependency lineage and the
+> validation evidence are evidence, and so is the conformer observation inside a group (the group, which gates the basin, is the
+> record). Statmech select: a candidate's source calculations and declared member records. Network select: the solve a validation
+> entry cites as its reference. Relative energies: the observations inside a compared group (the groups are the records). The
+> source-finding gate of thermo and kinetics select counts a determination of a not-rejected observation as a witness. A
+> transition-state entry stays a record and still gates its own evidence in select (Q3); the caller's own `min_review_status` still
+> holds unreviewed evidence out. A replay judges those inputs by the same rule, so a curated manifest with an unreviewed source
+> replays and one with a rejected or deprecated input is refused. **Named exception (Q7):** the ML export's energy rows keep their
+> calculations approved-only (`ml_dataset.ml_energy_row_floor`); a release is unchanged. The sweep keeps the exports and the
+> relative-energy routes listed only for the RECORDS they list or compare.
+>
+> **Still the earlier rule (below the floor is hidden, evidence included), and the text below describes that code:**
+> made-under (step 6) and detail-by-ref (step 7; the second seam below still applies the floor until then).
 
 Behaviourally, `curated` is applied at exactly **two** seams, which between
 them cover the whole read surface:

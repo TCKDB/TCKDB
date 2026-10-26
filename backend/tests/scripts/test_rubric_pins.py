@@ -491,14 +491,32 @@ def _moved_by(monkeypatch, module_name: str, function_name: str, old: str, new: 
     return {name for name in before if before[name] != after[name]}
 
 
-def test_a_local_import_is_followed_status_hidden_under_profile(monkeypatch) -> None:
-    """``>`` to ``>=`` in handles.py, reached through ``from ... import`` inside ``_hidden_calculation_ids``' callees."""
+def test_status_hidden_under_profile_moves_the_transition_state_rubric(monkeypatch) -> None:
+    """``>`` to ``>=`` in handles.py, reached by the transition-state rubric through ``ref_guard.classify_refs``, which imports
+    it at module level (``ref_guard.py``), on the scoped assessment's path.
+
+    Since step 5 of ADR 0023 the trust evaluators read the evidence rule, not the record floor, so the kinetics rubric no
+    longer reaches this function. (A function-local import being followed is pinned by
+    ``test_a_local_import_is_followed_visible_statuses``.)
+    """
     moved = _moved_by(
         monkeypatch,
         "app.services.scientific_read.handles",
         "status_hidden_under_profile",
         "REVIEW_FLOOR_ORDER[status] > REVIEW_FLOOR_ORDER[floor]",
         "REVIEW_FLOOR_ORDER[status] >= REVIEW_FLOOR_ORDER[floor]",
+    )
+    assert "computed_transition_state" in moved
+
+
+def test_the_evidence_rule_the_trust_evaluators_read_is_walked(monkeypatch) -> None:
+    """Editing ``ids_withheld_as_evidence`` (what ``trust_floor`` takes out of the graph) moves both trust rubrics that use it."""
+    moved = _moved_by(
+        monkeypatch,
+        "app.services.scientific_read.common",
+        "ids_withheld_as_evidence",
+        "RecordReview.status.in_(WITHHELD_EVIDENCE_STATUSES),",
+        "RecordReview.status.not_in(WITHHELD_EVIDENCE_STATUSES),",
     )
     assert {"computed_transition_state", "computed_kinetics"} <= moved
 

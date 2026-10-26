@@ -49,7 +49,7 @@ from app.services.manifest_formats import (
     new_format_registry,
     read_manifest_format,
 )
-from app.services.scientific_read.common import check_read_profile_block
+from app.services.scientific_read.common import check_read_profile_block, evidence_usable_statuses
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 from app.services.selection_kernel import assessment_semantics as semantics
 from app.services.selection_kernel.requested import expected_candidate_statuses
@@ -314,6 +314,10 @@ def _check_consistency(
         )
     # Every captured input, not only the candidates: a declaration's members and each source calculation carry their own
     # status, and a manifest relabelled curated (or one with an input quietly flipped) must not pass on its candidates alone.
+    # ADR 0023: a source calculation and a declared member are evidence, judged by the evidence rule (every status but
+    # rejected and deprecated, over the caller's own floor), not by the profile's record floor. A replay computes this from the
+    # recorded request alone, so a manifest cannot widen it.
+    usable = evidence_usable_statuses(request.min_review_status)
     recorded_candidate = frozenset(RecordReviewStatus(s) for s in manifest.get("candidate_review_statuses") or ())
     if recorded_candidate != expected_candidate_statuses(floor, request.min_review_status, request.eligibility):
         raise ReplayError(
@@ -325,10 +329,10 @@ def _check_consistency(
             raise ReplayError("inconsistent_manifest", f"{candidate.candidate_ref} has a review status its own request cannot see")
         if candidate.declaration is not None:
             for member in candidate.declaration.members:
-                if member.review_status is not None and member.review_status not in recorded:
+                if member.review_status is not None and member.review_status not in usable:
                     raise ReplayError("inconsistent_manifest", f"a member of {candidate.candidate_ref} has a status its request cannot see")
     for calc in calcs.values():
-        if calc.review_status not in recorded:
+        if calc.review_status not in usable:
             raise ReplayError("inconsistent_manifest", f"{calc.calculation_ref} has a review status its own request cannot see")
     if manifest.get("population", {}).get("visible_candidates") != len(candidates):
         raise ReplayError("inconsistent_manifest", "the recorded visible-candidate count is not the number of captured candidates")
@@ -438,6 +442,7 @@ def reassess_statmech_captured_inputs(manifest: dict[str, Any]) -> list[Statmech
             c, request=request, subject=subject, calculations=calcs,
             effective_statuses=frozenset(RecordReviewStatus(s) for s in manifest["effective_review_statuses"]),
             candidate_statuses=frozenset(RecordReviewStatus(s) for s in manifest["candidate_review_statuses"]),
+            evidence_statuses=evidence_usable_statuses(request.min_review_status),
         )
         for c in candidates
     ]

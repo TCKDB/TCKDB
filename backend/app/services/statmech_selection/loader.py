@@ -43,7 +43,12 @@ from app.db.models.structure_determination import StructureDetermination, Struct
 from app.db.models.transition_state import TransitionStateEntry
 from app.schemas.reads.scientific_selection_common import ELIGIBILITY_ENTRY_STATUS
 from app.services.monatomic import subject_atom_count
-from app.services.scientific_read.common import fetch_review_badges, visible_statuses
+from app.services.scientific_read.common import (
+    evidence_usable_statuses,
+    evidence_visible_statuses,
+    fetch_review_badges,
+    visible_statuses,
+)
 from app.services.scientific_read.ref_guard import unavailable_refs
 from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.selection_filters import filter_by_provenance
@@ -117,6 +122,11 @@ class PopulationScan:
     removed_by_filters: int = 0
     removed_by_floor: int = 0
     terminal_excluded: dict[str, int] = field(default_factory=dict)
+    #: The evidence rule (ADR 0023): the statuses at which a source calculation or a declared member is not withheld
+    #: (``evidence_shown``) and may be used (``evidence_usable``, over the caller's own floor). The profile's record floor
+    #: decides the candidates only. Under exploratory they equal ``profile_statuses`` and ``effective_statuses``.
+    evidence_shown: frozenset[RecordReviewStatus] = frozenset()
+    evidence_usable: frozenset[RecordReviewStatus] = frozenset()
 
 
 @dataclass
@@ -372,13 +382,16 @@ def scan_population(session: Session, *, request: StatmechRequest, owner_id: int
         else:
             population.append(i)
     check_candidates(request.bounds, len(population))
-    nested = _nested_rows(session, population, profile)
+    evidence_shown = evidence_visible_statuses()
+    nested = _nested_rows(session, population, evidence_shown)
     check_nested_rows(request.bounds, nested)
     return PopulationScan(
         owner_kind=kind,
         owner_id=owner_id,
         effective_statuses=effective,
         profile_statuses=profile,
+        evidence_shown=evidence_shown,
+        evidence_usable=evidence_usable_statuses(request.min_review_status),
         statmech_ids=tuple(population),
         status=status,
         excluded=tuple(excluded),
@@ -466,7 +479,7 @@ def load_population(session: Session, scan: PopulationScan, request: StatmechReq
         ).all()
     )
     ids = [r.id for r in rows]
-    profile = scan.profile_statuses
+    profile = scan.evidence_shown  # linked evidence: the evidence rule, not the record floor (ADR 0023)
 
     # --- the calculations, once, at their own review states -------------------------------------------------------
     calc_ids = _calc_ids_of(session, ids)

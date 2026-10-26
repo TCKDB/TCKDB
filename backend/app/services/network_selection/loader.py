@@ -377,7 +377,7 @@ def _finite_matrix(matrix: object, rows: int, cols: int) -> bool:
 
 
 def _withhold_hidden_references(session: Session, validation: dict | None) -> dict | None:
-    """Withhold a validation entry's reference to a solve the caller may not see.
+    """Withhold a validation entry's reference to a solve the evidence rule withholds.
 
     The captured facts, and so the manifest, must not carry a ref the read profile hides, and the evidence it would
     have supported must not count: the entry keeps its other content, its reference is ``None`` and
@@ -389,7 +389,8 @@ def _withhold_hidden_references(session: Session, validation: dict | None) -> di
     entries = []
     for entry in validation["entries"]:
         ref = entry.get("reference_solve_ref")
-        if ref is not None and not solve_ref_is_visible(session, ref):
+        # The reference solve is evidence the entry rests on (ADR 0023): known unless rejected or deprecated.
+        if ref is not None and not solve_ref_is_visible(session, ref, as_evidence=True):
             entry = {**entry, "reference_solve_ref": None, "reference_withheld": True}
         entries.append(entry)
     return {**validation, "entries": entries}

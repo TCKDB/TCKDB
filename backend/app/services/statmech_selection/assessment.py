@@ -904,6 +904,7 @@ def assess_candidate(
     calculations: Mapping[str, NormalizedCalculation],
     effective_statuses: frozenset[RecordReviewStatus],
     candidate_statuses: frozenset[RecordReviewStatus] | None = None,
+    evidence_statuses: frozenset[RecordReviewStatus] | None = None,
 ) -> StatmechAssessment:
     """Assess one candidate against a supported request. Pure.
 
@@ -911,12 +912,16 @@ def assess_candidate(
         profile's, with the terminal statuses out. A request never lifts this; a parent's approval never approves a source.
     :param candidate_statuses: What the candidate's own review status may be: ``effective_statuses`` plus the terminal
         statuses the request lifted (``eligibility``). ``None``: the same as ``effective_statuses``.
+    :param evidence_statuses: What a source calculation or a declared member must have to be used (ADR 0023): the evidence
+        rule, which has no record floor. ``None``: the same as ``effective_statuses``. The determination's owner, a
+        transition-state entry, is a record and keeps ``effective_statuses``.
     """
     assert isinstance(request.task, Task)
     profile = profile_of(request)
     own_statuses = effective_statuses if candidate_statuses is None else candidate_statuses
     lift_findings = request.eligibility.include_confirmed_findings
-    world = _World(calculations, effective_statuses, lift_findings)
+    used = effective_statuses if evidence_statuses is None else evidence_statuses
+    world = _World(calculations, used, lift_findings)
     f = Collector()
     decl = candidate.declaration
 
@@ -935,7 +940,7 @@ def assess_candidate(
 
     evidence: dict[str, tuple[str, ...]] = {}
     if decl is not None:
-        _members_available(decl, effective_statuses, f)
+        _members_available(decl, used, f)
         ev = _declared_evidence(candidate, world, f, needs_geometry=needs_geometry, needs_curvature=needs_curvature)
     else:
         _legacy_checks(candidate, profile, f)

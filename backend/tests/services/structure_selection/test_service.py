@@ -425,10 +425,11 @@ def test_several_determinations_of_one_basin_are_kept_as_separate_candidates(db_
     assert all(a.physically_eligible for a in result.assessments)
 
 
-def test_a_source_hidden_by_the_profile_reads_generically_and_names_nothing(db_session):
+def test_a_source_withheld_by_the_profile_reads_generically_and_names_nothing(db_session):
     world = make_world(db_session)
-    # The energy source is below the curated floor; the determination and its other sources are visible.
-    d, opt, sp, f = build_basin(world, statuses={"sp": None})
+    # The energy source is rejected, which the curated profile withholds as evidence; the determination and its other
+    # sources are visible.
+    d, opt, sp, f = build_basin(world, statuses={"sp": RecordReviewStatus.rejected})
     token = curated()
     try:
         result = run(db_session, world, minimum_request())
@@ -444,10 +445,32 @@ def test_a_source_hidden_by_the_profile_reads_generically_and_names_nothing(db_s
         }
     )
     assert sp.public_ref not in text
-    # Outside the curated profile the same unreviewed source is visible, and the caller's own floor names why.
-    floor = run(db_session, world, minimum_request(min_review_status=RecordReviewStatus.approved))
-    assert [r.code for r in by_ref(floor)[d.public_ref].reasons] == ["source_below_review_floor"]
+    # Outside the curated profile the same source is a visible, terminal one, and says so.
+    assert [r.code for r in by_ref(run(db_session, world, minimum_request()))[d.public_ref].reasons] == [
+        "source_terminal_review_status"
+    ]
+
+
+def test_an_unreviewed_source_is_used_under_curated_and_the_callers_own_floor_still_holds_it_out(db_session):
+    """ADR 0023 (Q4): the calculations inside a basin are evidence. The record floor does not apply to them.
+
+    Kills: the earlier rule, under which this source read as unavailable and the determination as unresolved.
+    """
+    world = make_world(db_session)
+    d, opt, sp, f = build_basin(world, statuses={"sp": None})
+    token = curated()
+    try:
+        result = run(db_session, world, minimum_request())
+        floored = run(db_session, world, minimum_request(min_review_status=RecordReviewStatus.approved))
+    finally:
+        reset_current_read_profile(token)
+    a = by_ref(result)[d.public_ref]
+    assert a.physically_eligible and a.applicability is not A.unresolved
+    assert sp.public_ref in json.dumps([c.to_dict() for c in result.calculations])
+    # The exploratory answer is the same as it always was.
     assert by_ref(run(db_session, world, minimum_request()))[d.public_ref].physically_eligible
+    # A caller who asks for approved evidence still gets it held out, with the reason that says why.
+    assert [r.code for r in by_ref(floored)[d.public_ref].reasons] == ["source_below_review_floor"]
 
 
 def test_a_rejected_source_and_a_rejected_quality_source_are_not_usable_evidence(db_session):

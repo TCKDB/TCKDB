@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from sqlalchemy import event
+from sqlalchemy import event, select
 
 from app.api.error_contract import CodedValueError
 from app.db.models.common import (
@@ -20,6 +20,7 @@ from app.db.models.common import (
     StructureDeterminationTargetKind,
     SubmissionRecordType,
 )
+from app.db.models.record_review import RecordReview
 from app.db.models.transition_state import TransitionStateValidationEvidence
 from app.services.structure_selection import SelectionBounds, assess_entry_structures
 from app.services.structure_selection.bounds import parse_quantity
@@ -74,8 +75,8 @@ def _basin_over_a_hidden_chain(session, *, hidden_opt: bool):
     """A basin whose optimisation (and an ancestor of it) the curated profile hides."""
     world = make_world(session)
     ok = RecordReviewStatus.approved
-    ancestor = world.opt("anc", -76.1, declared=declaration(), status=None)
-    opt = world.opt("o", -76.41, declared=declaration(), status=None if hidden_opt else ok)
+    ancestor = world.opt("anc", -76.1, declared=declaration(), status=RecordReviewStatus.rejected)
+    opt = world.opt("o", -76.41, declared=declaration(), status=RecordReviewStatus.rejected if hidden_opt else ok)
     sp = world.sp("s", -76.4, declared=declaration())
     freq = world.freq("f", declared=declaration())
     attach_dependency(session, parent=ancestor, child=opt, role=CalculationDependencyRole.optimized_from)
@@ -111,7 +112,7 @@ def test_a_hidden_ancestor_cannot_cause_or_hide_a_depth_refusal(db_session):
     attach_dependency(db_session, parent=opt, child=sp, role=CalculationDependencyRole.single_point_on)
     attach_dependency(db_session, parent=opt, child=freq, role=CalculationDependencyRole.freq_on)
     # Above the optimisation: a hidden calculation, then a long visible chain only it connects to.
-    above = world.opt("h", -76.0, declared=declaration(), status=None)
+    above = world.opt("h", -76.0, declared=declaration(), status=RecordReviewStatus.rejected)
     attach_dependency(db_session, parent=above, child=opt, role=CalculationDependencyRole.optimized_from)
     previous = above
     for i in range(10):
@@ -140,7 +141,7 @@ def test_a_hidden_irc_calculation_neither_appears_nor_certifies_connectivity(db_
     opt = world.opt("o", -40.2, declared=declaration())
     sp = world.sp("s", -40.3, declared=declaration())
     freq = world.freq("f", frequencies=(-1500.0, 100.0, 200.0), declared=declaration())
-    irc = world.opt("irc", None, declared=declaration(), status=None)  # hidden under the curated profile
+    irc = world.opt("irc", None, declared=declaration(), status=RecordReviewStatus.rejected)  # hidden under the curated profile
     det = world.determination(
         [("geometry_optimization", opt), ("energy", sp), ("curvature", freq), ("connectivity", irc)],
         target=StructureDeterminationTargetKind.saddle_point,
@@ -170,18 +171,28 @@ def test_a_hidden_irc_calculation_neither_appears_nor_certifies_connectivity(db_
     ]
 
 
-def test_a_visible_calculation_names_no_hidden_observation(db_session):
+def test_a_visible_calculation_names_no_withheld_observation(db_session):
+    """ADR 0023: the observation a calculation is anchored to is evidence. Rejected is withheld; unreviewed is named."""
     world = make_world(db_session)
     obs = make_conformer_observation(db_session, conformer_group=make_conformer_group(db_session, world.entry))
     c = world.sp("c", -76.4, declared=declaration(), observation=obs)
+    set_review(db_session, record_type=SubmissionRecordType.conformer_observation, record_id=obs.id, status=RecordReviewStatus.rejected)
     control = run(db_session, world, request())
     assert control.calculations[0].conformer_observation_ref is not None
     result = under_curated(db_session, world, request())
     assert result.calculations[0].calculation_ref == c.public_ref
     assert result.calculations[0].conformer_observation_ref is None
     assert obs.public_ref not in dump(result)
-    set_review(db_session, record_type=SubmissionRecordType.conformer_observation, record_id=obs.id, status=RecordReviewStatus.approved)
-    assert under_curated(db_session, world, request()).calculations[0].conformer_observation_ref == obs.public_ref
+    # Unreviewed is used (the earlier rule hid it); approved too.
+    for status in (RecordReviewStatus.under_review, RecordReviewStatus.approved):
+        review = db_session.scalar(
+            select(RecordReview).where(
+                RecordReview.record_type == SubmissionRecordType.conformer_observation, RecordReview.record_id == obs.id
+            )
+        )
+        review.status = status
+        db_session.flush()
+        assert under_curated(db_session, world, request()).calculations[0].conformer_observation_ref == obs.public_ref
 
 
 def test_counts_cover_the_rows_the_caller_can_see_and_nothing_else(db_session):
@@ -189,7 +200,7 @@ def test_counts_cover_the_rows_the_caller_can_see_and_nothing_else(db_session):
         world = make_world(db_session)
         build_basin(world, energy=-76.40)
         if with_hidden_source:
-            extra = world.sp("x", -75.0, declared=declaration(), status=None)
+            extra = world.sp("x", -75.0, declared=declaration(), status=RecordReviewStatus.rejected)
             world.determination([("energy", extra)], target=StructureDeterminationTargetKind.geometry, key="extra")
         return world
 

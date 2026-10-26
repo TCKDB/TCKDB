@@ -50,8 +50,9 @@ def solve_ref_is_visible(session: Session, ref: str, *, as_evidence: bool = Fals
     """A solve exists and the read profile lets the caller know it does. A hidden one reads as absent.
 
     ``as_evidence`` is the READ side of a returned solve's validation entry (ADR 0023): the reference solve is evidence the
-    entry rests on, so under ``curated`` it is known unless it is rejected or deprecated, however unreviewed. The upload
-    check and the selection loader keep the default (the record floor); they move with the loaders' own populations (step 5).
+    entry rests on, so under ``curated`` it is known unless it is rejected or deprecated, however unreviewed. The selection
+    loader and the response builder pass it (step 5). The upload check keeps the default: it runs outside a scientific read
+    profile, where both answers are the same.
     """
     solve_id = session.scalar(select(NetworkSolve.id).where(NetworkSolve.public_ref == ref))
     if solve_id is None:

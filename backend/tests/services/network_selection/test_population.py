@@ -351,8 +351,30 @@ def test_the_applicability_vocabulary_is_the_shared_kernels(db_session, world):
     assert assess(db_session, channel_request(world)).determination_assessments[0].applicability is A.applicable
 
 
-def test_a_reference_to_a_hidden_solve_is_withheld_from_the_facts_and_the_evidence_it_would_support_does_not_count(db_session, world):
-    hidden = add_solve(db_session, world, fits=[fit_spec("assoc", det="hid")], review=S.not_reviewed)
+def test_a_reference_to_an_unreviewed_solve_is_kept_under_curated(db_session, world):
+    """ADR 0023: a validation entry's reference solve is evidence it rests on, so unreviewed is used, not withheld.
+
+    Kills: the earlier rule (``reference_solve_ref`` nulled and the model-fidelity evidence unavailable).
+    """
+    unreviewed = add_solve(db_session, world, fits=[fit_spec("assoc", det="unrev")], review=S.not_reviewed)
+    entry = {"kind": "model_fidelity", "domain": validity(), "reference_solve_ref": unreviewed.public_ref}
+    cited = add_solve(
+        db_session, world, fits=[fit_spec("assoc", det="cit")], validation={"version": 1, "entries": [entry]}
+    )
+    token = curated()
+    try:
+        result = assess(db_session, channel_request(world))
+    finally:
+        reset_current_read_profile(token)
+    facts = {s.solve_ref: s for s in result.solves}
+    kept = facts[cited.public_ref].validation["entries"][0]
+    assert kept["reference_solve_ref"] == unreviewed.public_ref and not kept.get("reference_withheld")
+    evidence = {a.solve_ref: a for a in result.determination_assessments}[cited.public_ref].evidence
+    assert evidence["model_fidelity"] == "declared"
+
+
+def test_a_reference_to_a_withheld_solve_is_withheld_from_the_facts_and_the_evidence_it_would_support_does_not_count(db_session, world):
+    hidden = add_solve(db_session, world, fits=[fit_spec("assoc", det="hid")], review=S.rejected)
 
     def citing(ref: str):
         entry = {"kind": "model_fidelity", "domain": validity(), "reference_solve_ref": ref}

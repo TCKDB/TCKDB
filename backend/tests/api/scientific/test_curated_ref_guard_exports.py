@@ -775,3 +775,37 @@ def test_every_stream_issues_at_most_one_visibility_statement_per_batch(client, 
     for name in ("ndjson", "ndjson_all", "ml_species", "ml_reactions"):
         assert counts[(name, 200)][0] == 1, f"{name}: {counts[(name, 200)]}"
     print("STATEMENT COUNTS (visibility, mention record_review, all):", counts)
+
+
+def test_ml_energy_rows_are_the_named_approved_only_exception_to_the_evidence_rule(client, db_session, world, monkeypatch):
+    """Owner decision Q7 (ADR 0023): the ML export's energy rows keep their calculations approved-only under ``curated``.
+
+    The world's calculations are unlisted (not reviewed or under review), not withheld. Every other nested piece of an ML
+    record (the conformer group and observation refs) is shown while unlisted, so the only thing keeping the calculations
+    out is :func:`ml_dataset.ml_energy_row_floor`.
+
+    Kills: moving the energy rows to the evidence rule without a decision (the calculations appearing under curated); and
+    the exception drifting from its function (swapping the function for the evidence rule must bring them back, which
+    proves the function is what decides).
+    """
+    from app.db.models.calculation import Calculation
+    from app.db.models.common import SubmissionRecordType
+    from app.services.scientific_read.common import linked_evidence_predicate
+
+    w = world
+    hidden = {key: ref for key, ref in _hidden(w).items() if key.startswith("calc")}
+    assert hidden  # non-vacuous: the world has unlisted calculations
+    query = {**_query(w), "include_hessian": True}
+    exploratory = _get(client, "/export/ml/species.ndjson", "exploratory", query)
+    shown_in_exploratory = {key for key, ref in hidden.items() if ref in exploratory}
+    assert shown_in_exploratory  # the exploratory export names some of them
+    curated = _get(client, "/export/ml/species.ndjson", "curated", query)
+    assert not {key for key, ref in hidden.items() if ref in curated}  # Q7: none is a row under curated
+    # The exception is one function: under the evidence rule instead, the unlisted calculations come back.
+    monkeypatch.setattr(
+        ml_dataset,
+        "ml_energy_row_floor",
+        lambda profile: linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation, profile=profile),
+    )
+    moved = _get(client, "/export/ml/species.ndjson", "curated", query)
+    assert {key for key, ref in hidden.items() if ref in moved} == shown_in_exploratory

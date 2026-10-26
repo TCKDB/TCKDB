@@ -26,7 +26,12 @@ from app.services.relative_conformer_energy.models import (
     GROUP_TERMINAL_REVIEW_STATUS,
     RelativeEnergyRequest,
 )
-from app.services.scientific_read.common import fetch_review_badges, visible_statuses
+from app.services.scientific_read.common import (
+    evidence_usable_statuses,
+    evidence_visible_statuses,
+    fetch_review_badges,
+    visible_statuses,
+)
 from app.services.structure_selection.loader import assert_subject_visible
 from app.services.structure_selection.models import Grain
 
@@ -137,6 +142,8 @@ def scan_population(session: Session, *, entry_id: int, request: RelativeEnergyR
         session, record_type=SubmissionRecordType.conformer_observation, record_ids=observation_ids
     )
     group_ref_of = shown
+    observation_shown = evidence_visible_statuses()
+    observation_used = evidence_usable_statuses(request.min_review_status)
     determinations: list[str] = []
     floor_held: set[str] = set()
     terminal_held: set[str] = set()
@@ -145,9 +152,11 @@ def scan_population(session: Session, *, entry_id: int, request: RelativeEnergyR
         if group_id not in in_floor:
             continue
         status = observation_badges[r.conformer_observation_id].status
-        if status not in profile:
+        # The observation is evidence inside the group (ADR 0023, Q2): used and badged unless it is withheld (rejected or
+        # deprecated); the caller's own floor still holds an unreviewed one out. The group above is the record.
+        if status not in observation_shown:
             continue
-        if status in effective:
+        if status in observation_used:
             determinations.append(r.public_ref)
         elif status in _TERMINAL:
             # Rejected or deprecated is terminal, which is not a floor: the caller may have set none.

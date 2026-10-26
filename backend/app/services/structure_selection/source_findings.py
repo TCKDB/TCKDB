@@ -40,8 +40,9 @@ from sqlalchemy.orm import Session
 
 from app.db.models.calculation import CalculationInputGeometry, CalculationOutputGeometry
 from app.db.models.common import SubmissionRecordType
+from app.db.models.species import ConformerObservation
 from app.db.models.structure_determination import StructureDetermination, StructureDeterminationSource
-from app.services.scientific_read.common import fetch_review_badges, visible_statuses
+from app.services.scientific_read.common import evidence_visible_statuses, fetch_review_badges, visible_statuses
 from app.services.scientific_read.profile import current_read_profile
 from app.services.structure_selection.assessment import (
     CURVATURE_SIDE,
@@ -176,13 +177,17 @@ def _determinations_the_profile_shows(session: Session, rows) -> set[int]:
 
     A determination the profile hides is no evidence about its source calculation: a live finding on it must not block a
     visible record that merely shares that calculation. A determination belongs to its conformer observation (a basin)
-    or its transition-state entry (a saddle); either being hidden hides it, the same rule the structure loader and the
-    relative-energy population apply. Without a review floor every determination is shown (nothing is queried).
+    or its transition-state entry (a saddle). The conformer group the observation sits in is the record that gates a basin (Q4)
+    and keeps the record floor. The observation is linked evidence (ADR 0023, Q2), so it hides the
+    determination only when it is withheld (rejected or deprecated); the transition-state entry is a record (Q3) and still
+    gates its own evidence, so an entry below the profile's record floor hides it. Without a review floor every
+    determination is shown (nothing is queried).
     """
     everything = {determination_id for _, determination_id, *_ in rows}
     if current_read_profile().review_floor is None:
         return everything
     shown = frozenset(visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True))
+    evidence_shown = evidence_visible_statuses()
     observations = {o for *_, o, _ in rows if o is not None}
     entries = {e for *_, e in rows if e is not None}
     seen_observation = (
@@ -195,9 +200,32 @@ def _determinations_the_profile_shows(session: Session, rows) -> set[int]:
         if entries
         else {}
     )
+    # The observation's conformer group is the record that gates a basin (Q4), so it keeps the record floor, as in the
+    # structure loader's ``in_world``: a basin whose group is below the floor is not returned by the structure selection and
+    # is no witness about a source either.
+    group_of = (
+        dict(
+            session.execute(
+                select(ConformerObservation.id, ConformerObservation.conformer_group_id).where(
+                    ConformerObservation.id.in_(observations)
+                )
+            ).tuples().all()
+        )
+        if observations
+        else {}
+    )
+    group_ids = {g for g in group_of.values() if g is not None}
+    seen_group = (
+        fetch_review_badges(session, record_type=SubmissionRecordType.conformer_group, record_ids=group_ids)
+        if group_ids
+        else {}
+    )
     out: set[int] = set()
     for _, determination_id, _role, _evaluated, observation, entry in rows:
-        if observation is not None and seen_observation[observation].status not in shown:
+        if observation is not None and seen_observation[observation].status not in evidence_shown:
+            continue
+        group = group_of.get(observation) if observation is not None else None
+        if group is not None and seen_group[group].status not in shown:
             continue
         if entry is not None and seen_entry[entry].status not in shown:
             continue

@@ -307,8 +307,8 @@ def withhold_hidden_refs(session, refs) -> None:
     ADR 0023: under curated a record that is only below the floor is linked evidence, shown; "hidden == absent" is the
     property of evidence the profile WITHHOLDS (rejected, deprecated). The scenes build their hidden records unreviewed, so
     this pins them to the withheld state before the curated run. A record reviewed through a parent (a network-kinetics fit,
-    through its solve) has no review row of its own and is left to the parent. The loaders' own populations still apply the
-    floor (step 5 moves them), so the unlisted state is not claimed here.
+    through its solve) has no review row of its own and is left to the parent. The loaders' own populations follow the
+    evidence rule since step 5; what they do with the UNLISTED state is pinned in ``test_curated_selection_documents``.
     """
     from datetime import datetime, timezone
 
