@@ -21,7 +21,7 @@ beside far more selective predicates.
 
 from __future__ import annotations
 
-from sqlalchemy import and_, case, false, func, literal, or_, true
+from sqlalchemy import and_, case, false, func, literal, or_, select, true
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.chemistry.basis_set_names import HYPHEN_RULES, basis_identity_key
@@ -177,26 +177,76 @@ def basis_matches(value: str) -> ColumnElement[bool]:
     return basis_key_sql(LevelOfTheory.basis) == literal(key)
 
 
+def _layer(source, **columns: ColumnElement):
+    """One fenced derived table of ``columns``, correlated to the enclosing query.
+
+    ``OFFSET 0`` stops Postgres pulling the layer up into its parent, so each layer's expression is planned once and
+    the next layer reads it by column. Without the fence every reference to a column is a full copy of the expression
+    that computed it, and the stem key below compiled to a 7 MB statement that took seconds to plan per request.
+    """
+    stmt = select(*[expr.label(name) for name, expr in columns.items()])
+    if source is not None:
+        stmt = stmt.select_from(source).correlate_except(source)
+    else:
+        stmt = stmt.correlate_except(None)
+    return stmt.offset(0).subquery()
+
+
+def _stem_layer(column: ColumnElement):
+    """The last fenced layer of the stem key: a derived table with one column, ``stem``. See :func:`method_stem_key_sql`."""
+    known = sorted(CLASSIFICATIONS.get(CLASSIFICATION_NAME))
+    return _stem_chain(column, known)
+
+
 def method_stem_key_sql(column: ColumnElement) -> ColumnElement[str]:
     """SQL twin of :func:`~app.chemistry.method_families.method_stem_key` over a stored method column.
 
     Same order as the Python lookup: a table row that ends in a dispersion suffix keeps its exact key; else the key
     without the suffix (same strip pattern); else, when that is not a row, the key without a leading ``ro`` / ``r`` /
     ``u`` if what is left is a row.
+
+    Built as a short chain of fenced derived tables (see :func:`_layer`) so the statement stays a few kilobytes
+    however many table rows and prefixes there are.
     """
-    key = method_key_sql(column)
-    stripped = method_key_sql(func.regexp_replace(key, DISPERSION_STRIP_PATTERN, "\\1"))
-    stripped = case(
-        *[(and_(stripped != key, stripped == stem), repl) for stem, repl in SUFFIX_STEM_OVERRIDES.items()],
+    return select(_stem_layer(column).c.stem).scalar_subquery()
+
+
+def _stem_chain(column: ColumnElement, known: list[str]):
+    keyed = _layer(None, key=method_key_sql(column))
+    key = keyed.c.key
+    # The suffix-stripped key, itself keyed again (a stem can be an aliased spelling).
+    stripped_layer = _layer(
+        keyed, key=key, stripped=method_key_sql(func.regexp_replace(key, DISPERSION_STRIP_PATTERN, "\\1"))
+    )
+    stripped = stripped_layer.c.stripped
+    overridden = case(
+        *[(and_(stripped != stripped_layer.c.key, stripped == name), repl) for name, repl in SUFFIX_STEM_OVERRIDES.items()],
         else_=stripped,
     )
-    stem = case((key.in_(sorted(SUFFIXED_KEYS)), key), else_=stripped)
-    known = sorted(CLASSIFICATIONS.get(CLASSIFICATION_NAME))
-    branches = []
-    for prefix in SPIN_PREFIXES:
-        rest = method_key_sql(func.substr(stem, len(prefix) + 1))
-        branches.append((and_(stem.like(prefix + "%"), func.length(stem) > len(prefix), rest.in_(known)), rest))
-    return case((stem.in_(known), stem), *branches, else_=stem)
+    stem_layer = _layer(
+        stripped_layer, stem=case((stripped_layer.c.key.in_(sorted(SUFFIXED_KEYS)), stripped_layer.c.key), else_=overridden)
+    )
+    stem = stem_layer.c.stem
+    # Each spin prefix's remainder is keyed once, in its own layer, rather than inside the CASE that reads it.
+    rests = {
+        f"rest{i}": method_key_sql(func.substr(stem, len(prefix) + 1)) for i, prefix in enumerate(SPIN_PREFIXES)
+    }
+    rest_layer = _layer(stem_layer, stem=stem, **rests)
+    branches = [
+        (
+            and_(
+                rest_layer.c.stem.like(prefix + "%"),
+                func.length(rest_layer.c.stem) > len(prefix),
+                rest_layer.c[f"rest{i}"].in_(known),
+            ),
+            rest_layer.c[f"rest{i}"],
+        )
+        for i, prefix in enumerate(SPIN_PREFIXES)
+    ]
+    final = _layer(
+        rest_layer, stem=case((rest_layer.c.stem.in_(known), rest_layer.c.stem), *branches, else_=rest_layer.c.stem)
+    )
+    return final
 
 
 def method_family_matches(selected: MethodClassFilter, column: ColumnElement | None = None) -> ColumnElement[bool]:
@@ -208,15 +258,25 @@ def method_family_matches(selected: MethodClassFilter, column: ColumnElement | N
     """
     if not selected.active:
         return true()
-    stem = method_stem_key_sql(LevelOfTheory.method if column is None else column)
     keep, unclassified = selected.keys()
-    known = CLASSIFICATIONS.get(CLASSIFICATION_NAME)
-    parts: list[ColumnElement[bool]] = []
-    if keep:
-        parts.append(stem.in_(sorted(keep)))
-    if unclassified:
-        parts.append(stem.not_in(sorted(known)))
-    return or_(*parts) if parts else false()
+    known = sorted(CLASSIFICATIONS.get(CLASSIFICATION_NAME))
+    if not keep and not unclassified:
+        return false()
+    # One scalar subquery holds the whole test, so the stem chain is rendered and run once per row however many
+    # parts the test has. A NULL method gives a NULL stem. The IN / NOT IN test is then NULL, and the all-families shortcut
+    # (IS NOT NULL) is FALSE; in a WHERE both exclude the row, and no caller negates this predicate, so it matches no
+    # family, as before.
+    stem = _stem_layer(LevelOfTheory.method if column is None else column).c.stem
+    if unclassified and keep == frozenset(known):
+        test = stem.is_not(None)  # every name is a table key or is not one
+    else:
+        parts: list[ColumnElement[bool]] = []
+        if keep:
+            parts.append(stem.in_(sorted(keep)))
+        if unclassified:
+            parts.append(stem.not_in(known))
+        test = or_(*parts)
+    return select(test).scalar_subquery()
 
 
 def _component_matches(column: ColumnElement, value: str) -> ColumnElement[bool]:

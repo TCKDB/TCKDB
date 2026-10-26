@@ -8,7 +8,7 @@ of accuracy, and it orders nothing. Each test names what it kills.
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import String, column, select, values
 
 from app.chemistry.method_families import CLASSIFICATION, CLASSIFICATION_REF, MethodClassFilter, MethodFamily
 from app.db.models.common import RecordReviewStatus, ScientificOriginKind, SubmissionRecordType
@@ -424,3 +424,83 @@ def test_calculation_searches_filter_by_the_method_family_and_rung_of_the_calcul
         assert refs(path, method_family="unclassified", **extra)[0] == set()  # a calculation with no level matches no family
         assert bare.public_ref not in refs(path, method_family="dft", **extra)[0]
         assert client.get(f"{BASE}/{path}", params={"dft_rung_max": 9, **extra}).status_code == 422
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# statement size and count
+# ---------------------------------------------------------------------------------------------------------------
+
+_SHAPES = {
+    "one family": ["dft"],
+    "a family and unclassified": ["dft", "unclassified"],
+    "every family": ["dft", "wavefunction", "composite", "unclassified"],
+    "all seven families": [f.value for f in MethodFamily],  # the whole-table shortcut: stem IS NOT NULL
+}
+
+
+def test_the_family_predicate_stays_small_and_does_not_grow_with_the_levels_searched(client, db_session):
+    """Kills: a stem-key expression that repeats itself, so one filtered request plans a multi-megabyte statement.
+
+    Every reference to a derived key used to be a full copy of the expression that built it; the predicate compiled
+    to about 7 MB and a single filtered search spent seconds planning it, whatever the data. The ``unclassified`` shape
+    named the key twice, so it is measured too, and the size is that of the statement as executed, with the expanding
+    ``IN`` lists filled in, not only of the compiled text.
+    """
+    from sqlalchemy import event
+    from sqlalchemy.dialects import postgresql
+
+    limit = 60_000
+    for shape, families in _SHAPES.items():
+        selected = MethodClassFilter.of(families, None, None)
+        compiled = str(
+            method_family_matches(selected).compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+        )
+        assert len(compiled) < limit, (shape, len(compiled))
+        assert compiled.count("OFFSET 0") <= 5, shape  # one chain, however many parts the test has
+
+    # The all-families shortcut keeps an empty-string method (a name the table does not hold) and drops a NULL one.
+    everything = method_family_matches(MethodClassFilter.of(_SHAPES["all seven families"], None, None), column(
+        "method", String
+    ))
+    probe = select(column("method", String)).select_from(
+        values(column("method", String), name="t").data([("",), (None,), ("b3lyp",)])
+    )
+    kept = set(db_session.scalars(probe.where(everything)))
+    assert "" in kept and None not in kept, kept
+
+    species = make_species(db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("SZ"))
+    entry = make_species_entry(db_session, species)
+
+    def executed_statements(families):
+        seen: list[str] = []
+
+        def record(conn, cursor, statement, *args):
+            seen.append(statement)
+
+        engine = db_session.get_bind()
+        event.listen(engine, "before_cursor_execute", record)
+        try:
+            response = client.get(
+                f"{BASE}/calculations/search", params={"method_family": families, "species_entry_ref": entry.public_ref}
+            )
+        finally:
+            event.remove(engine, "before_cursor_execute", record)
+        assert response.status_code == 200
+        return seen
+
+    few = {shape: executed_statements(families) for shape, families in _SHAPES.items()}
+    for i in range(25):
+        calc_lot = make_lot(db_session, method=f"b97-d3-variant{i}", basis="def2tzvp")
+        make_calculation(db_session, species_entry_id=entry.id, lot_id=calc_lot.id)
+    many = {shape: executed_statements(families) for shape, families in _SHAPES.items()}
+
+    for shape in _SHAPES:
+        # The statements that carry the filter are the large ones. A level that now matches is read back row by row,
+        # which adds small statements, but must not make the filter's own statement any bigger.
+        sizes_few = {len(s) for s in few[shape] if len(s) > 5_000}
+        sizes_many = {len(s) for s in many[shape] if len(s) > 5_000}
+        assert max(sizes_many) < 3 * limit, (shape, max(sizes_many))
+        # The largest filter statement does not grow with the levels that exist (a few bytes of per-row variation).
+        assert max(sizes_many) <= 1.05 * max(sizes_few), (shape, max(sizes_few), max(sizes_many))
+
+
