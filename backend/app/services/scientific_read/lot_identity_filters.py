@@ -263,7 +263,9 @@ def method_family_matches(selected: MethodClassFilter, column: ColumnElement | N
     if not keep and not unclassified:
         return false()
     # One scalar subquery holds the whole test, so the stem chain is rendered and run once per row however many
-    # parts the test has. A NULL method gives a NULL stem and so a NULL test: it matches no family, as before.
+    # parts the test has. A NULL method gives a NULL stem. The IN / NOT IN test is then NULL, and the all-families shortcut
+    # (IS NOT NULL) is FALSE; in a WHERE both exclude the row, and no caller negates this predicate, so it matches no
+    # family, as before.
     stem = _stem_layer(LevelOfTheory.method if column is None else column).c.stem
     if unclassified and keep == frozenset(known):
         test = stem.is_not(None)  # every name is a table key or is not one

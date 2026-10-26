@@ -8,7 +8,7 @@ of accuracy, and it orders nothing. Each test names what it kills.
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import String, column, select, values
 
 from app.chemistry.method_families import CLASSIFICATION, CLASSIFICATION_REF, MethodClassFilter, MethodFamily
 from app.db.models.common import RecordReviewStatus, ScientificOriginKind, SubmissionRecordType
@@ -434,6 +434,7 @@ _SHAPES = {
     "one family": ["dft"],
     "a family and unclassified": ["dft", "unclassified"],
     "every family": ["dft", "wavefunction", "composite", "unclassified"],
+    "all seven families": [f.value for f in MethodFamily],  # the whole-table shortcut: stem IS NOT NULL
 }
 
 
@@ -456,6 +457,16 @@ def test_the_family_predicate_stays_small_and_does_not_grow_with_the_levels_sear
         )
         assert len(compiled) < limit, (shape, len(compiled))
         assert compiled.count("OFFSET 0") <= 5, shape  # one chain, however many parts the test has
+
+    # The all-families shortcut keeps an empty-string method (a name the table does not hold) and drops a NULL one.
+    everything = method_family_matches(MethodClassFilter.of(_SHAPES["all seven families"], None, None), column(
+        "method", String
+    ))
+    probe = select(column("method", String)).select_from(
+        values(column("method", String), name="t").data([("",), (None,), ("b3lyp",)])
+    )
+    kept = set(db_session.scalars(probe.where(everything)))
+    assert "" in kept and None not in kept, kept
 
     species = make_species(db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("SZ"))
     entry = make_species_entry(db_session, species)
