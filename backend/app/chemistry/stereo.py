@@ -462,10 +462,10 @@ def combine_sources(
                     },
                     message_prefix=False,
                 )
-            if sum(bring.values()) > sum(have.values()):
+            if bring.total() > have.total():
                 merged[key] = _class_order(incoming)
                 owners[key] = name if key not in owners else f"{owners[key]} and {name}"
-            elif key not in owners and sum(bring.values()):
+            elif key not in owners and bring.total():
                 owners[key] = name
     return _render(frame, merged)
 
