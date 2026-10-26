@@ -26,7 +26,12 @@ from app.db.models.common import (
     ThermoTargetKind,
 )
 from app.db.models.record_review import RecordReview, RecordReviewEvent
-from app.db.models.species import ConformerGroup, ConformerObservation, ConformerSelection
+from app.db.models.species import (
+    ConformerGroup,
+    ConformerGroupMergePending,
+    ConformerObservation,
+    ConformerSelection,
+)
 from app.db.models.statmech_declaration import StatmechModelDeclaration, StatmechModelMember
 from app.db.models.thermo import Thermo
 from app.services.conformer_reassignment import reassign_conformer_groups
@@ -138,8 +143,8 @@ def _v1_scheme_id(session) -> int:
     return session.scalar(text("SELECT id FROM conformer_assignment_scheme WHERE name = 'torsion_basin' AND version = 1"))
 
 
-def _v2_scheme_id(session) -> int:
-    return session.scalar(text("SELECT id FROM conformer_assignment_scheme WHERE name = 'torsion_basin' AND version = 2"))
+def _current_scheme_id(session) -> int:
+    return session.scalar(text("SELECT id FROM conformer_assignment_scheme WHERE name = 'torsion_basin' AND version = 3"))
 
 
 def test_a_split_basin_is_merged_onto_the_older_group_and_its_dependents_follow(db_session) -> None:
@@ -179,7 +184,7 @@ def test_a_split_basin_is_merged_onto_the_older_group_and_its_dependents_follow(
     assert placed == {
         (older_id, "lowest_energy", None),
         (newer_id, "lowest_energy", None),
-        (older_id, "display_default", _v2_scheme_id(session)),
+        (older_id, "display_default", _current_scheme_id(session)),
     }
     for group_id in (older_id, newer_id):
         assert _review_status(session, group_id) is RecordReviewStatus.not_reviewed
@@ -324,7 +329,7 @@ def test_approved_observation_and_thermo_target_move_through_a_declared_repair(d
     }
     assert set(declared) == {"conformer_observation", "thermo"}
     assert set(declared["conformer_observation"].declared_columns) == {
-        "conformer_group_id", "assignment_scheme_id", "torsion_fingerprint_json"
+        "conformer_group_id", "assignment_scheme_id", "torsion_fingerprint_json", "mapped_coords_json"
     }
     assert list(declared["thermo"].declared_columns) == ["target_conformer_group_id"]
 
@@ -345,7 +350,7 @@ def test_approved_observation_and_thermo_target_move_through_a_declared_repair(d
 
 
 def test_reassignment_changes_only_the_declared_columns_of_an_approved_row(db_session) -> None:
-    """The observation's note and every other column are untouched; only link, scheme and fingerprint move."""
+    """The observation's note and every other column are untouched; only link, scheme, fingerprint and mapped coordinates move."""
     session = db_session
     entry, (group,), (trans, gauche), _ = _seed(session, _ETHANOL, [_ethanol(180.0), _ethanol(60.0)], [0, 0])
     gauche.note = "depositor note"
@@ -670,7 +675,7 @@ def test_content_hash_alone_is_refused_but_follows_a_basin_move_in_the_same_tran
 
 def test_the_geometry_is_the_one_the_primary_calculation_carries_not_a_later_optimisation(db_session) -> None:
     from app.db.models.common import CalculationType
-    from app.services.conformer_reassignment import _observation_geometry_atoms
+    from app.services.conformer_basin_store import observation_geometry_atoms as _observation_geometry_atoms
     from tests.services.scientific_read._factories import attach_input_geometry
 
     session = db_session
@@ -708,3 +713,169 @@ def test_the_step_does_nothing_unless_the_default_scheme_is_the_one_this_code_im
     assert report.skipped_reason and "99" in report.skipped_reason
     assert report.entries_examined == 0 and report.groups_created == 0
     assert len(_groups(session, entry)) == 1
+
+
+# ---------------------------------------------------------------------------
+# A merge an upload could not make: owed, then completed by the owner-role reassignment
+# ---------------------------------------------------------------------------
+
+
+def _two_groups_then_what_points_at_the_younger(session, kind: str):
+    """Two optimised butane structures 36 degrees apart (two groups) and one approved record on the YOUNGER group.
+
+    Returns ``(entry, older_id, younger_id, observation_ids, where)``; ``where()`` is the group the record points at.
+    """
+    from app.db.models.calculation import Calculation
+    from app.db.models.kinetics import KineticsInterpretationAssignment
+    from tests.services.scientific_read._factories import make_chem_reaction, make_kinetics, make_reaction_entry
+    from tests.services.test_conformer_basin_linkage import _BUTANE, butane, deposit_observations
+
+    observations = deposit_observations(session, _BUTANE, [butane("A", 0.0), butane("C", 36.0)])
+    a, c = (session.get(ConformerObservation, observations[n]) for n in ("A", "C"))
+    older_id, younger_id = a.conformer_group_id, c.conformer_group_id
+    assert older_id < younger_id
+    younger = session.get(ConformerGroup, younger_id)
+    entry = younger.species_entry
+    calc_c = session.scalars(select(Calculation).where(Calculation.conformer_observation_id == c.id)).first()
+
+    if kind == "observation":
+        _approve(session, SubmissionRecordType.conformer_observation, c.id)
+        where = lambda: session.get(ConformerObservation, c.id).conformer_group_id  # noqa: E731
+    elif kind == "thermo":
+        thermo = _target_thermo(session, entry, younger, [calc_c])
+        _approve(session, SubmissionRecordType.thermo, thermo.id)
+        thermo_id = thermo.id
+        where = lambda: session.get(Thermo, thermo_id).target_conformer_group_id  # noqa: E731
+    elif kind == "statmech_declaration":
+        statmech, declaration = _basin_declaration(session, entry, younger, calc_c)
+        _approve(session, SubmissionRecordType.statmech, statmech.id)
+        declaration_id = declaration.id
+        where = lambda: session.get(StatmechModelDeclaration, declaration_id).conformer_group_id  # noqa: E731
+    elif kind == "ensemble_member":
+        owner = make_statmech(session, species_entry=entry)
+        cited = make_statmech(session, species_entry=entry)
+        attach_statmech_source_calculation(session, statmech=cited, calculation=calc_c)
+        _declaration, member = _ensemble_member(session, entry, owner, younger, cited)
+        _approve(session, SubmissionRecordType.statmech, owner.id)
+        member_id = member.id
+        where = lambda: session.get(StatmechModelMember, member_id).conformer_group_id  # noqa: E731
+    elif kind == "kinetics_selection":
+        selection = ConformerSelection(conformer_group_id=younger_id, selection_kind="lowest_energy")
+        session.add(selection)
+        species = entry.species
+        partner = make_species(session, smiles="C", inchi_key=next_inchi_key("PAIR"))
+        partner_entry = make_species_entry(session, partner)
+        reaction = make_chem_reaction(session, reactants=[species], products=[partner])
+        reaction_entry = make_reaction_entry(
+            session, reaction=reaction, reactant_entries=[entry], product_entries=[partner_entry]
+        )
+        kinetics = make_kinetics(session, reaction_entry=reaction_entry)
+        statmech = make_statmech(session, species_entry=entry)
+        session.flush()
+        session.add(
+            KineticsInterpretationAssignment(
+                kinetics_id=kinetics.id,
+                subject_key="reactant:1",
+                role="reactant",
+                statmech_id=statmech.id,
+                conformer_selection_id=selection.id,
+                ensemble_policy="lowest_energy_conformer",
+                standard_state_convention="ideal_gas_1_bar",
+                degeneracy_interpretation="no_symmetry_treatment",
+            )
+        )
+        session.flush()
+        _approve(session, SubmissionRecordType.kinetics, kinetics.id)
+        selection_id = selection.id
+        where = lambda: session.get(ConformerSelection, selection_id).conformer_group_id  # noqa: E731
+    else:  # pragma: no cover
+        raise AssertionError(kind)
+    session.flush()
+    return entry, older_id, younger_id, observations, where
+
+
+@pytest.mark.parametrize(
+    "kind", ["observation", "thermo", "statmech_declaration", "ensemble_member", "kinetics_selection"]
+)
+def test_a_bridge_over_an_approved_record_is_owed_and_the_owner_job_completes_it(db_session, kind: str) -> None:
+    from app.services.conformer_basin_store import entries_with_pending_merges
+    from tests.services.test_conformer_basin_linkage import _BUTANE, butane, deposit_observations
+
+    session = db_session
+    entry, older_id, younger_id, observations, where = _two_groups_then_what_points_at_the_younger(session, kind)
+    entry_id = entry.id
+    for group_id in (older_id, younger_id):
+        ensure_record_review(session, record_type=SubmissionRecordType.conformer_group, record_id=group_id)
+        set_record_review_status(
+            session, record_type=SubmissionRecordType.conformer_group, record_id=group_id,
+            status=RecordReviewStatus.under_review, actor=_curator(session),
+        )
+
+    # The bridging upload runs as the API role, which may not touch the approved record.
+    bridge = deposit_observations(session, _BUTANE, [butane("B", 18.0)])["B"]
+    session.expire_all()
+    assert session.get(ConformerObservation, bridge).conformer_group_id == older_id, "it joins the OLDEST linked group"
+    assert session.get(ConformerObservation, observations["C"]).conformer_group_id == younger_id, "the merge is owed"
+    assert where() == younger_id, "the approved record has not moved"
+    owed = session.scalars(select(ConformerGroupMergePending)).all()
+    assert [(p.species_entry_id, p.kept_conformer_group_id, p.absorbed_conformer_group_id, p.conformer_observation_id, p.completed_at)
+            for p in owed] == [(entry_id, older_id, younger_id, bridge, None)]
+    assert owed[0].reason
+    assert session.get(ConformerGroup, younger_id).merged_into_conformer_group_id is None
+    assert entries_with_pending_merges(session) == [entry_id]
+    # nothing was declared by the API role
+    assert session.execute(
+        text("SELECT count(*) FROM accepted_science_repair WHERE xact_id = (pg_current_xact_id())::text::bigint")
+    ).scalar() == 0
+
+    # The owner-role job completes it through the declared-repair path.
+    report = reassign_conformer_groups(
+        session, repair_revision=_REVISION, species_entry_ids=entries_with_pending_merges(session)
+    )
+
+    session.expire_all()
+    assert where() == older_id
+    assert session.get(ConformerObservation, observations["C"]).conformer_group_id == older_id
+    assert report.merges_pending_completed == 1 and report.groups_emptied_kept == 1
+    assert report.repairs_declared, "an approved row moved, so a repair was declared"
+    completed = session.scalars(select(ConformerGroupMergePending)).one()
+    assert completed.completed_at is not None and completed.completed_by_revision == _REVISION
+    assert entries_with_pending_merges(session) == []
+    emptied = session.get(ConformerGroup, younger_id)
+    assert emptied.merged_into_conformer_group_id == older_id
+    assert emptied.representative_observation_id is None and emptied.representative_fingerprint_json is None
+    assert session.get(ConformerGroup, older_id).representative_observation_id == bridge  # the middle structure
+    for group_id in (older_id, younger_id):
+        assert _review_status(session, group_id) is RecordReviewStatus.not_reviewed
+    # every approved row that moved is recorded old -> new
+    recorded = session.execute(
+        text(
+            "SELECT c.target_table, c.before_json, c.after_json FROM accepted_science_repair_change c "
+            "JOIN accepted_science_repair r ON r.id = c.repair_id WHERE r.alembic_revision = :r"
+        ),
+        {"r": _REVISION},
+    ).all()
+    if kind == "kinetics_selection":
+        # a selection is a curation row, not an accepted root: it moves with no repair to record
+        assert recorded == []
+    else:
+        assert recorded, "an approved row moved, and a repair with no recorded change would be unauditable"
+    # and a second run finds nothing to do
+    again = reassign_conformer_groups(session, repair_revision=_REVISION, species_entry_ids=[entry_id])
+    assert again.observations_moved == 0 and again.entries_changed == 0 and not again.repairs_declared
+
+
+def test_a_live_upload_cannot_move_an_approved_record_itself(db_session) -> None:
+    """Without the pending path the merge would be attempted as the API role; the trigger is what refuses it."""
+    from app.services.conformer_basin_moves import ReassignmentReport, Repairs, move_dependents
+
+    session = db_session
+    entry, older_id, younger_id, observations, where = _two_groups_then_what_points_at_the_younger(session, "thermo")
+    repairs = Repairs(session, "live upload", ReassignmentReport(), enabled=False)
+    with pytest.raises(DBAPIError):
+        with session.begin_nested():
+            move_dependents(
+                session, [younger_id], target_for=lambda *_: older_id, repairs=repairs,
+                report=ReassignmentReport(), scheme_id=_current_scheme_id(session),
+            )
+    assert where() == younger_id

@@ -451,8 +451,12 @@ Notes:
 - `species_entry_id`
 - `label`
 - `note`
-- `representative_fingerprint_json`
-- `representative_coords_json`
+- `representative_fingerprint_json` (derived: the medoid's)
+- `representative_coords_json` (derived: the medoid's)
+- `representative_observation_id` (nullable FK: the observation the representative was taken from)
+- `merged_into_conformer_group_id` (nullable self-FK: set on a group a merge emptied)
+- `basin_is_clique` (nullable: whether every pair of defining members matches; `false` is a wide basin)
+- `basin_span_deg` (nullable: largest per-rotor torsion difference between two defining members)
 - `created_at`
 - `created_by`
 
@@ -464,8 +468,20 @@ Notes:
 - `scientific_origin`
 - `note`
 - `torsion_fingerprint_json`
+- `mapped_coords_json` (nullable: the structure in the species' canonical atom order)
 - `created_at`
 - `created_by`
+
+`conformer_group_merge_pending` fields (a merge a live upload decided on but could not make):
+
+- `id`
+- `species_entry_id`
+- `kept_conformer_group_id` (the older group)
+- `absorbed_conformer_group_id` (the younger group, to be emptied)
+- `conformer_observation_id` (the upload whose structure linked the two)
+- `reason`
+- `completed_at`, `completed_by_revision` (stamped by the owner-role reassignment)
+- `created_at`
 
 `conformer_selection` fields:
 
@@ -482,6 +498,7 @@ Notes:
 - `conformer_group` is indexed by `species_entry_id`
 - `conformer_group` is unique on `(species_entry_id, label)`
 - `conformer_group` is the deduplicated conformational-basin identity for one `species_entry`
+- from scheme `torsion_basin` version 3 a basin is a connected component of the entry's *defining* observations (converged `opt` or `composite` primary with a final geometry), two linked when the matching rule says they share a basin, so the partition is a function of the set of structures and not of the order they were uploaded in; other observations are filed into a basin but never link two; the representative is the medoid and is derived, not identity; a group a merge empties keeps its row with `merged_into_conformer_group_id` set; a merge that would change an approved record is recorded in `conformer_group_merge_pending` and completed by the owner-role reassignment through the declared-repair path
 - `conformer_observation` is one provenance-bearing uploaded or imported observation assigned to a group; multiple observations per group are expected and valid
 - matching an existing basin reuses the `conformer_group` only; distinct uploads must not be silently collapsed into one shared `conformer_observation` merely because they land in the same basin
 - `conformer_observation` no longer stores `calculation_id`; `calculation.conformer_observation_id` carries the optional anchor to the specific observation the calculation came with

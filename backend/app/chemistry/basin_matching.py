@@ -42,12 +42,13 @@ search bounded.
 
 * Methyl hydrogens never need a permutation: a methyl rotor is measured
   modulo 120 degrees, which already identifies its three hydrogens.
-* The two hydrogens of an ``-NH2`` or a radical ``-CH2`` top are tried both
-  ways *per slot*. The choice of which hydrogen a slot's torsion uses touches
-  that slot only (a hydrogen belongs to exactly one top, and a top to exactly
-  one rotor), so trying both for each slot is the same as enumerating the
-  hydrogen swaps, without the product. The same swap covers planar (amide,
-  aniline) and pyramidal amines; no special fold is needed.
+* The two hydrogens of an ``-NH2`` or a radical ``-CH2`` top are compared **as a pair**. Both hydrogens'
+  torsions are measured, and the top matches when SOME assignment of the two hydrogens of one structure to the
+  two of the other puts BOTH torsions within tolerance. The assignment is the one choice a top has, so it is
+  enumerated (two of them) and applied to both hydrogens at once. Letting either hydrogen stand for the slot on
+  its own (what version 2 did) merged trans and gauche ethylamine, which share one N-H position and differ in
+  the other. A planar top (amide, aniline, a radical -CH2) still matches its swapped form, because the swapped
+  assignment pairs each hydrogen with its mirror partner; no special fold is needed.
 * A one-hydrogen top (O-H, S-H, O-O-H, N-O-H) has nothing to permute.
 
 The cap
@@ -138,6 +139,9 @@ class SymmetryModel:
     slots: tuple[RotorSlot, ...]
     #: ``(S, 4)`` atom indices of each slot's own torsion.
     quartets: np.ndarray
+    #: ``(S, 4)``: the same torsion measured through the other hydrogen of a two-hydrogen top (equal to
+    #: ``quartets`` for every other slot).
+    quartets_alt: np.ndarray
     #: ``(M, S, 2, 4)``: the image of each slot's torsion under each automorphism, with the two
     #: hydrogen choices of a two-hydrogen top as the third axis (equal for every other slot).
     images: np.ndarray
@@ -303,10 +307,15 @@ def build_symmetry_model(
 
     n_slots = len(slots)
     quartets = np.zeros((n_slots, 4), dtype=np.int32)
+    quartets_alt = np.zeros((n_slots, 4), dtype=np.int32)
     images = np.zeros((len(automorphisms), n_slots, 2, 4), dtype=np.int32)
     for s, slot in enumerate(slots):
         quartet = (slot.terminal_a, slot.bond_begin, slot.bond_end, slot.terminal_d)
         quartets[s] = quartet
+        # A two-hydrogen top's quartet holds exactly one of its hydrogens; the other is its alternative.
+        quartets_alt[s] = tuple(
+            slot.alt_terminal_h if slot.top_kind == "two_h" and atom not in heavy_set else atom for atom in quartet
+        )
         for m, sigma in enumerate(automorphisms):
             first = [0, 0, 0, 0]
             second = [0, 0, 0, 0]
@@ -324,6 +333,7 @@ def build_symmetry_model(
         smiles=smiles,
         slots=slots,
         quartets=quartets,
+        quartets_alt=quartets_alt,
         images=images,
         periods=periods,
         tolerances=tolerances,
@@ -472,11 +482,21 @@ def compare_basins(
 
     a = np.asarray(coords_a, dtype=np.float64)
     b = np.asarray(coords_b, dtype=np.float64)
-    folded_a = _dihedrals_deg(a, model.quartets) % model.periods  # (S,)
-    folded_b = _dihedrals_deg(b, model.images) % model.periods[None, :, None]  # (M, S, 2)
-    difference = np.abs(folded_a[None, :, None] - folded_b)
     period = model.periods[None, :, None]
-    delta = np.minimum(difference, period - difference).min(axis=2)  # (M, S): best hydrogen choice per slot
+    first = _dihedrals_deg(a, model.quartets) % model.periods  # (S,)
+    second = _dihedrals_deg(a, model.quartets_alt) % model.periods  # (S,): the other hydrogen of a two-hydrogen top
+    image = _dihedrals_deg(b, model.images) % period  # (M, S, 2): the image's two hydrogens (equal outside a pair)
+
+    def circular(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+        difference = np.abs(x - y)
+        return np.minimum(difference, period - difference)
+
+    # A two-hydrogen top is compared as a pair under one assignment of its hydrogens: both must be within
+    # tolerance. For every other slot both hydrogens are the same atom, so the two assignments coincide and
+    # this is the plain circular difference.
+    straight = np.maximum(circular(first[None, :, None], image[..., 0:1]), circular(second[None, :, None], image[..., 1:2]))
+    swapped = np.maximum(circular(first[None, :, None], image[..., 1:2]), circular(second[None, :, None], image[..., 0:1]))
+    delta = np.minimum(straight, swapped)[..., 0]  # (M, S)
     valid = np.all(delta <= model.tolerances[None, :] + _EPS, axis=1)
     totals = delta.sum(axis=1)
     if valid.any():
@@ -491,3 +511,34 @@ def compare_basins(
         model.n_mappings,
         model.cap_hit,
     )
+
+
+def comparison_distance(comparison: BasinComparison) -> float:
+    """The best-mapping distance of a comparison: summed torsion differences, or the RMSD of a rigid molecule."""
+    # Rounded, so two distances that differ only by floating-point noise tie, and a tie goes to the older group.
+    if comparison.is_rigid:
+        return round(float(comparison.kabsch_rmsd), 6) if comparison.kabsch_rmsd is not None else 0.0
+    return round(comparison.total_delta, 6)
+
+
+def compare_basins_symmetric(
+    smiles: str,
+    coords_a: list[tuple[float, float, float]],
+    coords_b: list[tuple[float, float, float]] | None,
+    params: BasinMatchParams,
+) -> BasinComparison:
+    """``compare_basins`` evaluated both ways round, so linkage between two structures is symmetric.
+
+    The symmetries of a molecule form a group, so below the cap ``a`` matches ``b`` exactly when ``b`` matches
+    ``a`` (the inverse mapping carries one to the other) and the two answers coincide. The cap keeps the first
+    ``max_symmetry_mappings`` mappings in a fixed order, and a truncated set is not closed under inverses, so
+    there the two directions can differ. Basin linkage must not depend on which structure was deposited first,
+    so the pair is linked when EITHER direction matches, and its distance is the smaller of the two.
+    """
+    forward = compare_basins(smiles, coords_a, coords_b, params)
+    if not forward.symmetry_cap_hit or coords_b is None:
+        return forward
+    backward = compare_basins(smiles, coords_b, coords_a, params)
+    if forward.same_basin != backward.same_basin:
+        return forward if forward.same_basin else backward
+    return forward if comparison_distance(forward) <= comparison_distance(backward) else backward

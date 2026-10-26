@@ -20,10 +20,13 @@ torsion differences the matcher calls "the same".
 
 from __future__ import annotations
 
+import json
 import random
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
+import numpy as np
 import pytest
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -368,3 +371,114 @@ def test_a_rigid_molecule_still_separates_a_genuinely_different_geometry() -> No
     atoms = atoms_of(embed("NN", 5))
     stretched = tuple((s, 1.6 * x, 1.6 * y, 1.6 * z) for s, x, y, z in atoms)
     assert not compare("NN", atoms, shuffled(stretched, 2)).same_basin
+
+
+# ---------------------------------------------------------------------------
+# Two-hydrogen tops are compared as a pair
+# ---------------------------------------------------------------------------
+
+_ETHYLAMINE_E2 = Path(__file__).resolve().parents[1] / "fixtures" / "conformer_basin" / "ethylamine_trans_gauche.json"
+
+
+def _e2(name: str) -> Atoms:
+    """One of the quantum-chemistry ethylamine minima (provenance in the fixture's own note)."""
+    return tuple((s, x, y, z) for s, x, y, z in json.loads(_ETHYLAMINE_E2.read_text())[name]["atoms"])
+
+
+def _swapped_nh(atoms: Atoms) -> Atoms:
+    """The same ethylamine with its two N-H atoms listed in the other order."""
+    mol = Chem.AddHs(Chem.MolFromSmiles("CCN"))
+    assert [a.GetSymbol() for a in mol.GetAtoms()] == [s for s, *_ in atoms]
+    return swap_hydrogens(atoms, mol, "N")
+
+
+def _nh_atoms(atoms: Atoms) -> list[int]:
+    """Indices of the two N-H atoms of ethylamine (heavy atoms come first, then the hydrogens in graph order)."""
+    return [i for i, (s, *_) in enumerate(atoms) if s == "H"][-2:]
+
+
+def _turn_one_hydrogen(atoms: Atoms, hydrogen: int, degrees: float, axis: tuple[int, int] = (1, 2)) -> Atoms:
+    """Rotate ONE atom about the ``axis`` bond: moves a single hydrogen of a top and leaves the other where it is."""
+    p = np.array([c[1:] for c in atoms], dtype=float)
+    origin, tip = p[axis[0]], p[axis[1]]
+    k = (tip - origin) / np.linalg.norm(tip - origin)
+    v = p[hydrogen] - origin
+    t = np.radians(degrees)
+    p[hydrogen] = origin + v * np.cos(t) + np.cross(k, v) * np.sin(t) + k * np.dot(k, v) * (1 - np.cos(t))
+    return tuple((s, *map(float, xyz)) for (s, *_), xyz in zip(atoms, p, strict=True))
+
+
+def test_trans_and_gauche_ethylamine_are_different_basins_at_both_levels() -> None:
+    """They share one N-H position and differ in the other, so a rule that lets either hydrogen stand for the slot merged them."""
+    for level in ("b3lyp", "wb97xd"):
+        result = compare("CCN", _e2(f"trans_{level}"), _e2(f"gauche_{level}"))
+        assert not result.same_basin, (level, result.torsion_deltas)
+    assert not compare("CCN", _e2("trans_b3lyp"), _e2("gauche_wb97xd")).same_basin
+
+
+def test_the_same_ethylamine_minimum_is_one_basin_across_levels_and_in_either_n_h_order() -> None:
+    for kind in ("trans", "gauche"):
+        a, b = _e2(f"{kind}_b3lyp"), _e2(f"{kind}_wb97xd")
+        assert compare("CCN", a, b).same_basin
+        assert compare("CCN", a, _swapped_nh(a)).same_basin
+        assert compare("CCN", a, _swapped_nh(b)).same_basin
+    # and a swapped listing of one rotamer is still not the other rotamer
+    assert not compare("CCN", _e2("trans_b3lyp"), _swapped_nh(_e2("gauche_b3lyp"))).same_basin
+    assert not compare("CCN", _swapped_nh(_e2("trans_b3lyp")), _e2("gauche_b3lyp")).same_basin
+
+
+def test_both_hydrogens_must_match_under_one_assignment() -> None:
+    """Turning ONE hydrogen 25 degrees keeps both inside the 30 degree tolerance; turning it 120 does not."""
+    base = _e2("gauche_b3lyp")
+    for hydrogen in _nh_atoms(base):
+        assert compare("CCN", base, _turn_one_hydrogen(base, hydrogen, 25.0)).same_basin
+        assert not compare("CCN", base, _turn_one_hydrogen(base, hydrogen, 120.0)).same_basin
+        assert not compare("CCN", base, _turn_one_hydrogen(base, hydrogen, -120.0)).same_basin
+
+
+@pytest.mark.parametrize("sign", [1.0, -1.0])
+def test_each_hydrogen_must_be_near_its_own_partner_under_one_assignment(sign: float) -> None:
+    """One hydrogen turned 90 and the other 90 the same way (or the opposite way): neither assignment holds both."""
+    base = _e2("gauche_b3lyp")
+    first, second = _nh_atoms(base)
+    a = _turn_one_hydrogen(base, first, 90.0)
+    b = _turn_one_hydrogen(base, second, 90.0 * sign)
+    assert not compare("CCN", a, b).same_basin
+
+
+def test_planar_tops_still_match_their_swapped_form() -> None:
+    """A planar -CH2 radical and a planar aniline NH2: the two hydrogens trade places and nothing changes."""
+    radical = "[CH2]CC"
+    mol = embed(radical, 3, optimise=False)
+    top = next(
+        x
+        for x in mol.GetAtoms()
+        if x.GetSymbol() == "C" and x.GetDegree() == 3 and sum(n.GetSymbol() == "H" for n in x.GetNeighbors()) == 2
+    )
+    hs = [n.GetIdx() for n in top.GetNeighbors() if n.GetSymbol() == "H"]
+    for degrees in (0.0, 90.0):
+        a = with_dihedral(radical, "[#1][CH2][CH2][CH3]", degrees, optimise=False)
+        out = list(a)
+        out[hs[0]], out[hs[1]] = a[hs[1]], a[hs[0]]
+        assert compare(radical, a, tuple(out)).same_basin
+
+    aniline = "Nc1ccccc1"
+    amol = embed(aniline, 3)
+    a = atoms_of(amol)
+    assert compare(aniline, a, swap_hydrogens(a, amol, "N")).same_basin
+    planar = _planar_aniline()
+    assert compare(aniline, planar, swap_hydrogens(planar, amol, "N")).same_basin
+
+
+def _planar_aniline() -> Atoms:
+    """Aniline with both N-H atoms projected into the plane of C(ipso), N and a ring neighbour: a planar NH2."""
+    mol = embed("Nc1ccccc1", 3)
+    p = mol.GetConformer().GetPositions()
+    n = next(a for a in mol.GetAtoms() if a.GetSymbol() == "N")
+    ipso = next(x for x in n.GetNeighbors() if x.GetSymbol() == "C")
+    ortho = next(x for x in ipso.GetNeighbors() if x.GetIdx() != n.GetIdx() and x.GetSymbol() == "C")
+    normal = np.cross(p[ortho.GetIdx()] - p[ipso.GetIdx()], p[n.GetIdx()] - p[ipso.GetIdx()])
+    normal /= np.linalg.norm(normal)
+    for h in (x.GetIdx() for x in n.GetNeighbors() if x.GetSymbol() == "H"):
+        p[h] = p[h] - np.dot(p[h] - p[n.GetIdx()], normal) * normal
+    return tuple((a.GetSymbol(), *map(float, p[i])) for i, a in enumerate(mol.GetAtoms()))

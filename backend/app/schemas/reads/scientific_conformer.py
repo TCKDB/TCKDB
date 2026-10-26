@@ -141,7 +141,18 @@ class ConformerGroupCoreBlock(BaseModel):
     is surfaced as ``fingerprint``, populated only under
     ``include=fingerprints`` (``None`` otherwise, and ``None`` when the
     row itself carries no fingerprint blob or an internally inconsistent
-    one — see ``_build_group_fingerprint``).
+    one — see ``_build_group_fingerprint``). The fingerprint is the
+    basin's most central member's (its medoid), derived from the members
+    and not part of the basin's identity.
+
+    ``merged_into_conformer_group_ref`` is set on a group a merge emptied:
+    its members live in the group it names, so a ``cg_`` ref cited before the
+    merge resolves forward. ``wide_basin`` is ``True`` when the basin's
+    optimised members are not all within tolerance of each other (a chain of
+    structures, reported for curation and never split) and ``False`` when
+    they are; ``None`` when the group has no optimised member.
+    ``basin_span_deg`` is the largest torsion difference between two of
+    them, in degrees.
     """
 
     conformer_group_id: int | None = None
@@ -151,6 +162,9 @@ class ConformerGroupCoreBlock(BaseModel):
     created_at: datetime
     review: RecordReviewBadge
     fingerprint: ConformerGroupFingerprint | None = None
+    merged_into_conformer_group_ref: str | None = None
+    wide_basin: bool | None = None
+    basin_span_deg: float | None = None
 
 
 class ConformerObservationCoreBlock(BaseModel):

@@ -13671,8 +13671,19 @@
         "type": "object"
       },
       "ConformerGroupCoreBlock": {
-        "description": "Direct conformer-group-row metadata.\n\nCarries the public ref (``cg_…``) plus the curator-facing label /\nnote pair. Of the two JSONB blobs on the row,\n``representative_coords_json`` is intentionally absent — no surface\nneed for it has been requested. ``representative_fingerprint_json``\nis surfaced as ``fingerprint``, populated only under\n``include=fingerprints`` (``None`` otherwise, and ``None`` when the\nrow itself carries no fingerprint blob or an internally inconsistent\none — see ``_build_group_fingerprint``).",
+        "description": "Direct conformer-group-row metadata.\n\nCarries the public ref (``cg_…``) plus the curator-facing label /\nnote pair. Of the two JSONB blobs on the row,\n``representative_coords_json`` is intentionally absent — no surface\nneed for it has been requested. ``representative_fingerprint_json``\nis surfaced as ``fingerprint``, populated only under\n``include=fingerprints`` (``None`` otherwise, and ``None`` when the\nrow itself carries no fingerprint blob or an internally inconsistent\none — see ``_build_group_fingerprint``). The fingerprint is the\nbasin's most central member's (its medoid), derived from the members\nand not part of the basin's identity.\n\n``merged_into_conformer_group_ref`` is set on a group a merge emptied:\nits members live in the group it names, so a ``cg_`` ref cited before the\nmerge resolves forward. ``wide_basin`` is ``True`` when the basin's\noptimised members are not all within tolerance of each other (a chain of\nstructures, reported for curation and never split) and ``False`` when\nthey are; ``None`` when the group has no optimised member.\n``basin_span_deg`` is the largest torsion difference between two of\nthem, in degrees.",
         "properties": {
+          "basin_span_deg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basin Span Deg"
+          },
           "conformer_group_id": {
             "anyOf": [
               {
@@ -13715,6 +13726,17 @@
             ],
             "title": "Label"
           },
+          "merged_into_conformer_group_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged Into Conformer Group Ref"
+          },
           "note": {
             "anyOf": [
               {
@@ -13728,6 +13750,17 @@
           },
           "review": {
             "$ref": "#/components/schemas/RecordReviewBadge"
+          },
+          "wide_basin": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wide Basin"
           }
         },
         "required": [

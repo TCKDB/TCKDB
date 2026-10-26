@@ -898,6 +898,30 @@ does all of it; there is no separate step.
 - **Locks.** One transaction-scoped advisory lock per species entry is held until the migration commits (the same lock live uploads
   take), so the Postgres lock table needs room for one lock per entry that has a conformer group.
 
+## Conformer basins as connected components (revision `b7e4c9a2d518`)
+
+Adds `conformer_assignment_scheme` `torsion_basin` version 3 and **reassigns every conformer observation under it inside the migration's
+own transaction**, through the same declared-repair machinery as `d3f8a1c6e92b`. A normal `alembic upgrade head` does all of it.
+
+- **Schema.** Nullable columns only: `conformer_group.representative_observation_id`, `merged_into_conformer_group_id`, `basin_is_clique`,
+  `basin_span_deg`; `conformer_observation.mapped_coords_json`; and the table `conformer_group_merge_pending`. Existing rows stay valid.
+- **Mostly merges.** A basin is now a connected component of the optimised structures, so basins that version 2 split by order of deposition
+  merge onto the older group. A version 2 group held together only by a structure that is not a converged optimisation can split. Both go
+  through the declared-repair path; dependents (thermo targets, statmech basin declarations and ensemble members with `content_hash`
+  recomputed, conformer selections) follow the observation their own calculations came from; reviews of every group whose membership
+  changed reset to `not_reviewed`; no group is deleted (an emptied group keeps its row and names the group that took its members).
+- **Take the backup first.** The downgrade makes version 2 the default again and drops what the revision added; it does **not** un-merge.
+- **Read the output.** One line, `conformer reassignment: ...`, with the counts (`mapped_coords_filled`, `wide_basins`, `merges_pending_completed`
+  are new). A `wide_basins` count above zero means basins whose members form a chain longer than the tolerance: they are stored
+  (`basin_is_clique = false`) and logged, never split. Review them.
+- **Pending merges.** A live upload cannot merge two groups when approved records point at the younger one (the API role cannot declare a
+  repair). It files the observation under the older group and writes a `conformer_group_merge_pending` row. Complete them as the owner role:
+  `reassign_conformer_groups(session, repair_revision=..., species_entry_ids=entries_with_pending_merges(session))`
+  (`app.services.conformer_reassignment`, `app.services.conformer_basin_store`). No operator script is shipped yet.
+- **Composition with other data steps.** The step recomputes whatever entries it is given from the database as it finds it, so it composes with a
+  revision that merges species entries or changes stereo identity before it. It declines unless the default scheme is exactly
+  (`torsion_basin`, 3); `d3f8a1c6e92b`'s step now declines on any database that is not at version 2.
+
 ## Self-hosted / Raspberry Pi note
 
 Single-node and Raspberry-Pi deployments follow the same flow as any other deployed DB. Two extra notes:

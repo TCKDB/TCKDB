@@ -51,6 +51,13 @@ merge destroys which observation was in which group, and version 1 cannot be run
 is no longer implemented. The version 2 row is kept because observations and selections reference it. Upgrading again
 re-asserts version 2 as the default and re-runs the (idempotent) step.
 
+Superseded by ``b7e4c9a2d518`` (comment added with it; nothing executable here changed)
+-------------------------------------------------------------------------------------
+``app.services.conformer_reassignment`` now implements ``torsion_basin`` version 3 and declines (``skipped_reason``) on
+a database whose default scheme is version 2. So on a database that has not yet run this revision, the data step above
+is a no-op and ``b7e4c9a2d518`` does the grouping once, under version 3. A database that already ran this revision is
+unaffected: its version 2 reassignment happened, and ``b7e4c9a2d518`` regroups it.
+
 Revision ID: d3f8a1c6e92b
 Revises: a5d9c3e7b1f2
 Create Date: 2026-10-26

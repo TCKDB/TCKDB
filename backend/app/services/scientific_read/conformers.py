@@ -665,6 +665,11 @@ def _build_group_core_block(
         fingerprint=(
             _build_group_fingerprint(cg) if include_fingerprint else None
         ),
+        merged_into_conformer_group_ref=(
+            cg.merged_into.public_ref if cg.merged_into is not None else None
+        ),
+        wide_basin=(None if cg.basin_is_clique is None else not cg.basin_is_clique),
+        basin_span_deg=cg.basin_span_deg,
     )
 
 

@@ -20,7 +20,11 @@ from app.services.calculation_resolution import (
 )
 from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
-from app.services.conformer_resolution import resolve_conformer_group
+from app.services.conformer_resolution import (
+    is_defining_primary,
+    resolve_conformer_group,
+    settle_conformer_basin,
+)
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -179,6 +183,7 @@ def persist_conformer_upload(
         created_by=created_by,
         smiles=smiles,
         xyz_atoms=parsed.atoms,
+        defining=is_defining_primary(request.calculation),
     )
     observation = ConformerObservation(
         conformer_group_id=conformer_group.id,
@@ -190,6 +195,7 @@ def persist_conformer_upload(
     )
     session.add(observation)
     session.flush()
+    settle_conformer_basin(session, observation, fingerprint, smiles=smiles)
 
     # Anchor ALL calculations (primary + additional) to this conformer
     # observation so the structure context is unambiguous.

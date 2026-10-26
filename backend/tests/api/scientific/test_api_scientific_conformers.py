@@ -179,6 +179,28 @@ def test_cg_detail_default_response_shape(client, db_session):
     assert "review_history" not in record
 
 
+def test_cg_detail_reports_where_a_merged_group_went_and_whether_a_basin_is_wide(client, db_session):
+    """A group a merge emptied names the group that took its members; a basin carries its clique flag and span."""
+    _, entry = _make_species_entry(db_session)
+    survivor = make_conformer_group(db_session, entry, label="conformer_1")
+    emptied = make_conformer_group(db_session, entry, label="conformer_2")
+    survivor.basin_is_clique = False
+    survivor.basin_span_deg = 36.0
+    emptied.merged_into_conformer_group_id = survivor.id
+    db_session.flush()
+
+    wide = client.get(_cg_url(survivor.public_ref)).json()["record"]["conformer_group"]
+    assert (wide["wide_basin"], wide["basin_span_deg"], wide["merged_into_conformer_group_ref"]) == (True, 36.0, None)
+    gone = client.get(_cg_url(emptied.public_ref)).json()["record"]["conformer_group"]
+    assert gone["merged_into_conformer_group_ref"] == survivor.public_ref
+    assert (gone["wide_basin"], gone["basin_span_deg"]) == (None, None)
+
+    survivor.basin_is_clique = True
+    db_session.flush()
+    tight = client.get(_cg_url(survivor.public_ref)).json()["record"]["conformer_group"]
+    assert tight["wide_basin"] is False
+
+
 def test_cg_detail_review_badge_present(client, db_session):
     _, cg, _ = _make_group_with_obs(db_session)
     body = client.get(_cg_url(cg.public_ref)).json()

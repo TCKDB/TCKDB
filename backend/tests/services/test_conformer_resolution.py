@@ -68,6 +68,7 @@ def test_resolve_conformer_group_takes_advisory_xact_lock(db_conn) -> None:
                     label="conf-b",
                     smiles="[H]",
                     xyz_atoms=(("H", 0.0, 0.0, 0.0),),
+                    defining=True,
                 )
             finally:
                 event.remove(session.bind, "before_cursor_execute", _capture)

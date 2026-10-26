@@ -98,7 +98,11 @@ from app.services.charge_multiplicity_extraction import (
 )
 from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
-from app.services.conformer_resolution import resolve_conformer_group
+from app.services.conformer_resolution import (
+    is_defining_primary,
+    resolve_conformer_group,
+    settle_conformer_basin,
+)
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -362,6 +366,7 @@ def persist_computed_species_upload(
             created_by=created_by,
             smiles=request.species_entry.smiles,
             xyz_atoms=parsed.atoms,
+            defining=is_defining_primary(conf_in.primary_calculation),
         )
         observation = ConformerObservation(
             conformer_group_id=conformer_group.id,
@@ -375,6 +380,7 @@ def persist_computed_species_upload(
         )
         session.add(observation)
         session.flush()
+        settle_conformer_basin(session, observation, fingerprint, smiles=request.species_entry.smiles)
 
         # Step 4: primary opt + additionals. We replicate the
         # /uploads/conformers anchor-and-link logic here because the
@@ -574,8 +580,11 @@ def persist_computed_species_upload(
     }
     # The same total namespace, to each conformer's group: a thermo target
     # that names a conformer by key resolves to the group it was assigned to.
+    # Read off the observation, not the group captured when it was filed: a later
+    # conformer of this bundle can link two basins and merge the younger into the
+    # older, and the observation is where the survivor shows.
     conformer_keys_to_group_id: dict[str, int] = {
-        outcome.conformer_in_bundle.key: outcome.group_id
+        outcome.conformer_in_bundle.key: outcome.observation.conformer_group_id
         for outcome in conformer_outcomes
     }
     calc_keys_to_id: dict[str, Calculation] = {}

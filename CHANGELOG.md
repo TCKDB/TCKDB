@@ -33,6 +33,35 @@ dataset must never require a code release.
   frontend. Pre-release; no compatibility shim. The cost guard is unchanged: only the routes that bound their page compare inputs.
 - No schema or migration impact. No rubric pin changed.
 
+## Conformer basins are connected components (2026-10-26)
+
+Closes #812. A conformer basin no longer depends on the order its structures were uploaded in.
+
+- **The defect.** A basin was matched against one stored reference, the first structure deposited into it. Three n-butane structures 18 degrees
+  apart (0, 18, 36 against a 20 degree tolerance) made three different partitions from the six orders they can arrive in, and a recompute rebuilt
+  the reference from the first member, so it reproduced the defect. Any calculation type could also create or extend a basin, so a scan point
+  could bridge two minima, and trans and gauche ethylamine (one shared N-H position) shared a basin.
+- **`torsion_basin` version 3.** A basin is a connected component of the species entry's *defining* observations (an `opt` or `composite`
+  primary with a final geometry, not stated as unconverged), two linked when the unchanged `symmetry_existence` rule (20 / 30 degrees) says they share a
+  basin, evaluated both ways round so the symmetry cap cannot make linkage order-dependent. A single point, scan point or partial optimisation is
+  filed into a basin but never links two. A new defining structure matching groups in several basins joins the oldest and the younger groups are
+  merged into it (the emptied row is kept, with `merged_into_conformer_group_id`, and both reviews reset to `not_reviewed`).
+- **The two hydrogens of an `-NH2` or radical `-CH2` top are compared as a pair** under one assignment, so a planar top still matches its swapped
+  form and a pyramidal one no longer matches a structure that shares only one N-H.
+- **The representative is the medoid**, derived from the members (smallest summed best-mapping torsion distance, ties to the lowest observation
+  id) and stored for reads; it is not what an upload is matched against and no energy enters anywhere. A basin whose members are not all within
+  tolerance of each other (a chain) is a *wide basin*: stored (`basin_is_clique = false`, `basin_span_deg`), shown on the conformer-group read as
+  `wide_basin` and `basin_span_deg`, never split automatically.
+- **A merge that touches approved records is owed, not made.** The API role cannot declare a repair, so the bridging observation joins the oldest
+  group and a `conformer_group_merge_pending` row records the merge; the owner-role reassignment completes it through `accepted_science_repair`
+  (`reassign_conformer_groups` over `entries_with_pending_merges`).
+- **Schema (revision `b7e4c9a2d518`).** Nullable `conformer_group.representative_observation_id`, `merged_into_conformer_group_id`,
+  `basin_is_clique`, `basin_span_deg`; nullable `conformer_observation.mapped_coords_json`; the table `conformer_group_merge_pending`; the version 3
+  scheme row as the default; and a data step that recomputes every entry through the existing declared-repair machinery (dependents follow their own
+  calculation's observation, `content_hash` recomputed, no group deleted). Idempotent. The downgrade makes version 2 the default again and drops what the
+  revision added; it cannot un-merge. The conformer-group read gains `merged_into_conformer_group_ref`, `wide_basin` and `basin_span_deg` (OpenAPI
+  golden regenerated).
+
 ## The client defaults the enthalpy reference declaration (2026-10-26)
 
 - **`tckdb-client` 0.172.0.** The thermo builders (`Thermo.scalar`, `Thermo.nasa`, `Thermo.points`) set `enthalpy_reference_kind="formation_298k"` when the
