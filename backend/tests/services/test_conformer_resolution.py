@@ -151,3 +151,33 @@ def test_recomputing_what_the_upload_path_just_wrote_changes_nothing(db_conn) ->
         assert report.observations_unresolved == 0
         assert report.observations_moved == 0 and report.groups_created == 0
         assert report.groups_emptied_kept == 0 and report.groups_review_reset == 0
+
+
+def test_a_single_atom_never_joins_a_group_that_a_merge_emptied(db_conn) -> None:
+    """The fingerprint-less fallback joins "the first group with no fingerprint". An emptied group has none either."""
+    from sqlalchemy import null as sql_null
+
+    from app.db.models.species import ConformerObservation
+    from tests.services.scientific_read._factories import (
+        make_conformer_group,
+        make_species,
+        make_species_entry,
+        next_inchi_key,
+    )
+
+    with Session(db_conn) as session, session.begin():
+        species = make_species(session, smiles="[H]", inchi_key=next_inchi_key("FALLB"), multiplicity=2)
+        entry = make_species_entry(session, species)
+        emptied = make_conformer_group(session, entry, label="conformer_1")  # the lower id
+        live = make_conformer_group(session, entry, label="conformer_2")
+        session.add(ConformerObservation(conformer_group_id=live.id))
+        emptied.merged_into_conformer_group_id = live.id
+        for g in (emptied, live):
+            g.representative_fingerprint_json = sql_null()  # neither has a fingerprint: only the merge tells them apart
+        session.flush()
+        assert emptied.id < live.id
+        group, fingerprint, _scheme = resolve_conformer_group(
+            session, entry, label=None, smiles=None, xyz_atoms=None, defining=True
+        )
+        assert fingerprint is None  # no structure to fingerprint: the fallback applies
+        assert group.id == live.id

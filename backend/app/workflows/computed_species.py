@@ -100,7 +100,7 @@ from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.conformer_resolution import (
     current_conformer_group_targets,
-    is_defining_primary,
+    primary_structure,
     resolve_conformer_group,
     settle_conformer_basin,
 )
@@ -359,7 +359,8 @@ def persist_computed_species_upload(
     for conf_in in request.conformers:
         geometry = resolve_geometry_payload(session, conf_in.geometry)
 
-        parsed = parse_xyz(GeometryPayload(xyz_text=conf_in.geometry.xyz_text))
+        structure = primary_structure(conf_in.primary_calculation, conf_in.geometry.xyz_text)
+        parsed = parse_xyz(GeometryPayload(xyz_text=structure.xyz_text))
         conformer_group, fingerprint, scheme = resolve_conformer_group(
             session,
             species_entry,
@@ -367,7 +368,7 @@ def persist_computed_species_upload(
             created_by=created_by,
             smiles=request.species_entry.smiles,
             xyz_atoms=parsed.atoms,
-            defining=is_defining_primary(conf_in.primary_calculation),
+            defining=structure.defining,
         )
         observation = ConformerObservation(
             conformer_group_id=conformer_group.id,

@@ -1348,6 +1348,7 @@ class ThermoSelectionResponse(TypedDict):
     """
 
     request: JSONDict
+    forwarded_from_conformer_group_ref: str | None
     review: JSONDict
     policy: JSONDict
     outcome: ThermoSelectionOutcomeToken
@@ -2329,6 +2330,7 @@ class StatmechSelectionResponse(TypedDict):
     """
 
     request: JSONDict
+    forwarded_from_conformer_group_ref: str | None
     review: JSONDict
     versions: JSONDict
     outcome: StatmechSelectionOutcomeToken

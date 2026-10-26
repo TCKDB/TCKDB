@@ -1596,13 +1596,13 @@ the gap.
 
 **Role:** role not stated on the model
 
-**Purpose:** A merge of two conformer groups that a live upload decided on but could not carry out.
+**Purpose:** Work a live upload decided on but could not carry out, in two kinds.
 
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
 | `id` | BIGINT | no | — | — | — | not documented |
 | `species_entry_id` | BIGINT | no | — | species_entry.id | — | not documented |
-| `kept_conformer_group_id` | BIGINT | no | — | conformer_group.id | — | not documented |
+| `kept_conformer_group_id` | BIGINT | yes | — | conformer_group.id | — | not documented |
 | `absorbed_conformer_group_id` | BIGINT | no | — | conformer_group.id | — | not documented |
 | `conformer_observation_id` | BIGINT | no | — | conformer_observation.id | — | not documented |
 | `reason` | TEXT | no | — | — | — | not documented |
@@ -1612,7 +1612,7 @@ the gap.
 
 **Check constraints:**
 
-- `ck_conformer_group_merge_pending_kept_differs_from_absorbed`: `kept_conformer_group_id <> absorbed_conformer_group_id`
+- `ck_conformer_group_merge_pending_kept_differs_from_absorbed`: `kept_conformer_group_id IS NULL OR kept_conformer_group_id <> absorbed_conformer_group_id`
 
 ### `dataset_release`
 

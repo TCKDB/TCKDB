@@ -34,7 +34,7 @@ from app.schemas.reads.scientific_statmech_selection import (
 )
 from app.services.scientific_read.profile import stamp_read_profile
 from app.services.scientific_read.ref_guard import attach_review_statuses
-from app.services.statmech_selection.public import build_response, run_selection
+from app.services.statmech_selection.public import build_response, forward_emptied_basin, run_selection
 
 router = APIRouter(prefix="/statmech")
 
@@ -79,8 +79,10 @@ def select_statmech_models(
     candidate).
     """
     _refuse_unknown_query_keys(request)
+    body, forwarded_from = forward_emptied_basin(session, body)
     selection = run_selection(session, body=body)
     payload = build_response(selection)
+    payload.forwarded_from_conformer_group_ref = forwarded_from
     stamp_read_profile(payload)
     attach_review_statuses(payload)
     return payload
@@ -98,6 +100,7 @@ def select_statmech_models_manifest(
 ) -> JSONResponse:
     """The same request, answered with the decision manifest as a download (a new snapshot, not a saved decision)."""
     _refuse_unknown_query_keys(request)
+    body, _forwarded_from = forward_emptied_basin(session, body)
     selection = run_selection(session, body=body)
     target_ref = selection.manifest["subject"]["entry_ref"]
     return JSONResponse(

@@ -1006,8 +1006,9 @@ def test_an_approved_non_defining_observation_that_must_move_is_owed_not_moved(d
     session.expire_all()
     assert session.get(ConformerObservation, sp).conformer_group_id == sp_group, "an approved row is not moved live"
     owed = session.scalars(select(ConformerGroupMergePending)).all()
+    # a re-file owed names no target group (there may be none yet, and the target can change before the owner runs)
     assert [(p.kept_conformer_group_id, p.absorbed_conformer_group_id, p.conformer_observation_id) for p in owed] == [
-        (opt_group, sp_group, sp)
+        (None, sp_group, sp)
     ]
     assert entries_with_pending_merges(session) == [entry_id]
 
@@ -1017,3 +1018,97 @@ def test_an_approved_non_defining_observation_that_must_move_is_owed_not_moved(d
     assert entries_with_pending_merges(session) == []
     again = reassign_conformer_groups(session, repair_revision=_REVISION, species_entry_ids=[entry_id])
     assert again.entries_changed == 0
+
+
+# ---------------------------------------------------------------------------
+# A re-file that is owed creates no group and is recorded once
+# ---------------------------------------------------------------------------
+
+
+def _empty_live_groups(session, entry_id: int) -> list[int]:
+    """Groups of the entry with no observation that are not recorded as merged away: rows nothing can ever fill."""
+    session.expire_all()
+    return [
+        g.id
+        for g in session.scalars(select(ConformerGroup).where(ConformerGroup.species_entry_id == entry_id))
+        if g.merged_into_conformer_group_id is None
+        and not session.scalars(select(ConformerObservation.id).where(ConformerObservation.conformer_group_id == g.id)).first()
+    ]
+
+
+def _open_refiles(session) -> list[ConformerGroupMergePending]:
+    session.expire_all()
+    return list(
+        session.scalars(
+            select(ConformerGroupMergePending).where(
+                ConformerGroupMergePending.kept_conformer_group_id.is_(None),
+                ConformerGroupMergePending.completed_at.is_(None),
+            )
+        )
+    )
+
+
+def _owed_refile_scenario(session, *, blocker: str):
+    """opt 0 and sp 18 share a group; opt -15 and opt -30 move the medoid to -15, which the sp (33 degrees away) no
+    longer matches, so it belongs in a basin of its own. ``blocker`` says why this role may not move it."""
+    from app.db.models.calculation import Calculation
+    from tests.services.test_conformer_basin_linkage import _BUTANE, butane, deposit_observations
+
+    first = deposit_observations(session, _BUTANE, [butane("opt0", 0.0), butane("sp18", 18.0, "sp")])
+    sp = first["sp18"]
+    group = session.get(ConformerObservation, sp).conformer_group_id
+    entry = session.get(ConformerGroup, group).species_entry
+    if blocker == "approved":
+        _approve(session, SubmissionRecordType.conformer_observation, sp)
+    elif blocker == "evidence_of_a_thermo_target":
+        calc = session.scalars(select(Calculation).where(Calculation.conformer_observation_id == sp)).first()
+        _target_thermo(session, entry, session.get(ConformerGroup, group), [calc])
+    elif blocker == "none_but_a_thermo_on_the_group":
+        calc = session.scalars(
+            select(Calculation).where(Calculation.conformer_observation_id == first["opt0"])
+        ).first()
+        _target_thermo(session, entry, session.get(ConformerGroup, group), [calc])
+    session.flush()
+    return entry.id, sp, group, _BUTANE, butane, deposit_observations
+
+
+@pytest.mark.parametrize("blocker", ["approved", "evidence_of_a_thermo_target"])
+def test_an_owed_re_file_creates_no_group_and_is_recorded_once(db_session, blocker: str) -> None:
+    from app.services.conformer_basin_store import entries_with_pending_merges
+
+    session = db_session
+    entry_id, sp, group, smiles, butane, deposit = _owed_refile_scenario(session, blocker=blocker)
+    for degrees in (-15.0, -30.0, 120.0, 240.0):
+        deposit(session, smiles, [butane(f"opt{degrees}", degrees)])
+        assert _empty_live_groups(session, entry_id) == [], f"after opt {degrees}"
+        assert session.get(ConformerObservation, sp).conformer_group_id == group, "this role may not move it"
+        owed = _open_refiles(session)
+        assert len(owed) <= 1
+        if degrees <= -30.0:
+            assert [(p.conformer_observation_id, p.absorbed_conformer_group_id) for p in owed] == [(sp, group)]
+    assert entries_with_pending_merges(session) == [entry_id]
+
+    reassign_conformer_groups(session, repair_revision=_REVISION, species_entry_ids=[entry_id])
+    session.expire_all()
+    sp_group = session.get(ConformerObservation, sp).conformer_group_id
+    assert sp_group != group
+    assert [o.id for o in session.scalars(select(ConformerObservation).where(ConformerObservation.conformer_group_id == sp_group))] == [sp]
+    assert _empty_live_groups(session, entry_id) == []
+    assert _open_refiles(session) == [] and entries_with_pending_merges(session) == []
+    again = reassign_conformer_groups(session, repair_revision=_REVISION, species_entry_ids=[entry_id])
+    assert again.entries_changed == 0, again.summary()
+
+
+def test_a_thermo_on_the_group_is_not_by_itself_a_reason_to_owe_the_move(db_session) -> None:
+    """Moving an observation writes neither thermo nor statmech rows: a thermo whose evidence is another structure is
+    untouched by the move, so the sp is moved live and nothing is owed."""
+    session = db_session
+    entry_id, sp, group, smiles, butane, deposit = _owed_refile_scenario(session, blocker="none_but_a_thermo_on_the_group")
+    for degrees in (-15.0, -30.0):
+        deposit(session, smiles, [butane(f"opt{degrees}", degrees)])
+    session.expire_all()
+    assert session.get(ConformerObservation, sp).conformer_group_id != group
+    assert _open_refiles(session) == []
+    assert _empty_live_groups(session, entry_id) == []
+    again = reassign_conformer_groups(session, repair_revision=_REVISION, species_entry_ids=[entry_id])
+    assert again.entries_changed == 0, again.summary()

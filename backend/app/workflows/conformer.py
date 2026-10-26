@@ -22,7 +22,7 @@ from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.conformer_resolution import (
     current_conformer_group_targets,
-    is_defining_primary,
+    primary_structure,
     resolve_conformer_group,
     settle_conformer_basin,
 )
@@ -174,7 +174,8 @@ def persist_conformer_upload(
         )
 
     # Parse XYZ for torsion fingerprinting
-    parsed = parse_xyz(GeometryPayload(xyz_text=request.geometry.xyz_text))
+    structure = primary_structure(request.calculation, request.geometry.xyz_text)
+    parsed = parse_xyz(GeometryPayload(xyz_text=structure.xyz_text))
     smiles = request.species_entry.smiles
 
     conformer_group, fingerprint, scheme = resolve_conformer_group(
@@ -184,7 +185,7 @@ def persist_conformer_upload(
         created_by=created_by,
         smiles=smiles,
         xyz_atoms=parsed.atoms,
-        defining=is_defining_primary(request.calculation),
+        defining=structure.defining,
     )
     observation = ConformerObservation(
         conformer_group_id=conformer_group.id,

@@ -86,7 +86,7 @@ from app.services.conformer_anchoring import (
 )
 from app.services.conformer_resolution import (
     current_conformer_group_targets,
-    is_defining_primary,
+    primary_structure,
     resolve_conformer_group,
     settle_conformer_basin,
 )
@@ -491,7 +491,8 @@ def persist_network_pdep_upload(
             )
 
             # Create conformer group + observation (with torsion matching)
-            parsed = parse_xyz(GeometryPayload(xyz_text=conf.geometry.xyz_text))
+            structure = primary_structure(conf.calculation, conf.geometry.xyz_text)
+            parsed = parse_xyz(GeometryPayload(xyz_text=structure.xyz_text))
             conformer_group, fingerprint, scheme = resolve_conformer_group(
                 session,
                 species_entry,
@@ -499,7 +500,7 @@ def persist_network_pdep_upload(
                 created_by=created_by,
                 smiles=sp.species_entry.smiles,
                 xyz_atoms=parsed.atoms,
-                defining=is_defining_primary(conf.calculation),
+                defining=structure.defining,
             )
             observation = ConformerObservation(
                 conformer_group_id=conformer_group.id,

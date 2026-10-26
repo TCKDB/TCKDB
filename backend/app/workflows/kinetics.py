@@ -623,6 +623,9 @@ def resolve_interpretation_assignments(
                 .where(
                     ConformerGroup.species_entry_id == selection_species_entry.id,
                     ConformerSelection.selection_kind == locator.selection_kind,
+                    # a group a merge emptied is not a candidate: its members, and the selection that matters, live
+                    # in the group that took them (a ref that names it is forwarded above)
+                    ConformerGroup.merged_into_conformer_group_id.is_(None),
                 )
                 # Label first so the values the refusal prints come out in
                 # an order a human can scan, and ``public_ref`` after it so

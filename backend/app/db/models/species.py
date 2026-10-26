@@ -375,7 +375,16 @@ class ConformerObservation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
 
 
 class ConformerGroupMergePending(Base, TimestampMixin):
-    """A merge of two conformer groups that a live upload decided on but could not carry out.
+    """Work a live upload decided on but could not carry out, in two kinds.
+
+    **A merge owed** (``kept_conformer_group_id`` set): two conformer groups the upload linked, whose younger one
+    cannot be emptied by this role.
+
+    **A re-file owed** (``kept_conformer_group_id`` NULL): a structure that defines no basin and now belongs in a basin
+    other than the group it sits in, which this role may not move (it was approved, or a thermo/statmech record cites
+    it as evidence). There is no target group yet, and none is created until the owner role completes the re-file.
+
+    The merge, in detail:
 
     An upload that links two groups (a structure within tolerance of a defining member of each) merges the younger
     into the older. When approved records point at the younger group -- an approved observation, thermo target,
@@ -394,8 +403,10 @@ class ConformerGroupMergePending(Base, TimestampMixin):
         ForeignKey("species_entry.id", deferrable=True, initially="IMMEDIATE"),
         nullable=False,
     )
-    #: The older group, which keeps its row.
-    kept_conformer_group_id: Mapped[int] = mapped_column(
+    #: The older group, which keeps its row. ``NULL`` for the other kind of owed work: an observation that must be
+    #: re-filed into a basin that has no group yet (``absorbed_conformer_group_id`` is then the group it sits in now,
+    #: and the owner-role reassignment creates the target row when it completes the re-file).
+    kept_conformer_group_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(
             "conformer_group.id",
@@ -403,7 +414,7 @@ class ConformerGroupMergePending(Base, TimestampMixin):
             initially="IMMEDIATE",
             name="fk_conformer_group_merge_pending_kept_group",
         ),
-        nullable=False,
+        nullable=True,
     )
     #: The younger group, to be emptied (and kept, with ``merged_into_conformer_group_id`` set).
     absorbed_conformer_group_id: Mapped[int] = mapped_column(
@@ -433,13 +444,21 @@ class ConformerGroupMergePending(Base, TimestampMixin):
 
     __table_args__ = (
         CheckConstraint(
-            "kept_conformer_group_id <> absorbed_conformer_group_id", name="kept_differs_from_absorbed"
+            "kept_conformer_group_id IS NULL OR kept_conformer_group_id <> absorbed_conformer_group_id",
+            name="kept_differs_from_absorbed",
         ),
         UniqueConstraint(
             "kept_conformer_group_id",
             "absorbed_conformer_group_id",
             "conformer_observation_id",
             name="uq_conformer_group_merge_pending_merge",
+        ),
+        # One OPEN re-file per observation, however many uploads follow; a later upload updates it.
+        Index(
+            "uq_conformer_group_merge_pending_open_refile",
+            "conformer_observation_id",
+            unique=True,
+            postgresql_where="kept_conformer_group_id IS NULL AND completed_at IS NULL",
         ),
         Index(
             "ix_conformer_group_merge_pending_open",

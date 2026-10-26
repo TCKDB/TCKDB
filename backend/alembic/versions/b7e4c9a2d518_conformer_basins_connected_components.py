@@ -32,10 +32,13 @@ Nullable columns only, so every existing row stays valid:
   resolves forward), ``basin_is_clique``, ``basin_span_deg``;
 * ``conformer_observation.mapped_coords_json`` (the structure in the species' canonical atom order, so an upload does
   not re-read ``geometry_atom`` for every member). Filled by the data step below;
-* the table ``conformer_group_merge_pending``: a merge that a live upload decided on but could not make because
-  approved records point at the younger group, which only a declared repair may move and only an owner role may
-  declare. The upload files its observation under the older group and writes a row here; the data step (or
-  ``reassign_conformer_groups`` over the entries listed) completes it and stamps ``completed_at``.
+* the table ``conformer_group_merge_pending``: work a live upload decided on but could not carry out, of two kinds. A
+  MERGE owed (``kept_conformer_group_id`` set): approved or frozen records point at the younger group, which only a
+  declared repair may move and only an owner role may declare; the upload files its observation under the older group.
+  A RE-FILE owed (``kept_conformer_group_id`` NULL): a structure that defines no basin must move to a basin that has no
+  group yet and this role may not move it; no group is created until the owner role completes it, and one open row
+  per observation is kept however many uploads follow. The data step (or ``reassign_conformer_groups`` over the
+  entries listed) completes both and stamps ``completed_at``.
 
 The data step
 -------------
@@ -166,7 +169,7 @@ def upgrade() -> None:
         "conformer_group_merge_pending",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("species_entry_id", sa.BigInteger(), nullable=False),
-        sa.Column("kept_conformer_group_id", sa.BigInteger(), nullable=False),
+        sa.Column("kept_conformer_group_id", sa.BigInteger(), nullable=True),
         sa.Column("absorbed_conformer_group_id", sa.BigInteger(), nullable=False),
         sa.Column("conformer_observation_id", sa.BigInteger(), nullable=False),
         sa.Column("reason", sa.Text(), nullable=False),
@@ -174,7 +177,7 @@ def upgrade() -> None:
         sa.Column("completed_by_revision", sa.String(length=64), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=False), server_default=sa.text("now()"), nullable=False),
         sa.CheckConstraint(
-            "kept_conformer_group_id <> absorbed_conformer_group_id",
+            "kept_conformer_group_id IS NULL OR kept_conformer_group_id <> absorbed_conformer_group_id",
             name=op.f("ck_conformer_group_merge_pending_kept_differs_from_absorbed"),
         ),
         sa.ForeignKeyConstraint(
@@ -212,6 +215,13 @@ def upgrade() -> None:
             "conformer_observation_id",
             name="uq_conformer_group_merge_pending_merge",
         ),
+    )
+    op.create_index(
+        "uq_conformer_group_merge_pending_open_refile",
+        "conformer_group_merge_pending",
+        ["conformer_observation_id"],
+        unique=True,
+        postgresql_where=sa.text("kept_conformer_group_id IS NULL AND completed_at IS NULL"),
     )
     op.create_index(
         "ix_conformer_group_merge_pending_open",
@@ -260,6 +270,7 @@ def downgrade() -> None:
         sa.text("UPDATE conformer_assignment_scheme SET is_default = true WHERE name = :name AND version = 2"),
         {"name": _NAME},
     )
+    op.drop_index("uq_conformer_group_merge_pending_open_refile", table_name="conformer_group_merge_pending")
     op.drop_index("ix_conformer_group_merge_pending_open", table_name="conformer_group_merge_pending")
     op.drop_table("conformer_group_merge_pending")
     op.drop_column("conformer_observation", "mapped_coords_json")

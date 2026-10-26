@@ -57,6 +57,8 @@ class Structure:
     #: When set, the upload declares this one output geometry (the structure itself) with this role, instead of
     #: leaving the output to the default (the conformer geometry, as the final output of an optimisation).
     output_role: str | None = None
+    #: When set, the declared output geometry is THIS structure rather than the conformer geometry itself.
+    output_atoms: tuple | None = None
 
 
 def butane(
@@ -84,9 +86,9 @@ def upload_request(smiles: str, structure: Structure) -> ConformerUploadRequest:
     if structure.converged is not None:
         calculation["opt_result"] = {"converged": structure.converged}
     if structure.output_role is not None:
-        calculation["output_geometries"] = [
-            {"geometry": {"xyz_text": "\n".join(lines)}, "role": structure.output_role}
-        ]
+        out = structure.output_atoms or atoms
+        out_lines = [str(len(out)), structure.name] + [f"{s} {x:.6f} {y:.6f} {z:.6f}" for s, x, y, z in out]
+        calculation["output_geometries"] = [{"geometry": {"xyz_text": "\n".join(out_lines)}, "role": structure.output_role}]
     return ConformerUploadRequest(
         species_entry={"smiles": smiles, "charge": 0, "multiplicity": 1},
         geometry={"xyz_text": "\n".join(lines)},
@@ -784,3 +786,26 @@ def test_a_new_member_is_added_to_a_stored_shape_in_linear_comparisons_and_equal
                 assert stored[key] == pytest.approx(value, abs=1e-6)
         finally:
             session.rollback()
+
+
+def test_the_basin_is_decided_on_the_declared_final_output_not_on_the_conformer_geometry(db_conn) -> None:
+    """An optimisation that declares a final output different from the conformer geometry: the recompute reads the
+    output back, so the upload must file the structure by the output too (one shared choice of geometry)."""
+    from dataclasses import replace
+
+    far = butane("conformer_geometry_at_0", 0.0)
+    declared = replace(
+        far, name="declared_final_at_100", output_role="final", output_atoms=butane("x", 100.0).atoms
+    )
+    twin = butane("plain_at_100", 100.0)
+    for order in ([declared, twin], [twin, declared]):
+        with Session(db_conn) as session:
+            session.begin()
+            try:
+                groups = deposit(session, _BUTANE, order)
+                assert groups["declared_final_at_100"] == groups["plain_at_100"], "filed by the conformer geometry"
+                entry_id = session.scalar(select(ConformerGroup.species_entry_id))
+                report = reassign_conformer_groups(session, repair_revision="test-geometry", species_entry_ids=[entry_id])
+                assert _is_a_no_op(report), report.summary()
+            finally:
+                session.rollback()

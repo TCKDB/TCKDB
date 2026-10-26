@@ -67,6 +67,15 @@ Closes #812. A conformer basin no longer depends on the order its structures wer
   is forwarded to the group that took its members. (8) The conformer-group read gains `merge_pending` (the target group's ref and the reason).
   (9) A wide basin is reported through the Phase D advisory mechanism: `--check wide-basin` on a `cg_` ref (rubric `wide_basin_consistency`,
   one append-only `record_machine_review` row, no effect on status or trust).
+- **Second review round.** (1) An owed re-file no longer creates a conformer group: the decision to move is taken before any row is made, and a
+  re-file owed is one open `conformer_group_merge_pending` row per observation (`kept_conformer_group_id` NULL, updated in place by later uploads,
+  closed when no longer needed); the owner job creates the target basin's row when it completes it. The read keeps the two kinds of owed work apart
+  (`merge_pending` has a target group; `refile_pending` has none). (2) A move is owed only when a write it makes would be refused or would give the next
+  recompute real work (an approved observation; a thermo/statmech record resting on that very observation; the group's representative when the group has
+  dependents), not whenever the group has a dependent. (3) A group a merge emptied is never matched by the fingerprint-less fallback, and the kinetics
+  selection locator by kind skips it. (4) The thermo and statmech select endpoints forward a basin ref that names an emptied group and say so
+  (`forwarded_from_conformer_group_ref`; `tckdb-client` 0.174.0). (5) The basin is decided on the geometry the recompute reads back, by one shared function
+  (`primary_structure`): the first `final` output, else the first input.
 - **Schema (revision `b7e4c9a2d518`).** Nullable `conformer_group.representative_observation_id`, `merged_into_conformer_group_id`,
   `basin_is_clique`, `basin_span_deg`; nullable `conformer_observation.mapped_coords_json`; the table `conformer_group_merge_pending`; the version 3
   scheme row as the default; and a data step that recomputes every entry through the existing declared-repair machinery (dependents follow their own

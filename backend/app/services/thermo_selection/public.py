@@ -58,6 +58,7 @@ from app.schemas.reads.scientific_thermo_selection import (
     ThermoSelectionReview,
     ThermoSelectionTargetEcho,
 )
+from app.services.conformer_group_forwarding import forwarded_group_id
 from app.services.scientific_read.handles import (
     handle_type_mismatch_error,
     is_ref_handle,
@@ -118,7 +119,8 @@ def _admin_policy(policy: ThermoSelectionPolicy) -> SelectionPolicy:
 def run_selection(
     session: Session, *, species_entry_id: int, body: ThermoSelectionRequest
 ) -> tuple[H298Selection, str | None]:
-    """Run the service for a public request. Returns the selection and the conformer-group ref, if any.
+    """Run the service for a public request. Returns the selection and, when the requested basin was forwarded to the
+    group that took its members, the ref that was asked for (otherwise ``None``).
 
     Every policy is administrative: it orders by review status and deposition time exactly as the browse
     endpoints do. The population cap is the service's fixed 500; it is not a request field.
@@ -129,7 +131,15 @@ def run_selection(
     read as it is; that exists for the test harness, which holds one outer transaction that cannot become a
     snapshot, and nothing in the application sets it.
     """
-    group_id = resolve_group_ref(session, body.target.conformer_group_ref) if body.target.conformer_group_ref else None
+    requested_ref = body.target.conformer_group_ref
+    group_id = resolve_group_ref(session, requested_ref) if requested_ref else None
+    # A basin emptied by a merge is forwarded to the group that took its members, the same as for a write; the
+    # response says so (``forwarded_from_conformer_group_ref``) and the decision is made on the survivor.
+    forwarded_from: str | None = None
+    if group_id is not None:
+        survivor = forwarded_group_id(session, group_id)
+        if survivor != group_id:
+            group_id, forwarded_from = survivor, requested_ref
     request = H298Request(
         target_kind=body.target.kind,
         conformer_group_id=group_id,
@@ -157,7 +167,7 @@ def run_selection(
             "nothing was assessed. Narrow the population with min_review_status or the curated profile.",
             context={"limit": MAX_CANDIDATES, "visible_candidates": visible},
         )
-    return selection, body.target.conformer_group_ref
+    return selection, forwarded_from
 
 
 def profile_has_floor() -> bool:

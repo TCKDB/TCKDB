@@ -13671,7 +13671,7 @@
         "type": "object"
       },
       "ConformerGroupCoreBlock": {
-        "description": "Direct conformer-group-row metadata.\n\nCarries the public ref (``cg_…``) plus the curator-facing label /\nnote pair. Of the two JSONB blobs on the row,\n``representative_coords_json`` is intentionally absent — no surface\nneed for it has been requested. ``representative_fingerprint_json``\nis surfaced as ``fingerprint``, populated only under\n``include=fingerprints`` (``None`` otherwise, and ``None`` when the\nrow itself carries no fingerprint blob or an internally inconsistent\none — see ``_build_group_fingerprint``). The fingerprint is the\nbasin's most central member's (its medoid), derived from the members\nand not part of the basin's identity.\n\n``merged_into_conformer_group_ref`` is set on a group a merge emptied:\nits members live in the group it names, so a ``cg_`` ref cited before the\nmerge resolves forward. ``wide_basin`` is ``True`` when the basin's\noptimised members are not all within tolerance of each other (a chain of\nstructures, reported for curation and never split) and ``False`` when\nthey are; ``None`` when the group has no optimised member.\n``basin_span_deg`` is the largest torsion difference between two of\nthem, in degrees. ``merge_pending`` is set while a merge of this group\ninto another is owed (see :class:`ConformerGroupMergePendingBlock`).",
+        "description": "Direct conformer-group-row metadata.\n\nCarries the public ref (``cg_…``) plus the curator-facing label /\nnote pair. Of the two JSONB blobs on the row,\n``representative_coords_json`` is intentionally absent — no surface\nneed for it has been requested. ``representative_fingerprint_json``\nis surfaced as ``fingerprint``, populated only under\n``include=fingerprints`` (``None`` otherwise, and ``None`` when the\nrow itself carries no fingerprint blob or an internally inconsistent\none — see ``_build_group_fingerprint``). The fingerprint is the\nbasin's most central member's (its medoid), derived from the members\nand not part of the basin's identity.\n\n``merged_into_conformer_group_ref`` is set on a group a merge emptied:\nits members live in the group it names, so a ``cg_`` ref cited before the\nmerge resolves forward. ``wide_basin`` is ``True`` when the basin's\noptimised members are not all within tolerance of each other (a chain of\nstructures, reported for curation and never split) and ``False`` when\nthey are; ``None`` when the group has no optimised member.\n``basin_span_deg`` is the largest torsion difference between two of\nthem, in degrees. ``merge_pending`` is set while a merge of this group\ninto another is owed (see :class:`ConformerGroupMergePendingBlock`); ``refile_pending`` is set while structures in it\nowe a re-file into a basin with no group yet (see :class:`ConformerGroupRefilePendingBlock`). The two are different\nwork: the first has a target group, the second does not.",
         "properties": {
           "basin_span_deg": {
             "anyOf": [
@@ -13757,6 +13757,16 @@
               }
             ],
             "title": "Note"
+          },
+          "refile_pending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConformerGroupRefilePendingBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "review": {
             "$ref": "#/components/schemas/RecordReviewBadge"
@@ -14067,6 +14077,25 @@
           "species_entry_id"
         ],
         "title": "ConformerGroupRead",
+        "type": "object"
+      },
+      "ConformerGroupRefilePendingBlock": {
+        "description": "Structures in this group that must be re-filed into another basin, which this role may not do yet.\n\nA structure that defines no basin (a single point, a scan point, a partial optimisation) belongs in the basin whose\nrepresentative it matches, and that moved. The structure was approved, or a record rests on it, so only the owner\nrole may move it. There is no target group to name: the basin it belongs in may not have a group yet, and none is\ncreated until the owner role completes the re-file. Absent once completed.",
+        "properties": {
+          "observation_count": {
+            "title": "Observation Count",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "observation_count",
+          "reason"
+        ],
+        "title": "ConformerGroupRefilePendingBlock",
         "type": "object"
       },
       "ConformerGroupSummaryRead": {
@@ -57388,6 +57417,18 @@
             "$ref": "#/components/schemas/SelectionFilterAnswer",
             "description": "Step 1: the filters as normalised, and how many candidates they removed."
           },
+          "forwarded_from_conformer_group_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the requested basin's conformer group had been merged into another: the ref that was asked for. The decision was made on the group that took its members, which is the one the request echoes.",
+            "title": "Forwarded From Conformer Group Ref"
+          },
           "fronts": {
             "description": "The qualified models that tie, in display order: one front, or none when nothing is listed. Its order is not a preference.",
             "items": {
@@ -65691,6 +65732,18 @@
           "filters": {
             "$ref": "#/components/schemas/SelectionFilterAnswer",
             "description": "Step 1: the filters as normalised, and how many candidates they removed."
+          },
+          "forwarded_from_conformer_group_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the requested conformer group had been merged into another: the ref that was asked for. The decision was made on the group that took its members, which is the one the request echoes.",
+            "title": "Forwarded From Conformer Group Ref"
           },
           "fronts": {
             "description": "The eligible records that tie, in display order. With no ranking between methods there is exactly one front (none when nothing is eligible); its order is not a preference.",

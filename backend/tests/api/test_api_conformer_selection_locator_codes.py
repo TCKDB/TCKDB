@@ -517,3 +517,26 @@ def test_a_locator_citing_a_group_a_merge_emptied_resolves_the_group_that_took_i
         )
     )
     assert stored == selection.id
+
+
+def test_a_locator_by_kind_does_not_find_a_selection_left_on_an_emptied_group(client, db_session) -> None:
+    """A selection that would have collided stays on the group a merge emptied. The kind-only locator must not count it
+    as a second candidate: the survivor's selection is the one."""
+    entries, statmechs = _seed_participants(db_session)
+    survivor = make_conformer_group(db_session, entries["ch3"], label="conformer_1")
+    emptied = make_conformer_group(db_session, entries["ch3"], label="conformer_2")
+    emptied.merged_into_conformer_group_id = survivor.id
+    chosen = attach_conformer_selection(db_session, conformer_group=survivor)
+    attach_conformer_selection(db_session, conformer_group=emptied)
+    db_session.flush()
+
+    resp = client.post(_KINETICS, json=_payload(statmechs))
+
+    assert resp.status_code == 201, resp.text[:800]
+    stored = db_session.scalar(
+        select(KineticsInterpretationAssignment.conformer_selection_id).where(
+            KineticsInterpretationAssignment.kinetics_id == resp.json()["id"],
+            KineticsInterpretationAssignment.subject_key == "reactant:1",
+        )
+    )
+    assert stored == chosen.id

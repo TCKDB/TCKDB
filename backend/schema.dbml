@@ -1955,7 +1955,7 @@ Table conformer_group {
 Table conformer_group_merge_pending {
   id bigint [pk, not null]
   species_entry_id bigint [not null, ref: > species_entry.id]
-  kept_conformer_group_id bigint [not null, ref: > conformer_group.id]
+  kept_conformer_group_id bigint [ref: > conformer_group.id]
   absorbed_conformer_group_id bigint [not null, ref: > conformer_group.id]
   conformer_observation_id bigint [not null, ref: > conformer_observation.id]
   reason text [not null]
@@ -1965,14 +1965,15 @@ Table conformer_group_merge_pending {
 
   indexes {
     species_entry_id [name: 'ix_conformer_group_merge_pending_open']
+    conformer_observation_id [unique, name: 'uq_conformer_group_merge_pending_open_refile']
     (kept_conformer_group_id, absorbed_conformer_group_id, conformer_observation_id) [unique, name: 'uq_conformer_group_merge_pending_merge']
   }
 
   checks {
-    `kept_conformer_group_id <> absorbed_conformer_group_id` [name: 'ck_conformer_group_merge_pending_kept_differs_from_absorbed']
+    `kept_conformer_group_id IS NULL OR kept_conformer_group_id <> absorbed_conformer_group_id` [name: 'ck_conformer_group_merge_pending_kept_differs_from_absorbed']
   }
 
-  Note: 'A merge of two conformer groups that a live upload decided on but could not carry out.'
+  Note: 'Work a live upload decided on but could not carry out, in two kinds.'
 }
 
 Table conformer_observation {

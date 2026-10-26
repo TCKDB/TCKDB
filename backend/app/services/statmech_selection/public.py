@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tckdb_schemas.fragments.version import VersionRef
 
@@ -52,6 +53,7 @@ from app.schemas.reads.scientific_statmech_selection import (
     StatmechSelectionReview,
     StatmechSelectionSelection,
 )
+from app.services.conformer_group_forwarding import forwarded_group_id
 from app.services.scientific_read.common import fetch_review_badges
 from app.services.selection_kernel.requested import answer_steps
 from app.services.statmech_selection.loader import _statuses as statuses_for
@@ -172,6 +174,29 @@ def check_request_refs(
             session, field=field, kind_label="statmech_model_declaration", ref=ref,
             owner=_owner_of(host), target=target, statmech_id=host.id if host is not None else None, profile=profile,
         )
+
+
+def forward_emptied_basin(session: Session, body: StatmechSelectionRequest) -> tuple[StatmechSelectionRequest, str | None]:
+    """A basin scope that names a conformer group a merge emptied is forwarded to the group that took its members.
+
+    Returns the request to run and, when it was forwarded, the ref that was asked for (otherwise ``None``). A ref that
+    names nothing is left alone: the checks that follow answer it as they always did.
+    """
+    scope = body.target.scope
+    ref = getattr(scope, "conformer_group_ref", None)
+    if ref is None:
+        return body, None
+    group = session.scalar(select(ConformerGroup).where(ConformerGroup.public_ref == ref))
+    if group is None:
+        return body, None
+    survivor_id = forwarded_group_id(session, group.id)
+    if survivor_id == group.id:
+        return body, None
+    survivor = session.get(ConformerGroup, survivor_id)
+    assert survivor is not None  # forwarded_group_id only returns an existing group
+    forwarded_scope = scope.model_copy(update={"conformer_group_ref": survivor.public_ref})
+    forwarded_target = body.target.model_copy(update={"scope": forwarded_scope})
+    return body.model_copy(update={"target": forwarded_target}), ref
 
 
 def run_selection(session: Session, *, body: StatmechSelectionRequest) -> StatmechSelection:

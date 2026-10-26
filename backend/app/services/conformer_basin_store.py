@@ -335,6 +335,45 @@ def group_has_dependents(session: Session, group_id: int) -> bool:
     )
 
 
+def observation_is_evidence_of_a_dependent(session: Session, observation_id: int, group_id: int) -> bool:
+    """Whether a thermo, statmech declaration or ensemble member filed on this group rests on this observation.
+
+    By D5 a dependent follows the observation its own calculations came from. A recompute that finds the observation
+    elsewhere moves the dependent with it, and a dependent may be frozen: a live move that left it behind would make
+    the recompute that follows do real work.
+    """
+    return bool(
+        session.execute(
+            text(
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM thermo t
+                      JOIN thermo_source_calculation x ON x.thermo_id = t.id
+                      JOIN calculation c ON c.id = x.calculation_id
+                     WHERE t.target_conformer_group_id = :g AND c.conformer_observation_id = :o
+                ) OR EXISTS (
+                    SELECT 1 FROM statmech_model_declaration d
+                      JOIN statmech_source_calculation x ON x.statmech_id = d.statmech_id
+                      JOIN calculation c ON c.id = x.calculation_id
+                     WHERE d.conformer_group_id = :g AND c.conformer_observation_id = :o
+                ) OR EXISTS (
+                    SELECT 1 FROM statmech_model_declaration d
+                      JOIN statmech_model_source s ON s.declaration_id = d.id
+                      JOIN calculation c ON c.id = s.calculation_id
+                     WHERE d.conformer_group_id = :g AND c.conformer_observation_id = :o
+                ) OR EXISTS (
+                    SELECT 1 FROM statmech_model_member m
+                      JOIN statmech_source_calculation x ON x.statmech_id = m.member_statmech_id
+                      JOIN calculation c ON c.id = x.calculation_id
+                     WHERE m.conformer_group_id = :g AND c.conformer_observation_id = :o
+                )
+                """
+            ),
+            {"g": group_id, "o": observation_id},
+        ).scalar()
+    )
+
+
 def observation_is_accepted(session: Session, observation_id: int) -> bool:
     """Whether the observation was ever approved (and so can change only through a declared repair)."""
     return bool(
@@ -346,6 +385,25 @@ def observation_is_accepted(session: Session, observation_id: int) -> bool:
             {"o": observation_id},
         ).scalar()
     )
+
+
+def live_move_refused(session: Session, observation_id: int, group_id: int, *, old_rep: int | None) -> str | None:
+    """Why this role may not move a structure that defines nothing out of its group now, or ``None`` if it may.
+
+    The same principle as for a merge: a move is owed only when a write it makes would be refused (or would leave the
+    next recompute with real work). The move writes the observation's group (refused once the observation was ever
+    approved). A thermo or statmech record on the group is NOT by itself a reason: the move writes neither. Two things
+    make one matter: it rests on this very observation (D5 moves it with the observation, and it may be frozen), or this
+    observation is the group's representative and the dependent follows the representative when it has no evidence of
+    its own.
+    """
+    if observation_is_accepted(session, observation_id):
+        return "approved"
+    if observation_is_evidence_of_a_dependent(session, observation_id, group_id):
+        return "evidence_of_a_dependent"
+    if old_rep == observation_id and group_has_dependents(session, group_id):
+        return "representative_of_a_group_with_dependents"
+    return None
 
 
 def refile_non_defining(
@@ -420,39 +478,58 @@ def refile_non_defining(
         lambda gid: [where[o.id] for o in members_of[gid] if o.id in where and not where[o.id].has_defining],
         lambda gid: where.get(old_rep(gid)) if old_rep(gid) in where else None,
     )
+    # Decide what may move BEFORE any row is created: a row made for a move that then turns out to be owed would stay
+    # empty (and without a fingerprint) for ever, and the next upload would make another.
+    movers: list[tuple] = []
+    owed: dict[int, int] = {}
+    for o in non_defining:
+        basin = where.get(o.id)
+        if basin is None or (basin.row is not None and basin.row == o.group_id):
+            continue
+        reason = live_move_refused(session, o.id, o.group_id, old_rep=old_rep(o.group_id))
+        if reason is None:
+            movers.append((o, basin))
+        else:
+            owed[o.id] = o.group_id
+    # a re-file that is no longer needed (the structure now belongs where it is) is closed; the rest are updated in
+    # place, one open row per observation
+    session.execute(
+        text(
+            "UPDATE conformer_group_merge_pending SET completed_at = now(), completed_by_revision = 'live upload' "
+            "WHERE species_entry_id = :e AND kept_conformer_group_id IS NULL AND completed_at IS NULL "
+            "AND NOT (conformer_observation_id = ANY(:owed))"
+        ),
+        {"e": entry_id, "owed": list(owed)},
+    )
+    for obs_id, group_id in owed.items():
+        record_pending_refile(session, entry_id=entry_id, observation_id=obs_id, current_group=group_id)
+
     created_by = next((g.created_by for g in groups), None)
-    for basin in basins:
+    for _o, basin in movers:
         if basin.row is None:
+            rep = by_id[basin.rep]
             basin.row = session.execute(
                 text(
-                    "INSERT INTO conformer_group (species_entry_id, label, created_by, public_ref) "
-                    "VALUES (:e, :label, :cb, :ref) RETURNING id"
+                    "INSERT INTO conformer_group (species_entry_id, label, created_by, representative_observation_id, "
+                    "representative_fingerprint_json, representative_coords_json, public_ref) "
+                    "VALUES (:e, :label, :cb, :rep, CAST(:fp AS jsonb), CAST(:coords AS jsonb), :ref) RETURNING id"
                 ),
-                {"e": entry_id, "label": next_group_label(session, entry_id), "cb": created_by, "ref": make_opaque_ref("cg")},
+                {
+                    "e": entry_id,
+                    "label": next_group_label(session, entry_id),
+                    "cb": created_by,
+                    "rep": rep.id,
+                    "fp": json.dumps(rep.fingerprint_json) if rep.fingerprint_json is not None else None,
+                    "coords": json.dumps([list(c) for c in coords[rep.id]]),
+                    "ref": make_opaque_ref("cg"),
+                },
             ).scalar_one()
             ensure_review(session, basin.row, "Created by a live upload: a structure that defines no basin matched none.")
 
     report = ReassignmentReport()
     moved = 0
     touched: set[int] = set()
-    for o in non_defining:
-        basin = where.get(o.id)
-        if basin is None or basin.row is None or basin.row == o.group_id:
-            continue
-        if observation_is_accepted(session, o.id) or group_has_dependents(session, o.group_id):
-            record_pending_merge(
-                session,
-                entry_id=entry_id,
-                kept=basin.row,
-                absorbed=o.group_id,
-                observation_id=o.id,
-                reason=(
-                    "a structure that defines no basin belongs in the first group, and an approved record or a "
-                    "record that points at the second group forbids this role to move it; the owner-role "
-                    "reassignment re-files it"
-                ),
-            )
-            continue
+    for o, basin in movers:
         session.execute(
             text("UPDATE conformer_observation SET conformer_group_id = :g WHERE id = :id"),
             {"g": basin.row, "id": o.id},
@@ -545,6 +622,33 @@ def record_pending_merge(
             "VALUES (:e, :k, :a, :o, :reason) ON CONFLICT ON CONSTRAINT uq_conformer_group_merge_pending_merge DO NOTHING"
         ),
         {"e": entry_id, "k": kept, "a": absorbed, "o": observation_id, "reason": reason},
+    )
+
+
+def record_pending_refile(session: Session, *, entry_id: int, observation_id: int, current_group: int) -> None:
+    """Record that a structure that defines no basin must be re-filed by the owner role. One open row per observation.
+
+    There is no target group: the basin it belongs in may have no row yet, and none is created until the owner role
+    completes the re-file. A later upload that still finds the move owed updates this row; it never adds another.
+    """
+    session.execute(
+        text(
+            "INSERT INTO conformer_group_merge_pending (species_entry_id, kept_conformer_group_id, "
+            "absorbed_conformer_group_id, conformer_observation_id, reason) "
+            "VALUES (:e, NULL, :g, :o, :reason) "
+            "ON CONFLICT (conformer_observation_id) WHERE kept_conformer_group_id IS NULL AND completed_at IS NULL "
+            "DO UPDATE SET absorbed_conformer_group_id = EXCLUDED.absorbed_conformer_group_id, reason = EXCLUDED.reason"
+        ),
+        {
+            "e": entry_id,
+            "g": current_group,
+            "o": observation_id,
+            "reason": (
+                "a structure that defines no basin belongs in a different basin than the group it sits in, and an "
+                "approved record or a record resting on it forbids this role to move it; the owner-role "
+                "reassignment re-files it"
+            ),
+        },
     )
 
 

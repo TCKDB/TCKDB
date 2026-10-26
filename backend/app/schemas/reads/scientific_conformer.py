@@ -143,6 +143,19 @@ class ConformerGroupMergePendingBlock(BaseModel):
     reason: str
 
 
+class ConformerGroupRefilePendingBlock(BaseModel):
+    """Structures in this group that must be re-filed into another basin, which this role may not do yet.
+
+    A structure that defines no basin (a single point, a scan point, a partial optimisation) belongs in the basin whose
+    representative it matches, and that moved. The structure was approved, or a record rests on it, so only the owner
+    role may move it. There is no target group to name: the basin it belongs in may not have a group yet, and none is
+    created until the owner role completes the re-file. Absent once completed.
+    """
+
+    observation_count: int
+    reason: str
+
+
 class ConformerGroupCoreBlock(BaseModel):
     """Direct conformer-group-row metadata.
 
@@ -165,7 +178,9 @@ class ConformerGroupCoreBlock(BaseModel):
     they are; ``None`` when the group has no optimised member.
     ``basin_span_deg`` is the largest torsion difference between two of
     them, in degrees. ``merge_pending`` is set while a merge of this group
-    into another is owed (see :class:`ConformerGroupMergePendingBlock`).
+    into another is owed (see :class:`ConformerGroupMergePendingBlock`); ``refile_pending`` is set while structures in it
+    owe a re-file into a basin with no group yet (see :class:`ConformerGroupRefilePendingBlock`). The two are different
+    work: the first has a target group, the second does not.
     """
 
     conformer_group_id: int | None = None
@@ -179,6 +194,7 @@ class ConformerGroupCoreBlock(BaseModel):
     wide_basin: bool | None = None
     basin_span_deg: float | None = None
     merge_pending: ConformerGroupMergePendingBlock | None = None
+    refile_pending: ConformerGroupRefilePendingBlock | None = None
 
 
 class ConformerObservationCoreBlock(BaseModel):

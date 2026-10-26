@@ -340,6 +340,23 @@ def test_single_conformer_and_equilibrium_targets_stay_distinct(client, db_sessi
     assert post(client, methane).json()["selection"]["thermo_ref"] == eq.public_ref
 
 
+def test_a_target_group_a_merge_emptied_is_forwarded_and_the_response_says_so(client, db_session, methane):
+    survivor = make_conformer_group(db_session, methane, label="conformer_1")
+    emptied = make_conformer_group(db_session, methane, label="conformer_2")
+    emptied.merged_into_conformer_group_id = survivor.id
+    db_session.flush()
+    one = g4(db_session, methane, target=ThermoTargetKind.single_conformer, group_id=survivor.id)
+    response = post(client, methane, {"target": {"kind": "single_conformer", "conformer_group_ref": emptied.public_ref}})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["selection"]["thermo_ref"] == one.public_ref, "the decision is made on the group that took its members"
+    assert body["request"]["target"] == {"kind": "single_conformer", "conformer_group_ref": survivor.public_ref}
+    assert body["forwarded_from_conformer_group_ref"] == emptied.public_ref
+    # asked for directly, nothing is forwarded
+    direct = post(client, methane, {"target": {"kind": "single_conformer", "conformer_group_ref": survivor.public_ref}})
+    assert direct.json()["forwarded_from_conformer_group_ref"] is None
+
+
 def test_a_group_of_another_entry_is_refused(client, db_session, methane):
     other = make_species_entry(db_session, make_species(db_session, smiles="CC", inchi_key="OTHERKEYAAAAAA-UHFFFAOYSA-N"))
     group = make_conformer_group(db_session, other)

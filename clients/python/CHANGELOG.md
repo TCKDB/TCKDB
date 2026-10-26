@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.174.0 - 2026-10-27
+
+Thermo and statmech selections say when the basin they were asked about was forwarded.
+
+- `ThermoSelectionResponse` and `StatmechSelectionResponse` carry `forwarded_from_conformer_group_ref`: the conformer-group ref that was asked for when
+  that group had been merged into another (the decision is made on the group that took its members, which is the one `request` echoes), otherwise `None`.
+  Additive; nothing is removed.
+
 ## 0.173.0 - 2026-10-26
 
 `MadeUnder` no longer carries `inputs_unchecked_reason`.

@@ -227,6 +227,29 @@ def test_cg_detail_shows_a_merge_that_is_owed_until_it_is_completed(client, db_s
         "reason": "approved records point at the younger group",
     }
     assert client.get(_cg_url(older.public_ref)).json()["record"]["conformer_group"]["merge_pending"] is None
+    assert young["refile_pending"] is None
+
+    # the OTHER kind of owed work: a structure sitting in `older` must be re-filed into a basin with no group yet.
+    # It names no target, and is not reported as a merge of `older` into anything.
+    stray = ConformerObservation(conformer_group_id=older.id)
+    db_session.add(stray)
+    db_session.flush()
+    db_session.add(
+        ConformerGroupMergePending(
+            species_entry_id=entry.id,
+            kept_conformer_group_id=None,
+            absorbed_conformer_group_id=older.id,
+            conformer_observation_id=stray.id,
+            reason="a structure that defines no basin must be re-filed",
+        )
+    )
+    db_session.flush()
+    kept = client.get(_cg_url(older.public_ref)).json()["record"]["conformer_group"]
+    assert kept["merge_pending"] is None
+    assert kept["refile_pending"] == {
+        "observation_count": 1,
+        "reason": "a structure that defines no basin must be re-filed",
+    }
 
     from datetime import datetime
 

@@ -249,24 +249,60 @@ class BasinPlacement:
     pending_absorbed: tuple[int, ...] = ()
 
 
-def is_defining_primary(calculation_payload: object) -> bool:
-    """Whether an upload's primary calculation makes its structure a defining member of a basin.
+@dataclass(frozen=True)
+class PrimaryStructure:
+    """The structure an upload's basin identity is decided on, and whether it defines a basin."""
 
-    The same predicate the recompute applies to the stored calculation
-    (:func:`app.services.conformer_basin_store.is_defining_calculation`), fed with what the upload is about to
-    store: the type, a stated failure to converge, and whether a ``final`` output geometry will be attached. The
-    upload attaches the conformer's geometry as the final output when it declares no output geometries of its own
-    (``attach_calculation_output_geometries``); when it declares some, there is a final one only if one of them has
-    that role. An optimisation whose declared outputs are all ``initial`` therefore has no final geometry, is not a
-    defining member, and is filed without linking anything -- exactly as the recompute reads it back.
+    xyz_text: str
+    defining: bool
+
+
+def primary_structure(calculation_payload: object, conformer_xyz_text: str) -> PrimaryStructure:
+    """The geometry the recompute will read back from this upload's primary calculation, and whether it defines a basin.
+
+    ONE function for both paths. The recompute fingerprints the geometry the stored primary calculation carries (the
+    first ``final`` output, else the first input); the upload must fingerprint the same one, or an optimisation whose
+    declared final output differs from the conformer geometry would be grouped by one structure live and another on
+    recompute. So this predicts what the upload is about to attach, with the attach rules
+    (``attach_calculation_output_geometries`` / ``attach_calculation_input_geometries``):
+
+    * outputs: the declared ones, in order; when none are declared an ``opt`` (and a ``composite`` primary, and a
+      one-atom ``sp``) gets the conformer geometry as its ``final`` output;
+    * inputs: the declared ones, in order; when none are declared a ``freq`` or ``sp`` gets the conformer geometry;
+    * the structure is the first ``final`` output, else the first input, else (nothing attached: the recompute cannot
+      read it back) the conformer geometry, as a best guess for a structure that then defines nothing;
+    * it defines a basin when the calculation is an optimisation or composite, has a ``final`` output and is not
+      stated unconverged (:func:`app.services.conformer_basin_store.is_defining_calculation`).
     """
+    from app.services.calculation_resolution import _INPUT_GEOMETRY_TYPES, _OUTPUT_GEOMETRY_TYPES
+
+    calc_type = getattr(calculation_payload.type, "value", calculation_payload.type)  # type: ignore[attr-defined]
+    declared_outputs = list(getattr(calculation_payload, "output_geometries", None) or [])
+    declared_inputs = list(getattr(calculation_payload, "input_geometries", None) or [])
+    single_atom = len([line for line in conformer_xyz_text.strip().splitlines()[2:] if line.strip()]) == 1
+    if declared_outputs:
+        finals = [e.geometry.xyz_text for e in declared_outputs if str(getattr(e.role, "value", e.role)) == "final"]
+    elif (
+        calc_type in {t.value for t in _OUTPUT_GEOMETRY_TYPES}
+        or calc_type == "composite"
+        or (calc_type == "sp" and single_atom)
+    ):
+        finals = [conformer_xyz_text]
+    else:
+        finals = []
+    if declared_inputs:
+        inputs = [g.xyz_text for g in declared_inputs]
+    elif calc_type in {t.value for t in _INPUT_GEOMETRY_TYPES}:
+        inputs = [conformer_xyz_text]
+    else:
+        inputs = []
+    chosen = finals[0] if finals else (inputs[0] if inputs else conformer_xyz_text)
     opt_result = getattr(calculation_payload, "opt_result", None)
-    declared = list(getattr(calculation_payload, "output_geometries", None) or [])
-    has_final = not declared or any(str(getattr(e.role, "value", e.role)) == "final" for e in declared)
-    return is_defining_calculation(
-        str(getattr(calculation_payload.type, "value", calculation_payload.type)),
-        has_final_geometry=has_final,
-        converged=getattr(opt_result, "converged", None),
+    return PrimaryStructure(
+        xyz_text=chosen,
+        defining=is_defining_calculation(
+            str(calc_type), has_final_geometry=bool(finals), converged=getattr(opt_result, "converged", None)
+        ),
     )
 
 
@@ -414,6 +450,8 @@ def resolve_conformer_group(
             select(ConformerGroup).where(
                 ConformerGroup.species_entry_id == species_entry.id,
                 ConformerGroup.representative_fingerprint_json.is_(None),
+                # a group a merge emptied has no fingerprint either, and nothing may join it
+                ConformerGroup.merged_into_conformer_group_id.is_(None),
             ).order_by(ConformerGroup.id)
         )
         if existing_no_fp is not None:
