@@ -424,3 +424,51 @@ def test_calculation_searches_filter_by_the_method_family_and_rung_of_the_calcul
         assert refs(path, method_family="unclassified", **extra)[0] == set()  # a calculation with no level matches no family
         assert bare.public_ref not in refs(path, method_family="dft", **extra)[0]
         assert client.get(f"{BASE}/{path}", params={"dft_rung_max": 9, **extra}).status_code == 422
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# statement size and count
+# ---------------------------------------------------------------------------------------------------------------
+
+
+def test_the_family_predicate_stays_small_and_does_not_grow_with_the_levels_searched(client, db_session):
+    """Kills: a stem-key expression that repeats itself, so one filtered request plans a multi-megabyte statement.
+
+    Every reference to a derived key used to be a full copy of the expression that built it; the predicate compiled
+    to about 7 MB and a single filtered search spent seconds planning it, whatever the data.
+    """
+    from sqlalchemy import event
+    from sqlalchemy.dialects import postgresql
+
+    selected = MethodClassFilter.of(["dft", "unclassified"], 2, 3)
+    compiled = str(method_family_matches(selected).compile(dialect=postgresql.dialect()))
+    assert len(compiled) < 100_000, len(compiled)
+
+    species = make_species(db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("SZ"))
+    entry = make_species_entry(db_session, species)
+
+    def statements_for_a_filtered_search():
+        seen: list[str] = []
+
+        def record(conn, cursor, statement, *args):
+            seen.append(statement)
+
+        engine = db_session.get_bind()
+        event.listen(engine, "before_cursor_execute", record)
+        try:
+            response = client.get(
+                f"{BASE}/calculations/search", params={"method_family": "dft", "species_entry_ref": entry.public_ref}
+            )
+        finally:
+            event.remove(engine, "before_cursor_execute", record)
+        assert response.status_code == 200
+        return seen
+
+    few = statements_for_a_filtered_search()
+    for i in range(25):
+        calc_lot = make_lot(db_session, method=f"b97-d3-variant{i}", basis="def2tzvp")
+        make_calculation(db_session, species_entry_id=entry.id, lot_id=calc_lot.id)
+    many = statements_for_a_filtered_search()
+
+    assert len(many) == len(few), (len(few), len(many))
+    assert max(len(s) for s in many) < 100_000
