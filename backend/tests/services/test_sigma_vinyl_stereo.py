@@ -230,7 +230,7 @@ def test_substituted_sigma_vinyl_e_and_z(radical, closed_e, closed_z, c1, c2, re
 
 class TestNoFalseStereo:
     # Smoke checks only: neither species has a possible stereo element, so no
-    # mutation of the perception code can fail these.
+    # stereo-relevant mutation can fail these.
     def test_dioxygen_biradical_smoke(self) -> None:
         _, xyz = _embed_xyz("[O][O]", seed=7)
         assert derive_stereo_label_from_3d("[O][O]", xyz) is None
