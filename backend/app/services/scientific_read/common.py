@@ -648,10 +648,10 @@ def ids_below_review_floor(
     record_type: SubmissionRecordType,
     record_ids: Iterable[int],
 ) -> set[int]:
-    """Which of ``record_ids`` the active read profile's review floor hides (the detail route answers 404 for them).
+    """Which of ``record_ids`` the active read profile's review floor hides from a LIST.
 
-    Mirrors the floor the detail-by-ref gate applies (``handles.py``); that stops being true in step 7 of ADR 0023, when
-    the gate moves to the withheld set. For the RECORD floor on a count or a matching filter (owner decision D5): a count of
+    The record floor only: since step 7 of ADR 0023 the detail-by-ref gate (``handles.py``) no longer mirrors it, and answers
+    404 for the withheld set alone. For the RECORD floor on a count or a matching filter (owner decision D5): a count of
     records must not include a record the profile hides. A count or level of a returned record's linked EVIDENCE uses the
     evidence rule instead (``ids_withheld_as_evidence``, ADR 0023). It is not a ref rule: refs are withheld at the
     response boundary by ``ref_guard``. Without a review floor (exploratory, or outside a scientific request) nothing is
@@ -715,9 +715,11 @@ def where_visible(stmt: Any, predicate: Any) -> Any:
 #                  Covers lists, searches and selects: which RECORDS are returned. Under ``curated`` anything below
 #                  ``approved`` is not returned.
 #
-#   DETAIL-BY-REF  ``resolve_path_handle`` -> ``_hidden_by_floor`` in ``handles.py``. Under ``curated`` it uses the
-#                  withheld set below (rejected / deprecated) from step 7 of ADR 0023 onward, amending ADR 0006's second
-#                  seam. Until step 7 it still applies the record floor.
+#   DETAIL-BY-REF  ``resolve_path_handle`` -> ``_withheld_by_profile`` in ``handles.py``, and the legacy detail reads
+#                  (``_legacy_reads.py``). Under ``curated`` they answer 404 for the withheld set below (rejected /
+#                  deprecated) only and serve every other record, badged (step 7 of ADR 0023, amending ADR 0006's second
+#                  seam). What a served detail embeds (a ``/full`` participant, a supersession successor, the usage a
+#                  reference row lists) follows the evidence rule: ``detail_visible_statuses``, ``shown_predicate``.
 #
 #   EVIDENCE RULE  this section. Covers LINKED EVIDENCE of a returned record (source calculations, levels derived from
 #                  them, conformer observations inside a group, evidence counts, nested refs). Under ``curated`` such
@@ -728,7 +730,7 @@ def where_visible(stmt: Any, predicate: Any) -> Any:
 # cannot be lifted by request. Under exploratory nothing is withheld as evidence, so every function here answers
 # "visible" and issues no query.
 #
-# STATUS (steps 2 to 5 of ADR 0023): matching in search, browse and select (``linked_evidence_predicate`` and
+# STATUS (steps 2 to 7 of ADR 0023): matching in search, browse and select (``linked_evidence_predicate`` and
 # ``ids_withheld_as_evidence`` in every filter on linked calculations and observations), the service counts, flags and derived
 # levels of a returned record, the response-level ref guard (``ref_guard.py``: pointers in responses, the document modes, the
 # selection loaders' unavailable-evidence seam, the export batcher), the legacy entity reads, the ML export's conformer refs,
@@ -737,7 +739,9 @@ def where_visible(stmt: Any, predicate: Any) -> Any:
 # gate) call this section. Named exception: the ML export's energy rows keep their calculations approved-only (owner decision
 # Q7, ``ml_dataset.ml_energy_row_floor``), and the made-under comparisons (step 6: a stored stamp is compared with a
 # profile-free recomputation, so the answer is the same under every profile; ``public_assessments._reproducibility_summary``).
-# Still on the earlier rule (D6: below the floor is hidden, evidence included) until its step lands: detail-by-ref (step 7).
+# Step 7: detail-by-ref (``resolve_path_handle``, the legacy detail reads) answers 404 for the withheld set only, and the
+# records a served detail embeds follow this rule. Nothing is still on the earlier rule (D6): the record floor decides lists,
+# searches and selects, and every other record a read serves or names, that is not withheld, is shown badged.
 
 #: Review statuses whose linked evidence is withheld under a profile with a review floor.
 WITHHELD_EVIDENCE_STATUSES: frozenset[RecordReviewStatus] = frozenset(
@@ -804,6 +808,28 @@ def evidence_visible_statuses(*, profile: Any = None) -> frozenset[RecordReviewS
     return frozenset(s for s in RecordReviewStatus if not evidence_withheld_under_profile(s, profile=profile))
 
 
+def detail_visible_statuses(
+    *,
+    min_review_status: RecordReviewStatus | None,
+    include_rejected: bool,
+    include_deprecated: bool,
+) -> set[RecordReviewStatus]:
+    """The review statuses a DETAIL read shows of the records it embeds (a ``/full`` participant, a conformer group).
+
+    Under ``curated`` a served detail shows every embedded record that is not in the withheld set (``rejected``,
+    ``deprecated``), badged (ADR 0023 step 7, owner decision Q9): the approved floor decides which records a list returns,
+    not what a detail page rests on. The caller's own ``min_review_status`` still narrows, and the ``include_*`` opt-ins stay
+    overridden. Without a floor (exploratory) this is :func:`visible_statuses`, so the default behaviour is unchanged.
+    """
+    if current_read_profile().review_floor is None:
+        return visible_statuses(
+            min_review_status=min_review_status,
+            include_rejected=include_rejected,
+            include_deprecated=include_deprecated,
+        )
+    return set(evidence_usable_statuses(min_review_status))
+
+
 def evidence_usable_statuses(min_review_status: RecordReviewStatus | None = None) -> frozenset[RecordReviewStatus]:
     """The review statuses at which a selection engine USES linked evidence (a source calculation, a member, an observation).
 
@@ -818,6 +844,19 @@ def evidence_usable_statuses(min_review_status: RecordReviewStatus | None = None
     if min_review_status is not None:
         base = base & status_at_or_above(min_review_status)
     return frozenset(base)
+
+
+def shown_predicate(id_column: Any, record_type: SubmissionRecordType, *, detail: bool, profile: Any = None) -> Any:
+    """The SQL condition for the records of ``record_type`` a read shows, by what kind of read it is.
+
+    A LIST (a search row, a count of what a list would show) keeps the approved record floor
+    (:func:`review_floor_predicate`). A served DETAIL embeds its records as linked evidence, so under ``curated`` it shows
+    everything but the withheld set, badged (:func:`linked_evidence_predicate`, ADR 0023 step 7). ``None`` when the profile
+    has no floor, so an exploratory statement is unchanged either way.
+    """
+    if detail:
+        return linked_evidence_predicate(id_column, record_type, profile=profile)
+    return review_floor_predicate(id_column, record_type, profile=profile)
 
 
 def evidence_withheld_predicate(id_column: Any, record_type: SubmissionRecordType, *, profile: Any = None) -> Any:

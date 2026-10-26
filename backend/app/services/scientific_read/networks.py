@@ -101,6 +101,7 @@ from app.services.scientific_read.common import (
     linked_evidence_predicate,
     review_floor_predicate,
     review_summary,
+    shown_predicate,
     validate_includes,
     where_visible,
 )
@@ -1149,7 +1150,7 @@ def get_network_solve(
 
     badge = _load_solve_review_badge(session, s.id)
     record = build_network_solve_record(
-        session, s=s, badge=badge, includes=includes
+        session, s=s, badge=badge, includes=includes, detail=True
     )
     return ScientificNetworkSolveDetailResponse(
         request=RequestEcho(include=sorted(includes)),
@@ -1164,8 +1165,16 @@ def build_network_solve_record(
     s: NetworkSolve,
     badge: RecordReviewBadge,
     includes: set[str],
+    detail: bool = False,
 ) -> ScientificNetworkSolveRecord:
-    """Project one NetworkSolve row into the public scientific record shape."""
+    """Project one NetworkSolve row into the public scientific record shape.
+
+    ``detail`` is True for the solve's own detail read. Under ``curated`` the transition-state entries it names (its channel
+    barriers) are then embedded records of a served detail and follow the evidence rule: shown with their badge unless
+    rejected or deprecated (ADR 0023 step 7, owner decision Q9). A search row (``detail=False``) counts the barriers of
+    the entries the record floor lists, as a list does.
+    """
+    barrier_entries_shown = _barrier_entry_visible(detail=detail)
     parent = session.get(Network, s.network_id)
     # Owner decision D1: the owner block is always built here; under ``profile=curated`` the ref guard blanks it when the
     # network is hidden (``NetworkContextSummary`` is a registered pointer and the field is nullable).
@@ -1194,15 +1203,10 @@ def build_network_solve_record(
     )
     channel_barrier_count = int(
         session.scalar(
-            where_visible(
-                select(func.count())
-                .select_from(NetworkSolveChannelBarrier)
-                .where(NetworkSolveChannelBarrier.solve_id == s.id),
-                review_floor_predicate(
-                    NetworkSolveChannelBarrier.transition_state_entry_id,
-                    SubmissionRecordType.transition_state_entry,
-                ),
-            )
+            select(func.count())
+            .select_from(NetworkSolveChannelBarrier)
+            .where(NetworkSolveChannelBarrier.solve_id == s.id)
+            .where(barrier_entries_shown)
         )
         or 0
     )
@@ -1284,7 +1288,7 @@ def build_network_solve_record(
 
     channel_barrier_block: list[NetworkSolveChannelBarrierSummary] | None = None
     if "channel_barriers" in includes:
-        channel_barrier_block = _build_channel_barriers_for_solve(session, s.id)
+        channel_barrier_block = _build_channel_barriers_for_solve(session, s.id, detail=detail)
 
     sources_block: list[NetworkSourceCalculationSummary] | None = None
     if "source_calculations" in includes:
@@ -1514,15 +1518,17 @@ def _visible_join(calculation, id_column):
     return calculation.id == id_column if visible is None else and_(calculation.id == id_column, visible)
 
 
-def _barrier_entry_visible():
-    visible = review_floor_predicate(
-        NetworkSolveChannelBarrier.transition_state_entry_id, SubmissionRecordType.transition_state_entry
+def _barrier_entry_visible(*, detail: bool):
+    """The channel-barrier rows whose transition-state entry is shown: the record floor for a list row, the evidence rule
+    for the barriers embedded in a served solve detail (ADR 0023 step 7)."""
+    visible = shown_predicate(
+        NetworkSolveChannelBarrier.transition_state_entry_id, SubmissionRecordType.transition_state_entry, detail=detail
     )
     return True if visible is None else visible
 
 
 def _build_channel_barriers_for_solve(
-    session: Session, solve_id: int
+    session: Session, solve_id: int, *, detail: bool = False
 ) -> list[NetworkSolveChannelBarrierSummary]:
     rows = session.execute(
         select(
@@ -1537,7 +1543,7 @@ def _build_channel_barriers_for_solve(
         .join(TransitionStateEntry, TransitionStateEntry.id == NetworkSolveChannelBarrier.transition_state_entry_id)
         .outerjoin(Calculation, Calculation.id == NetworkSolveChannelBarrier.source_calculation_id)
         .where(NetworkSolveChannelBarrier.solve_id == solve_id)
-        .where(_barrier_entry_visible())
+        .where(_barrier_entry_visible(detail=detail))
         .order_by(NetworkChannel.channel_key, ReactionEntry.public_ref, TransitionStateEntry.public_ref)
     ).all()
     return [

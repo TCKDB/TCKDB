@@ -326,9 +326,10 @@ def _gates_of(route) -> dict:
 
 
 def test_every_gated_detail_route_answers_a_hidden_record_as_an_unknown_id(routes, client, db_session):
-    """Cases come from the routers' own gates: every GET whose path has a gated parameter, called with a hidden record
-    and with a missing id under the curated profile, answers identically. Kills: a gated parameter that stops gating."""
-    w, hidden, network = _hidden_world(db_session)
+    """Cases come from the routers' own gates: every GET whose path has a gated parameter, called with a withheld record
+    (rejected) and with a missing id under the curated profile, answers identically. Kills: a gated parameter that stops
+    gating. A record that is merely unreviewed is served since step 7 of ADR 0023 (``test_curated_detail_by_ref.py``)."""
+    w, hidden, network = _hidden_world(db_session, withheld=True)
     tested = 0
     gated_kinds = set()
     for route in _legacy(routes):

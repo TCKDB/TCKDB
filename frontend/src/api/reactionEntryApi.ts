@@ -206,7 +206,7 @@ const tsDependencySchema = z.object({
 }).passthrough()
 
 const transitionStateInFullSchema = z.object({
-    // null under `profile=curated` when the owning transition state is not approved: the entry is shown, its owner is not named.
+    // null under `profile=curated` when the owning transition state is rejected or deprecated: the entry is shown, its owner is not named.
     transition_state_ref: z.string().nullable(),
     transition_state_entry_ref: z.string(),
     status: z.string().nullable().optional(),

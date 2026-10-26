@@ -324,9 +324,11 @@ def test_curated_applies_the_floor_to_detail_by_ref_reads(
 ):
     """Roughly half the read services never call ``visible_statuses``.
 
-    A never-reviewed statmech used to come back under ``profile=curated`` with
-    a curated echo. The floor is now applied at handle resolution, which every
-    detail-by-ref read passes through, so it cannot be forgotten.
+    A rejected statmech used to come back under ``profile=curated`` with a
+    curated echo. The withheld set (``rejected``, ``deprecated``) is applied at
+    handle resolution, which every detail-by-ref read passes through, so it
+    cannot be forgotten. A statmech that is merely never reviewed is served,
+    badged (ADR 0023 step 7).
     """
     from app.db.models.app_user import AppUser
     from tests.services.scientific_read._factories import make_statmech
@@ -351,10 +353,25 @@ def test_curated_applies_the_floor_to_detail_by_ref_reads(
         client.get(f"/api/v1/scientific/statmech/{unreviewed.public_ref}").status_code
         == 200
     )
-    # Curated: the unapproved one is simply not part of the surface.
+    # Curated: a never-reviewed one is served, badged; it is below the floor, not withheld.
+    unreviewed_read = client.get(
+        f"/api/v1/scientific/statmech/{unreviewed.public_ref}?profile=curated"
+    )
+    assert unreviewed_read.status_code == 200
+    assert unreviewed_read.json()["review_status_by_ref"][unreviewed.public_ref] == "not_reviewed"
+    # Curated: a rejected one is simply not part of the surface.
+    rejected = make_statmech(db_session, species_entry=entry)
+    set_record_review_status(
+        db_session,
+        record_type=SubmissionRecordType.statmech,
+        record_id=rejected.id,
+        status=RecordReviewStatus.rejected,
+        actor=curator,
+    )
+    db_session.flush()
     assert (
         client.get(
-            f"/api/v1/scientific/statmech/{unreviewed.public_ref}?profile=curated"
+            f"/api/v1/scientific/statmech/{rejected.public_ref}?profile=curated"
         ).status_code
         == 404
     )
@@ -412,7 +429,7 @@ def test_ml_export_manifest_line_carries_the_profile(
 # ---------------------------------------------------------------------------
 
 
-def test_network_kinetics_inherits_the_curated_floor_from_its_solve(
+def test_network_kinetics_inherits_the_curated_withholding_from_its_solve(
     client, db_session, _api_curator_user
 ):
     """``approved_floor_only`` must be true for *every* endpoint that echoes it.
@@ -468,23 +485,23 @@ def test_network_kinetics_inherits_the_curated_floor_from_its_solve(
     assert client.get(detail).status_code == 200
     assert client.get(parent).status_code == 200
 
-    # Curated, nothing reviewed: the child must 404 exactly like its parent.
-    assert client.get(f"{parent}?profile=curated").status_code == 404
-    assert client.get(f"{detail}?profile=curated").status_code == 404
+    # Curated, nothing reviewed: the child is served like its parent.
+    assert client.get(f"{parent}?profile=curated").status_code == 200
+    response = client.get(f"{detail}?profile=curated")
+    assert response.status_code == 200, response.text
+    assert response.json()["request"]["profile_recommendation"] == "approved_floor_only"
 
-    # Approving the parent admits the child.
+    # Rejecting the parent withholds the child exactly like its parent.
     set_record_review_status(
         db_session,
         record_type=SubmissionRecordType.network_solve,
         record_id=solve.id,
-        status=RecordReviewStatus.approved,
+        status=RecordReviewStatus.rejected,
         actor=curator,
     )
     db_session.flush()
-
-    response = client.get(f"{detail}?profile=curated")
-    assert response.status_code == 200, response.text
-    assert response.json()["request"]["profile_recommendation"] == "approved_floor_only"
+    assert client.get(f"{parent}?profile=curated").status_code == 404
+    assert client.get(f"{detail}?profile=curated").status_code == 404
 
 
 def test_every_handle_resolver_is_classified_for_the_curated_floor():

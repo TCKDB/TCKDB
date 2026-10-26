@@ -160,7 +160,7 @@ def prefix_for(model_cls: type) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Curated-profile floor on detail-by-ref reads
+# Curated-profile withheld set on detail-by-ref reads (ADR 0023 step 7)
 # ---------------------------------------------------------------------------
 
 
@@ -204,13 +204,8 @@ _REVIEWABLE_HANDLE_TYPES: dict[type, SubmissionRecordType] = {
 #: ``network_kinetics`` is a returned record with its own detail endpoint, but
 #: it has no ``record_review`` row in principle: a set of k(T,P) coefficients is
 #: reviewed as part of the ``network_solve`` that produced it, never on its own.
-#: Left out of the map entirely it sailed through the curated floor — a
-#: never-reviewed ``network_kinetics`` returned 200 with an
-#: ``approved_floor_only`` echo while its own parent correctly 404'd. That echo
-#: is documented as "every record shown is at or above the approved review
-#: floor", so the response was making a false machine-readable claim. It is the
-#: narrow, non-endorsing member of the same class of false claim that made the
-#: earlier profile bug blocking.
+#: Left out of the map entirely it sailed through the curated gate: a withheld ``network_kinetics`` returned 200
+#: while its own parent correctly 404'd. Judged by its solve, it is served or withheld exactly as the solve is.
 _PARENT_DERIVED_HANDLE_TYPES: dict[type, tuple[str, type]] = {
     NetworkKinetics: ("solve_id", NetworkSolve),
 }
@@ -244,12 +239,12 @@ def _resolve_review_target(
 def status_hidden_under_profile(status: RecordReviewStatus, *, profile: Any = None) -> bool:
     """Whether a record at ``status`` is hidden by the read profile's review floor.
 
-    The one definition of "hidden under the profile". Every site that decides visibility of a gated
-    record, including the curated-ref guard, calls this instead of restating the comparison. With no
-    floor (exploratory, or outside a scientific request) nothing is hidden.
+    The record floor: which RECORDS a list, search, browse or select returns, and which subject a list-gated response may
+    name. With no floor (exploratory, or outside a scientific request) nothing is hidden.
 
-    Changes in step 7 of ADR 0023: the detail-by-ref callers move to the evidence rule's withheld set, and this stays the
-    record floor (lists, searches, selects).
+    Detail-by-ref is not decided here. Since step 7 of ADR 0023 a detail read serves any record that is not in the withheld
+    set (``common.evidence_withheld_under_profile``: ``rejected`` and ``deprecated``), badged; see
+    :func:`_withheld_by_profile`.
 
     ``profile`` defaults to the request's profile; callers outside the request context (streams,
     which captured their profile eagerly) pass it explicitly.
@@ -263,12 +258,14 @@ def status_hidden_under_profile(status: RecordReviewStatus, *, profile: Any = No
     return REVIEW_FLOOR_ORDER[status] > REVIEW_FLOOR_ORDER[floor]
 
 
-def _hidden_by_floor(session: Session, model_cls: type, row_id: int) -> RecordReviewStatus | None:
-    """The review status that hides this record under the active profile, or ``None`` if it is not hidden.
+def _withheld_by_profile(session: Session, model_cls: type, row_id: int) -> RecordReviewStatus | None:
+    """The review status that withholds this record's detail under the active profile, or ``None`` if it is served.
 
-    Factored out of :func:`_enforce_curated_floor` without a change in behaviour: no floor, an ungated
-    type, or a status at or above the floor all answer ``None`` (and the first two issue no review query).
+    The withheld set is ``rejected`` and ``deprecated`` under a profile with a review floor (ADR 0023 step 7); a
+    ``not_reviewed`` or ``under_review`` record (or one with no review row) is served, badged. No floor, or an ungated
+    type, answers ``None`` and issues no review query.
     """
+    from app.services.scientific_read.common import evidence_withheld_under_profile
     from app.services.scientific_read.profile import current_read_profile
 
     if current_read_profile().review_floor is None:
@@ -285,42 +282,36 @@ def _hidden_by_floor(session: Session, model_cls: type, row_id: int) -> RecordRe
         )
     ).first()
     status = review.status if review is not None else RecordReviewStatus.not_reviewed
-    return status if status_hidden_under_profile(status) else None
+    return status if evidence_withheld_under_profile(status) else None
 
 
-def _enforce_curated_floor(
+def _enforce_detail_withholding(
     session: Session, model_cls: type, row_id: int, kind_label: str, ref: str | None = None
 ) -> None:
-    """Under ``profile=curated``, hide a record below the approval floor.
+    """Under ``profile=curated``, answer 404 for a record in the withheld set (``rejected``, ``deprecated``).
 
-    Search endpoints get the floor from ``visible_statuses``, but roughly half
-    the read services never call it — every detail-by-ref read resolves a
-    handle and returns the row directly. Without this, ``profile=curated``
-    happily returned never-reviewed statmech and transport records while
-    echoing a curated contract, which is precisely the false claim the profile
-    exists to prevent.
+    Search endpoints get the record floor from ``visible_statuses``, but roughly half the read services never call it:
+    every detail-by-ref read resolves a handle and returns the row directly. This is the one function every
+    detail-by-ref read passes through, so the rule cannot be forgotten by an endpoint. Records whose review state lives on
+    a parent are judged by that parent, see :data:`_PARENT_DERIVED_HANDLE_TYPES`.
 
-    This is the one function every detail-by-ref read passes through, so the
-    floor cannot be forgotten by an endpoint. Records whose review state lives
-    on a parent are gated by that parent — see
-    :data:`_PARENT_DERIVED_HANDLE_TYPES`.
+    Since step 7 of ADR 0023 (amending ADR 0006's second seam) the detail of a record that is merely ``not_reviewed`` or
+    ``under_review`` is served, and the response carries its review badge; only the withheld set answers 404. Lists,
+    searches, browses and selects keep the approved floor.
 
-    The response is the same 404 ``handle_not_found`` an unknown ref produces,
-    including the ref the caller supplied (``ref``), so the two cannot be told
-    apart by their detail text either.
-    That is deliberate and matches the existing posture elsewhere in this
-    module: under the curated contract the record is simply not part of the
-    addressable surface, and a distinguishable "exists but is not approved"
-    would leak review state to anonymous callers.
+    The response is the same 404 ``handle_not_found`` an unknown ref produces, including the ref the caller supplied
+    (``ref``), so the two cannot be told apart by their detail text either. That is deliberate: the withheld record is
+    simply not part of the addressable surface, and a distinguishable "exists but is withheld" would leak review state
+    to anonymous callers.
 
-    :raises NotFoundError: the record is below the curated review floor.
+    :raises NotFoundError: the record is withheld.
     """
-    status = _hidden_by_floor(session, model_cls, row_id)
+    status = _withheld_by_profile(session, model_cls, row_id)
     if status is None:
         return
 
     logger.info(
-        "path_handle_below_curated_floor kind=%s row_id=%d status=%s",
+        "path_handle_withheld_under_profile kind=%s row_id=%d status=%s",
         kind_label,
         row_id,
         status.value,
@@ -374,7 +365,7 @@ def resolve_path_handle(
                 row_id,
             )
             raise not_found(kind_label, code="handle_not_found")
-        _enforce_curated_floor(session, model_cls, row_id, kind_label)
+        _enforce_detail_withholding(session, model_cls, row_id, kind_label)
         return row_id
 
     # kind == "ref"
@@ -399,7 +390,7 @@ def resolve_path_handle(
         # above already carries more than the helper would, and the ref
         # is the half a 404 may echo.
         raise not_found(kind_label, ref=ref, code="handle_not_found")
-    _enforce_curated_floor(session, model_cls, row_id, kind_label, ref=ref)
+    _enforce_detail_withholding(session, model_cls, row_id, kind_label, ref=ref)
     return row_id
 
 

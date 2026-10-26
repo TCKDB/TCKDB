@@ -474,11 +474,11 @@ def test_unreviewed_scoping_parents_are_not_hidden(client, db_session, login_as)
             assert cur.status_code == 200, (key, suffix, cur.text)
     ref = world.extra["reaction_entry_hidden_participant"].public_ref
     cur = _get(client, f"/reaction-entries/{ref}/full", "curated")
-    # The /full participant list applies the floor to the species entries it lists (existing behaviour, not the
-    # guard's): the unreviewed entry is neither listed nor named, and the route still answers.
-    assert unreviewed_entry not in cur.text
+    # The /full participant list is an embedded record of a served detail (ADR 0023 step 7, Q9): the unreviewed entry is
+    # listed with its badge, as under exploratory, not left out by the record floor.
     exp = _get(client, f"/reaction-entries/{ref}/full", "exploratory")
     assert [p["species_entry_ref"] for p in exp.json()["species"]["reactants"]] == [unreviewed_entry]
+    assert [p["species_entry_ref"] for p in cur.json()["species"]["reactants"]] == [unreviewed_entry]
     unreviewed_rxe = world.extra["reaction_entry_unreviewed"].public_ref
     records = _get(client, f"/reaction-entries/{unreviewed_rxe}/kinetics", "curated").json()["records"]
     assert [r["kinetics_ref"] for r in records] == [world.visible["kin_vu"].public_ref]

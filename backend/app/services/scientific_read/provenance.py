@@ -90,18 +90,18 @@ from app.services.scientific_read.calculations import (
     build_calculation_trust_fragment,
 )
 from app.services.scientific_read.common import (
+    detail_visible_statuses,
+    evidence_withheld_under_profile,
     fetch_review_badges,
     molecular_formula_expr,
     reject_client_sort,
     review_summary,
     validate_includes,
-    visible_statuses,
 )
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summaries,
 )
 from app.services.scientific_read.conformers import build_group_record
-from app.services.scientific_read.handles import status_hidden_under_profile
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
@@ -198,7 +198,8 @@ def get_reaction_full(
             )
         )
 
-    visible = visible_statuses(
+    # A served detail shows what it embeds badged, unless withheld (ADR 0023 step 7, Q9).
+    visible = detail_visible_statuses(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
@@ -700,6 +701,7 @@ def _build_kinetics_section(
         session,
         reaction_entry_id=reaction_entry_id,
         request=kinetics_request,
+        detail=True,
     )
     return list(response.records)
 
@@ -1360,9 +1362,9 @@ def _build_review_records_section(
             .order_by(RecordReview.record_id.asc(), RecordReview.id.asc())
         ).all()
         for r in rows:
-            # The review row of a record the active profile hides (its own detail route answers 404) is not listed:
+            # The review row of a record the active profile withholds (its own detail route answers 404) is not listed:
             # its type, status and id would say that record exists. The reaction entry is a scoping parent, never gated.
-            if record_type is not SubmissionRecordType.reaction_entry and status_hidden_under_profile(r.status):
+            if record_type is not SubmissionRecordType.reaction_entry and evidence_withheld_under_profile(r.status):
                 continue
             out.append(
                 ReviewRecordEntry(

@@ -43,7 +43,7 @@ from app.schemas.reads.scientific_frequency_scale_factor import (
     ScientificFrequencyScaleFactorDetailResponse,
     ScientificFrequencyScaleFactorRecord,
 )
-from app.services.scientific_read.common import review_floor_predicate, validate_includes, where_visible
+from app.services.scientific_read.common import shown_predicate, validate_includes, where_visible
 from app.services.scientific_read.composite_binding import composite_scheme_summary
 from app.services.scientific_read.energy_correction_schemes import applied_target_visible
 from app.services.scientific_read.handles import (
@@ -95,7 +95,7 @@ def get_frequency_scale_factor(
         raise not_found("frequency_scale_factor", row_id=fsf_id, code="handle_not_found")
 
     record = build_frequency_scale_factor_record(
-        session, fsf=fsf, includes=includes
+        session, fsf=fsf, includes=includes, detail=True
     )
 
     return ScientificFrequencyScaleFactorDetailResponse(
@@ -116,9 +116,14 @@ def build_frequency_scale_factor_record(
     *,
     fsf: FrequencyScaleFactor,
     includes: set[str],
+    detail: bool = False,
 ) -> ScientificFrequencyScaleFactorRecord:
-    """Project one FrequencyScaleFactor row into the public record shape."""
-    statmech_count = _count_statmech_usage(session, fsf.id)
+    """Project one FrequencyScaleFactor row into the public record shape.
+
+    ``detail`` is True for the factor's own detail read: its usage (statmech records and applications) is then linked
+    evidence, shown under ``curated`` unless withheld (ADR 0023 step 7). A search row keeps the record floor.
+    """
+    statmech_count = _count_statmech_usage(session, fsf.id, detail=detail)
 
     evidence = FrequencyScaleFactorEvidenceSummary(
         has_literature_source=fsf.source_literature_id is not None,
@@ -150,7 +155,7 @@ def build_frequency_scale_factor_record(
 
     used_by_block: list[FrequencyScaleFactorUsageSummary] | None = None
     if "used_by" in includes:
-        used_by_block = _build_used_by(session, fsf.id)
+        used_by_block = _build_used_by(session, fsf.id, detail=detail)
 
     return ScientificFrequencyScaleFactorRecord(
         frequency_scale_factor=core,
@@ -169,12 +174,12 @@ def build_frequency_scale_factor_record(
 # ---------------------------------------------------------------------------
 
 
-def _count_statmech_usage(session: Session, fsf_id: int) -> int:
+def _count_statmech_usage(session: Session, fsf_id: int, *, detail: bool = False) -> int:
     return int(
         session.scalar(
             where_visible(
                 select(func.count()).select_from(Statmech).where(Statmech.frequency_scale_factor_id == fsf_id),
-                review_floor_predicate(Statmech.id, SubmissionRecordType.statmech),
+                shown_predicate(Statmech.id, SubmissionRecordType.statmech, detail=detail),
             )
         )
         or 0
@@ -182,7 +187,7 @@ def _count_statmech_usage(session: Session, fsf_id: int) -> int:
 
 
 def _build_used_by(
-    session: Session, fsf_id: int
+    session: Session, fsf_id: int, *, detail: bool = False
 ) -> list[FrequencyScaleFactorUsageSummary]:
     """Bounded inverse-link summary.
 
@@ -197,7 +202,7 @@ def _build_used_by(
     statmech_rows = session.execute(
         where_visible(
             select(Statmech.id, Statmech.public_ref).where(Statmech.frequency_scale_factor_id == fsf_id),
-            review_floor_predicate(Statmech.id, SubmissionRecordType.statmech),
+            shown_predicate(Statmech.id, SubmissionRecordType.statmech, detail=detail),
         )
         .order_by(Statmech.id.asc())
         .limit(_USAGE_LIMIT)
@@ -222,7 +227,7 @@ def _build_used_by(
                     AppliedEnergyCorrection.target_reaction_entry_id,
                     AppliedEnergyCorrection.target_transition_state_entry_id,
                 ).where(AppliedEnergyCorrection.frequency_scale_factor_id == fsf_id),
-                applied_target_visible(),
+                applied_target_visible(detail=detail),
             )
             .order_by(AppliedEnergyCorrection.id.asc())
             .limit(remaining)

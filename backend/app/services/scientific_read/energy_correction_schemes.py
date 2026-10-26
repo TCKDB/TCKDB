@@ -49,7 +49,7 @@ from app.schemas.reads.scientific_energy_correction_scheme import (
     ScientificEnergyCorrectionSchemeDetailResponse,
     ScientificEnergyCorrectionSchemeRecord,
 )
-from app.services.scientific_read.common import review_floor_predicate, validate_includes, where_visible
+from app.services.scientific_read.common import shown_predicate, validate_includes, where_visible
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summary,
 )
@@ -103,7 +103,7 @@ def get_energy_correction_scheme(
         raise not_found("energy_correction_scheme", row_id=ecs_id, code="handle_not_found")
 
     record = build_energy_correction_scheme_record(
-        session, ecs=ecs, includes=includes
+        session, ecs=ecs, includes=includes, detail=True
     )
 
     return ScientificEnergyCorrectionSchemeDetailResponse(
@@ -124,12 +124,17 @@ def build_energy_correction_scheme_record(
     *,
     ecs: EnergyCorrectionScheme,
     includes: set[str],
+    detail: bool = False,
 ) -> ScientificEnergyCorrectionSchemeRecord:
-    """Project one EnergyCorrectionScheme row into the public record shape."""
+    """Project one EnergyCorrectionScheme row into the public record shape.
+
+    ``detail`` is True for the scheme's own detail read: its applications to transition-state entries are then linked
+    evidence, shown under ``curated`` unless withheld (ADR 0023 step 7). A search row keeps the record floor.
+    """
     atom_n = _count_atom_params(session, ecs.id)
     bond_n = _count_bond_params(session, ecs.id)
     comp_n = _count_component_params(session, ecs.id)
-    applied_n = _count_applied_usage(session, ecs.id)
+    applied_n = _count_applied_usage(session, ecs.id, detail=detail)
     total_terms = atom_n + bond_n + comp_n
 
     evidence = EnergyCorrectionSchemeEvidenceSummary(
@@ -174,7 +179,7 @@ def build_energy_correction_scheme_record(
 
     used_by_block: list[EnergyCorrectionSchemeUsageSummary] | None = None
     if "used_by" in includes:
-        used_by_block = _build_used_by(session, ecs.id)
+        used_by_block = _build_used_by(session, ecs.id, detail=detail)
 
     return ScientificEnergyCorrectionSchemeRecord(
         energy_correction_scheme=core,
@@ -234,21 +239,24 @@ def _count_component_params(session: Session, ecs_id: int) -> int:
     )
 
 
-def applied_target_visible():
+def applied_target_visible(*, detail: bool = False):
     """Condition on ``AppliedEnergyCorrection``: its target is not a transition-state entry the profile hides.
 
     ``None`` under the default profile. A species or reaction entry is a scoping parent, never hidden; the application of
-    a scheme to a hidden transition-state entry is not part of what the curated profile shows (owner decision D5).
+    a scheme to a transition-state entry the record floor hides is not listed by a search (owner decision D5). The scheme's
+    own detail (``detail=True``) lists it unless the entry is withheld (ADR 0023 step 7).
     """
-    visible = review_floor_predicate(
-        AppliedEnergyCorrection.target_transition_state_entry_id, SubmissionRecordType.transition_state_entry
+    visible = shown_predicate(
+        AppliedEnergyCorrection.target_transition_state_entry_id,
+        SubmissionRecordType.transition_state_entry,
+        detail=detail,
     )
     if visible is None:
         return None
     return AppliedEnergyCorrection.target_transition_state_entry_id.is_(None) | visible
 
 
-def _count_applied_usage(session: Session, ecs_id: int) -> int:
+def _count_applied_usage(session: Session, ecs_id: int, *, detail: bool = False) -> int:
     from sqlalchemy import func
 
     return int(
@@ -257,7 +265,7 @@ def _count_applied_usage(session: Session, ecs_id: int) -> int:
                 select(func.count())
                 .select_from(AppliedEnergyCorrection)
                 .where(AppliedEnergyCorrection.scheme_id == ecs_id),
-                applied_target_visible(),
+                applied_target_visible(detail=detail),
             )
         )
         or 0
@@ -321,7 +329,7 @@ def _build_corrections(
 
 
 def _build_used_by(
-    session: Session, ecs_id: int
+    session: Session, ecs_id: int, *, detail: bool = False
 ) -> list[EnergyCorrectionSchemeUsageSummary]:
     """Project this scheme's applications — pointer *and* applied value.
 
@@ -347,7 +355,7 @@ def _build_used_by(
     # An application to a hidden transition-state entry is not listed (floored before the limit, so a hidden row cannot
     # displace a shown one); one whose source calculation is hidden is, and the guard withholds the source.
     rows = session.execute(
-        where_visible(applied_stmt, applied_target_visible()).order_by(AppliedEnergyCorrection.id.asc()).limit(_USAGE_LIMIT)
+        where_visible(applied_stmt, applied_target_visible(detail=detail)).order_by(AppliedEnergyCorrection.id.asc()).limit(_USAGE_LIMIT)
     ).all()
     if not rows:
         return []

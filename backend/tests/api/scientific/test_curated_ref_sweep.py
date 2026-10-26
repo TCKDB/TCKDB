@@ -239,13 +239,15 @@ EXPECTED_EXPLORATORY_SIGHTINGS: dict[str, set[str]] = {
 }
 
 
-#: Why a route still leaves out an unlisted record that exploratory names (ADR 0023): its service applies the earlier rule.
+#: Why a route still leaves out an unlisted record that exploratory names (ADR 0023): it is a list, a search, a browse or a
+#: population (an export, a comparison), and the record floor decides which records those return. Since step 7 no detail
+#: read is here: a served detail shows what it embeds unless rejected or deprecated.
 SERVICE_FLOOR = (
-    "a search or detail service applies the record floor to a RECORD it lists or counts (a network solve, a kinetics record, "
+    "a search service applies the record floor to a RECORD it lists or counts (a network solve, a kinetics record, "
     "a transition state or entry: ADR 0023 Q3/Q5), or to a matching filter (step 4)"
 )
 DERIVED = (
-    "a reference row's usage list, usage count and usage-eligibility filter preview the RECORD list of what cites it (a "
+    "a reference row's search result counts and its usage-eligibility filter preview the RECORD list of what cites it (a "
     "calculation, a statmech) and keep the record floor; a correction scheme's or scale factor's calculation kind is lost "
     "only when it rides with an application to a transition-state entry below the floor"
 )
@@ -269,22 +271,17 @@ COMPARED_RECORDS = (
 #: show everything exploratory shows, so a guard that blanks evidence again fails the sweep wherever it was already moved.
 #: What a returned ROW that is itself below the floor holds is not evidence (the floor drops the whole row) and is excluded
 #: by the row's actual status. A kind that is now shown is stale and fails: the list can only shrink.
-STILL_ON_THE_EARLIER_RULE: dict[tuple[str, str], tuple[set[str], str]] = {
-    ("GET", "/api/v1/scientific/energy-correction-schemes/{energy_correction_scheme_ref_or_id}"): ({'calc', 'tse'}, DERIVED),
+KEEPS_THE_RECORD_FLOOR: dict[tuple[str, str], tuple[set[str], str]] = {
     ("GET", "/api/v1/scientific/energy-correction-schemes/search"): ({'calc', 'tse'}, DERIVED),
     ("GET", "/api/v1/scientific/export/ml/reactions.ndjson"): ({'calc', 'kin', 'ts', 'tse'}, ML_ENERGY_ROWS),
     ("GET", "/api/v1/scientific/export/ml/species.ndjson"): ({'calc', 'thm'}, ML_ENERGY_ROWS),
     ("GET", "/api/v1/scientific/export/ndjson"): ({'kin', 'thm', 'trn'}, EXPORTED_RECORDS),
-    ("GET", "/api/v1/scientific/frequency-scale-factors/{frequency_scale_factor_ref_or_id}"): ({'sm', 'tse'}, DERIVED),
     ("GET", "/api/v1/scientific/frequency-scale-factors/search"): ({'sm', 'tse'}, DERIVED),
     ("GET", "/api/v1/scientific/level-of-theories/browse"): ({'calc'}, DERIVED),
-    ("GET", "/api/v1/scientific/level-of-theories/{level_of_theory_ref_or_id}"): ({'calc'}, DERIVED),
     ("GET", "/api/v1/scientific/level-of-theories/search"): ({'calc'}, DERIVED),
     ("GET", "/api/v1/scientific/networks/browse"): ({'nsolve'}, SERVICE_FLOOR),
-    ("GET", "/api/v1/scientific/network-solves/{network_solve_ref_or_id}"): ({'tse'}, SERVICE_FLOOR),
     ("GET", "/api/v1/scientific/network-solves/search"): ({'tse'}, SERVICE_FLOOR),
     ("GET", "/api/v1/scientific/networks/search"): ({'calc', 'nsolve', 'tse'}, SERVICE_FLOOR),
-    ("GET", "/api/v1/scientific/reaction-entries/{reaction_entry_id}/full"): ({'calc', 'cg', 'kin', 'ts', 'tse'}, SERVICE_FLOOR),
     ("POST", "/api/v1/scientific/energy-correction-schemes/search"): ({'calc', 'tse'}, DERIVED),
     ("POST", "/api/v1/scientific/frequency-scale-factors/search"): ({'sm', 'tse'}, DERIVED),
     ("POST", "/api/v1/scientific/level-of-theories/search"): ({'calc'}, DERIVED),
@@ -387,8 +384,8 @@ def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypa
     """The sweep proper, in two states of the same world (ADR 0023).
 
     **Unlisted** (the world as built: not_reviewed / under_review): a record below the approved floor may be named NESTED
-    with its badge, but is never the answer: not ``record``, not a row of ``records``, not a candidate. Curated must still
-    be a withholding of exploratory (no substitution).
+    with its badge, but is never a LISTED answer: not a row of ``records``, not a candidate (the record floor). The ``record`` of
+    a detail read is served, badged (step 7). Curated must still be a withholding of exploratory (no substitution).
 
     **Withheld** (the same records turned rejected / deprecated): linked evidence at these statuses is withheld, so under
     curated they appear NOWHERE, by ref or by id, and curated is still a withholding of the exploratory crawl taken
@@ -467,7 +464,7 @@ def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypa
     # Two things exploratory names are the floor's, not evidence: a record it returns as the answer, and anything nested
     # inside a returned ROW that is itself below the floor (the whole row is dropped by curated). Both are judged by the
     # row's ACTUAL review status in the database, not by membership of the tracked hidden records. What a route still leaves
-    # out is on the earlier rule until its step lands and is listed in STILL_ON_THE_EARLIER_RULE (by route and ref kind).
+    # out is the record floor's (a list, a search, a population) and is listed in KEEPS_THE_RECORD_FLOOR (by route and ref kind).
     missing: dict[tuple[str, str], set[str]] = defaultdict(set)
     shown_routes = 0
     for (route, label), e in exploratory.items():
@@ -490,18 +487,18 @@ def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypa
         else:
             shown_routes += 1
     for route, kinds in sorted(missing.items()):
-        allowed = STILL_ON_THE_EARLIER_RULE.get(route, (None, ""))[0]
+        allowed = KEEPS_THE_RECORD_FLOOR.get(route, (None, ""))[0]
         if allowed is None:
             failures.append(
                 fmt(route, f"exploratory names unlisted {sorted(kinds)} records that curated leaves out (evidence must be shown)")
             )
         elif kinds - set(allowed):
             failures.append(fmt(route, f"{sorted(kinds - set(allowed))} are newly left out beside the listed {sorted(allowed)}"))
-    for route, (allowed, reason) in sorted(STILL_ON_THE_EARLIER_RULE.items()):
+    for route, (allowed, reason) in sorted(KEEPS_THE_RECORD_FLOOR.items()):
         assert reason and allowed, route
         stale = set(allowed) - missing.get(route, set())
         if stale:
-            failures.append(fmt(route, f"now shows {sorted(stale)}: remove them from STILL_ON_THE_EARLIER_RULE"))
+            failures.append(fmt(route, f"now shows {sorted(stale)}: remove them from KEEPS_THE_RECORD_FLOOR"))
     if shown_routes < 15:
         failures.append(f"only {shown_routes} request variants show unlisted evidence in full: the evidence rule is not exercised")
 
@@ -515,7 +512,7 @@ def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypa
     for route, reason in KNOWN_UNGUARDED.items():
         assert reason, route
 
-    # -- 4a. unlisted: never the answer. Withheld: named nowhere, by ref or by id -------------------------------------
+    # -- 4a. unlisted: never a listed answer. Withheld: named nowhere, by ref or by id -------------------------------------
     subject_found: set[str] = set()
     for (route, _label), r in curated.items():
         for key, path in subject_leaks(r.text, hidden, identities.get(route)):
@@ -560,7 +557,7 @@ def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypa
                 substituted.add(f"[{state}] " + fmt(route, path))
 
     for entry in sorted(subject_found):
-        failures.append(f"unlisted record served as the answer: {entry}")
+        failures.append(f"unlisted record listed as an answer: {entry}")
     for entry in sorted(ref_found):
         failures.append(f"withheld ref leak: {entry}")
     for entry in sorted(id_found):

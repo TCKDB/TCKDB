@@ -324,8 +324,8 @@ def subject_leaks(
 ) -> set[tuple[str, str]]:
     """``(hidden key, json path)`` where an UNLISTED record is the subject of the answer (ADR 0023).
 
-    A record below the approved floor may be named nested, badged; it must never BE the answer: not ``record``, not a row of
-    ``records``, not a candidate. The subject's identity is the path the guard's registry declares for its model
+    A record below the approved floor may be named nested, badged; it must never BE a LISTED answer: not a row of ``records``,
+    not a candidate. The ``record`` of a detail read is not checked: since step 7 it serves anything but the withheld set. The subject's identity is the path the guard's registry declares for its model
     (``identity``, from :func:`route_subject_identities`); a ref anywhere else on the row is linked evidence and is allowed.
     A candidate of a selection is checked by :data:`CANDIDATE_IDENTITY_KEYS`.
     """
@@ -338,7 +338,7 @@ def subject_leaks(
     by_ref = {r: k for k, r in present.items()}
     found: set[tuple[str, str]] = set()
     for path, node in _dicts(obj):
-        if identity is not None and path in ("record", "records[*]"):
+        if identity is not None and path == "records[*]":
             value = _at(node, identity)
             if isinstance(value, str) and value in by_ref:
                 found.add((by_ref[value], f"{path}.{'.'.join(identity)}"))
@@ -350,7 +350,10 @@ def subject_leaks(
 
 
 def subject_rows(text: str, identity: tuple[str, ...] | None) -> list[tuple[str | None, Any]]:
-    """``(identity ref, row)`` for every subject row (``record`` / ``records[*]``) of a JSON body."""
+    """``(identity ref, row)`` for every LISTED subject row (``records[*]``) of a JSON body.
+
+    The ``record`` of a detail read is not a row the floor can drop (step 7), so it is not returned.
+    """
     kind, obj = parse_body(text)
     return _rows_of(kind, obj, identity)
 
@@ -359,8 +362,6 @@ def _rows_of(kind: str, obj: Any, identity: tuple[str, ...] | None) -> list[tupl
     if kind != "json" or not isinstance(obj, dict):
         return []
     rows: list[Any] = []
-    if isinstance(obj.get("record"), dict):
-        rows.append(obj["record"])
     if isinstance(obj.get("records"), list):
         rows.extend(r for r in obj["records"] if isinstance(r, dict))
     out = []
@@ -385,7 +386,7 @@ def refs_in(node: Any, found: set[str] | None = None) -> set[str]:
 
 
 def refs_outside_floored_rows(text: str, identity: tuple[str, ...] | None, floored: set[str]) -> set[str]:
-    """Strings of a body that sit outside every subject row whose own identity ref is in ``floored``.
+    """Strings of a body that sit outside every listed row whose own identity ref is in ``floored``.
 
     A row below the floor is the floor's to drop (its whole subtree goes with it), so what is nested inside it is not
     evidence a curated read owes. Everything else in the body (other rows, the envelope) is kept.
@@ -396,8 +397,6 @@ def refs_outside_floored_rows(text: str, identity: tuple[str, ...] | None, floor
     dropped = {id(row) for ref, row in _rows_of(kind, obj, identity) if ref in floored}
     out: set[str] = set()
     for key, value in obj.items():
-        if key == "record" and id(value) in dropped:
-            continue
         if key == "records" and isinstance(value, list):
             for row in value:
                 if id(row) not in dropped:

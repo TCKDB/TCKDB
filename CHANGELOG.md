@@ -22,6 +22,21 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Curated detail pages serve unreviewed records badged (2026-10-26)
+
+- **No client type change.** Step 7 of ADR 0023, the last step. Under `profile=curated`, a detail read (every route that resolves one record by
+  ref or id: the scientific `*_ref_or_id` routes, and the legacy entity detail routes) now serves any record that is not `rejected` or `deprecated`,
+  with its review badge (`review_status_by_ref`). Before, it answered 404 for anything below `approved`. A `rejected` or `deprecated` record still
+  answers the same 404 as a ref that names nothing, and the default (exploratory) behaviour is unchanged. Lists, searches, browses and selects keep
+  the `approved` floor.
+- What a served detail embeds follows the evidence rule: a `/reaction-entries/{id}/full` participant or entry, a supersession successor, a
+  network solve's channel barriers, and the usage a level of theory, correction scheme or frequency scale factor lists are shown badged unless
+  withheld. A search row of those reference records still counts the floor's population.
+- A legacy detail read under `curated` states the record's review status in an `X-TCKDB-Review-Status` response header (the raw entity payloads
+  have no badge field).
+- The ref guard's "subject below the floor" net (renamed `SubjectNotShown`) applies to the rows of `records` only; the `record` of a detail read
+  is checked against the withheld set. No schema or migration change. ADR 0006's second seam is amended by ADR 0023.
+
 ## Curated reads check made-under inputs (2026-10-26)
 
 - **`tckdb-client` 0.173.0.** Step 6 of ADR 0023. Under `profile=curated`, a route that asks for `check_inputs` (the thermo and kinetics entry-scoped
