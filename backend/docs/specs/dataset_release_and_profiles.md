@@ -187,8 +187,8 @@ Resolved once, by an `async` router-level dependency
 > **Landed (step 7):** detail-by-ref. Under `curated` a detail read (the second seam below, and the legacy entity detail reads)
 > serves any record that is not `rejected` or `deprecated`, badged, and answers 404 only for those two (Q1). What a served detail
 > embeds follows the evidence rule: a `/full` participant or entry (Q9), a supersession successor (Q5), and the usage a level of
-> theory, correction scheme or scale factor lists. Lists, searches, browses and selects keep the approved floor, and a search row
-> of a reference record still counts that population. Nothing is left on the earlier rule (D6).
+> theory, correction scheme or scale factor lists. Lists, searches, browses and selects keep the approved floor (a select request resolves the refs it names through
+> `resolve_selection_handle`), and a search row of a reference record still counts that population. Nothing is left on the earlier rule (D6).
 
 Behaviourally, `curated` is applied at exactly **two** seams, which between
 them cover the whole read surface:

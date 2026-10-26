@@ -28,7 +28,7 @@ dataset must never require a code release.
   ref or id: the scientific `*_ref_or_id` routes, and the legacy entity detail routes) now serves any record that is not `rejected` or `deprecated`,
   with its review badge (`review_status_by_ref`). Before, it answered 404 for anything below `approved`. A `rejected` or `deprecated` record still
   answers the same 404 as a ref that names nothing, and the default (exploratory) behaviour is unchanged. Lists, searches, browses and selects keep
-  the `approved` floor.
+  the `approved` floor (a select request resolves the refs it names through `resolve_selection_handle`, which keeps it).
 - What a served detail embeds follows the evidence rule: a `/reaction-entries/{id}/full` participant or entry, a supersession successor, a
   network solve's channel barriers, and the usage a level of theory, correction scheme or frequency scale factor lists are shown badged unless
   withheld. A search row of those reference records still counts the floor's population.

@@ -46,7 +46,7 @@ Three things are assigned to three rules, so none is mixed up:
 - **Record floor** (`approved`): lists, searches and selects.
 - **Detail-by-ref** under `curated`: the withheld set (`rejected`, `deprecated`) from step 7 onward. This amends ADR 0006's
   second seam (`resolve_path_handle`, which reached `_hidden_by_floor` and `status_hidden_under_profile` in `handles.py`; since
-  step 7 it reaches `_withheld_by_profile`, which asks `evidence_withheld_under_profile`). `status_hidden_under_profile` stays
+  step 7 it reaches `_gated_status`, which asks `evidence_withheld_under_profile`; a select target resolves through `resolve_selection_handle`, which keeps the record floor). `status_hidden_under_profile` stays
   the record floor for lists.
 - **Evidence rule**: a returned record's linked evidence.
 
@@ -121,7 +121,8 @@ Step 2 (nested refs in responses, selection documents and exports) moved the sel
   supersession successor (Q5) and the usage a reference row lists (a level of theory's calculations, a correction scheme's or scale factor's
   applications) are shown unless withheld. Lists, searches, browses and selects keep the approved record floor, and a search row of a
   reference record still counts the floor's population. The response-level ref guard's "subject below the floor" net now applies to the
-  rows of `records` only; the `record` of a detail read is checked against the withheld set instead. Selection manifests record
-  `linked_evidence_withheld` and resolve their targets through the same handles, so a manifest's content and format are unchanged. A
+  rows of `records` only; the `record` of a detail read is checked against the withheld set instead. A select request resolves the refs it names (its target, scope and candidate population) through `resolve_selection_handle`, which
+  keeps the approved record floor, so a select over a record below the floor answers the same 404 as before; selection manifests record
+  `linked_evidence_withheld`, so a manifest's content and format are unchanged. A
   recorded selection that named an `approved` record replays as before. `generate_rubric_pins.py --check` stays clean. Nothing is
   left on D6.

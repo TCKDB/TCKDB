@@ -520,6 +520,8 @@ def test_every_handle_resolver_is_classified_for_the_curated_floor():
     source = Path(handles.__file__).read_text()
     reaching = set(re.findall(r"resolve_path_handle\(\s*\n?\s*session,\s*(\w+),", source))
     assert reaching, "resolver scan found nothing; did the call shape change?"
+    # ``resolve_selection_handle`` passes its caller's class straight through: not a class of its own to classify.
+    reaching.discard("model_cls")
 
     gated = {cls.__name__ for cls in handles._REVIEWABLE_HANDLE_TYPES}
     parent_derived = {cls.__name__ for cls in handles._PARENT_DERIVED_HANDLE_TYPES}

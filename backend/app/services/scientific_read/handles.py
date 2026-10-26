@@ -244,7 +244,7 @@ def status_hidden_under_profile(status: RecordReviewStatus, *, profile: Any = No
 
     Detail-by-ref is not decided here. Since step 7 of ADR 0023 a detail read serves any record that is not in the withheld
     set (``common.evidence_withheld_under_profile``: ``rejected`` and ``deprecated``), badged; see
-    :func:`_withheld_by_profile`.
+    :func:`_gated_status`.
 
     ``profile`` defaults to the request's profile; callers outside the request context (streams,
     which captured their profile eagerly) pass it explicitly.
@@ -258,12 +258,15 @@ def status_hidden_under_profile(status: RecordReviewStatus, *, profile: Any = No
     return REVIEW_FLOOR_ORDER[status] > REVIEW_FLOOR_ORDER[floor]
 
 
-def _withheld_by_profile(session: Session, model_cls: type, row_id: int) -> RecordReviewStatus | None:
-    """The review status that withholds this record's detail under the active profile, or ``None`` if it is served.
+def _gated_status(
+    session: Session, model_cls: type, row_id: int, *, floor: bool
+) -> RecordReviewStatus | None:
+    """The review status that keeps this record out of the answer under the active profile, or ``None`` if it is served.
 
-    The withheld set is ``rejected`` and ``deprecated`` under a profile with a review floor (ADR 0023 step 7); a
-    ``not_reviewed`` or ``under_review`` record (or one with no review row) is served, badged. No floor, or an ungated
-    type, answers ``None`` and issues no review query.
+    ``floor=False`` (a detail read): the withheld set, ``rejected`` and ``deprecated`` under a profile with a review floor
+    (ADR 0023 step 7); a ``not_reviewed`` or ``under_review`` record (or one with no review row) is served, badged.
+    ``floor=True`` (a select target, a candidate population): the approved record floor, as for a list. No floor, or an
+    ungated type, answers ``None`` and issues no review query.
     """
     from app.services.scientific_read.common import evidence_withheld_under_profile
     from app.services.scientific_read.profile import current_read_profile
@@ -282,13 +285,14 @@ def _withheld_by_profile(session: Session, model_cls: type, row_id: int) -> Reco
         )
     ).first()
     status = review.status if review is not None else RecordReviewStatus.not_reviewed
-    return status if evidence_withheld_under_profile(status) else None
+    hidden = status_hidden_under_profile(status) if floor else evidence_withheld_under_profile(status)
+    return status if hidden else None
 
 
-def _enforce_detail_withholding(
-    session: Session, model_cls: type, row_id: int, kind_label: str, ref: str | None = None
+def _enforce_handle_gate(
+    session: Session, model_cls: type, row_id: int, kind_label: str, ref: str | None = None, *, floor: bool = False
 ) -> None:
-    """Under ``profile=curated``, answer 404 for a record in the withheld set (``rejected``, ``deprecated``).
+    """Under ``profile=curated``, answer 404 for a record the gate keeps out: the withheld set for a detail read.
 
     Search endpoints get the record floor from ``visible_statuses``, but roughly half the read services never call it:
     every detail-by-ref read resolves a handle and returns the row directly. This is the one function every
@@ -297,24 +301,26 @@ def _enforce_detail_withholding(
 
     Since step 7 of ADR 0023 (amending ADR 0006's second seam) the detail of a record that is merely ``not_reviewed`` or
     ``under_review`` is served, and the response carries its review badge; only the withheld set answers 404. Lists,
-    searches, browses and selects keep the approved floor.
+    searches, browses and selects keep the approved floor: a select resolves the records it selects over (``floor=True``,
+    :func:`resolve_selection_handle`) as a list does.
 
     The response is the same 404 ``handle_not_found`` an unknown ref produces, including the ref the caller supplied
-    (``ref``), so the two cannot be told apart by their detail text either. That is deliberate: the withheld record is
+    (``ref``), so the two cannot be told apart by their detail text either. That is deliberate: a record kept out is
     simply not part of the addressable surface, and a distinguishable "exists but is withheld" would leak review state
     to anonymous callers.
 
-    :raises NotFoundError: the record is withheld.
+    :raises NotFoundError: the record is kept out.
     """
-    status = _withheld_by_profile(session, model_cls, row_id)
+    status = _gated_status(session, model_cls, row_id, floor=floor)
     if status is None:
         return
 
     logger.info(
-        "path_handle_withheld_under_profile kind=%s row_id=%d status=%s",
+        "path_handle_withheld_under_profile kind=%s row_id=%d status=%s floor=%s",
         kind_label,
         row_id,
         status.value,
+        floor,
     )
     raise not_found(kind_label, ref=ref, code="handle_not_found")
 
@@ -325,10 +331,13 @@ def resolve_path_handle(
     handle: str,
     *,
     kind_label: str,
+    floor: bool = False,
 ) -> int:
     """Resolve a path-level handle (integer PK or public ref) to an integer id.
 
-    Used by detail routes like ``/species-entries/{handle}/thermo``.
+    Used by detail routes like ``/species-entries/{handle}/thermo``. Under ``curated`` a detail read answers 404 for the
+    withheld set only (ADR 0023 step 7); ``floor=True`` applies the approved record floor instead, for a select target
+    (see :func:`resolve_selection_handle`).
 
     - Integer handle: SELECT by id. Missing → 404.
     - Public ref with the expected prefix: SELECT by ``public_ref``.
@@ -365,7 +374,7 @@ def resolve_path_handle(
                 row_id,
             )
             raise not_found(kind_label, code="handle_not_found")
-        _enforce_detail_withholding(session, model_cls, row_id, kind_label)
+        _enforce_handle_gate(session, model_cls, row_id, kind_label, floor=floor)
         return row_id
 
     # kind == "ref"
@@ -390,8 +399,18 @@ def resolve_path_handle(
         # above already carries more than the helper would, and the ref
         # is the half a 404 may echo.
         raise not_found(kind_label, ref=ref, code="handle_not_found")
-    _enforce_detail_withholding(session, model_cls, row_id, kind_label, ref=ref)
+    _enforce_handle_gate(session, model_cls, row_id, kind_label, ref=ref, floor=floor)
     return row_id
+
+
+def resolve_selection_handle(session: Session, model_cls: type, handle: str, *, kind_label: str) -> int:
+    """Resolve a ref a SELECT request names (its target, scope or candidate population) to an integer id.
+
+    A select chooses among records, so the approved record floor decides which records it can name, exactly as for a list
+    (ADR 0023: lists, searches and selects keep the floor; only a detail read follows the withheld set). Errors and the 404
+    for a record below the floor are those of :func:`resolve_path_handle`.
+    """
+    return resolve_path_handle(session, model_cls, handle, kind_label=kind_label, floor=True)
 
 
 # ---------------------------------------------------------------------------
@@ -813,6 +832,7 @@ __all__ = [
     "resolve_network_solve_handle",
     "resolve_path_handle",
     "resolve_reaction_entry_handle",
+    "resolve_selection_handle",
     "resolve_species_entry_handle",
     "resolve_statmech_handle",
     "resolve_transition_state_entry_handle",

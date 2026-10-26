@@ -56,7 +56,7 @@ from app.services.network_selection.models import (
     Scope,
 )
 from app.services.network_selection.selection import NetworkSelection, select_network
-from app.services.scientific_read.handles import is_ref_handle, resolve_path_handle
+from app.services.scientific_read.handles import is_ref_handle, resolve_selection_handle
 from app.services.scientific_read.profile import current_read_profile
 from app.services.selection_kernel import Outcome
 from app.services.selection_kernel.requested import OFFER_REVIEW, Eligibility, answer_steps, review_default
@@ -69,7 +69,7 @@ def _ref_only(session: Session, model_cls: type, handle: str, *, kind_label: str
     """Resolve a public ref to a row id, refusing an integer id outright (``invalid_handle``)."""
     if not is_ref_handle(handle):
         raise ValueError(f"invalid_handle: {handle!r} is not a <prefix>_<body> public ref")
-    return resolve_path_handle(session, model_cls, handle, kind_label=kind_label)
+    return resolve_selection_handle(session, model_cls, handle, kind_label=kind_label)
 
 
 def resolve_network_ref(session: Session, ref: str) -> int:

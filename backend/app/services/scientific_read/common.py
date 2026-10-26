@@ -715,7 +715,7 @@ def where_visible(stmt: Any, predicate: Any) -> Any:
 #                  Covers lists, searches and selects: which RECORDS are returned. Under ``curated`` anything below
 #                  ``approved`` is not returned.
 #
-#   DETAIL-BY-REF  ``resolve_path_handle`` -> ``_withheld_by_profile`` in ``handles.py``, and the legacy detail reads
+#   DETAIL-BY-REF  ``resolve_path_handle`` -> ``_gated_status`` in ``handles.py``, and the legacy detail reads
 #                  (``_legacy_reads.py``). Under ``curated`` they answer 404 for the withheld set below (rejected /
 #                  deprecated) only and serve every other record, badged (step 7 of ADR 0023, amending ADR 0006's second
 #                  seam). What a served detail embeds (a ``/full`` participant, a supersession successor, the usage a
