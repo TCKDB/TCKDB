@@ -104,3 +104,11 @@ Step 2 (nested refs in responses, selection documents and exports) moved the sel
   version bump: the checks and grading are unchanged, only the calculations a curated read hands them change (an unreviewed one is
   read), so stored and exploratory verdicts are unchanged and curated read-time verdicts may change. The ML export's energy rows
   keep their calculations approved-only (Q7); that is a named function, `ml_dataset.ml_energy_row_floor`, with its own test.
+- Step 6 (made-under comparisons) changed no manifest content and no rubric. A stored assessment's stamp was computed from the full set of
+  inputs, without a read profile, so whether it is current is a property of the record and its stamp, not of the reader. Under `curated`, a
+  route that asks for `check_inputs` (the thermo and kinetics entry-scoped lists with `include=assessments`, and the statmech and transport
+  by-ref reads) now recomputes and compares exactly as `exploratory` does, and `state`, `stale_reason` and `inputs_checked` are identical under
+  both. The recomputation (`evaluate_reproducibility`) reads no request profile. The answer is a state and a reason, never a ref; "stale because
+  a rejected input changed" is accepted (Q8). The cost guard is unchanged: only the routes that bound their page compare. The read model's
+  `made_under.inputs_unchecked_reason` (it only ever said `curated_profile`) is removed, with `tckdb-client` 0.173.0. The stored machine-review
+  `made_under` compares stamps only (`inputs_checked` false) under every profile and is unchanged. `generate_rubric_pins.py --check` stays clean.

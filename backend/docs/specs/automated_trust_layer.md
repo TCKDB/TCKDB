@@ -1181,8 +1181,9 @@ These are intentionally left for implementation review.
   never the response size**: statmech and transport by-ref reads always compare them; the thermo and kinetics entry-scoped lists compare them only on an explicit
   `check_inputs=true` with `include=assessments` and `limit` of at most 10 (422 `assessment_input_check_limit` otherwise; echoed as `request.check_inputs`);
   every other route compares the rubric name and version only and reports `inputs_unchecked`. `null` when there is nothing to compare (`unassessed`).
-  Under a profile that hides records (`curated`) the comparison is never made, even when asked: it would compare today's inputs, hidden calculations included, with
-  the stored snapshot, and a hidden edit would move a visible verdict. The answer is `inputs_unchecked` with `inputs_unchecked_reason: curated_profile`. `check_inputs` sent
+  The comparison is the same under `curated` and `exploratory` (ADR 0023, step 6): a stored stamp was computed from the full set of inputs with no read profile, so
+  whether it is current is a property of the record and its stamp, not of the reader. The recomputation reads no profile; a changed input, whatever its review
+  status, makes the stamp `stale` (`inputs_changed`), and the answer is a state and a reason, never a ref. `check_inputs` sent
   to a route that does not support it is refused (422 `check_inputs_not_supported`), not ignored; a bad handle is a 404 before `check_inputs` is judged.
 - The admin curator-task reads carry `made_under` for the stored machine review the task came from (the row whose `source_audit_event_id` is the task's; the
   record's latest reviewer-family review when the task has none), read by the currency rule (`currency.stamp_mismatches`): a different prompt or rubric name or

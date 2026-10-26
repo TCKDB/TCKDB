@@ -22,6 +22,17 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Curated reads check made-under inputs (2026-10-26)
+
+- **`tckdb-client` 0.173.0.** Step 6 of ADR 0023. Under `profile=curated`, a route that asks for `check_inputs` (the thermo and kinetics entry-scoped
+  lists with `include=assessments`, and the statmech and transport by-ref reads) now compares a stored assessment's inputs with today's, as an
+  exploratory read does. Whether a stamp is current is a property of the record and its stored stamp, not of the reader: the stamp was computed from the
+  full set of inputs without a read profile, and the recomputation reads no profile. `state`, `stale_reason` and `inputs_checked` are identical under both
+  profiles. The answer is a state and a reason, never a ref.
+- **Removed:** `made_under.inputs_unchecked_reason` (it only ever said `curated_profile`) is gone from the read model, the OpenAPI document, the client type and the
+  frontend. Pre-release; no compatibility shim. The cost guard is unchanged: only the routes that bound their page compare inputs.
+- No schema or migration impact. No rubric pin changed.
+
 ## The client defaults the enthalpy reference declaration (2026-10-26)
 
 - **`tckdb-client` 0.172.0.** The thermo builders (`Thermo.scalar`, `Thermo.nasa`, `Thermo.points`) set `enthalpy_reference_kind="formation_298k"` when the

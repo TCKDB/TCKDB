@@ -952,7 +952,6 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
         "state": "unassessed",
         "stale_reason": None,
         "inputs_checked": None,
-            "inputs_unchecked_reason": None,
     }
     trust_made_under = detail["deterministic_trust"]["made_under"]
     assert trust_made_under["state"] == "current"
