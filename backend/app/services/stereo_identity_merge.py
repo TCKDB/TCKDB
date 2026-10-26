@@ -99,7 +99,9 @@ _STAYS_ON_MERGED_ROW = {
 #: reassignment module's own constants until it exports one mapping; keep in step with ``reassign_conformer_groups``
 #: (every ``repairs.declare(table, columns)`` call in ``app.services.conformer_reassignment``).
 _REASSIGNMENT_REPAIR_COLUMNS: dict[str, tuple[str, ...]] = {
-    "conformer_observation": tuple(OBSERVATION_COLUMNS),
+    # Basin scheme v3 (#825) also writes ``mapped_coords_json``. Replace this mapping with
+    # ``app.services.conformer_basin_moves.REASSIGNMENT_REPAIR_COLUMNS`` once that PR has merged.
+    "conformer_observation": tuple(dict.fromkeys([*OBSERVATION_COLUMNS, "mapped_coords_json"])),
     "thermo": tuple(THERMO_COLUMNS),
     "statmech_model_member": tuple(STATMECH_MEMBER_COLUMNS),
     "statmech_model_declaration": tuple(STATMECH_DECLARATION_COLUMNS),
