@@ -62,13 +62,14 @@ REGISTRIES: dict[str, Callable[[], VersionRegistry]] = {
 #: The thermo and kinetics formats moved once more to 5 (2026-10-26): their provenance filters are matched through ONE source
 #: calculation and the filter set grew, so a decision recorded under the earlier reading is refused on replay.
 #: The structure and relative-energy formats moved to 5 (ADR 0023, step 5): a basin determination records its conformer
-#: group's and observation's review statuses apart, so a replay judges the group as a record and the observation as evidence.
+#: group's and observation's review statuses apart (the statmech format moved to 5 with them: a declared determination records
+#: whether its owner gates it and its basin's conformer statuses), so a replay judges the group as a record and the observation as evidence.
 EXPECTED: dict[str, int] = {
     "thermo_formats": 5,
     "thermo_semantics": 2,
     "kinetics_formats": 5,
     "kinetics_semantics": 2,
-    "statmech_formats": 4,
+    "statmech_formats": 5,
     "statmech_semantics": 2,
     "structure_formats": 5,
     "network_formats": 4,

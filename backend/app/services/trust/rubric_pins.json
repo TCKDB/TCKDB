@@ -16,7 +16,7 @@
       "1": "28e638f09e687fce82fcc274d372e97cdcc938dad8acbafa2b598c6d803a0c91"
     },
     "computed_transition_state": {
-      "2": "becd1645137247fa4b85d0d7e9bba875a7563e64500ea0bc5719c5ed7f92284a"
+      "2": "ca806f32afeb69873823fa062cf46172d1a882794ea1500586ba5b5fe40e0268"
     },
     "computed_transport": {
       "1": "1b5a1f833dc867aff540eddc5e123a5d6fa3cb0d320e90b7a931e94f7a158676"
@@ -111,7 +111,7 @@
     {
       "name": "computed_transition_state",
       "version": 2,
-      "reason": "ADR 0023 step 5 review fixes: the structure loader records a basin's conformer group and observation statuses apart and the source-finding gate keeps the record floor on the group. Stored and exploratory verdicts are unchanged; curated read-time verdicts may change."
+      "reason": "ADR 0023 step 5 review fixes: the structure loader (_scan_determinations, NormalizedDetermination) records a basin's conformer group and observation statuses apart, judges the group as a record and the observation as evidence, and excludes a basin unless every terminal status among them is lifted by the request. Stored and exploratory verdicts are unchanged under default settings; curated read-time verdicts may change."
     }
   ]
 }

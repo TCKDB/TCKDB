@@ -171,15 +171,42 @@ class DeterminationFacts:
     owner_ref: str
     target_kind: str
     evaluated_geometry_ref: str
+    #: The review status of the entry that owns the determination (the selection's subject).
     review_status: RecordReviewStatus | None
+    #: Whether that owner gates the determination as a RECORD. A transition-state entry does (Q3); a species entry is a scoping
+    #: parent and never does (ADR 0023), which a profile with a review floor records as ``False``. Without a floor it is
+    #: ``True`` for either owner, so an exploratory assessment is unchanged.
+    owner_gates: bool = True
+    #: Under a profile with a review floor only (``None`` otherwise): the determination's conformer observation's status and
+    #: that observation's group's status. A declared basin is linked EVIDENCE of the statmech record, so these follow the
+    #: evidence rule: rejected or deprecated is withheld (the determination reads as unavailable), unreviewed is used.
+    observation_review_status: RecordReviewStatus | None = None
+    group_review_status: RecordReviewStatus | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {**self.__dict__, "review_status": self.review_status.value if self.review_status else None}
+        def value(status: RecordReviewStatus | None) -> str | None:
+            return status.value if status else None
+
+        return {
+            **self.__dict__,
+            "review_status": value(self.review_status),
+            "observation_review_status": value(self.observation_review_status),
+            "group_review_status": value(self.group_review_status),
+        }
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> DeterminationFacts:
-        status = RecordReviewStatus(raw["review_status"]) if raw["review_status"] else None
-        return cls(**{**raw, "review_status": status})
+        def status(key: str) -> RecordReviewStatus | None:
+            return RecordReviewStatus(raw[key]) if raw[key] else None
+
+        return cls(
+            **{
+                **raw,
+                "review_status": status("review_status"),
+                "observation_review_status": status("observation_review_status"),
+                "group_review_status": status("group_review_status"),
+            }
+        )
 
 
 @dataclass(frozen=True)

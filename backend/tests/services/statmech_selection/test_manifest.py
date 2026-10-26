@@ -113,7 +113,7 @@ def test_a_decision_replays_from_its_manifest_alone_at_both_levels():
 def test_the_manifest_holds_an_ordering_block_and_no_rule_edge_or_conflict_field():
     manifest = make_manifest()
     assert set(manifest["decision"]["ordering"]) == {"fronts", "administrative_order", "admin_key"}
-    assert "protocol" not in manifest["decision"] and manifest["format"] == {"name": "statmech_selection_manifest", "version": 4}
+    assert "protocol" not in manifest["decision"] and manifest["format"] == {"name": "statmech_selection_manifest", "version": 5}
     assert replay_matches(manifest)
 
 
@@ -341,3 +341,66 @@ def test_the_writer_stamps_the_registered_format_and_every_reader_refuses_a_floa
         for read in readers:
             with pytest.raises(ReplayError, match="unknown manifest format"):
                 read(tampered)
+
+
+def _manifest_with_a_determination(profile=EXPLORATORY, statuses=EFFECTIVE):
+    from app.services.statmech_selection.assessment import assess_candidate
+    from tests.services.statmech_selection._support import ts_declared, ts_req
+    from tests.services.statmech_selection.test_assessment_ts_legacy import saddle_calcs, ts_subject
+
+    request = ts_req()
+    candidates = [ts_declared()]
+    calcs = saddle_calcs()
+    assessments = tuple(
+        assess_candidate(
+            c, request=request, subject=ts_subject(), calculations=calcs, effective_statuses=statuses
+        )
+        for c in candidates
+    )
+    decision = decide_statmech(request=request, candidates=candidates, assessments=assessments)
+    verdicts = {a.candidate_ref: verdict_of(a, c, request) for a, c in zip(assessments, candidates, strict=True)}
+    qualification = StatmechQualification(
+        request=request,
+        subject=ts_subject(),
+        effective_statuses=tuple(sorted(statuses, key=lambda s: s.value)),
+        total_candidates=1,
+        visible_candidates=1,
+        excluded_by_review=(),
+        excluded_count=0,
+        nested_rows=0,
+        snapshot_isolation="repeatable read",
+        candidates=tuple(candidates),
+        calculations=tuple(calcs.values()),
+        assessments=assessments,
+        summary=summarize(request, assessments),
+        candidate_statuses=tuple(sorted(statuses, key=lambda s: s.value)),
+        verdicts=verdicts,
+        funnel=funnel(considered=1, removed_by_filters=0, terminal_excluded={}, verdicts=list(verdicts.values())),
+    )
+    return build_manifest(qualification, decision, profile=dict(profile))
+
+
+def test_a_statmech_manifest_records_how_its_determination_is_gated_and_replay_refuses_a_forged_record():
+    """Format 5: the declared determination records whether its owner gates it and, under a floor only, its conformer statuses.
+
+    Kills: replay ignoring those fields (a forged ``owner_gates`` or a conformer status passing on an exploratory manifest,
+    or a transition-state owner recorded as not gating on a curated one).
+    """
+    genuine = _manifest_with_a_determination()
+    assert genuine["format"]["version"] == 5 and replay_matches(genuine)
+    [recorded] = [c["determination"] for c in genuine["candidates"]]
+    assert recorded["owner_gates"] is True and recorded["group_review_status"] is None
+
+    def forged_refused(manifest, **changes):
+        def edit(body):
+            for c in body["candidates"]:
+                c["determination"].update(changes)
+
+        refused("inconsistent_manifest", replay_statmech_decision, retamper(manifest, edit))
+
+    forged_refused(genuine, group_review_status="approved")  # an exploratory manifest records no conformer status
+    forged_refused(genuine, observation_review_status="approved")
+    forged_refused(genuine, owner_gates=False)  # and its owner always gates
+    curated = _manifest_with_a_determination(CURATED, frozenset({RecordReviewStatus.approved}))
+    assert replay_matches(curated)
+    forged_refused(curated, owner_gates=False)  # a transition-state entry is a record: it gates under curated too

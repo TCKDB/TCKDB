@@ -519,8 +519,16 @@ def _scan_determinations(
             unit_status[i] = gate  # None: no review of its own; the species entry's status is not copied onto it
         if i not in kept:
             continue
-        default = review_default(gate) if gate is not None else None
-        if default is not None and not elig.lifts(default):
+        # Every terminal status among the basin's group and observation must be lifted by the request, not only the weaker
+        # one: asking for rejected records does not ask for a deprecated group. The first default not lifted decides (the
+        # weaker status first), so live selection and the replay of its manifest agree.
+        unlifted = [
+            d
+            for d in (review_default(s) for s in sorted(links, key=lambda s: -REVIEW_FLOOR_ORDER[s]))
+            if d is not None and not elig.lifts(d)
+        ]
+        default = unlifted[0] if unlifted else None
+        if default is not None:
             excluded.append((i, gate, REASON_TERMINAL))
             terminal_excluded[default] = terminal_excluded.get(default, 0) + 1
         elif gate is not None and below_floor(i, gate):

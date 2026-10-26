@@ -306,6 +306,10 @@ def _check_consistency(
         if hasattr(item, "determination_ref") and request.grain is Grain.conformer:
             check_basin_statuses(item, ref, recorded_candidate, observation_allowed)
             continue
+        if hasattr(item, "determination_ref") and (
+            item.observation_review_status is not None or item.group_review_status is not None
+        ):
+            raise ReplayError("inconsistent_manifest", f"{ref} records a conformer status, which only a conformer-grain unit has")
         if item.review_status is None and hasattr(item, "determination_ref"):
             continue  # a determination with no review of its own (see NormalizedDetermination.review_status)
         if item.review_status not in allowed:

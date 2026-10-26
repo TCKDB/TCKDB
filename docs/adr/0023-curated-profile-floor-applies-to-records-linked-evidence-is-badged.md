@@ -94,7 +94,10 @@ Step 2 (nested refs in responses, selection documents and exports) moved the sel
   tell a `not_reviewed` that came from the group from one that came from the observation. Format 5 records
   `observation_review_status` and `group_review_status` apart beside the combined status, and a replay judges the group by the
   record floor, the observation by the evidence rule, and the combined status as the weaker of the two. Formats 4 and earlier are
-  refused. The thermo, kinetics, statmech and network manifests keep their formats: they record each input's own `review_status`.
+  refused. The statmech manifest is format 5 as well: a candidate's declared determination records whether its owner gates it (a
+  transition-state entry does, Q3; a species entry is a scoping parent and never does) and, under a profile with a floor, its
+  conformer observation's and group's status, which follow the evidence rule. The thermo, kinetics and network manifests keep
+  their formats: they record each input's own `review_status`.
   What every replay accepts moved: it judges a source calculation, a lineage parent, a declared member and a basin's conformer
   observation by the evidence rule (every status but `rejected` and `deprecated`, over the caller's own floor), computed from the
   recorded request alone, and still judges the records themselves (the candidates, the compared groups, the owning

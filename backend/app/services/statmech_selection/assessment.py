@@ -959,7 +959,12 @@ def assess_candidate(
             f.add("required_evidence_unavailable:geometry")
     if request.target.scope.kind is ScopeKind.ts_determination and candidate.determination is not None:
         det = candidate.determination
-        if det.review_status is None or det.review_status not in effective_statuses:
+        # The owner gates as a record only when it is a transition-state entry (Q3); a species entry is a scoping parent and
+        # ``owner_gates`` is recorded ``False`` for it under a profile with a floor. The basin's conformer observation and its
+        # group are linked evidence: recorded under a floor only, withheld when rejected or deprecated, used when unreviewed.
+        if (det.owner_gates and (det.review_status is None or det.review_status not in effective_statuses)) or any(
+            s is not None and s not in used for s in (det.observation_review_status, det.group_review_status)
+        ):
             f.add("required_evidence_unavailable:determination")
         elif pinned is None:
             pinned = det.evaluated_geometry_ref

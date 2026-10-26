@@ -470,7 +470,7 @@ def test_the_current_format_version_of_every_engine_is_written(client, world):
         "kinetics": (5, None),
         "network": (4, None),
         "structure": (5, None),
-        "statmech": (4, None),
+        "statmech": (5, None),
         "relative_energy": (5, 1),
     }
 
@@ -482,8 +482,9 @@ def test_the_current_format_version_of_every_engine_is_written(client, world):
         for engine in ("thermo", "kinetics", "network", "structure", "statmech", "relative_energy")
         for previous in (1, 3)
     ]
-    # Format 4 is retired for the two engines whose recorded inputs now carry a basin's group and observation statuses apart.
-    + [("structure", 4), ("relative_energy", 4)],
+    # Format 4 is retired for the engines whose recorded inputs now carry a basin's group and observation statuses apart
+    # (structure, relative energies) or how a declared determination is gated (statmech).
+    + [("structure", 4), ("relative_energy", 4), ("statmech", 4)],
 )
 def test_a_manifest_of_another_format_version_is_refused(client, world, name, previous):
     """Kills: another format version added to an engine's registry. Format 3 is the one ADR 0023 retired: a manifest

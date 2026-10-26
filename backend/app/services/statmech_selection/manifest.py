@@ -69,7 +69,7 @@ from app.services.statmech_selection.models import (
     StatmechRequest,
 )
 from app.services.statmech_selection.service import StatmechQualification, verdict_of
-from app.services.statmech_selection.vocabulary import CONTRACT_VERSION
+from app.services.statmech_selection.vocabulary import CONTRACT_VERSION, OwnerKind
 from app.services.structure_selection.models import NormalizedCalculation
 from app.versioning import same_value
 
@@ -80,8 +80,10 @@ from app.versioning import same_value
 #: eligibility settings, the manifest records which review statuses a candidate itself may have and each candidate's
 #: verdict under those settings, and the population records the funnel. Version 4: ``read_profile`` records the review statuses whose linked
 #: evidence the profile withheld (ADR 0023); under ``curated`` a not-reviewed or under-review record is shown as
-#: evidence and only a rejected or deprecated one is a token.
-MANIFEST_FORMAT_VERSION = 4
+#: evidence and only a rejected or deprecated one is a token. Version 5: a candidate's declared determination records
+#: whether its owner gates it as a record and, under a profile with a floor, its conformer observation's and group's status
+#: (linked evidence, judged by the evidence rule); a manifest of an earlier format is refused.
+MANIFEST_FORMAT_VERSION = 5
 MANIFEST_FORMAT_NAME = "statmech_selection_manifest"
 MANIFEST_FORMATS = new_format_registry(
     "statmech_selection_manifest_formats", MANIFEST_FORMAT_NAME, MANIFEST_FORMAT_VERSION
@@ -325,6 +327,18 @@ def _check_consistency(
             "the review statuses a candidate may have are not what the recorded profile, request floor and eligibility settings allow",
         )
     for candidate in candidates:
+        det = candidate.determination
+        if det is not None:
+            # ADR 0023: the owner gates a determination as a record only when it is a transition-state entry, and only a
+            # profile with a floor records the basin's conformer statuses; an exploratory manifest carries neither.
+            curated_profile = floor is not None
+            owner_is_ts = request.target.owner_kind is OwnerKind.transition_state_entry
+            if (det.owner_gates != (owner_is_ts or not curated_profile)) or (
+                not curated_profile and (det.observation_review_status or det.group_review_status)
+            ):
+                raise ReplayError(
+                    "inconsistent_manifest", f"the determination of {candidate.candidate_ref} records owner or conformer statuses its profile does not"
+                )
         if candidate.review_status not in recorded_candidate:
             raise ReplayError("inconsistent_manifest", f"{candidate.candidate_ref} has a review status its own request cannot see")
         if candidate.declaration is not None:
