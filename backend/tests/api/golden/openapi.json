@@ -30093,18 +30093,6 @@
             ],
             "title": "Inputs Checked"
           },
-          "inputs_unchecked_reason": {
-            "anyOf": [
-              {
-                "const": "curated_profile",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Inputs Unchecked Reason"
-          },
           "rubric": {
             "anyOf": [
               {

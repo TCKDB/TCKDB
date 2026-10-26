@@ -1,4 +1,4 @@
-"""Where ``check_inputs`` is honoured, refused, and what a curated read may learn from it."""
+"""Where ``check_inputs`` is honoured, refused, and that a curated read compares inputs exactly as exploratory does."""
 
 from __future__ import annotations
 
@@ -19,55 +19,84 @@ from tests.services.scientific_read._factories import (
 API = "/api/v1/scientific"
 
 
-def _approved_thermo_with_a_hidden_source(db_session):
+def _approved_thermo_with_a_second_source(db_session, second_status: RecordReviewStatus | None):
+    """An approved thermo stamped over an approved calculation and a second one whose review row is stated here.
+
+    ``second_status`` None means no review row at all (reads as ``not_reviewed``).
+    """
     entry = make_species_entry(db_session, make_species(db_session))
     set_review(db_session, record_type=SubmissionRecordType.species_entry, record_id=entry.id, status=RecordReviewStatus.approved)
     lot = make_lot(db_session)
     thermo = make_thermo_scalar(db_session, species_entry=entry)
     visible = make_calculation(db_session, type=CalculationType.opt, species_entry_id=entry.id, lot_id=lot.id)
     set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=visible.id, status=RecordReviewStatus.approved)
-    hidden = make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot.id)  # not reviewed
+    second = make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot.id)
+    if second_status is not None:
+        set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=second.id, status=second_status)
     attach_thermo_source_calculation(db_session, thermo=thermo, calculation=visible, role=ThermoCalculationRole.opt)
-    attach_thermo_source_calculation(db_session, thermo=thermo, calculation=hidden, role=ThermoCalculationRole.sp)
+    attach_thermo_source_calculation(db_session, thermo=thermo, calculation=second, role=ThermoCalculationRole.sp)
     evaluate_and_append_reproducibility(db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id)
     # Approved last: an accepted record's source links are immutable.
     set_review(db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id, status=RecordReviewStatus.approved)
     db_session.expire_all()
-    return entry, thermo, hidden
+    return entry, thermo, second
 
 
-def _checked(client, entry, profile: str):
+def _checked_response(client, entry, profile: str):
     response = client.get(
         f"{API}/species-entries/{entry.public_ref}/thermo?include=assessments&check_inputs=true&limit=10&profile={profile}"
     )
     assert response.status_code == 200, response.text
-    records = response.json()["records"]
-    assert len(records) == 1, "the approved thermo must be visible under the profile"
-    return records[0]["assessments"]["reproducibility"]
+    assert len(response.json()["records"]) == 1, "the approved thermo must be visible under the profile"
+    return response
 
 
-def test_a_hidden_source_calculation_cannot_move_a_visible_verdict_under_curated(client, db_session):
-    entry, _, hidden = _approved_thermo_with_a_hidden_source(db_session)
-    before = _checked(client, entry, "curated")
-    hidden.lot_id = make_lot(db_session, method="a-different-method").id
+def _checked(client, entry, profile: str):
+    return _checked_response(client, entry, profile).json()["records"][0]["assessments"]["reproducibility"]
+
+
+_SECOND_STATUSES = [None, RecordReviewStatus.not_reviewed, RecordReviewStatus.rejected, RecordReviewStatus.deprecated]
+
+
+@pytest.mark.parametrize("second_status", _SECOND_STATUSES)
+def test_a_current_stamp_is_current_under_curated_as_under_exploratory(client, db_session, second_status):
+    entry, _, _ = _approved_thermo_with_a_second_source(db_session, second_status)
+    curated = _checked(client, entry, "curated")
+    exploratory = _checked(client, entry, "exploratory")
+    assert curated["state"] == "current"
+    assert curated["made_under"]["state"] == "current"
+    assert curated["made_under"]["inputs_checked"] is True
+    assert curated["made_under"]["stale_reason"] is None
+    assert curated["made_under"] == exploratory["made_under"]
+
+
+@pytest.mark.parametrize("second_status", _SECOND_STATUSES)
+def test_changed_inputs_are_stale_under_curated_as_under_exploratory(client, db_session, second_status):
+    entry, _, second = _approved_thermo_with_a_second_source(db_session, second_status)
+    assert _checked(client, entry, "curated")["made_under"]["state"] == "current"
+    second.lot_id = make_lot(db_session, method="a-different-method").id
     db_session.flush()
     db_session.expire_all()
-    after = _checked(client, entry, "curated")
-    assert after == before, "editing a hidden calculation changed what a curated read says about a visible record"
-    assert after["made_under"]["state"] == "inputs_unchecked"
-    assert after["made_under"]["inputs_checked"] is False
-    assert after["made_under"]["inputs_unchecked_reason"] == "curated_profile"
+    curated = _checked(client, entry, "curated")
+    exploratory = _checked(client, entry, "exploratory")
+    assert curated["made_under"]["state"] == "stale"
+    assert curated["made_under"]["stale_reason"] == "inputs_changed"
+    assert curated["made_under"]["inputs_checked"] is True
+    assert curated["state"] == "stale"
+    assert curated["made_under"] == exploratory["made_under"]
 
 
-def test_the_same_edit_is_visible_to_an_exploratory_check(client, db_session):
-    """The control: the input check does see the edit when nothing is hidden, so the curated result above is a decision."""
-    entry, _, hidden = _approved_thermo_with_a_hidden_source(db_session)
-    before = _checked(client, entry, "exploratory")
-    assert before["made_under"]["state"] == "current"
-    hidden.lot_id = make_lot(db_session, method="a-different-method").id
+@pytest.mark.parametrize("second_status", [RecordReviewStatus.rejected, RecordReviewStatus.deprecated])
+def test_a_curated_made_under_response_names_no_withheld_record(client, db_session, second_status):
+    entry, _, second = _approved_thermo_with_a_second_source(db_session, second_status)
+    second.lot_id = make_lot(db_session, method="a-different-method").id
     db_session.flush()
     db_session.expire_all()
-    assert _checked(client, entry, "exploratory")["made_under"]["state"] == "stale"
+    assert second.public_ref, "the withheld calculation must have a ref for this check to mean anything"
+    response = _checked_response(client, entry, "curated")
+    assert response.json()["records"][0]["assessments"]["reproducibility"]["made_under"]["state"] == "stale"
+    assert second.public_ref not in response.text
+    assert "inputs_unchecked_reason" not in response.text
 
 
 def test_a_bad_ref_is_a_404_before_check_inputs_is_judged(client):

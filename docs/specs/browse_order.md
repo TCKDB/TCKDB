@@ -222,8 +222,10 @@ the ML export's is `tckdb.ml` version 2.
 > unreviewed calculation, declared member or conformer observation is used, a `rejected` or `deprecated` one is absent. The record
 > they return or compare (a candidate, a compared conformer group, the owning transition-state entry) still has to clear the floor.
 >
-> **Still the earlier rule (decision D6: below the floor is hidden, evidence included), and described as it is:** made-under
-> comparisons (step 6), and detail-by-ref (step 7). Matching in search and select (step 4)
+> **Already true (step 6):** made-under comparisons are profile-free. A stored stamp is compared with a recomputation from the full set of
+> inputs, so a route that asks for `check_inputs` answers the same under `curated` and `exploratory`.
+>
+> **Still the earlier rule (decision D6: below the floor is hidden, evidence included), and described as it is:** detail-by-ref (step 7). Matching in search and select (step 4)
 > follows the evidence rule: see the filter paragraph below. Every passage below that describes what `curated` hides or shows for
 > those is therefore the earlier rule.
 

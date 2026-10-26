@@ -180,7 +180,6 @@ def test_assessments_are_opt_in_and_report_freshness(client, db_session):
             "state": "unassessed",
             "stale_reason": None,
             "inputs_checked": None,
-            "inputs_unchecked_reason": None,
         },
     }
 

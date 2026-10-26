@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.173.0 - 2026-10-26
+
+`MadeUnder` no longer carries `inputs_unchecked_reason`.
+
+- **Behaviour change.** A curated read that asks for `check_inputs` now compares a stored assessment's inputs exactly as an exploratory one does,
+  so `state` is `current` or `stale` (`stale_reason` `inputs_changed`) with `inputs_checked` true, the same under both profiles. The `curated_profile`
+  reason had no other use, so the field and its `Literal` are removed from the `MadeUnder` typed dict. A reader that tested for it should drop the test.
+
 ## 0.172.0 - 2026-10-26
 
 The thermo builders default the enthalpy declaration.

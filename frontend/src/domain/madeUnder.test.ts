@@ -21,17 +21,6 @@ describe("describeMadeUnder", () => {
         )
     })
 
-    it("inputs_unchecked under the curated profile says so", () => {
-        const w = describeMadeUnder({
-            ...base, assessed_version: 1, current_version: 1, state: "inputs_unchecked", inputs_checked: false,
-            inputs_unchecked_reason: "curated_profile",
-        })
-        expect(w.sentence).toBe(
-            "Assessed under rubric tckdb reproducibility, version 1 (the current version). "
-            + "Whether its inputs have changed since is not checked under the curated profile.",
-        )
-    })
-
     it("stale: states the assessed version, the current version, a Stale badge and that it has not been re-assessed", () => {
         const w = describeMadeUnder({
             ...base, assessed_version: 1, current_version: 3, state: "stale", stale_reason: "rubric_version",

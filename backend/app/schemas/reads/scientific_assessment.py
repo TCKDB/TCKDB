@@ -50,9 +50,6 @@ class MadeUnder(BaseModel):
     #: Whether the inputs were compared with today's: true only on a route that checks them. ``null`` when there is
     #: nothing to check (``unassessed``).
     inputs_checked: bool | None = None
-    #: Why the inputs were not compared although the route asked: ``curated_profile`` (a profile that hides records
-    #: would let a hidden record's edit move a visible verdict).
-    inputs_unchecked_reason: Literal["curated_profile"] | None = None
 
 
 class DeterministicTrustSummary(BaseModel):

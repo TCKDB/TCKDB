@@ -30,8 +30,6 @@ export const madeUnderSchema = z.object({
     stale_reason: z.string().nullable().optional(),
     // True only on a route that compares the inputs; null when there is nothing to compare.
     inputs_checked: z.boolean().nullable().optional(),
-    // Why the inputs were not compared although the route asked: a curated profile withholds the comparison.
-    inputs_unchecked_reason: z.string().nullable().optional(),
 }).passthrough()
 
 export type MadeUnder = z.infer<typeof madeUnderSchema>
@@ -89,11 +87,9 @@ export function describeMadeUnder(m: MadeUnder, kind: MadeUnderKind = "assessmen
         }
     }
     if (m.state === "inputs_unchecked") {
-        const unchecked = m.inputs_unchecked_reason === "curated_profile"
-            ? "Whether its inputs have changed since is not checked under the curated profile."
-            : review
-                ? "Whether the evidence it saw has changed since was not checked on this page."
-                : "Whether its inputs have changed since was not checked on this page."
+        const unchecked = review
+            ? "Whether the evidence it saw has changed since was not checked on this page."
+            : "Whether its inputs have changed since was not checked on this page."
         return {
             state: "inputs_unchecked",
             badge: null,

@@ -47,7 +47,6 @@ from app.services.reproducibility_rubric import (
     reproducibility_rubric_for,
 )
 from app.services.scientific_read.kinetics import KINETICS_TRUST_EAGER_LOADS
-from app.services.scientific_read.profile import current_read_profile
 from app.services.scientific_read.statmech import STATMECH_TRUST_EAGER_LOADS
 from app.services.scientific_read.thermo import THERMO_TRUST_EAGER_LOADS
 from app.services.scientific_read.transport import TRANSPORT_TRUST_EAGER_LOADS
@@ -352,8 +351,7 @@ def _reproducibility_summary(
     if assessment is None:
         return ReproducibilityAssessmentSummary(state="unassessed", made_under=MadeUnder(state="unassessed", inputs_checked=None))
 
-    withheld = check_inputs and current_read_profile().review_floor is not None
-    if not check_inputs or withheld:
+    if not check_inputs:
         # Whether the inputs of a stored assessment still match is a full re-evaluation (tens of statements) per record,
         # so only a route that is asked to (and bounds its page) does it. Here the rubric name and version are compared
         # and nothing is claimed about the inputs.
@@ -375,13 +373,13 @@ def _reproducibility_summary(
                 state=state,
                 stale_reason=None if rubric_is_current else "rubric_version",
                 inputs_checked=False,
-                # Under a profile that hides records the input check would compare today's inputs, hidden ones
-                # included, with the stored snapshot: a hidden record's edit would move a visible verdict. It is
-                # not done, and the answer says why instead of guessing.
-                inputs_unchecked_reason="curated_profile" if withheld else None,
             ),
         )
 
+    # A stored stamp was computed from the full set of inputs, with no read profile, so whether it is current is a property
+    # of the record and its stamp, not of the reader: the recomputation below reads nothing from the request's profile
+    # (``evaluate_reproducibility`` never consults it) and the answer is the same under ``curated`` and ``exploratory``
+    # (ADR 0023, step 6). The answer is a state and a reason, never a ref.
     current = evaluate_reproducibility(session, record_type=record_type, record_id=record_id)
     rubric_is_current = (assessment.rubric_name, assessment.rubric_version) == (
         current.rubric_name,
