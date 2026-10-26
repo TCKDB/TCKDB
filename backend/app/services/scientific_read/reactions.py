@@ -48,6 +48,7 @@ from app.schemas.reads.scientific_reactions import (
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    linked_evidence_predicate,
     molecular_formula_expr,
     reject_client_sort,
     review_floor_predicate,
@@ -965,9 +966,10 @@ def _compute_availability(
         for id_column, record_type in (
             (TransitionState.id, SubmissionRecordType.transition_state),
             (TransitionStateEntry.id, SubmissionRecordType.transition_state_entry),
-            (Calculation.id, SubmissionRecordType.calculation),
         ):
             path_search = where_visible(path_search, review_floor_predicate(id_column, record_type))
+        # The path search itself is evidence of the entry (ADR 0023): withheld only when rejected or deprecated.
+        path_search = where_visible(path_search, linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation))
         rows = session.execute(path_search.distinct()).all()
         has_path_search_set = {row[0] for row in rows}
 

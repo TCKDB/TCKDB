@@ -33,7 +33,7 @@ from app.schemas.reads.scientific_network import (
     NetworkValidationEntryRead,
     NetworkValidationRead,
 )
-from app.services.scientific_read.common import fetch_review_badges, visible_statuses
+from app.services.scientific_read.common import evidence_visible_statuses, fetch_review_badges, visible_statuses
 
 
 def _parse(model: type[BaseModel], raw: Any) -> tuple[Any, bool]:
@@ -46,12 +46,19 @@ def _parse(model: type[BaseModel], raw: Any) -> tuple[Any, bool]:
         return None, True
 
 
-def solve_ref_is_visible(session: Session, ref: str) -> bool:
-    """A solve exists and the read profile lets the caller know it does. A hidden one reads as absent."""
+def solve_ref_is_visible(session: Session, ref: str, *, as_evidence: bool = False) -> bool:
+    """A solve exists and the read profile lets the caller know it does. A hidden one reads as absent.
+
+    ``as_evidence`` is the READ side of a returned solve's validation entry (ADR 0023): the reference solve is evidence the
+    entry rests on, so under ``curated`` it is known unless it is rejected or deprecated, however unreviewed. The upload
+    check and the selection loader keep the default (the record floor); they move with the loaders' own populations (step 5).
+    """
     solve_id = session.scalar(select(NetworkSolve.id).where(NetworkSolve.public_ref == ref))
     if solve_id is None:
         return False
     badge = fetch_review_badges(session, record_type=SubmissionRecordType.network_solve, record_ids=[solve_id])[solve_id]
+    if as_evidence:
+        return badge.status in evidence_visible_statuses()
     return badge.status in visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
 
 
@@ -64,8 +71,8 @@ def _served_validation(
     for entry in validation.entries:
         body = entry.model_dump(mode="json")
         ref = body["reference_solve_ref"]
-        if ref is not None and not solve_ref_is_visible(session, ref):
-            # Nulled like any other ref to a hidden record (rule 2 / D1) and nothing more: upload refuses a reference to
+        if ref is not None and not solve_ref_is_visible(session, ref, as_evidence=True):
+            # Nulled like any other ref to a withheld record (rule 2 / D1) and nothing more: upload refuses a reference to
             # a solve its depositor cannot see, so ``reference_withheld`` is false on every default-profile read and a
             # ``true`` here would be the one signal that a hidden solve exists.
             body["reference_solve_ref"] = None

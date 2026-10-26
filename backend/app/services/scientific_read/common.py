@@ -651,8 +651,9 @@ def ids_below_review_floor(
     """Which of ``record_ids`` the active read profile's review floor hides (the detail route answers 404 for them).
 
     Mirrors the floor the detail-by-ref gate applies (``handles.py``); that stops being true in step 7 of ADR 0023, when
-    the gate moves to the withheld set. For the count and flag floors (owner decision
-    D5), where a count must not include a record the profile hides. It is not a ref rule: refs are withheld at the
+    the gate moves to the withheld set. For the RECORD floor on a count or a matching filter (owner decision D5): a count of
+    records must not include a record the profile hides. A count or level of a returned record's linked EVIDENCE uses the
+    evidence rule instead (``ids_withheld_as_evidence``, ADR 0023). It is not a ref rule: refs are withheld at the
     response boundary by ``ref_guard``. Without a review floor (exploratory, or outside a scientific request) nothing is
     hidden and no query is made. Otherwise one statement.
     """
@@ -675,8 +676,10 @@ def review_floor_predicate(id_column: Any, record_type: SubmissionRecordType, *,
     ``profile`` defaults to the request's. A streaming caller, which outlives the request context, passes the profile it
     captured while the request was alive.
 
-    Owner decision D5: a count or flag that would say a hidden record exists ("this entry has an IRC", "3 calculations")
-    answers what the list endpoint would show. A missing review row reads as ``not_reviewed``, as everywhere else.
+    The RECORD floor, for a count or flag of records a list would show (owner decision D5) and for matching filters. The
+    count or flag of a returned record's linked evidence ("this entry has an IRC", "3 calculations") is
+    :func:`linked_evidence_predicate` since step 3 of ADR 0023. A missing review row reads as ``not_reviewed``, as everywhere
+    else.
     """
     from app.services.scientific_read.handles import status_hidden_under_profile
 
@@ -725,12 +728,12 @@ def where_visible(stmt: Any, predicate: Any) -> Any:
 # cannot be lifted by request. Under exploratory nothing is withheld as evidence, so every function here answers
 # "visible" and issues no query.
 #
-# STATUS (steps 2 and 4 of ADR 0023): matching in search, browse and select (``linked_evidence_predicate`` and
-# ``ids_withheld_as_evidence`` in every filter on linked calculations and observations) is done. The response-level ref guard (``ref_guard.py``: pointers in responses, the document modes, the
+# STATUS (steps 2, 3 and 4 of ADR 0023): matching in search, browse and select (``linked_evidence_predicate`` and
+# ``ids_withheld_as_evidence`` in every filter on linked calculations and observations), the service counts, flags and derived
+# levels of a returned record, the response-level ref guard (``ref_guard.py``: pointers in responses, the document modes, the
 # selection loaders' unavailable-evidence seam, the export batcher), the legacy entity reads, and the ML export's conformer
 # refs call this section. Still on the earlier rule (D6: below the floor is hidden, evidence included) until their steps land:
-# service counts and derived levels (step 3), the trust and selection loaders'
-# own populations (step 5), made-under comparisons (step 6), and detail-by-ref (step 7).
+# the trust and selection loaders' own populations (step 5), made-under comparisons (step 6), and detail-by-ref (step 7).
 
 #: Review statuses whose linked evidence is withheld under a profile with a review floor.
 WITHHELD_EVIDENCE_STATUSES: frozenset[RecordReviewStatus] = frozenset(
@@ -797,17 +800,17 @@ def evidence_visible_statuses(*, profile: Any = None) -> frozenset[RecordReviewS
     return frozenset(s for s in RecordReviewStatus if not evidence_withheld_under_profile(s, profile=profile))
 
 
-def linked_evidence_predicate(id_column: Any, record_type: SubmissionRecordType, *, profile: Any = None) -> Any:
-    """A SQL condition true for the rows of ``record_type`` whose evidence the profile leaves visible.
+def evidence_withheld_predicate(id_column: Any, record_type: SubmissionRecordType, *, profile: Any = None) -> Any:
+    """A SQL condition true for the rows of ``record_type`` the evidence rule withholds under the profile.
 
-    ``id_column`` holds the evidence record id, as for :func:`review_floor_predicate`. The condition is "no review
-    row of ``rejected`` or ``deprecated`` status exists", so a record with no review row is visible. Returns ``None``
-    when the profile has no floor (exploratory), so a caller adds no condition and its statement is unchanged.
+    The positive form of :func:`linked_evidence_predicate`, for a statement that wants to read the verdict beside the row
+    (``SELECT row, <this>``) instead of filtering by it, so a builder that already queries per record learns which of its
+    links are withheld without another statement. ``None`` when the profile has no floor (nothing is withheld).
     """
     profile = profile if profile is not None else current_read_profile()
     if profile.review_floor is None:
         return None
-    return ~(
+    return (
         select(RecordReview.id)
         .where(
             RecordReview.record_type == record_type,
@@ -816,6 +819,17 @@ def linked_evidence_predicate(id_column: Any, record_type: SubmissionRecordType,
         )
         .exists()
     )
+
+
+def linked_evidence_predicate(id_column: Any, record_type: SubmissionRecordType, *, profile: Any = None) -> Any:
+    """A SQL condition true for the rows of ``record_type`` whose evidence the profile leaves visible.
+
+    ``id_column`` holds the evidence record id, as for :func:`review_floor_predicate`. The condition is "no review
+    row of ``rejected`` or ``deprecated`` status exists", so a record with no review row is visible. Returns ``None``
+    when the profile has no floor (exploratory), so a caller adds no condition and its statement is unchanged.
+    """
+    withheld = evidence_withheld_predicate(id_column, record_type, profile=profile)
+    return None if withheld is None else ~withheld
 
 
 def ids_withheld_as_evidence(

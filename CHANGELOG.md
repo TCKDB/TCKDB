@@ -86,6 +86,42 @@ format-3 manifest is refused on replay, not read as the new rule. The relative-e
 `computed_transition_state` rubric is re-pinned without a version bump (ADR 0023). Stored and exploratory verdicts are unchanged; curated read-time
 verdicts may change, because a curated read now supplies not-reviewed and under-review evidence to the grading. The grading code is untouched.
 
+## Curated profile: counts, flags and levels follow the evidence rule (2026-10-25, step 3 of 8)
+
+Under `curated`, the counts, flags and derived levels of a returned record now follow the evidence rule of [ADR 0023](docs/adr/0023-curated-profile-floor-applies-to-records-linked-evidence-is-badged.md):
+a linked calculation that is `rejected` or `deprecated` is not counted, sets no flag and supplies no level; one that is merely
+not reviewed or under review is counted and supplies its level, as the response already names it. Before this step a response
+could name an unreviewed calculation and, beside it, a count, a flag or a level of theory that left it out, and a statmech, thermo
+or conformer summary still counted a rejected one. Under `exploratory` nothing changes.
+
+- **What moved.** Transition-state entry and concept summaries (calculation counts, per-type coverage, `has_*` flags, available
+  sections, the validation descriptor, the saddle-point block, the per-type level and software maps); conformer group and
+  observation counts and flags; network source-calculation counts, per-participant state-energy sources and `partial_sources`, and a
+  validation entry's reference solve; statmech `evidence_summary`, `available_sections` and `levels`; thermo and kinetics `levels`,
+  primary level of theory and evidence checklist; the analytics provenance flags; the CHEMKIN transport linearity witness; a
+  reaction's `has_path_search`.
+- **Levels and no borrowing.** A level is a fact about the calculation that supplied it. When every calculation that could
+  supply it is withheld, the level and its source go together (`null` and `null`); the derivation still reads every link, so no other
+  calculation (the optimisation for a single point, a sibling at another level) is put in its place. A level another shown calculation also
+  supplies stays. The thermo `provenance.level_of_theory` is null with a withheld primary calculation. The kinetics helper is renamed
+  `_without_levels_from_withheld_calculations`; a shared helper does the same for statmech and thermo
+  (`withhold_levels_from_calculations`).
+- **Statements.** No statement per record is added: the verdict is read beside the rows in the statement that already loads the
+  statmech links and torsions; per page, thermo makes one lookup for matching (before paging), one for display and one for a
+  linked statmech's verdict, kinetics two (links, and the optimisations reached by dependency), and the network and conformer
+  counts none of their own.
+- **Reviewed and fixed.** The thermo evidence checklist picks each role's target from every link and then drops a withheld one
+  (it never fills the role from the linked statmech); a withheld linked statmech contributes no flag, level, primary calculation
+  or declared energy level; the traced conformer comes from no withheld primary. The kinetics checklist counts only transition-state
+  entries that clear the floor (entries are records), reads no validation row of a withheld target, and names the entry through a
+  shown source only.
+- **Unchanged here.** Transition-state entries, network solves and reaction kinetics stay records (floored). The trust and
+  selection loaders, usage lists on reference rows (what uses a level of theory, a scale factor or a correction scheme),
+  made-under comparisons and detail-by-ref arrive in later steps. Matching (step 4) already follows the same rule, so a filter such
+  as `has_irc=true` agrees with the flag it filters on.
+- **Version effects.** None. No rubric changed (`generate_rubric_pins.py --check` is clean without a re-pin), the selection
+  manifests are unchanged (format 4 already records `linked_evidence_withheld`), and no API field is added or removed.
+
 ## Conformer basins: symmetric groups, hydroxyl and amine rotors, stated tolerances (2026-10-26)
 
 In plain terms: two geometries of one molecule are now filed as the same conformer when some relabelling of the molecule that its own

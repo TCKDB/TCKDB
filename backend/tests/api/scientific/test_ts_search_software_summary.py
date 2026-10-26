@@ -68,9 +68,10 @@ def _world(db_session):
     opt = make_calculation(
         db_session, type=CalculationType.opt, transition_state_entry_id=entry.id, software_release_id=shown.id
     )
-    make_calculation(
+    sp = make_calculation(
         db_session, type=CalculationType.sp, transition_state_entry_id=entry.id, software_release_id=hidden.id
     )
+    entry.sp_calculation = sp  # for the tests below that review it
     set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=opt.id, status=RecordReviewStatus.approved)
     set_review(db_session, record_type=SubmissionRecordType.transition_state_entry, record_id=entry.id, status=RecordReviewStatus.approved)
     return entry, shown, hidden
@@ -83,8 +84,12 @@ def _software(client, entry, profile):
 
 
 def test_a_calculation_below_the_curated_floor_contributes_no_software(client, db_session, login_as):
-    """Kills: dropping the visibility predicate, so a hidden calculation names its type and software under curated."""
+    """Kills: dropping the evidence predicate, so a WITHHELD calculation names its type and software under curated.
+
+    The calculation is rejected (ADR 0023, step 3): an unreviewed one contributes its software, as the next test pins.
+    """
     entry, shown, hidden = _world(db_session)
+    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=entry.sp_calculation.id, status=RecordReviewStatus.rejected)
     curator = AppUser(username="ts-software-curator", role=AppUserRole.curator)
     db_session.add(curator)
     db_session.flush()
@@ -98,3 +103,15 @@ def test_a_calculation_below_the_curated_floor_contributes_no_software(client, d
     exploratory = _software(client, entry, "exploratory")
     assert set(exploratory) == {"opt", "sp"}
     assert [s["software"] for s in exploratory["sp"]] == ["orca"]
+
+
+def test_an_unreviewed_calculation_contributes_its_software_under_curated(client, db_session, login_as):
+    """Kills: the software map keeping the record floor (an unreviewed calculation's type and software dropped)."""
+    entry, shown, hidden = _world(db_session)
+    curator = AppUser(username="ts-software-curator-2", role=AppUserRole.curator)
+    db_session.add(curator)
+    db_session.flush()
+    login_as(curator.id)
+    curated = _software(client, entry, "curated")
+    assert set(curated) == {"opt", "sp"}
+    assert [s["software"] for s in curated["sp"]] == ["orca"]

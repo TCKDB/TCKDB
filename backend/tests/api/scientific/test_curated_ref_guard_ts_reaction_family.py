@@ -552,8 +552,10 @@ def test_levels_of_theory_name_only_the_calculation_types_the_profile_shows(clie
     cur_k = next(r for r in _get(client, kinetics, "curated").json()["records"] if r["kinetics_ref"] == ref)
     assert exp_k["levels"]["frequency"] is not None and exp_k["levels"]["frequency_source"] == "freq"
     assert cur_k["levels"]["frequency"] is None and cur_k["levels"]["frequency_source"] is None
-    # The checklist counts the calculation types the profile shows: ``kin_vn`` cites nothing and reaches a freq only
-    # through the (hidden) calculations of the reaction's entries.
+    # The checklist counts the calculation types under the transition-state ENTRIES that clear the record floor (entries are
+    # records, ADR 0023 Q3), minus the calculations the evidence rule withholds: ``kin_vn`` cites nothing and reaches a freq
+    # only through the reaction's hidden entry, so it counts none. (A freq under a SHOWN entry counts even unreviewed: see
+    # test_curated_evidence_counts_and_levels.py.)
     ref = world.visible["kin_vn"].public_ref
     exp_n = next(r for r in _get(client, kinetics, "exploratory").json()["records"] if r["kinetics_ref"] == ref)
     cur_n = next(r for r in _get(client, kinetics, "curated").json()["records"] if r["kinetics_ref"] == ref)
@@ -778,8 +780,8 @@ def test_an_id_whose_type_sits_in_a_sibling_key_is_seen_by_the_leak_check(db_ses
 
 def test_the_legacy_composite_annotation_follows_the_masked_levels():
     """``legacy_composite_shape`` says a named-method level (a catalogued recipe) sits on a non-composite calculation.
-    When the calculation that supplied that level is hidden the annotation goes with the level; one supplied by a
-    visible calculation stays.
+    When the calculation that supplied that level is withheld the annotation goes with the level; one supplied by a
+    shown calculation stays.
 
     Kills: computing the annotation before the mask and keeping it.
     """
@@ -788,7 +790,7 @@ def test_the_legacy_composite_annotation_follows_the_masked_levels():
         LevelOfTheorySummary,
         ScientificLevelsSummary,
     )
-    from app.services.scientific_read.kinetics import _without_levels_from_hidden_calculations
+    from app.services.scientific_read.kinetics import _without_levels_from_withheld_calculations
 
     named = LevelOfTheorySummary(
         level_of_theory_id=1,
@@ -804,14 +806,14 @@ def test_the_legacy_composite_annotation_follows_the_masked_levels():
         frequency_source="freq",
         legacy_composite_shape="named_method_level_on_non_composite_calculation",
     )
-    kept = _without_levels_from_hidden_calculations(levels, hidden=set(), opt_calc_id=10, freq_calc_id=11, sp_calc_id=None)
+    kept = _without_levels_from_withheld_calculations(levels, withheld=set(), opt_calc_id=10, freq_calc_id=11, sp_calc_id=None)
     assert kept.legacy_composite_shape is not None
-    # The freq is hidden: its level goes, and so does the annotation that rested on it.
-    masked = _without_levels_from_hidden_calculations(levels, hidden={11}, opt_calc_id=10, freq_calc_id=11, sp_calc_id=None)
+    # The freq is withheld: its level goes, and so does the annotation that rested on it.
+    masked = _without_levels_from_withheld_calculations(levels, withheld={11}, opt_calc_id=10, freq_calc_id=11, sp_calc_id=None)
     assert masked.frequency is None and masked.legacy_composite_shape is None
     assert masked.geometry == plain
-    # A hidden opt does not touch an annotation that rests on the visible freq.
-    other = _without_levels_from_hidden_calculations(levels, hidden={10}, opt_calc_id=10, freq_calc_id=11, sp_calc_id=None)
+    # A withheld opt does not touch an annotation that rests on the shown freq.
+    other = _without_levels_from_withheld_calculations(levels, withheld={10}, opt_calc_id=10, freq_calc_id=11, sp_calc_id=None)
     assert other.geometry is None and other.legacy_composite_shape is not None
 
 

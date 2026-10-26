@@ -92,29 +92,28 @@ calculation id. It is a stored-result presence fact only: it does not say the
 curvature is at the pinned geometry, usable, or eligible for any task (that is
 qualified by `POST /scientific/statmech/select`), and no witness is ranked or
 picked. Only calculations the record itself links are consulted; a calculation of
-the same owner that the record does not link is never borrowed. Witnesses follow
-the read profile's calculation visibility, the same floor
-`GET /scientific/calculations/{ref}` applies: under `profile=curated` a linked
-calculation below `approved` is omitted (so its existence, review state and
-whether it stores a Hessian are not confirmed), under `exploratory` every linked
-calculation with curvature is listed. The existing `source_freq_calculation_refs`
-pointer and the `source_calculations` block follow the same rule: under `profile=curated` they omit linked
-calculations below `approved`, so a statmech read never names a calculation that
-`GET /scientific/calculations/{ref}` answers 404 for, and a torsion's `source_scan_calculation_ref` / `_id` is
-null when that scan calculation is hidden. **Scope decision (owner may overrule):** only those
-blocks, which identify a calculation, are filtered. Record-level facts (`levels`, the `evidence_summary`
-counts, the `available_sections` flags including `has_frequencies`, and trust) describe the approved
-statmech's own provenance and are computed from every link in every profile, so they do not vary by profile.
-Release, archive and export copy raw provenance tables and are unaffected. Exploratory output is unchanged.
+the same owner that the record does not link is never borrowed. Witnesses follow the
+evidence rule of the read profile (ADR 0023): under `profile=curated` a linked calculation that is `rejected` or `deprecated` is
+omitted (so its existence, review state and whether it stores a Hessian are not confirmed); an unreviewed or under-review one is
+listed, with its badge in `review_status_by_ref`. Under `exploratory` every linked calculation with curvature is listed. The
+existing `source_freq_calculation_refs` pointer and the `source_calculations` block follow the same rule, and a torsion's
+`source_scan_calculation_ref` / `_id` is null when that scan calculation is withheld.
 
-The same rule now applies to the transition-state-entry read's `include=statmech` (`statmech[].source_calculations`), the thermo
+**Record-level facts follow the same rule (step 3).** The `levels`, the `evidence_summary` counts and flags
+(`source_calculation_count`, `has_opt_calculation`, `has_freq_calculation`, `has_sp_calculation`, `has_rotor_scans`), and the
+`available_sections` flags `has_source_calculations` and `has_frequencies` describe the source calculations the profile shows: a
+withheld calculation is not counted, and a level only it supplied is null together with its `*_source` (the derivation reads every
+link, so no other calculation's level is put in its place). An unreviewed calculation is counted and supplies its level. Under
+`exploratory` nothing is withheld, so these are computed from every link, as before. Trust is a separate verdict and is unchanged.
+Release, archive and export copy raw provenance tables and are unaffected.
+
+The same rule applies to the transition-state-entry read's `include=statmech` (`statmech[].source_calculations`), the thermo
 provenance's source calculations (the thermo's own and the statmech fallback), its target conformer group, statmech link and traced
-conformer refs, and statmech `include=conformers`
-(`conformer_group_ref`).
+conformer refs, its primary level of theory and derived levels, and statmech `include=conformers` (`conformer_group_ref`).
 
-**Not yet covered:** curated reads are not yet complete. Other surfaces may still name records the curated profile hides (a
-follow-up lists them), and supersession notices can name a successor that has since become hidden (an owner decision). Do not
-assume a curated read hides every unapproved ref.
+**Not yet covered:** detail-by-ref still applies the record floor (step 7), so a ref to an unreviewed calculation that a curated
+read now names answers 404 on its own route until then; search and select matching on a level or software is unchanged (step 4).
+Supersession notices name a successor that is shown with its badge.
 
 `statmech` also does **not** link to a conformer directly. The
 linkage is at the `species_entry` level: the `include=conformers`

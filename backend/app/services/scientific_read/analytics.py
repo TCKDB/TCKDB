@@ -99,8 +99,8 @@ from app.schemas.reads.scientific_analytics import (
 from app.schemas.reads.scientific_common import ReviewStatusSummary, WatermarkEcho, browse_order
 from app.services.scientific_read.common import (
     build_pagination,
+    linked_evidence_predicate,
     reject_client_sort,
-    review_floor_predicate,
     validate_includes,
     validate_pagination,
     validate_temperature_range,
@@ -374,13 +374,13 @@ _KINETICS_FILTER_FIELDS: tuple[str, ...] = (
 #: existence of any assignment is the signal. TS provenance is the same
 #: table restricted to assignments that name a transition-state entry.
 #:
-#: Both flags rest on records the read profile may hide, so under ``profile=curated`` they are true only when the
-#: statmech (or the transition-state entry) the assignment names is shown (owner decision D5): a flag that counted a
-#: hidden one would say it exists. The default profile adds no condition.
+#: Both flags rest on linked evidence, so under ``profile=curated`` they are true only when the statmech (or the
+#: transition-state entry) the assignment names is not withheld by the evidence rule (ADR 0023: rejected or deprecated):
+#: an unreviewed one is shown with its badge and counts. The default profile adds no condition.
 def _kinetics_has_statmech():
     return where_visible(
         exists().where(KineticsInterpretationAssignment.kinetics_id == Kinetics.id),
-        review_floor_predicate(KineticsInterpretationAssignment.statmech_id, SubmissionRecordType.statmech),
+        linked_evidence_predicate(KineticsInterpretationAssignment.statmech_id, SubmissionRecordType.statmech),
     )
 
 
@@ -390,16 +390,16 @@ def _kinetics_has_ts():
             KineticsInterpretationAssignment.kinetics_id == Kinetics.id,
             KineticsInterpretationAssignment.transition_state_entry_id.is_not(None),
         ),
-        review_floor_predicate(
+        linked_evidence_predicate(
             KineticsInterpretationAssignment.transition_state_entry_id, SubmissionRecordType.transition_state_entry
         ),
     )
 
 
 def _thermo_has_statmech():
-    """``thermo.statmech_id`` names a statmech the read profile shows (the column alone under the default profile)."""
+    """``thermo.statmech_id`` names a statmech the evidence rule does not withhold (the column alone by default)."""
     present = Thermo.statmech_id.is_not(None)
-    visible = review_floor_predicate(Thermo.statmech_id, SubmissionRecordType.statmech)
+    visible = linked_evidence_predicate(Thermo.statmech_id, SubmissionRecordType.statmech)
     return present if visible is None else and_(present, visible)
 
 

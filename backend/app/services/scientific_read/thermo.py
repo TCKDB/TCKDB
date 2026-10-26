@@ -6,7 +6,7 @@ See docs/specs/browse_order.md.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Any
 
 from pydantic import ValidationError
@@ -78,7 +78,7 @@ from app.schemas.reads.scientific_thermo import (
     ThermoTargetBlock,
     ThermoWilhoitBlock,
 )
-from app.services.calculation_levels import RoleCalcInfo, derive_levels
+from app.services.calculation_levels import RoleCalcInfo, derive_levels, withhold_levels_from_calculations
 from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.common import (
     build_pagination,
@@ -325,7 +325,8 @@ def get_species_thermo(
 
     # A source calculation the evidence rule withholds (rejected or deprecated under curated, ADR 0023) contributes no
     # level and no software to a filter match; a not-reviewed one does, with its badge. The record's own link to it
-    # stays a fact of the record. One lookup, and none without a review floor.
+    # stays a fact of the record. One lookup before paging (it decides which records match), and none without a review
+    # floor; the display below does its own lookup for the page that is returned.
     hidden_source_calc_ids = ids_withheld_as_evidence(
         session,
         record_type=SubmissionRecordType.calculation,
@@ -411,6 +412,18 @@ def get_species_thermo(
         for srcs in statmech_sources_by_id.values()
         for sc in srcs
     }
+    # Evidence rule (ADR 0023): a source calculation the profile WITHHOLDS (rejected or deprecated under ``curated``) is not
+    # counted, supplies no level and is not the primary; an unreviewed one is shown with its badge. One lookup for the
+    # page, none without a floor. The LISTS that name calculations keep every link; the ref guard removes the withheld.
+    withheld_calc_ids = ids_withheld_as_evidence(
+        session, record_type=SubmissionRecordType.calculation, record_ids=all_source_calc_ids
+    )
+    # A linked statmech the rule withholds contributes nothing to the record: no flag, no level, no primary calculation.
+    withheld_statmech_ids = ids_withheld_as_evidence(
+        session,
+        record_type=SubmissionRecordType.statmech,
+        record_ids={t.statmech_id for t, _ in classified if t.statmech_id is not None},
+    )
     geom_vals = _geometry_validations(session, all_source_calc_ids)
     scf_vals = _scf_stabilities(session, all_source_calc_ids)
     calc_meta = _calc_lot_meta(session, all_source_calc_ids)
@@ -517,9 +530,10 @@ def get_species_thermo(
         record_statmech_id = t.statmech_id
         record_statmech_sources = (
             statmech_sources_by_id.get(record_statmech_id, [])
-            if record_statmech_id is not None
+            if record_statmech_id is not None and record_statmech_id not in withheld_statmech_ids
             else []
         )
+        statmech_shown = record_statmech_id is not None and record_statmech_id not in withheld_statmech_ids
 
         # Determine the "effective" temperature range for coverage. Precedence
         # (mirroring how a NASA-7 block already wins over row-level bounds):
@@ -554,8 +568,9 @@ def get_species_thermo(
         evidence = _evidence_breakdown(
             thermo=t,
             sources=sources,
-            has_statmech_link=t.statmech_id is not None,
+            has_statmech_link=statmech_shown,
             statmech_sources=record_statmech_sources,
+            withheld_calc_ids=withheld_calc_ids,
             nasa_present=nasa_block is not None,
             points_count=len(points_by_thermo.get(t.id, [])),
             has_nasa9=bool(nasa9_by_thermo.get(t.id)),
@@ -583,6 +598,7 @@ def get_species_thermo(
                 else None
             ),
             conformer_links=conformer_links,
+            withheld_calc_ids=withheld_calc_ids,
         )
         # Derived levels (#636): the record's own source calculations, then
         # (per role) the statmech it is LINKED to by ``thermo.statmech_id``.
@@ -597,12 +613,13 @@ def get_species_thermo(
             composite_facts=composite_facts,
             recipe_level_summaries=recipe_level_summaries,
             composite_verifications=composite_verifications,
+            withheld_calc_ids=withheld_calc_ids,
         )
         declared_lot_id = (
             t.energy_level_of_theory_id
             if t.energy_level_of_theory_id is not None
             # Only through the record's OWN statmech link.
-            else statmech_declared_lot_ids.get(t.statmech_id)
+            else (statmech_declared_lot_ids.get(t.statmech_id) if statmech_shown else None)
         )
         if declared_lot_id is not None:
             levels = levels.model_copy(
@@ -1262,6 +1279,7 @@ def _build_provenance(
     thermo_software: SoftwareReleaseSummary | None,
     thermo_workflow_tool: WorkflowToolReleaseSummary | None,
     conformer_links: Mapping[int, tuple[int | None, str | None, int | None, str | None]],
+    withheld_calc_ids: Collection[int] = frozenset(),
 ) -> ThermoProvenance:
     """Build a ``ThermoProvenance`` block for one thermo record.
 
@@ -1294,15 +1312,18 @@ def _build_provenance(
     (population B: no source calcs at all) reports no conformer either.
 
     Slots are picked from EVERY link, never from a profile-filtered subset: which calculation is the
-    primary / freq / sp must not depend on the profile, or a hidden pick would let the picker fall through
-    to a different, visible calculation. A ref the profile hides is withheld afterwards, at the response
-    boundary (``ref_guard``), which only ever empties a slot.
+    primary / freq / sp must not depend on the profile, or a withheld pick would let the picker fall through
+    to a different, shown calculation. A ref the profile withholds is removed afterwards, at the response
+    boundary (``ref_guard``), which only ever empties a slot. The primary's own level and software are facts
+    about that calculation (ADR 0023): when it is withheld they are null with it, never read from another.
     """
     primary_calc_id_v = _primary_calc_id(sources)
     # Fall back to a statmech-derived primary when thermo declared none.
     if primary_calc_id_v is None:
         primary_calc_id_v = _statmech_primary_calc_id(statmech_sources)
     primary_meta = calc_meta.get(primary_calc_id_v) if primary_calc_id_v else None
+    if primary_calc_id_v in withheld_calc_ids:
+        primary_meta = None
 
     primary_calc_summary: CalculationEvidenceSummary | None = None
     primary_lot: LevelOfTheorySummary | None = None
@@ -1337,7 +1358,7 @@ def _build_provenance(
 
     conformer_link = (
         conformer_links.get(primary_calc_id_v)
-        if primary_calc_id_v is not None
+        if primary_calc_id_v is not None and primary_calc_id_v not in withheld_calc_ids
         else None
     )
     if conformer_link is not None:
@@ -1464,8 +1485,13 @@ def _build_levels_thermo(
     composite_facts: dict[int, CompositeRoleFacts],
     recipe_level_summaries: dict[int, LevelOfTheorySummary],
     composite_verifications: dict[int, CompositeEnergyVerification],
+    withheld_calc_ids: Collection[int] = frozenset(),
 ) -> ScientificLevelsSummary:
     """R1 for one thermo record: derive its geometry/frequency/energy levels.
+
+    The derivation reads every link. A level whose supplying calculations are all in ``withheld_calc_ids`` (the evidence
+    rule, ADR 0023: rejected or deprecated under ``curated``) is then nulled with its source, never re-derived from what is
+    left.
 
     Delegates the actual priority decision to
     :func:`app.services.calculation_levels.derive_levels` -- the same
@@ -1481,38 +1507,51 @@ def _build_levels_thermo(
     def is_composite(cid: int) -> bool:
         return calc_meta[cid]["type"] == CalculationType.composite
 
-    def infos(role: str) -> list[RoleCalcInfo]:
+    def linked(role: str) -> list[tuple[int, RoleCalcInfo]]:
         if role == "composite":
             # Only a calculation of type ``composite`` is a composite energy;
-            # the legacy shape is read through ``legacy_infos``.
+            # the legacy shape is read through ``legacy_linked``.
             return [
-                composite_role_info(
-                    calc_meta[cid]["lot_id"], cid in freq_calc_ids, composite_facts.get(cid)
+                (
+                    cid,
+                    composite_role_info(
+                        calc_meta[cid]["lot_id"], cid in freq_calc_ids, composite_facts.get(cid)
+                    ),
                 )
                 for cid in role_calc_ids.get(role, [])
                 if cid in calc_meta and is_composite(cid)
             ]
         return [
-            RoleCalcInfo(
-                lot_id=calc_meta[cid]["lot_id"],
-                carries_frequencies=cid in freq_calc_ids,
-            )
+            (cid, RoleCalcInfo(lot_id=calc_meta[cid]["lot_id"], carries_frequencies=cid in freq_calc_ids))
             for cid in role_calc_ids.get(role, [])
             if cid in calc_meta
         ]
 
+    legacy_linked = [
+        (cid, RoleCalcInfo(lot_id=calc_meta[cid]["lot_id"], carries_frequencies=cid in freq_calc_ids))
+        for cid in role_calc_ids.get("composite", [])
+        if cid in calc_meta and not is_composite(cid)
+    ]
+    roles = {
+        "opts": linked("opt"),
+        "freqs": linked("freq"),
+        "sps": linked("sp"),
+        "composites": linked("composite"),
+        "importeds": linked("imported"),
+        "legacy_composites": legacy_linked,
+    }
     derived = derive_levels(
-        opts=infos("opt"),
-        freqs=infos("freq"),
-        sps=infos("sp"),
-        composites=infos("composite"),
-        importeds=infos("imported"),
-        legacy_composites=[
-            RoleCalcInfo(lot_id=calc_meta[cid]["lot_id"], carries_frequencies=cid in freq_calc_ids)
-            for cid in role_calc_ids.get("composite", [])
-            if cid in calc_meta and not is_composite(cid)
-        ],
+        opts=[info for _, info in roles["opts"]],
+        freqs=[info for _, info in roles["freqs"]],
+        sps=[info for _, info in roles["sps"]],
+        composites=[info for _, info in roles["composites"]],
+        importeds=[info for _, info in roles["importeds"]],
+        legacy_composites=[info for _, info in roles["legacy_composites"]],
     )
+    derived = withhold_levels_from_calculations(derived, withheld=withheld_calc_ids, **roles)
+    shown_composite_ids = [
+        cid for cid in role_calc_ids.get("composite", []) if cid in calc_meta and is_composite(cid) and cid not in withheld_calc_ids
+    ]
     geometry = _lot_summary_from_id(calc_meta_by_lot_id, derived.geometry_lot_id, recipe_level_summaries)
     frequency = _lot_summary_from_id(calc_meta_by_lot_id, derived.frequency_lot_id, recipe_level_summaries)
     energy = _lot_summary_from_id(calc_meta_by_lot_id, derived.energy_lot_id)
@@ -1525,14 +1564,13 @@ def _build_levels_thermo(
         frequency_source=derived.frequency_source,
         composite_energy_verification=record_composite_verification(
             energy_source=derived.energy_source,
-            typed_composite_ids=[
-                cid for cid in role_calc_ids.get("composite", []) if cid in calc_meta and is_composite(cid)
-            ],
+            typed_composite_ids=shown_composite_ids,
             verifications=composite_verifications,
         ),
         legacy_composite_shape=legacy_composite_shape(
             composite_role_on_non_composite=any(
-                cid in calc_meta and not is_composite(cid) for cid in role_calc_ids.get("composite", [])
+                cid in calc_meta and not is_composite(cid) and cid not in withheld_calc_ids
+                for cid in role_calc_ids.get("composite", [])
             ),
             geometry=geometry,
             geometry_source=derived.geometry_source,
@@ -1587,6 +1625,7 @@ def _evidence_breakdown(
     has_wilhoit: bool = False,
     geom_vals: dict[int, ValidationStatus],
     scf_vals: dict[int, SCFStabilityStatus],
+    withheld_calc_ids: Collection[int] = frozenset(),
 ) -> EvidenceCompletenessBreakdown:
     """Thermo L1 checklist, max=8.
 
@@ -1599,11 +1638,15 @@ def _evidence_breakdown(
     link counts only its own sources and ``has_statmech_source`` is false
     (#645: never borrow). The predicate names and ``max`` are unchanged.
     """
-    statmech_roles = {sc.role for sc in statmech_sources}
-    has_sources = len(sources) > 0 or len(statmech_sources) > 0
+    # Evidence rule (ADR 0023): the role targets are chosen from EVERY link, then a withheld target is dropped; a role is
+    # never filled from another link because the first was withheld. The role flags count the links that are shown.
+    shown_sources = [sc for sc in sources if sc.calculation_id not in withheld_calc_ids]
+    shown_statmech_sources = [sc for sc in statmech_sources if sc.calculation_id not in withheld_calc_ids]
+    statmech_roles = {sc.role for sc in shown_statmech_sources}
+    has_sources = len(shown_sources) > 0 or len(shown_statmech_sources) > 0
     has_statmech = has_statmech_link
 
-    source_roles = {sc.role for sc in sources}
+    source_roles = {sc.role for sc in shown_sources}
     has_freq_evidence = (
         ThermoCalculationRole.freq in source_roles
         or StatmechCalculationRole.freq in statmech_roles
@@ -1631,7 +1674,7 @@ def _evidence_breakdown(
             statmech_sources, StatmechCalculationRole.opt
         )
     has_geom_val = False
-    if opt_calc_id is not None:
+    if opt_calc_id is not None and opt_calc_id not in withheld_calc_ids:
         gv = geom_vals.get(opt_calc_id)
         has_geom_val = gv in {ValidationStatus.passed, ValidationStatus.warning}
 
@@ -1642,7 +1685,7 @@ def _evidence_breakdown(
             statmech_sources, StatmechCalculationRole.sp
         )
     has_scf = False
-    if sp_calc_id is not None:
+    if sp_calc_id is not None and sp_calc_id not in withheld_calc_ids:
         s = scf_vals.get(sp_calc_id)
         has_scf = s in {SCFStabilityStatus.stable, SCFStabilityStatus.stabilized}
 

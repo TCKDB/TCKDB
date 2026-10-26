@@ -8,10 +8,10 @@ amends its detail-page seam**, see Q1),
 Supersedes the read-side rule known as D6 ("hidden == unknown == absent") for linked evidence. The rule is being rolled out in
 steps; a site that has not been moved yet still applies D6. The helper that holds the rule (`evidence_withheld_under_profile` and
 its siblings in `app/services/scientific_read/common.py`) is called, from step 2, by the response-level ref guard
-(`ref_guard.py`), the selection documents, the export streams, the legacy entity reads and the ML export's conformer refs. Still on
-D6: service counts and derived levels, the trust and selection loaders' own populations, made-under comparisons, and
-detail-by-ref. Matching in search, browse and select moved in step 4 (filters match through linked evidence unless it is rejected
-or deprecated; a filter ref that names such evidence matches nothing).
+(`ref_guard.py`), the selection documents, the export streams, the legacy entity reads and the ML export's conformer refs, and, from
+step 3, by the service counts, flags and derived levels of a returned record. Still on D6: the trust and selection loaders' own
+populations, made-under comparisons, and detail-by-ref. Matching in search, browse and select moved in step 4 (filters match through
+linked evidence unless it is rejected or deprecated; a filter ref that names such evidence matches nothing).
 
 Under the `curated` profile, the `approved` floor decides which **records** a list, search or select returns. The **linked
 evidence** of a returned record is always shown with its review badge. Only `rejected` and `deprecated` evidence is withheld.
@@ -84,3 +84,6 @@ Step 2 (nested refs in responses, selection documents and exports) moved the sel
   network manifest). A manifest in an earlier format is refused, not read as the new rule.
 - The `computed_transition_state` rubric is re-pinned without a version bump. The grading code is unchanged; only the inputs a
   curated read supplies to it change. The `computed_kinetics` pin follows when its inputs move (step 5).
+- Step 3 (counts, flags and derived levels of a returned record) changed no manifest content and no rubric. The selection loaders
+  and the trust evaluators do not read those summaries, so the format-4 `linked_evidence_withheld` field already describes the
+  rule a recorded manifest was made under, and `generate_rubric_pins.py --check` stays clean without a re-pin.

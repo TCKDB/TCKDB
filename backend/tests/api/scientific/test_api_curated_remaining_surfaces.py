@@ -3,7 +3,9 @@
 Same rule as the statmech source blocks (#765), as ADR 0023 now states it: under a review floor a ref to a record the
 profile WITHHOLDS (rejected or deprecated) is never named; a ref to one that is merely below the floor (not reviewed,
 under review) is linked evidence and is named. Each hiding test below runs over a rejected record and has an unreviewed
-twin. Exploratory output is unchanged; record-level facts (levels, evidence, availability flags) are not filtered.
+twin. Exploratory output is unchanged. Record-level facts (levels, evidence counts, availability flags) follow the same
+rule since step 3: a withheld calculation is not counted and supplies no level; an unreviewed one is (see also
+test_curated_evidence_counts_and_levels.py).
 
   (a) transition-state-entry ``include=statmech`` -> ``statmech[].source_calculations``
   (b) species-entry thermo provenance -> the statmech fallback's primary / freq / sp calculations (and the conformer
@@ -514,24 +516,28 @@ def _substitution_world(db_session):
 
 
 def test_thermo_curated_does_not_substitute_another_calculation_for_a_hidden_pick(client, db_session):
-    """Kills: filtering the links BEFORE the picker (it falls through to the next, visible, candidate). The primary is
-    rejected: withheld, left unnamed, and nothing else promoted into its place."""
+    """Kills: filtering the links BEFORE the picker (it falls through to the next, shown, candidate). The primary is
+    rejected: withheld, left unnamed, and nothing else promoted into its place; its level goes with it (step 3)."""
     entry, own_sp, own_freq, sm_sp = _substitution_world(db_session)
     _review(db_session, SubmissionRecordType.calculation, own_sp, RecordReviewStatus.rejected)
     prov_x, rec_x = _provenance(client, entry, "exploratory")
     assert prov_x["primary_calculation"]["calculation_ref"] == own_sp.public_ref  # the true primary
     prov_c, rec_c = _provenance(client, entry, "curated")
-    # The record-level level of theory is the true primary's, whatever the profile.
-    assert prov_c["level_of_theory"] == prov_x["level_of_theory"]
-    assert prov_c["level_of_theory"]["method"] == "ccsd(t)"
-    # The hidden primary and sp are left unnamed, and nothing else is promoted into their place.
+    # The primary's level of theory is a fact about the withheld primary (ADR 0023): null with it, never another calculation's.
+    assert prov_x["level_of_theory"]["method"] == "ccsd(t)"
+    assert prov_c["level_of_theory"] is None
+    # The withheld primary and sp are left unnamed, and nothing else is promoted into their place.
     assert prov_c["primary_calculation"] is None
     assert prov_c["sp_calculation_ref"] is None
     assert own_sp.public_ref not in str(rec_c)
     # The approved freq stays the freq; it is never the primary, and the statmech's sp is never the sp.
     assert prov_c["freq_calculation_ref"] == own_freq.public_ref
     assert sm_sp.public_ref not in str(prov_c)
-    assert rec_c["levels"] == rec_x["levels"]
+    # The energy level only the withheld sp supplied is null with its source; the statmech's sp (same level) and the
+    # freq do not stand in for it. The freq level, supplied by a shown calculation, is unchanged.
+    assert rec_x["levels"]["energy"]["method"] == "ccsd(t)" and rec_x["levels"]["energy_source"] == "sp"
+    assert rec_c["levels"]["energy"] is None and rec_c["levels"]["energy_source"] is None
+    assert rec_c["levels"]["frequency"] == rec_x["levels"]["frequency"]
 
 
 # --- statement counts: nothing extra without a floor, and no per-record cost for the conformer filter ------------

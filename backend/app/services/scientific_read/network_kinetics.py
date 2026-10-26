@@ -80,7 +80,7 @@ from app.schemas.reads.scientific_network_kinetics_evaluate import (
 )
 from app.services.scientific_read.common import (
     fetch_review_badges,
-    review_floor_predicate,
+    linked_evidence_predicate,
     review_summary,
     validate_includes,
     where_visible,
@@ -548,7 +548,7 @@ def _build_network_kinetics_record(
                 select(func.count())
                 .select_from(NetworkSolveSourceCalculation)
                 .where(NetworkSolveSourceCalculation.solve_id == solve.id),
-                review_floor_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
+                linked_evidence_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
             )
         )
         or 0

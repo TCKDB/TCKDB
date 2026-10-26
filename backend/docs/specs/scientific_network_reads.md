@@ -130,6 +130,12 @@ Defined in [scientific_network.py](../../app/schemas/reads/scientific_network.py
 - **`NetworkSolveSummary`** — `nsolve_…` ref + ME/grain/T/P metadata
   + bath-gas list (composite-PK rows are bounded) + counts for
   energy-transfer rows and source calculations + review badge.
+  *Curated profile (ADR 0023):* a solve is a record, so the counts, the T/P envelope and the kinetics flags rest on the solves
+  that clear the floor. A solve's source-calculation count (on the network, the solve summary and the solve read, and the fit
+  read) is evidence: it counts every source calculation except a `rejected` or `deprecated` one, so an unreviewed calculation
+  that `include=source_calculations` names is also counted. The per-participant sources of a state energy follow the same rule,
+  and `partial_sources` is computed from the sources that remain. A validation entry's reference solve is evidence of the entry
+  and is dropped only when it is `rejected` or `deprecated`.
 - **`NetworkKineticsSummary`** — model_kind discriminator + T/P
   envelope + shape metadata (`chebyshev_shape` like ``"6x4"``,
   `plog_entry_count`, `point_count`). **Coefficient payloads are

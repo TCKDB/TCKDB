@@ -98,6 +98,7 @@ from app.schemas.reads.scientific_network import (
 )
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    linked_evidence_predicate,
     review_floor_predicate,
     review_summary,
     validate_includes,
@@ -226,7 +227,7 @@ def build_network_record(
                     select(func.count())
                     .select_from(NetworkSolveSourceCalculation)
                     .where(NetworkSolveSourceCalculation.solve_id.in_(solve_ids)),
-                    review_floor_predicate(
+                    linked_evidence_predicate(
                         NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation
                     ),
                 )
@@ -359,14 +360,6 @@ def _count(session: Session, model_cls, where) -> int:
         )
         or 0
     )
-
-
-def _visible_calculation_ids(session: Session, calculation_ids: set[int]) -> set[int]:
-    """The subset of ``calculation_ids`` the active read profile shows (all of them under the default profile)."""
-    visible = review_floor_predicate(Calculation.id, SubmissionRecordType.calculation)
-    if visible is None or not calculation_ids:
-        return set(calculation_ids)
-    return set(session.scalars(where_visible(select(Calculation.id).where(Calculation.id.in_(calculation_ids)), visible)))
 
 
 def _exists_review_for(
@@ -736,7 +729,7 @@ def _build_solves(
                     NetworkSolveSourceCalculation.solve_id,
                     func.count(),
                 ).where(NetworkSolveSourceCalculation.solve_id.in_(solve_ids)),
-                review_floor_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
+                linked_evidence_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
             ).group_by(NetworkSolveSourceCalculation.solve_id)
         ).all()
     )
@@ -1219,7 +1212,7 @@ def build_network_solve_record(
                 select(func.count())
                 .select_from(NetworkSolveSourceCalculation)
                 .where(NetworkSolveSourceCalculation.solve_id == s.id),
-                review_floor_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
+                linked_evidence_predicate(NetworkSolveSourceCalculation.calculation_id, SubmissionRecordType.calculation),
             )
         )
         or 0
@@ -1448,7 +1441,7 @@ def _build_state_energies_for_solve(
         )
     ).all():
         if source.zpe_calculation_id is not None and source.zpe_public_ref is None:
-            # The zero-point calculation is hidden: the source is withheld whole (a source without its zero-point
+            # The zero-point calculation is withheld: the source is withheld whole (a source without its zero-point
             # calculation would read as one that cited none).
             continue
         listed_by_state.setdefault(source.state_id, []).append(
@@ -1510,13 +1503,14 @@ def _build_state_energies_for_solve(
 
 
 def _visible_join(calculation, id_column):
-    """``calculation.id = id_column`` that holds only for a calculation the profile shows.
+    """``calculation.id = id_column`` that holds only for a calculation the evidence rule shows.
 
     Used for the per-participant sources of a state energy, where the service (not only the guard) must drop a source
-    whose calculation is hidden: ``partial_sources`` is computed here from the sources that remain, and a guard that
-    deleted the element afterwards would leave it saying the sources are complete.
+    whose calculation is withheld (rejected or deprecated under ``curated``; an unreviewed one is shown, ADR 0023):
+    ``partial_sources`` is computed here from the sources that remain, and a guard that deleted the element afterwards
+    would leave it saying the sources are complete.
     """
-    visible = review_floor_predicate(calculation.id, SubmissionRecordType.calculation)
+    visible = linked_evidence_predicate(calculation.id, SubmissionRecordType.calculation)
     return calculation.id == id_column if visible is None else and_(calculation.id == id_column, visible)
 
 

@@ -108,8 +108,8 @@ from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
-    ids_below_review_floor,
     ids_withheld_as_evidence,
+    linked_evidence_predicate,
     reject_client_sort,
     review_floor_predicate,
     review_summary,
@@ -435,23 +435,15 @@ def get_reaction_kinetics(
     sources_by_kinetics = _load_source_calculations(
         session, [k.id for k in kinetics_rows]
     )
-    # Owner decision D5: a source calculation the active profile hides contributes no level, software or filter match.
-    # The record's own LINK to it stays a fact of the record (the ref guard withholds the ref); what the calculation
-    # was run at is a fact about the hidden record. One lookup, and none without a floor.
-    hidden_source_calc_ids = ids_below_review_floor(
-        session,
-        record_type=SubmissionRecordType.calculation,
-        record_ids={sc.calculation_id for srcs in sources_by_kinetics.values() for sc in srcs},
-    )
-
-    # Matching follows the evidence rule (ADR 0023): only a rejected or deprecated source calculation (under curated)
-    # contributes no filter match; a not-reviewed one does. The levels and software printed on the record above still
-    # follow ``hidden_source_calc_ids`` until step 3 of ADR 0023 lands.
+    all_source_ids = {sc.calculation_id for srcs in sources_by_kinetics.values() for sc in srcs}
+    # Evidence rule (ADR 0023): a source calculation the profile WITHHOLDS (rejected or deprecated under ``curated``)
+    # contributes no level, no primary software and no filter match. An unreviewed one is shown, with its badge. The record's own LINK to
+    # a withheld calculation is withheld by the ref guard; what that calculation was run at is a fact about it, so it is
+    # nulled with the link and never replaced by another source. One lookup, and none without a floor.
     withheld_source_calc_ids = ids_withheld_as_evidence(
-        session,
-        record_type=SubmissionRecordType.calculation,
-        record_ids={sc.calculation_id for srcs in sources_by_kinetics.values() for sc in srcs},
+        session, record_type=SubmissionRecordType.calculation, record_ids=all_source_ids
     )
+    # Matching uses the same set (step 4 of ADR 0023): a not-reviewed source calculation contributes a filter match.
 
     def shown(sources: list[KineticsSourceCalculation]) -> list[KineticsSourceCalculation]:
         return [sc for sc in sources if sc.calculation_id not in withheld_source_calc_ids]
@@ -614,7 +606,7 @@ def get_reaction_kinetics(
             sw_summaries=sw_summaries,
             wt_summaries=wt_summaries,
             network_kinetics_refs=network_kinetics_refs,
-            hidden_calc_ids=hidden_source_calc_ids,
+            hidden_calc_ids=withheld_source_calc_ids,
         )
         for k in kinetics_rows
     }
@@ -639,10 +631,10 @@ def get_reaction_kinetics(
     missing_opt_meta_ids = set(opt_via_dependency.values()) - calc_meta.keys()
     if missing_opt_meta_ids:
         calc_meta.update(_calc_metadata(session, missing_opt_meta_ids))
-    hidden_opt_ids = ids_below_review_floor(
+    withheld_opt_ids = ids_withheld_as_evidence(
         session, record_type=SubmissionRecordType.calculation, record_ids=set(opt_via_dependency.values())
     )
-    hidden_level_calc_ids = hidden_source_calc_ids | hidden_opt_ids
+    withheld_level_calc_ids = withheld_source_calc_ids | withheld_opt_ids
 
     # Pass 2: build per-record output.
     records: list[KineticsRecord] = []
@@ -683,9 +675,9 @@ def get_reaction_kinetics(
             calc_meta=calc_meta,
             composite_verifications=composite_verifications,
         )
-        levels = _without_levels_from_hidden_calculations(
+        levels = _without_levels_from_withheld_calculations(
             levels,
-            hidden=hidden_level_calc_ids,
+            withheld=withheld_level_calc_ids,
             opt_calc_id=levels_opt_calc_id,
             freq_calc_id=ts_freq_calc_id,
             sp_calc_id=ts_sp_calc_id,
@@ -693,7 +685,8 @@ def get_reaction_kinetics(
 
         evidence = _evidence_breakdown(
             kinetics=k,
-            sources=sources,
+            sources=[sc for sc in sources if sc.calculation_id not in withheld_source_calc_ids],
+            withheld_calc_ids=withheld_source_calc_ids,
             ts_entry_ids=ts_entry_ids,
             ts_calc_types=ts_calc_types,
             geometry_validations=geometry_validations,
@@ -981,11 +974,17 @@ def _build_provenance(
         else None
     )
 
-    transition_state_entry_id = _first_ts_entry_id(sources, calc_meta)
+    # The transition-state entry is traced through a source calculation the rule shows: a withheld source names none. The entry
+    # is a record: ``ts_entry_refs`` holds only those that clear the record floor, so one that does not is named nowhere (and no
+    # other entry is put in its place).
+    transition_state_entry_id = _first_ts_entry_id(
+        [sc for sc in sources if sc.calculation_id not in (hidden_calc_ids or ())],
+        calc_meta,
+    )
 
     primary_calc_id = _primary_calc_id(sources)
     if primary_calc_id in (hidden_calc_ids or ()):
-        # What the hidden primary calculation ran at is a fact about that record; no other source is put in its place.
+        # What the withheld primary calculation ran at is a fact about that record; no other source is put in its place.
         primary_calc_id = None
     primary_lot = (
         _lot_summary_for_calc(calc_meta.get(primary_calc_id))
@@ -1080,6 +1079,7 @@ def _evidence_breakdown(
     scf_stabilities: dict[int, SCFStabilityStatus],
     ts_opt_calc_id: int | None,
     ts_sp_calc_id: int | None,
+    withheld_calc_ids: set[int] | frozenset[int] = frozenset(),
 ) -> EvidenceCompletenessBreakdown:
     """L1 kinetics checklist — endpoint-local, additive, max=9."""
     has_sources = len(sources) > 0
@@ -1114,14 +1114,15 @@ def _evidence_breakdown(
         )
     )
 
+    # The validation targets are chosen first, then a withheld one is dropped (never replaced by another calculation).
     has_geom_val = False
-    if ts_opt_calc_id is not None:
+    if ts_opt_calc_id is not None and ts_opt_calc_id not in withheld_calc_ids:
         gv = geometry_validations.get(ts_opt_calc_id)
         has_geom_val = gv in {ValidationStatus.passed, ValidationStatus.warning}
 
     has_scf = False
     scf_target = ts_sp_calc_id if ts_sp_calc_id is not None else ts_opt_calc_id
-    if scf_target is not None:
+    if scf_target is not None and scf_target not in withheld_calc_ids:
         s = scf_stabilities.get(scf_target)
         has_scf = s in {SCFStabilityStatus.stable, SCFStabilityStatus.stabilized}
 
@@ -1353,10 +1354,15 @@ def _scf_stabilities(
 
 
 def _ts_entry_ids_for_reaction(session: Session, reaction_entry_id: int) -> set[int]:
+    # A transition-state ENTRY is a record (ADR 0023, Q3): only the entries that clear the record floor count here, as in
+    # ``/reactions/browse``. The calculations under a shown entry are evidence (see ``_ts_calc_types_for_entries``).
     rows = session.scalars(
-        select(TransitionStateEntry.id)
-        .join(TransitionState, TransitionState.id == TransitionStateEntry.transition_state_id)
-        .where(TransitionState.reaction_entry_id == reaction_entry_id)
+        where_visible(
+            select(TransitionStateEntry.id)
+            .join(TransitionState, TransitionState.id == TransitionStateEntry.transition_state_id)
+            .where(TransitionState.reaction_entry_id == reaction_entry_id),
+            review_floor_predicate(TransitionStateEntry.id, SubmissionRecordType.transition_state_entry),
+        )
     ).all()
     return set(rows)
 
@@ -1371,8 +1377,8 @@ def _ts_calc_types_for_entries(
             select(Calculation.transition_state_entry_id, Calculation.type).where(
                 Calculation.transition_state_entry_id.in_(ts_entry_ids)
             ),
-            # D5: the evidence checklist counts the calculation types the profile shows.
-            review_floor_predicate(Calculation.id, SubmissionRecordType.calculation),
+            # The evidence checklist counts the calculation types the evidence rule shows (ADR 0023).
+            linked_evidence_predicate(Calculation.id, SubmissionRecordType.calculation),
         )
     ).all()
     grouped: dict[int, set[CalculationType]] = defaultdict(set)
@@ -1976,24 +1982,25 @@ def _build_kinetics_levels(
     )
 
 
-def _without_levels_from_hidden_calculations(
+def _without_levels_from_withheld_calculations(
     levels: ScientificLevelsSummary,
     *,
-    hidden: set[int],
+    withheld: set[int],
     opt_calc_id: int | None,
     freq_calc_id: int | None,
     sp_calc_id: int | None,
 ) -> ScientificLevelsSummary:
-    """Null the levels that come from a calculation the active profile hides (owner decision D5).
+    """Null the levels that come from a calculation the evidence rule withholds (ADR 0023).
 
-    A level is a fact about the calculation that supplied it. When that calculation is below the floor the level is
-    withheld, not re-derived from what is left: the opt's level is never put in the place of a hidden single point's
-    (the substitution the guard exists to prevent). ``notation`` is computed from ``energy`` and ``geometry`` and goes
-    with them. With nothing hidden the summary is returned untouched.
+    A level is a fact about the calculation that supplied it. When that calculation is withheld (rejected or deprecated
+    under ``curated``) the level and its source are nulled together, not re-derived from what is left: the opt's level
+    is never put in the place of a withheld single point's (the substitution the guard exists to prevent). An unreviewed
+    calculation is not withheld, so its level is shown. ``notation`` is computed from ``energy`` and ``geometry`` and goes
+    with them. With nothing withheld the summary is returned untouched.
     """
-    if not hidden:
+    if not withheld:
         return levels
-    opt, freq, sp = (c is not None and c in hidden for c in (opt_calc_id, freq_calc_id, sp_calc_id))
+    opt, freq, sp = (c is not None and c in withheld for c in (opt_calc_id, freq_calc_id, sp_calc_id))
     update: dict[str, object] = {}
     if (freq and levels.frequency_source == "freq") or (opt and levels.frequency_source == "opt"):
         update.update(frequency=None, frequency_source=None)
@@ -2010,7 +2017,7 @@ def _without_levels_from_hidden_calculations(
         return levels
     masked = levels.model_copy(update=update)
     # The annotation describes the levels it sits beside: recomputed from what is left, so it cannot still say that a
-    # hidden calculation sat at a named-method level.
+    # withheld calculation sat at a named-method level.
     return masked.model_copy(
         update={
             "legacy_composite_shape": legacy_composite_shape(

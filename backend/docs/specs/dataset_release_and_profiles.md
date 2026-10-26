@@ -151,17 +151,26 @@ Resolved once, by an `async` router-level dependency
 > statuses the default hides by default (`rejected`, `deprecated`); unlike the default, this cannot be lifted by request.
 >
 > **Badges (step 2):** every scientific response has `review_status_by_ref` under `curated` (null otherwise); the exports carry it
-> per line. **Interim state until steps 3 to 5:** a nested unreviewed record can sit beside a count or level that omits it.
+> per line. **Interim state until steps 4 and 5:** a search or select filter on evidence still uses the record floor, so it can
+> disagree with a count or flag that now includes an unreviewed calculation.
 >
 > **Landed (step 2):** the response-level ref guard (`ref_guard.py`) is split into two sets. The *evidence set* (rejected and
 > deprecated records) drives every nested withhold: pointers in responses, selection documents, and the export streams. The
 > *record-floor set* is used only to fail loud when a response's subject is below the floor. The legacy entity reads and the ML
 > export's conformer refs follow the evidence set; the ML export's energy rows keep their calculations approved-only (a release
-> is unchanged). **Still the earlier rule (below the floor is hidden, evidence included), and the text below describes that
-> code:** counts, flags and derived levels (step 3), trust and selection loaders (step 5), made-under
-> (step 6) and detail-by-ref (step 7; the second seam below still applies the floor until then). **Landed (step 4):** a filter
-> on linked records (search, browse, select) matches through any linked record the evidence rule leaves visible, that is, not
-> a rejected or deprecated one; a not-reviewed one matches.
+> is unchanged).
+>
+> **Landed (step 3):** the counts, flags and derived levels of a returned record follow the evidence rule: a `rejected` or
+> `deprecated` calculation is not counted and supplies no level (the level and its source are null together; no other calculation
+> is put in its place), an unreviewed one is counted and supplies its level. Nothing recorded in a manifest changes: the selection
+> loaders do not read these summaries, so format 4 already covers the rule (`linked_evidence_withheld`).
+>
+> **Landed (step 4):** a filter on linked records (search, browse, select) matches through any linked record the evidence rule
+> leaves visible, that is, not a rejected or deprecated one; a not-reviewed one matches.
+>
+> **Still the earlier rule (below the floor is hidden, evidence included), and the text below describes that code:** trust and
+> selection loaders (step 5), made-under (step 6) and detail-by-ref (step 7; the second seam below still applies the floor
+> until then).
 
 Behaviourally, `curated` is applied at exactly **two** seams, which between
 them cover the whole read surface:
