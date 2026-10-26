@@ -169,6 +169,27 @@ HIDDEN_HEADER = "X-TCKDB-Hidden-By-Default"
 #: on a detail whose path names no gated record.
 REVIEW_STATUS_HEADER = "X-TCKDB-Review-Status"
 
+#: The id a withheld record is replaced by before the route runs: it names no row, so the route answers for the withheld
+#: record exactly as it answers for an id that does not exist (hidden == unknown). Shared by the path-parameter gates and
+#: the id-typed filters.
+ABSENT_ID = -1
+
+#: The OpenAPI declaration of the headers legacy responses may carry.
+REVIEW_STATUS_HEADER_SPEC = {
+    "description": (
+        "Under profile=curated, the review status (not_reviewed, under_review, approved, ...) of the single record this "
+        "response serves. Absent under the default profile, on lists, and on sub-resource lists."
+    ),
+    "schema": {"type": "string"},
+}
+HIDDEN_HEADER_SPEC = {
+    "description": (
+        "On a list that is a bare JSON array: how many records each default exclusion hid, as `rejected=1; deprecated=2`. "
+        "Absent when nothing was excluded and always absent under profile=curated."
+    ),
+    "schema": {"type": "string"},
+}
+
 
 def disclose_in_header(response: Response, block: HiddenByDefault | None) -> None:
     """A list that is a bare JSON array has no envelope to carry ``hidden_by_default``; it goes in a header.
@@ -467,7 +488,20 @@ def withhold_hidden_records(session: Session, payload: Any, *, request_statuses:
 _PATH_PARAM = re.compile(r"{(\w+)(?::[^}]*)?}")
 
 
-def _wrap(endpoint: Any, gates: dict[str, Gate], path_params: set[str]) -> Any:
+def served_param_of(path: str, gates: dict[str, Gate]) -> str | None:
+    """The gated path parameter whose record a route SERVES: the one its path ends with (``/thermo/{thermo_id}``).
+
+    A route whose path continues past a gated parameter (``/networks/{network_id}/solves``,
+    ``/calculations/{calculation_id}/dependencies``) serves a list of sub-resources, not that record, and states no review
+    status. On ``/networks/{network_id}/solves/{solve_id}`` the served record is the solve. ``None`` when no gated
+    parameter ends the path.
+    """
+    last = path.rstrip("/").rsplit("/", 1)[-1]
+    match = _PATH_PARAM.fullmatch(last)
+    return match.group(1) if match and match.group(1) in gates else None
+
+
+def _wrap(endpoint: Any, gates: dict[str, Gate], path_params: set[str], served_param: str | None = None) -> Any:
     """The endpoint, with the gates and the walk applied around it.
 
     Gates read the value FastAPI already validated and bound to the parameter, so every spelling of an id that
@@ -483,12 +517,11 @@ def _wrap(endpoint: Any, gates: dict[str, Gate], path_params: set[str]) -> Any:
             for param, gate in gates.items():
                 value = kwargs.get(param)
                 if isinstance(value, int) and _hidden_ids(session, gate.record_type, {value}, _evidence_statuses()):
-                    # A withheld record is the id of nothing: the route answers for it exactly as it answers for an id that
-                    # names no row, in its own words (hidden == unknown). No id is ever -1.
-                    kwargs[param] = -1
+                    # A withheld record is the id of nothing (hidden == unknown); see ``ABSENT_ID``.
+                    kwargs[param] = ABSENT_ID
                     continue
-                if isinstance(value, int):
-                    # A served record states its own review status (ADR 0023 step 7); see ``review_status_header``.
+                if isinstance(value, int) and param == served_param:
+                    # The record this route serves states its own review status (ADR 0023 step 7).
                     badge = fetch_review_badges(session, record_type=gate.record_type, record_ids=[value]).get(value)
                     if badge is not None:
                         context.served_review_status = badge.status.value
@@ -498,7 +531,7 @@ def _wrap(endpoint: Any, gates: dict[str, Gate], path_params: set[str]) -> Any:
                 kind = POINTER_KINDS.get(name)
                 if kind is not None and name not in path_params and isinstance(value, int) and name not in gates:
                     if _hidden_ids(session, kind, {value}, _evidence_statuses()):
-                        kwargs[name] = -1
+                        kwargs[name] = ABSENT_ID
         result = endpoint(*args, **kwargs)
         if context is None:
             return result
@@ -526,7 +559,20 @@ def legacy_route_class(gates: dict[str, Gate] | None = None) -> type[APIRoute]:
         def __init__(self, path: str, endpoint: Any, **kwargs: Any) -> None:
             methods = {m.upper() for m in (kwargs.get("methods") or [])}
             if "GET" in methods and not inspect.iscoroutinefunction(endpoint):
-                endpoint = _wrap(endpoint, declared, set(_PATH_PARAM.findall(path)))
+                served = served_param_of(path, declared)
+                headers: dict[str, Any] = {}
+                if served is not None:
+                    headers[REVIEW_STATUS_HEADER] = REVIEW_STATUS_HEADER_SPEC
+                if "response" in inspect.signature(endpoint).parameters:
+                    headers[HIDDEN_HEADER] = HIDDEN_HEADER_SPEC
+                if headers:
+                    responses = dict(kwargs.get("responses") or {})
+                    ok = dict(responses.get(200) or {})
+                    ok["headers"] = {**(ok.get("headers") or {}), **headers}
+                    ok.setdefault("description", "Successful Response")
+                    responses[200] = ok
+                    kwargs["responses"] = responses
+                endpoint = _wrap(endpoint, declared, set(_PATH_PARAM.findall(path)), served)
             super().__init__(path, endpoint, **kwargs)
 
         def get_route_handler(self) -> Any:
@@ -548,8 +594,10 @@ LegacyReadRoute = legacy_route_class()
 
 
 __all__ = [
+    "ABSENT_ID",
     "ADMIN_LISTING_ORDER",
     "COUPLED_FIELDS",
+    "HIDDEN_HEADER",
     "NETWORK_KINETICS",
     "PARENT_OF",
     "POINTER_KINDS",

@@ -234,7 +234,7 @@ INDEPENDENT_UNGATED_DETAIL = {
 
 def test_the_entry_detail_routes_are_ungated_on_purpose(routes, client, db_session):
     """Entries are scoping parents. The gate-coverage net lists them here, with the reason, and CALLS each route on an
-    unreviewed entry under curated, so an ``ensure_not_below_floor`` written inside the route body is caught too."""
+    unreviewed entry under curated, so a withheld-set check written inside the route body is caught too."""
     from tests.services.scientific_read._factories import (
         make_chem_reaction,
         make_reaction_entry,

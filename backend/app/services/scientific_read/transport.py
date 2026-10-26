@@ -53,6 +53,7 @@ from app.schemas.reads.scientific_transport import (
 )
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    ids_withheld_as_evidence,
     review_summary,
     validate_includes,
 )
@@ -211,6 +212,14 @@ def build_transport_record(
     """
     species_context = _build_species_context(session, tr.species_entry_id)
     source_rows = _load_source_rows(session, tr.id)
+    # The count and flag follow the list: a source calculation the evidence rule withholds is not listed (the ref guard
+    # removes it), so it is not counted either (ADR 0023).
+    withheld_calc_ids = ids_withheld_as_evidence(
+        session,
+        record_type=SubmissionRecordType.calculation,
+        record_ids={r.calculation_id for r in source_rows},
+    )
+    source_rows = [r for r in source_rows if r.calculation_id not in withheld_calc_ids]
 
     has_lj = tr.sigma_angstrom is not None and tr.epsilon_over_k_k is not None
     has_dipole = tr.dipole_debye is not None

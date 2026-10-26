@@ -92,6 +92,12 @@ POPULATION_KEYS = frozenset(
         "has_opt_calculation",
         "has_freq_calculation",
         "has_sp_calculation",
+        # Step 7 review: a group's observations, an observation's siblings and a calculation's dependency edges follow the
+        # evidence rule like the keys above (pinned by test_curated_detail_consistency.py).
+        "observation_count",
+        "has_observations",
+        "has_dependencies",
+        "by_scientific_origin",
         # A candidate's ordinal among the population's own (guard PR-3): it stands in for the database id as the last
         # tie-break. The population is the profile's, so the same record has another ordinal under curated.
         "id_rank",
@@ -126,6 +132,12 @@ EVIDENCE_COUNT_KEYS = frozenset(
         "has_sp_calculation",
         "has_statmech_provenance",
         "has_transition_state_provenance",
+        # Step 7 review: a group's observations, an observation's siblings and a calculation's dependency edges are counted
+        # over the same evidence-rule population the page lists, so they shrink with a withheld record.
+        "observation_count",
+        "has_observations",
+        "has_dependencies",
+        "by_scientific_origin",
     }
 )
 
@@ -458,6 +470,8 @@ def _is_withholding(cur: Any, exp: Any, mode: str | None = None, relaxed: frozen
 
 
 def _evidence_count_violation(exp: Any, cur: Any, mode: str) -> bool:
+    if isinstance(exp, dict) and isinstance(cur, dict):  # a map of counts: every entry is held to the same relation
+        return any(_evidence_count_violation(exp.get(k, 0), cur.get(k, 0), mode) for k in set(exp) | set(cur))
     if isinstance(exp, bool) or isinstance(cur, bool):
         return exp != cur if mode == "equal" else bool(cur) and not bool(exp)
     if isinstance(exp, (int, float)) and isinstance(cur, (int, float)):

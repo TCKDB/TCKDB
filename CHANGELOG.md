@@ -34,6 +34,8 @@ dataset must never require a code release.
   withheld. A search row of those reference records still counts the floor's population.
 - A legacy detail read under `curated` states the record's review status in an `X-TCKDB-Review-Status` response header (the raw entity payloads
   have no badge field).
+- A served detail counts what it lists: the counts and `has_*` flags of a transition state (and its entries), a conformer group and observation, a calculation (`has_dependencies`) and a transport record agree with the collections beside them, and the scientific network detail lists its unreviewed solves badged. `POST /networks/{ref}/kinetics/evaluate` is a population of fits and keeps the `approved` floor.
+- `X-TCKDB-Review-Status` is set on single-record legacy responses only, and it and `X-TCKDB-Hidden-By-Default` are declared in OpenAPI and exposed to browsers (`Access-Control-Expose-Headers`).
 - The ref guard's "subject below the floor" net (renamed `SubjectNotShown`) applies to the rows of `records` only; the `record` of a detail read
   is checked against the withheld set. No schema or migration change. ADR 0006's second seam is amended by ADR 0023.
 

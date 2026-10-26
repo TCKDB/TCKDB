@@ -216,7 +216,7 @@ def _resolve_review_target(
 ) -> tuple[SubmissionRecordType, int] | None:
     """The ``(record_type, record_id)`` whose review governs this handle.
 
-    Returns ``None`` for handles the curated floor does not gate at all.
+    Returns ``None`` for handles the curated gate does not cover at all.
     """
     record_type = _REVIEWABLE_HANDLE_TYPES.get(model_cls)
     if record_type is not None:
@@ -226,13 +226,10 @@ def _resolve_review_target(
     if derived is None:
         return None
     fk_column, parent_cls = derived
+    # The parent FK is NOT NULL and the caller has already checked that the row exists, so there is always a parent.
     parent_id = session.scalar(
         select(getattr(model_cls, fk_column)).where(model_cls.id == row_id)
     )
-    if parent_id is None:
-        # An orphan child cannot inherit approval, so it is not part of the
-        # curated surface either.
-        return _REVIEWABLE_HANDLE_TYPES[parent_cls], -1
     return _REVIEWABLE_HANDLE_TYPES[parent_cls], parent_id
 
 

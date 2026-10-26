@@ -99,7 +99,6 @@ from app.schemas.reads.scientific_network import (
 from app.services.scientific_read.common import (
     fetch_review_badges,
     linked_evidence_predicate,
-    review_floor_predicate,
     review_summary,
     shown_predicate,
     validate_includes,
@@ -165,7 +164,7 @@ def get_network(
 
     badge = _load_review_badge(session, n.id)
     record = build_network_record(
-        session, n=n, badge=badge, includes=includes
+        session, n=n, badge=badge, includes=includes, detail=True
     )
     return ScientificNetworkDetailResponse(
         request=RequestEcho(include=sorted(includes)),
@@ -185,8 +184,14 @@ def build_network_record(
     n: Network,
     badge: RecordReviewBadge,
     includes: set[str],
+    detail: bool = False,
 ) -> ScientificNetworkRecord:
-    """Project one Network row into the public scientific record shape."""
+    """Project one Network row into the public scientific record shape.
+
+    ``detail`` is True for the network's own detail read. Its solves (and the counts, envelope and kinetics flags that rest
+    on them) are then embedded records of a served page: under ``curated`` they are shown badged unless rejected or
+    deprecated, and the counts agree with the list the page returns (ADR 0023 step 7). A search row keeps the record floor.
+    """
     # --- bulk-load counts + envelope -------------------------------------
     species_count = _count(
         session, NetworkSpecies, NetworkSpecies.network_id == n.id
@@ -200,11 +205,12 @@ def build_network_record(
     channel_count = _count(
         session, NetworkChannel, NetworkChannel.network_id == n.id
     )
-    # Counts, the envelope and the kinetics flags rest on the solves the profile shows (owner decision D5).
+    # Counts, the envelope and the kinetics flags rest on the solves the page shows (owner decision D5; the evidence rule
+    # on a served detail, the record floor on a search row).
     solve_rows = session.scalars(
         where_visible(
             select(NetworkSolve).where(NetworkSolve.network_id == n.id),
-            review_floor_predicate(NetworkSolve.id, SubmissionRecordType.network_solve),
+            shown_predicate(NetworkSolve.id, SubmissionRecordType.network_solve, detail=detail),
         ).order_by(NetworkSolve.id.asc())
     ).all()
     solve_count = len(solve_rows)
@@ -313,7 +319,7 @@ def build_network_record(
 
     channels_block: list[NetworkChannelSummary] | None = None
     if "channels" in includes:
-        channels_block = _build_channels(session, n.id)
+        channels_block = _build_channels(session, n.id, detail=detail)
 
     solves_block: list[NetworkSolveSummary] | None = None
     if "solves" in includes:
@@ -590,7 +596,7 @@ def _build_states(
 
 
 def _build_channels(
-    session: Session, network_id: int
+    session: Session, network_id: int, *, detail: bool = False
 ) -> list[NetworkChannelSummary]:
     rows = session.scalars(
         select(NetworkChannel)
@@ -651,7 +657,7 @@ def _build_channels(
         for (cid,) in session.execute(
             where_visible(
                 select(NetworkKinetics.channel_id).where(NetworkKinetics.channel_id.in_([r.id for r in rows])),
-                review_floor_predicate(NetworkKinetics.solve_id, SubmissionRecordType.network_solve),
+                shown_predicate(NetworkKinetics.solve_id, SubmissionRecordType.network_solve, detail=detail),
             ).distinct()
         ).all()
     }

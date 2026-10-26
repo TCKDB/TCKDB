@@ -319,7 +319,7 @@ def test_curated_never_claims_release_backing_on_the_general_read_surface(
     assert echo["profile_release_ref"] is None
 
 
-def test_curated_applies_the_floor_to_detail_by_ref_reads(
+def test_curated_detail_by_ref_serves_unreviewed_and_withholds_rejected(
     client, db_session, _api_curator_user
 ):
     """Roughly half the read services never call ``visible_statuses``.
@@ -432,13 +432,12 @@ def test_ml_export_manifest_line_carries_the_profile(
 def test_network_kinetics_inherits_the_curated_withholding_from_its_solve(
     client, db_session, _api_curator_user
 ):
-    """``approved_floor_only`` must be true for *every* endpoint that echoes it.
+    """A withheld solve must be withheld for *every* endpoint that names it.
 
-    ``network_kinetics`` has no ``record_review`` row in principle — a set of
-    k(T,P) coefficients is reviewed as part of the ``network_solve`` that
-    produced it. Being absent from the gate map entirely, it returned 200 with
-    an ``approved_floor_only`` echo while its own parent correctly 404'd, so the
-    response made a false machine-readable claim.
+    ``network_kinetics`` has no ``record_review`` row in principle: a set of k(T,P) coefficients is reviewed as part of the
+    ``network_solve`` that produced it. Being absent from the gate map entirely, it returned 200 while its own parent
+    correctly 404'd. It is served or withheld exactly as its solve is (ADR 0023 step 7: unreviewed is served, rejected is
+    withheld).
     """
     from app.db.models.app_user import AppUser
     from app.db.models.common import (
@@ -489,6 +488,8 @@ def test_network_kinetics_inherits_the_curated_withholding_from_its_solve(
     assert client.get(f"{parent}?profile=curated").status_code == 200
     response = client.get(f"{detail}?profile=curated")
     assert response.status_code == 200, response.text
+    # step 8: this asserts the profile copy ("every record shown is at or above the approved floor") on a response that
+    # serves a not-reviewed solve's fit. The copy is stale since step 2 and step 8 rewrites it; update this with it.
     assert response.json()["request"]["profile_recommendation"] == "approved_floor_only"
 
     # Rejecting the parent withholds the child exactly like its parent.
@@ -504,7 +505,7 @@ def test_network_kinetics_inherits_the_curated_withholding_from_its_solve(
     assert client.get(f"{detail}?profile=curated").status_code == 404
 
 
-def test_every_handle_resolver_is_classified_for_the_curated_floor():
+def test_every_handle_resolver_is_classified_for_the_curated_gate():
     """A new detail resolver must not slip past the floor unnoticed.
 
     ``network_kinetics`` did exactly that. Every ORM class reaching
