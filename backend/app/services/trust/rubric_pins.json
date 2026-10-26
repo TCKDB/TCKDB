@@ -16,7 +16,7 @@
       "1": "28e638f09e687fce82fcc274d372e97cdcc938dad8acbafa2b598c6d803a0c91"
     },
     "computed_transition_state": {
-      "2": "6b6a095cd6d9a9dda1609c574def11836df27d1970f7070094ae6000ca3dc79e"
+      "2": "141366a16f1ce561a969be2963ab318fe9acae2095b1d4b74c972800dc54425e"
     },
     "computed_transport": {
       "1": "1b5a1f833dc867aff540eddc5e123a5d6fa3cb0d320e90b7a931e94f7a158676"
@@ -117,6 +117,11 @@
       "name": "computed_transition_state",
       "version": 2,
       "reason": "method_stem_key_sql rebuilt as fenced derived tables; same matches, smaller SQL; stored and read-time verdicts unchanged"
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "method_family_matches now tests the stem inside one fenced subquery (second change to the same SQL shape); same matches, NULL still matches nothing, smaller SQL; stored and read-time verdicts unchanged"
     }
   ]
 }

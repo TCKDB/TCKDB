@@ -192,6 +192,12 @@ def _layer(source, **columns: ColumnElement):
     return stmt.offset(0).subquery()
 
 
+def _stem_layer(column: ColumnElement):
+    """The last fenced layer of the stem key: a derived table with one column, ``stem``. See :func:`method_stem_key_sql`."""
+    known = sorted(CLASSIFICATIONS.get(CLASSIFICATION_NAME))
+    return _stem_chain(column, known)
+
+
 def method_stem_key_sql(column: ColumnElement) -> ColumnElement[str]:
     """SQL twin of :func:`~app.chemistry.method_families.method_stem_key` over a stored method column.
 
@@ -202,7 +208,10 @@ def method_stem_key_sql(column: ColumnElement) -> ColumnElement[str]:
     Built as a short chain of fenced derived tables (see :func:`_layer`) so the statement stays a few kilobytes
     however many table rows and prefixes there are.
     """
-    known = sorted(CLASSIFICATIONS.get(CLASSIFICATION_NAME))
+    return select(_stem_layer(column).c.stem).scalar_subquery()
+
+
+def _stem_chain(column: ColumnElement, known: list[str]):
     keyed = _layer(None, key=method_key_sql(column))
     key = keyed.c.key
     # The suffix-stripped key, itself keyed again (a stem can be an aliased spelling).
@@ -237,7 +246,7 @@ def method_stem_key_sql(column: ColumnElement) -> ColumnElement[str]:
     final = _layer(
         rest_layer, stem=case((rest_layer.c.stem.in_(known), rest_layer.c.stem), *branches, else_=rest_layer.c.stem)
     )
-    return select(final.c.stem).scalar_subquery()
+    return final
 
 
 def method_family_matches(selected: MethodClassFilter, column: ColumnElement | None = None) -> ColumnElement[bool]:
@@ -249,15 +258,23 @@ def method_family_matches(selected: MethodClassFilter, column: ColumnElement | N
     """
     if not selected.active:
         return true()
-    stem = method_stem_key_sql(LevelOfTheory.method if column is None else column)
     keep, unclassified = selected.keys()
-    known = CLASSIFICATIONS.get(CLASSIFICATION_NAME)
-    parts: list[ColumnElement[bool]] = []
-    if keep:
-        parts.append(stem.in_(sorted(keep)))
-    if unclassified:
-        parts.append(stem.not_in(sorted(known)))
-    return or_(*parts) if parts else false()
+    known = sorted(CLASSIFICATIONS.get(CLASSIFICATION_NAME))
+    if not keep and not unclassified:
+        return false()
+    # One scalar subquery holds the whole test, so the stem chain is rendered and run once per row however many
+    # parts the test has. A NULL method gives a NULL stem and so a NULL test: it matches no family, as before.
+    stem = _stem_layer(LevelOfTheory.method if column is None else column).c.stem
+    if unclassified and keep == frozenset(known):
+        test = stem.is_not(None)  # every name is a table key or is not one
+    else:
+        parts: list[ColumnElement[bool]] = []
+        if keep:
+            parts.append(stem.in_(sorted(keep)))
+        if unclassified:
+            parts.append(stem.not_in(known))
+        test = or_(*parts)
+    return select(test).scalar_subquery()
 
 
 def _component_matches(column: ColumnElement, value: str) -> ColumnElement[bool]:

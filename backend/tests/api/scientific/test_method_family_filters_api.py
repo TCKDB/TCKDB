@@ -430,24 +430,37 @@ def test_calculation_searches_filter_by_the_method_family_and_rung_of_the_calcul
 # statement size and count
 # ---------------------------------------------------------------------------------------------------------------
 
+_SHAPES = {
+    "one family": ["dft"],
+    "a family and unclassified": ["dft", "unclassified"],
+    "every family": ["dft", "wavefunction", "composite", "unclassified"],
+}
+
 
 def test_the_family_predicate_stays_small_and_does_not_grow_with_the_levels_searched(client, db_session):
     """Kills: a stem-key expression that repeats itself, so one filtered request plans a multi-megabyte statement.
 
     Every reference to a derived key used to be a full copy of the expression that built it; the predicate compiled
-    to about 7 MB and a single filtered search spent seconds planning it, whatever the data.
+    to about 7 MB and a single filtered search spent seconds planning it, whatever the data. The ``unclassified`` shape
+    named the key twice, so it is measured too, and the size is that of the statement as executed, with the expanding
+    ``IN`` lists filled in, not only of the compiled text.
     """
     from sqlalchemy import event
     from sqlalchemy.dialects import postgresql
 
-    selected = MethodClassFilter.of(["dft", "unclassified"], 2, 3)
-    compiled = str(method_family_matches(selected).compile(dialect=postgresql.dialect()))
-    assert len(compiled) < 100_000, len(compiled)
+    limit = 60_000
+    for shape, families in _SHAPES.items():
+        selected = MethodClassFilter.of(families, None, None)
+        compiled = str(
+            method_family_matches(selected).compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+        )
+        assert len(compiled) < limit, (shape, len(compiled))
+        assert compiled.count("OFFSET 0") <= 5, shape  # one chain, however many parts the test has
 
     species = make_species(db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("SZ"))
     entry = make_species_entry(db_session, species)
 
-    def statements_for_a_filtered_search():
+    def executed_statements(families):
         seen: list[str] = []
 
         def record(conn, cursor, statement, *args):
@@ -457,18 +470,26 @@ def test_the_family_predicate_stays_small_and_does_not_grow_with_the_levels_sear
         event.listen(engine, "before_cursor_execute", record)
         try:
             response = client.get(
-                f"{BASE}/calculations/search", params={"method_family": "dft", "species_entry_ref": entry.public_ref}
+                f"{BASE}/calculations/search", params={"method_family": families, "species_entry_ref": entry.public_ref}
             )
         finally:
             event.remove(engine, "before_cursor_execute", record)
         assert response.status_code == 200
         return seen
 
-    few = statements_for_a_filtered_search()
+    few = {shape: executed_statements(families) for shape, families in _SHAPES.items()}
     for i in range(25):
         calc_lot = make_lot(db_session, method=f"b97-d3-variant{i}", basis="def2tzvp")
         make_calculation(db_session, species_entry_id=entry.id, lot_id=calc_lot.id)
-    many = statements_for_a_filtered_search()
+    many = {shape: executed_statements(families) for shape, families in _SHAPES.items()}
 
-    assert len(many) == len(few), (len(few), len(many))
-    assert max(len(s) for s in many) < 100_000
+    for shape in _SHAPES:
+        # The statements that carry the filter are the large ones. A level that now matches is read back row by row,
+        # which adds small statements, but must not make the filter's own statement any bigger.
+        sizes_few = {len(s) for s in few[shape] if len(s) > 5_000}
+        sizes_many = {len(s) for s in many[shape] if len(s) > 5_000}
+        assert max(sizes_many) < 3 * limit, (shape, max(sizes_many))
+        # The largest filter statement does not grow with the levels that exist (a few bytes of per-row variation).
+        assert max(sizes_many) <= 1.05 * max(sizes_few), (shape, max(sizes_few), max(sizes_many))
+
+
