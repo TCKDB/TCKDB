@@ -54,10 +54,19 @@ class Structure:
     calc_type: str = "opt"
     #: The depositor's statement about convergence of the optimisation (``None``: not stated).
     converged: bool | None = None
+    #: When set, the upload declares this one output geometry (the structure itself) with this role, instead of
+    #: leaving the output to the default (the conformer geometry, as the final output of an optimisation).
+    output_role: str | None = None
 
 
-def butane(name: str, degrees: float, calc_type: str = "opt", converged: bool | None = None) -> Structure:
-    return Structure(name, with_dihedral(_BUTANE, _BUTANE_DIHEDRAL, degrees), calc_type, converged)
+def butane(
+    name: str,
+    degrees: float,
+    calc_type: str = "opt",
+    converged: bool | None = None,
+    output_role: str | None = None,
+) -> Structure:
+    return Structure(name, with_dihedral(_BUTANE, _BUTANE_DIHEDRAL, degrees), calc_type, converged, output_role)
 
 
 def ethanol(name: str, degrees: float, calc_type: str = "opt") -> Structure:
@@ -74,6 +83,10 @@ def upload_request(smiles: str, structure: Structure) -> ConformerUploadRequest:
     }
     if structure.converged is not None:
         calculation["opt_result"] = {"converged": structure.converged}
+    if structure.output_role is not None:
+        calculation["output_geometries"] = [
+            {"geometry": {"xyz_text": "\n".join(lines)}, "role": structure.output_role}
+        ]
     return ConformerUploadRequest(
         species_entry={"smiles": smiles, "charge": 0, "multiplicity": 1},
         geometry={"xyz_text": "\n".join(lines)},
@@ -439,8 +452,8 @@ def test_a_provisional_basin_has_no_defining_member_until_an_optimised_deposit_j
 # ---------------------------------------------------------------------------
 
 
-def _is_a_no_op(report) -> bool:
-    ignored = {"entries_examined", "observations_examined"}
+def _is_a_no_op(report, *, ignore: tuple[str, ...] = ()) -> bool:
+    ignored = {"entries_examined", "observations_examined", *ignore}
     return not any(v for k, v in report.__dict__.items() if isinstance(v, int) and k not in ignored)
 
 
@@ -539,3 +552,235 @@ def test_a_structure_that_defines_nothing_is_filed_into_the_basin_it_matches_bes
                 assert groups["A"] != groups["C"]
             finally:
                 session.rollback()
+
+
+# ---------------------------------------------------------------------------
+# Structures that define nothing are re-filed when the basins change (live == recompute)
+# ---------------------------------------------------------------------------
+
+
+def _check_recompute_is_a_no_op_after_each_upload(db_conn, structures, *, ignore: tuple[str, ...] = ()) -> None:
+    with Session(db_conn) as session:
+        session.begin()
+        try:
+            for structure in structures:
+                deposit_observations(session, _BUTANE, [structure])
+                entry_id = session.scalar(select(ConformerGroup.species_entry_id))
+                report = reassign_conformer_groups(
+                    session, repair_revision="test-live-agrees", species_entry_ids=[entry_id]
+                )
+                assert _is_a_no_op(report, ignore=ignore), (structure.name, report.summary())
+        finally:
+            session.rollback()
+
+
+def test_a_provisional_basin_is_re_filed_when_an_optimised_structure_arrives(db_conn) -> None:
+    """sp 0 and sp 30 are two provisional basins; opt 15 then matches both of them. The recompute files the sp
+    structures against the optimised basin's representative, so the live path has to as well."""
+    _check_recompute_is_a_no_op_after_each_upload(
+        db_conn, [butane("sp0", 0.0, "sp"), butane("sp30", 30.0, "sp"), butane("opt15", 15.0)]
+    )
+
+
+def test_a_structure_that_defines_nothing_follows_the_representative_when_the_medoid_moves(db_conn) -> None:
+    _check_recompute_is_a_no_op_after_each_upload(
+        db_conn,
+        [butane("opt0", 0.0), butane("sp30", 30.0, "sp"), butane("opt12", 12.0), butane("opt24", 24.0)],
+    )
+
+
+def test_an_sp_between_a_chain_is_left_out_once_the_medoid_has_moved_away_from_it(db_conn) -> None:
+    """The medoid of 0 / -15 / -30 is -15, which an sp at 18 does not match (33 degrees): it is its own basin."""
+    with Session(db_conn) as session:
+        session.begin()
+        try:
+            groups = deposit(
+                session,
+                _BUTANE,
+                [butane("o0", 0.0), butane("sp18", 18.0, "sp"), butane("o-15", -15.0), butane("o-30", -30.0)],
+            )
+            assert groups["o0"] == groups["o-15"] == groups["o-30"]
+            assert groups["sp18"] != groups["o0"]
+        finally:
+            session.rollback()
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_the_recompute_is_a_no_op_after_every_upload_of_a_mixed_sequence(db_conn, seed: int) -> None:
+    """Optimisations, single points and optimisations stated unconverged, in random order and positions."""
+    rng = random.Random(500 + seed)
+    kinds = [("opt", None), ("sp", None), ("opt", False)]
+    degrees = rng.sample([0.0, 9.0, 18.0, 30.0, 45.0, 60.0, 75.0, 100.0, 140.0, 200.0, 230.0], 8)
+    structures = []
+    for i, d in enumerate(degrees):
+        kind, converged = rng.choice(kinds) if i else ("opt", None)
+        structures.append(butane(f"s{i}", d, kind, converged))
+    _check_recompute_is_a_no_op_after_each_upload(db_conn, structures)
+
+
+# ---------------------------------------------------------------------------
+# "Defining" is decided on what is attached, the same way live and stored
+# ---------------------------------------------------------------------------
+
+
+def test_an_optimisation_whose_declared_outputs_have_no_final_geometry_does_not_bridge(db_conn) -> None:
+    """The upload attaches only what the producer declared; with no ``final`` output the recompute cannot even read the
+    structure back, so the live path must not let it link two basins either."""
+    with Session(db_conn) as session:
+        session.begin()
+        try:
+            groups = deposit(
+                session,
+                _BUTANE,
+                [butane("A", 0.0), butane("C", 36.0), butane("B", 18.0, "opt", output_role="initial")],
+            )
+            assert groups["A"] != groups["C"], "an optimisation with no final output geometry bridged two basins"
+            entry_id = session.scalar(select(ConformerGroup.species_entry_id))
+            report = reassign_conformer_groups(session, repair_revision="test-n2", species_entry_ids=[entry_id])
+            assert report.groups_emptied_kept == 0 and report.observations_moved == 0, report.summary()
+            session.expire_all()
+            assert session.get(ConformerGroup, groups["A"]).merged_into_conformer_group_id is None
+        finally:
+            session.rollback()
+
+
+def test_an_optimisation_that_declares_a_final_output_does_bridge(db_conn) -> None:
+    with Session(db_conn) as session:
+        session.begin()
+        try:
+            groups = deposit(
+                session,
+                _BUTANE,
+                [butane("A", 0.0), butane("C", 36.0), butane("B", 18.0, "opt", output_role="final")],
+            )
+            assert len(set(groups.values())) == 1
+        finally:
+            session.rollback()
+
+
+# ---------------------------------------------------------------------------
+# The pure linkage functions, directly
+# ---------------------------------------------------------------------------
+
+
+def _table(smiles: str, dihedral: str, degrees_by_key: dict[int, float], *, seed: int = 7):
+    from app.chemistry.basin_linkage import PairTable
+
+    coords = {}
+    for key, degrees in degrees_by_key.items():
+        _fp, mapped = compute_fingerprint_for_observation(
+            smiles, with_dihedral(smiles, dihedral, degrees, seed=seed), _PARAMS
+        )
+        coords[key] = mapped
+    return PairTable(smiles, _MATCH, coords), coords
+
+
+def test_connected_components_compares_every_pair_not_just_neighbours_in_key_order() -> None:
+    from app.chemistry.basin_linkage import connected_components
+
+    # 0-18-36 is a chain (1, 3, 5) and 100-118 a pair (2, 4); the keys alternate between the two, so no two keys that
+    # are next to each other in key order are linked.
+    table, _ = _table(_BUTANE, _BUTANE_DIHEDRAL, {1: 0.0, 2: 100.0, 3: 18.0, 4: 118.0, 5: 36.0})
+    assert not any(table.linked(a, a + 1) for a in (1, 2, 3, 4))
+    assert connected_components(table, [5, 3, 1, 4, 2]) == [[1, 3, 5], [2, 4]]
+
+
+def test_the_medoid_of_a_tie_is_the_lowest_key() -> None:
+    from app.chemistry.basin_linkage import basin_shape
+
+    # two members: each is the other's only neighbour, so the summed distances are equal
+    table, _ = _table(_BUTANE, _BUTANE_DIHEDRAL, {9: 60.0, 4: 70.0})
+    assert basin_shape(table, [9, 4]).medoid_key == 4
+    table, _ = _table(_BUTANE, _BUTANE_DIHEDRAL, {4: 60.0, 9: 70.0})
+    assert basin_shape(table, [4, 9]).medoid_key == 4
+
+
+def test_a_non_defining_structure_equidistant_from_two_basins_goes_to_the_older_one() -> None:
+    from app.chemistry.basin_linkage import FilingBasin, file_non_defining
+    from app.services.conformer_resolution import find_matching_basin
+
+    smiles = _ETHANOL
+    table, coords = _table(smiles, _ETHANOL_DIHEDRAL, {1: 180.0, 2: 125.0, 3: 152.5}, seed=5)
+    assert not table.linked(1, 2) and table.linked(1, 3) and table.linked(2, 3)
+    assert table.compare(1, 3).total_delta == pytest.approx(table.compare(2, 3).total_delta, abs=1e-6)
+    for rows in ((10, 20), (20, 10)):
+        basins = [
+            FilingBasin(index=0, members=[1], rep=1, has_defining=True, row=rows[0]),
+            FilingBasin(index=1, members=[2], rep=2, has_defining=True, row=rows[1]),
+        ]
+        where = file_non_defining(smiles, _MATCH, basins, [3], coords)
+        assert where[3].row == min(rows), rows
+    # the live path's own search takes its candidates oldest first and keeps the first of equals
+    rotors = {"rotor_count": 2}
+    found = find_matching_basin(smiles, coords[3], [("older", rotors, coords[1]), ("younger", rotors, coords[2])], _PARAMS)
+    assert found == "older"
+
+
+def test_extending_a_shape_equals_rebuilding_it() -> None:
+    from app.chemistry.basin_linkage import basin_shape, extend_shape
+
+    degrees = {1: 0.0, 2: 15.0, 3: 30.0, 4: 8.0, 5: 22.0, 6: 40.0}
+    table, _ = _table(_BUTANE, _BUTANE_DIHEDRAL, degrees)
+    keys = list(degrees)
+    shape = basin_shape(table, keys[:2])
+    for count, new in enumerate(keys[2:], start=3):
+        shape = extend_shape(table, shape, new)
+        rebuilt = basin_shape(table, keys[:count])
+        assert (shape.medoid_key, shape.is_clique, shape.span_deg) == (
+            rebuilt.medoid_key, rebuilt.is_clique, rebuilt.span_deg,
+        )
+        assert shape.distance_sums.keys() == rebuilt.distance_sums.keys()
+        for k, v in rebuilt.distance_sums.items():
+            assert shape.distance_sums[k] == pytest.approx(v, abs=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# A new member updates a group's shape from k comparisons, and gets the answer a full rebuild gets
+# ---------------------------------------------------------------------------
+
+
+def test_a_new_member_is_added_to_a_stored_shape_in_linear_comparisons_and_equals_a_rebuild(db_conn, monkeypatch) -> None:
+    from app.chemistry.basin_linkage import PairTable, basin_shape
+
+    rng = random.Random(3)
+    structures = [butane(f"s{i}", rng.uniform(0.0, 19.0)) for i in range(14)]
+    with Session(db_conn) as session:
+        session.begin()
+        try:
+            deposit_observations(session, _BUTANE, structures[:-1])
+            calls: list[tuple[int, int]] = []
+            original = PairTable.compare
+
+            def counting(self, a, b):
+                calls.append((a, b))
+                return original(self, a, b)
+
+            monkeypatch.setattr(PairTable, "compare", counting)
+            observations = deposit_observations(session, _BUTANE, structures[-1:])
+            monkeypatch.setattr(PairTable, "compare", original)
+            k = len(structures) - 1
+            assert len(calls) <= 2 * k, f"{len(calls)} comparisons for {k} existing members: a full rebuild"
+            assert len(calls) >= k, "the new member was not compared with the others"
+
+            group = session.get(
+                ConformerGroup, session.get(ConformerObservation, observations["s13"]).conformer_group_id
+            )
+            members = list(
+                session.scalars(
+                    select(ConformerObservation)
+                    .where(ConformerObservation.conformer_group_id == group.id)
+                    .order_by(ConformerObservation.id)
+                )
+            )
+            assert len(members) == len(structures)
+            table = PairTable(_BUTANE, _MATCH, {m.id: m.mapped_coords_json for m in members})
+            rebuilt = basin_shape(table, [m.id for m in members])
+            assert group.representative_observation_id == rebuilt.medoid_key
+            assert group.basin_is_clique is rebuilt.is_clique
+            assert group.basin_span_deg == pytest.approx(rebuilt.span_deg, abs=1e-6)
+            stored = {int(k_): v for k_, v in group.basin_distance_sums_json.items()}
+            assert stored.keys() == rebuilt.distance_sums.keys()
+            for key, value in rebuilt.distance_sums.items():
+                assert stored[key] == pytest.approx(value, abs=1e-6)
+        finally:
+            session.rollback()

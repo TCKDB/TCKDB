@@ -31,8 +31,18 @@ from dataclasses import dataclass
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.chemistry.basin_linkage import BasinShape, PairTable, basin_shape
+from app.chemistry.basin_linkage import (
+    BasinShape,
+    FilingBasin,
+    PairTable,
+    basin_shape,
+    claim_rows,
+    extend_shape,
+    file_non_defining,
+)
 from app.chemistry.basin_matching import BasinMatchParams
+from app.services.conformer_basin_moves import ReassignmentReport, clear_representative, ensure_review, reset_review
+from app.services.public_refs import make_opaque_ref
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +184,8 @@ def write_group_shape(
         text(
             "UPDATE conformer_group SET representative_observation_id = :rep, "
             "representative_fingerprint_json = CAST(:fp AS jsonb), representative_coords_json = CAST(:coords AS jsonb), "
-            "basin_is_clique = :clique, basin_span_deg = :span, merged_into_conformer_group_id = NULL WHERE id = :id"
+            "basin_is_clique = :clique, basin_span_deg = :span, basin_distance_sums_json = CAST(:sums AS jsonb), "
+            "merged_into_conformer_group_id = NULL WHERE id = :id"
         ),
         {
             "id": group_id,
@@ -183,6 +194,7 @@ def write_group_shape(
             "coords": json.dumps([list(c) for c in coords]) if coords is not None else None,
             "clique": shape.is_clique if shape is not None else None,
             "span": shape.span_deg if shape is not None else None,
+            "sums": json.dumps({str(k): v for k, v in shape.distance_sums.items()}) if shape is not None else None,
         },
     )
 
@@ -191,8 +203,8 @@ def stored_group_shape(session: Session, group_id: int):
     return session.execute(
         text(
             "SELECT representative_observation_id AS rep, representative_fingerprint_json AS fp, "
-            "representative_coords_json AS coords, basin_is_clique AS clique, basin_span_deg AS span "
-            "FROM conformer_group WHERE id = :id"
+            "representative_coords_json AS coords, basin_is_clique AS clique, basin_span_deg AS span, "
+            "basin_distance_sums_json AS sums FROM conformer_group WHERE id = :id"
         ),
         {"id": group_id},
     ).first()
@@ -206,6 +218,7 @@ def refresh_group_shape(
     params: BasinMatchParams,
     compute_missing: Callable[[list[int]], dict[int, tuple[dict | None, list | None]]],
     overrides: dict[int, tuple[bool, Sequence | None]] | None = None,
+    added: int | None = None,
 ) -> BasinShape | None:
     """Re-derive a group's representative (medoid), clique flag and span from its members, and store them.
 
@@ -215,6 +228,11 @@ def refresh_group_shape(
 
     A group with defining members is represented by their medoid. A group with none (a provisional basin of
     partly optimised structures) is represented by the first member filed, and carries no shape.
+
+    ``added`` names a defining member that has just joined: when the group's stored per-member distance sums cover
+    exactly the other defining members, the new shape is built from the ``k`` new comparisons alone
+    (:func:`app.chemistry.basin_linkage.extend_shape`) and equals a full rebuild; otherwise (a merge changed the
+    members, the sums were never stored) the pairs are all compared.
     """
     rows = session.execute(
         text(
@@ -246,13 +264,28 @@ def refresh_group_shape(
         for oid, (fp, structure) in compute_missing(missing).items():
             if structure is not None:
                 coords[oid] = structure
-                fingerprints.setdefault(oid, fp)
-                if fingerprints[oid] is None:
+                if fingerprints.get(oid) is None:
                     fingerprints[oid] = fp
     defining_with_coords = sorted(i for i in defining if i in coords)
     if defining_with_coords:
         table = PairTable(smiles, params, {i: [tuple(c) for c in coords[i]] for i in defining_with_coords})
-        shape = basin_shape(table, defining_with_coords)
+        shape = None
+        if added is not None and added in defining_with_coords:
+            stored = stored_group_shape(session, group_id)
+            prior = {int(k): float(v) for k, v in (stored.sums or {}).items()}
+            if stored.clique is not None and stored.span is not None and set(prior) == set(defining_with_coords) - {added}:
+                shape = extend_shape(
+                    table,
+                    BasinShape(
+                        medoid_key=stored.rep or added,
+                        is_clique=stored.clique,
+                        span_deg=stored.span,
+                        distance_sums=prior,
+                    ),
+                    added,
+                )
+        if shape is None:
+            shape = basin_shape(table, defining_with_coords)
         rep = shape.medoid_key
     else:
         shape = None
@@ -268,8 +301,188 @@ def refresh_group_shape(
         shape=shape,
     )
     if shape is not None and not shape.is_clique:
-        logger.info("conformer group %s is a wide basin (span %.1f degrees)", group_id, shape.span_deg)
+        logger.warning(
+            "conformer group %s holds optimised structures that are not all within tolerance of each other "
+            "(span %.1f degrees); a wide basin is reported, never split",
+            group_id, shape.span_deg,
+        )
     return shape
+
+
+def next_group_label(session: Session, entry_id: int) -> str:
+    """The next unused ``conformer_N`` label for an entry (one past the highest in use, not the row count)."""
+    labels = session.execute(
+        text("SELECT label FROM conformer_group WHERE species_entry_id = :e"), {"e": entry_id}
+    ).scalars().all()
+    highest = 0
+    for label in labels:
+        if label and label.startswith("conformer_") and label[len("conformer_") :].isdigit():
+            highest = max(highest, int(label[len("conformer_") :]))
+    return f"conformer_{max(highest, len(labels)) + 1}"
+
+
+def group_has_dependents(session: Session, group_id: int) -> bool:
+    """Whether a thermo target or a statmech basin declaration or ensemble member points at this group."""
+    return bool(
+        session.execute(
+            text(
+                "SELECT EXISTS (SELECT 1 FROM thermo WHERE target_conformer_group_id = :g) "
+                "OR EXISTS (SELECT 1 FROM statmech_model_declaration WHERE conformer_group_id = :g) "
+                "OR EXISTS (SELECT 1 FROM statmech_model_member WHERE conformer_group_id = :g)"
+            ),
+            {"g": group_id},
+        ).scalar()
+    )
+
+
+def observation_is_accepted(session: Session, observation_id: int) -> bool:
+    """Whether the observation was ever approved (and so can change only through a declared repair)."""
+    return bool(
+        session.execute(
+            text(
+                "SELECT EXISTS (SELECT 1 FROM record_review WHERE record_type = 'conformer_observation' "
+                "AND record_id = :o AND first_approved_at IS NOT NULL)"
+            ),
+            {"o": observation_id},
+        ).scalar()
+    )
+
+
+def refile_non_defining(
+    session: Session,
+    entry_id: int,
+    *,
+    smiles: str,
+    params: BasinMatchParams,
+    compute_missing: Callable[[list[int]], dict[int, tuple[dict | None, list | None]]],
+    defining_overrides: dict[int, bool] | None = None,
+) -> int:
+    """Re-file the entry's non-defining observations the way the recompute would, after the basins changed.
+
+    A structure that defines nothing belongs to the basin whose representative it matches best, and a basin's
+    representative moves when an optimised structure arrives (or when the partition changes). So after every upload
+    the structures that define nothing are filed again, by the same function the recompute uses
+    (:func:`app.chemistry.basin_linkage.file_non_defining`), against the groups as they now stand, so that a recompute
+    straight afterwards changes nothing. A structure that must move but cannot be moved by this role (it was
+    approved, or a thermo target or statmech declaration points at its group) stays where it is and is recorded in
+    ``conformer_group_merge_pending`` for the owner-role reassignment.
+
+    :returns: how many observations were moved.
+    """
+    observations = load_entry_observations(session, entry_id)
+    overrides = defining_overrides or {}
+    defining_ids = defining_observation_ids(session, [o.id for o in observations if o.id not in overrides])
+    defining_ids |= {oid for oid, flag in overrides.items() if flag}
+    non_defining = [o for o in observations if o.id not in defining_ids]
+    if not non_defining:
+        return 0
+    coords: dict[int, Sequence] = {}
+    missing: list[int] = []
+    for o in observations:
+        if o.mapped_coords is not None:
+            coords[o.id] = o.mapped_coords
+        else:
+            missing.append(o.id)
+    if missing:
+        for oid, (_fp, structure) in compute_missing(missing).items():
+            if structure is not None:
+                coords[oid] = structure
+    groups = session.execute(
+        text(
+            "SELECT id, created_by, representative_observation_id AS rep FROM conformer_group "
+            "WHERE species_entry_id = :e ORDER BY id"
+        ),
+        {"e": entry_id},
+    ).all()
+    by_id = {o.id: o for o in observations}
+    members_of: dict[int, list] = {g.id: [] for g in groups}
+    for o in observations:
+        members_of[o.group_id].append(o)
+
+    basins: list[FilingBasin] = []
+    for g in groups:
+        defining_here = sorted(o.id for o in members_of[g.id] if o.id in defining_ids and o.id in coords)
+        if defining_here:
+            rep = g.rep if g.rep in defining_here else defining_here[0]
+            basins.append(FilingBasin(index=len(basins), members=defining_here, rep=rep, has_defining=True, row=g.id))
+    keys = [o.id for o in non_defining if o.id in coords]
+    where = file_non_defining(smiles, params, basins, keys, coords)
+
+    def old_rep(group_id: int) -> int | None:
+        g = next(g for g in groups if g.id == group_id)
+        if g.rep in by_id and g.rep in coords:
+            return g.rep
+        return next((o.id for o in members_of[group_id] if o.id in coords), None)
+
+    claim_rows(
+        basins,
+        [g.id for g in groups],
+        lambda gid: [where[o.id] for o in members_of[gid] if o.id in where and not where[o.id].has_defining],
+        lambda gid: where.get(old_rep(gid)) if old_rep(gid) in where else None,
+    )
+    created_by = next((g.created_by for g in groups), None)
+    for basin in basins:
+        if basin.row is None:
+            basin.row = session.execute(
+                text(
+                    "INSERT INTO conformer_group (species_entry_id, label, created_by, public_ref) "
+                    "VALUES (:e, :label, :cb, :ref) RETURNING id"
+                ),
+                {"e": entry_id, "label": next_group_label(session, entry_id), "cb": created_by, "ref": make_opaque_ref("cg")},
+            ).scalar_one()
+            ensure_review(session, basin.row, "Created by a live upload: a structure that defines no basin matched none.")
+
+    report = ReassignmentReport()
+    moved = 0
+    touched: set[int] = set()
+    for o in non_defining:
+        basin = where.get(o.id)
+        if basin is None or basin.row is None or basin.row == o.group_id:
+            continue
+        if observation_is_accepted(session, o.id) or group_has_dependents(session, o.group_id):
+            record_pending_merge(
+                session,
+                entry_id=entry_id,
+                kept=basin.row,
+                absorbed=o.group_id,
+                observation_id=o.id,
+                reason=(
+                    "a structure that defines no basin belongs in the first group, and an approved record or a "
+                    "record that points at the second group forbids this role to move it; the owner-role "
+                    "reassignment re-files it"
+                ),
+            )
+            continue
+        session.execute(
+            text("UPDATE conformer_observation SET conformer_group_id = :g WHERE id = :id"),
+            {"g": basin.row, "id": o.id},
+        )
+        touched |= {o.group_id, basin.row}
+        moved += 1
+    if not moved:
+        return 0
+    for gid in sorted(touched):
+        remaining = session.execute(
+            text("SELECT count(*) FROM conformer_observation WHERE conformer_group_id = :g"), {"g": gid}
+        ).scalar()
+        if not remaining:
+            rep = old_rep(gid)
+            new_home = next((b.row for b in basins if rep in b.members), None)
+            clear_representative(session, gid, merged_into=new_home if new_home != gid else None)
+        else:
+            member_ids = {
+                r[0]
+                for r in session.execute(
+                    text("SELECT id FROM conformer_observation WHERE conformer_group_id = :g"), {"g": gid}
+                )
+            }
+            has_defining_member = bool(member_ids & defining_ids)
+            if not has_defining_member:
+                refresh_group_shape(session, gid, smiles=smiles, params=params, compute_missing=compute_missing)
+        reset_review(session, gid, report, repairs_revision="live upload")
+    session.flush()
+    session.expire_all()
+    return moved
 
 
 # ---------------------------------------------------------------------------
@@ -277,13 +490,18 @@ def refresh_group_shape(
 # ---------------------------------------------------------------------------
 
 
-def merge_touches_approved(session: Session, group_ids: Sequence[int]) -> bool:
-    """Whether moving the members and dependents of these groups would change an accepted (approved) record.
+def merge_needs_declared_repair(session: Session, group_ids: Sequence[int]) -> bool:
+    """Whether moving the members and dependents of these groups would write a row the database refuses to edit.
 
-    Accepted records (those a reviewer approved at least once) change only through a declared repair, which only
-    an owner-role job can make. They are: an observation filed under the group, a thermo whose target is the group,
-    a statmech record carrying a basin declaration or ensemble member on it, and a conformer selection that an
-    accepted kinetics record cites.
+    The test is "would the trigger refuse this write?", not "is it approved?". A write the API role cannot make
+    needs a declared repair, which only an owner role may declare. The rows a merge writes, and what guards them:
+
+    * ``conformer_observation`` and ``thermo``: accepted-science roots, refused once approved at least once;
+    * ``statmech_model_declaration`` and ``statmech_model_member``: refused in EVERY state
+      (``tckdb_statmech_model_immutable``), approved or not, except ``conformer_group_id`` under a declared repair;
+    * a ``conformer_selection`` that an accepted kinetics record cites: a curation row the trigger does not guard, but
+      moving what an accepted record cites is not something this role decides alone;
+    * ``conformer_group`` and ``record_review`` are not guarded.
     """
     if not group_ids:
         return False
@@ -300,14 +518,9 @@ def merge_touches_approved(session: Session, group_ids: Sequence[int]) -> bool:
                       JOIN record_review r ON r.record_type = 'thermo' AND r.record_id = t.id
                      WHERE t.target_conformer_group_id = ANY(:g) AND r.first_approved_at IS NOT NULL
                 ) OR EXISTS (
-                    SELECT 1 FROM statmech_model_declaration d
-                      JOIN record_review r ON r.record_type = 'statmech' AND r.record_id = d.statmech_id
-                     WHERE d.conformer_group_id = ANY(:g) AND r.first_approved_at IS NOT NULL
+                    SELECT 1 FROM statmech_model_declaration d WHERE d.conformer_group_id = ANY(:g)
                 ) OR EXISTS (
-                    SELECT 1 FROM statmech_model_member m
-                      JOIN statmech_model_declaration d ON d.id = m.declaration_id
-                      JOIN record_review r ON r.record_type = 'statmech' AND r.record_id = d.statmech_id
-                     WHERE m.conformer_group_id = ANY(:g) AND r.first_approved_at IS NOT NULL
+                    SELECT 1 FROM statmech_model_member m WHERE m.conformer_group_id = ANY(:g)
                 ) OR EXISTS (
                     SELECT 1 FROM conformer_selection s
                       JOIN kinetics_interpretation_assignment a ON a.conformer_selection_id = s.id

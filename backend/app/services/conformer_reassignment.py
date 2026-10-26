@@ -62,13 +62,21 @@ import json
 import logging
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.chemistry.basin_linkage import BasinShape, PairTable, basin_shape, connected_components
-from app.chemistry.basin_matching import BasinMatchParams, compare_basins_symmetric, comparison_distance
+from app.chemistry.basin_linkage import (
+    BasinShape,
+    FilingBasin,
+    PairTable,
+    basin_shape,
+    claim_rows,
+    connected_components,
+    file_non_defining,
+)
+from app.chemistry.basin_matching import BasinMatchParams
 from app.chemistry.torsion_fingerprint import TorsionFingerprint
 from app.services.conformer_basin_moves import (
     OBSERVATION_COLUMNS,
@@ -119,21 +127,6 @@ class _Observation:
     def mapped_json(self) -> list:
         assert self.coords is not None
         return [list(c) for c in self.coords]
-
-
-@dataclass
-class _Basin:
-    """A basin as the recompute finds it, before it is given a row."""
-
-    index: int
-    members: list[_Observation] = field(default_factory=list)
-    shape: BasinShape | None = None
-    #: The representative: the medoid of the defining members, else the first member filed.
-    rep: _Observation | None = None
-
-    @property
-    def has_defining(self) -> bool:
-        return any(o.defining for o in self.members)
 
 
 def reassign_conformer_groups(
@@ -207,7 +200,8 @@ def _reassign_entry(
         text(
             "SELECT id, label, created_by, representative_observation_id AS rep_obs, "
             "representative_fingerprint_json AS fp, representative_coords_json AS coords, "
-            "basin_is_clique AS clique, basin_span_deg AS span, merged_into_conformer_group_id AS merged_into "
+            "basin_is_clique AS clique, basin_span_deg AS span, basin_distance_sums_json AS sums, "
+            "merged_into_conformer_group_id AS merged_into "
             "FROM conformer_group WHERE species_entry_id = :e ORDER BY id"
         ),
         {"e": entry_id},
@@ -243,21 +237,23 @@ def _reassign_entry(
     match_params = BasinMatchParams.from_scheme_params(params)
 
     # --- 1. Basins: connected components of the defining members. ---
-    basins: list[_Basin] = []
-    basin_of: dict[int, _Basin] = {}
+    basins: list[FilingBasin] = []
+    basin_of: dict[int, FilingBasin] = {}
+    shape_of: dict[int, BasinShape] = {}  # basin.index -> shape, for basins with defining members
+    coords_of = {o.id: o.coords for o in eligible}
     defining = [o for o in eligible if o.defining]
     if defining:
         assert smiles is not None
         table = PairTable(smiles, match_params, {o.id: o.coords for o in defining})  # type: ignore[misc]
         for component in connected_components(table, [o.id for o in defining]):
-            basin = _Basin(index=len(basins), members=[by_id[i] for i in component])
-            basin.shape = basin_shape(table, component)
-            basin.rep = by_id[basin.shape.medoid_key]
+            shape = basin_shape(table, component)
+            basin = FilingBasin(index=len(basins), members=list(component), rep=shape.medoid_key, has_defining=True)
+            shape_of[basin.index] = shape
             basins.append(basin)
-            for obs in basin.members:
-                basin_of[obs.id] = basin
+            for key in component:
+                basin_of[key] = basin
 
-    # --- 2. Rows for the basins that hold defining members: the older group claims first. ---
+    # --- 2. Rows for the basins that hold defining members: the older group claims first, one basin per row. ---
     old_rep_obs: dict[int, int | None] = {}
     members_of_group: dict[int, list[_Observation]] = defaultdict(list)
     for obs in observations:
@@ -266,46 +262,36 @@ def _reassign_entry(
         first_eligible = next((o.id for o in members_of_group[g.id] if o.eligible), None)
         old_rep_obs[g.id] = g.rep_obs if g.rep_obs in by_id and by_id[g.rep_obs].eligible else first_eligible
 
-    row_of_basin: dict[int, int] = {}  # basin.index -> group id
+    group_ids_asc = [g.id for g in groups]
 
-    def claim(candidate_basins_of) -> None:
-        for g in groups:  # ascending id: the older group claims a basin first
-            candidates = {b.index: b for b in candidate_basins_of(g) if b.index not in row_of_basin}
-            if not candidates:
-                continue
-            held = basin_of.get(old_rep_obs[g.id]) if old_rep_obs[g.id] is not None else None
-            if held is not None and held.index in candidates:
-                chosen = held
-            else:
-                chosen = min(candidates.values(), key=lambda b: min(o.id for o in b.members))
-            row_of_basin[chosen.index] = g.id
+    def held_by(group_id: int) -> FilingBasin | None:
+        rep = old_rep_obs[group_id]
+        return basin_of.get(rep) if rep is not None else None
 
-    claim(lambda g: [basin_of[o.id] for o in members_of_group[g.id] if o.defining and o.eligible])
+    claim_rows(
+        basins,
+        group_ids_asc,
+        lambda gid: [basin_of[o.id] for o in members_of_group[gid] if o.defining and o.eligible],
+        held_by,
+    )
 
     # --- 3. File the observations that define nothing: into the basin whose representative they match best. ---
-    def distance_to(basin: _Basin, obs: _Observation) -> float | None:
-        assert basin.rep is not None and smiles is not None
-        comparison = compare_basins_symmetric(smiles, basin.rep.coords, obs.coords, match_params)  # type: ignore[arg-type]
-        return comparison_distance(comparison) if comparison.same_basin else None
-
-    def older_rank(basin: _Basin) -> tuple[int, int]:
-        row = row_of_basin.get(basin.index)
-        return (0, row) if row is not None else (1, min(o.id for o in basin.members))
-
-    for obs in (o for o in eligible if not o.defining):
-        scored = [(d, older_rank(b), b) for b in basins if (d := distance_to(b, obs)) is not None]
-        if scored:
-            target = min(scored, key=lambda t: (t[0], t[1]))[2]
-        else:
-            target = _Basin(index=len(basins), rep=obs)
-            basins.append(target)
-        target.members.append(obs)
-        basin_of[obs.id] = target
-    claim(lambda g: [basin_of[o.id] for o in members_of_group[g.id] if o.eligible and not basin_of[o.id].has_defining])
+    non_defining = [o.id for o in eligible if not o.defining]
+    if non_defining:
+        assert smiles is not None
+        basin_of.update(file_non_defining(smiles, match_params, basins, non_defining, coords_of))  # type: ignore[arg-type]
+    claim_rows(
+        basins,
+        group_ids_asc,
+        lambda gid: [basin_of[o.id] for o in members_of_group[gid] if o.eligible and not basin_of[o.id].has_defining],
+        held_by,
+    )
 
     # Unclaimed basins get a provisional (negative) row id until it is certain this entry will be written.
-    provisional = {basin.index: -(basin.index + 1) for basin in basins if basin.index not in row_of_basin}
-    row_of_basin.update(provisional)
+    provisional = {basin.index: -(basin.index + 1) for basin in basins if basin.row is None}
+    row_of_basin: dict[int, int] = {
+        basin.index: (basin.row if basin.row is not None else provisional[basin.index]) for basin in basins
+    }
     new_group_of_obs: dict[int, int] = {o.id: row_of_basin[basin_of[o.id].index] for o in eligible}
     old_group_of_obs: dict[int, int] = {o.id: o.group_id for o in observations}
     fallback_of_group: dict[int, int] = {}
@@ -344,7 +330,8 @@ def _reassign_entry(
     for basin in basins:
         if basin.index not in provisional:
             continue
-        assert basin.rep is not None and basin.rep.fingerprint is not None
+        rep_obs = by_id[basin.rep]
+        assert rep_obs.fingerprint is not None
         created = session.execute(
             text(
                 "INSERT INTO conformer_group (species_entry_id, label, created_by, representative_fingerprint_json, "
@@ -354,9 +341,9 @@ def _reassign_entry(
             {
                 "e": entry_id,
                 "label": f"conformer_{next_number}",
-                "cb": basin.rep.created_by,
-                "fp": json.dumps(basin.rep.fingerprint.to_dict()),
-                "coords": json.dumps(basin.rep.mapped_json),
+                "cb": rep_obs.created_by,
+                "fp": json.dumps(rep_obs.fingerprint.to_dict()),
+                "coords": json.dumps(rep_obs.mapped_json),
                 # The ORM mints this on insert; raw SQL would leave the server-side placeholder.
                 "ref": make_opaque_ref("cg"),
             },
@@ -417,26 +404,29 @@ def _reassign_entry(
     stored = {g.id: g for g in groups}
     for basin in basins:
         row = row_of_basin[basin.index]
-        assert basin.rep is not None and basin.rep.fingerprint is not None
-        fingerprint_json = basin.rep.fingerprint.to_dict()
-        coords_json = basin.rep.mapped_json
-        shape = basin.shape if basin.has_defining else None
+        rep_obs = by_id[basin.rep]
+        assert rep_obs.fingerprint is not None
+        fingerprint_json = rep_obs.fingerprint.to_dict()
+        coords_json = rep_obs.mapped_json
+        shape = shape_of.get(basin.index)
+        sums_json = {str(k): v for k, v in shape.distance_sums.items()} if shape else None
         if row in stored:
             before = stored[row]
             unchanged = (
-                before.rep_obs == basin.rep.id
+                before.rep_obs == rep_obs.id
                 and before.merged_into is None
                 and _normalised(before.fp) == _normalised(fingerprint_json)
                 and _normalised(before.coords) == _normalised(coords_json)
                 and before.clique == (shape.is_clique if shape else None)
                 and (before.span == shape.span_deg if shape else before.span is None)
+                and _normalised(before.sums) == _normalised(sums_json)
             )
             if unchanged:
                 continue
         write_group_shape(
             session,
             row,
-            representative_observation_id=basin.rep.id,
+            representative_observation_id=rep_obs.id,
             fingerprint_json=fingerprint_json,
             coords=coords_json,
             shape=shape,
@@ -448,7 +438,7 @@ def _reassign_entry(
             logger.warning(
                 "species entry %s: conformer group %s holds %d optimised structures that are not all within tolerance "
                 "of each other (span %.1f degrees); not split",
-                entry_id, row, sum(1 for o in basin.members if o.defining), shape.span_deg,
+                entry_id, row, len(basin.members), shape.span_deg,
             )
         changed = True
 

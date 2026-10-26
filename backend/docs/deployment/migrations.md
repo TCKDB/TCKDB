@@ -918,6 +918,13 @@ own transaction**, through the same declared-repair machinery as `d3f8a1c6e92b`.
   repair). It files the observation under the older group and writes a `conformer_group_merge_pending` row. Complete them as the owner role:
   `reassign_conformer_groups(session, repair_revision=..., species_entry_ids=entries_with_pending_merges(session))`
   (`app.services.conformer_reassignment`, `app.services.conformer_basin_store`). No operator script is shipped yet.
+- **Declaring a repair first.** The database allows one repair declaration per table per transaction. A migration that declares a repair
+  to `conformer_observation`, `thermo`, `statmech_model_declaration` or `statmech_model_member` and then calls
+  `reassign_conformer_groups` in the same transaction must declare the union of its own columns and
+  `app.services.conformer_basin_moves.REASSIGNMENT_REPAIR_COLUMNS`; a narrower declaration already in force is refused by column name.
+- **Seeing what is owed and what is wide.** The conformer-group read shows `merge_pending` (target group and reason) while a merge is owed
+  and `wide_basin` / `basin_span_deg` for a chain; `scripts/run_consistency_check.py --check wide-basin --target-ref cg_...` records the
+  advisory (rubric `wide_basin_consistency`).
 - **Composition with other data steps.** The step recomputes whatever entries it is given from the database as it finds it, so it composes with a
   revision that merges species entries or changes stereo identity before it. It declines unless the default scheme is exactly
   (`torsion_basin`, 3); `d3f8a1c6e92b`'s step now declines on any database that is not at version 2.

@@ -407,5 +407,5 @@ def test_downgrade_restores_the_default_and_drops_what_the_revision_added_withou
         }
         assert not columns & {
             "representative_observation_id", "merged_into_conformer_group_id", "basin_is_clique",
-            "basin_span_deg", "mapped_coords_json",
+            "basin_span_deg", "basin_distance_sums_json", "mapped_coords_json",
         }

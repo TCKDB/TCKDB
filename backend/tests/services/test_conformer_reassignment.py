@@ -738,6 +738,8 @@ def _two_groups_then_what_points_at_the_younger(session, kind: str):
     entry = younger.species_entry
     calc_c = session.scalars(select(Calculation).where(Calculation.conformer_observation_id == c.id)).first()
 
+    approve = (lambda *a: None) if kind.endswith("_unapproved") else _approve
+    kind = kind.removesuffix("_unapproved")
     if kind == "observation":
         _approve(session, SubmissionRecordType.conformer_observation, c.id)
         where = lambda: session.get(ConformerObservation, c.id).conformer_group_id  # noqa: E731
@@ -748,7 +750,7 @@ def _two_groups_then_what_points_at_the_younger(session, kind: str):
         where = lambda: session.get(Thermo, thermo_id).target_conformer_group_id  # noqa: E731
     elif kind == "statmech_declaration":
         statmech, declaration = _basin_declaration(session, entry, younger, calc_c)
-        _approve(session, SubmissionRecordType.statmech, statmech.id)
+        approve(session, SubmissionRecordType.statmech, statmech.id)
         declaration_id = declaration.id
         where = lambda: session.get(StatmechModelDeclaration, declaration_id).conformer_group_id  # noqa: E731
     elif kind == "ensemble_member":
@@ -756,7 +758,7 @@ def _two_groups_then_what_points_at_the_younger(session, kind: str):
         cited = make_statmech(session, species_entry=entry)
         attach_statmech_source_calculation(session, statmech=cited, calculation=calc_c)
         _declaration, member = _ensemble_member(session, entry, owner, younger, cited)
-        _approve(session, SubmissionRecordType.statmech, owner.id)
+        approve(session, SubmissionRecordType.statmech, owner.id)
         member_id = member.id
         where = lambda: session.get(StatmechModelMember, member_id).conformer_group_id  # noqa: E731
     elif kind == "kinetics_selection":
@@ -795,7 +797,18 @@ def _two_groups_then_what_points_at_the_younger(session, kind: str):
 
 
 @pytest.mark.parametrize(
-    "kind", ["observation", "thermo", "statmech_declaration", "ensemble_member", "kinetics_selection"]
+    "kind",
+    [
+        "observation",
+        "thermo",
+        "statmech_declaration",
+        "ensemble_member",
+        "kinetics_selection",
+        # Not approved, but the database refuses every UPDATE of a statmech basin declaration or member without a
+        # declared repair, which the API role cannot make: the test is "would the trigger refuse", not "is it approved".
+        "statmech_declaration_unapproved",
+        "ensemble_member_unapproved",
+    ],
 )
 def test_a_bridge_over_an_approved_record_is_owed_and_the_owner_job_completes_it(db_session, kind: str) -> None:
     from app.services.conformer_basin_store import entries_with_pending_merges
@@ -879,3 +892,91 @@ def test_a_live_upload_cannot_move_an_approved_record_itself(db_session) -> None
                 report=ReassignmentReport(), scheme_id=_current_scheme_id(session),
             )
     assert where() == younger_id
+
+
+# ---------------------------------------------------------------------------
+# A group row claims at most one basin
+# ---------------------------------------------------------------------------
+
+
+def test_a_row_that_holds_a_basin_does_not_also_claim_a_provisional_one(db_session) -> None:
+    """opt 0, sp 18, opt -15, opt -30 all filed under ONE group (the old way). The optimised three are one wide
+    basin whose medoid is -15; the sp matches nothing the recompute compares it with, so it is a provisional basin of
+    its own. The row must hold the optimised basin, not be written a second time with the sp as its representative."""
+    from app.db.models.common import CalculationType
+    from tests.services.test_conformer_basin_linkage import _BUTANE, _BUTANE_DIHEDRAL
+
+    session = db_session
+    geometries = [with_dihedral(_BUTANE, _BUTANE_DIHEDRAL, d) for d in (0.0, 18.0, -15.0, -30.0)]
+    entry, (group,), observations, calculations = _seed(session, _BUTANE, geometries, [0, 0, 0, 0])
+    calculations[1].type = CalculationType.sp
+    session.flush()
+    group_id, sp_id, medoid_id = group.id, observations[1].id, observations[2].id
+
+    first = reassign_conformer_groups(session, repair_revision=_REVISION, species_entry_ids=[entry.id])
+
+    session.expire_all()
+    groups = _groups(session, entry)
+    assert len(groups) == 2
+    holder = session.get(ConformerGroup, group_id)
+    assert holder.representative_observation_id == medoid_id
+    assert holder.basin_is_clique is False  # the wide flag is kept
+    assert session.get(ConformerObservation, sp_id).conformer_group_id != group_id
+    sp_group = session.get(ConformerGroup, session.get(ConformerObservation, sp_id).conformer_group_id)
+    assert sp_group.representative_observation_id == sp_id and sp_group.basin_is_clique is None
+    assert first.groups_created == 1
+
+    second = reassign_conformer_groups(session, repair_revision=_REVISION, species_entry_ids=[entry.id])
+    assert second.entries_changed == 0, second.summary()
+
+
+# ---------------------------------------------------------------------------
+# A declaration already in force in the transaction must cover what reassignment writes
+# ---------------------------------------------------------------------------
+
+
+def _approved_thermo_on_the_gauche_basin(session):
+    entry, (group,), (trans, gauche), (calc_trans, calc_gauche) = _seed(
+        session, _ETHANOL, [_ethanol(180.0), _ethanol(60.0)], [0, 0]
+    )
+    thermo = _target_thermo(session, entry, group, [calc_gauche])
+    _approve(session, SubmissionRecordType.thermo, thermo.id)
+    return entry, group, thermo
+
+
+def test_the_exported_repair_columns_are_exactly_what_reassignment_writes() -> None:
+    from app.services.conformer_basin_moves import REASSIGNMENT_REPAIR_COLUMNS
+
+    assert {k: sorted(v) for k, v in REASSIGNMENT_REPAIR_COLUMNS.items()} == {
+        "conformer_observation": [
+            "assignment_scheme_id", "conformer_group_id", "mapped_coords_json", "torsion_fingerprint_json",
+        ],
+        "statmech_model_declaration": ["conformer_group_id", "content_hash"],
+        "statmech_model_member": ["conformer_group_id"],
+        "thermo": ["target_conformer_group_id"],
+    }
+
+
+def test_a_narrower_declaration_already_in_force_is_refused_by_name(db_session) -> None:
+    from app.services.conformer_basin_moves import RepairDeclarationError
+
+    session = db_session
+    entry, group, thermo = _approved_thermo_on_the_gauche_basin(session)
+    thermo_id, group_id = thermo.id, group.id
+    # a revision that ran earlier in this transaction declared the table for ITS columns only
+    _declare_statmech_repair(session, "thermo", ("species_entry_id",))
+    with pytest.raises(RepairDeclarationError, match="target_conformer_group_id"):
+        with session.begin_nested():
+            reassign_conformer_groups(session, repair_revision=_REVISION, species_entry_ids=[entry.id])
+    session.expire_all()
+    assert session.get(Thermo, thermo_id).target_conformer_group_id == group_id  # nothing was written
+
+
+def test_a_declaration_covering_a_superset_of_the_columns_is_used(db_session) -> None:
+    session = db_session
+    entry, group, thermo = _approved_thermo_on_the_gauche_basin(session)
+    thermo_id, group_id = thermo.id, group.id
+    _declare_statmech_repair(session, "thermo", ("species_entry_id", "target_conformer_group_id"))
+    reassign_conformer_groups(session, repair_revision=_REVISION, species_entry_ids=[entry.id])
+    session.expire_all()
+    assert session.get(Thermo, thermo_id).target_conformer_group_id != group_id

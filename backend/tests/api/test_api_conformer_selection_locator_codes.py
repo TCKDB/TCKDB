@@ -494,3 +494,26 @@ def test_the_new_field_is_optional_and_its_absence_still_refuses(
     assert sorted(context["discriminator_values"]) == sorted(
         group.public_ref for group in groups
     ), context
+
+
+def test_a_locator_citing_a_group_a_merge_emptied_resolves_the_group_that_took_its_members(
+    client, db_session
+) -> None:
+    """Forward on write: the emptied row has no selection, the survivor does, and the write attaches to the survivor."""
+    entries, statmechs = _seed_participants(db_session)
+    survivor = make_conformer_group(db_session, entries["ch3"], label="conformer_1")
+    emptied = make_conformer_group(db_session, entries["ch3"], label="conformer_2")
+    emptied.merged_into_conformer_group_id = survivor.id
+    selection = attach_conformer_selection(db_session, conformer_group=survivor)
+    db_session.flush()
+
+    resp = client.post(_KINETICS, json=_payload(statmechs, conformer_group_ref=emptied.public_ref))
+
+    assert resp.status_code == 201, resp.text[:800]
+    stored = db_session.scalar(
+        select(KineticsInterpretationAssignment.conformer_selection_id).where(
+            KineticsInterpretationAssignment.kinetics_id == resp.json()["id"],
+            KineticsInterpretationAssignment.subject_key == "reactant:1",
+        )
+    )
+    assert stored == selection.id

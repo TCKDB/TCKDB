@@ -201,6 +201,41 @@ def test_cg_detail_reports_where_a_merged_group_went_and_whether_a_basin_is_wide
     assert tight["wide_basin"] is False
 
 
+def test_cg_detail_shows_a_merge_that_is_owed_until_it_is_completed(client, db_session):
+    """The group still holds its members while approved records keep it from being merged; a reader is told."""
+    from app.db.models.species import ConformerGroupMergePending, ConformerObservation
+
+    _, entry = _make_species_entry(db_session)
+    older = make_conformer_group(db_session, entry, label="conformer_1")
+    younger = make_conformer_group(db_session, entry, label="conformer_2")
+    bridge = ConformerObservation(conformer_group_id=older.id)
+    db_session.add(bridge)
+    db_session.flush()
+    owed = ConformerGroupMergePending(
+        species_entry_id=entry.id,
+        kept_conformer_group_id=older.id,
+        absorbed_conformer_group_id=younger.id,
+        conformer_observation_id=bridge.id,
+        reason="approved records point at the younger group",
+    )
+    db_session.add(owed)
+    db_session.flush()
+
+    young = client.get(_cg_url(younger.public_ref)).json()["record"]["conformer_group"]
+    assert young["merge_pending"] == {
+        "target_conformer_group_ref": older.public_ref,
+        "reason": "approved records point at the younger group",
+    }
+    assert client.get(_cg_url(older.public_ref)).json()["record"]["conformer_group"]["merge_pending"] is None
+
+    from datetime import datetime
+
+    owed.completed_at = datetime(2026, 10, 27)
+    db_session.flush()
+    done = client.get(_cg_url(younger.public_ref)).json()["record"]["conformer_group"]
+    assert done["merge_pending"] is None
+
+
 def test_cg_detail_review_badge_present(client, db_session):
     _, cg, _ = _make_group_with_obs(db_session)
     body = client.get(_cg_url(cg.public_ref)).json()

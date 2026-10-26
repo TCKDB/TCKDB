@@ -99,6 +99,7 @@ from app.services.charge_multiplicity_extraction import (
 from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.conformer_resolution import (
+    current_conformer_group_targets,
     is_defining_primary,
     resolve_conformer_group,
     settle_conformer_basin,
@@ -956,7 +957,7 @@ def persist_computed_species_upload(
     )
     apply_review_policy(
         session,
-        targets=review_targets,
+        targets=current_conformer_group_targets(session, review_targets),
         policy=review_policy,
         created_by=created_by,
     )

@@ -294,6 +294,16 @@ def test_a_target_named_by_conformer_key_follows_a_basin_merge_made_by_a_later_c
     ).all()
     assert len(groups) == 2 and groups[1].merged_into_conformer_group_id == groups[0].id  # the emptied row is kept
     assert row.target_conformer_group_id == groups[0].id
+    # the review of the basin belongs to the group that holds the observations, not to the row the first conformer
+    # was filed under before a later one merged it away
+    from app.db.models.record_review import RecordReview
+
+    reviewed = set(
+        db_session.scalars(
+            select(RecordReview.record_id).where(RecordReview.record_type == SubmissionRecordType.conformer_group)
+        )
+    )
+    assert groups[0].id in reviewed and groups[1].id not in reviewed
 
 
 def test_species_bundle_refuses_a_conformer_or_calculation_nothing_declared(client, db_session):

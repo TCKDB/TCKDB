@@ -22,10 +22,15 @@ A live upload (:func:`resolve_conformer_group`)
   representative it matches best (ties: the older group). It never links two basins. If none matches it starts a
   *provisional* basin that has no defining member and is matched by its own geometry until an optimised deposit
   arrives.
-* A merge that would change an approved record (an approved observation, thermo target, statmech declaration or
-  ensemble member, or a selection an accepted kinetics record cites) cannot be made by the API role: only a declared
-  repair may change those rows, and only an owner role may declare one. The new observation is filed under the oldest
-  group and a ``conformer_group_merge_pending`` row records the merge owed; the owner-role reassignment completes it.
+* A merge that would write a row the database refuses to edit cannot be made by the API role: the accepted-science
+  roots once approved (an observation, a thermo target), EVERY statmech basin declaration or ensemble member (approved
+  or not), and a selection an accepted kinetics record cites. Only a declared repair may move them, and only an owner
+  role may declare one. The new observation is filed under the oldest group and a ``conformer_group_merge_pending``
+  row records the merge owed; the owner-role reassignment completes it. The test is "would the trigger refuse this
+  write?", not "is it approved?" (:func:`app.services.conformer_basin_store.merge_needs_declared_repair`).
+* After every upload the structures that define nothing are filed again against the groups as they now stand
+  (:func:`app.services.conformer_basin_store.refile_non_defining`), by the function the recompute uses, so a recompute
+  straight after an upload changes nothing.
 
 The representative of a group is derived, not identity: its medoid, stored for reads. Energy appears nowhere in
 matching, linkage or the medoid.
@@ -51,6 +56,7 @@ from app.chemistry.torsion_fingerprint import (
     TorsionFingerprint,
     resolve_atom_mapping,
 )
+from app.db.models.common import SubmissionRecordType
 from app.db.models.species import (
     ConformerAssignmentScheme,
     ConformerGroup,
@@ -69,11 +75,13 @@ from app.services.conformer_basin_store import (
     defining_observation_ids,
     is_defining_calculation,
     load_entry_observations,
-    merge_touches_approved,
+    merge_needs_declared_repair,
     observation_geometry_atoms,
     record_pending_merge,
+    refile_non_defining,
     refresh_group_shape,
 )
+from app.services.record_review import RecordRef
 
 logger = logging.getLogger(__name__)
 
@@ -241,23 +249,24 @@ class BasinPlacement:
     pending_absorbed: tuple[int, ...] = ()
 
 
-def is_defining_upload(calculation_type: str, *, converged: bool | None = None) -> bool:
-    """Whether the primary calculation of an upload makes its structure a defining member of a basin.
-
-    An upload's geometry is the final output of an ``opt`` or ``composite`` primary (the upload attaches it as
-    such), so only the type and a stated failure to converge matter here. The recompute reads the same facts back
-    from the stored calculation (:func:`app.services.conformer_basin_store.defining_observation_ids`).
-    """
-    return is_defining_calculation(
-        str(getattr(calculation_type, "value", calculation_type)), has_final_geometry=True, converged=converged
-    )
-
-
 def is_defining_primary(calculation_payload: object) -> bool:
-    """:func:`is_defining_upload` for an upload's primary-calculation payload (its type and optional ``opt_result``)."""
+    """Whether an upload's primary calculation makes its structure a defining member of a basin.
+
+    The same predicate the recompute applies to the stored calculation
+    (:func:`app.services.conformer_basin_store.is_defining_calculation`), fed with what the upload is about to
+    store: the type, a stated failure to converge, and whether a ``final`` output geometry will be attached. The
+    upload attaches the conformer's geometry as the final output when it declares no output geometries of its own
+    (``attach_calculation_output_geometries``); when it declares some, there is a final one only if one of them has
+    that role. An optimisation whose declared outputs are all ``initial`` therefore has no final geometry, is not a
+    defining member, and is filed without linking anything -- exactly as the recompute reads it back.
+    """
     opt_result = getattr(calculation_payload, "opt_result", None)
-    return is_defining_upload(
-        calculation_payload.type, converged=getattr(opt_result, "converged", None)
+    declared = list(getattr(calculation_payload, "output_geometries", None) or [])
+    has_final = not declared or any(str(getattr(e.role, "value", e.role)) == "final" for e in declared)
+    return is_defining_calculation(
+        str(getattr(calculation_payload.type, "value", calculation_payload.type)),
+        has_final_geometry=has_final,
+        converged=getattr(opt_result, "converged", None),
     )
 
 
@@ -325,7 +334,7 @@ def resolve_conformer_group(
     :param created_by: Optional application user id for new rows.
     :param smiles: SMILES string for the species (needed for torsion extraction).
     :param xyz_atoms: Parsed XYZ atoms (needed for torsion extraction).
-    :param defining: Whether this structure is a defining member (see :func:`is_defining_upload`). A structure
+    :param defining: Whether this structure is a defining member (see :func:`is_defining_primary`). A structure
         that is not (a single point, a scan point, a partial optimisation) is filed into a basin but never links two.
     :returns: (conformer_group, fingerprint_or_none, scheme_or_none).
     """
@@ -372,7 +381,7 @@ def resolve_conformer_group(
                 target = next(g for g in existing_groups if g.id == kept_id)
                 absorbed = sorted(linked_groups - {kept_id})
                 if absorbed:
-                    if merge_touches_approved(session, absorbed):
+                    if merge_needs_declared_repair(session, absorbed):
                         pending_absorbed = tuple(absorbed)
                     else:
                         _merge_inline(session, kept_id, absorbed, scheme_id=scheme.id if scheme is not None else None)
@@ -496,14 +505,51 @@ def settle_conformer_basin(
                 "only a declared repair may move them"
             ),
         )
+    match_params = BasinMatchParams.from_scheme_params(placement.params)
+    compute_missing = _structures_of(session, smiles, placement.params)
     refresh_group_shape(
         session,
         observation.conformer_group_id,
         smiles=smiles,
-        params=BasinMatchParams.from_scheme_params(placement.params),
-        compute_missing=_structures_of(session, smiles, placement.params),
+        params=match_params,
+        compute_missing=compute_missing,
         overrides={observation.id: (placement.defining, placement.mapped_coords)},
+        added=observation.id if placement.defining else None,
     )
+    # The representative of a basin may have moved, or the partition changed: file the structures that define
+    # nothing again, by the function the recompute uses, so that a recompute straight after changes nothing.
+    refile_non_defining(
+        session,
+        placement.species_entry_id,
+        smiles=smiles,
+        params=match_params,
+        compute_missing=compute_missing,
+        defining_overrides={observation.id: placement.defining},
+    )
+
+
+def current_conformer_group_targets(session: Session, targets: Sequence[RecordRef]) -> list[RecordRef]:
+    """``targets`` with the conformer-group refs replaced by where each conformer observation is NOW.
+
+    A bundle collects its review targets as it goes, but a later conformer of the same request can link two basins
+    and merge the younger into the older, and settling an upload can re-file a structure that defines nothing. The
+    group captured when an observation was filed may then be an emptied row; the review belongs to the group that
+    holds the observation at the end.
+    """
+    observation_ids = [t.record_id for t in targets if t.record_type is SubmissionRecordType.conformer_observation]
+    groups = (
+        sorted(
+            set(
+                session.scalars(
+                    select(ConformerObservation.conformer_group_id).where(ConformerObservation.id.in_(observation_ids))
+                )
+            )
+        )
+        if observation_ids
+        else []
+    )
+    kept = [t for t in targets if t.record_type is not SubmissionRecordType.conformer_group]
+    return [*kept, *(RecordRef(SubmissionRecordType.conformer_group, g) for g in groups)]
 
 
 def _next_group_label(session: Session, species_entry_id: int) -> str:

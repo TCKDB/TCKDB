@@ -263,6 +263,7 @@ the gap.
 | `merged_into_conformer_group_id` | BIGINT | yes | — | conformer_group.id | — | not documented |
 | `basin_is_clique` | BOOLEAN | yes | — | — | — | not documented |
 | `basin_span_deg` | FLOAT | yes | — | — | — | not documented |
+| `basin_distance_sums_json` | JSONB | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |

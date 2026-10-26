@@ -131,6 +131,18 @@ class ConformerGroupFingerprint(BaseModel):
     torsions: list[ConformerRotorTorsion]
 
 
+class ConformerGroupMergePendingBlock(BaseModel):
+    """A merge of this group into another that an upload decided on but could not carry out.
+
+    Approved records point at this group, and only the owner-role reassignment may move them (through a declared
+    repair). Until that runs, the group still holds its members and the upload that linked it is filed under the
+    target group. Absent once the merge is completed.
+    """
+
+    target_conformer_group_ref: str
+    reason: str
+
+
 class ConformerGroupCoreBlock(BaseModel):
     """Direct conformer-group-row metadata.
 
@@ -152,7 +164,8 @@ class ConformerGroupCoreBlock(BaseModel):
     structures, reported for curation and never split) and ``False`` when
     they are; ``None`` when the group has no optimised member.
     ``basin_span_deg`` is the largest torsion difference between two of
-    them, in degrees.
+    them, in degrees. ``merge_pending`` is set while a merge of this group
+    into another is owed (see :class:`ConformerGroupMergePendingBlock`).
     """
 
     conformer_group_id: int | None = None
@@ -165,6 +178,7 @@ class ConformerGroupCoreBlock(BaseModel):
     merged_into_conformer_group_ref: str | None = None
     wide_basin: bool | None = None
     basin_span_deg: float | None = None
+    merge_pending: ConformerGroupMergePendingBlock | None = None
 
 
 class ConformerObservationCoreBlock(BaseModel):

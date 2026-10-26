@@ -1938,6 +1938,7 @@ Table conformer_group {
   merged_into_conformer_group_id bigint [ref: > conformer_group.id]
   basin_is_clique boolean
   basin_span_deg double
+  basin_distance_sums_json jsonb
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
   public_ref string [not null]

@@ -59,6 +59,7 @@ from app.services.calculation_ownership import (
     assert_statmech_owned_by,
 )
 from app.services.calculation_resolution import resolve_level_of_theory_ref
+from app.services.conformer_group_forwarding import forwarded_group_id
 from app.services.conformer_selection_locator import (
     SelectionCandidate,
     ambiguous_conformer_selection_locator,
@@ -559,6 +560,15 @@ def resolve_interpretation_assignments(
                         ConformerGroup.public_ref == locator.conformer_group_ref
                     )
                 ).first()
+                if selection_group is not None:
+                    # a basin emptied by a merge is forwarded to the group that took its members
+                    forwarded = forwarded_group_id(session, selection_group.id)
+                    if forwarded != selection_group.id:
+                        selection_group = session.execute(
+                            select(ConformerGroup.id, ConformerGroup.species_entry_id).where(
+                                ConformerGroup.id == forwarded
+                            )
+                        ).first()
                 if selection_group is None:
                     raise unknown_reference(
                         code=W_UNKNOWN_CONFORMER_GROUP_REF,

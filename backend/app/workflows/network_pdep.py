@@ -85,6 +85,7 @@ from app.services.conformer_anchoring import (
     anchor_species_calculation_to_observation,
 )
 from app.services.conformer_resolution import (
+    current_conformer_group_targets,
     is_defining_primary,
     resolve_conformer_group,
     settle_conformer_basin,
@@ -1510,7 +1511,7 @@ def persist_network_pdep_upload(
 
     apply_review_policy(
         session,
-        targets=review_targets,
+        targets=current_conformer_group_targets(session, review_targets),
         policy=review_policy,
         created_by=created_by,
     )

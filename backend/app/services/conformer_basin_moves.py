@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -43,6 +43,23 @@ THERMO_COLUMNS = ("target_conformer_group_id",)
 STATMECH_MEMBER_COLUMNS = ("conformer_group_id",)
 #: A declaration's checksum covers its basin and each member's basin, so it is declared with the basin and follows it.
 STATMECH_DECLARATION_COLUMNS = ("conformer_group_id", "content_hash")
+
+#: The columns reassignment may write, per table, and so the columns its declared repair names. The database allows one
+#: declaration per table per transaction, so a migration that declares a repair to one of these tables and then
+#: calls :func:`app.services.conformer_reassignment.reassign_conformer_groups` in the same transaction has to declare
+#: the UNION of its own columns and these: a narrower declaration already in force is not extended, and
+#: :meth:`Repairs.declare` refuses it by name instead of writing under a declaration that does not cover the write.
+REASSIGNMENT_REPAIR_COLUMNS: Mapping[str, tuple[str, ...]] = {
+    "conformer_observation": OBSERVATION_COLUMNS,
+    "thermo": THERMO_COLUMNS,
+    "statmech_model_member": STATMECH_MEMBER_COLUMNS,
+    "statmech_model_declaration": STATMECH_DECLARATION_COLUMNS,
+}
+
+
+class RepairDeclarationError(RuntimeError):
+    """A repair declaration already in force in this transaction does not cover the columns reassignment must write."""
+
 
 _REASON = (
     "Reassign conformer observations to their basins under the new default conformer_assignment_scheme "
@@ -108,6 +125,23 @@ class Repairs:
             ),
             {"t": table},
         ).first()
+        if already is not None:
+            covered = set(
+                self._session.execute(
+                    text(
+                        "SELECT declared_columns FROM accepted_science_repair WHERE target_table = :t "
+                        "AND xact_id = (pg_current_xact_id())::text::bigint"
+                    ),
+                    {"t": table},
+                ).scalar_one()
+            )
+            missing = sorted(set(columns) - covered)
+            if missing:
+                raise RepairDeclarationError(
+                    f"a repair to {table} is already declared in this transaction and does not cover "
+                    f"{', '.join(missing)}; declare the union of its columns and "
+                    f"REASSIGNMENT_REPAIR_COLUMNS[{table!r}] = {tuple(columns)} before reassigning"
+                )
         if already is None:
             self._session.execute(
                 text(
@@ -196,7 +230,7 @@ def clear_representative(session: Session, group_id: int, *, merged_into: int | 
     session.execute(
         text(
             "UPDATE conformer_group SET representative_fingerprint_json = NULL, representative_coords_json = NULL, "
-            "representative_observation_id = NULL, basin_is_clique = NULL, basin_span_deg = NULL, "
+            "representative_observation_id = NULL, basin_is_clique = NULL, basin_span_deg = NULL, basin_distance_sums_json = NULL, "
             "merged_into_conformer_group_id = :merged WHERE id = :id"
         ),
         {"id": group_id, "merged": merged_into},

@@ -141,6 +141,7 @@ def upgrade() -> None:
     op.add_column("conformer_group", sa.Column("merged_into_conformer_group_id", sa.BigInteger(), nullable=True))
     op.add_column("conformer_group", sa.Column("basin_is_clique", sa.Boolean(), nullable=True))
     op.add_column("conformer_group", sa.Column("basin_span_deg", sa.Float(), nullable=True))
+    op.add_column("conformer_group", sa.Column("basin_distance_sums_json", postgresql.JSONB(), nullable=True))
     op.create_foreign_key(
         "fk_conformer_group_representative_observation_id",
         "conformer_group",
@@ -264,6 +265,7 @@ def downgrade() -> None:
     op.drop_column("conformer_observation", "mapped_coords_json")
     op.drop_constraint("fk_conformer_group_merged_into_conformer_group_id", "conformer_group", type_="foreignkey")
     op.drop_constraint("fk_conformer_group_representative_observation_id", "conformer_group", type_="foreignkey")
+    op.drop_column("conformer_group", "basin_distance_sums_json")
     op.drop_column("conformer_group", "basin_span_deg")
     op.drop_column("conformer_group", "basin_is_clique")
     op.drop_column("conformer_group", "merged_into_conformer_group_id")

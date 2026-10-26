@@ -260,6 +260,9 @@ class ConformerGroup(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
             deferrable=True,
             initially="IMMEDIATE",
             name="fk_conformer_group_representative_observation_id",
+            # conformer_group <-> conformer_observation reference each other; the FK from the group is added after
+            # both tables exist, so metadata can be sorted and created.
+            use_alter=True,
         ),
         nullable=True,
     )
@@ -280,6 +283,11 @@ class ConformerGroup(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     basin_is_clique: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     #: The largest per-rotor torsion difference between any two defining members under the best mapping, in degrees.
     basin_span_deg: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    #: Per defining member (observation id as a string), the summed best-mapping distance to the other defining
+    #: members: what the medoid minimises. Derived and kept so that a new member updates the representative and the
+    #: shape in O(k) comparisons rather than O(k^2). Valid only while its keys are exactly the group's defining
+    #: members; a reader that finds them different rebuilds it.
+    basin_distance_sums_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     species_entry: Mapped["SpeciesEntry"] = relationship(
         back_populates="conformer_groups"

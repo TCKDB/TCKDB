@@ -55,6 +55,18 @@ Closes #812. A conformer basin no longer depends on the order its structures wer
 - **A merge that touches approved records is owed, not made.** The API role cannot declare a repair, so the bridging observation joins the oldest
   group and a `conformer_group_merge_pending` row records the merge; the owner-role reassignment completes it through `accepted_science_repair`
   (`reassign_conformer_groups` over `entries_with_pending_merges`).
+- **Review fixes (same PR).** (1) A bridging upload now takes the pending path for any group that carries a statmech basin declaration or
+  ensemble member, approved or not: the database refuses every edit of those, and the API role cannot declare a repair. (2) The recompute
+  no longer lets one group row claim two basins. (3) A structure that defines nothing is filed again after every upload, by the function
+  the recompute uses, so the recompute straight after an upload is a no-op; one that cannot be moved by the API role is recorded as owed.
+  (4) "Defining" is decided on the output geometries actually attached (an optimisation with no `final` output defines nothing, live and
+  stored alike). (5) `Repairs.declare` raises, by column name, when a declaration already in force in the transaction does not cover the
+  columns reassignment writes; `REASSIGNMENT_REPAIR_COLUMNS` is exported so a migration that declares first can declare the union.
+  (6) A new member updates the stored medoid, clique flag and span from k comparisons instead of k-squared (`basin_distance_sums_json`).
+  (7) A write that cites the `cg_` ref of an emptied group (thermo target, statmech basin declaration or member, kinetics selection locator)
+  is forwarded to the group that took its members. (8) The conformer-group read gains `merge_pending` (the target group's ref and the reason).
+  (9) A wide basin is reported through the Phase D advisory mechanism: `--check wide-basin` on a `cg_` ref (rubric `wide_basin_consistency`,
+  one append-only `record_machine_review` row, no effect on status or trust).
 - **Schema (revision `b7e4c9a2d518`).** Nullable `conformer_group.representative_observation_id`, `merged_into_conformer_group_id`,
   `basin_is_clique`, `basin_span_deg`; nullable `conformer_observation.mapped_coords_json`; the table `conformer_group_merge_pending`; the version 3
   scheme row as the default; and a data step that recomputes every entry through the existing declared-repair machinery (dependents follow their own
