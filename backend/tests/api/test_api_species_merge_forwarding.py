@@ -16,6 +16,7 @@ from sqlalchemy.exc import DBAPIError
 from app.db.models.common import StereoResolution
 from app.db.models.species import Species, SpeciesEntry
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
+from app.services.public_refs import PREFIXES, make_content_ref
 from app.services.species_resolution import resolve_species_entry
 from app.services.upload_reconciliation import reconcile_species_entry, stereo_unresolved_warnings
 from tests.services.scientific_read._factories import make_thermo_scalar
@@ -37,28 +38,39 @@ def _merged_pair(db_session):
     """A live 2-butene species and entry, and the kept rows of a marked spelling merged into them."""
     survivor = _resolve(db_session, "C/C=C/C")
     species = survivor.species
+    # The kept rows hold the SAME key as their survivors (the partial unique indexes only look at live rows), so a lookup
+    # that forgot to skip merged-away rows would find the wrong one.
+    # Their ids sort BEFORE the survivors' (negative), so a lookup that only happened to return the lowest id would pick them.
     loser_species = Species(
-        kind=species.kind, smiles="C/C=C/C ", inchi_key="Z" * 27, charge=0, multiplicity=1, stereo_kind=species.stereo_kind
+        id=-species.id,
+        kind=species.kind,
+        smiles=species.smiles,
+        inchi_key=species.inchi_key,
+        charge=0,
+        multiplicity=1,
+        stereo_kind=species.stereo_kind,
+        merged_into_species_id=species.id,
+        # The ref the row had under the old key, which the kept row still answers to.
+        public_ref=make_content_ref(PREFIXES["Species"], "species:smiles=C/C=C/C;charge=0;multiplicity=1;stereo_kind=ez_isomer"),
     )
     db_session.add(loser_species)
     db_session.flush()
     loser = SpeciesEntry(
-        species_id=loser_species.id,
+        id=-survivor.id,
+        species_id=species.id,
         mol="C/C=C/C",
         stereo_label="E",
-        stereo_descriptor="E",
+        stereo_descriptor=survivor.stereo_descriptor,
         stereo_resolution=StereoResolution.resolved,
+        merged_into_species_entry_id=survivor.id,
     )
     db_session.add(loser)
     db_session.flush()
-    db_session.execute(
-        text("UPDATE species_entry SET merged_into_species_entry_id = :s WHERE id = :l"), {"s": survivor.id, "l": loser.id}
-    )
-    db_session.execute(
-        text("UPDATE species SET merged_into_species_id = :s WHERE id = :l"), {"s": species.id, "l": loser_species.id}
-    )
-    db_session.refresh(loser)
-    db_session.refresh(loser_species)
+    # Rewrite the survivors so their current row versions sit AFTER the kept rows in the heap: a lookup that forgot to
+    # skip merged-away rows would otherwise be rescued by returning the physically first match.
+    db_session.execute(text("UPDATE species SET inchi_key = inchi_key WHERE id = :i"), {"i": species.id})
+    db_session.execute(text("UPDATE species_entry SET kind = kind WHERE id = :i"), {"i": survivor.id})
+    db_session.expire_all()
     return survivor, loser, loser_species
 
 

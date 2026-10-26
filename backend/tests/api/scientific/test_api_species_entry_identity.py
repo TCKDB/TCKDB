@@ -418,10 +418,9 @@ def test_derivation_covers_the_whole_unique_constraint():
     from app.db.models.species import SpeciesEntry
     from app.services.scientific_read.species_identity import IDENTITY_COLUMNS
 
+    # Since DR-0038 the key is a partial unique index over the live rows, not a table constraint.
     constraint = next(
-        c
-        for c in SpeciesEntry.__table__.constraints
-        if c.name == "uq_species_entry_species_id"
+        i for i in SpeciesEntry.__table__.indexes if i.name == "uq_species_entry_species_id"
     )
     # ``stereo_label`` is the injective display text of the key column ``stereo_descriptor`` (DR-0038).
     columns = {"stereo_label" if c.name == "stereo_descriptor" else c.name for c in constraint.columns} - {

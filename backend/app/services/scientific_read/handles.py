@@ -22,7 +22,7 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any, Callable
 
-from sqlalchemy import func, select
+from sqlalchemy import func, null, select
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.sql import ColumnElement
 
@@ -160,7 +160,17 @@ def prefix_for(model_cls: type) -> str:
 # ---------------------------------------------------------------------------
 
 
-def forward_merged(session: Session, model_cls: type, row_id: int) -> int:
+_UNSET: object = object()
+
+
+def _id_and_marker(model_cls: type):
+    """``(id, merged-into id)`` for a model that can be merged away; ``(id, NULL)`` for any other, so one lookup serves both."""
+    column_name = MERGE_COLUMNS.get(model_cls)
+    marker = getattr(model_cls, column_name) if column_name is not None else null()
+    return model_cls.id, marker
+
+
+def forward_merged(session: Session, model_cls: type, row_id: int, *, into: int | None | object = _UNSET) -> int:
     """The row a species, species entry or reaction stands for: itself, or the row it was merged into.
 
     A merged row is kept with its public ref, so a citation of it still resolves; it forwards one hop
@@ -170,7 +180,8 @@ def forward_merged(session: Session, model_cls: type, row_id: int) -> int:
     column_name = MERGE_COLUMNS.get(model_cls)
     if column_name is None:
         return row_id
-    into = session.scalar(select(getattr(model_cls, column_name)).where(model_cls.id == row_id))
+    if into is _UNSET:
+        into = session.scalar(select(getattr(model_cls, column_name)).where(model_cls.id == row_id))
     if into is None:
         return row_id
     refs = dict(
@@ -384,10 +395,10 @@ def resolve_path_handle(
 
     if kind == "id":
         row_id = int(parsed)
-        exists = session.scalar(
-            select(model_cls.id).where(model_cls.id == row_id)
-        )
-        if exists is None:
+        found = session.execute(
+            select(*_id_and_marker(model_cls)).where(model_cls.id == row_id)
+        ).first()
+        if found is None:
             # F7/F18: log the integer id server-side so operators can
             # still correlate 404s with traffic; do not echo it back
             # to the public caller. The stable ``handle_not_found``
@@ -400,7 +411,7 @@ def resolve_path_handle(
                 row_id,
             )
             raise not_found(kind_label, code="handle_not_found")
-        row_id = forward_merged(session, model_cls, row_id)
+        row_id = forward_merged(session, model_cls, row_id, into=found[1])
         _enforce_handle_gate(session, model_cls, row_id, kind_label, floor=floor)
         return row_id
 
@@ -411,9 +422,10 @@ def resolve_path_handle(
         raise handle_type_mismatch_error(
             kind_label, expected_prefix, prefix, noun="handle"
         )
-    row_id = session.scalar(
-        select(model_cls.id).where(model_cls.public_ref == ref)
-    )
+    found = session.execute(
+        select(*_id_and_marker(model_cls)).where(model_cls.public_ref == ref)
+    ).first()
+    row_id = found[0] if found is not None else None
     if row_id is None:
         # The ref is public-by-design, so echoing it back is fine and
         # actually useful for client debugging.
@@ -426,7 +438,7 @@ def resolve_path_handle(
         # above already carries more than the helper would, and the ref
         # is the half a 404 may echo.
         raise not_found(kind_label, ref=ref, code="handle_not_found")
-    row_id = forward_merged(session, model_cls, row_id)
+    row_id = forward_merged(session, model_cls, row_id, into=found[1])
     _enforce_handle_gate(session, model_cls, row_id, kind_label, ref=ref, floor=floor)
     return row_id
 
@@ -476,10 +488,10 @@ def resolve_filter_ref(
         raise handle_type_mismatch_error(
             kind_label, expected_prefix, prefix, noun="ref"
         )
-    row_id = session.scalar(
-        select(model_cls.id).where(model_cls.public_ref == ref)
-    )
-    return forward_merged(session, model_cls, row_id) if row_id is not None else None
+    found = session.execute(
+        select(*_id_and_marker(model_cls)).where(model_cls.public_ref == ref)
+    ).first()
+    return forward_merged(session, model_cls, found[0], into=found[1]) if found is not None else None
 
 
 # ---------------------------------------------------------------------------

@@ -371,6 +371,13 @@ def test_a_cumulated_chain_that_is_not_stereogenic_contributes_no_element(smiles
     assert frame(smiles).elements == ()
 
 
+@pytest.mark.parametrize("smiles", ["FC1=C=N[N]N=N1", "FC1=C=[NH+][N-]N=N1"])
+def test_a_cumulated_chain_closed_in_a_small_ring_is_not_an_element_and_is_not_refused(smiles: str) -> None:
+    """A ring of fewer than eight members cannot take the linear geometry axial stereo needs, so such a deposit (it
+    exists in the bulk reaction fixtures) is neither stereogenic nor refused."""
+    assert frame(smiles).elements == ()
+
+
 def test_isotopic_stereo_gets_a_descriptor_but_the_species_does_not() -> None:
     r, s = resolve("C[C@H]([2H])O"), resolve("C[C@@H]([2H])O")
     assert {r.descriptor, s.descriptor} == {"R", "S"}

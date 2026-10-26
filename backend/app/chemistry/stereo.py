@@ -284,6 +284,10 @@ def _cumulated_bonds(mol_h: Chem.Mol, ranks_h: list[int]) -> set[int]:
             continue
         cumulated.update(members)
         member_set = set(members)
+        ring_info = mol_h.GetRingInfo()
+        if any(ring_info.NumBondRings(i) and min(len(r) for r in ring_info.BondRings() if i in r) < 8 for i in members):
+            # A chain closed in a ring of fewer than eight members cannot take the linear geometry axial stereo needs.
+            continue
         ends = [a for a, bonds in by_atom.items() if len([x for x in bonds if x in member_set]) == 1]
         capable = 0
         for end in ends:

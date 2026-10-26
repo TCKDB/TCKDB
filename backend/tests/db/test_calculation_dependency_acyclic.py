@@ -32,8 +32,8 @@ from tests.db._migration_chain import revision_under_test
 from tests.db.test_accepted_science_immutability import _actor, _approve
 from tests.services.scientific_read._factories import (
     make_calculation,
-    make_species,
     next_inchi_key,
+    unique_smiles,
 )
 
 _REVISION = "e2f2b3fb6725"
@@ -50,12 +50,18 @@ def _migration_module():
 
 
 def _calcs(session, n, label="ACYC"):
-    # The entry is inserted by SQL, not through the ORM: the race fixture's database stands at the revision under
-    # test, and an ORM insert of ``SpeciesEntry`` names columns a later revision added.
-    species = make_species(session, inchi_key=next_inchi_key(label))
+    # The species and the entry are inserted by SQL, not through the ORM: the race fixture's database stands at the
+    # revision under test, and an ORM insert of ``Species`` or ``SpeciesEntry`` names columns a later revision added.
+    species_id = session.scalar(
+        text(
+            "INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity, stereo_kind) VALUES "
+            "(CAST('molecule' AS molecule_kind), :s, :k, 0, 1, CAST('achiral' AS stereo_kind)) RETURNING id"
+        ),
+        {"s": unique_smiles(session), "k": next_inchi_key(label)},
+    )
     entry_id = session.scalar(
         text("INSERT INTO species_entry (species_id, public_ref) VALUES (:s, :r) RETURNING id"),
-        {"s": species.id, "r": f"spe_acyc_{species.id}_{label.lower()}"[:30]},
+        {"s": species_id, "r": f"spe_acyc_{species_id}_{label.lower()}"[:30]},
     )
     return [make_calculation(session, species_entry_id=entry_id, type=CalculationType.opt) for _ in range(n)]
 
