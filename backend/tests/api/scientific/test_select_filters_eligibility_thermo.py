@@ -466,9 +466,9 @@ def test_a_decision_records_its_provenance_filters_and_an_earlier_manifest_forma
     request = {"filters": {"method_family": ["dft"], "software": "gaussian", "scientific_origin": "computed"}}
     manifest = post(client, methane, request, manifest=True).json()
     assert manifest["request"]["filters"] == {"method_family": ["dft"], "software": "gaussian", "scientific_origin": "computed"}
-    assert manifest["format"] == {"name": "thermo_selection_manifest", "version": 4}
+    assert manifest["format"] == {"name": "thermo_selection_manifest", "version": 5}
     assert replay_matches(manifest)
     earlier = copy.deepcopy(manifest)
-    earlier["format"]["version"] = 3  # level and software were matched through any, independently
+    earlier["format"]["version"] = 4  # level and software were matched through any, independently
     with pytest.raises(ReplayError, match="earlier format, not replayable"):
         replay_decision(earlier)

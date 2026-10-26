@@ -30,8 +30,8 @@ from app.schemas.reads._field_bounds import (
     MAX_SOFTWARE_NAME_LENGTH,
     MAX_WORKFLOW_TOOL_LENGTH,
 )
-from app.schemas.reads.scientific_common import ScientificResponse
 from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
+from app.schemas.reads.scientific_common import ScientificResponse
 
 #: The stable machine names of the eligibility defaults, in the order they are echoed.
 ELIGIBILITY_REJECTED: Final = "rejected_review_status"

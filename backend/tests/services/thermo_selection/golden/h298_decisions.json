@@ -1430,7 +1430,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -1755,7 +1755,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -2030,7 +2030,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -2286,7 +2286,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -2505,7 +2505,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -2722,7 +2722,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -2829,7 +2829,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "no_applicable_candidate",
     "policy": {
@@ -3037,7 +3037,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -3308,7 +3308,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -3529,7 +3529,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -3748,7 +3748,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -3967,7 +3967,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -4186,7 +4186,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -4509,7 +4509,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -4836,7 +4836,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -5163,7 +5163,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -5331,7 +5331,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "sole_eligible_candidate",
     "policy": {
@@ -5545,7 +5545,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -5868,7 +5868,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -6143,7 +6143,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {
@@ -6364,7 +6364,7 @@
     },
     "format": {
      "name": "thermo_selection_manifest",
-     "version": 4
+     "version": 5
     },
     "outcome": "incomparable_alternatives",
     "policy": {

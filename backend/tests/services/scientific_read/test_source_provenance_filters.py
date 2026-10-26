@@ -315,6 +315,33 @@ def test_a_hidden_calculation_cannot_make_a_record_match_under_curated(db_sessio
         reset_current_read_profile(token)
 
 
+@KINDS
+@pytest.mark.parametrize("status", [RecordReviewStatus.not_reviewed, RecordReviewStatus.under_review], ids=lambda s: s.value)
+@pytest.mark.parametrize(
+    "filters",
+    [
+        {"method_family": [F.dft]},
+        {"dft_rung_min": 4, "dft_rung_max": 4},
+        {"method_family": [F.dft], "software": "gaussian"},
+    ],
+    ids=lambda f: "+".join(f),
+)
+def test_an_unreviewed_calculation_still_matches_family_and_rung_under_curated(db_session, kind, filters, status):
+    """ADR 0023 step 4: only a rejected or deprecated calculation is withheld as evidence, so a linked calculation that
+    is not reviewed (or under review) takes part in a family or rung match under curated, with the one-calculation rule.
+
+    The review row is stated explicitly (``status``), not left to an absent row. Calculation A (hybrid DFT, gaussian) is
+    the unreviewed one; B (wavefunction, orca) is approved. Kills: matching over an approved-only calculation set.
+    """
+    world = kind().build(db_session, [A, B], approved_calcs=[1], approve=True)
+    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=world.calcs[0].id, status=status)
+    token = set_current_read_profile(CURATED)
+    try:
+        assert world.read(db_session, **filters) == [world.ref]
+    finally:
+        reset_current_read_profile(token)
+
+
 def test_the_thermo_search_takes_the_same_filters_and_echoes_them(db_session):
     """Kills: a search that drops the new filters on the way to the per-entry read, or leaves them out of the echo."""
     world = _Thermo().build(db_session, [A, B])

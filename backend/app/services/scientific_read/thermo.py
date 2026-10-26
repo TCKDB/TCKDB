@@ -87,7 +87,6 @@ from app.services.scientific_read.common import (
     ids_withheld_as_evidence,
     reject_client_sort,
     review_summary,
-    slice_for_pagination,
     temperature_coverage,
     validate_includes,
     validate_pagination,

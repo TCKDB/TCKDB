@@ -114,7 +114,6 @@ from app.services.scientific_read.common import (
     reject_client_sort,
     review_floor_predicate,
     review_summary,
-    slice_for_pagination,
     temperature_coverage,
     validate_includes,
     validate_pagination,

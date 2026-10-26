@@ -427,7 +427,7 @@ def test_the_manifest_download_replays_to_the_decision_it_records(client, db_ses
     assert response.headers["content-disposition"].startswith("attachment;")
     manifest = response.json()
     assert manifest["outcome"] == "incomparable_alternatives"
-    assert manifest["format"] == {"name": "thermo_selection_manifest", "version": 4}
+    assert manifest["format"] == {"name": "thermo_selection_manifest", "version": 5}
     assert replay_matches(manifest)
     assert replay_decision(manifest)["fronts"] == manifest["decision"]["fronts"]
     # The response and the download are one decision.
@@ -523,7 +523,7 @@ def _assert_integers_are_pinned(doc, *, is_manifest, curated):
     if is_manifest:
         population = doc["population"]
         pinned.update({
-            "format.version": lambda v: v == [4],
+            "format.version": lambda v: v == [5],
             "candidates[].id_rank": lambda v: sorted(v) == list(range(1, len(candidates) + 1)),
             "population.visible_candidates": lambda v: v == [len(candidates)],
             "population.assessed": lambda v: v == [len(candidates)],
