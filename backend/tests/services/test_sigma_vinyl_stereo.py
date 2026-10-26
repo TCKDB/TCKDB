@@ -6,9 +6,12 @@ say which one was computed. Geometry is the only place the configuration
 exists, so ``derive_stereo_label_from_3d`` must read it from there -- and must
 return no label (never a guess) where geometry does not decide it.
 
-These tests pin behaviour that already holds: the neutralised template maps
-bond orders and RDKit's sanitiser leaves the radical bookkeeping the stereo
-perception needs, so a bent sigma-vinyl reads E or Z from the coordinates.
+These tests pin behaviour that already holds. The template's radicals are
+neutralised only to map bond orders. For a sigma-vinyl radical such as
+``[CH]=CC`` RDKit's sanitiser still leaves the unpaired electron on the mapped
+molecule, so a bent geometry reads E or Z from the coordinates. (It does not do
+so for every radical: ``[O][O]``, ``[CH3]`` and ``C[C](F)Cl`` lose theirs, which
+does not matter because none of them has a stereo element that depends on it.)
 
 Geometries here are explicit coordinates (sigma-vinyl) or RDKit embeddings with
 a fixed seed whose relevant geometry is asserted before it is used.
@@ -26,43 +29,57 @@ from rdkit.Chem import rdMolTransforms as T
 from app.chemistry.species import classify_stereo_kind, derive_stereo_label_from_3d
 from app.db.models.common import StereoKind
 
-# 1-propenyl, planar, H-C1=C2 angle 137 degrees (a bent sigma-vinyl radical).
+# 1-propenyl, planar C=C with a tetrahedral methyl, H-C1=C2 angle about 137
+# degrees (a bent sigma-vinyl radical).
 # Atoms: C1(radical) C2 H1(on C1) C3(methyl) H2(on C2) H3 H4 H5 (methyl Hs).
-# Z: H1 and C3 on the same side of C1=C2.  E: opposite sides.
+# Z: H1 and C3 on the same side of C1=C2.  E: H1 mirrored in y,
+# so C3 lies opposite H1.
 _PROPENYL_Z = """8
 
-C 0.0000 0.0000 0.0000
-C 1.3200 0.0000 0.0000
-H -0.7899 0.7366 0.0000
-C 2.1370 1.2580 0.0000
-H 1.8600 -0.9353 0.0000
-H 2.6370 2.1580 0.0000
-H 2.6370 1.5580 0.9000
-H 2.6370 1.5580 -0.9000
+C 0.00000 0.00000 0.00000
+C 1.31500 0.00000 0.00000
+H -0.79352 0.73997 0.00000
+C 2.16461 1.23619 0.00000
+H 1.84344 -0.95334 0.00000
+H 1.54755 2.14077 0.00000
+H 2.80957 1.27341 0.88412
+H 2.80957 1.27341 -0.88412
 """
 _PROPENYL_E = """8
 
-C 0.0000 0.0000 0.0000
-C 1.3200 0.0000 0.0000
-H -0.7899 0.7366 0.0000
-C 2.1370 -1.2580 0.0000
-H 1.8600 0.9353 0.0000
-H 2.6370 -2.1580 0.0000
-H 2.6370 -1.5580 0.9000
-H 2.6370 -1.5580 -0.9000
+C 0.00000 0.00000 0.00000
+C 1.31500 0.00000 0.00000
+H -0.79352 -0.73997 0.00000
+C 2.16461 1.23619 0.00000
+H 1.84344 -0.95334 0.00000
+H 1.54755 2.14077 0.00000
+H 2.80957 1.27341 0.88412
+H 2.80957 1.27341 -0.88412
 """
 
 # The same E geometry with every atom row shuffled (atom order must not matter).
 _PROPENYL_E_SHUFFLED = """8
 
-H 2.6370 -1.5580 -0.9000
-C 2.1370 -1.2580 0.0000
-H 1.8600 0.9353 0.0000
-C 0.0000 0.0000 0.0000
-H 2.6370 -2.1580 0.0000
-H -0.7899 0.7366 0.0000
-H 2.6370 -1.5580 0.9000
-C 1.3200 0.0000 0.0000
+H 2.80957 1.27341 -0.88412
+C 2.16461 1.23619 0.00000
+H 1.84344 -0.95334 0.00000
+C 0.00000 0.00000 0.00000
+H 1.54755 2.14077 0.00000
+H -0.79352 -0.73997 0.00000
+H 2.80957 1.27341 0.88412
+C 1.31500 0.00000 0.00000
+"""
+
+_PROPENYL_LINEAR = """8
+
+C 0.00000 0.00000 0.00000
+C 1.31500 0.00000 0.00000
+H -1.08000 0.00000 0.00000
+C 2.16461 1.23619 0.00000
+H 1.84344 -0.95334 0.00000
+H 1.54755 2.14077 0.00000
+H 2.80957 1.27341 0.88412
+H 2.80957 1.27341 -0.88412
 """
 
 
@@ -152,18 +169,7 @@ class TestSigmaVinylRadical:
     def test_linear_sigma_vinyl_geometry_gets_no_label(self) -> None:
         # H-C1=C2 collinear: the configuration is geometrically undefined, so
         # no label is returned. Never guess.
-        linear = """8
-
-C 0.0000 0.0000 0.0000
-C 1.3200 0.0000 0.0000
-H -1.0800 0.0000 0.0000
-C 2.1370 1.2580 0.0000
-H 1.8600 -0.9353 0.0000
-H 2.6370 2.1580 0.0000
-H 2.6370 1.5580 0.9000
-H 2.6370 1.5580 -0.9000
-"""
-        assert derive_stereo_label_from_3d("[CH]=CC", linear) is None
+        assert derive_stereo_label_from_3d("[CH]=CC", _PROPENYL_LINEAR) is None
 
     def test_stereo_kind_agrees_with_perception(self) -> None:
         # classify_stereo_kind reads the (radical) identity mol, not the
@@ -176,24 +182,89 @@ H 2.6370 1.5580 -0.9000
 
 
 # ---------------------------------------------------------------------------
-# Safe cases: no false stereo from restoring the radical count
+# Substituted sigma-vinyl radicals: E and Z from asserted bent geometry
+# ---------------------------------------------------------------------------
+
+
+def _vinyl_radical_xyz(closed_smiles: str, c1: int, c2: int, ref: int, *, dihedral: float) -> str:
+    """Embed the closed-shell alkene, delete the H on ``c1`` and return the radical's XYZ.
+
+    The remaining substituent X on ``c1`` is asserted bent (X-C1=C2 between 115
+    and 135 degrees) and cis (0) or trans (180) to ``ref`` about C1=C2.
+    """
+    mol = Chem.AddHs(Chem.MolFromSmiles(closed_smiles))
+    assert AllChem.EmbedMolecule(mol, randomSeed=11) == 0
+    AllChem.MMFFOptimizeMolecule(mol)
+    pos = mol.GetConformer().GetPositions()
+    nbrs = [n.GetIdx() for n in mol.GetAtomWithIdx(c1).GetNeighbors()]
+    h = next(i for i in nbrs if mol.GetAtomWithIdx(i).GetAtomicNum() == 1)
+    x = next(i for i in nbrs if i not in (h, c2))
+    assert 115.0 < _angle_deg(pos[x], pos[c1], pos[c2]) < 135.0
+    assert abs(abs(_dihedral_deg(pos[x], pos[c1], pos[c2], pos[ref])) - dihedral) < 5.0
+    keep = [i for i in range(mol.GetNumAtoms()) if i != h]
+    return "\n".join(
+        [str(len(keep)), ""]
+        + [f"{mol.GetAtomWithIdx(i).GetSymbol()} {pos[i][0]:.5f} {pos[i][1]:.5f} {pos[i][2]:.5f}" for i in keep]
+    )
+
+
+@pytest.mark.parametrize(
+    ("radical", "closed_e", "closed_z", "c1", "c2", "ref"),
+    [
+        ("C[C]=CC", "C/C=C/C", r"C/C=C\C", 1, 2, 3),
+        ("[C](F)=CC", "F/C=C/C", r"F/C=C\C", 1, 2, 3),
+        ("C=C[C]=CC", "C=C/C=C/C", r"C=C/C=C\C", 2, 3, 4),
+    ],
+)
+def test_substituted_sigma_vinyl_e_and_z(radical, closed_e, closed_z, c1, c2, ref) -> None:
+    e_xyz = _vinyl_radical_xyz(closed_e, c1, c2, ref, dihedral=180.0)
+    z_xyz = _vinyl_radical_xyz(closed_z, c1, c2, ref, dihedral=0.0)
+    assert derive_stereo_label_from_3d(radical, e_xyz) == "E"
+    assert derive_stereo_label_from_3d(radical, z_xyz) == "Z"
+
+
+# ---------------------------------------------------------------------------
+# Safe cases: no false stereo from radical centres
 # ---------------------------------------------------------------------------
 
 
 class TestNoFalseStereo:
-    def test_dioxygen_biradical(self) -> None:
+    # Smoke checks only: neither species has a possible stereo element, so no
+    # mutation of the perception code can fail these.
+    def test_dioxygen_biradical_smoke(self) -> None:
         _, xyz = _embed_xyz("[O][O]", seed=7)
         assert derive_stereo_label_from_3d("[O][O]", xyz) is None
 
-    def test_ammonium_charged(self) -> None:
+    def test_ammonium_charged_smoke(self) -> None:
         _, xyz = _embed_xyz("[NH3+]", seed=7)
         assert derive_stereo_label_from_3d("[NH3+]", xyz) is None
 
-    def test_pyramidal_radical_centre_gets_no_cip_label(self) -> None:
-        # C[C](F)Cl: a pyramidal radical centre must NOT receive R/S.
-        mol, xyz = _embed_xyz("C[C](F)Cl", seed=7)
+    @pytest.mark.parametrize("embed_smiles", ["C[C@H](F)Cl", "C[C@@H](F)Cl"])
+    def test_pyramidal_radical_centre_gets_no_cip_label(self, embed_smiles: str) -> None:
+        # C[C](F)Cl with a genuinely pyramidal centre (the H of a chiral
+        # closed-shell analogue deleted): a radical centre must NOT receive R/S,
+        # even though its signed volume is clearly non-zero.
+        mol = Chem.AddHs(Chem.MolFromSmiles(embed_smiles))
+        assert AllChem.EmbedMolecule(mol, randomSeed=7) == 0
+        AllChem.MMFFOptimizeMolecule(mol)
+        pos = mol.GetConformer().GetPositions()
+        centre = 1
+        h = next(n.GetIdx() for n in mol.GetAtomWithIdx(centre).GetNeighbors() if n.GetAtomicNum() == 1)
+        subs = [n.GetIdx() for n in mol.GetAtomWithIdx(centre).GetNeighbors() if n.GetIdx() != h]
+        v = [tuple(pos[i] - pos[centre]) for i in subs]
+        angle_sum = sum(_angle_deg(pos[a], pos[centre], pos[b]) for a, b in ((subs[0], subs[1]), (subs[0], subs[2]), (subs[1], subs[2])))
+        triple = abs(sum(
+            v[0][i] * (v[1][(i + 1) % 3] * v[2][(i + 2) % 3] - v[1][(i + 2) % 3] * v[2][(i + 1) % 3])
+            for i in range(3)
+        ))
+        assert angle_sum < 345.0  # pyramidal, not planar (360)
+        assert triple > 1.0  # clearly non-zero signed volume
+        keep = [i for i in range(mol.GetNumAtoms()) if i != h]
+        xyz = "\n".join(
+            [str(len(keep)), ""]
+            + [f"{mol.GetAtomWithIdx(i).GetSymbol()} {pos[i][0]:.5f} {pos[i][1]:.5f} {pos[i][2]:.5f}" for i in keep]
+        )
         assert derive_stereo_label_from_3d("C[C](F)Cl", xyz) is None
-        assert derive_stereo_label_from_3d("C[C](F)Cl", _embed_xyz("C[C@](F)Cl", seed=11)[1]) is None
 
     def test_allyl_radical_has_no_label(self) -> None:
         _, xyz = _embed_xyz("[CH2]C=C", seed=7)

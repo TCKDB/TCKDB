@@ -1695,11 +1695,11 @@ wrapper over a contract that is itself still moving.
 
 ## Unreleased
 
-### Tests pin sigma-vinyl radical E/Z perception from geometry
+### Tests pin sigma-vinyl radical E/Z perception from geometry (#820)
 
-- No behaviour change. Tests pin that a bent sigma-vinyl radical (1-propenyl and substituted variants) reads `E`
-  or `Z` from geometry, that a collinear H-C=C geometry gives no label, and that biradical, charged, pyramidal
-  and allyl radicals get no false stereo. E and Z 1-propenyl upload to two species entries.
+- No behaviour change. Tests pin that a bent sigma-vinyl radical (1-propenyl, 1-methyl-1-propenyl, 1-fluoro-1-propenyl and a
+  dienyl) reads `E` or `Z` from geometry, that a collinear H-C=C geometry gives no label, and that a pyramidal
+  radical centre (`C[C](F)Cl`) and an allyl radical get no false stereo. E and Z 1-propenyl upload to two species entries.
 
 ### Owner-scoped reproducibility rubric for transition-state statmech (#760)
 
