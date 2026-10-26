@@ -425,7 +425,7 @@ def test_thermo_levels_and_primary_level_leave_out_a_withheld_single_point(clien
 # ---------------------------------------------------------------------------
 
 
-def _kinetics_world(db_session, *, sp_status=None, freq_status=None):
+def _kinetics_world(db_session, *, sp_status=None, freq_status=None, before_approval=None):
     from app.db.models.common import KineticsCalculationRole
     from app.db.models.kinetics import KineticsSourceCalculation
     from tests.services.scientific_read._factories import make_kinetics
@@ -447,6 +447,8 @@ def _kinetics_world(db_session, *, sp_status=None, freq_status=None):
     _review(db_session, SubmissionRecordType.calculation, freq, freq_status or APPROVED)
     if sp_status is not None:
         _review(db_session, SubmissionRecordType.calculation, ts_sp, sp_status)
+    if before_approval is not None:  # an approved kinetics record's children are immutable
+        before_approval(rxe, k)
     _review(db_session, SubmissionRecordType.kinetics, k)
     return rxe, k, ts_sp
 
@@ -501,7 +503,7 @@ def test_thermo_analytics_statmech_flag_follows_the_evidence_rule(client, db_ses
 # ---------------------------------------------------------------------------
 
 
-def _checklist_world(db_session, *, freq_status=None):
+def _checklist_world(db_session, *, freq_status=None, entry_status=APPROVED):
     from tests.services.scientific_read._factories import make_kinetics
 
     a = make_species(db_session, smiles="CC", inchi_key=next_inchi_key("CLA"))
@@ -517,6 +519,8 @@ def _checklist_world(db_session, *, freq_status=None):
     tse = make_transition_state_entry(db_session, transition_state=ts)
     freq = make_calculation(db_session, type=T.freq, transition_state_entry_id=tse.id)
     k = make_kinetics(db_session, reaction_entry=rxe)
+    if entry_status is not None:  # a transition-state ENTRY is a record: it has to clear the floor itself
+        _review(db_session, SubmissionRecordType.transition_state_entry, tse, entry_status)
     if freq_status is not None:
         _review(db_session, SubmissionRecordType.calculation, freq, freq_status)
     _review(db_session, SubmissionRecordType.kinetics, k)
@@ -770,3 +774,394 @@ def test_thermo_checklist_leaves_out_a_withheld_statmech_source_calculation(clie
     checklist = _thermo(client, entry, "curated")["evidence_completeness"]["checklist"]
     assert checklist["has_frequency_evidence"] is False and checklist["has_source_calculations"] is False
     assert checklist["has_statmech_source"] is True  # the statmech link itself is the record's own
+
+
+# ---------------------------------------------------------------------------
+# Review round: no substitution across links, withheld statmech, floored TS entries, untested sites
+# ---------------------------------------------------------------------------
+
+
+def _validated(db_session, calc, *, scf=False):
+    from tests.services.scientific_read._factories import attach_geometry_validation, attach_scf_stability
+
+    attach_geometry_validation(db_session, calculation=calc)
+    if scf:
+        attach_scf_stability(db_session, calculation=calc)
+
+
+def _thermo_substitution_world(db_session, *, own_status=None):
+    """The thermo's OWN opt and sp (no validation rows); the linked approved statmech has an opt validated ``passed`` and an
+    sp with SCF ``stable``. The own links win both roles, so exploratory reports neither flag."""
+    entry = _entry(db_session, "CSU")
+    sm = make_statmech(db_session, species_entry=entry)
+    sm_opt = make_calculation(db_session, type=T.opt, species_entry_id=entry.id)
+    sm_sp = make_calculation(db_session, type=T.sp, species_entry_id=entry.id)
+    _validated(db_session, sm_opt)
+    _validated(db_session, sm_sp, scf=True)
+    attach_statmech_source_calculation(db_session, statmech=sm, calculation=sm_opt, role=R.opt)
+    attach_statmech_source_calculation(db_session, statmech=sm, calculation=sm_sp, role=R.sp)
+    thermo = make_thermo_scalar(db_session, species_entry=entry, statmech_id=sm.id)
+    own_opt = make_calculation(db_session, type=T.opt, species_entry_id=entry.id)
+    own_sp = make_calculation(db_session, type=T.sp, species_entry_id=entry.id)
+    attach_thermo_source_calculation(db_session, thermo=thermo, calculation=own_opt, role=ThermoCalculationRole.opt)
+    attach_thermo_source_calculation(db_session, thermo=thermo, calculation=own_sp, role=ThermoCalculationRole.sp)
+    for calc in (sm_opt, sm_sp):
+        _review(db_session, SubmissionRecordType.calculation, calc)
+    if own_status is not None:
+        for calc in (own_opt, own_sp):
+            _review(db_session, SubmissionRecordType.calculation, calc, own_status)
+    _review(db_session, SubmissionRecordType.statmech, sm)
+    _review(db_session, SubmissionRecordType.thermo, thermo)
+    return entry
+
+
+@WITHHELD
+def test_thermo_checklist_does_not_fill_a_withheld_role_from_the_linked_statmech(client, db_session, status):
+    """Kills: passing the checklist only the shown links, so the statmech's opt/sp stand in for a withheld own opt/sp
+    (curated then reports validation that exploratory, reading the own links, does not)."""
+    entry = _thermo_substitution_world(db_session, own_status=status)
+    exp = _thermo(client, entry, "exploratory")["evidence_completeness"]["checklist"]
+    cur = _thermo(client, entry, "curated")["evidence_completeness"]["checklist"]
+    assert exp["has_geometry_validation"] is False and exp["has_scf_stability"] is False
+    assert cur["has_geometry_validation"] is False and cur["has_scf_stability"] is False
+
+
+def _linked_statmech_thermo(db_session, *, statmech_status=None):
+    entry = _entry(db_session, "CLS")
+    sm = make_statmech(db_session, species_entry=entry)
+    sm.energy_level_of_theory_id = make_lot(db_session, method="lsdecl").id
+    sp = make_calculation(db_session, type=T.sp, species_entry_id=entry.id, lot_id=make_lot(db_session, method="lssp").id)
+    freq = make_calculation(db_session, type=T.freq, species_entry_id=entry.id)
+    attach_statmech_source_calculation(db_session, statmech=sm, calculation=sp, role=R.sp)
+    attach_statmech_source_calculation(db_session, statmech=sm, calculation=freq, role=R.freq)
+    thermo = make_thermo_scalar(db_session, species_entry=entry, statmech_id=sm.id)
+    for calc in (sp, freq):
+        _review(db_session, SubmissionRecordType.calculation, calc)
+    if statmech_status is not None:
+        _review(db_session, SubmissionRecordType.statmech, sm, statmech_status)
+    _review(db_session, SubmissionRecordType.thermo, thermo)
+    return entry
+
+
+def test_a_not_reviewed_linked_statmech_still_feeds_the_thermo(client, db_session):
+    """Kills: treating a merely unreviewed linked statmech as withheld."""
+    entry = _linked_statmech_thermo(db_session)
+    rec = _thermo(client, entry, "curated")
+    checklist = rec["evidence_completeness"]["checklist"]
+    assert checklist["has_statmech_source"] is True and checklist["has_frequency_evidence"] is True
+    assert rec["levels"]["energy"]["method"] == "lssp"
+    assert rec["provenance"]["primary_calculation"] is not None
+
+
+@WITHHELD
+def test_a_withheld_linked_statmech_contributes_no_flag_level_or_primary(client, db_session, status):
+    """Kills: ``has_statmech_source`` from the bare FK, and levels / primary calculation read through a withheld statmech."""
+    entry = _linked_statmech_thermo(db_session, statmech_status=status)
+    rec = _thermo(client, entry, "curated")
+    checklist = rec["evidence_completeness"]["checklist"]
+    assert checklist["has_statmech_source"] is False and checklist["has_source_calculations"] is False
+    assert checklist["has_frequency_evidence"] is False and checklist["has_sp_or_energy_evidence"] is False
+    assert rec["levels"]["energy"] is None and rec["levels"]["energy_source"] is None
+    assert rec["provenance"]["primary_calculation"] is None and rec["provenance"]["level_of_theory"] is None
+    assert rec["levels"]["declared_energy"] is None  # the withheld statmech's declared energy level goes with it
+    exp = _thermo(client, entry, "exploratory")
+    assert exp["levels"]["energy"]["method"] == "lssp" and exp["levels"]["declared_energy"] is not None
+
+
+def _traced_world(db_session, *, primary_status=None):
+    entry = _entry(db_session, "CTR")
+    group = make_conformer_group(db_session, entry, label="g")
+    obs = make_conformer_observation(db_session, conformer_group=group)
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    sp = make_calculation(db_session, type=T.sp, species_entry_id=entry.id, conformer_observation_id=obs.id)
+    attach_thermo_source_calculation(db_session, thermo=thermo, calculation=sp, role=ThermoCalculationRole.sp)
+    _review(db_session, SubmissionRecordType.conformer_group, group)
+    _review(db_session, SubmissionRecordType.conformer_observation, obs)
+    if primary_status is not None:
+        _review(db_session, SubmissionRecordType.calculation, sp, primary_status)
+    _review(db_session, SubmissionRecordType.thermo, thermo)
+    return entry, group, obs
+
+
+def test_the_traced_conformer_is_named_through_a_not_reviewed_primary(client, db_session):
+    """Kills: tracing the conformer on the record floor."""
+    entry, group, obs = _traced_world(db_session)
+    prov = _thermo(client, entry, "curated")["provenance"]
+    assert prov["conformer_group_ref"] == group.public_ref and prov["conformer_observation_ref"] == obs.public_ref
+
+
+@WITHHELD
+def test_the_traced_conformer_does_not_come_from_a_withheld_primary(client, db_session, status):
+    """Kills: tracing the conformer through a primary calculation the rule withholds."""
+    entry, group, obs = _traced_world(db_session, primary_status=status)
+    prov = _thermo(client, entry, "curated")["provenance"]
+    assert prov["conformer_group_ref"] is None and prov["conformer_observation_ref"] is None
+    assert _thermo(client, entry, "exploratory")["provenance"]["conformer_group_ref"] == group.public_ref
+
+
+def _scf_kinetics_world(db_session, *, sp_status=None):
+    from tests.services.scientific_read._factories import attach_scf_stability
+
+    rxe, k, ts_sp = _kinetics_world(db_session, sp_status=sp_status)
+    attach_scf_stability(db_session, calculation=ts_sp)
+    return rxe
+
+
+def test_kinetics_scf_stability_counts_a_not_reviewed_single_point(client, db_session):
+    """Kills: flooring the SCF target."""
+    rxe = _scf_kinetics_world(db_session)
+    assert _kinetics(client, rxe, "curated")["evidence_completeness"]["checklist"]["has_scf_stability"] is True
+
+
+@WITHHELD
+def test_kinetics_scf_stability_does_not_read_a_withheld_single_point(client, db_session, status):
+    """Kills: ``has_scf_stability`` reading the SCF row of a withheld ts_energy calculation beside ``has_ts_sp_evidence``
+    false."""
+    rxe = _scf_kinetics_world(db_session, sp_status=status)
+    checklist = _kinetics(client, rxe, "curated")["evidence_completeness"]["checklist"]
+    assert checklist["has_scf_stability"] is False
+    assert _kinetics(client, rxe, "exploratory")["evidence_completeness"]["checklist"]["has_scf_stability"] is True
+
+
+def _entry_floor_world(db_session, *, entry_status=None):
+    rxe, k, freq = _checklist_world(db_session, entry_status=entry_status)
+    return rxe, k, freq, None
+
+
+def test_kinetics_checklist_counts_an_unreviewed_calculation_under_an_approved_entry(client, db_session):
+    """Kills: dropping a not-reviewed calculation under a SHOWN transition-state entry."""
+    rxe, k, freq, tse = _entry_floor_world(db_session, entry_status=APPROVED)
+    checklist = _kinetics(client, rxe, "curated")["evidence_completeness"]["checklist"]
+    assert checklist["has_transition_state_entry"] is True and checklist["has_ts_freq_evidence"] is True
+
+
+def test_kinetics_checklist_does_not_count_an_entry_below_the_record_floor(client, db_session):
+    """Kills: counting a transition-state ENTRY (a record, ADR 0023 Q3) that does not clear the floor, or its calculations."""
+    rxe, k, freq, tse = _entry_floor_world(db_session)
+    checklist = _kinetics(client, rxe, "curated")["evidence_completeness"]["checklist"]
+    assert checklist["has_transition_state_entry"] is False and checklist["has_ts_freq_evidence"] is False
+    exp = _kinetics(client, rxe, "exploratory")["evidence_completeness"]["checklist"]
+    assert exp["has_transition_state_entry"] is True and exp["has_ts_freq_evidence"] is True
+
+
+def _traced_entry_world(db_session, *, entry_status=None, sp_status=None):
+    from app.db.models.common import KineticsCalculationRole
+    from app.db.models.kinetics import KineticsSourceCalculation
+    from tests.services.scientific_read._factories import make_kinetics
+
+    a = make_species(db_session, smiles="CC", inchi_key=next_inchi_key("CTA"))
+    b = make_species(db_session, smiles="CCC", inchi_key=next_inchi_key("CTB"))
+    chem = make_chem_reaction(db_session, reactants=[a], products=[b])
+    rxe = make_reaction_entry(
+        db_session,
+        reaction=chem,
+        reactant_entries=[make_species_entry(db_session, a)],
+        product_entries=[make_species_entry(db_session, b)],
+    )
+    ts = make_transition_state(db_session, reaction_entry=rxe)
+    tse = make_transition_state_entry(db_session, transition_state=ts)
+    sp = make_calculation(db_session, type=T.sp, transition_state_entry_id=tse.id)
+    k = make_kinetics(db_session, reaction_entry=rxe)
+    db_session.add(KineticsSourceCalculation(kinetics_id=k.id, calculation_id=sp.id, role=KineticsCalculationRole.ts_energy))
+    db_session.flush()
+    if entry_status is not None:
+        _review(db_session, SubmissionRecordType.transition_state_entry, tse, entry_status)
+    if sp_status is not None:
+        _review(db_session, SubmissionRecordType.calculation, sp, sp_status)
+    _review(db_session, SubmissionRecordType.kinetics, k)
+    return rxe, tse
+
+
+def test_kinetics_names_the_transition_state_entry_of_a_shown_source(client, db_session):
+    rxe, tse = _traced_entry_world(db_session, entry_status=APPROVED)
+    assert _kinetics(client, rxe, "curated")["provenance"]["transition_state_entry_ref"] == tse.public_ref
+
+
+def test_kinetics_does_not_name_an_entry_below_the_record_floor(client, db_session):
+    """Kills: ``_first_ts_entry_id`` over an entry that does not clear the floor."""
+    rxe, tse = _traced_entry_world(db_session)
+    assert _kinetics(client, rxe, "curated")["provenance"]["transition_state_entry_ref"] is None
+    assert _kinetics(client, rxe, "exploratory")["provenance"]["transition_state_entry_ref"] == tse.public_ref
+
+
+@WITHHELD
+def test_kinetics_does_not_trace_the_entry_through_a_withheld_source(client, db_session, status):
+    """Kills: tracing the transition-state entry through a source calculation the rule withholds."""
+    rxe, tse = _traced_entry_world(db_session, entry_status=APPROVED, sp_status=status)
+    assert _kinetics(client, rxe, "curated")["provenance"]["transition_state_entry_ref"] is None
+
+
+# -- conformer sites that no other test reached ------------------------------------------------------------------------
+
+
+def _geometry_world(db_session, *, calc_status=None):
+    from tests.services.scientific_read._factories import attach_output_geometry, make_geometry
+
+    entry = _entry(db_session, "CGW")
+    group = make_conformer_group(db_session, entry, label="g")
+    obs = make_conformer_observation(db_session, conformer_group=group)
+    opt = make_calculation(db_session, type=T.opt, species_entry_id=entry.id, conformer_observation_id=obs.id)
+    attach_output_geometry(db_session, calculation=opt, geometry=make_geometry(db_session))
+    _validated(db_session, opt, scf=True)
+    if calc_status is not None:
+        _review(db_session, SubmissionRecordType.calculation, opt, calc_status)
+    _review(db_session, SubmissionRecordType.conformer_group, group)
+    _review(db_session, SubmissionRecordType.conformer_observation, obs)
+    return group, obs
+
+
+def test_conformer_geometry_and_validation_counts_include_a_not_reviewed_calculation(client, db_session):
+    """Kills: flooring the geometry count, the validation coverage or the section flags."""
+    group, obs = _geometry_world(db_session)
+    rec = _get(client, f"/conformer-groups/{group.public_ref}", "curated")["record"]
+    summary = rec["evidence_summary"]
+    assert summary["geometry_count"] == 1
+    assert summary["evidence_coverage"]["geometry_validation"] == 1 and summary["evidence_coverage"]["scf_stability"] == 1
+    assert rec["available_sections"]["has_calculations"] is True and rec["available_sections"]["has_geometries"] is True
+    ob = _get(client, f"/conformer-observations/{obs.public_ref}", "curated")["record"]
+    assert ob["evidence_summary"]["has_geometry_validation"] is True and ob["evidence_summary"]["has_scf_stability"] is True
+    assert ob["available_sections"]["has_calculations"] is True and ob["available_sections"]["has_geometries"] is True
+
+
+@WITHHELD
+def test_conformer_geometry_and_validation_counts_leave_out_a_withheld_calculation(client, db_session, status):
+    """Kills: counting a withheld calculation's geometry, its validation or SCF row, or setting the section flags."""
+    group, obs = _geometry_world(db_session, calc_status=status)
+    rec = _get(client, f"/conformer-groups/{group.public_ref}", "curated")["record"]
+    summary = rec["evidence_summary"]
+    assert summary["geometry_count"] == 0
+    assert summary["evidence_coverage"]["geometry_validation"] == 0 and summary["evidence_coverage"]["scf_stability"] == 0
+    assert rec["available_sections"]["has_calculations"] is False and rec["available_sections"]["has_geometries"] is False
+    ob = _get(client, f"/conformer-observations/{obs.public_ref}", "curated")["record"]
+    assert ob["evidence_summary"]["has_geometry_validation"] is False and ob["evidence_summary"]["has_scf_stability"] is False
+    assert ob["available_sections"]["has_calculations"] is False and ob["available_sections"]["has_geometries"] is False
+    exp = _get(client, f"/conformer-groups/{group.public_ref}", "exploratory")["record"]["evidence_summary"]
+    assert exp["geometry_count"] == 1
+
+
+# -- analytics flags for kinetics ----------------------------------------------------------------------------------------
+
+
+def _assignment_world(db_session, *, statmech_status=None, entry_status=None):
+    from app.db.models.kinetics import KineticsInterpretationAssignment
+
+    made = {}
+
+    def assign(rxe, k):
+        entry = _entry(db_session, "CAS")
+        sm = make_statmech(db_session, species_entry=entry)
+        ts = make_transition_state(db_session, reaction_entry=rxe)
+        tse = make_transition_state_entry(db_session, transition_state=ts)
+        db_session.add(
+            KineticsInterpretationAssignment(
+                kinetics_id=k.id,
+                subject_key="transition_state",
+                role="transition_state",
+                statmech_id=sm.id,
+                transition_state_entry_id=tse.id,
+                ensemble_policy="lowest_energy_conformer",
+                standard_state_convention="ideal_gas_1_bar",
+                degeneracy_interpretation="reaction_path_degeneracy",
+            )
+        )
+        db_session.flush()
+        made.update(sm=sm, tse=tse)
+
+    rxe, k, ts_sp = _kinetics_world(db_session, before_approval=assign)
+    sm, tse = made["sm"], made["tse"]
+    if statmech_status is not None:
+        _review(db_session, SubmissionRecordType.statmech, sm, statmech_status)
+    if entry_status is not None:
+        _review(db_session, SubmissionRecordType.transition_state_entry, tse, entry_status)
+    return k
+
+
+def _kinetics_analytics_row(client, k, profile):
+    rows = _get(client, "/analytics/kinetics", profile)["records"]
+    (row,) = [r for r in rows if r["kinetics_ref"] == k.public_ref]
+    return row
+
+
+def test_kinetics_analytics_flags_count_not_reviewed_assignment_targets(client, db_session):
+    """Kills: flooring ``_kinetics_has_statmech`` / ``_kinetics_has_ts``."""
+    k = _assignment_world(db_session)
+    row = _kinetics_analytics_row(client, k, "curated")
+    assert row["has_statmech_provenance"] is True and row["has_transition_state_provenance"] is True
+
+
+@WITHHELD
+def test_kinetics_analytics_flags_leave_out_withheld_assignment_targets(client, db_session, status):
+    """Kills: counting a rejected/deprecated statmech or transition-state entry in the analytics flags."""
+    k = _assignment_world(db_session, statmech_status=status, entry_status=status)
+    row = _kinetics_analytics_row(client, k, "curated")
+    assert row["has_statmech_provenance"] is False and row["has_transition_state_provenance"] is False
+    exp = _kinetics_analytics_row(client, k, "exploratory")
+    assert exp["has_statmech_provenance"] is True and exp["has_transition_state_provenance"] is True
+
+
+def _own_validated_world(db_session, *, status=None):
+    entry = _entry(db_session, "COV")
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    opt = make_calculation(db_session, type=T.opt, species_entry_id=entry.id)
+    sp = make_calculation(db_session, type=T.sp, species_entry_id=entry.id)
+    _validated(db_session, opt)
+    _validated(db_session, sp, scf=True)
+    attach_thermo_source_calculation(db_session, thermo=thermo, calculation=opt, role=ThermoCalculationRole.opt)
+    attach_thermo_source_calculation(db_session, thermo=thermo, calculation=sp, role=ThermoCalculationRole.sp)
+    if status is not None:
+        for calc in (opt, sp):
+            _review(db_session, SubmissionRecordType.calculation, calc, status)
+    _review(db_session, SubmissionRecordType.thermo, thermo)
+    return entry
+
+
+def test_thermo_validation_flags_count_not_reviewed_own_calculations(client, db_session):
+    """Kills: flooring the validation targets."""
+    entry = _own_validated_world(db_session)
+    checklist = _thermo(client, entry, "curated")["evidence_completeness"]["checklist"]
+    assert checklist["has_geometry_validation"] is True and checklist["has_scf_stability"] is True
+
+
+@WITHHELD
+def test_thermo_validation_flags_do_not_read_withheld_own_calculations(client, db_session, status):
+    """Kills: reading the validation rows of a withheld opt / sp target."""
+    entry = _own_validated_world(db_session, status=status)
+    checklist = _thermo(client, entry, "curated")["evidence_completeness"]["checklist"]
+    assert checklist["has_geometry_validation"] is False and checklist["has_scf_stability"] is False
+    exp = _thermo(client, entry, "exploratory")["evidence_completeness"]["checklist"]
+    assert exp["has_geometry_validation"] is True and exp["has_scf_stability"] is True
+
+
+def _opt_source_kinetics(db_session, *, status=None):
+    from app.db.models.common import KineticsCalculationRole
+    from app.db.models.kinetics import KineticsSourceCalculation
+    from tests.services.scientific_read._factories import make_kinetics
+
+    a = make_species(db_session, smiles="CC", inchi_key=next_inchi_key("CGA"))
+    b = make_species(db_session, smiles="CCC", inchi_key=next_inchi_key("CGB"))
+    chem = make_chem_reaction(db_session, reactants=[a], products=[b])
+    ea = make_species_entry(db_session, a)
+    rxe = make_reaction_entry(db_session, reaction=chem, reactant_entries=[ea], product_entries=[make_species_entry(db_session, b)])
+    opt = make_calculation(db_session, type=T.opt, species_entry_id=ea.id)
+    _validated(db_session, opt)
+    k = make_kinetics(db_session, reaction_entry=rxe)
+    db_session.add(KineticsSourceCalculation(kinetics_id=k.id, calculation_id=opt.id, role=KineticsCalculationRole.ts_energy))
+    db_session.flush()
+    if status is not None:
+        _review(db_session, SubmissionRecordType.calculation, opt, status)
+    _review(db_session, SubmissionRecordType.kinetics, k)
+    return rxe
+
+
+def test_kinetics_geometry_validation_counts_a_not_reviewed_optimisation(client, db_session):
+    """Kills: flooring the geometry-validation target."""
+    rxe = _opt_source_kinetics(db_session)
+    assert _kinetics(client, rxe, "curated")["evidence_completeness"]["checklist"]["has_geometry_validation"] is True
+
+
+@WITHHELD
+def test_kinetics_geometry_validation_does_not_read_a_withheld_optimisation(client, db_session, status):
+    """Kills: reading the validation row of a withheld optimisation."""
+    rxe = _opt_source_kinetics(db_session, status=status)
+    assert _kinetics(client, rxe, "curated")["evidence_completeness"]["checklist"]["has_geometry_validation"] is False
+    assert _kinetics(client, rxe, "exploratory")["evidence_completeness"]["checklist"]["has_geometry_validation"] is True

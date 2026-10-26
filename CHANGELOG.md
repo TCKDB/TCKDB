@@ -107,7 +107,14 @@ or conformer summary still counted a rejected one. Under `exploratory` nothing c
   `_without_levels_from_withheld_calculations`; a shared helper does the same for statmech and thermo
   (`withhold_levels_from_calculations`).
 - **Statements.** No statement per record is added: the verdict is read beside the rows in the statement that already loads the
-  statmech links and torsions, once per page for thermo, kinetics and the network and conformer counts.
+  statmech links and torsions; per page, thermo makes one lookup for matching (before paging), one for display and one for a
+  linked statmech's verdict, kinetics two (links, and the optimisations reached by dependency), and the network and conformer
+  counts none of their own.
+- **Reviewed and fixed.** The thermo evidence checklist picks each role's target from every link and then drops a withheld one
+  (it never fills the role from the linked statmech); a withheld linked statmech contributes no flag, level, primary calculation
+  or declared energy level; the traced conformer comes from no withheld primary. The kinetics checklist counts only transition-state
+  entries that clear the floor (entries are records), reads no validation row of a withheld target, and names the entry through a
+  shown source only.
 - **Unchanged here.** Transition-state entries, network solves and reaction kinetics stay records (floored). The trust and
   selection loaders, usage lists on reference rows (what uses a level of theory, a scale factor or a correction scheme),
   made-under comparisons and detail-by-ref arrive in later steps. Matching (step 4) already follows the same rule, so a filter such

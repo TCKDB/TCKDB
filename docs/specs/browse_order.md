@@ -161,7 +161,10 @@ the ML export's is `tckdb.ml` version 2.
 > itself a record in the list (a transition-state entry, a network solve) still has to clear the floor to be counted.
 >
 > **Known interim state until step 5.** Usage lists on reference rows (what uses a level of theory, a scale factor or a
-> correction scheme) and the relative-energy and export populations are unchanged. The sweep lists every route where this
+> correction scheme) and the relative-energy and export populations are unchanged. The level-of-theory `used_by`,
+> `evidence_summary.calculation_usage_count` and the usage-eligibility filter of the level-of-theory search stay on the record
+> floor together: they preview the calculation record list, so a level used only by calculations below `approved` is not listed
+> and its count says so. A species entry's availability `calculation_count` previews the same list and also keeps the floor. The sweep lists every route where this
 > happens (`STILL_ON_THE_EARLIER_RULE`), and the list can only shrink.
 >
 > **Still the earlier rule (decision D6: below the floor is hidden, evidence included), and described as it is:** the trust and

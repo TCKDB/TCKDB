@@ -235,7 +235,12 @@ def build_level_of_theory_record(
 
 
 def _calculation_visible():
-    """The calculations the read profile shows, or ``None`` under the default profile (owner decision D5)."""
+    """The calculations the read profile shows, or ``None`` under the default profile (owner decision D5).
+
+    The record floor, on purpose (ADR 0023): ``used_by``, ``evidence_summary.calculation_usage_count`` and the usage-eligibility
+    filter of the level-of-theory search all preview the CALCULATION record list (approved-only under ``curated``), not the
+    evidence of a returned record. They share this predicate so the count, the list and the search agree.
+    """
     return review_floor_predicate(Calculation.id, SubmissionRecordType.calculation)
 
 

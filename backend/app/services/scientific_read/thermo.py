@@ -325,7 +325,8 @@ def get_species_thermo(
 
     # A source calculation the evidence rule withholds (rejected or deprecated under curated, ADR 0023) contributes no
     # level and no software to a filter match; a not-reviewed one does, with its badge. The record's own link to it
-    # stays a fact of the record. One lookup, and none without a review floor.
+    # stays a fact of the record. One lookup before paging (it decides which records match), and none without a review
+    # floor; the display below does its own lookup for the page that is returned.
     hidden_source_calc_ids = ids_withheld_as_evidence(
         session,
         record_type=SubmissionRecordType.calculation,
@@ -416,6 +417,12 @@ def get_species_thermo(
     # page, none without a floor. The LISTS that name calculations keep every link; the ref guard removes the withheld.
     withheld_calc_ids = ids_withheld_as_evidence(
         session, record_type=SubmissionRecordType.calculation, record_ids=all_source_calc_ids
+    )
+    # A linked statmech the rule withholds contributes nothing to the record: no flag, no level, no primary calculation.
+    withheld_statmech_ids = ids_withheld_as_evidence(
+        session,
+        record_type=SubmissionRecordType.statmech,
+        record_ids={t.statmech_id for t, _ in classified if t.statmech_id is not None},
     )
     geom_vals = _geometry_validations(session, all_source_calc_ids)
     scf_vals = _scf_stabilities(session, all_source_calc_ids)
@@ -523,9 +530,10 @@ def get_species_thermo(
         record_statmech_id = t.statmech_id
         record_statmech_sources = (
             statmech_sources_by_id.get(record_statmech_id, [])
-            if record_statmech_id is not None
+            if record_statmech_id is not None and record_statmech_id not in withheld_statmech_ids
             else []
         )
+        statmech_shown = record_statmech_id is not None and record_statmech_id not in withheld_statmech_ids
 
         # Determine the "effective" temperature range for coverage. Precedence
         # (mirroring how a NASA-7 block already wins over row-level bounds):
@@ -559,9 +567,10 @@ def get_species_thermo(
         # Evidence completeness (thermo flavor, max=8).
         evidence = _evidence_breakdown(
             thermo=t,
-            sources=[sc for sc in sources if sc.calculation_id not in withheld_calc_ids],
-            has_statmech_link=t.statmech_id is not None,
-            statmech_sources=[sc for sc in record_statmech_sources if sc.calculation_id not in withheld_calc_ids],
+            sources=sources,
+            has_statmech_link=statmech_shown,
+            statmech_sources=record_statmech_sources,
+            withheld_calc_ids=withheld_calc_ids,
             nasa_present=nasa_block is not None,
             points_count=len(points_by_thermo.get(t.id, [])),
             has_nasa9=bool(nasa9_by_thermo.get(t.id)),
@@ -610,7 +619,7 @@ def get_species_thermo(
             t.energy_level_of_theory_id
             if t.energy_level_of_theory_id is not None
             # Only through the record's OWN statmech link.
-            else statmech_declared_lot_ids.get(t.statmech_id)
+            else (statmech_declared_lot_ids.get(t.statmech_id) if statmech_shown else None)
         )
         if declared_lot_id is not None:
             levels = levels.model_copy(
@@ -1349,7 +1358,7 @@ def _build_provenance(
 
     conformer_link = (
         conformer_links.get(primary_calc_id_v)
-        if primary_calc_id_v is not None
+        if primary_calc_id_v is not None and primary_calc_id_v not in withheld_calc_ids
         else None
     )
     if conformer_link is not None:
@@ -1616,6 +1625,7 @@ def _evidence_breakdown(
     has_wilhoit: bool = False,
     geom_vals: dict[int, ValidationStatus],
     scf_vals: dict[int, SCFStabilityStatus],
+    withheld_calc_ids: Collection[int] = frozenset(),
 ) -> EvidenceCompletenessBreakdown:
     """Thermo L1 checklist, max=8.
 
@@ -1628,11 +1638,15 @@ def _evidence_breakdown(
     link counts only its own sources and ``has_statmech_source`` is false
     (#645: never borrow). The predicate names and ``max`` are unchanged.
     """
-    statmech_roles = {sc.role for sc in statmech_sources}
-    has_sources = len(sources) > 0 or len(statmech_sources) > 0
+    # Evidence rule (ADR 0023): the role targets are chosen from EVERY link, then a withheld target is dropped; a role is
+    # never filled from another link because the first was withheld. The role flags count the links that are shown.
+    shown_sources = [sc for sc in sources if sc.calculation_id not in withheld_calc_ids]
+    shown_statmech_sources = [sc for sc in statmech_sources if sc.calculation_id not in withheld_calc_ids]
+    statmech_roles = {sc.role for sc in shown_statmech_sources}
+    has_sources = len(shown_sources) > 0 or len(shown_statmech_sources) > 0
     has_statmech = has_statmech_link
 
-    source_roles = {sc.role for sc in sources}
+    source_roles = {sc.role for sc in shown_sources}
     has_freq_evidence = (
         ThermoCalculationRole.freq in source_roles
         or StatmechCalculationRole.freq in statmech_roles
@@ -1660,7 +1674,7 @@ def _evidence_breakdown(
             statmech_sources, StatmechCalculationRole.opt
         )
     has_geom_val = False
-    if opt_calc_id is not None:
+    if opt_calc_id is not None and opt_calc_id not in withheld_calc_ids:
         gv = geom_vals.get(opt_calc_id)
         has_geom_val = gv in {ValidationStatus.passed, ValidationStatus.warning}
 
@@ -1671,7 +1685,7 @@ def _evidence_breakdown(
             statmech_sources, StatmechCalculationRole.sp
         )
     has_scf = False
-    if sp_calc_id is not None:
+    if sp_calc_id is not None and sp_calc_id not in withheld_calc_ids:
         s = scf_vals.get(sp_calc_id)
         has_scf = s in {SCFStabilityStatus.stable, SCFStabilityStatus.stabilized}
 

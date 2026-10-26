@@ -28,6 +28,7 @@ from app.db.models.common import ReadProfile, RecordReviewStatus
 from app.services.scientific_read import ref_guard
 from app.services.scientific_read.profile import ResolvedReadProfile
 from tests.api.scientific._curated_sweep_analysis import (
+    RELAXED_UNLISTED,
     fmt,
     id_leaks,
     order_independent,
@@ -244,8 +245,9 @@ SERVICE_FLOOR = (
     "a transition state or entry: ADR 0023 Q3/Q5), or to a matching filter (step 4)"
 )
 DERIVED = (
-    "a reference row's usage list, usage count or used-by filter names the RECORDS that cite it (a calculation, a statmech), "
-    "not its evidence, so it keeps the record floor; the used-by filters are matching (step 4)"
+    "a reference row's usage list, usage count and usage-eligibility filter preview the RECORD list of what cites it (a "
+    "calculation, a statmech) and keep the record floor; a correction scheme's or scale factor's calculation kind is lost "
+    "only when it rides with an application to a transition-state entry below the floor"
 )
 EXPORTS_AND_LOADERS = "export populations and the relative-energy loader floor their evidence (step 5)"
 
@@ -528,7 +530,13 @@ def test_curated_sweep_enforces_the_guard(client, db_session, login_as, monkeypa
             ckind, cobj = parse_body(c.text)
             if ekind != "json" or ckind != "json":
                 continue
-            for path in withholding_violations(order_independent(route[1], eobj), order_independent(route[1], cobj)):
+            mode = "equal" if state == "unlisted" else "le"
+            for path in withholding_violations(
+                order_independent(route[1], eobj),
+                order_independent(route[1], cobj),
+                mode=mode,
+                relaxed=frozenset(RELAXED_UNLISTED.get(route[1], {})) if state == "unlisted" else frozenset(),
+            ):
                 if route in RELATIVE_ENERGY_ROUTES and path.split("<", 1)[0] in RELATIVE_ENERGY_POPULATION_PATHS:
                     continue
                 if (

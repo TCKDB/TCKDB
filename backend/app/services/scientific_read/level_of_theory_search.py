@@ -206,6 +206,8 @@ def _run_lot_query(
 
     # Usage-derived eligibility rests on the calculations the profile shows: a level used only by hidden calculations
     # is not listed (owner decision D5). It stays addressable by its own ref, which is a vocabulary row with no gate.
+    # The record floor, on purpose (ADR 0023): eligibility previews the calculation record list, and agrees with
+    # ``calculation_usage_count`` and ``used_by`` on the read (``level_of_theory._calculation_visible``).
     stmt = select(
         LevelOfTheory.id,
         LevelOfTheory.method.label("method_key"),

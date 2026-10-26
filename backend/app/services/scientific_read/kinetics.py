@@ -111,6 +111,7 @@ from app.services.scientific_read.common import (
     ids_withheld_as_evidence,
     linked_evidence_predicate,
     reject_client_sort,
+    review_floor_predicate,
     review_summary,
     software_names_by_calculation,
     temperature_coverage,
@@ -685,6 +686,7 @@ def get_reaction_kinetics(
         evidence = _evidence_breakdown(
             kinetics=k,
             sources=[sc for sc in sources if sc.calculation_id not in withheld_source_calc_ids],
+            withheld_calc_ids=withheld_source_calc_ids,
             ts_entry_ids=ts_entry_ids,
             ts_calc_types=ts_calc_types,
             geometry_validations=geometry_validations,
@@ -972,7 +974,13 @@ def _build_provenance(
         else None
     )
 
-    transition_state_entry_id = _first_ts_entry_id(sources, calc_meta)
+    # The transition-state entry is traced through a source calculation the rule shows: a withheld source names none. The entry
+    # is a record: ``ts_entry_refs`` holds only those that clear the record floor, so one that does not is named nowhere (and no
+    # other entry is put in its place).
+    transition_state_entry_id = _first_ts_entry_id(
+        [sc for sc in sources if sc.calculation_id not in (hidden_calc_ids or ())],
+        calc_meta,
+    )
 
     primary_calc_id = _primary_calc_id(sources)
     if primary_calc_id in (hidden_calc_ids or ()):
@@ -1071,6 +1079,7 @@ def _evidence_breakdown(
     scf_stabilities: dict[int, SCFStabilityStatus],
     ts_opt_calc_id: int | None,
     ts_sp_calc_id: int | None,
+    withheld_calc_ids: set[int] | frozenset[int] = frozenset(),
 ) -> EvidenceCompletenessBreakdown:
     """L1 kinetics checklist — endpoint-local, additive, max=9."""
     has_sources = len(sources) > 0
@@ -1105,14 +1114,15 @@ def _evidence_breakdown(
         )
     )
 
+    # The validation targets are chosen first, then a withheld one is dropped (never replaced by another calculation).
     has_geom_val = False
-    if ts_opt_calc_id is not None:
+    if ts_opt_calc_id is not None and ts_opt_calc_id not in withheld_calc_ids:
         gv = geometry_validations.get(ts_opt_calc_id)
         has_geom_val = gv in {ValidationStatus.passed, ValidationStatus.warning}
 
     has_scf = False
     scf_target = ts_sp_calc_id if ts_sp_calc_id is not None else ts_opt_calc_id
-    if scf_target is not None:
+    if scf_target is not None and scf_target not in withheld_calc_ids:
         s = scf_stabilities.get(scf_target)
         has_scf = s in {SCFStabilityStatus.stable, SCFStabilityStatus.stabilized}
 
@@ -1344,10 +1354,15 @@ def _scf_stabilities(
 
 
 def _ts_entry_ids_for_reaction(session: Session, reaction_entry_id: int) -> set[int]:
+    # A transition-state ENTRY is a record (ADR 0023, Q3): only the entries that clear the record floor count here, as in
+    # ``/reactions/browse``. The calculations under a shown entry are evidence (see ``_ts_calc_types_for_entries``).
     rows = session.scalars(
-        select(TransitionStateEntry.id)
-        .join(TransitionState, TransitionState.id == TransitionStateEntry.transition_state_id)
-        .where(TransitionState.reaction_entry_id == reaction_entry_id)
+        where_visible(
+            select(TransitionStateEntry.id)
+            .join(TransitionState, TransitionState.id == TransitionStateEntry.transition_state_id)
+            .where(TransitionState.reaction_entry_id == reaction_entry_id),
+            review_floor_predicate(TransitionStateEntry.id, SubmissionRecordType.transition_state_entry),
+        )
     ).all()
     return set(rows)
 

@@ -552,15 +552,15 @@ def test_levels_of_theory_name_only_the_calculation_types_the_profile_shows(clie
     cur_k = next(r for r in _get(client, kinetics, "curated").json()["records"] if r["kinetics_ref"] == ref)
     assert exp_k["levels"]["frequency"] is not None and exp_k["levels"]["frequency_source"] == "freq"
     assert cur_k["levels"]["frequency"] is None and cur_k["levels"]["frequency_source"] is None
-    # The checklist counts the calculation types the evidence rule shows (ADR 0023, step 3): ``kin_vn`` cites nothing and
-    # reaches a freq only through calculations of the reaction's entries. The world's entries carry a freq that was never
-    # reviewed (``sm_ts_on_hidden_entry``'s source), which is linked evidence and counts; the withheld twin, where the only
-    # freq is rejected or deprecated, is test_curated_evidence_counts_and_levels.py.
+    # The checklist counts the calculation types under the transition-state ENTRIES that clear the record floor (entries are
+    # records, ADR 0023 Q3), minus the calculations the evidence rule withholds: ``kin_vn`` cites nothing and reaches a freq
+    # only through the reaction's hidden entry, so it counts none. (A freq under a SHOWN entry counts even unreviewed: see
+    # test_curated_evidence_counts_and_levels.py.)
     ref = world.visible["kin_vn"].public_ref
     exp_n = next(r for r in _get(client, kinetics, "exploratory").json()["records"] if r["kinetics_ref"] == ref)
     cur_n = next(r for r in _get(client, kinetics, "curated").json()["records"] if r["kinetics_ref"] == ref)
     assert exp_n["evidence_completeness"]["checklist"]["has_ts_freq_evidence"] is True
-    assert cur_n["evidence_completeness"]["checklist"]["has_ts_freq_evidence"] is True
+    assert cur_n["evidence_completeness"]["checklist"]["has_ts_freq_evidence"] is False
 
 
 def _extra_hidden_calculation_world(db_session, world, status=RecordReviewStatus.rejected):

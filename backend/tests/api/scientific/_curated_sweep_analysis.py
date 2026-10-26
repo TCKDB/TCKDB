@@ -98,6 +98,62 @@ POPULATION_KEYS = frozenset(
     }
 )
 
+#: Counts and flags of a returned record's linked EVIDENCE (ADR 0023, step 3). They are the evidence rule's, not the record
+#: floor's, so the sweep holds them to it when it is given a ``mode``: in the unlisted state (linked evidence that is merely
+#: unreviewed) a count or flag EQUALS the exploratory one; in the withheld state (rejected / deprecated) it is never higher
+#: (a number is <=, a flag may only go True -> False). Without a ``mode`` they are skipped like the population keys.
+EVIDENCE_COUNT_KEYS = frozenset(
+    {
+        "calculation_count",
+        "has_calculations",
+        "has_geometries",
+        "has_validation_evidence",
+        "has_opt",
+        "has_freq",
+        "has_sp",
+        "has_irc",
+        "has_path_search",
+        "has_geometry_validation",
+        "has_scf_stability",
+        "source_calculation_count",
+        "has_source_calculations",
+        "geometry_count",
+        "optimization_chain_count",
+        "has_rotor_scans",
+        "has_frequencies",
+        "has_opt_calculation",
+        "has_freq_calculation",
+        "has_sp_calculation",
+        "has_statmech_provenance",
+        "has_transition_state_provenance",
+    }
+)
+
+#: Evidence count keys that legitimately differ in the UNLISTED state on a route because they also rest on a RECORD the floor
+#: removes (so they are "<=", not "==" there). Per route path, with the reason. Grow this only with a reason.
+RELAXED_UNLISTED: dict[str, dict[str, str]] = {
+    **{
+        path: {"source_calculation_count": "a network's count adds up the source calculations of the solves that clear the floor"}
+        for path in (
+            "/api/v1/scientific/networks/browse",
+            "/api/v1/scientific/networks/search",
+            "/api/v1/scientific/networks/{network_ref_or_id}",
+        )
+    },
+    **{
+        path: {"has_path_search": "a path search counts through the transition state and entry, which are records (floored)"}
+        for path in ("/api/v1/scientific/reactions/browse", "/api/v1/scientific/reactions/search")
+    },
+    **{
+        path: {"calculation_count": "a species entry's availability previews the calculation record list (record floor)"}
+        for path in ("/api/v1/scientific/species/browse", "/api/v1/scientific/species/search")
+    },
+    "/api/v1/scientific/transition-states/{transition_state_ref_or_id}": {
+        "calculation_count": "the concept pools the entries that clear the floor (entries are records)",
+        "has_geometries": "the concept pools the entries that clear the floor (entries are records)",
+    },
+}
+
 #: Blocks that describe the read itself (when it was taken, which profile, the selection document's own disclosures and
 #: checksum) rather than the records. They differ between profiles by design.
 DESCRIBES_THE_READ_KEYS = frozenset(
@@ -398,11 +454,21 @@ def _dicts(obj: Any, path: str = "", *, top: bool = True) -> Iterator[tuple[str,
             yield from _dicts(item, f"{path}[*]", top=False)
 
 
-def _is_withholding(cur: Any, exp: Any) -> bool:
-    return not withholding_violations(exp, cur)
+def _is_withholding(cur: Any, exp: Any, mode: str | None = None, relaxed: frozenset[str] = frozenset()) -> bool:
+    return not withholding_violations(exp, cur, mode=mode, relaxed=relaxed)
 
 
-def withholding_violations(exp: Any, cur: Any, path: str = "") -> list[str]:
+def _evidence_count_violation(exp: Any, cur: Any, mode: str) -> bool:
+    if isinstance(exp, bool) or isinstance(cur, bool):
+        return exp != cur if mode == "equal" else bool(cur) and not bool(exp)
+    if isinstance(exp, (int, float)) and isinstance(cur, (int, float)):
+        return exp != cur if mode == "equal" else cur > exp
+    return exp != cur
+
+
+def withholding_violations(
+    exp: Any, cur: Any, path: str = "", *, mode: str | None = None, relaxed: frozenset[str] = frozenset()
+) -> list[str]:
     """Paths where ``cur`` is not a withholding of ``exp``.
 
     Allowed: equal; a value turned ``None``; a list with elements removed (a subsequence under this same relation).
@@ -415,6 +481,11 @@ def withholding_violations(exp: Any, cur: Any, path: str = "") -> list[str]:
         out: list[str] = []
         for key in sorted(set(exp) | set(cur)):
             sub = f"{path}.{key}" if path else key
+            if mode is not None and key in EVIDENCE_COUNT_KEYS and key in exp and key in cur:
+                key_mode = "le" if key in relaxed else mode
+                if cur[key] is not None and _evidence_count_violation(exp[key], cur[key], key_mode):
+                    out.append(f"{sub}<evidence count {key_mode}: {exp[key]!r} -> {cur[key]!r}>")
+                continue
             if (
                 key in REQUEST_KEYS
                 or key in POPULATION_KEYS
@@ -430,20 +501,24 @@ def withholding_violations(exp: Any, cur: Any, path: str = "") -> list[str]:
             elif key not in exp:
                 out.append(f"{sub}<key added>")
             else:
-                out.extend(withholding_violations(exp[key], cur[key], sub))
+                out.extend(withholding_violations(exp[key], cur[key], sub, mode=mode, relaxed=relaxed))
         return out
     if isinstance(exp, list) and isinstance(cur, list):
         if len(cur) == len(exp):
-            return [v for e, c in zip(exp, cur, strict=True) for v in withholding_violations(e, c, f"{path}[*]")]
+            return [
+                v for e, c in zip(exp, cur, strict=True) for v in withholding_violations(e, c, f"{path}[*]", mode=mode, relaxed=relaxed)
+            ]
         # Fewer elements: each curated element must match, in order, a distinct exploratory element.
         i = 0
         for c in cur:
-            while i < len(exp) and not _is_withholding(c, exp[i]):
+            while i < len(exp) and not _is_withholding(c, exp[i], mode, relaxed):
                 i += 1
             if i == len(exp):
                 # Name the field that differs, not just the element: the closest exploratory element (fewest
                 # violations) is the one this curated element was taken from, so its violations are the substitution.
-                closest = min((withholding_violations(e, c, f"{path}[*]") for e in exp), key=len, default=[])
+                closest = min(
+                    (withholding_violations(e, c, f"{path}[*]", mode=mode, relaxed=relaxed) for e in exp), key=len, default=[]
+                )
                 return closest or [f"{path}[*]<element not in exploratory list>"]
             i += 1
         return []
