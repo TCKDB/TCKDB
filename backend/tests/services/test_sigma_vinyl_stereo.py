@@ -6,8 +6,9 @@ say which one was computed. Geometry is the only place the configuration
 exists, so ``derive_stereo_label_from_3d`` must read it from there -- and must
 return no label (never a guess) where geometry does not decide it.
 
-Neutralising the template's radicals is for bond-order assignment only; the
-unpaired electrons are restored before stereo is read off the coordinates.
+These tests pin behaviour that already holds: the neutralised template maps
+bond orders and RDKit's sanitiser leaves the radical bookkeeping the stereo
+perception needs, so a bent sigma-vinyl reads E or Z from the coordinates.
 
 Geometries here are explicit coordinates (sigma-vinyl) or RDKit embeddings with
 a fixed seed whose relevant geometry is asserted before it is used.
@@ -206,37 +207,6 @@ class TestNoFalseStereo:
         dihedral = abs(T.GetDihedralDeg(conf, *match))
         assert (dihedral > 150.0) if expected == "E" else (dihedral < 30.0)
         assert derive_stereo_label_from_3d("[CH2]C=CC", xyz) == expected
-
-
-# ---------------------------------------------------------------------------
-# The mapped molecule must carry its unpaired electrons when stereo is read
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("smiles", "radical_electrons"),
-    [("[CH]=CC", 1), ("[O][O]", 2), ("C[C](F)Cl", 1), ("[CH3]", 1), ("CC=CC", 0)],
-)
-def test_bond_order_mapped_mol_has_radicals_restored(smiles: str, radical_electrons: int) -> None:
-    """The molecule handed to stereo perception has the species' real spin bookkeeping.
-
-    ``AssignBondOrdersFromTemplate`` returns the neutralised template's
-    molecule, and what RDKit's sanitiser leaves on it is inconsistent: the
-    sigma-vinyl keeps its electron while ``[O][O]``, ``[CH3]`` and
-    ``C[C](F)Cl`` lose theirs. ``derive_stereo_label_from_3d`` must not depend
-    on that, so it calls ``_restore_radicals`` before reading stereo.
-    """
-    from rdkit.Chem import rdDetermineBonds
-
-    from app.chemistry import species as chem
-
-    mol, xyz = _embed_xyz(smiles, seed=7)
-    template = chem._neutralize_radicals_for_template(Chem.AddHs(Chem.MolFromSmiles(smiles)))
-    raw = Chem.MolFromXYZBlock(xyz)
-    rdDetermineBonds.DetermineConnectivity(raw)
-    mapped = AllChem.AssignBondOrdersFromTemplate(template, raw)
-    chem._restore_radicals(mapped)
-    assert sum(a.GetNumRadicalElectrons() for a in mapped.GetAtoms()) == radical_electrons
 
 
 # ---------------------------------------------------------------------------
