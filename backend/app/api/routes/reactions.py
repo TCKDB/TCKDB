@@ -9,11 +9,13 @@ from sqlalchemy.orm import Session
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
 from app.api.routes._legacy_reads import (
+    MERGED_FROM_HEADER,
     EntityListResponse,
     LegacyReadRoute,
     LegacyVisibility,
     disclose_in_header,
     entity_page,
+    sub_response,
 )
 from app.db.models.common import SubmissionRecordType
 from app.db.models.kinetics import Kinetics
@@ -66,13 +68,13 @@ def list_reactions(
 
 
 @router.get("/{reaction_id}", response_model=ChemReactionRead)
-def get_reaction(reaction_id: int, response: Response, session: Session = Depends(get_db)):
+def get_reaction(reaction_id: int, session: Session = Depends(get_db), marker=Depends(sub_response)):
     reaction = session.get(ChemReaction, reaction_id)
     if reaction is None:
         raise NotFoundError("Reaction not found")
     # A reaction merged into another is kept for its ref and answers as the one it was merged into (DR-0038).
     if reaction.merged_into_chem_reaction_id is not None:
-        response.headers["X-TCKDB-Merged-From"] = reaction.public_ref
+        marker.headers[MERGED_FROM_HEADER] = reaction.public_ref
         reaction = session.get(ChemReaction, reaction.merged_into_chem_reaction_id)
     return ChemReactionRead.model_validate(reaction)
 

@@ -15,11 +15,13 @@ from app.api.deps import (
 )
 from app.api.errors import NotFoundError
 from app.api.routes._legacy_reads import (
+    MERGED_FROM_HEADER,
     EntityListResponse,
     LegacyReadRoute,
     LegacyVisibility,
     disclose_in_header,
     entity_page,
+    sub_response,
 )
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
@@ -108,13 +110,13 @@ def list_species(
 
 
 @router.get("/{species_id}", response_model=SpeciesRead)
-def get_species(species_id: int, response: Response, session: Session = Depends(get_db)):
+def get_species(species_id: int, session: Session = Depends(get_db), marker=Depends(sub_response)):
     species = session.get(Species, species_id)
     if species is None:
         raise NotFoundError("Species not found")
     # A species merged into another is kept for its ref and answers as the one it was merged into (DR-0038).
     if species.merged_into_species_id is not None:
-        response.headers[MERGED_FROM_HEADER] = species.public_ref
+        marker.headers[MERGED_FROM_HEADER] = species.public_ref
         species = session.get(Species, species.merged_into_species_id)
     return SpeciesRead.model_validate(species)
 
@@ -126,10 +128,6 @@ def get_species(species_id: int, response: Response, session: Session = Depends(
 entries_router = APIRouter(route_class=LegacyReadRoute)
 #: The write route of the species-entries path: no read profile applies to it.
 entries_write_router = APIRouter()
-
-
-#: Set on a legacy read that named a merged-away row and was answered with the row it was merged into.
-MERGED_FROM_HEADER = "X-TCKDB-Merged-From"
 
 
 def _forward_entry(session: Session, entry: SpeciesEntry, response: Response) -> SpeciesEntry:
@@ -178,7 +176,7 @@ def _species_entry_conformer_summary(
 
 @entries_router.get("/{entry_id}", response_model=SpeciesEntryRead)
 def get_species_entry(
-    entry_id: int, response: Response, session: Session = Depends(get_db), visibility: LegacyVisibility = Depends()
+    entry_id: int, session: Session = Depends(get_db), visibility: LegacyVisibility = Depends(), marker=Depends(sub_response)
 ):
     """Return one species entry with a compact conformer summary.
 
@@ -188,7 +186,7 @@ def get_species_entry(
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
-    entry = _forward_entry(session, entry, response)
+    entry = _forward_entry(session, entry, marker)
     entry_id = entry.id
     # Entries are scoping parents: never gated here (nor on their sub-routes, filters or pointers).
     read = SpeciesEntryRead.model_validate(entry)
