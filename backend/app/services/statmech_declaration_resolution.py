@@ -56,6 +56,7 @@ from app.db.models.structure_determination import StructureDetermination
 from app.db.models.workflow import WorkflowToolRelease
 from app.schemas.upload_warning import UploadWarning
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
+from app.services.conformer_group_forwarding import forwarded_group_id
 from app.services.energy_correction_resolution import resolve_or_create_freq_scale_factor_ref
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import resolve_calculation_key
@@ -121,7 +122,9 @@ def _group_by_ref(session: Session, ref: str, *, field: str) -> ConformerGroup:
             ref=ref,
             remedy="Deposit the conformer first, or state the basin of this upload.",
         )
-    return group
+    # A basin emptied by a merge is forwarded to the group that took its members.
+    forwarded = forwarded_group_id(session, group.id)
+    return group if forwarded == group.id else session.get(ConformerGroup, forwarded)
 
 
 def _calculation_for(

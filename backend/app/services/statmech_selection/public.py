@@ -22,6 +22,7 @@ still verifies and replays.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -52,6 +53,7 @@ from app.schemas.reads.scientific_statmech_selection import (
     StatmechSelectionReview,
     StatmechSelectionSelection,
 )
+from app.services.conformer_group_forwarding import forwarded_group_id
 from app.services.scientific_read.common import fetch_review_badges
 from app.services.selection_kernel.requested import answer_steps
 from app.services.statmech_selection.loader import _statuses as statuses_for
@@ -174,7 +176,32 @@ def check_request_refs(
         )
 
 
-def run_selection(session: Session, *, body: StatmechSelectionRequest) -> StatmechSelection:
+def forward_emptied_basin(session: Session, body: StatmechSelectionRequest) -> tuple[StatmechSelectionRequest, str | None]:
+    """A basin scope that names a conformer group a merge emptied is forwarded to the group that took its members.
+
+    Returns the request to run and, when it was forwarded, the ref that was asked for (otherwise ``None``). A ref that
+    names nothing, or that the profile hides, is the 404 it always was.
+    """
+    scope = body.target.scope
+    ref = getattr(scope, "conformer_group_ref", None)
+    if ref is None:
+        return body, None
+    # Through the visibility guard first, so a basin the read profile hides is the same 404 as an unknown one and
+    # is never forwarded to a survivor the caller may see (hidden is unknown).
+    group_id = _ref_only(session, ConformerGroup, ref, kind_label="conformer_group")
+    survivor_id = forwarded_group_id(session, group_id)
+    if survivor_id == group_id:
+        return body, None
+    survivor = session.get(ConformerGroup, survivor_id)
+    assert survivor is not None  # forwarded_group_id only returns an existing group
+    forwarded_scope = scope.model_copy(update={"conformer_group_ref": survivor.public_ref})
+    forwarded_target = body.target.model_copy(update={"scope": forwarded_scope})
+    return body.model_copy(update={"target": forwarded_target}), ref
+
+
+def run_selection(
+    session: Session, *, body: StatmechSelectionRequest, forwarded_from: str | None = None
+) -> StatmechSelection:
     """Run the service for a public request.
 
     The session must be a read-only snapshot (see ``get_snapshot_db``), and this insists on it: a session that is not
@@ -183,6 +210,8 @@ def run_selection(session: Session, *, body: StatmechSelectionRequest) -> Statme
     cannot become a snapshot); nothing in the application sets it.
     """
     request = body.service_request()
+    if forwarded_from is not None:
+        request = dataclasses.replace(request, forwarded_from_conformer_group_ref=forwarded_from)
     owner_id = resolve_target(session, request)
     _, profile = statuses_for(request)
     # The target first: a target the profile hides is the same 404 as an unknown one, and every other ref is judged

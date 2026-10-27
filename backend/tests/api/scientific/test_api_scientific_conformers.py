@@ -179,6 +179,86 @@ def test_cg_detail_default_response_shape(client, db_session):
     assert "review_history" not in record
 
 
+def test_cg_detail_reports_where_a_merged_group_went_and_whether_a_basin_is_wide(client, db_session):
+    """A group a merge emptied names the group that took its members; a basin carries its clique flag and span."""
+    _, entry = _make_species_entry(db_session)
+    survivor = make_conformer_group(db_session, entry, label="conformer_1")
+    emptied = make_conformer_group(db_session, entry, label="conformer_2")
+    survivor.basin_is_clique = False
+    survivor.basin_span_deg = 36.0
+    emptied.merged_into_conformer_group_id = survivor.id
+    db_session.flush()
+
+    wide = client.get(_cg_url(survivor.public_ref)).json()["record"]["conformer_group"]
+    assert (wide["wide_basin"], wide["basin_span_deg"], wide["merged_into_conformer_group_ref"]) == (True, 36.0, None)
+    gone = client.get(_cg_url(emptied.public_ref)).json()["record"]["conformer_group"]
+    assert gone["merged_into_conformer_group_ref"] == survivor.public_ref
+    assert (gone["wide_basin"], gone["basin_span_deg"]) == (None, None)
+
+    survivor.basin_is_clique = True
+    db_session.flush()
+    tight = client.get(_cg_url(survivor.public_ref)).json()["record"]["conformer_group"]
+    assert tight["wide_basin"] is False
+
+
+def test_cg_detail_shows_a_merge_that_is_owed_until_it_is_completed(client, db_session):
+    """The group still holds its members while approved records keep it from being merged; a reader is told."""
+    from app.db.models.species import ConformerGroupMergePending, ConformerObservation
+
+    _, entry = _make_species_entry(db_session)
+    older = make_conformer_group(db_session, entry, label="conformer_1")
+    younger = make_conformer_group(db_session, entry, label="conformer_2")
+    bridge = ConformerObservation(conformer_group_id=older.id)
+    db_session.add(bridge)
+    db_session.flush()
+    owed = ConformerGroupMergePending(
+        species_entry_id=entry.id,
+        kept_conformer_group_id=older.id,
+        absorbed_conformer_group_id=younger.id,
+        conformer_observation_id=bridge.id,
+        reason="approved records point at the younger group",
+    )
+    db_session.add(owed)
+    db_session.flush()
+
+    young = client.get(_cg_url(younger.public_ref)).json()["record"]["conformer_group"]
+    assert young["merge_pending"] == {
+        "target_conformer_group_ref": older.public_ref,
+        "reason": "approved records point at the younger group",
+    }
+    assert client.get(_cg_url(older.public_ref)).json()["record"]["conformer_group"]["merge_pending"] is None
+    assert young["refile_pending"] is None
+
+    # the OTHER kind of owed work: a structure sitting in `older` must be re-filed into a basin with no group yet.
+    # It names no target, and is not reported as a merge of `older` into anything.
+    stray = ConformerObservation(conformer_group_id=older.id)
+    db_session.add(stray)
+    db_session.flush()
+    db_session.add(
+        ConformerGroupMergePending(
+            species_entry_id=entry.id,
+            kept_conformer_group_id=None,
+            absorbed_conformer_group_id=older.id,
+            conformer_observation_id=stray.id,
+            reason="a structure that defines no basin must be re-filed",
+        )
+    )
+    db_session.flush()
+    kept = client.get(_cg_url(older.public_ref)).json()["record"]["conformer_group"]
+    assert kept["merge_pending"] is None
+    assert kept["refile_pending"] == {
+        "observation_count": 1,
+        "reason": "a structure that defines no basin must be re-filed",
+    }
+
+    from datetime import datetime
+
+    owed.completed_at = datetime(2026, 10, 27)
+    db_session.flush()
+    done = client.get(_cg_url(younger.public_ref)).json()["record"]["conformer_group"]
+    assert done["merge_pending"] is None
+
+
 def test_cg_detail_review_badge_present(client, db_session):
     _, cg, _ = _make_group_with_obs(db_session)
     body = client.get(_cg_url(cg.public_ref)).json()
@@ -2665,3 +2745,75 @@ def test_search_no_forbidden_payload_keys(client, db_session):
                 _walk(item)
 
     _walk(body)
+
+
+def _wide_basin_scene(db_session):
+    _, entry = _make_species_entry(db_session)
+    wide = make_conformer_group(db_session, entry, label="wide")
+    tight = make_conformer_group(db_session, entry, label="tight")
+    provisional = make_conformer_group(db_session, entry, label="provisional")
+    wide.basin_is_clique, wide.basin_span_deg = False, 36.0
+    tight.basin_is_clique, tight.basin_span_deg = True, 10.0
+    db_session.flush()
+    return entry, wide, tight, provisional
+
+
+def _refs(body) -> set[str]:
+    return {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+
+
+def test_search_wide_basin_lists_exactly_the_wide_groups(client, db_session):
+    entry, wide, tight, provisional = _wide_basin_scene(db_session)
+    only_wide = client.get(_search_url(species_entry_ref=entry.public_ref, wide_basin="true")).json()
+    assert _refs(only_wide) == {wide.public_ref}
+    only_tight = client.get(_search_url(species_entry_ref=entry.public_ref, wide_basin="false")).json()
+    assert _refs(only_tight) == {tight.public_ref}  # the group with no optimised member matches neither
+    assert only_wide["request"]["filter"]["wide_basin"] is True
+    # on its own, with no other filter, it is a meaningful filter
+    alone = client.get(_search_url(wide_basin="true")).json()
+    assert wide.public_ref in _refs(alone) and tight.public_ref not in _refs(alone)
+    assert provisional.public_ref not in _refs(alone)
+
+
+def test_search_min_span_deg_and_the_post_body(client, db_session):
+    entry, wide, tight, _provisional = _wide_basin_scene(db_session)
+    both = client.get(_search_url(species_entry_ref=entry.public_ref, min_span_deg="5")).json()
+    assert _refs(both) == {wide.public_ref, tight.public_ref}
+    assert _refs(client.get(_search_url(species_entry_ref=entry.public_ref, min_span_deg="20")).json()) == {wide.public_ref}
+    posted = client.post(_search_url(), json={"species_entry_ref": entry.public_ref, "wide_basin": True})
+    assert posted.status_code == 200 and _refs(posted.json()) == {wide.public_ref}
+    posted = client.post(_search_url(), json={"min_span_deg": 20.0})
+    assert wide.public_ref in _refs(posted.json()) and tight.public_ref not in _refs(posted.json())
+    assert client.get(_search_url(species_entry_ref=entry.public_ref, min_span_deg="-1")).status_code == 422
+    assert client.post(_search_url(), json={"wide_basin": "maybe"}).status_code == 422
+    # a query-string filter on POST is refused, as for every other filter
+    assert client.post(_search_url(wide_basin="true"), json={"species_entry_ref": entry.public_ref}).status_code == 422
+
+
+def test_search_wide_basin_keeps_the_route_order_and_the_review_floor(client, db_session):
+    entry, wide, tight, _ = _wide_basin_scene(db_session)
+    second = make_conformer_group(db_session, entry, label="wide2")
+    second.basin_is_clique, second.basin_span_deg = False, 50.0
+    db_session.flush()
+    body = client.get(_search_url(species_entry_ref=entry.public_ref, wide_basin="true")).json()
+    plain = client.get(_search_url(species_entry_ref=entry.public_ref)).json()
+    # the same relative order as the unfiltered listing: a span is a filter fact, never a sort key
+    order = [r["conformer_group"]["conformer_group_ref"] for r in plain["records"]]
+    listed = [r["conformer_group"]["conformer_group_ref"] for r in body["records"]]
+    assert listed == [r for r in order if r in set(listed)] and len(listed) == 2
+    assert body["request"]["sort"] == plain["request"]["sort"]
+    # a review floor applies to the listed groups
+    floor = client.get(_search_url(species_entry_ref=entry.public_ref, wide_basin="true", min_review_status="approved")).json()
+    assert _refs(floor) == set()
+
+
+def test_search_refuses_an_unknown_key_on_get_and_in_the_post_body(client, db_session):
+    """A misspelt filter must not quietly widen the result (the filter would be ignored, the answer unfiltered)."""
+    entry, wide, tight, _ = _wide_basin_scene(db_session)
+    typo = client.get(_search_url(species_entry_ref=entry.public_ref, wide_basins="true"))
+    assert typo.status_code == 422 and "unknown_query_parameter" in typo.text and "wide_basins" in typo.text
+    posted = client.post(_search_url(), json={"species_entry_ref": entry.public_ref, "wide_basins": True})
+    assert posted.status_code == 422 and "extra_forbidden" in posted.text
+    # every declared filter and the profile keys are still accepted
+    ok = client.get(_search_url(species_entry_ref=entry.public_ref, wide_basin="true", profile="exploratory"))
+    assert ok.status_code == 200 and _refs(ok.json()) == {wide.public_ref}

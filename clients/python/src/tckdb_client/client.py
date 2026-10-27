@@ -3853,6 +3853,8 @@ class TCKDBClient:
         selection_kind: str | None = None,
         has_selection: bool | None = None,
         assignment_scheme_ref: str | None = None,
+        wide_basin: bool | None = None,
+        min_span_deg: float | None = None,
         has_observations: bool | None = None,
         has_calculations: bool | None = None,
         has_geometries: bool | None = None,
@@ -3890,6 +3892,11 @@ class TCKDBClient:
         ``has_x=False`` matches groups whose coverage is incomplete. A
         group with no observations matches neither under
         ``"all_observations"``. Leave it ``None`` to keep the default.
+
+        ``wide_basin=True`` lists the groups whose optimised members are linked end to end but are not all within
+        tolerance of each other (reported for curation, never split); ``False`` lists those whose members all are. A
+        group with no optimised member matches neither. ``min_span_deg`` keeps groups whose largest torsion
+        difference between two optimised members is at least that many degrees. Neither orders the result.
         """
 
         body = {
@@ -3900,6 +3907,8 @@ class TCKDBClient:
             "selection_kind": selection_kind,
             "has_selection": has_selection,
             "assignment_scheme_ref": assignment_scheme_ref,
+            "wide_basin": wide_basin,
+            "min_span_deg": min_span_deg,
             "has_observations": has_observations,
             "has_calculations": has_calculations,
             "has_geometries": has_geometries,

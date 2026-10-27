@@ -85,6 +85,8 @@ class H298Request:
     :param max_candidates: Population cap; the endpoint contract is 500.
     :param filters: The caller's filters, applied before eligibility.
     :param eligibility: The eligibility defaults the caller lifted.
+    :param forwarded_from_conformer_group_ref: The conformer-group ref the caller named when that group had been merged
+        into another and the request was forwarded to the group that took its members; recorded in the manifest.
     """
 
     target_kind: ThermoTargetKind
@@ -94,6 +96,7 @@ class H298Request:
     max_candidates: int = MAX_CANDIDATES
     filters: ThermoFilters = field(default_factory=ThermoFilters)
     eligibility: Eligibility = field(default_factory=Eligibility)
+    forwarded_from_conformer_group_ref: str | None = None
 
     def __post_init__(self) -> None:
         if self.target_kind is ThermoTargetKind.single_conformer and self.conformer_group_id is None:

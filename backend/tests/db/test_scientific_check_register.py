@@ -96,9 +96,14 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # carry which energy kind, and the table had been two private ones that
     # disagreed. The new ``network_energy_zpe_source_absent`` warning is NOT a
     # second entry: it joins the existing "energy not comparable" entry.
-    assert 10 <= len(REGISTER) <= 47, (
+    #
+    # Raised 47 -> 48 (2026-10-27) for #812: the review-tier ``wide-basin`` advisory check. A conformer basin is the
+    # connected component of its optimised structures, so a chain can be wider than the matching tolerance; TCKDB
+    # reports that and never splits it (any automatic cut would put back an arbitrary threshold or an order
+    # dependence), and a curator needs a finding to read. One entry, different tier from every blocking entry.
+    assert 10 <= len(REGISTER) <= 48, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~47 the inclusion test ('could this check be wrong "
+        "the system; above ~48 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 

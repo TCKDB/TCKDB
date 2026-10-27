@@ -3537,6 +3537,10 @@ KIRCHHOFF_CONSISTENCY = EvidenceRubric(name="kirchhoff_consistency", version=1, 
 ISOTOPE_IDENTITY_CONSISTENCY = EvidenceRubric(
     name="isotope_identity_consistency", version=1, record_type="species_entry", checks=(),
 )
+# A conformer group whose optimised structures are linked end to end but are not all within tolerance of each other.
+WIDE_BASIN_CONSISTENCY = EvidenceRubric(
+    name="wide_basin_consistency", version=1, record_type="conformer_group", checks=(),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -3563,6 +3567,7 @@ for _rubric in (
     HESS_CONSISTENCY,
     ISOTOPE_IDENTITY_CONSISTENCY,
     KIRCHHOFF_CONSISTENCY,
+    WIDE_BASIN_CONSISTENCY,
 ):
     RUBRICS.register(_rubric.name, _rubric.version, _rubric, current=True)
 del _rubric

@@ -20,7 +20,7 @@ from datetime import datetime
 import pytest
 from tckdb_schemas.fragments.version import VersionRef
 
-from app.services.consistency import gibbs, hess, isotope_identity, kinetics, kirchhoff
+from app.services.consistency import gibbs, hess, isotope_identity, kinetics, kirchhoff, wide_basin
 from app.services.consistency import thermo as thermo_check
 from app.services.consistency.core import AdvisoryResult, currency
 from app.services.consistency.service import invoke
@@ -55,6 +55,7 @@ from app.services.trust.rubrics import (
     RUBRICS,
     THERMO_CONSISTENCY,
     THERMO_KINETICS_CONSISTENCY,
+    WIDE_BASIN_CONSISTENCY,
 )
 from tests.services._rubric_registry import bump, register_unrelated
 
@@ -86,6 +87,7 @@ _ADVISORY_RECIPES = {
     (hess.RUNNER, HESS_CONSISTENCY): VersionRef(name="hess_consistency", version=1),
     (isotope_identity.RUNNER, ISOTOPE_IDENTITY_CONSISTENCY): VersionRef(name="isotope_identity_consistency", version=1),
     (kirchhoff.RUNNER, KIRCHHOFF_CONSISTENCY): VersionRef(name="kirchhoff_consistency", version=1),
+    (wide_basin.RUNNER, WIDE_BASIN_CONSISTENCY): VersionRef(name="wide_basin_consistency", version=1),
     (cp.RUNNER, EXTERNAL_CP_COMPARISON): VersionRef(name="external_cp_comparison", version=1),
 }
 

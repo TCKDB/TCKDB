@@ -124,6 +124,19 @@ def test_an_unsupported_version_and_a_contradiction_are_refused_before_anything_
     assert _declarations(db_session) == []
 
 
+def test_a_basin_citing_a_group_a_merge_emptied_attaches_to_the_group_that_took_its_members(client, db_session):
+    first = _post(client, _water())
+    entry = db_session.get(Statmech, first.json()["id"]).species_entry
+    survivor = make_conformer_group(db_session, entry, label="conformer_1")
+    emptied = make_conformer_group(db_session, entry, label="conformer_2")
+    emptied.merged_into_conformer_group_id = survivor.id
+    db_session.flush()
+    ok = _post(client, _water(model_declaration=_declaration(scope_kind="basin", conformer_group_ref=emptied.public_ref)))
+    assert ok.status_code == 201, ok.text[:600]
+    (row,) = _declarations(db_session)
+    assert row.conformer_group_id == survivor.id
+
+
 def test_a_basin_names_a_group_of_the_records_own_species_entry(client, db_session):
     first = _post(client, _water())
     entry_id = first.json()["species_entry_id"]

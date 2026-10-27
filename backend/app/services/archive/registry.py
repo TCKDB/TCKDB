@@ -77,6 +77,7 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "composite_scheme_term_input",
         "conformer_assignment_scheme",
         "conformer_group",
+        "conformer_group_merge_pending",
         "conformer_observation",
         "conformer_selection",
         "curation_policy",
@@ -315,7 +316,7 @@ PRESEEDED_TABLES: Mapping[
     ),
     "conformer_assignment_scheme": (
         ("name", "version"),
-        frozenset({("torsion_basin", 1), ("torsion_basin", 2)}),
+        frozenset({("torsion_basin", 1), ("torsion_basin", 2), ("torsion_basin", 3)}),
     ),
 }
 

@@ -85,6 +85,13 @@ def build_manifest(
             "temperature_k": REFERENCE_TEMPERATURE_K,
             "phase": PHASE,
             "target": {"kind": request.target_kind.value, "conformer_group_ref": conformer_group_ref},
+            # present only when the caller named a basin a merge had emptied: the decision was made on the group that
+            # took its members (named above), and a download must say the request was forwarded
+            **(
+                {"forwarded_from_conformer_group_ref": request.forwarded_from_conformer_group_ref}
+                if request.forwarded_from_conformer_group_ref is not None
+                else {}
+            ),
             "min_review_status": request.min_review_status.value if request.min_review_status else None,
             "effective_review_statuses": sorted((s.value for s in effective_statuses), key=lambda v: _rank(v)),
             "administrative_policy": request.admin_policy.value,

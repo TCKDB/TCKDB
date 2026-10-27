@@ -87,9 +87,9 @@ disagree, this one is right by construction.
 | `block` | 22 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
 | `warn` | 12 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
 | `label` | 1 | Labels a stored record at read time without refusing anything — a `HardFailReason` in the trust evaluator. For facts TCKDB observes about a record after it was accepted, which no upload-time check could have refused because they did not exist yet. |
-| `review` | 7 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
+| `review` | 8 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
 | `structural` | 5 | Not an ADR 0008 consequence tier. The position is enforced by the shape of the schema, so a record violating it cannot be represented. |
-| **total** | **47** | |
+| **total** | **48** | |
 
 ## Where a check's code reaches a client
 
@@ -99,8 +99,8 @@ disagree, this one is right by construction.
 | `upload_warning` | 12 | the `code` field of an `UploadWarning` returned alongside the accepted upload |
 | `trust_label` | 1 | a read-time trust label (`HardFailReason`), not any refusal |
 | `database_constraint` | 1 | PostgreSQL only, so the refusal is a 409 rather than a 422 — named, where the constraint declares a rejection code |
-| `none` | 10 | *nothing carries a code* |
-| **total** | **47** | |
+| `none` | 11 | *nothing carries a code* |
+| **total** | **48** | |
 
 ## Recorded divergences
 
@@ -1055,9 +1055,29 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
+### 46. Report a conformer group whose converged optimised structures are linked end to end but are not all within the matching tolerance of each other (a wide basin), with the largest torsion difference between two of them.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `review` |
+| **Code** | *(none — prose only)* |
+| **Code reaches a client via** | *nothing carries a code* |
+| **Governing ADR** | 0008, 0005 |
+
+**Why this tier.** A basin is the connected component of its optimised structures, so a chain can be wider than the tolerance. Splitting it automatically would put back an arbitrary threshold or a dependence on the order of deposition, so it is reported for curation instead: one append-only record_machine_review row a curator may read, with no status, selection, trust or approval effect.
+
+**Enforced at.**
+
+- `compare_wide_basin` — `backend/app/services/consistency/wide_basin.py::compare_wide_basin`
+  *Explicit CLI/service invocation only (--check wide-basin, a cg_ ref). Reads the group's stored basin_is_clique and basin_span_deg, which the upload path and the reassignment derive from its defining members; a group with no defining member is reported as not judged. The reassignment logs a WARNING for each wide basin it writes.*
+
+**Escape hatch.** None.
+
+*(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
+
 ## External reference comparison
 
-### 46. A computed thermo record's heat capacity, evaluated at each temperature an independent external observation reports, is compared against that observation and the residual is recorded -- never judged against a threshold and never fed back into the record's trust or review state.
+### 47. A computed thermo record's heat capacity, evaluated at each temperature an independent external observation reports, is compared against that observation and the residual is recorded -- never judged against a threshold and never fed back into the record's trust or review state.
 
 | Field | Value |
 | --- | --- |
@@ -1079,7 +1099,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Scan coordinates
 
-### 47. A scan point's stored coordinate_value is the internal coordinate at that point's own sampled geometry, in that coordinate's own unit (ADR 0020) -- never a displacement, and never compared against start_value as an anchor.
+### 48. A scan point's stored coordinate_value is the internal coordinate at that point's own sampled geometry, in that coordinate's own unit (ADR 0020) -- never a displacement, and never compared against start_value as an anchor.
 
 | Field | Value |
 | --- | --- |

@@ -58,6 +58,7 @@ from app.db.models.calculation import Calculation
 from app.db.models.common import ThermoTargetKind
 from app.db.models.species import ConformerGroup
 from app.services.calculation_ownership import assert_calculation_owned_by, assert_owned_by
+from app.services.conformer_group_forwarding import forwarded_group_id
 from app.services.local_key_resolution import resolve_calculation_key, resolve_declared_key
 from app.services.upload_reference import (
     W_UNKNOWN_CALCULATION_REF,
@@ -120,11 +121,20 @@ def assert_thermo_declaration(payload: object) -> None:
 
 
 def _group_row(session: Session, *, ref: str | None = None, group_id: int | None = None):
+    """The group a ref or id names, forwarded to the group that took its members if a merge emptied it."""
     stmt = select(ConformerGroup.id, ConformerGroup.species_entry_id)
     stmt = stmt.where(
         ConformerGroup.public_ref == ref if ref is not None else ConformerGroup.id == group_id
     )
-    return session.execute(stmt).first()
+    row = session.execute(stmt).first()
+    if row is None:
+        return None
+    forwarded = forwarded_group_id(session, row.id)
+    if forwarded == row.id:
+        return row
+    return session.execute(
+        select(ConformerGroup.id, ConformerGroup.species_entry_id).where(ConformerGroup.id == forwarded)
+    ).first()
 
 
 def _assert_group_owned(group, *, field: str, species_entry_id: int) -> None:

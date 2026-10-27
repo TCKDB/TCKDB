@@ -95,6 +95,10 @@ class TorsionFingerprint:
     #: fingerprint was built without one. Diagnostic only.
     symmetry_mappings: int | None = None
     symmetry_cap_hit: bool | None = None
+    #: Where the live upload path put the structure this fingerprint belongs to, carried from
+    #: ``resolve_conformer_group`` to ``settle_conformer_basin`` on the same request. Transient: never serialised,
+    #: never compared.
+    placement: object | None = field(default=None, repr=False, compare=False)
 
     @property
     def rotor_count(self) -> int:
