@@ -1060,9 +1060,14 @@ def _owed_refile_scenario(session, *, blocker: str):
     entry = session.get(ConformerGroup, group).species_entry
     if blocker == "approved":
         _approve(session, SubmissionRecordType.conformer_observation, sp)
-    elif blocker == "evidence_of_a_thermo_target":
+    elif blocker in ("approved_thermo_evidence", "unapproved_thermo_evidence"):
         calc = session.scalars(select(Calculation).where(Calculation.conformer_observation_id == sp)).first()
-        _target_thermo(session, entry, session.get(ConformerGroup, group), [calc])
+        thermo = _target_thermo(session, entry, session.get(ConformerGroup, group), [calc])
+        if blocker == "approved_thermo_evidence":
+            _approve(session, SubmissionRecordType.thermo, thermo.id)
+    elif blocker == "statmech_evidence":
+        calc = session.scalars(select(Calculation).where(Calculation.conformer_observation_id == sp)).first()
+        _basin_declaration(session, entry, session.get(ConformerGroup, group), calc)
     elif blocker == "none_but_a_thermo_on_the_group":
         calc = session.scalars(
             select(Calculation).where(Calculation.conformer_observation_id == first["opt0"])
@@ -1072,7 +1077,7 @@ def _owed_refile_scenario(session, *, blocker: str):
     return entry.id, sp, group, _BUTANE, butane, deposit_observations
 
 
-@pytest.mark.parametrize("blocker", ["approved", "evidence_of_a_thermo_target"])
+@pytest.mark.parametrize("blocker", ["approved", "approved_thermo_evidence", "statmech_evidence"])
 def test_an_owed_re_file_creates_no_group_and_is_recorded_once(db_session, blocker: str) -> None:
     from app.services.conformer_basin_store import entries_with_pending_merges
 
@@ -1110,5 +1115,49 @@ def test_a_thermo_on_the_group_is_not_by_itself_a_reason_to_owe_the_move(db_sess
     assert session.get(ConformerObservation, sp).conformer_group_id != group
     assert _open_refiles(session) == []
     assert _empty_live_groups(session, entry_id) == []
+    again = reassign_conformer_groups(session, repair_revision=_REVISION, species_entry_ids=[entry_id])
+    assert again.entries_changed == 0, again.summary()
+
+
+def test_an_unapproved_thermo_resting_on_the_structure_moves_with_it_and_nothing_is_owed(db_session) -> None:
+    """The API role can move an unapproved thermo target, as an inline merge already does: the sp moves live, the
+    thermo follows the observation its calculation came from (D5), and a recompute straight after is a no-op."""
+    session = db_session
+    entry_id, sp, group, smiles, butane, deposit = _owed_refile_scenario(session, blocker="unapproved_thermo_evidence")
+    thermo_id = session.scalar(select(Thermo.id).where(Thermo.target_conformer_group_id == group))
+    for degrees in (-15.0, -30.0):
+        deposit(session, smiles, [butane(f"opt{degrees}", degrees)])
+    session.expire_all()
+    new_group = session.get(ConformerObservation, sp).conformer_group_id
+    assert new_group != group
+    assert session.get(Thermo, thermo_id).target_conformer_group_id == new_group
+    assert _open_refiles(session) == [] and _empty_live_groups(session, entry_id) == []
+    again = reassign_conformer_groups(session, repair_revision=_REVISION, species_entry_ids=[entry_id])
+    assert again.entries_changed == 0, again.summary()
+
+
+def test_a_selection_follows_when_a_provisional_group_is_emptied_by_a_re_file(db_session) -> None:
+    """opt 30; sp 0 (too far: its own provisional group) with a selection on it; opt 15 and opt 5 move the medoid to 15,
+    which the sp matches. The sp moves into the optimised group, its old group is emptied, and the selection goes with
+    it, the way an inline merge moves a selection."""
+    from tests.services.test_conformer_basin_linkage import _BUTANE, butane, deposit_observations
+
+    session = db_session
+    first = deposit_observations(session, _BUTANE, [butane("opt30", 30.0), butane("sp0", 0.0, "sp")])
+    optimised = session.get(ConformerObservation, first["opt30"]).conformer_group_id
+    provisional = session.get(ConformerObservation, first["sp0"]).conformer_group_id
+    assert optimised != provisional
+    entry_id = session.get(ConformerGroup, optimised).species_entry_id
+    selection = ConformerSelection(conformer_group_id=provisional, selection_kind="lowest_energy")
+    session.add(selection)
+    session.flush()
+    selection_id = selection.id
+
+    deposit_observations(session, _BUTANE, [butane("opt15", 15.0), butane("opt5", 5.0)])
+    session.expire_all()
+    assert session.get(ConformerObservation, first["sp0"]).conformer_group_id == optimised
+    assert session.get(ConformerGroup, provisional).merged_into_conformer_group_id == optimised
+    assert session.get(ConformerSelection, selection_id).conformer_group_id == optimised, "the selection stayed behind"
+    assert _open_refiles(session) == []
     again = reassign_conformer_groups(session, repair_revision=_REVISION, species_entry_ids=[entry_id])
     assert again.entries_changed == 0, again.summary()

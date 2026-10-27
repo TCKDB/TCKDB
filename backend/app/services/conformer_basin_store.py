@@ -41,7 +41,14 @@ from app.chemistry.basin_linkage import (
     file_non_defining,
 )
 from app.chemistry.basin_matching import BasinMatchParams
-from app.services.conformer_basin_moves import ReassignmentReport, clear_representative, ensure_review, reset_review
+from app.services.conformer_basin_moves import (
+    ReassignmentReport,
+    Repairs,
+    clear_representative,
+    ensure_review,
+    move_dependents,
+    reset_review,
+)
 from app.services.public_refs import make_opaque_ref
 
 logger = logging.getLogger(__name__)
@@ -321,26 +328,41 @@ def next_group_label(session: Session, entry_id: int) -> str:
     return f"conformer_{max(highest, len(labels)) + 1}"
 
 
-def group_has_dependents(session: Session, group_id: int) -> bool:
-    """Whether a thermo target or a statmech basin declaration or ensemble member points at this group."""
+def group_dependents_need_declared_repair(session: Session, group_id: int) -> bool:
+    """Whether moving what points at this group would write a row the API role may not write.
+
+    Only the rows a trigger refuses count: a statmech basin declaration or ensemble member (refused in every state), an
+    approved thermo target (an accepted root), a selection an accepted kinetics record cites. An unapproved thermo
+    target and an ordinary selection are moved by the API role, as an inline merge already does.
+    """
     return bool(
         session.execute(
             text(
-                "SELECT EXISTS (SELECT 1 FROM thermo WHERE target_conformer_group_id = :g) "
-                "OR EXISTS (SELECT 1 FROM statmech_model_declaration WHERE conformer_group_id = :g) "
-                "OR EXISTS (SELECT 1 FROM statmech_model_member WHERE conformer_group_id = :g)"
+                """
+                SELECT EXISTS (SELECT 1 FROM statmech_model_declaration WHERE conformer_group_id = :g)
+                    OR EXISTS (SELECT 1 FROM statmech_model_member WHERE conformer_group_id = :g)
+                    OR EXISTS (
+                        SELECT 1 FROM thermo t
+                          JOIN record_review r ON r.record_type = 'thermo' AND r.record_id = t.id
+                         WHERE t.target_conformer_group_id = :g AND r.first_approved_at IS NOT NULL)
+                    OR EXISTS (
+                        SELECT 1 FROM conformer_selection s
+                          JOIN kinetics_interpretation_assignment a ON a.conformer_selection_id = s.id
+                          JOIN record_review r ON r.record_type = 'kinetics' AND r.record_id = a.kinetics_id
+                         WHERE s.conformer_group_id = :g AND r.first_approved_at IS NOT NULL)
+                """
             ),
             {"g": group_id},
         ).scalar()
     )
 
 
-def observation_is_evidence_of_a_dependent(session: Session, observation_id: int, group_id: int) -> bool:
-    """Whether a thermo, statmech declaration or ensemble member filed on this group rests on this observation.
+def observation_is_evidence_of_a_frozen_dependent(session: Session, observation_id: int, group_id: int) -> bool:
+    """Whether a statmech declaration or member, or an approved thermo, filed on this group rests on this observation.
 
-    By D5 a dependent follows the observation its own calculations came from. A recompute that finds the observation
-    elsewhere moves the dependent with it, and a dependent may be frozen: a live move that left it behind would make
-    the recompute that follows do real work.
+    By D5 a dependent follows the observation its own calculations came from, so a recompute that finds the observation
+    elsewhere moves the dependent with it. A statmech record is frozen in every state and an approved thermo is an
+    accepted root, so the API role cannot move them; an UNAPPROVED thermo it can.
     """
     return bool(
         session.execute(
@@ -348,9 +370,11 @@ def observation_is_evidence_of_a_dependent(session: Session, observation_id: int
                 """
                 SELECT EXISTS (
                     SELECT 1 FROM thermo t
+                      JOIN record_review r ON r.record_type = 'thermo' AND r.record_id = t.id
                       JOIN thermo_source_calculation x ON x.thermo_id = t.id
                       JOIN calculation c ON c.id = x.calculation_id
                      WHERE t.target_conformer_group_id = :g AND c.conformer_observation_id = :o
+                       AND r.first_approved_at IS NOT NULL
                 ) OR EXISTS (
                     SELECT 1 FROM statmech_model_declaration d
                       JOIN statmech_source_calculation x ON x.statmech_id = d.statmech_id
@@ -390,19 +414,18 @@ def observation_is_accepted(session: Session, observation_id: int) -> bool:
 def live_move_refused(session: Session, observation_id: int, group_id: int, *, old_rep: int | None) -> str | None:
     """Why this role may not move a structure that defines nothing out of its group now, or ``None`` if it may.
 
-    The same principle as for a merge: a move is owed only when a write it makes would be refused (or would leave the
-    next recompute with real work). The move writes the observation's group (refused once the observation was ever
-    approved). A thermo or statmech record on the group is NOT by itself a reason: the move writes neither. Two things
-    make one matter: it rests on this very observation (D5 moves it with the observation, and it may be frozen), or this
-    observation is the group's representative and the dependent follows the representative when it has no evidence of
-    its own.
+    The same principle as for a merge: a move is owed only when a write it makes would be refused by a trigger. It writes
+    the observation's group (refused once the observation was ever approved) and, by D5, whatever rests on it moves with
+    it: statmech records (frozen in every state) and approved thermo targets (accepted roots). An unapproved thermo
+    target and a selection are moved here, the way an inline merge moves them. What follows the observation is what rests
+    on it as evidence, and, when the observation is the group's representative, everything with no evidence of its own.
     """
     if observation_is_accepted(session, observation_id):
         return "approved"
-    if observation_is_evidence_of_a_dependent(session, observation_id, group_id):
-        return "evidence_of_a_dependent"
-    if old_rep == observation_id and group_has_dependents(session, group_id):
-        return "representative_of_a_group_with_dependents"
+    if observation_is_evidence_of_a_frozen_dependent(session, observation_id, group_id):
+        return "evidence_of_a_frozen_dependent"
+    if old_rep == observation_id and group_dependents_need_declared_repair(session, group_id):
+        return "representative_of_a_group_with_frozen_dependents"
     return None
 
 
@@ -529,15 +552,44 @@ def refile_non_defining(
     report = ReassignmentReport()
     moved = 0
     touched: set[int] = set()
+    new_group_of = {o.id: o.group_id for o in observations}
+    old_group_of = dict(new_group_of)
     for o, basin in movers:
         session.execute(
             text("UPDATE conformer_observation SET conformer_group_id = :g WHERE id = :id"),
             {"g": basin.row, "id": o.id},
         )
+        new_group_of[o.id] = basin.row
         touched |= {o.group_id, basin.row}
         moved += 1
     if not moved:
         return 0
+    # What pointed at a group the moved structures left follows by D5, exactly as the recompute moves it: each record
+    # goes to the group holding the observation its own calculations came from, else with the group's representative
+    # (so a selection on an emptied group goes where the representative went).
+    fallback = {g.id: (new_group_of[old_rep(g.id)] if old_rep(g.id) in new_group_of else g.id) for g in groups}
+
+    def target_for(group_id: int, calculation_ids: Sequence[int], calc_observation: dict[int, int]) -> int:
+        holders = {
+            new_group_of[calc_observation[c]]
+            for c in calculation_ids
+            if c in calc_observation
+            and calc_observation[c] in new_group_of
+            and old_group_of.get(calc_observation[c]) == group_id
+        }
+        return next(iter(holders)) if len(holders) == 1 else fallback[group_id]
+
+    scheme_id = session.execute(
+        text("SELECT id FROM conformer_assignment_scheme WHERE is_default ORDER BY id DESC LIMIT 1")
+    ).scalar()
+    move_dependents(
+        session,
+        sorted({o.group_id for o, _ in movers}),
+        target_for=target_for,
+        repairs=Repairs(session, "live upload", report, enabled=False),
+        report=report,
+        scheme_id=scheme_id if scheme_id is not None else 0,
+    )
     for gid in sorted(touched):
         remaining = session.execute(
             text("SELECT count(*) FROM conformer_observation WHERE conformer_group_id = :g"), {"g": gid}

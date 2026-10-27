@@ -60,10 +60,16 @@ search_router = APIRouter(prefix="/conformers")
 _POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
 
+# GET: every declared search field plus the profile keys. Derived from the request model so a new filter cannot be
+# refused here by oversight, and a misspelt one is refused rather than ignored.
+_GET_ALLOWED_QS_KEYS: set[str] = set(ConformersSearchRequest.model_fields) | set(PROFILE_QUERY_KEYS)
+
+
 @search_router.get(
     "/search", response_model=ScientificConformersSearchResponse
 )
 def scientific_conformers_search_get(
+    request: Request,
     session: Session = Depends(get_db),
     species_ref: str | None = Query(None),
     species_entry_ref: str | None = Query(None),
@@ -115,6 +121,16 @@ def scientific_conformers_search_get(
     review knobs are not enough — see
     ``backend/docs/specs/scientific_conformer_reads.md``.
     """
+    unknown = set(request.query_params.keys()) - _GET_ALLOWED_QS_KEYS
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "unknown_query_parameter: query-string keys "
+                f"{sorted(unknown)!r} are not conformer search filters; "
+                "an unrecognised key is refused rather than ignored."
+            ),
+        )
     request_obj = ConformersSearchRequest(
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,

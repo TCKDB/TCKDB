@@ -355,6 +355,14 @@ def test_a_target_group_a_merge_emptied_is_forwarded_and_the_response_says_so(cl
     # asked for directly, nothing is forwarded
     direct = post(client, methane, {"target": {"kind": "single_conformer", "conformer_group_ref": survivor.public_ref}})
     assert direct.json()["forwarded_from_conformer_group_ref"] is None
+    # the manifest download says it too, and a manifest of a direct request carries no such key
+    manifest = post(client, methane, {"target": {"kind": "single_conformer", "conformer_group_ref": emptied.public_ref}}, manifest=True)
+    assert manifest.status_code == 200, manifest.text
+    request = manifest.json()["request"]
+    assert request["target"]["conformer_group_ref"] == survivor.public_ref
+    assert request["forwarded_from_conformer_group_ref"] == emptied.public_ref
+    direct_manifest = post(client, methane, {"target": {"kind": "single_conformer", "conformer_group_ref": survivor.public_ref}}, manifest=True)
+    assert "forwarded_from_conformer_group_ref" not in direct_manifest.json()["request"]
 
 
 def test_a_group_of_another_entry_is_refused(client, db_session, methane):

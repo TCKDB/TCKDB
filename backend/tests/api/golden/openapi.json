@@ -15509,7 +15509,8 @@
         "type": "object"
       },
       "ConformersSearchRequest": {
-        "description": "Service-layer request for /scientific/conformers/search.\n\nFilters AND-combine. At least one meaningful filter is required —\nrequests with only pagination / include / review knobs are rejected\nwith 422 ``missing_filter`` to avoid accidental public table scans.",
+        "additionalProperties": false,
+        "description": "Service-layer request for /scientific/conformers/search.\n\nFilters AND-combine. At least one meaningful filter is required —\nrequests with only pagination / include / review knobs are rejected\nwith 422 ``missing_filter`` to avoid accidental public table scans.\n\nA key the model does not declare is a 422 (``extra_forbidden``), never ignored: a misspelled filter would otherwise\nquietly widen the result.",
         "properties": {
           "assignment_scheme_ref": {
             "anyOf": [

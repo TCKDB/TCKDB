@@ -2805,3 +2805,15 @@ def test_search_wide_basin_keeps_the_route_order_and_the_review_floor(client, db
     # a review floor applies to the listed groups
     floor = client.get(_search_url(species_entry_ref=entry.public_ref, wide_basin="true", min_review_status="approved")).json()
     assert _refs(floor) == set()
+
+
+def test_search_refuses_an_unknown_key_on_get_and_in_the_post_body(client, db_session):
+    """A misspelt filter must not quietly widen the result (the filter would be ignored, the answer unfiltered)."""
+    entry, wide, tight, _ = _wide_basin_scene(db_session)
+    typo = client.get(_search_url(species_entry_ref=entry.public_ref, wide_basins="true"))
+    assert typo.status_code == 422 and "unknown_query_parameter" in typo.text and "wide_basins" in typo.text
+    posted = client.post(_search_url(), json={"species_entry_ref": entry.public_ref, "wide_basins": True})
+    assert posted.status_code == 422 and "extra_forbidden" in posted.text
+    # every declared filter and the profile keys are still accepted
+    ok = client.get(_search_url(species_entry_ref=entry.public_ref, wide_basin="true", profile="exploratory"))
+    assert ok.status_code == 200 and _refs(ok.json()) == {wide.public_ref}

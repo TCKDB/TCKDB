@@ -80,7 +80,7 @@ def select_statmech_models(
     """
     _refuse_unknown_query_keys(request)
     body, forwarded_from = forward_emptied_basin(session, body)
-    selection = run_selection(session, body=body)
+    selection = run_selection(session, body=body, forwarded_from=forwarded_from)
     payload = build_response(selection)
     payload.forwarded_from_conformer_group_ref = forwarded_from
     stamp_read_profile(payload)
@@ -100,8 +100,8 @@ def select_statmech_models_manifest(
 ) -> JSONResponse:
     """The same request, answered with the decision manifest as a download (a new snapshot, not a saved decision)."""
     _refuse_unknown_query_keys(request)
-    body, _forwarded_from = forward_emptied_basin(session, body)
-    selection = run_selection(session, body=body)
+    body, forwarded_from = forward_emptied_basin(session, body)
+    selection = run_selection(session, body=body, forwarded_from=forwarded_from)
     target_ref = selection.manifest["subject"]["entry_ref"]
     return JSONResponse(
         selection.manifest,

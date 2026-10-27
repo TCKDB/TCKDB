@@ -143,6 +143,7 @@ def run_selection(
     request = H298Request(
         target_kind=body.target.kind,
         conformer_group_id=group_id,
+        forwarded_from_conformer_group_ref=forwarded_from,
         min_review_status=body.min_review_status,
         admin_policy=_admin_policy(body.policy),
         filters=ThermoFilters(

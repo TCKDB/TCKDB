@@ -364,6 +364,10 @@ class StatmechRequest:
     bounds: SelectionBounds = field(default_factory=SelectionBounds)
     filters: StatmechFilters = field(default_factory=StatmechFilters)
     eligibility: Eligibility = field(default_factory=lambda: Eligibility(offered=OFFER_FINDINGS))
+    #: The conformer-group ref the caller named when that group had been merged into another and the request was
+    #: forwarded to the group that took its members (``target.scope`` names the survivor). Recorded in the manifest's
+    #: request, and only when set, so every other manifest is byte-for-byte what it was.
+    forwarded_from_conformer_group_ref: str | None = None
 
     # -- derived ---------------------------------------------------------------------------------------------
     @property
@@ -447,7 +451,13 @@ class StatmechRequest:
 
     # -- wire ------------------------------------------------------------------------------------------------
     def to_dict(self) -> dict[str, Any]:
+        forwarded = (
+            {"forwarded_from_conformer_group_ref": self.forwarded_from_conformer_group_ref}
+            if self.forwarded_from_conformer_group_ref is not None
+            else {}
+        )
         return {
+            **forwarded,
             "contract_version": CONTRACT_VERSION,
             "task": self.task.value,
             "intent": self.intent.value,
@@ -482,6 +492,7 @@ class StatmechRequest:
             bounds=SelectionBounds.from_dict(raw["bounds"]),
             filters=StatmechFilters.from_record(raw["filters"]),
             eligibility=Eligibility.from_record(raw["eligibility"], offered=OFFER_FINDINGS),
+            forwarded_from_conformer_group_ref=raw.get("forwarded_from_conformer_group_ref"),
         )
 
 
