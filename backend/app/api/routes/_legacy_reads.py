@@ -55,6 +55,19 @@ from app.services.scientific_read.sql_review import join_review, visible_review_
 
 T = TypeVar("T")
 
+#: Set on a legacy read that named a merged-away row and was answered with the row it was merged into.
+MERGED_FROM_HEADER = "X-TCKDB-Merged-From"
+
+
+def sub_response(response: Response):
+    """The response a detail read sets its header on.
+
+    A dependency, not a handler parameter: the legacy route class reads a ``Response`` parameter as "this is a bare
+    list that discloses what it hid" and documents that header, which a detail read does not carry.
+    """
+
+    return response
+
 ADMIN_LISTING_STATEMENT = (
     "Administrative listing: raw entity rows in stable id order. This is not the browse display order "
     "(review status, then deposition time), and it carries no scientific preference. Use the scientific reads for "

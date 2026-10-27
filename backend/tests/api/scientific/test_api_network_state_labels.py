@@ -35,6 +35,7 @@ from app.db.models.common import (
     NetworkStateKind,
     SpeciesEntryStateKind,
     StationaryPointKind,
+    StereoResolution,
 )
 from app.db.models.species import SpeciesEntry
 from tests.services.scientific_read._factories import (
@@ -66,6 +67,8 @@ def _entry(db_session, species, *, stereo_label: str | None) -> SpeciesEntry:
         species_id=species.id,
         kind=StationaryPointKind.minimum,
         stereo_label=stereo_label,
+        stereo_descriptor=stereo_label,
+        stereo_resolution=StereoResolution.resolved if stereo_label else None,
         electronic_state_kind=SpeciesEntryStateKind.ground,
     )
     db_session.add(row)

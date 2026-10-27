@@ -60,14 +60,14 @@ def _entry(db_session, *, smiles: str = "CC"):
 
 
 def test_search_by_smiles_returns_calculations(db_session):
-    species, entry = _entry(db_session, smiles="C[CH2]")
+    species, entry = _entry(db_session, smiles="[CH2]C")
     calc = make_calculation(
         db_session, type=CalculationType.sp, species_entry_id=entry.id
     )
 
     response = search_species_calculations(
         db_session,
-        SpeciesCalculationsSearchRequest(smiles="C[CH2]"),
+        SpeciesCalculationsSearchRequest(smiles="[CH2]C"),
     )
 
     assert len(response.records) == 1
@@ -875,12 +875,12 @@ def test_sp_calc_with_no_output_geometry_returns_empty_output_geometries(
     locks in the behavior so a future refactor doesn't accidentally
     fabricate an output geometry for SP.
     """
-    _, entry = _entry(db_session, smiles="SPNO")
+    _, entry = _entry(db_session, smiles="CS")
     sp = make_calculation(
         db_session, type=CalculationType.sp, species_entry_id=entry.id
     )
     response = search_species_calculations(
-        db_session, SpeciesCalculationsSearchRequest(smiles="SPNO")
+        db_session, SpeciesCalculationsSearchRequest(smiles="CS")
     )
     matching = [
         r

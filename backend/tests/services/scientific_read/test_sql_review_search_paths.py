@@ -95,7 +95,7 @@ _ENTRY_ID_BASE = 9_000_000
 #: * they are written to the heap in *this* order, so a sequential or bitmap
 #:   scan returns the ids shuffled;
 #: * their stereo labels ascend as their ids descend, so an index scan over
-#:   ``uq_species_entry_species_id`` — which is ``(species_id, stereo_label,
+#:   ``uq_species_entry_species_id`` — which is ``(species_id, stereo_descriptor, …, term_symbol,
 #:   …)``, and is what the planner actually picks here — returns them
 #:   reversed.
 _ENTRY_ORDER_FIXTURE = (
@@ -543,7 +543,7 @@ def test_species_entries_within_a_record_are_ordered_by_id(db_session):
         db_session.execute(
             text(
                 "INSERT INTO species_entry (id, species_id, kind, "
-                "electronic_state_kind, stereo_label) "
+                "electronic_state_kind, term_symbol) "
                 "VALUES (:id, :species_id, 'minimum', 'ground', :label)"
             ),
             {
@@ -553,7 +553,7 @@ def test_species_entries_within_a_record_are_ordered_by_id(db_session):
                 "species_id": species.id,
                 # ``uq_species_entry_species_id`` treats NULLs as equal, so
                 # the entries of one species must differ somewhere. The
-                # stereo label is the cheapest axis and is not filtered on.
+                # term symbol is the cheapest axis and is not filtered on.
                 "label": stereo_label,
             },
         )

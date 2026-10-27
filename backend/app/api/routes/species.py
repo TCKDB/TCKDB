@@ -15,11 +15,13 @@ from app.api.deps import (
 )
 from app.api.errors import NotFoundError
 from app.api.routes._legacy_reads import (
+    MERGED_FROM_HEADER,
     EntityListResponse,
     LegacyReadRoute,
     LegacyVisibility,
     disclose_in_header,
     entity_page,
+    sub_response,
 )
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
@@ -53,6 +55,7 @@ from app.schemas.entities.species_entry_review import (
 from app.schemas.entities.statmech import StatmechRead
 from app.schemas.entities.thermo import ThermoRead
 from app.schemas.entities.transport import TransportRead
+from app.services.scientific_read.structure_query import constitution_smiles
 from app.services.species_entry_review import (
     create_species_entry_review,
     list_species_entry_reviews,
@@ -76,9 +79,9 @@ def list_species(
     multiplicity: int | None = Query(None),
     kind: MoleculeKind | None = Query(None),
 ):
-    base = select(Species.id)
+    base = select(Species.id).where(Species.merged_into_species_id.is_(None))
     if smiles is not None:
-        base = base.where(Species.smiles == smiles)
+        base = base.where(Species.smiles == constitution_smiles(smiles))
     if inchi_key is not None:
         base = base.where(Species.inchi_key == inchi_key)
     if charge is not None:
@@ -107,10 +110,14 @@ def list_species(
 
 
 @router.get("/{species_id}", response_model=SpeciesRead)
-def get_species(species_id: int, session: Session = Depends(get_db)):
+def get_species(species_id: int, session: Session = Depends(get_db), marker=Depends(sub_response)):
     species = session.get(Species, species_id)
     if species is None:
         raise NotFoundError("Species not found")
+    # A species merged into another is kept for its ref and answers as the one it was merged into (DR-0038).
+    if species.merged_into_species_id is not None:
+        marker.headers[MERGED_FROM_HEADER] = species.public_ref
+        species = session.get(Species, species.merged_into_species_id)
     return SpeciesRead.model_validate(species)
 
 
@@ -121,6 +128,15 @@ def get_species(species_id: int, session: Session = Depends(get_db)):
 entries_router = APIRouter(route_class=LegacyReadRoute)
 #: The write route of the species-entries path: no read profile applies to it.
 entries_write_router = APIRouter()
+
+
+def _forward_entry(session: Session, entry: SpeciesEntry, response: Response) -> SpeciesEntry:
+    """The entry a species entry stands for: itself, or (one hop) the entry it was merged into, said in a header."""
+
+    if entry.merged_into_species_entry_id is None:
+        return entry
+    response.headers[MERGED_FROM_HEADER] = entry.public_ref
+    return session.get(SpeciesEntry, entry.merged_into_species_entry_id)
 
 
 def _species_entry_conformer_summary(
@@ -160,7 +176,7 @@ def _species_entry_conformer_summary(
 
 @entries_router.get("/{entry_id}", response_model=SpeciesEntryRead)
 def get_species_entry(
-    entry_id: int, session: Session = Depends(get_db), visibility: LegacyVisibility = Depends()
+    entry_id: int, session: Session = Depends(get_db), visibility: LegacyVisibility = Depends(), marker=Depends(sub_response)
 ):
     """Return one species entry with a compact conformer summary.
 
@@ -170,6 +186,8 @@ def get_species_entry(
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
+    entry = _forward_entry(session, entry, marker)
+    entry_id = entry.id
     # Entries are scoping parents: never gated here (nor on their sub-routes, filters or pointers).
     read = SpeciesEntryRead.model_validate(entry)
     read.conformer_summary = _species_entry_conformer_summary(session, entry_id, visibility)
@@ -195,6 +213,8 @@ def list_conformer_groups_for_entry(
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
+    entry = _forward_entry(session, entry, response)
+    entry_id = entry.id
 
     obs_count_sq = visibility.restrict(
         select(
@@ -254,6 +274,8 @@ def list_conformers_for_entry(
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
+    entry = _forward_entry(session, entry, response)
+    entry_id = entry.id
     matched = (
         select(ConformerObservation.id)
         .join(ConformerGroup, ConformerGroup.id == ConformerObservation.conformer_group_id)
@@ -292,6 +314,8 @@ def list_thermo_for_entry(
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
+    entry = _forward_entry(session, entry, response)
+    entry_id = entry.id
     disclose_in_header(
         response,
         visibility.hidden(
@@ -321,6 +345,8 @@ def list_statmech_for_entry(
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
+    entry = _forward_entry(session, entry, response)
+    entry_id = entry.id
     disclose_in_header(
         response,
         visibility.hidden(
@@ -350,6 +376,8 @@ def list_transport_for_entry(
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
+    entry = _forward_entry(session, entry, response)
+    entry_id = entry.id
     disclose_in_header(
         response,
         visibility.hidden(

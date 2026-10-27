@@ -697,7 +697,9 @@ def _resolve_species_list(
             code = REACTANT_NOT_FOUND if role == "reactant" else PRODUCT_NOT_FOUND
             mb.add(code, f"{role}[{i}] '{smi}': {e}")
             return None
-        sp = session.scalar(select(Species).where(Species.inchi_key == inchi_key))
+        sp = session.scalar(
+            select(Species).where(Species.inchi_key == inchi_key, Species.merged_into_species_id.is_(None))
+        )
         if sp is None:
             code = REACTANT_NOT_FOUND if role == "reactant" else PRODUCT_NOT_FOUND
             mb.add(code, f"{role}[{i}] '{smi}' not found in database")
@@ -736,7 +738,10 @@ def _resolve_reaction(
         reversible=reversible, reactants=r_stoich, products=p_stoich,
     )
     chem_rxn = session.scalar(
-        select(ChemReaction).where(ChemReaction.stoichiometry_hash == stoi_hash)
+        select(ChemReaction).where(
+            ChemReaction.stoichiometry_hash == stoi_hash,
+            ChemReaction.merged_into_chem_reaction_id.is_(None),
+        )
     )
     if chem_rxn is None:
         mb.add(REACTION_IDENTITY_NONE, "no reaction with this stoichiometry exists")
@@ -867,7 +872,7 @@ def lookup_species(
         return _respond(query, mb)
 
     species = session.scalar(
-        select(Species).where(Species.inchi_key == inchi_key)
+        select(Species).where(Species.inchi_key == inchi_key, Species.merged_into_species_id.is_(None))
     )
     if species is None:
         mb.add(SPECIES_IDENTITY_NONE, "no species with this InChI key exists")
@@ -875,7 +880,9 @@ def lookup_species(
 
     mb.add(SPECIES_IDENTITY_EXACT, "species identity matched exactly by InChI key")
 
-    entries_stmt = select(SpeciesEntry).where(SpeciesEntry.species_id == species.id)
+    entries_stmt = select(SpeciesEntry).where(
+        SpeciesEntry.species_id == species.id, SpeciesEntry.merged_into_species_entry_id.is_(None)
+    )
     entries_hidden = visibility.hidden(
         session,
         SubmissionRecordType.species_entry,
@@ -1155,7 +1162,7 @@ def lookup_species_calculation(
         return _respond(query_echo, mb)
 
     species = session.scalar(
-        select(Species).where(Species.inchi_key == inchi_key)
+        select(Species).where(Species.inchi_key == inchi_key, Species.merged_into_species_id.is_(None))
     )
     if species is None:
         mb.add(SPECIES_IDENTITY_NONE, "species identity not found")
@@ -1173,7 +1180,9 @@ def lookup_species_calculation(
     ))
 
     # Step 2: every entry of the species. None is picked: the calculations of all of them are searched.
-    entries_stmt = select(SpeciesEntry).where(SpeciesEntry.species_id == species.id)
+    entries_stmt = select(SpeciesEntry).where(
+        SpeciesEntry.species_id == species.id, SpeciesEntry.merged_into_species_entry_id.is_(None)
+    )
     entries_hidden = visibility.hidden(
         session,
         SubmissionRecordType.species_entry,

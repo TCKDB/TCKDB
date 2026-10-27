@@ -58,7 +58,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from tckdb_schemas.enthalpy_reference import (
     ENTHALPY_REFERENCE_MIXED,
@@ -486,7 +486,9 @@ def _resolve_species_entry_ids(
     if species_refs:
         for ref in species_refs:
             se_id = session.scalar(
-                select(SpeciesEntry.id).where(SpeciesEntry.public_ref == ref)
+                select(func.coalesce(SpeciesEntry.merged_into_species_entry_id, SpeciesEntry.id)).where(
+                    SpeciesEntry.public_ref == ref  # a merged-away entry stands for the one it was merged into
+                )
             )
             if se_id is None:
                 raise ValueError(
@@ -496,7 +498,9 @@ def _resolve_species_entry_ids(
 
     if all_species:
         all_ids = session.scalars(
-            select(SpeciesEntry.id).order_by(SpeciesEntry.id)
+            select(SpeciesEntry.id)
+            .where(SpeciesEntry.merged_into_species_entry_id.is_(None))
+            .order_by(SpeciesEntry.id)
         ).all()
         if len(all_ids) > all_cap:
             # The ML surface's own cap, and the same disclosure call as

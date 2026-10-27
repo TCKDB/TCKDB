@@ -1033,7 +1033,8 @@ def _resolve_chem_reaction(
     )
     chem_reaction = session.scalar(
         select(ChemReaction).where(
-            ChemReaction.stoichiometry_hash == stoichiometry_hash
+            ChemReaction.stoichiometry_hash == stoichiometry_hash,
+            ChemReaction.merged_into_chem_reaction_id.is_(None),
         )
     )
     if chem_reaction is not None:
@@ -1098,7 +1099,10 @@ def _resolve_chem_reaction(
             session.flush()
     except IntegrityError:
         chem_reaction = session.scalar(
-            select(ChemReaction).where(ChemReaction.stoichiometry_hash == stoichiometry_hash)
+            select(ChemReaction).where(
+                ChemReaction.stoichiometry_hash == stoichiometry_hash,
+                ChemReaction.merged_into_chem_reaction_id.is_(None),
+            )
         )
 
     return chem_reaction
@@ -1111,7 +1115,8 @@ def _reaction_with_hash(session: Session, *, reversible: bool, reactants: Mappin
     return session.scalar(
         select(ChemReaction).where(
             ChemReaction.stoichiometry_hash
-            == reaction_stoichiometry_hash(reversible=reversible, reactants=reactants, products=products)
+            == reaction_stoichiometry_hash(reversible=reversible, reactants=reactants, products=products),
+            ChemReaction.merged_into_chem_reaction_id.is_(None),
         )
     )
 

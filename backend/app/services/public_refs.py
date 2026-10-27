@@ -249,7 +249,11 @@ def _canonical_lot(obj: Any) -> str:
 def _canonical_species(obj: Any) -> str:
     """Species identity: ``(smiles, charge, multiplicity, stereo_kind)``.
 
-    Must track the species dedup key (DR-0031). Keying the public ref on
+    Must track the species dedup key (DR-0031). ``smiles`` is the stereo-blind
+    constitution key (DR-0038): a stereo mark never reaches it, so the ref does
+    not move with how much stereo a depositor wrote. Rows keyed under the old
+    rule keep the ref they were given (a ref is a citation, never recomputed).
+    Keying the public ref on
     ``inchi_key`` instead of the canonical ``smiles`` would collide the
     refs of standard-InChIKey-merged tautomers (2-pyridone vs
     2-hydroxypyridine), which are now distinct species.

@@ -4,31 +4,31 @@
   "algorithm": 6,
   "pins": {
     "computed_calculation": {
-      "1": "d31242c449c123d139929275cf14d35a6ed6df6f81f4cf1b6be4545b1ee67dbb"
+      "1": "642ddc060abe6d3e806e9edff92b2623eee2bf45293047c52c81478d34f301eb"
     },
     "computed_kinetics": {
-      "1": "6bbfb7306edf07e3530f924b64673b53c129edc3791582a29b14e596934ff0a5"
+      "1": "e238e043fb023aff7b40a3a2838f345298a88c3f82610e6fb12037af3b8d9702"
     },
     "computed_statmech": {
-      "1": "c19590c56e1e1bc806afa368cb79408364ebac4066c641624984a792ef70f04c"
+      "1": "7fe4bf00f4230fc337159af1500191be266ec44d4fe7a6a2c65f20fd958d204d"
     },
     "computed_thermo": {
-      "1": "28e638f09e687fce82fcc274d372e97cdcc938dad8acbafa2b598c6d803a0c91"
+      "1": "c1fdf07bcf116692bfde62e27546b76222f8d9336423bf66dece5ec83220be45"
     },
     "computed_transition_state": {
-      "2": "141366a16f1ce561a969be2963ab318fe9acae2095b1d4b74c972800dc54425e"
+      "2": "e4ba069ddb24e40b090741bc35f27d9166c79decdeb9e19d394c07968d71ef81"
     },
     "computed_transport": {
-      "1": "1b5a1f833dc867aff540eddc5e123a5d6fa3cb0d320e90b7a931e94f7a158676"
+      "1": "23d1baed9a538453e07c4a75a53c8c9170ad5e60b0f9abbe5cd92846e8728fc9"
     },
     "computed_ts_statmech": {
-      "1": "6e5103f9a711d2e75c5f7ed11e568a30f806515d78876cc3cc8227b994b42aa5"
+      "1": "f969c099b3f65bb3e491719032b0bdbb8100bf8126477243d58825edc1f3cd8f"
     },
     "tckdb_reproducibility": {
-      "1": "2336d7c82155eadec0f24c32ee99f266179bfa1f33ef8df531cec992e9f9607c"
+      "1": "53210334c9470a6da9d482ffcb1c96596bd1f8278be6fa2588a44c40487e1648"
     },
     "tckdb_reproducibility_ts_statmech": {
-      "1": "c066b8a4362f17c55d1422f293dac76f25a8c6faf7b72e4794250b926afa7cb1"
+      "1": "5bc446bd0400a48cea1ef86119d40b023b529cf38a34f10d5d2ad8ddd16930c0"
     }
   },
   "unbumped_overrides": [
@@ -122,6 +122,51 @@
       "name": "computed_transition_state",
       "version": 2,
       "reason": "method_family_matches now tests the stem inside one fenced subquery (second change to the same SQL shape); same matches, NULL still matches nothing, smaller SQL; stored and read-time verdicts unchanged"
+    },
+    {
+      "name": "computed_calculation",
+      "version": 1,
+      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+    },
+    {
+      "name": "computed_kinetics",
+      "version": 1,
+      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+    },
+    {
+      "name": "computed_statmech",
+      "version": 1,
+      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+    },
+    {
+      "name": "computed_thermo",
+      "version": 1,
+      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+    },
+    {
+      "name": "computed_transport",
+      "version": 1,
+      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+    },
+    {
+      "name": "computed_ts_statmech",
+      "version": 1,
+      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+    },
+    {
+      "name": "tckdb_reproducibility",
+      "version": 1,
+      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+    },
+    {
+      "name": "tckdb_reproducibility_ts_statmech",
+      "version": 1,
+      "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
     }
   ]
 }

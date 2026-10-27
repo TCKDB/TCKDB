@@ -27,11 +27,14 @@ from typing import Mapping, Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.chemistry.species import canonical_isotope_key, canonical_species_identity
+from app.api.error_contract import CodedValueError
+from app.chemistry.species import (
+    canonical_species_identity,
+)
 from app.db.models.literature import Literature
 from app.db.models.reaction import ChemReaction
 from app.db.models.software import Software, SoftwareRelease
-from app.db.models.species import Species, SpeciesEntry
+from app.db.models.species import Species
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.contribution_bundle_dry_run import (
     ContributionBundleDryRunItem,
@@ -54,7 +57,7 @@ from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.literature_metadata import normalize_doi, normalize_isbn
 from app.services.reaction_resolution import inherit_reversible, reaction_stoichiometry_hash
 from app.services.software_resolution import normalize_software_name
-from app.services.species_resolution import null_safe_equals
+from app.services.species_resolution import find_species, find_species_entry, null_safe_equals, resolve_entry_stereo
 
 # ---------------------------------------------------------------------------
 # Public entry point
@@ -345,22 +348,39 @@ def _preview_species_entry_identity(
             None,
         )
 
-    species = session.scalar(
-        select(Species).where(Species.inchi_key == inchi_key)
-    )
+    # The same lookup and the same stereo resolution submit performs (DR-0038): a preview that named a different row
+    # than the real import would not be a preview. These upload routes deposit no geometry of their own, so the stereo
+    # comes from the marks and a supplied label.
+    species = find_species(session, payload)
 
     species_item = ContributionBundleDryRunItem(
         record_type=DryRunRecordType.species,
         action=DryRunAction.would_reuse if species is not None else DryRunAction.would_create,
         reason=(
-            "A species with this InChIKey already exists on the hosted instance."
+            "A species with this identity already exists on the hosted instance."
             if species is not None
-            else "No species with this InChIKey exists yet; one would be created during real import."
+            else "No species with this identity exists yet; one would be created during real import."
         ),
         local_ref=local_ref,
         target=canonical_smiles,
         hosted_identity={"inchi_key": inchi_key},
     )
+
+    try:
+        previewed_stereo = resolve_entry_stereo(payload)
+    except (CodedValueError, ValueError) as exc:
+        return (
+            [
+                species_item,
+                ContributionBundleDryRunItem(
+                    record_type=DryRunRecordType.species_entry,
+                    action=DryRunAction.error,
+                    reason=f"Could not resolve species-entry stereochemistry: {exc}",
+                    local_ref=local_ref,
+                ),
+            ],
+            species,
+        )
 
     if species is None:
         # Without a Species row, a SpeciesEntry by definition cannot exist.
@@ -377,23 +397,7 @@ def _preview_species_entry_identity(
         )
         return [species_item, species_entry_item], None
 
-    species_entry = session.scalar(
-        select(SpeciesEntry).where(
-            SpeciesEntry.species_id == species.id,
-            SpeciesEntry.kind == payload.species_entry_kind,
-            null_safe_equals(SpeciesEntry.stereo_label, payload.stereo_label),
-            SpeciesEntry.electronic_state_kind == payload.electronic_state_kind,
-            null_safe_equals(
-                SpeciesEntry.electronic_state_label,
-                payload.electronic_state_label,
-            ),
-            null_safe_equals(SpeciesEntry.term_symbol, payload.term_symbol),
-            null_safe_equals(
-                SpeciesEntry.isotope_key,
-                canonical_isotope_key(payload.smiles),
-            ),
-        )
-    )
+    species_entry = find_species_entry(session, species, payload, previewed_stereo)
 
     species_entry_item = ContributionBundleDryRunItem(
         record_type=DryRunRecordType.species_entry,
@@ -472,7 +476,8 @@ def _preview_chem_reaction(
     )
     chem_reaction = session.scalar(
         select(ChemReaction).where(
-            ChemReaction.stoichiometry_hash == stoichiometry_hash
+            ChemReaction.stoichiometry_hash == stoichiometry_hash,
+            ChemReaction.merged_into_chem_reaction_id.is_(None),
         )
     )
     if chem_reaction is not None:

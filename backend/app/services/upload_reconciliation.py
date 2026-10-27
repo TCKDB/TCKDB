@@ -10,6 +10,8 @@ No database dependencies — pure functions only.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from tckdb_schemas.stationary_point import (
     TS_IMAGINARY_FREQUENCY_MIN_CM1,
     W_N_IMAG_CONTRADICTS_MINIMUM,
@@ -24,6 +26,7 @@ from tckdb_schemas.stationary_point import (
     warning_findings,
 )
 
+from app.api.error_contract import CodedValueError
 from app.chemistry.atomic_ground_terms import (
     declared_term_multiplicity,
     ground_term_for,
@@ -34,6 +37,7 @@ from app.schemas.fragments.calculation import (
     CalculationWithResultsPayload,
     FreqResultPayload,
 )
+from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.conformer_upload import ConformerUploadStatmechPayload
@@ -468,11 +472,32 @@ def term_symbol_warnings(payload: SpeciesEntryIdentityPayload) -> list[UploadWar
 # ---------------------------------------------------------------------------
 
 
+def stereo_unresolved_warnings(
+    payload: SpeciesEntryIdentityPayload,
+    geometries: Sequence[GeometryPayload] = (),
+) -> list[UploadWarning]:
+    """``species_entry_stereo_unresolved`` for the entry this request would store, if any element stays unknown.
+
+    Derived from the request alone and by the same resolution submit runs
+    (:func:`app.services.species_resolution.resolve_entry_stereo`), so the warning predicts exactly what is stored.
+    A request submit would refuse earns no warning here; the refusal says why.
+    """
+    from app.services.species_resolution import resolve_entry_stereo, stereo_unresolved_warning
+
+    try:
+        resolved = resolve_entry_stereo(payload, geometries)
+    except (CodedValueError, ValueError):
+        return []
+    warning = stereo_unresolved_warning(resolved)
+    return [] if warning is None else [warning]
+
+
 def reconcile_species_entry(
     payload: SpeciesEntryIdentityPayload,
     *,
     freq_n_imag: int | None = None,
     freq_imag_freq_cm1: float | None = None,
+    geometries: Sequence[GeometryPayload] = (),
 ) -> list[UploadWarning]:
     """Layer 1: reconcile using only freq n_imag (no calculation context).
 
@@ -485,6 +510,7 @@ def reconcile_species_entry(
         mode too stiff to be anything but a reaction coordinate.
     """
     warnings: list[UploadWarning] = list(term_symbol_warnings(payload))
+    warnings.extend(stereo_unresolved_warnings(payload, geometries))
     if freq_n_imag is not None:
         warnings.extend(
             _check_n_imag(
@@ -521,6 +547,11 @@ def reconcile_species_entry_full(
     :returns: List of warnings (may be empty).
     """
     warnings: list[UploadWarning] = list(term_symbol_warnings(payload))
+    warnings.extend(
+        stereo_unresolved_warnings(
+            payload, [GeometryPayload(xyz_text=reference_xyz_text)] if reference_xyz_text else ()
+        )
+    )
     additional = additional_calcs or []
 
     # Layer 1: structural n_imag checks
@@ -625,5 +656,6 @@ __all__ = [
     "reconcile_species_entry",
     "reconcile_species_entry_full",
     "stationary_point_warnings",
+    "stereo_unresolved_warnings",
     "term_symbol_warnings",
 ]

@@ -3802,6 +3802,7 @@ class TCKDBClient:
         query_inchi_key: str | None = None,
         mode: str | None = None,
         similarity_threshold: float | None = None,
+        isomeric: bool | None = None,
         min_review_status: str | None = None,
         include_rejected: bool | None = None,
         include_deprecated: bool | None = None,
@@ -3821,6 +3822,11 @@ class TCKDBClient:
         rather than requiring the caller to already know what it wants.
         Defaults to POST because SMARTS is full of characters that
         round-trip badly through a query string.
+
+        A species is a constitution, so ``C/C=C/C`` and ``CC=CC`` find the
+        same species. ``isomeric=True`` (exact mode, ``query_smiles``) keeps
+        only the entries whose stereo descriptor is the one the query's
+        stereo marks name -- the E entries of 2-butene for ``C/C=C/C``.
         """
 
         body = {
@@ -3830,6 +3836,7 @@ class TCKDBClient:
             "query_inchi_key": query_inchi_key,
             "mode": mode,
             "similarity_threshold": similarity_threshold,
+            "isomeric": isomeric,
             "min_review_status": min_review_status,
             "include_rejected": include_rejected,
             "include_deprecated": include_deprecated,

@@ -27,13 +27,13 @@ from tests.services.scientific_read._factories import (
 
 
 def test_search_by_smiles_returns_canonical_species(db_session):
-    species = make_species(db_session, smiles="C[CH2]", multiplicity=2)
+    species = make_species(db_session, smiles="[CH2]C", multiplicity=2)
     make_species_entry(db_session, species)
 
-    response = search_species(db_session, SpeciesSearchRequest(smiles="C[CH2]"))
+    response = search_species(db_session, SpeciesSearchRequest(smiles="[CH2]C"))
 
     assert len(response.records) == 1
-    assert response.records[0].canonical_smiles == "C[CH2]"
+    assert response.records[0].canonical_smiles == "[CH2]C"
     assert response.records[0].species_id == species.id
 
 

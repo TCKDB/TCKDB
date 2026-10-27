@@ -33,6 +33,7 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
     StereoKind,
+    StereoResolution,
 )
 from app.schemas.reads.scientific_common import (
     CursorToken,
@@ -148,6 +149,9 @@ class ScientificSpeciesStructureSearchRecord(BaseModel):
     species_entry_kind: StationaryPointKind
     electronic_state_kind: SpeciesEntryStateKind
     stereo_label: str | None = None
+    stereo_descriptor: str | None = None
+    stereo_resolution: StereoResolution | None = None
+    stereo_smiles: str | None = None
     electronic_state_label: str | None = None
     term_symbol: str | None = None
     isotope_key: str | None = None
@@ -183,6 +187,12 @@ class ScientificSpeciesStructureSearchRequest(BaseModel):
     similarity_threshold: float | None = Field(
         default=None, ge=0.0, le=1.0
     )
+    #: Entry-level isomeric search (``exact`` mode with ``query_smiles``): keep
+    #: only the entries whose stereo descriptor equals the one the query's
+    #: stereo marks specify, so ``C/C=C/C`` finds the E entries of 2-butene and
+    #: not the Z or unresolved ones. Species identity is stereo-blind (DR-0038),
+    #: so without it every stereo entry of the species is returned.
+    isomeric: bool = False
 
     # Trust / review filters mirror the other scientific search surfaces.
     min_review_status: RecordReviewStatus | None = None

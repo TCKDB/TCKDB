@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.176.0 - 2026-10-27
+
+A species entry's stereo is a descriptor; the species is the constitution.
+
+- Requires `tckdb-schemas>=0.138.0`: `stereo_label` accepts descriptor tokens only (`R S r s E Z e z - ?`, one per stereo element). Free text such as `"trans"`
+  is refused before the request is sent.
+- Reads: the species-entry types gain `stereo_descriptor`, `stereo_resolution` and `stereo_smiles`; `stereo_label` is now the display text of the descriptor
+  (null while nothing is resolved). Exact structure search takes `isomeric`.
+- Two refusal codes are published (`species_stereo_contradiction`, `species_stereo_label_invalid`). Allenes and longer cumulenes are accepted with a `?`
+  axis and the upload warning `species_entry_stereo_not_represented` (a different code from `species_entry_stereo_unresolved`: no further data would settle it).
+
 ## 0.175.0 - 2026-10-27
 
 The README and docstrings describe the `curated` profile as it works.

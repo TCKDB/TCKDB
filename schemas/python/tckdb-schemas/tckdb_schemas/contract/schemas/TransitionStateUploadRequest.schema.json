@@ -3944,7 +3944,7 @@
     },
     "SpeciesEntryIdentityPayload": {
       "additionalProperties": false,
-      "description": "Reusable upload fragment for resolved species-entry identity.\n\n:param species_entry_kind: Stationary-point kind for the resolved entry.\n:param unmapped_smiles: Optional display/search SMILES for the resolved entry.\n:param stereo_kind: Stereo classification for the resolved entry.\n:param stereo_label: Optional stereo label such as ``R`` or ``E``.\n:param electronic_state_kind: Electronic-state classification.\n:param electronic_state_label: Optional state label such as ``X`` or ``A``.\n:param term_symbol_raw: Optional raw uploaded term symbol.\n:param term_symbol: Optional canonicalized term symbol.\n\nIsotopic resolution is *not* a field on this payload. It is derived\nserver-side from the atom-resolved isotope labels in ``smiles`` (see\n``SpeciesIdentityPayload.smiles``). The former free-text\n``isotopologue_label`` has been removed: an arbitrary string could mint\ntwo species identities that no scientific content distinguished, and a\nderived key may never be accepted from an uploader.",
+      "description": "Reusable upload fragment for resolved species-entry identity.\n\n:param species_entry_kind: Stationary-point kind for the resolved entry.\n:param unmapped_smiles: Optional display/search SMILES for the resolved entry.\n:param stereo_kind: Stereo classification for the resolved entry.\n:param stereo_label: Optional stereo descriptor in the closed vocabulary\n    ``R``/``S``/``r``/``s`` (lower case: a pseudo-asymmetric centre)/``E``/``Z``/``-`` (an\n    element that is not stereogenic in this configuration)/``?``, one comma-separated\n    token per potential stereo element in canonical order (``E``, ``R,S``, ``E,?``). Free text\n    such as ``\"trans\"`` is refused. It fills only the elements the geometry\n    and the SMILES marks leave unresolved and is cross-checked where they\n    exist; the server decides whether it fits the molecule.\n:param electronic_state_kind: Electronic-state classification.\n:param electronic_state_label: Optional state label such as ``X`` or ``A``.\n:param term_symbol_raw: Optional raw uploaded term symbol.\n:param term_symbol: Optional canonicalized term symbol.\n\nIsotopic resolution is *not* a field on this payload. It is derived\nserver-side from the atom-resolved isotope labels in ``smiles`` (see\n``SpeciesIdentityPayload.smiles``). The former free-text\n``isotopologue_label`` has been removed: an arbitrary string could mint\ntwo species identities that no scientific content distinguished, and a\nderived key may never be accepted from an uploader.",
       "properties": {
         "charge": {
           "title": "Charge",
@@ -3992,7 +3992,7 @@
         "stereo_label": {
           "anyOf": [
             {
-              "maxLength": 64,
+              "maxLength": 512,
               "type": "string"
             },
             {
