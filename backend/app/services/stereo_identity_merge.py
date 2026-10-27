@@ -63,6 +63,7 @@ from sqlalchemy.orm import Session
 from app.api.error_contract import CodedValueError
 from app.chemistry import stereo
 from app.chemistry.species import classify_stereo_kind, identity_mol_from_smiles, strip_isotopes
+from app.db.models.common import StereoKind
 from app.services.conformer_reassignment import (
     OBSERVATION_COLUMNS,
     STATMECH_DECLARATION_COLUMNS,
@@ -129,6 +130,10 @@ class MergeReport:
 
     species_examined: int = 0
     species_rekeyed: int = 0
+    #: Entries whose symmetry is past the automorphism cap: the elements inside their symmetry classes are stated as ``?``.
+    symmetry_capped: list[str] = field(default_factory=list)
+    #: Species whose ``stereo_kind`` now follows the explicit-hydrogen perception (chiral radicals, allenes).
+    species_reclassified: int = 0
     species_unparseable: int = 0
     species_merged: int = 0
     reactions_rehashed: int = 0
@@ -155,6 +160,7 @@ class MergeReport:
             f"{counts}, repairs_declared={self.repairs_declared}, "
             f"contradictions_left_for_curation={self.contradictions}, "
             f"stereo_unsupported={self.unsupported}, "
+            f"symmetry_past_cap_entries={self.symmetry_capped}, "
             f"labels_not_carried={self.uncarried_labels}, "
             f"left_on_merged_rows(table, column, rows)={self.left_on_merged_rows}, "
             f"merged(record, merged_ref, into_ref)={self.merged_refs}, "
@@ -339,6 +345,13 @@ class _Entry:
     key: tuple
 
 
+def _species_ref(smiles: str, charge: int, multiplicity: int, stereo_kind: str) -> str:
+    return make_content_ref(
+        PREFIXES["Species"],
+        f"species:smiles={smiles};charge={charge};multiplicity={multiplicity};stereo_kind={stereo_kind}",
+    )
+
+
 class _Merger:
     def __init__(self, session: Session, catalogue: _Catalogue, repairs: _Repairs, report: MergeReport) -> None:
         self.s = session
@@ -381,12 +394,13 @@ class _Merger:
             if len(group) == 1:
                 continue
             kind = classify_stereo_kind(identity_mol_from_smiles(smiles))[0].value
-            canonical_ref = make_content_ref(
-                PREFIXES["Species"],
-                f"species:smiles={smiles};charge={charge};multiplicity={multiplicity};stereo_kind={kind}",
-            )
+            canonical_ref = _species_ref(smiles, charge, multiplicity, kind)
+            # A row minted before ``stereo_kind`` followed the explicit-hydrogen perception (chiral radicals) holds the
+            # ref of the same key under another kind; it is still the row that already holds the key's ref.
+            any_kind_refs = {_species_ref(smiles, charge, multiplicity, k.value) for k in StereoKind}
             survivor = (
                 next((r for r in group if r.public_ref == canonical_ref), None)
+                or next((r for r in group if r.public_ref in any_kind_refs), None)
                 or next((r for r in group if r.smiles == smiles), None)
                 or group[0]
             )
@@ -405,6 +419,16 @@ class _Merger:
             if row.id in loser_to_survivor or row.id not in new_key:
                 continue
             smiles, key = new_key[row.id]
+            kind = classify_stereo_kind(identity_mol_from_smiles(smiles))[0].value
+            # Only a kind the old heavy-atom perception could have produced for a stereo-capable molecule is replaced.
+            reclassified = self.s.execute(
+                text(
+                    "UPDATE species SET stereo_kind = CAST(:kind AS stereo_kind) "
+                    "WHERE id = :id AND stereo_kind::text <> :kind AND stereo_kind::text IN ('achiral', 'ez_isomer')"
+                ),
+                {"kind": kind, "id": row.id},
+            ).rowcount
+            self.report.species_reclassified += reclassified or 0
             changed = self.s.execute(
                 text(
                     "UPDATE species SET smiles = :smiles, inchi_key = :key "
@@ -581,6 +605,8 @@ class _Merger:
                         resolved.resolution.value,
                         resolved.stereo_smiles,
                     )
+                    if "symmetry" in resolved.unrepresented:
+                        self.report.symmetry_capped.append(row.public_ref)
                     # A contradictory entry keeps the label text it was deposited with, for the curator.
                     label = row.stereo_label if contradicted else resolved.label
                     self._count_label(row, frame, resolved, contradicted)
@@ -699,14 +725,17 @@ class _Merger:
                     + ", ".join(r.public_ref for r in group)
                     + "); that is a decision for a curator, not for this migration"
                 )
+            # On a descriptor that still has a ``?``, only entries whose old labels are identical (or all absent) may merge:
+            # an entry labelled ``R,S`` that nothing could apply must not vanish into an unlabelled one.
             old = {r.id: (self.old_labels.get(r.id) or "").strip().lower() for r in group}
-            labels = {label for label in old.values() if label}
-            if len(labels) > 1 and "?" in (group[0].stereo_descriptor or ""):
+            if len(set(old.values())) > 1 and "?" in (group[0].stereo_descriptor or ""):
                 raise BlockedMerge(
-                    "species entries with different stereo labels would merge although nothing in their marks or "
-                    "geometries says they are one configuration; a curator fixes their data first: "
+                    "species entries with different stereo labels (or one labelled and one not) would merge although "
+                    "nothing in their marks or geometries says they are one configuration; a curator fixes their data "
+                    "first: "
                     + ", ".join(f"{r.public_ref} (label {self.old_labels.get(r.id)!r})" for r in group)
                 )
+            self._assert_no_double_standing_selection(group)
             survivor = group[0]
             for loser in group[1:]:
                 self._merge_entry(loser.id, survivor.id)
@@ -714,6 +743,35 @@ class _Merger:
                 self.report.entries_merged += 1
             survivors.add(survivor.id)
         return survivors
+
+    def _assert_no_double_standing_selection(self, group) -> None:
+        """Stop when merging this group would leave one subject with two standing release selections.
+
+        Selections are append-only and stay on the row they were made about; afterwards a selection about a merged-away
+        entry counts as one for the survivor. Two standing selections of one record type in one release (draft or
+        published) would then both be "the" selection for the same subject, which is not a state to create silently.
+        """
+        rows = self.s.execute(
+            text(
+                "SELECT id, public_ref, dataset_release_id, record_type::text AS record_type, action::text AS action, "
+                "supersedes_selection_id FROM release_selection "
+                "WHERE subject_type = CAST('species_entry' AS submission_record_type) AND subject_id = ANY(:ids) "
+                "ORDER BY id"
+            ),
+            {"ids": [r.id for r in group]},
+        ).all()
+        superseded = {r.supersedes_selection_id for r in rows if r.supersedes_selection_id is not None}
+        standing: dict[tuple, list[str]] = defaultdict(list)
+        for r in rows:
+            if r.id not in superseded and r.action != "withdraw":
+                standing[(r.dataset_release_id, r.record_type)].append(r.public_ref)
+        doubled = {key: refs for key, refs in standing.items() if len(refs) > 1}
+        if doubled:
+            raise BlockedMerge(
+                "merging these species entries would leave one subject with two standing release selections "
+                f"({'; '.join(', '.join(refs) for refs in doubled.values())}); a curator withdraws or supersedes one "
+                "first. Entries: " + ", ".join(r.public_ref for r in group)
+            )
 
     def _merge_entry(self, loser: int, survivor: int) -> None:
         self.s.execute(

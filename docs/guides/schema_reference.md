@@ -403,7 +403,7 @@ the gap.
 **Check constraints:**
 
 - `ck_species_entry_not_merged_into_itself`: `merged_into_species_entry_id IS NULL OR merged_into_species_entry_id <> id`
-- `ck_species_entry_stereo_descriptor_vocabulary`: `stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSrsEZ?-](,[RSrsEZ?-])*$'`
+- `ck_species_entry_stereo_descriptor_vocabulary`: `stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSrsEZez?-](,[RSrsEZez?-])*$'`
 - `ck_species_entry_stereo_resolution_iff_descriptor`: `(stereo_descriptor IS NULL) = (stereo_resolution IS NULL)`
 
 ### `workflow_tool`

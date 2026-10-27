@@ -307,36 +307,33 @@ def classify_stereo_kind(
 ) -> tuple[StereoKind, str | None]:
     """Classify stereochemistry kind from molecular graph topology.
 
-    Uses RDKit's ``FindPotentialStereo`` to detect stereocenters and E/Z bonds
-    from the 2D graph.  Returns the kind and, for single-chiral-center molecules,
-    the R/S label if the SMILES specifies it.
+    The elements are the ones the entry descriptor is built from
+    (:func:`app.chemistry.stereo.frame_from_mol`, perceived with every hydrogen
+    explicit), so a chiral radical such as ``C[CH]C(C)O`` is classified like its
+    closed-shell relatives and a stereogenic allene counts as an axial element.
+    This feeds the species' content ref (``stereo_kind``), not its key.
+    Returns the kind and, for single-chiral-center molecules, the R/S label if
+    the SMILES specifies it.
 
     :param mol: Sanitized RDKit molecule.
     :returns: ``(stereo_kind, stereo_label)`` tuple.
     """
 
-    stereo_info = list(Chem.FindPotentialStereo(mol))
+    kinds = [element.kind for element in stereo.frame_from_mol(mol).elements]
+    chiral = sum(1 for kind in kinds if kind in ("tetrahedral", "axial"))
+    bonds = len(kinds) - chiral
 
-    chiral_atoms = [
-        si for si in stereo_info
-        if si.type == Chem.StereoType.Atom_Tetrahedral
-    ]
-    ez_bonds = [
-        si for si in stereo_info
-        if si.type == Chem.StereoType.Bond_Double
-    ]
-
-    if not chiral_atoms and not ez_bonds:
+    if not kinds:
         return StereoKind.achiral, None
 
-    # Both chiral centres and E/Z bonds → diastereomer
-    if chiral_atoms and ez_bonds:
+    # Both chiral elements and E/Z bonds, or several chiral elements → diastereomer
+    if chiral and bonds:
         return StereoKind.diastereomer, None
 
-    if chiral_atoms:
-        if len(chiral_atoms) >= 2:
+    if chiral:
+        if chiral >= 2:
             return StereoKind.diastereomer, None
-        # Single chiral centre → enantiomer pair
+        # Single chiral element → enantiomer pair
         chiral_centres = Chem.FindMolChiralCenters(mol, includeUnassigned=True)
         label = chiral_centres[0][1] if chiral_centres else None
         if label == "?":

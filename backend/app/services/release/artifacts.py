@@ -43,7 +43,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 from sqlalchemy import select
@@ -61,6 +61,7 @@ from app.db.models.dataset_release import (
     ReleaseSelection,
 )
 from app.db.models.record_review import RecordReview, RecordReviewEvent
+from app.db.models.species import SpeciesEntry
 from app.services.release.record_rights import LinkedRights, linked_rights
 from app.services.release.records import (
     CANDIDATE_SOURCES,
@@ -72,6 +73,7 @@ from app.services.release.records import (
     serialize_records,
     subject_identities,
 )
+from app.services.species_merge import canonical_id
 
 NDJSON_MEDIA_TYPE = "application/x-ndjson"
 
@@ -301,6 +303,23 @@ class ReleaseRecordUniverse:
     candidates_by_subject: dict[
         tuple[SubmissionRecordType, int], tuple[SubmissionRecordType, int]
     ]
+    #: Each selection's subject, and the subject it stands for now: a species entry merged into another forwards to it
+    #: (the selection rows themselves are append-only history and are never rewritten).
+    subject_forward: dict[
+        tuple[SubmissionRecordType, int], tuple[SubmissionRecordType, int]
+    ] = field(default_factory=dict)
+
+
+def _forward_subjects(
+    session: Session, pairs: set[tuple[SubmissionRecordType, int]]
+) -> dict[tuple[SubmissionRecordType, int], tuple[SubmissionRecordType, int]]:
+    forward = {}
+    for subject_type, subject_id in pairs:
+        target = subject_id
+        if subject_type is SubmissionRecordType.species_entry:
+            target = canonical_id(session, SpeciesEntry, subject_id)
+        forward[(subject_type, subject_id)] = (subject_type, target)
+    return forward
 
 
 def release_record_universe(
@@ -316,7 +335,10 @@ def release_record_universe(
     # scoping to ``state.active`` would render its ledger entries with a null
     # subject ref — losing exactly the information a reader needs to see that
     # the release deliberately recommends nothing there.
-    subject_pairs = {(row.subject_type, row.subject_id) for row in state.all_selections}
+    recorded_subjects = {(row.subject_type, row.subject_id) for row in state.all_selections}
+    subject_forward = _forward_subjects(session, recorded_subjects)
+    # A subject that was merged into another is looked up as the survivor, which is where its candidates now live.
+    subject_pairs = recorded_subjects | set(subject_forward.values())
     ledger_pairs = {(row.record_type, row.record_id) for row in state.all_selections}
 
     # Every candidate the selection was made from, per subject. Keyed by the
@@ -359,6 +381,7 @@ def release_record_universe(
         ledger_pairs=ledger_pairs,
         candidate_pairs=candidate_pairs,
         candidates_by_subject=candidates_by_subject,
+        subject_forward=subject_forward,
     )
 
 
@@ -386,6 +409,11 @@ def render_artifacts(
     # opaque handles: not interpretable or checkable offline, and less science
     # than the unauthenticated read API already publishes.
     subject_identity_map = _subject_identities(session, subject_pairs)
+    # A selection recorded against a merged-away subject is rendered as the subject it stands for.
+    for recorded, forwarded in universe.subject_forward.items():
+        if recorded != forwarded:
+            subject_ref_map[recorded] = subject_ref_map.get(forwarded)
+            subject_identity_map[recorded] = subject_identity_map.get(forwarded, {})
     provenance_map = _record_provenance(session, all_pairs)
     # Who agreed to license each shipped record, through its deposit. The
     # attester is labelled the same way a curator is -- by name and ORCID,

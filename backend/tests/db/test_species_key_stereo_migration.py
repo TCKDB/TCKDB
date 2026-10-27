@@ -581,3 +581,114 @@ def test_the_catalogue_covers_every_foreign_key_and_a_trigger_guards_each() -> N
     assert _STAYS_ON_MERGED_ROW <= found
     for composite in (c for t in Base.metadata.sorted_tables for c in t.foreign_key_constraints if len(c.columns) > 1):
         assert composite.referred_table.name not in into, composite
+
+
+def _second_entry(conn, species: int, smiles: str, label: str | None) -> int:
+    """A second entry on ``species`` (it differs from the first by ``electronic_state_label``)."""
+    return conn.scalar(
+        text(
+            "INSERT INTO species_entry (species_id, mol, stereo_label, electronic_state_label) "
+            "VALUES (:sp, mol_from_smiles(CAST(:m AS cstring)), :l, 'second') RETURNING id"
+        ),
+        {"sp": species, "m": smiles, "l": label},
+    )
+
+
+def test_two_standing_selections_for_the_entries_that_merge_stop_the_migration(harness) -> None:
+    """Selections are append-only and stay put; afterwards a selection about a merged entry counts for the survivor. Two
+    standing selections of one record type in one release would both be "the" selection for it, so a curator resolves it."""
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        ids = _seed(conn)
+        release, policy, reviewer = conn.execute(
+            text("SELECT dataset_release_id, curation_policy_id, selected_by FROM release_selection LIMIT 1")
+        ).one()
+        other_thermo = conn.scalar(
+            text(
+                "INSERT INTO thermo (species_entry_id, scientific_origin, thermodynamic_target_kind) VALUES (:e, "
+                "CAST('computed' AS scientific_origin_kind), CAST('equilibrium_ensemble' AS thermo_target_kind)) RETURNING id"
+            ),
+            {"e": ids["e_trans"]},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO release_selection (dataset_release_id, curation_policy_id, record_type, record_id, "
+                "subject_type, subject_id, rationale, selected_by, public_ref) VALUES (:r, :p, "
+                "CAST('thermo' AS submission_record_type), :t, CAST('species_entry' AS submission_record_type), :e, "
+                "'also chosen', :u, 'rsel_stereo_2')"
+            ),
+            {"r": release, "p": policy, "t": other_thermo, "e": ids["e_trans"], "u": reviewer},
+        )
+    failed = harness.run("upgrade", _MIGRATION.revision, check=False)
+    assert failed.returncode != 0
+    assert "two standing release selections" in failed.stderr
+    assert "rsel_stereo_1" in failed.stderr and "rsel_stereo_2" in failed.stderr
+
+
+def test_a_labelled_entry_nothing_could_apply_does_not_merge_into_an_unlabelled_one(harness) -> None:
+    """Butane-2,3-diol has two centres of one kind, so the old label ``R,S`` cannot be placed on either. It must not
+    vanish into an unlabelled entry that shares the descriptor ``?,?``."""
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        species = _species(conn, "CC(O)C(O)C", "OWBTYPJTUOEWEK-UHFFFAOYSA-N")
+        labelled = _entry(conn, species, "CC(O)C(O)C", "R,S")
+        unlabelled = conn.scalar(
+            text(
+                "INSERT INTO species_entry (species_id, mol) VALUES (:sp, mol_from_smiles(CAST('CC(O)C(O)C' AS cstring))) "
+                "RETURNING id"
+            ),
+            {"sp": species},
+        )
+        refs = [_value(conn, "SELECT public_ref FROM species_entry WHERE id = :i", i=i) for i in (labelled, unlabelled)]
+    failed = harness.run("upgrade", _MIGRATION.revision, check=False)
+    assert failed.returncode != 0
+    assert all(ref in failed.stderr for ref in refs)
+    assert "one labelled and one not" in failed.stderr
+
+
+def test_two_differently_labelled_allene_entries_stop_the_migration(harness) -> None:
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        species = _species(conn, "CC=C=CC", "OWBTYPJTUOEWEK-UHFFFAOYSA-M")
+        _entry(conn, species, "CC=C=CC", "foo")
+        _entry(conn, species, "CC=C=CC", "bar")
+    failed = harness.run("upgrade", _MIGRATION.revision, check=False)
+    assert failed.returncode != 0 and "different stereo labels" in failed.stderr
+
+
+def test_a_chiral_radical_is_reclassified_with_the_explicit_hydrogen_perception(harness) -> None:
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        species = conn.scalar(
+            text(
+                "INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity, stereo_kind) VALUES "
+                "(CAST('molecule' AS molecule_kind), 'C[CH]C(C)O', 'KJRFGMHRYYQZDZ-UHFFFAOYSA-N', 0, 2, "
+                "CAST('achiral' AS stereo_kind)) RETURNING id"
+            )
+        )
+        before = _value(conn, "SELECT public_ref FROM species WHERE id = :i", i=species)
+    harness.run("upgrade", _MIGRATION.revision)
+    with harness.engine.connect() as conn:
+        assert _value(conn, "SELECT stereo_kind::text FROM species WHERE id = :i", i=species) != "achiral"
+        assert _value(conn, "SELECT public_ref FROM species WHERE id = :i", i=species) == before, "the ref is kept"
+
+
+def test_a_merged_away_row_cannot_be_edited_and_a_database_that_went_down_cannot_go_up_again(harness) -> None:
+    harness.run("upgrade", _MIGRATION.parent)
+    canonical = make_content_ref(
+        PREFIXES["Species"], "species:smiles=N=N;charge=0;multiplicity=1;stereo_kind=ez_isomer"
+    )
+    with harness.engine.begin() as conn:
+        _seed(conn)
+        _species(conn, "[H]/N=N/[H]", "RAABOESOVLLHRU-OWOJBTEDSA-N", ref=canonical)
+        _species(conn, "N=N", "RAABOESOVLLHRU-UHFFFAOYSA-N")
+    harness.run("upgrade", _MIGRATION.revision)
+    with harness.engine.connect() as conn:
+        kept = _value(conn, "SELECT id FROM species WHERE merged_into_species_id IS NOT NULL ORDER BY id LIMIT 1")
+    with pytest.raises(Exception, match="cannot be edited"):
+        with harness.engine.begin() as conn:
+            conn.execute(text("UPDATE species SET inchi_key = 'X' WHERE id = :i"), {"i": kept})
+    harness.run("downgrade", _MIGRATION.parent)
+    again = harness.run("upgrade", _MIGRATION.revision, check=False)
+    assert again.returncode != 0
+    assert "cannot be upgraded through it again" in again.stderr

@@ -19,6 +19,7 @@ from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.services.public_refs import PREFIXES, make_content_ref
 from app.services.species_resolution import resolve_species_entry
 from app.services.upload_reconciliation import reconcile_species_entry, stereo_unresolved_warnings
+from tests.api._merged_world import MARKED_INCHI
 from tests.services.scientific_read._factories import make_thermo_scalar
 from tests.services.test_stereo_descriptor import embed_xyz
 
@@ -34,18 +35,22 @@ def _resolve(db_session, smiles: str, **kwargs):
     return entry
 
 
-def _merged_pair(db_session):
-    """A live 2-butene species and entry, and the kept rows of a marked spelling merged into them."""
+def _merged_pair(db_session, *, holds_key: bool = False):
+    """A live 2-butene species and entry, and the kept rows of a marked spelling merged into them.
+
+    By default the kept rows are what the migration leaves: the OLD marked SMILES, InChIKey and label, not the survivor's
+    values. ``holds_key=True`` is the other shape the migration can leave (the loser was the row that already held the
+    key's SMILES): the kept rows then carry the SAME key as their survivors, which the partial unique indexes allow, with
+    ids that sort before and heap positions that sit before the survivors', so a lookup that forgot to skip merged-away
+    rows would find the wrong one.
+    """
     survivor = _resolve(db_session, "C/C=C/C")
     species = survivor.species
-    # The kept rows hold the SAME key as their survivors (the partial unique indexes only look at live rows), so a lookup
-    # that forgot to skip merged-away rows would find the wrong one.
-    # Their ids sort BEFORE the survivors' (negative), so a lookup that only happened to return the lowest id would pick them.
     loser_species = Species(
-        id=-species.id,
+        **({"id": -species.id} if holds_key else {}),
         kind=species.kind,
-        smiles=species.smiles,
-        inchi_key=species.inchi_key,
+        smiles=species.smiles if holds_key else "C/C=C/C",
+        inchi_key=species.inchi_key if holds_key else MARKED_INCHI,
         charge=0,
         multiplicity=1,
         stereo_kind=species.stereo_kind,
@@ -56,7 +61,7 @@ def _merged_pair(db_session):
     db_session.add(loser_species)
     db_session.flush()
     loser = SpeciesEntry(
-        id=-survivor.id,
+        **({"id": -survivor.id} if holds_key else {}),
         species_id=species.id,
         mol="C/C=C/C",
         stereo_label="E",
@@ -109,8 +114,9 @@ def test_exact_structure_search_returns_the_survivor_only(client: TestClient, db
     assert survivor.public_ref in refs and loser.public_ref not in refs
 
 
-def test_an_upload_resolves_to_the_survivor_not_the_kept_row(db_session) -> None:
-    survivor, loser, loser_species = _merged_pair(db_session)
+@pytest.mark.parametrize("holds_key", [False, True], ids=["old_values", "holds_the_key"])
+def test_an_upload_resolves_to_the_survivor_not_the_kept_row(db_session, holds_key: bool) -> None:
+    survivor, loser, loser_species = _merged_pair(db_session, holds_key=holds_key)
     again = _resolve(db_session, "C/C=C/C")
     assert again.id == survivor.id and again.species_id == survivor.species_id
     # By id, a merged entry stands for its survivor.
@@ -327,3 +333,82 @@ def test_the_dry_run_predicts_what_submit_does(db_session) -> None:
     )
     assert items[-1].action.value == "error"
     assert entry.stereo_descriptor == "E"
+
+
+def test_the_legacy_detail_reads_answer_a_merged_row_as_its_survivor_and_say_so(client: TestClient, db_session) -> None:
+    survivor, loser, loser_species = _merged_pair(db_session)
+    make_thermo_scalar(db_session, species_entry=survivor)
+    db_session.flush()
+    header = "X-TCKDB-Merged-From"
+
+    species = client.get(f"/api/v1/species/{loser_species.id}")
+    assert species.status_code == 200, species.text
+    assert species.json()["id"] == survivor.species_id and species.headers[header] == loser_species.public_ref
+
+    entry = client.get(f"/api/v1/species-entries/{loser.id}")
+    assert entry.status_code == 200, entry.text
+    assert entry.json()["id"] == survivor.id and entry.headers[header] == loser.public_ref
+
+    thermo = client.get(f"/api/v1/species-entries/{loser.id}/thermo")
+    assert thermo.status_code == 200 and thermo.json(), "the results moved to the survivor, so the kept id shows them"
+    assert thermo.headers[header] == loser.public_ref
+
+    live = client.get(f"/api/v1/species-entries/{survivor.id}")
+    assert header not in live.headers
+
+
+def test_a_merged_row_cannot_be_edited(db_session) -> None:
+    _survivor, loser, loser_species = _merged_pair(db_session)
+    for sql, params in (
+        ("UPDATE species SET inchi_key = 'X' WHERE id = :i", {"i": loser_species.id}),
+        ("UPDATE species_entry SET stereo_smiles = 'C' WHERE id = :i", {"i": loser.id}),
+    ):
+        with pytest.raises(DBAPIError, match="cannot be edited"):
+            with db_session.begin_nested():
+                db_session.execute(text(sql), params)
+
+
+_NOT_REPRESENTED = "species_entry_stereo_not_represented"
+
+
+def _warnings(response) -> dict[str, str]:
+    assert response.status_code in (200, 201), response.text
+    return {w["code"]: w["message"] for w in response.json()["warnings"]}
+
+
+def _thermo_body(smiles: str) -> dict:
+    return {
+        "species_entry": {"smiles": smiles, "charge": 0, "multiplicity": 1},
+        "scientific_origin": "computed",
+        "h298_kj_mol": -11.0,
+        "enthalpy_reference_kind": "formation_298k",
+    }
+
+
+def test_an_allene_deposit_is_accepted_and_the_warning_names_the_lumping(client: TestClient) -> None:
+    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=C=CC")))
+    assert _UNRESOLVED not in warnings, "no further data would settle an axis, so this is not a request for more"
+    assert (
+        "axial stereo (Ra/Sa) is not yet represented: both mirror-image forms of this allene are stored in one entry"
+        in warnings[_NOT_REPRESENTED]
+    )
+
+
+def test_a_butatriene_deposit_is_accepted_and_the_warning_says_cis_trans_is_not_represented(client: TestClient) -> None:
+    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=C=C=CC")))
+    assert "cis/trans stereo across this cumulene is not yet represented" in warnings[_NOT_REPRESENTED]
+    assert _UNRESOLVED not in warnings
+
+
+def test_an_allene_with_an_unknown_centre_says_both(client: TestClient) -> None:
+    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=C=CC(C)O")))
+    assert "1 other stereo element(s) are also unknown" in warnings[_NOT_REPRESENTED]
+
+
+def test_a_letter_on_an_allene_is_refused_before_anything_is_stored(client: TestClient) -> None:
+    body = _thermo_body("CC=C=CC")
+    body["species_entry"]["stereo_label"] = "R"
+    response = client.post("/api/v1/uploads/thermo", json=body)
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "species_stereo_label_invalid"
+    assert "axial stereo (Ra/Sa)" in response.json()["detail"] and "not supported yet" in response.json()["detail"]

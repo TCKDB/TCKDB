@@ -53,12 +53,14 @@ dataset must never require a code release.
 ## The species key is the constitution; stereo lives on the entry (2026-10-26)
 
 - **Backend, `tckdb-schemas` 0.138.0, `tckdb-client` 0.174.0.** A species is its stereo-blind canonical SMILES plus charge and multiplicity; which
-  stereoisomer a deposit is lives on the species entry as a canonical stereo descriptor (`E`, `R,S`, `E,?`; `?` for an element nothing pinned down). The first
-  geometry, the marks in the SMILES and a supplied label each fill the elements the earlier ones left unknown, and any element two of them state
-  differently is refused (`species_stereo_contradiction`). `stereo_label` becomes display text; free text is refused.
-- **Migration `c7e2a9f4d138`** recomputes every species key, merges the species, reactions and entries that now collide (oldest id survives), re-points every
-  foreign key to them, and derives each entry's descriptor. Approved rows change only through declared repairs; a collision it cannot express stops the
-  migration with the table named. It cannot be un-merged by the downgrade.
+  stereoisomer a deposit is lives on the species entry as a canonical stereo descriptor (`E`, `R,S`, `E,?`; `?` for an element nothing pinned down; one
+  string per stereoisomer). Every geometry, the marks in the SMILES and a supplied label each fill the elements the earlier ones left unknown, and any
+  element two of them state differently is refused (`species_stereo_contradiction`). `stereo_label` becomes display text; free text is refused. Allene axes
+  and cis/trans across longer cumulenes are not represented yet: they are always `?`, with the warning `species_entry_stereo_not_represented`.
+- **Migration `c7e2a9f4d138`** recomputes every species key, merges the species, reactions and entries that now collide, re-points their results to the
+  survivor and KEEPS the merged-away rows (public ref and own history), marked `merged_into_*`, forwarding one hop. Approved rows change only through
+  declared repairs; a collision it cannot express, differently labelled entries that would merge, or two standing release selections for one subject
+  stop the migration. The downgrade cannot un-merge, and the upgrade refuses a database that went down through it.
 - New refusal codes `species_stereo_contradiction` and `species_stereo_label_invalid`; new warning `species_entry_stereo_unresolved`.
 
 ## The client defaults the enthalpy reference declaration (2026-10-26)

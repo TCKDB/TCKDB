@@ -991,7 +991,8 @@ def _browse_candidate_species_stmt(
     columns: list[Any] = [Species.id, Species.created_at]
     if include_heavy_atom_count:
         columns.append(_heavy_atom_count_expr().label("heavy_atom_count"))
-    stmt = select(*columns)
+    # A merged-away species is kept for its ref but is never a live record (DR-0038).
+    stmt = select(*columns).where(Species.merged_into_species_id.is_(None))
     if request.charge is not None:
         stmt = stmt.where(Species.charge == request.charge)
     if request.multiplicity is not None:

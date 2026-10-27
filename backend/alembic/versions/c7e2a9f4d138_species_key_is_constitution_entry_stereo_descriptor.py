@@ -47,8 +47,11 @@ The curation recorded about a kept row (reviews, machine reviews, release select
 idempotency bodies, per-user entry reviews) is never moved: it describes that row.
 
 The migration stops, naming the rows by public ref, when the data needs a decision it may not make: entries that would merge
-although their old labels differ and nothing in the data separates them; an entry whose marks, geometries and label
-disagree that would share a key; entries of different stationary-point kinds that would merge.
+although their old labels differ (or one is labelled and one is not) and nothing in the data separates them; an entry whose
+marks, geometries and label disagree that would share a key; entries of different stationary-point kinds that would merge;
+entries whose merge would leave one subject with two standing release selections of one record type in one release.
+Allene and cumulene axes are stated as ``?`` (never refused), so differently labelled allene entries stop it too; an entry
+whose symmetry is past the automorphism cap is described with ``?`` at its symmetric positions and listed.
 
 Downgrade
 ---------
@@ -58,7 +61,7 @@ A merged-away row that would collide with another under the old unique keys is r
 (``species.smiles`` and ``species_entry.stereo_label`` become ``merged:<public_ref>``, a colliding
 ``chem_reaction.stoichiometry_hash`` becomes NULL); the rows, their refs and their history stay. After the downgrade a
 merged row is an ordinary empty-looking row; the results stay on the survivor. Because the markers are forgotten,
-upgrading again after a downgrade is not supported on a database that has been through this step.
+the upgrade refuses, loudly, a database that still carries the ``merged:`` sentinels the downgrade leaves.
 
 Revision ID: c7e2a9f4d138
 Revises: f3a8c5d1e947
@@ -167,10 +170,41 @@ def _install_guards(bind) -> None:
         $$
         """
     )
+    op.execute(
+        """
+        CREATE FUNCTION public.tckdb_freeze_merged_row() RETURNS trigger
+        LANGUAGE plpgsql
+        SET search_path = pg_catalog, public
+        AS $$
+        DECLARE
+            marker text := TG_ARGV[0];
+        BEGIN
+            -- A merged-away row is a record of what it was: it may not be edited, except by a repair someone declared
+            -- in this transaction (the accepted-science path), and an update that changes nothing is let through.
+            IF (to_jsonb(OLD) ->> marker) IS NULL OR to_jsonb(NEW) = to_jsonb(OLD) THEN
+                RETURN NEW;
+            END IF;
+            IF EXISTS (
+                SELECT 1 FROM public.accepted_science_repair
+                 WHERE target_table = TG_TABLE_NAME AND xact_id = (pg_current_xact_id())::text::bigint
+            ) THEN
+                RETURN NEW;
+            END IF;
+            RAISE EXCEPTION USING ERRCODE = '23514',
+                MESSAGE = format('a merged-away %I row cannot be edited', TG_TABLE_NAME),
+                HINT = 'it is kept as it was; edit the row it was merged into, or declare a repair';
+        END;
+        $$
+        """
+    )
     for table, marker in _MERGEABLE:
         op.execute(
             f"CREATE TRIGGER trg_{table}_merge_marker BEFORE INSERT OR UPDATE OF {marker} ON public.{table} "
             f"FOR EACH ROW EXECUTE FUNCTION public.tckdb_guard_merge_marker('{marker}')"
+        )
+        op.execute(
+            f"CREATE TRIGGER trg_{table}_freeze_merged BEFORE UPDATE ON public.{table} "
+            f"FOR EACH ROW EXECUTE FUNCTION public.tckdb_freeze_merged_row('{marker}')"
         )
     for table, column, target, marker in _foreign_keys_into_mergeable(bind):
         name = f"trg_mt_{table}_{column}"[:63]
@@ -197,6 +231,21 @@ def _foreign_keys_into_mergeable(bind):
 
 def upgrade() -> None:
     bind = op.get_bind()
+    # A database that went down through this revision's downgrade carries ``merged:<ref>`` sentinels where merged-away rows
+    # were renamed to restore the old keys, and has forgotten which rows were merged. Applying the step again would treat
+    # those rows as live and unparseable, so it refuses, loudly, rather than guess.
+    sentinels = bind.execute(
+        sa.text(
+            "SELECT (SELECT count(*) FROM species WHERE smiles LIKE 'merged:%') "
+            "     + (SELECT count(*) FROM species_entry WHERE stereo_label LIKE 'merged:%')"
+        )
+    ).scalar_one()
+    if sentinels:
+        raise RuntimeError(
+            f"{sentinels} row(s) carry a 'merged:' sentinel left by the downgrade of revision {revision}; this database "
+            "has been through that downgrade and cannot be upgraded through it again. Restore it from a backup taken "
+            "before the first upgrade."
+        )
     postgresql.ENUM("resolved", "partial", "unresolved", name="stereo_resolution").create(bind, checkfirst=True)
     op.add_column("species_entry", sa.Column("stereo_descriptor", sa.Text(), nullable=True))
     op.add_column("species_entry", sa.Column("stereo_resolution", _RESOLUTION, nullable=True))
@@ -247,7 +296,7 @@ def upgrade() -> None:
     op.create_check_constraint(
         "stereo_descriptor_vocabulary",
         "species_entry",
-        "stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSrsEZ?-](,[RSrsEZ?-])*$'",
+        "stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSrsEZez?-](,[RSrsEZez?-])*$'",
     )
     op.create_check_constraint(
         "stereo_resolution_iff_descriptor",
@@ -264,6 +313,8 @@ def downgrade() -> None:
         op.execute(f"DROP TRIGGER IF EXISTS {f'trg_mt_{table}_{column}'[:63]} ON public.{table}")
     for table, _marker in _MERGEABLE:
         op.execute(f"DROP TRIGGER IF EXISTS trg_{table}_merge_marker ON public.{table}")
+        op.execute(f"DROP TRIGGER IF EXISTS trg_{table}_freeze_merged ON public.{table}")
+    op.execute("DROP FUNCTION IF EXISTS public.tckdb_freeze_merged_row()")
     op.execute("DROP FUNCTION IF EXISTS public.tckdb_refuse_merged_target()")
     op.execute("DROP FUNCTION IF EXISTS public.tckdb_guard_merge_marker()")
 

@@ -38,7 +38,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.error_contract import CodedValueError
@@ -643,7 +643,9 @@ def resolve_seed(
             reaction_entry_ids.add(re_id)
             continue
         cr_id = session.scalar(
-            select(ChemReaction.id).where(ChemReaction.public_ref == ref)
+            select(func.coalesce(ChemReaction.merged_into_chem_reaction_id, ChemReaction.id)).where(
+                ChemReaction.public_ref == ref  # a merged-away reaction stands for the one it was merged into
+            )
         )
         if cr_id is not None:
             entry_ids = session.scalars(
@@ -661,12 +663,16 @@ def resolve_seed(
                 ReactionFamily,
                 ReactionFamily.id == ChemReaction.reaction_family_id,
             )
-            .where(ReactionFamily.name == seed.reaction_family)
+            .where(ReactionFamily.name == seed.reaction_family, ChemReaction.merged_into_chem_reaction_id.is_(None))
         ).all()
         reaction_entry_ids.update(family_entry_ids)
 
     if seed.all_reactions:
-        all_ids = session.scalars(select(ReactionEntry.id)).all()
+        all_ids = session.scalars(
+            select(ReactionEntry.id)
+            .join(ChemReaction, ChemReaction.id == ReactionEntry.reaction_id)
+            .where(ChemReaction.merged_into_chem_reaction_id.is_(None))
+        ).all()
         if len(all_ids) > all_cap:
             # A relationship code as of 2026-08-18, published cap-only.
             #
@@ -703,7 +709,9 @@ def resolve_seed(
 
     for ref in seed.species_refs or []:
         se_id = session.scalar(
-            select(SpeciesEntry.id).where(SpeciesEntry.public_ref == ref)
+            select(func.coalesce(SpeciesEntry.merged_into_species_entry_id, SpeciesEntry.id)).where(
+                SpeciesEntry.public_ref == ref  # a merged-away entry stands for the one it was merged into
+            )
         )
         if se_id is None:
             raise ValueError(

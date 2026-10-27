@@ -15,6 +15,11 @@ Vocabulary
 ``r s``
     CIP's lower-case labels for a *pseudo-asymmetric* centre (C3 of
     pentane-2,3,4-triol in the ``R,S`` diastereomer).
+``e z``
+    The same for a *pseudo-asymmetric double bond*: the two ends differ only by
+    the chirality of their substituents (``CC(O)C(=CC)C(C)O`` has four isomers,
+    ``E`` and ``Z`` for the two achiral-substituent pairs and ``e``/``z`` for the
+    other two).
 ``-``
     The element is a *potential* stereo element of the constitution but is not
     stereogenic in this configuration (C3 of pentane-2,3,4-triol when C2 and C4
@@ -47,8 +52,12 @@ other, so the descriptor is the **lexicographically smallest token string over
 every automorphism** (a mirror image is not an automorphism: enantiomers stay
 distinct). Sorting inside a symmetry class would not do: it loses the correlation
 *between* classes and puts different diastereomers of galactitol and allitol on
-one string. Enumerating the automorphisms is capped (:data:`_AUTOMORPHISM_CAP`);
-above the cap the deposit is refused rather than mislabelled.
+one string. Enumerating the automorphisms is capped (:data:`_AUTOMORPHISM_CAP`). Above the
+cap the elements that belong to a symmetry class of more than one are stated as
+``?`` (and flagged ``symmetry`` in :attr:`ResolvedStereo.unrepresented`), whichever
+the source says: this lumps real isomers into one entry, but it is deterministic,
+so one configuration never receives two strings. Elements that are alone in their
+class are unaffected.
 
 Sources and how they combine
 ----------------------------
@@ -73,13 +82,18 @@ frame keeps them: ``C[C@H]([2H])O`` has a stereocentre (CIP ranks by mass number
 although CH2D-CH2OH's species is ethanol. ``stereo_smiles`` is written without
 isotopes and is therefore left NULL where stripping them would lose the stereo.
 
-Not representable
------------------
-A stereogenic cumulene (an allene with different substituents at each end, or any
-cumulated chain whose ends both carry two different substituents) has axial, not
-E/Z, stereo. It is refused with :data:`W_SPECIES_STEREO_UNSUPPORTED` rather than
-treated as two double bonds. A cumulated chain that is not stereogenic (allene
-itself, a ketene, sulfone S=O bonds) simply contributes no element.
+Not yet represented
+-------------------
+A stereogenic cumulene (a cumulated chain whose two ends each carry two different
+substituents) is a stereo element, and an entry carries it as ``?`` always: an
+even number of cumulated double bonds (an allene) has an axis (Ra/Sa), an odd
+number of three or more (a butatriene) has cis/trans isomers, and RDKit's CIP
+labeller names neither from marks or from coordinates. The deposit is accepted,
+with the :data:`W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED` warning, and both
+mirror-image forms of an allene land in one entry (a known lumping of real
+isomers). A supplied label may only say ``?`` there. A cumulated chain that is
+not stereogenic (allene itself, a ketene, sulfone S=O bonds) contributes no
+element. Ring size does not matter.
 """
 
 from __future__ import annotations
@@ -107,46 +121,53 @@ W_SPECIES_STEREO_CONTRADICTION = "species_stereo_contradiction"
 #: configuration that cannot exist).
 W_SPECIES_STEREO_LABEL_INVALID = "species_stereo_label_invalid"
 
-#: Raised for stereo this vocabulary cannot represent (axial stereo of a
-#: cumulene) or cannot canonicalise within its cap.
-W_SPECIES_STEREO_UNSUPPORTED = "species_stereo_unsupported"
-
-#: The non-blocking warning for an entry that ends with at least one ``?``.
+#: The non-blocking warning for an entry that ends with at least one ``?`` that data could have settled.
 W_SPECIES_ENTRY_STEREO_UNRESOLVED = "species_entry_stereo_unresolved"
+
+#: The non-blocking warning for an entry with a stereo element the vocabulary cannot yet state (an allene's
+#: axis, cis/trans across a longer cumulene, a symmetry class past the automorphism cap): real isomers share the entry.
+W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED = "species_entry_stereo_not_represented"
 
 UNKNOWN = "?"
 NOT_STEREOGENIC = "-"
 TETRAHEDRAL_TOKENS = frozenset({"R", "S", "r", "s"})
-DOUBLE_BOND_TOKENS = frozenset({"E", "Z"})
+DOUBLE_BOND_TOKENS = frozenset({"E", "Z", "e", "z"})
 VOCABULARY = TETRAHEDRAL_TOKENS | DOUBLE_BOND_TOKENS | {UNKNOWN, NOT_STEREOGENIC}
 
 #: Wire pattern for ``stereo_label``/``stereo_descriptor``; the schema package
 #: carries its own copy because it cannot import the backend.
-DESCRIPTOR_PATTERN = r"^[RSrsEZ?-](,[RSrsEZ?-])*$"
+DESCRIPTOR_PATTERN = r"^[RSrsEZez?-](,[RSrsEZez?-])*$"
 
 #: Above this many potential elements the stereoisomer enumeration is skipped:
 #: ``-`` is not deduced, a supplied label is not tested for realisability and
 #: ``stereo_smiles`` is left NULL.
 _ENUMERATION_CAP = 8
 
-#: Most automorphisms of the constitution examined before the deposit is refused.
+#: Most automorphisms of the constitution examined before the symmetric elements are stated as ``?``.
 _AUTOMORPHISM_CAP = 100_000
 
 #: Order in which tokens compare when the smallest string is chosen; ``?`` is last,
 #: so a partial descriptor reads ``E,?`` and never ``?,E``.
-_ORDER = {"R": 0, "S": 1, "r": 2, "s": 3, "E": 4, "Z": 5, "-": 6, "?": 7}
+_ORDER = {"R": 0, "S": 1, "r": 2, "s": 3, "E": 4, "Z": 5, "e": 6, "z": 7, "-": 8, "?": 9}
 
 _TETRAHEDRAL = "tetrahedral"
 _DOUBLE_BOND = "double_bond"
+#: Axis of a cumulated chain with an even number of double bonds (an allene): Ra/Sa, not yet represented.
+_AXIAL = "axial"
+#: Cis/trans across a cumulated chain with an odd number (three or more) of double bonds: not yet represented.
+_CUMULENE = "cumulene"
+#: Element kinds whose token is always ``?`` because the vocabulary has no letter for them yet.
+_UNREPRESENTED_KINDS = frozenset({_AXIAL, _CUMULENE})
 
 
 @dataclass(frozen=True)
 class StereoElement:
     """One potential stereo element of the constitution graph.
 
-    :param kind: ``tetrahedral`` or ``double_bond``.
-    :param atoms: One atom index (tetrahedral) or the two bonded atom indices
-        (double bond), in the constitution molecule's atom numbering.
+    :param kind: ``tetrahedral``, ``double_bond``, ``axial`` or ``cumulene``.
+    :param atoms: One atom index (tetrahedral), the two bonded atom indices
+        (double bond) or the two end atoms of the cumulated chain, in the
+        constitution molecule's atom numbering.
     :param key: Sort/class key built from canonical ranks.
     """
 
@@ -193,11 +214,18 @@ class ResolvedStereo:
         ``descriptor`` is ``None``.
     :param stereo_smiles: Canonical isomeric SMILES of the fully resolved
         configuration, when one can be written and round-trips.
+    :param unrepresented: Why some ``?`` cannot be settled by any data: ``axial``
+        (allene axis), ``cumulene`` (cis/trans across a longer cumulene),
+        ``symmetry`` (a symmetry class past the automorphism cap). Empty when
+        every ``?`` is an element the data left unknown.
+    :param unknown_elements: How many ``?`` are elements the data could settle.
     """
 
     descriptor: str | None
     resolution: StereoResolution | None
     stereo_smiles: str | None
+    unrepresented: tuple[str, ...] = ()
+    unknown_elements: int = 0
 
     @property
     def label(self) -> str | None:
@@ -240,22 +268,15 @@ def constitution_mol(marked: Chem.Mol) -> Chem.Mol:
     return constitution
 
 
-def _unsupported(problem: str) -> CodedValueError:
-    return CodedValueError(
-        W_SPECIES_STEREO_UNSUPPORTED,
-        f"This molecule's stereochemistry cannot be represented: {problem}. "
-        "Axial stereo of a cumulene has no token in the stereo descriptor vocabulary, and treating it as "
-        "two E/Z double bonds would be wrong.",
-        context={"problem": problem},
-        message_prefix=False,
-    )
+def _cumulated_bonds(
+    mol_h: Chem.Mol, ranks_h: list[int], ranks: list[int]
+) -> tuple[set[int], list[StereoElement]]:
+    """Double bonds that belong to a cumulated chain, and the chains that are stereo elements.
 
-
-def _cumulated_bonds(mol_h: Chem.Mol, ranks_h: list[int]) -> set[int]:
-    """Indices of double bonds that belong to a cumulated chain.
-
-    :raises CodedValueError: ``species_stereo_unsupported`` when a chain's two
-        ends each carry two different substituents (axial or cumulene E/Z stereo).
+    A chain is an element when both ends carry two different substituents. Its kind
+    is ``axial`` for an even number of double bonds and ``cumulene`` (cis/trans) for
+    an odd number of three or more. Neither is named by the CIP labeller, so both are
+    always ``?`` and every bond of the chain is kept out of the ordinary E/Z path.
     """
 
     double = [b for b in mol_h.GetBonds() if b.GetBondType() == Chem.BondType.DOUBLE]
@@ -279,15 +300,12 @@ def _cumulated_bonds(mol_h: Chem.Mol, ranks_h: list[int]) -> set[int]:
         chains.setdefault(find(b.GetIdx()), []).append(b.GetIdx())
 
     cumulated: set[int] = set()
+    elements: list[StereoElement] = []
     for members in chains.values():
         if len(members) < 2:
             continue
         cumulated.update(members)
         member_set = set(members)
-        ring_info = mol_h.GetRingInfo()
-        if any(ring_info.NumBondRings(i) and min(len(r) for r in ring_info.BondRings() if i in r) < 8 for i in members):
-            # A chain closed in a ring of fewer than eight members cannot take the linear geometry axial stereo needs.
-            continue
         ends = [a for a, bonds in by_atom.items() if len([x for x in bonds if x in member_set]) == 1]
         capable = 0
         for end in ends:
@@ -301,10 +319,10 @@ def _cumulated_bonds(mol_h: Chem.Mol, ranks_h: list[int]) -> set[int]:
             if len(others) == 2 and ranks_h[others[0]] != ranks_h[others[1]]:
                 capable += 1
         if capable == 2:
-            raise _unsupported(
-                "a cumulated double-bond chain (allene or cumulene) has different substituents at both ends"
-            )
-    return cumulated
+            low, high = sorted((ranks[ends[0]], ranks[ends[1]]))
+            kind = _AXIAL if len(members) % 2 == 0 else _CUMULENE
+            elements.append(StereoElement(kind, (ends[0], ends[1]), (low, 2 if kind == _AXIAL else 3, high)))
+    return cumulated, elements
 
 
 def frame_from_mol(marked: Chem.Mol) -> StereoFrame:
@@ -312,8 +330,6 @@ def frame_from_mol(marked: Chem.Mol) -> StereoFrame:
 
     :param marked: The entry's molecule with isotopes kept (an entry is
         isotopologue-aware) and stereo marks retained.
-    :raises CodedValueError: ``species_stereo_unsupported`` for a stereogenic
-        cumulene.
     """
 
     tagged = Chem.Mol(marked)
@@ -324,9 +340,8 @@ def frame_from_mol(marked: Chem.Mol) -> StereoFrame:
     constitution_h = Chem.AddHs(constitution)
     ranks = list(Chem.CanonicalRankAtoms(constitution, breakTies=False))
     ranks_h = list(Chem.CanonicalRankAtoms(constitution_h, breakTies=False))
-    skipped = _cumulated_bonds(constitution_h, ranks_h)
+    skipped, found = _cumulated_bonds(constitution_h, ranks_h, ranks)
 
-    found: list[StereoElement] = []
     for info in Chem.FindPotentialStereo(constitution_h):
         if info.type == Chem.StereoType.Atom_Tetrahedral:
             atom = info.centeredOn
@@ -371,7 +386,8 @@ def element_permutations(frame: StereoFrame) -> tuple[tuple[int, ...], ...]:
     canonical rank (which carries hydrogen count, radical state, charge and
     isotope), so an automorphism never maps ``CH3`` onto ``CH2.``.
 
-    :raises CodedValueError: ``species_stereo_unsupported`` above the cap.
+    Above :data:`_AUTOMORPHISM_CAP` only the identity is returned and the frame is
+    marked ``capped`` (see :func:`mask_capped`).
     """
 
     cached = frame.cache.get("perms")
@@ -394,10 +410,9 @@ def element_permutations(frame: StereoFrame) -> tuple[tuple[int, ...], ...]:
     query = Chem.Mol(colored)
     matches = query.GetSubstructMatches(query, uniquify=False, useChirality=False, maxMatches=_AUTOMORPHISM_CAP)
     if len(matches) >= _AUTOMORPHISM_CAP:
-        raise _unsupported(
-            "the molecule's symmetry is too large to canonicalise its stereo descriptor "
-            f"(more than {_AUTOMORPHISM_CAP} automorphisms)"
-        )
+        frame.cache["capped"] = True
+        frame.cache["perms"] = (identity,)
+        return frame.cache["perms"]
     index = _element_index(frame)
     perms = {identity}
     for match in matches:
@@ -420,9 +435,28 @@ def _order_key(tokens) -> tuple[int, ...]:
     return tuple(_ORDER[t] for t in tokens)
 
 
+def mask_capped(frame: StereoFrame, tokens) -> list[str]:
+    """``tokens`` with every element of a multi-member symmetry class set to ``?`` when the
+    automorphism cap was hit, else unchanged.
+
+    Past the cap the canonical string cannot be chosen, so the positions it would
+    have to permute are not stated. Elements alone in their class are fixed by every
+    automorphism and keep their token.
+    """
+
+    element_permutations(frame)
+    if not frame.cache.get("capped"):
+        return list(tokens)
+    counts: dict = {}
+    for element in frame.elements:
+        counts[element.key] = counts.get(element.key, 0) + 1
+    return [t if counts[e.key] == 1 else UNKNOWN for t, e in zip(tokens, frame.elements, strict=True)]
+
+
 def canonical_tokens(frame: StereoFrame, tokens) -> tuple[str, ...]:
     """The smallest token string over every automorphism (the descriptor's tokens)."""
 
+    tokens = mask_capped(frame, tokens)
     best: tuple[str, ...] | None = None
     best_key: tuple[int, ...] | None = None
     for perm in element_permutations(frame):
@@ -468,7 +502,9 @@ def mark_tokens(frame: StereoFrame) -> list[str]:
     rdCIPLabeler.AssignCIPLabels(marked)
     tokens: list[str] = []
     for element in frame.elements:
-        if element.kind == _TETRAHEDRAL:
+        if element.kind in _UNREPRESENTED_KINDS:
+            tokens.append(UNKNOWN)
+        elif element.kind == _TETRAHEDRAL:
             tokens.append(_atom_token(marked.GetAtomWithIdx(frame.marked_index[element.atoms[0]])))
         else:
             begin, end = (frame.marked_index[index] for index in element.atoms)
@@ -589,7 +625,9 @@ def geometry_tokens(
     mol, mapping = perceived
     tokens: list[str] = []
     for element in frame.elements:
-        if element.kind == _TETRAHEDRAL:
+        if element.kind in _UNREPRESENTED_KINDS:
+            tokens.append(UNKNOWN)
+        elif element.kind == _TETRAHEDRAL:
             tokens.append(_atom_token(mol.GetAtomWithIdx(mapping[element.atoms[0]])))
         else:
             begin, end = element.atoms
@@ -617,6 +655,9 @@ def _full_tokens(frame: StereoFrame, iso_h: Chem.Mol) -> list[str]:
             specified[("D", frozenset((bond.GetBeginAtomIdx(), bond.GetEndAtomIdx())))] = is_specified
     tokens: list[str] = []
     for element in frame.elements:
+        if element.kind in _UNREPRESENTED_KINDS:
+            tokens.append(UNKNOWN)
+            continue
         if element.kind == _TETRAHEDRAL:
             token = _atom_token(iso.GetAtomWithIdx(element.atoms[0]))
             is_specified = specified.get(("T", element.atoms[0]), False)
@@ -642,8 +683,10 @@ def stereoisomers(frame: StereoFrame) -> list[tuple[tuple[str, ...], Chem.Mol]] 
     if n == 0 or n > _ENUMERATION_CAP:
         frame.cache["isomers"] = None
         return None
+    # RDKit also offers every bond of a cumulated chain, so size the cap from what it reports, not from our elements.
+    potential = len(Chem.FindPotentialStereo(frame.constitution_h))
     options = StereoEnumerationOptions(
-        onlyUnassigned=True, unique=True, tryEmbedding=False, maxIsomers=2 ** (n + 1)
+        onlyUnassigned=True, unique=True, tryEmbedding=False, maxIsomers=2 ** (max(n, potential) + 1)
     )
     seen: dict[tuple[str, ...], Chem.Mol] = {}
     try:
@@ -769,7 +812,7 @@ def parse_supplied_label(frame: StereoFrame, label: str) -> list[str]:
     """
 
     tokens = [token.strip() for token in label.split(",")]
-    kinds = ["R/S" if element.kind == _TETRAHEDRAL else "E/Z" for element in frame.elements]
+    kinds = [_kind_text(element) for element in frame.elements]
     expected = ",".join(kinds) if kinds else "none"
     if not frame.elements:
         raise _label_invalid("this molecule has no stereo element, so it takes no stereo label", expected)
@@ -778,6 +821,12 @@ def parse_supplied_label(frame: StereoFrame, label: str) -> list[str]:
             f"expected {len(frame.elements)} token(s), one per stereo element, got {len(tokens)}", expected
         )
     for position, (token, element) in enumerate(zip(tokens, frame.elements, strict=True), 1):
+        if element.kind in _UNREPRESENTED_KINDS and token != UNKNOWN:
+            what = "axial stereo (Ra/Sa)" if element.kind == _AXIAL else "cis/trans stereo across a cumulene"
+            raise _label_invalid(
+                f"token {position} ({token!r}) names {what}, which is not supported yet; say '?' for this element",
+                expected,
+            )
         allowed = TETRAHEDRAL_TOKENS if element.kind == _TETRAHEDRAL else DOUBLE_BOND_TOKENS
         if token not in allowed and token not in (UNKNOWN, NOT_STEREOGENIC):
             raise _label_invalid(
@@ -794,11 +843,20 @@ def parse_supplied_label(frame: StereoFrame, label: str) -> list[str]:
     return tokens
 
 
+def _kind_text(element: StereoElement) -> str:
+    return {
+        _TETRAHEDRAL: "R/S",
+        _DOUBLE_BOND: "E/Z",
+        _AXIAL: "? (axial stereo, not yet represented)",
+        _CUMULENE: "? (cumulene cis/trans, not yet represented)",
+    }[element.kind]
+
+
 def _label_invalid(problem: str, expected: str) -> CodedValueError:
     return CodedValueError(
         W_SPECIES_STEREO_LABEL_INVALID,
         f"species_entry.stereo_label does not fit the molecule: {problem}. "
-        f"Tokens are R, S, r, s, E, Z, - (not stereogenic here) or ? (unknown), one per stereo element in "
+        f"Tokens are R, S, r, s, E, Z, e, z, - (not stereogenic here) or ? (unknown), one per stereo element in "
         f"canonical order; this molecule's elements are, in order: {expected}.",
         context={"expected_element_kinds": expected, "problem": problem},
         message_prefix=False,
@@ -897,11 +955,11 @@ def resolve_stereo(
         xyz, isotopes = (source, None) if isinstance(source, str) else source
         tokens = geometry_tokens(frame, xyz, isotopes)
         if tokens is not None:
-            named.append(("geometry" if len(geometries) == 1 else f"conformer geometry {k}", tokens))
+            named.append(("geometry" if len(geometries) == 1 else f"conformer geometry {k}", mask_capped(frame, tokens)))
     if use_marks:
-        named.append(("SMILES stereo marks", mark_tokens(frame)))
+        named.append(("SMILES stereo marks", mask_capped(frame, mark_tokens(frame))))
     if supplied_label is not None:
-        named.append(("supplied stereo_label", parse_supplied_label(frame, supplied_label)))
+        named.append(("supplied stereo_label", mask_capped(frame, parse_supplied_label(frame, supplied_label))))
 
     current = [UNKNOWN] * len(frame.elements)
     owner = ""
@@ -929,7 +987,19 @@ def finish(frame: StereoFrame, tokens, *, with_smiles: bool = True) -> ResolvedS
         if with_smiles and resolution == StereoResolution.resolved
         else None
     )
-    return ResolvedStereo(descriptor, resolution, smiles)
+    reasons = sorted({e.kind for e in frame.elements if e.kind in _UNREPRESENTED_KINDS})
+    stated_unknown = 0
+    if frame.cache.get("capped"):
+        counts: dict = {}
+        for e in frame.elements:
+            counts[e.key] = counts.get(e.key, 0) + 1
+        masked = [e for e in frame.elements if counts[e.key] > 1 and e.kind not in _UNREPRESENTED_KINDS]
+        if masked:
+            reasons.append("symmetry")
+        stated_unknown = len(masked)
+    unrepresented_count = sum(1 for e in frame.elements if e.kind in _UNREPRESENTED_KINDS)
+    unknown_elements = max(0, unknown - unrepresented_count - stated_unknown)
+    return ResolvedStereo(descriptor, resolution, smiles, tuple(reasons), unknown_elements)
 
 
 def descriptor_of_mol(mol: Chem.Mol) -> str | None:

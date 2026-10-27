@@ -610,8 +610,7 @@ def resolve_entry_stereo(
     differently is refused. Torsional conformers share one configuration, so every geometry takes part: a conformer
     deposited as the other isomer is a contradiction, not something to ignore.
 
-    :raises CodedValueError: ``species_stereo_contradiction``, ``species_stereo_label_invalid`` or
-        ``species_stereo_unsupported``.
+    :raises CodedValueError: ``species_stereo_contradiction`` or ``species_stereo_label_invalid``.
     """
 
     if is_electron(payload):
@@ -763,6 +762,45 @@ def resolve_species_entry_reference(
     return resolve_species_entry(session, payload, created_by=created_by)
 
 
+_NOT_REPRESENTED_TEXT = {
+    "axial": (
+        "axial stereo (Ra/Sa) is not yet represented: both mirror-image forms of this allene are stored in one entry"
+    ),
+    "cumulene": (
+        "cis/trans stereo across this cumulene is not yet represented: its cis and trans forms are stored in one entry"
+    ),
+    "symmetry": (
+        "this molecule's symmetry is too large to canonicalise its stereo descriptor, so the stereo elements inside "
+        "its symmetry classes are not represented: their configurations are stored in one entry"
+    ),
+}
+
+
+def _not_represented_warning(resolved: stereo.ResolvedStereo, field: str) -> UploadWarning:
+    """The warning for an entry that has a stereo element the vocabulary cannot state yet.
+
+    It is a code of its own, not the "unresolved" one: no further data would settle these elements, so the
+    depositor must not read it as a request for more.
+    """
+
+    reasons = "; ".join(_NOT_REPRESENTED_TEXT[r] for r in resolved.unrepresented)
+    unknown = (
+        f" {resolved.unknown_elements} other stereo element(s) are also unknown to the data (no geometry, mark or "
+        "stereo_label settled them)."
+        if resolved.unknown_elements
+        else ""
+    )
+    return UploadWarning(
+        field=field,
+        code=stereo.W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED,
+        message=(
+            f"Part of this species entry's stereochemistry cannot be represented yet (descriptor "
+            f"{resolved.descriptor!r}): {reasons}. Real stereoisomers therefore share this entry, and a "
+            f"later deposit of the other form lands in it.{unknown}"
+        ),
+    )
+
+
 def stereo_unresolved_warning(
     resolved: stereo.ResolvedStereo,
     *,
@@ -782,6 +820,8 @@ def stereo_unresolved_warning(
 
     if resolved.resolution not in (StereoResolution.partial, StereoResolution.unresolved):
         return None
+    if resolved.unrepresented:
+        return _not_represented_warning(resolved, field)
     return UploadWarning(
         field=field,
         code=stereo.W_SPECIES_ENTRY_STEREO_UNRESOLVED,

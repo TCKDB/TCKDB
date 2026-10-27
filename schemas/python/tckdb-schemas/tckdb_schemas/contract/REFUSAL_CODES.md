@@ -1136,15 +1136,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/chemistry/stereo.py`.
 - The body's `context` names the things involved.
-- Message: "species_entry.stereo_label does not fit the molecule: {problem}. Tokens are R, S, r, s, E, Z, - (not stereogenic here) or ? (unknown), one per stereo element in canonical order; this molecule's elements are, in order: {expected}."
-
-<a id="c-species-stereo-unsupported"></a>
-
-#### `species_stereo_unsupported`
-
-- Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/chemistry/stereo.py`.
-- The body's `context` names the things involved.
-- Message: "This molecule's stereochemistry cannot be represented: {problem}. Axial stereo of a cumulene has no token in the stereo descriptor vocabulary, and treating it as two E/Z double bonds would be wrong."
+- Message: "species_entry.stereo_label does not fit the molecule: {problem}. Tokens are R, S, r, s, E, Z, e, z, - (not stereogenic here) or ? (unknown), one per stereo element in canonical order; this molecule's elements are, in order: {expected}."
 
 <a id="c-statmech-calculation-key-undeclared"></a>
 

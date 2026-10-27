@@ -164,6 +164,7 @@ _INJECTIVE = [
     "CC(O)C(O)C(O)C(O)C(C)O",  # heptane-2,3,4,5,6-pentol: pseudo-asymmetric centres
     "CC(O)C(O)C(C)O",  # pentane-2,3,4-triol
     "C/C=C/C(O)C(O)/C=C/C",  # centres and bonds together
+    "CC(O)C(=CC)C(C)O",  # a pseudo-asymmetric double bond: four isomers, e/z among their tokens
 ]
 
 
@@ -186,6 +187,29 @@ def test_distinct_stereoisomers_get_distinct_descriptors_and_equal_ones_the_same
     assert all(len(d) == 1 for d in by_smiles.values()), "one molecule, two descriptors"
     assert all(len(s) == 1 for s in by_descriptor.values()), f"two molecules share a descriptor: {by_descriptor}"
     assert len(by_smiles) == len(by_descriptor)
+
+
+def test_a_pseudo_asymmetric_double_bond_has_lower_case_tokens_and_four_isomers_get_four_descriptors() -> None:
+    isomers = {Chem.MolToSmiles(i) for i in _stereoisomers("CC(O)C(=CC)C(C)O")}
+    assert len(isomers) == 4
+    descriptors = {stereo.descriptor_of_mol(Chem.MolFromSmiles(s)) for s in isomers}
+    assert len(descriptors) == 4
+    assert {d.split(",")[0] for d in descriptors} == {"-", "e", "z"}
+    assert all("?" not in d for d in descriptors), "fully specified isomers must not read as partial"
+    assert resolve("C/C=C(/[C@H](C)O)[C@@H](C)O").resolution == StereoResolution.resolved
+    assert resolve("CC(O)C(=CC)C(C)O", label="e,R,S").descriptor == "e,R,S"
+
+
+def test_all_cis_trimethylcyclohexane_is_a_known_limit_of_the_labeller() -> None:
+    """Pinned, not endorsed: RDKit's CIP labeller names only some ring centres of 1,3,5-trimethylcyclohexane. The two
+    isomers stay distinct (injective); the all-cis one reads ``r,?,?`` although it is fully specified. Documented in
+    DR-0038 as a limitation."""
+    descriptors = {
+        s: resolve(s)
+        for s in ("C[C@H]1C[C@H](C)C[C@@H](C)C1", "C[C@H]1C[C@@H](C)C[C@@H](C)C1")
+    }
+    assert sorted(r.descriptor for r in descriptors.values()) == ["r,?,?", "s,s,s"]
+    assert descriptors["C[C@H]1C[C@H](C)C[C@@H](C)C1"].resolution == StereoResolution.partial
 
 
 def test_the_known_counts() -> None:
@@ -359,11 +383,59 @@ def test_unknown_stays_unknown_when_the_configuration_does_not_decide_the_centre
     assert partial.resolution == StereoResolution.partial
 
 
-def test_a_stereogenic_allene_is_refused_clearly() -> None:
+@pytest.mark.parametrize(
+    ("smiles", "kind"),
+    [("CC=C=CC", "axial"), ("CC=C=C=C=CC", "axial"), ("CC=C=C=CC", "cumulene"), ("C1=C=C(C)CCC1", "axial")],
+)
+def test_a_stereogenic_cumulene_is_one_element_and_always_unknown(smiles: str, kind: str) -> None:
+    assert [e.kind for e in frame(smiles).elements] == [kind]
+    r = resolve(smiles)
+    assert (r.descriptor, r.resolution) == ("?", StereoResolution.unresolved)
+    assert r.unrepresented == (kind,)
+    assert r.unknown_elements == 0
+
+
+@pytest.mark.parametrize("size", [6, 7, 8, 9])
+def test_cyclic_allenes_of_every_ring_size_carry_an_unknown_axis(size: int) -> None:
+    smiles = "C1=C=C(C)" + "C" * (size - 3) + "1"
+    r = resolve(smiles)
+    assert r.descriptor == "?" and r.unrepresented == ("axial",), smiles
+    assert resolve(smiles, label="?").descriptor == "?"
+
+
+@pytest.mark.parametrize("label", ["Ra", "R", "E"])
+def test_a_letter_at_an_axial_position_is_refused(label: str) -> None:
     with pytest.raises(CodedValueError) as excinfo:
-        frame("CC=C=CC")
-    assert excinfo.value.code == stereo.W_SPECIES_STEREO_UNSUPPORTED
-    assert "two E/Z double bonds" in str(excinfo.value)
+        resolve("CC=C=CC", label=label)
+    assert excinfo.value.code == stereo.W_SPECIES_STEREO_LABEL_INVALID
+
+
+def test_the_axial_refusal_says_axial_stereo_is_not_supported_yet() -> None:
+    with pytest.raises(CodedValueError) as excinfo:
+        resolve("CC=C=CC", label="R")
+    assert "axial stereo (Ra/Sa)" in str(excinfo.value) and "not supported yet" in str(excinfo.value)
+
+
+def test_both_mirror_images_of_an_allene_share_one_entry() -> None:
+    a = resolve("CC=C=CC", xyz=embed_xyz("CC=C=CC", seed=3))
+    b = resolve("CC=C=CC", xyz=embed_xyz("CC=C=CC", seed=11))
+    assert a.descriptor == b.descriptor == "?"
+
+
+def test_an_allene_beside_a_centre_keeps_the_centre_and_stays_partial() -> None:
+    r = resolve("CC=C=C[C@H](C)O")
+    assert r.resolution == StereoResolution.partial
+    assert sorted(r.descriptor.split(",")) in (["?", "R"], ["?", "S"])
+    assert r.unrepresented == ("axial",) and r.unknown_elements == 0
+
+
+def test_butatriene_is_not_labelled_by_rdkit_so_it_is_unknown_and_flagged() -> None:
+    """RDKit parses no stereo from ``C/C=C=C=C/C`` marks and perceives none from 3D (probed on 2025.09), so the
+    cis/trans element across a cumulene is stated as ``?`` with its own flag."""
+    for smiles in ("C/C=C=C=C/C", "C/C=C=C=C\\C", "CC=C=C=CC"):
+        r = resolve(smiles)
+        assert (r.descriptor, r.unrepresented) == ("?", ("cumulene",)), smiles
+    assert resolve("CC=C=C=CC", xyz=embed_xyz("CC=C=C=CC")).descriptor == "?"
 
 
 @pytest.mark.parametrize("smiles", ["C=C=C", "C=C=CC", "C=C=O", "CS(=O)(=O)C", "O=C=O"])
@@ -372,10 +444,30 @@ def test_a_cumulated_chain_that_is_not_stereogenic_contributes_no_element(smiles
 
 
 @pytest.mark.parametrize("smiles", ["FC1=C=N[N]N=N1", "FC1=C=[NH+][N-]N=N1"])
-def test_a_cumulated_chain_closed_in_a_small_ring_is_not_an_element_and_is_not_refused(smiles: str) -> None:
-    """A ring of fewer than eight members cannot take the linear geometry axial stereo needs, so such a deposit (it
-    exists in the bulk reaction fixtures) is neither stereogenic nor refused."""
-    assert frame(smiles).elements == ()
+def test_the_ring_cumulene_in_the_bulk_fixture_is_accepted(smiles: str) -> None:
+    """Such a deposit exists in the bulk reaction fixtures; it is neither refused nor special-cased by ring size."""
+    r = resolve(smiles)
+    assert r.descriptor in (None, "?")
+
+
+def test_past_the_automorphism_cap_symmetric_elements_are_unknown_and_flagged(monkeypatch) -> None:
+    """The cap never crashes and never refuses: the elements inside a symmetry class are stated as ``?`` (a lumping of
+    real isomers, deterministic, flagged ``symmetry``); an element alone in its class keeps its token."""
+    full = resolve("C[C@H](O)[C@@H](O)[C@@H](C)O")  # a meso pentane-2,3,4-triol: R, r, S
+    assert "r" in full.descriptor
+    monkeypatch.setattr(stereo, "_AUTOMORPHISM_CAP", 2)
+    capped = resolve("C[C@H](O)[C@@H](O)[C@@H](C)O")
+    assert sorted(capped.descriptor.split(",")) == ["?", "?", "r"]
+    assert capped.unrepresented == ("symmetry",)
+    assert capped.resolution == StereoResolution.partial
+    # Two sources naming the same configuration still agree after masking; none can contradict inside a masked class.
+    assert resolve("CC(O)C(O)C(C)O", xyz=embed_xyz("C[C@H](O)[C@@H](O)[C@@H](C)O")).descriptor == capped.descriptor
+    # The same configuration spelled with the atoms in another order gets the same string.
+    molecule = Chem.MolFromSmiles("C[C@H](O)[C@@H](O)[C@@H](C)O")
+    for seed in range(5):
+        random.seed(seed)
+        spelling = Chem.MolToSmiles(molecule, doRandom=True)
+        assert resolve(spelling).descriptor == capped.descriptor, spelling
 
 
 def test_isotopic_stereo_gets_a_descriptor_but_the_species_does_not() -> None:
@@ -399,13 +491,13 @@ def test_isotopic_stereo_gets_a_descriptor_but_the_species_does_not() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("label", ["trans", "cis", "e", "R/S", "E;Z", "E,", "1"])
+@pytest.mark.parametrize("label", ["trans", "cis", "ez", "R/S", "E;Z", "E,", "1"])
 def test_free_text_is_refused_by_the_wire_schema(label: str) -> None:
     with pytest.raises(ValueError, match="stereo_label"):
         SpeciesEntryIdentityPayload(smiles="CC=CC", charge=0, multiplicity=1, stereo_label=label)
 
 
-@pytest.mark.parametrize("label", ["E", "R,S", "E,?", "?", "  Z  ", "R,r,S", "S,-,S"])
+@pytest.mark.parametrize("label", ["E", "R,S", "E,?", "?", "  Z  ", "R,r,S", "S,-,S", "e,R,S", "z"])
 def test_descriptor_tokens_are_accepted_by_the_wire_schema(label: str) -> None:
     assert SpeciesEntryIdentityPayload(smiles="CC=CC", charge=0, multiplicity=1, stereo_label=label)
 

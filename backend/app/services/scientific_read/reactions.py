@@ -74,6 +74,7 @@ from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
 )
+from app.services.scientific_read.structure_query import constitution_smiles
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "kinetics",
@@ -230,6 +231,10 @@ def search_reactions(
             )
         ).all()
     }
+    # An entry that stayed on a merged-away reaction is not a live record.
+    entries = [e for e in entries if chem_reactions[e.reaction_id].merged_into_chem_reaction_id is None]
+    if not entries:
+        return _empty_response(request, includes, offset, limit)
 
     # Filter by family if requested.
     if request.family is not None:
@@ -499,6 +504,9 @@ def browse_reactions(
             )
         ).all()
     }
+    entries = [e for e in entries if chem_reactions[e.reaction_id].merged_into_chem_reaction_id is None]
+    if not entries:
+        return _empty_browse_response(request, offset, limit)
 
     if request.family is not None:
         family = session.scalar(
@@ -654,11 +662,16 @@ def _resolve_smiles_to_species_ids(
 ) -> list[int]:
     if not smiles_list:
         return []
+    # The species key is the constitution (DR-0038): ``C/C=C/C`` and ``CC=CC`` name one species, and a species merged
+    # into another is kept but is not what a query resolves to.
+    flat = {s: constitution_smiles(s) for s in smiles_list}
     rows = session.execute(
-        select(Species.smiles, Species.id).where(Species.smiles.in_(smiles_list))
+        select(Species.smiles, Species.id).where(
+            Species.smiles.in_(set(flat.values())), Species.merged_into_species_id.is_(None)
+        )
     ).all()
     by_smiles: dict[str, int] = {row.smiles: row.id for row in rows}
-    return [by_smiles[s] for s in smiles_list if s in by_smiles]
+    return [by_smiles[flat[s]] for s in smiles_list if flat[s] in by_smiles]
 
 
 def _side_matches(
