@@ -383,8 +383,11 @@ class RefGuardUnplaceable(RuntimeError):
         )
 
 
-class SubjectBelowFloor(RefGuardUnplaceable):
-    """A record below the read profile's floor was returned as the ANSWER of a read: the service's population filter is missing.
+class SubjectNotShown(RefGuardUnplaceable):
+    """A record the read profile does not show was returned as the ANSWER of a read: the service's population filter is missing.
+
+    For a list row that is a record below the record floor; for the ``record`` of a detail read it is a record in the
+    withheld set (``rejected``, ``deprecated``), which the detail gate answers 404 for (ADR 0023 step 7).
 
     A subclass of :class:`RefGuardUnplaceable` (it fails the request the same way) with its own message: the remedy is the
     service's floor, not the field's optionality and not ``POINTER_MODELS``.
@@ -393,7 +396,7 @@ class SubjectBelowFloor(RefGuardUnplaceable):
     def __init__(self, model_name: str, field_path: str, ref_prefix: str) -> None:
         RuntimeError.__init__(
             self,
-            f"a {ref_prefix}_ record below the read profile's floor was returned as a result at {field_path} ({model_name}); "
+            f"a {ref_prefix}_ record the read profile does not show was returned as a result at {field_path} ({model_name}); "
             "the service's population filter is missing",
         )
         self.model_name = model_name
@@ -423,6 +426,8 @@ class RefGuardContext:
     document_reports: list[WithholdReport] = field(default_factory=list)
     #: The review status of every gated ref any lookup of this request fetched (:func:`classify_refs`).
     statuses: dict[str, RecordReviewStatus] = field(default_factory=dict)
+    #: A legacy detail read under a floor: the review status of the record it served (``X-TCKDB-Review-Status``).
+    served_review_status: str | None = None
 
 
 _CURRENT_CONTEXT: ContextVar[RefGuardContext | None] = ContextVar("tckdb_ref_guard_context", default=None)
@@ -892,6 +897,11 @@ def subject_identity_site(path: tuple[_Frame, ...]) -> tuple[str, ...] | None:
     return None
 
 
+def _is_detail_subject(path: tuple[_Frame, ...]) -> bool:
+    """Is the site under the ``record`` of a response (the answer of a detail-by-ref read), not a row of ``records``?"""
+    return bool(path) and path[0][1] == "record"
+
+
 def _is_subject_own_ref(path: tuple[_Frame, ...], ref: str) -> bool:
     """Is this site the subject's identity ref, as the registry (:data:`SUBJECT_IDENTITY`) declares it?
 
@@ -1099,16 +1109,21 @@ def withhold_in_model(
     report.refs_seen = len(sites)
     if not sites:
         return report
-    subject_refs = {ref for path, ref in sites if _is_subject_own_ref(path, ref)}
+    # A list subject (an element of ``records``) is judged by the record floor; a detail subject (``record``) is the answer
+    # of a detail-by-ref read, which serves anything but the withheld set (ADR 0023 step 7), so it is judged by that set.
+    subject_refs = {ref for path, ref in sites if _is_subject_own_ref(path, ref) and not _is_detail_subject(path)}
     found = classify_refs(session, {ref for _, ref in sites}, profile=profile, subject_refs=subject_refs)
     report.hidden = found.evidence
     report.statuses = found.statuses
     report.hidden |= {ref for _, ref in sites if ref == UNSETTLED_TEXT}
-    # The safety net: a subject's own ref below the record floor means a service forgot its population filter, whatever its
-    # badge would say. Only the evidence set says what a nested pointer does.
+    # The safety net: a listed subject below the record floor, or a detail subject in the withheld set, means a service
+    # forgot its population filter (or the detail gate), whatever its badge would say. Only the evidence set says what a
+    # nested pointer does.
     for path, ref in sites:
-        if ref in found.subject_below_floor and _is_subject_own_ref(path, ref):
-            raise SubjectBelowFloor(type(path[-1][0]).__name__, _path_text(path), ref.split("_", 1)[0])
+        if not _is_subject_own_ref(path, ref):
+            continue
+        if ref in (found.evidence if _is_detail_subject(path) else found.subject_below_floor):
+            raise SubjectNotShown(type(path[-1][0]).__name__, _path_text(path), ref.split("_", 1)[0])
     if not report.hidden:
         return report
     planned: dict[tuple[int, Any, str], _Action] = {}
@@ -1536,7 +1551,7 @@ __all__ = [
     "RefGuardContext",
     "RefGuardUnplaceable",
     "RefSets",
-    "SubjectBelowFloor",
+    "SubjectNotShown",
     "WithheldSite",
     "WithholdReport",
     "attach_review_statuses",

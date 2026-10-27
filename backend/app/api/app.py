@@ -155,6 +155,9 @@ def create_app() -> FastAPI:
             allow_credentials=settings.cors_allow_credentials,
             allow_methods=settings.cors_allow_methods,
             allow_headers=settings.cors_allow_headers,
+            # Response headers a browser client may read: the served record's review status and the default-exclusion
+            # disclosure on bare-array lists (legacy reads).
+            expose_headers=["X-TCKDB-Review-Status", "X-TCKDB-Hidden-By-Default"],
         )
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(RequestIDMiddleware)

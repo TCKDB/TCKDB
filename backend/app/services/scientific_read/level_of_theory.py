@@ -61,7 +61,7 @@ from app.schemas.reads.scientific_level_of_theory import (
     ScientificLevelOfTheoryDetailResponse,
     ScientificLevelOfTheoryRecord,
 )
-from app.services.scientific_read.common import review_floor_predicate, validate_includes, where_visible
+from app.services.scientific_read.common import shown_predicate, validate_includes, where_visible
 from app.services.scientific_read.composite_binding import composite_scheme_summary
 from app.services.scientific_read.energy_correction_schemes import (
     build_energy_correction_scheme_record,
@@ -126,7 +126,7 @@ def get_level_of_theory(
     if lot is None:  # pragma: no cover — defended by resolver 404
         raise not_found("level_of_theory", row_id=lot_id, code="handle_not_found")
 
-    record = build_level_of_theory_record(session, lot=lot, includes=includes)
+    record = build_level_of_theory_record(session, lot=lot, includes=includes, detail=True)
 
     return ScientificLevelOfTheoryDetailResponse(
         request=RequestEcho(include=sorted(includes)),
@@ -147,6 +147,7 @@ def build_level_of_theory_record(
     lot: LevelOfTheory,
     includes: set[str],
     composite_schemes: Mapping[int, CompositeSchemeSummary] | None = None,
+    detail: bool = False,
 ) -> ScientificLevelOfTheoryRecord:
     """Project one LevelOfTheory row into the public record shape.
 
@@ -154,8 +155,11 @@ def build_level_of_theory_record(
         :func:`composite_scheme_summaries` call. ``None`` looks this level up
         alone (the detail route); a search passes it so a page costs one
         statement, not one per record.
+    :param detail: True for the level's own detail read. Its usage (``used_by``, the usage count, the software rows) is then
+        the calculations it rests on as linked evidence: under ``curated`` all but the withheld set, badged (ADR 0023
+        step 7). A search row keeps the approved record floor, which is what its eligibility filter lists.
     """
-    calc_usage_count = _count_calculation_usage(session, lot.id)
+    calc_usage_count = _count_calculation_usage(session, lot.id, detail=detail)
     has_schemes = _has_correction_schemes(session, lot.id)
     has_fsf = _has_frequency_scale_factors(session, lot.id)
     # Always computed (same discipline as has_schemes/has_fsf above): this
@@ -164,7 +168,7 @@ def build_level_of_theory_record(
     # disagree -- see ``LevelOfTheoryEvidenceSummary.distinct_software_count``'s
     # docstring for why that used to be a real risk (two independent
     # queries) and is not one now.
-    software_rows = _software_usage_rows(session, lot.id)
+    software_rows = _software_usage_rows(session, lot.id, detail=detail)
     distinct_software = len({name for name, _version, _count in software_rows})
 
     evidence = LevelOfTheoryEvidenceSummary(
@@ -204,7 +208,7 @@ def build_level_of_theory_record(
 
     correction_schemes_block = None
     if "correction_schemes" in includes:
-        correction_schemes_block = _build_correction_schemes(session, lot.id)
+        correction_schemes_block = _build_correction_schemes(session, lot.id, detail=detail)
 
     fsf_block = None
     if "frequency_scale_factors" in includes:
@@ -212,11 +216,11 @@ def build_level_of_theory_record(
 
     used_by_block = None
     if "used_by" in includes:
-        used_by_block = _build_used_by(session, lot.id)
+        used_by_block = _build_used_by(session, lot.id, detail=detail)
 
     software_block = None
     if "software" in includes:
-        software_block = _build_software(session, lot.id, software_rows=software_rows)
+        software_block = _build_software(session, lot.id, software_rows=software_rows, detail=detail)
 
     return ScientificLevelOfTheoryRecord(
         level_of_theory=core,
@@ -234,22 +238,23 @@ def build_level_of_theory_record(
 # ---------------------------------------------------------------------------
 
 
-def _calculation_visible():
+def _calculation_visible(*, detail: bool = False):
     """The calculations the read profile shows, or ``None`` under the default profile (owner decision D5).
 
-    The record floor, on purpose (ADR 0023): ``used_by``, ``evidence_summary.calculation_usage_count`` and the usage-eligibility
-    filter of the level-of-theory search all preview the CALCULATION record list (approved-only under ``curated``), not the
-    evidence of a returned record. They share this predicate so the count, the list and the search agree.
+    A search row keeps the record floor (ADR 0023): its usage count and the usage-eligibility filter of the level-of-theory
+    search preview the CALCULATION record list (approved-only under ``curated``), and they share this predicate so the
+    count and the search agree. The level's own detail (``detail=True``, step 7) shows its usage as linked evidence: all
+    but the withheld set, badged.
     """
-    return review_floor_predicate(Calculation.id, SubmissionRecordType.calculation)
+    return shown_predicate(Calculation.id, SubmissionRecordType.calculation, detail=detail)
 
 
-def _calculation_visible_or_true():
-    visible = _calculation_visible()
+def _calculation_visible_or_true(*, detail: bool = False):
+    visible = _calculation_visible(detail=detail)
     return True if visible is None else visible
 
 
-def _count_calculation_usage(session: Session, lot_id: int) -> int:
+def _count_calculation_usage(session: Session, lot_id: int, *, detail: bool = False) -> int:
     """Number of calculations attributing *lot_id*.
 
     Usage-derived: an ``INNER JOIN`` from ``calculation.lot_id`` is
@@ -263,7 +268,7 @@ def _count_calculation_usage(session: Session, lot_id: int) -> int:
         session.scalar(
             where_visible(
                 select(func.count()).select_from(Calculation).where(Calculation.lot_id == lot_id),
-                _calculation_visible(),
+                _calculation_visible(detail=detail),
             )
         )
         or 0
@@ -316,7 +321,7 @@ def _has_frequency_scale_factors(session: Session, lot_id: int) -> bool:
 # list at all. It is never rendered with a ``calculation_count`` of zero.
 
 
-def _software_usage_rows(session: Session, lot_id: int) -> list[tuple[str, str | None, int]]:
+def _software_usage_rows(session: Session, lot_id: int, *, detail: bool = False) -> list[tuple[str, str | None, int]]:
     """``(software_name, version, calculation_count)`` rows for *lot_id*.
 
     Grouped by ``(Software.name, SoftwareRelease.version)`` -- two
@@ -339,7 +344,7 @@ def _software_usage_rows(session: Session, lot_id: int) -> list[tuple[str, str |
         )
         .join(Software, Software.id == SoftwareRelease.software_id)
         .where(Calculation.lot_id == lot_id)
-        .where(_calculation_visible_or_true())
+        .where(_calculation_visible_or_true(detail=detail))
         .group_by(Software.name, SoftwareRelease.version)
         .order_by(
             func.count(Calculation.id).desc(),
@@ -351,7 +356,7 @@ def _software_usage_rows(session: Session, lot_id: int) -> list[tuple[str, str |
 
 
 def _workflow_tool_usage_rows(
-    session: Session, lot_id: int
+    session: Session, lot_id: int, *, detail: bool = False
 ) -> list[tuple[str, str | None, int]]:
     """``(workflow_tool_name, version, calculation_count)`` rows for *lot_id*.
 
@@ -372,7 +377,7 @@ def _workflow_tool_usage_rows(
         )
         .join(WorkflowTool, WorkflowTool.id == WorkflowToolRelease.workflow_tool_id)
         .where(Calculation.lot_id == lot_id)
-        .where(_calculation_visible_or_true())
+        .where(_calculation_visible_or_true(detail=detail))
         .group_by(WorkflowTool.name, WorkflowToolRelease.version)
         .order_by(
             func.count(Calculation.id).desc(),
@@ -388,6 +393,7 @@ def _build_software(
     lot_id: int,
     *,
     software_rows: list[tuple[str, str | None, int]],
+    detail: bool = False,
 ) -> LevelOfTheorySoftwareBreakdown:
     """Assemble the ``include=software`` payload.
 
@@ -399,7 +405,7 @@ def _build_software(
     ``include=software``. Only the workflow-tool side is queried fresh,
     since nothing else in this module needs it yet.
     """
-    workflow_rows = _workflow_tool_usage_rows(session, lot_id)
+    workflow_rows = _workflow_tool_usage_rows(session, lot_id, detail=detail)
     return LevelOfTheorySoftwareBreakdown(
         software=[
             LevelOfTheorySoftwareUsage(
@@ -421,7 +427,7 @@ def _build_software(
 # ---------------------------------------------------------------------------
 
 
-def _build_correction_schemes(session: Session, lot_id: int):
+def _build_correction_schemes(session: Session, lot_id: int, *, detail: bool = False):
     """Schemes joined on ``level_of_theory_id`` -- the FK, never text.
 
     This is the fix for the gap the methods-surface plan names directly:
@@ -444,7 +450,7 @@ def _build_correction_schemes(session: Session, lot_id: int):
     ).all()
     return [
         build_energy_correction_scheme_record(
-            session, ecs=scheme, includes={"corrections"}
+            session, ecs=scheme, includes={"corrections"}, detail=detail
         )
         for scheme in schemes
     ]
@@ -527,7 +533,7 @@ def _literature_ref(session: Session, literature_id: int | None) -> str | None:
 
 
 def _build_used_by(
-    session: Session, lot_id: int
+    session: Session, lot_id: int, *, detail: bool = False
 ) -> list[LevelOfTheoryCalculationUsageSummary]:
     """Bounded, ordered-by-id list of calculations attributing this LOT."""
     from app.db.models.species import SpeciesEntry
@@ -542,7 +548,7 @@ def _build_used_by(
             Calculation.transition_state_entry_id,
         )
         .where(Calculation.lot_id == lot_id)
-        .where(_calculation_visible_or_true())
+        .where(_calculation_visible_or_true(detail=detail))
         .order_by(Calculation.id.asc())
         .limit(_USAGE_LIMIT)
     ).all()

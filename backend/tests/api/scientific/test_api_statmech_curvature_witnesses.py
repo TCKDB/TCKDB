@@ -210,9 +210,9 @@ def _read_profile(client, sm, profile):
 
 def test_curated_profile_lists_an_unreviewed_calculation_as_evidence(client, db_session):
     """ADR 0023: a not-reviewed source calculation is linked evidence of the approved statmech, so its curvature witness is
-    listed under curated as it is under exploratory. Its own detail route still answers 404 (step 7)."""
+    listed under curated as it is under exploratory. Its own detail route serves it (step 7)."""
     sm, unreviewed = _curated_world(db_session, calc_status=None)  # not_reviewed
-    assert client.get(f"/api/v1/scientific/calculations/{unreviewed.public_ref}", params={"profile": "curated"}).status_code == 404
+    assert client.get(f"/api/v1/scientific/calculations/{unreviewed.public_ref}", params={"profile": "curated"}).status_code == 200
     (w,) = _read_profile(client, sm, "curated")
     assert w["calculation_ref"] == unreviewed.public_ref and w["has_hessian"] is True
 

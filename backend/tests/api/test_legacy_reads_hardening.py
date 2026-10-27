@@ -51,7 +51,7 @@ SPELLINGS = ["+{id}", "{id}.0", "%20{id}", "{id}_0", "0{id}"]
 def test_a_respelled_id_is_gated_like_the_id(case, client, db_session):
     """Kills: a gate that compares the raw path text (``isdecimal``) while FastAPI coerces the spelling to the id."""
     seeded, url = _seed(case, db_session)
-    hidden_id = seeded.rows[3].id  # not_reviewed: below the curated floor
+    hidden_id = seeded.rows[0].id  # rejected: withheld under curated (a not_reviewed one is served since step 7)
     unknown = client.get(f"{url}/999999999", params={"profile": "curated"})
     accepted = 0
     for spelling in SPELLINGS:
@@ -196,7 +196,7 @@ def test_an_id_filter_naming_a_withheld_record_answers_as_an_unknown_id_does(cli
 @pytest.mark.parametrize("withheld", [False, True], ids=["unlisted", "withheld"])
 def test_an_approved_ts_does_not_list_a_withheld_entry(client, db_session, withheld):
     """An entry embedded in its transition state is linked evidence of it: listed while unreviewed, dropped once rejected.
-    Its own detail route stays on the record floor either way."""
+    Its own detail route serves it while unreviewed and answers 404 once rejected (step 7)."""
     w = _world(db_session, withheld)
     count = 0 if withheld else 1
     detail = _curated(client, f"/transition-states/{w['ts'].id}").json()
@@ -207,17 +207,22 @@ def test_an_approved_ts_does_not_list_a_withheld_entry(client, db_session, withh
     assert len(via_entry["entries"]) == count
     exploratory = client.get(f"{LEGACY}/transition-states/{w['ts'].id}", params={"include_rejected": "true"})
     assert len(exploratory.json()["entries"]) == 1
-    assert _curated(client, f"/transition-states/entries/{w['ts_entry'].id}").status_code == 404
+    assert _curated(client, f"/transition-states/entries/{w['ts_entry'].id}").status_code == (404 if withheld else 200)
 
 
-def test_an_observation_in_a_hidden_group_is_hidden_with_it(client, db_session):
-    """Kills: listing an approved observation that names its (hidden) group, and 200 on its own detail route."""
-    w = _world(db_session)
+@pytest.mark.parametrize("withheld", [False, True], ids=["unlisted", "withheld"])
+def test_an_observation_in_a_hidden_group_is_hidden_with_it(client, db_session, withheld):
+    """Kills: listing an approved observation that names its (hidden) group, and 200 on its own detail route once the
+    group is withheld. While the group is merely unreviewed the observation's detail route serves it (step 7)."""
+    w = _world(db_session, withheld)
     orphan = w["orphaned_observation"]
     assert client.get(f"{LEGACY}/conformer-observations/{orphan.id}").status_code == 200
     curated = _curated(client, f"/conformer-observations/{orphan.id}")
-    assert curated.status_code == 404
-    assert curated.json() == _curated(client, "/conformer-observations/999999999").json()
+    if withheld:
+        assert curated.status_code == 404
+        assert curated.json() == _curated(client, "/conformer-observations/999999999").json()
+    else:
+        assert curated.status_code == 200, curated.text
     listed = _curated(client, "/conformer-observations").json()
     assert [i["id"] for i in listed["items"]] == [w["shown_observation"].id]
     assert listed["total"] == 1
@@ -243,7 +248,8 @@ def test_a_hidden_solve_filter_answers_as_a_missing_one(client, db_session):
     network_id = db_session.scalar(select(NetworkChannel.network_id))
     channel_id = db_session.scalar(select(NetworkChannel.id))
     set_review(db_session, record_type=T.network, record_id=network_id, status=S.approved)
-    hidden_solve = seeded.review_targets[0][1]  # a solve with no review row: below the floor
+    hidden_solve = seeded.review_targets[0][1]
+    set_review(db_session, record_type=T.network_solve, record_id=hidden_solve, status=S.rejected)  # withheld
     path = f"/networks/{network_id}/channels/{channel_id}/kinetics"
     hidden = _curated(client, path, solve_id=hidden_solve)
     missing = _curated(client, path, solve_id=999999999)
@@ -421,7 +427,9 @@ def test_applied_energy_corrections_obey_the_default_visibility_and_the_floor(cl
     assert [i["id"] for i in curated["items"]] == [rows[1].id] and curated["total"] == 1
     assert curated["hidden_by_default"] is None
     assert client.get(f"{url}/{rows[2].id}").status_code == 200
-    assert client.get(f"{url}/{rows[2].id}", params={"profile": "curated"}).status_code == 404
+    # Below the floor but not withheld: served under curated (step 7). Rejected: 404.
+    assert client.get(f"{url}/{rows[2].id}", params={"profile": "curated"}).status_code == 200
+    assert client.get(f"{url}/{rows[0].id}", params={"profile": "curated"}).status_code == 404
 
 
 # --- counts equal lists, also without a floor ---------------------------------------------------------------------------
@@ -512,11 +520,12 @@ def test_a_channels_kinetics_discloses_what_the_default_hid_in_a_header(client, 
 @pytest.mark.parametrize("withheld", [False, True], ids=["unlisted", "withheld"])
 def test_an_approved_child_of_a_withheld_parent_is_not_named_by_a_pointer(client, db_session, withheld):
     """Kills: judging a pointer by the child's own review only. The detail route of the observation / the entry answers
-    404 while its parent is below the floor (step 7 changes that); a calculation must not name it once the parent is
-    withheld, and does name it while the parent is merely unreviewed."""
+    404 while its parent is withheld and serves it while the parent is merely unreviewed (step 7); a calculation must not
+    name it once the parent is withheld, and does name it while the parent is merely unreviewed."""
     w = _world(db_session, withheld)
-    assert _curated(client, f"/conformer-observations/{w['orphaned_observation'].id}").status_code == 404
-    assert _curated(client, f"/transition-states/entries/{w['orphan_ts_entry'].id}").status_code == 404
+    served = 404 if withheld else 200
+    assert _curated(client, f"/conformer-observations/{w['orphaned_observation'].id}").status_code == served
+    assert _curated(client, f"/transition-states/entries/{w['orphan_ts_entry'].id}").status_code == served
     observation = _curated(client, f"/calculations/{w['orphan_calc'].id}").json()["conformer_observation_id"]
     ts_entry = _curated(client, f"/calculations/{w['orphan_ts_calc'].id}").json()["transition_state_entry_id"]
     assert observation == (None if withheld else w["orphaned_observation"].id)

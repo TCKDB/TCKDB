@@ -8,14 +8,14 @@ the scientific reads obey. This module gives them the same three:
   ``include_deprecated`` is set (:class:`LegacyVisibility`), by the same function the scientific reads use
   (:func:`~app.services.scientific_read.common.visible_statuses`).
 * **The read profile.** ``?profile=curated`` raises the floor to ``approved`` through that same function, and is
-  resolved by the same dependency as on the scientific surface. A record below the floor is absent: from a list, from
-  a count, and from its own detail route, where it answers exactly as an id that names nothing (decision D6, hidden ==
-  unknown == absent).
-* **Linked evidence (ADR 0023).** The floor decides which rows a list returns and which detail routes answer. What a returned
+  resolved by the same dependency as on the scientific surface. A record below the floor is absent from a list and from
+  a count. Its own detail route serves it unless it is rejected or deprecated (ADR 0023 step 7), and a withheld one answers
+  exactly as an id that names nothing (hidden == unknown == absent).
+* **Linked evidence (ADR 0023).** The floor decides which rows a list returns; a detail route answers 404 for a withheld record only (step 7). What a returned
   row NAMES (a pointer column, an embedded record such as a conformer group's observations) is linked evidence: under
   ``curated`` only a rejected or deprecated record is blanked or dropped, and one that is merely below the floor is named as
-  it is under the default profile. These payloads carry raw ids and no badge field, so the badge is not shown; the record's
-  own detail route still answers by the floor until step 7. An id-typed filter naming a withheld record is rewritten to name
+  it is under the default profile. These payloads carry raw ids and no badge field, so the response says the badge in the
+  ``X-TCKDB-Review-Status`` header (:data:`REVIEW_STATUS_HEADER`). An id-typed filter naming a withheld record is rewritten to name
   nothing; one naming an unreviewed record is kept (a filter is not a subject).
 * **Disclosure.** A list under the exploratory profile reports how many records each default exclusion hid
   (``hidden_by_default``). Under ``curated`` it reports nothing about records below the floor.
@@ -38,7 +38,6 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.errors import NotFoundError
 from app.api.routes._pagination import PaginatedResponse
 from app.db.models.common import ProfileRecommendation, ReadProfile, RecordReviewStatus, SubmissionRecordType
 from app.db.models.record_review import RecordReview
@@ -48,7 +47,6 @@ from app.schemas.reads.scientific_common import (
     OrderKeyEcho,
 )
 from app.services.scientific_read.common import evidence_visible_statuses, fetch_review_badges, visible_statuses
-from app.services.scientific_read.handles import status_hidden_under_profile
 from app.services.scientific_read.hidden_by_default import hidden_by_default_block
 from app.services.scientific_read.profile import current_read_profile
 from app.services.scientific_read.ref_guard import current_ref_guard_context
@@ -165,11 +163,39 @@ class LegacyVisibility:
 
 HIDDEN_HEADER = "X-TCKDB-Hidden-By-Default"
 
+#: The review status of the record a legacy DETAIL read served under a profile with a review floor (``curated``). The
+#: legacy payloads are raw entity rows with no badge field, and since step 7 of ADR 0023 a detail serves a record that is
+#: merely ``not_reviewed`` or ``under_review``, so the status travels here. Absent under the default profile, on a list, and
+#: on a detail whose path names no gated record.
+REVIEW_STATUS_HEADER = "X-TCKDB-Review-Status"
+
+#: The id a withheld record is replaced by before the route runs: it names no row, so the route answers for the withheld
+#: record exactly as it answers for an id that does not exist (hidden == unknown). Shared by the path-parameter gates and
+#: the id-typed filters.
+ABSENT_ID = -1
+
+#: The OpenAPI declaration of the headers legacy responses may carry.
+REVIEW_STATUS_HEADER_SPEC = {
+    "description": (
+        "Under profile=curated, the review status (not_reviewed, under_review, approved, ...) of the single record this "
+        "response serves. Absent under the default profile, on lists, and on any response that is not the single gated "
+        "record itself (sub-resource lists, and single-object sub-resources such as /calculations/{id}/sp-result)."
+    ),
+    "schema": {"type": "string"},
+}
+HIDDEN_HEADER_SPEC = {
+    "description": (
+        "On a list that is a bare JSON array: how many records each default exclusion hid, as `deprecated=2; rejected=1` (keys sorted). "
+        "Absent when nothing was excluded and always absent under profile=curated."
+    ),
+    "schema": {"type": "string"},
+}
+
 
 def disclose_in_header(response: Response, block: HiddenByDefault | None) -> None:
     """A list that is a bare JSON array has no envelope to carry ``hidden_by_default``; it goes in a header.
 
-    ``rejected=1; deprecated=2``, one entry per default exclusion. Absent when nothing was excluded by default and
+    ``deprecated=2; rejected=1``, one entry per default exclusion. Absent when nothing was excluded by default and
     always absent under ``curated`` (no count of records below the floor).
     """
     if block is None:
@@ -198,22 +224,6 @@ def entity_page(
     )
 
 
-def ensure_not_below_floor(
-    session: Session, record_type: SubmissionRecordType, record_id: int, kind_label: str
-) -> None:
-    """Answer 404 for a record the active profile's review floor hides: exactly as an id that names nothing.
-
-    No-op without a floor (exploratory), so the default behaviour of a detail read is unchanged.
-    """
-    if current_read_profile().review_floor is None:
-        return
-    status = session.scalar(
-        select(RecordReview.status).where(RecordReview.record_type == record_type, RecordReview.record_id == record_id)
-    )
-    if status_hidden_under_profile(status if status is not None else RecordReviewStatus.not_reviewed):
-        raise NotFoundError(f"{kind_label} not found")
-
-
 @dataclass(frozen=True)
 class Gate:
     """A path parameter that names a record the profile may hide (judged with its parent, see :data:`PARENT_OF`)."""
@@ -227,10 +237,6 @@ T = SubmissionRecordType
 #: Kind of a ``network_kinetics`` row, which is reviewed through its solve (it has no review row of its own).
 NETWORK_KINETICS = "network_kinetics"
 
-
-def _floor_statuses() -> set[RecordReviewStatus]:
-    """The statuses the profile's floor leaves visible (every status without a floor)."""
-    return visible_statuses(min_review_status=None, include_rejected=True, include_deprecated=True)
 
 def _evidence_statuses() -> set[RecordReviewStatus]:
     """The statuses linked evidence may have and still be shown under the profile (ADR 0023): all but ``rejected`` and
@@ -483,11 +489,20 @@ def withhold_hidden_records(session: Session, payload: Any, *, request_statuses:
 _PATH_PARAM = re.compile(r"{(\w+)(?::[^}]*)?}")
 
 
-def _floor_hidden(session: Session, kind: SubmissionRecordType, record_id: int) -> bool:
-    return bool(_hidden_ids(session, kind, {record_id}, _floor_statuses()))
+def served_param_of(path: str, gates: dict[str, Gate]) -> str | None:
+    """The gated path parameter whose record a route SERVES: the one its path ends with (``/thermo/{thermo_id}``).
+
+    A route whose path continues past a gated parameter (``/networks/{network_id}/solves``,
+    ``/calculations/{calculation_id}/dependencies``) serves a list of sub-resources, not that record, and states no review
+    status. On ``/networks/{network_id}/solves/{solve_id}`` the served record is the solve. ``None`` when no gated
+    parameter ends the path.
+    """
+    last = path.rstrip("/").rsplit("/", 1)[-1]
+    match = _PATH_PARAM.fullmatch(last)
+    return match.group(1) if match and match.group(1) in gates else None
 
 
-def _wrap(endpoint: Any, gates: dict[str, Gate], path_params: set[str]) -> Any:
+def _wrap(endpoint: Any, gates: dict[str, Gate], path_params: set[str], served_param: str | None = None) -> Any:
     """The endpoint, with the gates and the walk applied around it.
 
     Gates read the value FastAPI already validated and bound to the parameter, so every spelling of an id that
@@ -502,15 +517,22 @@ def _wrap(endpoint: Any, gates: dict[str, Gate], path_params: set[str]) -> Any:
             session = context.session
             for param, gate in gates.items():
                 value = kwargs.get(param)
-                if isinstance(value, int) and _hidden_ids(session, gate.record_type, {value}, _floor_statuses()):
-                    raise NotFoundError(f"{gate.label} not found")
+                if isinstance(value, int) and _hidden_ids(session, gate.record_type, {value}, _evidence_statuses()):
+                    # A withheld record is the id of nothing (hidden == unknown); see ``ABSENT_ID``.
+                    kwargs[param] = ABSENT_ID
+                    continue
+                if isinstance(value, int) and param == served_param:
+                    # The record this route serves states its own review status (ADR 0023 step 7).
+                    badge = fetch_review_badges(session, record_type=gate.record_type, record_ids=[value]).get(value)
+                    if badge is not None:
+                        context.served_review_status = badge.status.value
             # An id-typed filter naming a WITHHELD record (rejected or deprecated) is the filter for an id that names
             # nothing. A filter naming a not-reviewed one is kept: a filter is not a subject (ADR 0023).
             for name, value in list(kwargs.items()):
                 kind = POINTER_KINDS.get(name)
                 if kind is not None and name not in path_params and isinstance(value, int) and name not in gates:
                     if _hidden_ids(session, kind, {value}, _evidence_statuses()):
-                        kwargs[name] = -1
+                        kwargs[name] = ABSENT_ID
         result = endpoint(*args, **kwargs)
         if context is None:
             return result
@@ -538,8 +560,33 @@ def legacy_route_class(gates: dict[str, Gate] | None = None) -> type[APIRoute]:
         def __init__(self, path: str, endpoint: Any, **kwargs: Any) -> None:
             methods = {m.upper() for m in (kwargs.get("methods") or [])}
             if "GET" in methods and not inspect.iscoroutinefunction(endpoint):
-                endpoint = _wrap(endpoint, declared, set(_PATH_PARAM.findall(path)))
+                served = served_param_of(path, declared)
+                headers: dict[str, Any] = {}
+                if served is not None:
+                    headers[REVIEW_STATUS_HEADER] = REVIEW_STATUS_HEADER_SPEC
+                if "response" in inspect.signature(endpoint).parameters:
+                    headers[HIDDEN_HEADER] = HIDDEN_HEADER_SPEC
+                if headers:
+                    responses = dict(kwargs.get("responses") or {})
+                    ok = dict(responses.get(200) or {})
+                    ok["headers"] = {**(ok.get("headers") or {}), **headers}
+                    ok.setdefault("description", "Successful Response")
+                    responses[200] = ok
+                    kwargs["responses"] = responses
+                endpoint = _wrap(endpoint, declared, set(_PATH_PARAM.findall(path)), served)
             super().__init__(path, endpoint, **kwargs)
+
+        def get_route_handler(self) -> Any:
+            handler = super().get_route_handler()
+
+            async def with_review_status(request: Any) -> Any:
+                response = await handler(request)
+                context = current_ref_guard_context()
+                if context is not None and context.served_review_status is not None:
+                    response.headers[REVIEW_STATUS_HEADER] = context.served_review_status
+                return response
+
+            return with_review_status
 
     return LegacyRoute
 
@@ -548,19 +595,21 @@ LegacyReadRoute = legacy_route_class()
 
 
 __all__ = [
+    "ABSENT_ID",
     "ADMIN_LISTING_ORDER",
     "COUPLED_FIELDS",
+    "HIDDEN_HEADER",
     "NETWORK_KINETICS",
     "PARENT_OF",
     "POINTER_KINDS",
     "RECORD_MODELS",
+    "REVIEW_STATUS_HEADER",
     "UNGATED_ID_FIELDS",
     "EntityListResponse",
     "Gate",
     "LegacyReadRoute",
     "LegacyVisibility",
     "disclose_in_header",
-    "ensure_not_below_floor",
     "entity_page",
     "legacy_route_class",
     "withhold_hidden_records",

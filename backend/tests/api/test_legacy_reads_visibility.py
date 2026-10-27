@@ -5,8 +5,9 @@ raw entity layer: ``id`` ascending, internal ids. They used to show every record
 ignored ``profile``, so ``?profile=curated`` did not bypass anything only because it did nothing. Now:
 
 * rejected and deprecated records are hidden unless included, and the response counts what it hid (exploratory);
-* ``?profile=curated`` shows approved records only, in the list, its total and the record's own detail route, which
-  answers exactly as an id that names nothing (decision D6); and says nothing about the records below the floor;
+* ``?profile=curated`` shows approved records only in the list and its total, and says nothing about the records below the
+  floor; the record's own detail route serves anything but a rejected or deprecated record, which answers exactly as an id
+  that names nothing (ADR 0023 step 7);
 * every list echoes its order (``id`` ascending, administrative) and the profile it answered under.
 """
 
@@ -152,16 +153,24 @@ def test_the_curated_profile_shows_approved_records_only_and_counts_nothing_else
 
 
 @pytest.mark.parametrize("case", sorted(CASES))
-def test_a_record_below_the_floor_answers_its_detail_route_as_an_unknown_id_does(case, client, db_session):
+def test_a_withheld_record_answers_its_detail_route_as_an_unknown_id_does(case, client, db_session):
+    """ADR 0023 step 7: a rejected or deprecated record answers 404 exactly as an id that names nothing; one that is merely
+    below the floor is served, with its review status in ``X-TCKDB-Review-Status``."""
     seeded, url = _seed(case, db_session)
-    hidden_id = seeded.rows[3].id  # not_reviewed: visible by default, below the curated floor
-    assert client.get(f"{url}/{hidden_id}").status_code == 200
-    curated = client.get(f"{url}/{hidden_id}", params={"profile": "curated"})
     unknown = client.get(f"{url}/999999999", params={"profile": "curated"})
-    assert curated.status_code == unknown.status_code == 404
-    assert curated.json() == unknown.json()
-    approved = client.get(f"{url}/{seeded.rows[2].id}", params={"profile": "curated"})
-    assert approved.status_code == 200
+    assert unknown.status_code == 404
+    for row, status in ((seeded.rows[0], S.rejected), (seeded.rows[1], S.deprecated)):
+        curated = client.get(f"{url}/{row.id}", params={"profile": "curated"})
+        assert curated.status_code == 404, status
+        assert curated.json() == unknown.json()
+        assert "X-TCKDB-Review-Status" not in curated.headers
+    for index, status in ((2, S.approved), (3, S.not_reviewed), (4, S.under_review)):
+        row = seeded.rows[index]
+        assert client.get(f"{url}/{row.id}").status_code == 200  # exploratory: addressable
+        curated = client.get(f"{url}/{row.id}", params={"profile": "curated"})
+        assert curated.status_code == 200, (status, curated.text)
+        assert curated.headers["X-TCKDB-Review-Status"] == status.value
+        assert "X-TCKDB-Review-Status" not in client.get(f"{url}/{row.id}").headers
 
 
 def test_a_curated_thermo_names_unreviewed_calculations_and_not_rejected_ones(client, db_session):
@@ -317,12 +326,13 @@ def test_every_lookup_and_legacy_read_declares_the_read_profile(client):
     assert not missing, missing
 
 
-def test_every_calculation_sub_route_answers_404_for_a_calculation_below_the_floor(client, db_session):
-    """Every GET under ``/calculations/{calculation_id}/...``, called for a calculation the curated floor hides, answers
-    as an unknown id does. Kills: a sub-route added outside the router-level gate."""
+def test_every_calculation_sub_route_answers_404_for_a_withheld_calculation(client, db_session):
+    """Every GET under ``/calculations/{calculation_id}/...``, called for a calculation the curated profile withholds
+    (rejected or deprecated), answers as an unknown id does. Kills: a sub-route added outside the router-level gate."""
     species = make_species(db_session, smiles="C=O", inchi_key=next_inchi_key("LSW"))
     entry = make_species_entry(db_session, species)
-    calc = make_calculation(db_session, species_entry_id=entry.id)  # never reviewed: below the curated floor
+    calc = make_calculation(db_session, species_entry_id=entry.id)
+    set_review(db_session, record_type=SubmissionRecordType.calculation, record_id=calc.id, status=S.rejected)
     spec = client.get("/openapi.json").json()
     paths = [
         path

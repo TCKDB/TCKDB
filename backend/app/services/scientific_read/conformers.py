@@ -83,6 +83,7 @@ from app.schemas.reads.scientific_conformer import (
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    ids_withheld_as_evidence,
     linked_evidence_predicate,
     molecular_formula_expr,
     review_summary,
@@ -267,6 +268,14 @@ def build_group_record(
         .where(ConformerObservation.conformer_group_id == cg.id)
         .order_by(ConformerObservation.id.asc())
     ).all()
+    # An observation is evidence of its group (Q2): the page lists those the evidence rule leaves visible, so it counts
+    # those (the ref guard removes the rejected and deprecated ones from the list).
+    withheld_obs_ids = ids_withheld_as_evidence(
+        session,
+        record_type=SubmissionRecordType.conformer_observation,
+        record_ids=[o.id for o in obs_rows],
+    )
+    obs_rows = [o for o in obs_rows if o.id not in withheld_obs_ids]
     obs_ids = [o.id for o in obs_rows]
 
     observations_summary = _build_observations_summary(obs_rows)
@@ -1294,12 +1303,16 @@ def _exists_other_observations_in_group(
     return bool(
         session.scalar(
             select(
-                exists().where(
-                    and_(
-                        ConformerObservation.conformer_group_id
-                        == conformer_group_id,
-                        ConformerObservation.id != exclude_observation_id,
-                    )
+                where_visible(
+                    exists().where(
+                        and_(
+                            ConformerObservation.conformer_group_id
+                            == conformer_group_id,
+                            ConformerObservation.id != exclude_observation_id,
+                        )
+                    ),
+                    # The siblings the page lists: an observation is evidence, withheld only if rejected or deprecated.
+                    linked_evidence_predicate(ConformerObservation.id, SubmissionRecordType.conformer_observation),
                 )
             )
         )

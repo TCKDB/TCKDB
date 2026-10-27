@@ -76496,7 +76496,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Review-Status": {
+                "description": "Under profile=curated, the review status (not_reviewed, under_review, approved, ...) of the single record this response serves. Absent under the default profile, on lists, and on any response that is not the single gated record itself (sub-resource lists, and single-object sub-resources such as /calculations/{id}/sp-result).",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -77515,7 +77523,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Review-Status": {
+                "description": "Under profile=curated, the review status (not_reviewed, under_review, approved, ...) of the single record this response serves. Absent under the default profile, on lists, and on any response that is not the single gated record itself (sub-resource lists, and single-object sub-resources such as /calculations/{id}/sp-result).",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -80172,7 +80188,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Review-Status": {
+                "description": "Under profile=curated, the review status (not_reviewed, under_review, approved, ...) of the single record this response serves. Absent under the default profile, on lists, and on any response that is not the single gated record itself (sub-resource lists, and single-object sub-resources such as /calculations/{id}/sp-result).",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -80572,7 +80596,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Review-Status": {
+                "description": "Under profile=curated, the review status (not_reviewed, under_review, approved, ...) of the single record this response serves. Absent under the default profile, on lists, and on any response that is not the single gated record itself (sub-resource lists, and single-object sub-resources such as /calculations/{id}/sp-result).",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -83466,7 +83498,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Review-Status": {
+                "description": "Under profile=curated, the review status (not_reviewed, under_review, approved, ...) of the single record this response serves. Absent under the default profile, on lists, and on any response that is not the single gated record itself (sub-resource lists, and single-object sub-resources such as /calculations/{id}/sp-result).",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -85883,7 +85923,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Review-Status": {
+                "description": "Under profile=curated, the review status (not_reviewed, under_review, approved, ...) of the single record this response serves. Absent under the default profile, on lists, and on any response that is not the single gated record itself (sub-resource lists, and single-object sub-resources such as /calculations/{id}/sp-result).",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -86039,7 +86087,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Hidden-By-Default": {
+                "description": "On a list that is a bare JSON array: how many records each default exclusion hid, as `deprecated=2; rejected=1` (keys sorted). Absent when nothing was excluded and always absent under profile=curated.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -86170,7 +86226,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Hidden-By-Default": {
+                "description": "On a list that is a bare JSON array: how many records each default exclusion hid, as `deprecated=2; rejected=1` (keys sorted). Absent when nothing was excluded and always absent under profile=curated.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -86282,7 +86346,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Review-Status": {
+                "description": "Under profile=curated, the review status (not_reviewed, under_review, approved, ...) of the single record this response serves. Absent under the default profile, on lists, and on any response that is not the single gated record itself (sub-resource lists, and single-object sub-resources such as /calculations/{id}/sp-result).",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -86516,7 +86588,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Hidden-By-Default": {
+                "description": "On a list that is a bare JSON array: how many records each default exclusion hid, as `deprecated=2; rejected=1` (keys sorted). Absent when nothing was excluded and always absent under profile=curated.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -86647,7 +86727,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Hidden-By-Default": {
+                "description": "On a list that is a bare JSON array: how many records each default exclusion hid, as `deprecated=2; rejected=1` (keys sorted). Absent when nothing was excluded and always absent under profile=curated.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -111412,7 +111500,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Hidden-By-Default": {
+                "description": "On a list that is a bare JSON array: how many records each default exclusion hid, as `deprecated=2; rejected=1` (keys sorted). Absent when nothing was excluded and always absent under profile=curated.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -111543,7 +111639,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Hidden-By-Default": {
+                "description": "On a list that is a bare JSON array: how many records each default exclusion hid, as `deprecated=2; rejected=1` (keys sorted). Absent when nothing was excluded and always absent under profile=curated.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -111674,7 +111778,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Hidden-By-Default": {
+                "description": "On a list that is a bare JSON array: how many records each default exclusion hid, as `deprecated=2; rejected=1` (keys sorted). Absent when nothing was excluded and always absent under profile=curated.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -111805,7 +111917,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Hidden-By-Default": {
+                "description": "On a list that is a bare JSON array: how many records each default exclusion hid, as `deprecated=2; rejected=1` (keys sorted). Absent when nothing was excluded and always absent under profile=curated.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -111936,7 +112056,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Hidden-By-Default": {
+                "description": "On a list that is a bare JSON array: how many records each default exclusion hid, as `deprecated=2; rejected=1` (keys sorted). Absent when nothing was excluded and always absent under profile=curated.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -112618,7 +112746,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Review-Status": {
+                "description": "Under profile=curated, the review status (not_reviewed, under_review, approved, ...) of the single record this response serves. Absent under the default profile, on lists, and on any response that is not the single gated record itself (sub-resource lists, and single-object sub-resources such as /calculations/{id}/sp-result).",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -114092,7 +114228,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Review-Status": {
+                "description": "Under profile=curated, the review status (not_reviewed, under_review, approved, ...) of the single record this response serves. Absent under the default profile, on lists, and on any response that is not the single gated record itself (sub-resource lists, and single-object sub-resources such as /calculations/{id}/sp-result).",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -114368,7 +114512,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Review-Status": {
+                "description": "Under profile=curated, the review status (not_reviewed, under_review, approved, ...) of the single record this response serves. Absent under the default profile, on lists, and on any response that is not the single gated record itself (sub-resource lists, and single-object sub-resources such as /calculations/{id}/sp-result).",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -114495,7 +114647,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Review-Status": {
+                "description": "Under profile=curated, the review status (not_reviewed, under_review, approved, ...) of the single record this response serves. Absent under the default profile, on lists, and on any response that is not the single gated record itself (sub-resource lists, and single-object sub-resources such as /calculations/{id}/sp-result).",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -114819,7 +114979,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-TCKDB-Review-Status": {
+                "description": "Under profile=curated, the review status (not_reviewed, under_review, approved, ...) of the single record this response serves. Absent under the default profile, on lists, and on any response that is not the single gated record itself (sub-resource lists, and single-object sub-resources such as /calculations/{id}/sp-result).",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {

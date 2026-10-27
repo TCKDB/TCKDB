@@ -5,12 +5,13 @@
 amends its detail-page seam**, see Q1),
 [0007](0007-curated-selections-are-a-release-overlay-not-a-column.md) (curated selections are a release overlay),
 [0016](0016-review-approves-a-claim-and-does-not-cascade.md) (review approves a claim and does not cascade).
-Supersedes the read-side rule known as D6 ("hidden == unknown == absent") for linked evidence. The rule is being rolled out in
-steps; a site that has not been moved yet still applies D6. The helper that holds the rule (`evidence_withheld_under_profile` and
+Supersedes the read-side rule known as D6 ("hidden == unknown == absent") for linked evidence and for detail-by-ref. The rule was
+rolled out in steps 2 to 7, and no site applies D6 any longer. The helper that holds the rule (`evidence_withheld_under_profile` and
 its siblings in `app/services/scientific_read/common.py`) is called, from step 2, by the response-level ref guard
 (`ref_guard.py`), the selection documents, the export streams, the legacy entity reads and the ML export's conformer refs, and, from
 step 3, by the service counts, flags and derived levels of a returned record, and, from step 5, by the trust evaluators and the
-selection loaders' own evidence populations. Still on D6: detail-by-ref (step 7). Matching in search, browse and select moved in step 4 (filters match through
+selection loaders' own evidence populations, and, from step 7, by every detail-by-ref read (`resolve_path_handle` and the legacy
+detail reads). Matching in search, browse and select moved in step 4 (filters match through
 linked evidence unless it is rejected or deprecated; a filter ref that names such evidence matches nothing).
 
 Under the `curated` profile, the `approved` floor decides which **records** a list, search or select returns. The **linked
@@ -44,8 +45,9 @@ Three things are assigned to three rules, so none is mixed up:
 
 - **Record floor** (`approved`): lists, searches and selects.
 - **Detail-by-ref** under `curated`: the withheld set (`rejected`, `deprecated`) from step 7 onward. This amends ADR 0006's
-  second seam (`resolve_path_handle`, which reaches `_hidden_by_floor` and `status_hidden_under_profile` in `handles.py`).
-  Until step 7 the seam still applies the floor.
+  second seam (`resolve_path_handle`, which reached `_hidden_by_floor` and `status_hidden_under_profile` in `handles.py`; since
+  step 7 it reaches `_gated_status`, which asks `evidence_withheld_under_profile`; a select target resolves through `resolve_selection_handle`, which keeps the record floor). `status_hidden_under_profile` stays
+  the record floor for lists.
 - **Evidence rule**: a returned record's linked evidence.
 
 The boundary between a record and its evidence, as approved by the owner:
@@ -112,3 +114,15 @@ Step 2 (nested refs in responses, selection documents and exports) moved the sel
   a rejected input changed" is accepted (Q8). The cost guard is unchanged: only the routes that bound their page compare. The read model's
   `made_under.inputs_unchecked_reason` (it only ever said `curated_profile`) is removed, with `tckdb-client` 0.173.0. The stored machine-review
   `made_under` compares stamps only (`inputs_checked` false) under every profile and is unchanged. `generate_rubric_pins.py --check` stays clean.
+- Step 7 (detail-by-ref) changed no manifest content and no rubric. Under `curated`, a detail read (every route that resolves one record
+  by ref or id: `resolve_path_handle` on the scientific surface, the legacy entity detail routes) serves the record unless its own status is
+  `rejected` or `deprecated`; those answer the same 404 as an unknown ref, as before. A served record carries its review badge (a missing
+  review row reads as `not_reviewed`). What a served detail embeds follows the evidence rule: a `/full` participant or entry (Q9), a
+  supersession successor (Q5) and the usage a reference row lists (a level of theory's calculations, a correction scheme's or scale factor's
+  applications) are shown unless withheld. Lists, searches, browses and selects keep the approved record floor, and a search row of a
+  reference record still counts the floor's population. The response-level ref guard's "subject below the floor" net now applies to the
+  rows of `records` only; the `record` of a detail read is checked against the withheld set instead. A select request resolves the refs it names (its target, scope and candidate population) through `resolve_selection_handle`, which
+  keeps the approved record floor, so a select over a record below the floor answers the same 404 as before; selection manifests record
+  `linked_evidence_withheld`, so a manifest's content and format are unchanged. A
+  recorded selection that named an `approved` record replays as before. A served detail counts what it lists: the counts, summaries and `has_*` flags of a transition state, a conformer group and observation, a calculation (`has_dependencies`) and a transport record are computed over the same evidence-rule population as the collections beside them, and a network detail lists its unreviewed solves badged. The network batch evaluate is a population of fits and keeps the record floor, as the selects do. The legacy detail reads state the served record's review status in `X-TCKDB-Review-Status` (single-record responses only; declared in OpenAPI and exposed to browsers by CORS). `generate_rubric_pins.py --check` stays clean. Nothing is
+  left on D6.

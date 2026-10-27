@@ -142,7 +142,7 @@ Resolved once, by an `async` router-level dependency
   variable set in an async dependency reaches the endpoint; one set in a sync
   dependency would not.
 
-> **Rule change in progress (owner decision 2026-10-25,
+> **Rule change, complete at step 7 (owner decision 2026-10-25,
 > [ADR 0023](../../../docs/adr/0023-curated-profile-floor-applies-to-records-linked-evidence-is-badged.md)).**
 > Under `curated`, the `approved` floor decides which *records* a list, search or select returns (the *record floor*). A
 > returned record's own linked evidence (source calculations, levels derived from them, conformer observations in a group,
@@ -155,7 +155,7 @@ Resolved once, by an `async` router-level dependency
 >
 > **Landed (step 2):** the response-level ref guard (`ref_guard.py`) is split into two sets. The *evidence set* (rejected and
 > deprecated records) drives every nested withhold: pointers in responses, selection documents, and the export streams. The
-> *record-floor set* is used only to fail loud when a response's subject is below the floor. The legacy entity reads and the ML
+> *record-floor set* is used only to fail loud when a listed row (an element of `records`) is below the floor; since step 7 the `record` of a detail read is checked against the withheld set instead. The legacy entity reads and the ML
 > export's conformer refs follow the evidence set; the ML export's energy rows keep their calculations approved-only (a release
 > is unchanged).
 >
@@ -184,8 +184,11 @@ Resolved once, by an `async` router-level dependency
 > `exploratory`. The stamp was made from the full set of inputs without a profile, so the comparison is profile-free and the answer
 > (`state`, `stale_reason`, `inputs_checked`) is the same for both.
 >
-> **Still the earlier rule (below the floor is hidden, evidence included), and the text below describes that code:**
-> detail-by-ref (step 7; the second seam below still applies the floor until then).
+> **Landed (step 7):** detail-by-ref. Under `curated` a detail read (the second seam below, and the legacy entity detail reads)
+> serves any record that is not `rejected` or `deprecated`, badged, and answers 404 only for those two (Q1). What a served detail
+> embeds follows the evidence rule: a `/full` participant or entry (Q9), a supersession successor (Q5), and the usage a level of
+> theory, correction scheme or scale factor lists. Lists, searches, browses and selects keep the approved floor (a select request resolves the refs it names through
+> `resolve_selection_handle`), and a search row of a reference record still counts that population. Nothing is left on the earlier rule (D6).
 
 Behaviourally, `curated` is applied at exactly **two** seams, which between
 them cover the whole read surface:
@@ -199,10 +202,12 @@ them cover the whole read surface:
    *detail-by-ref* read resolves its handle here, and roughly half the read
    services never call `visible_statuses` at all. Without this, `profile=curated`
    returned never-reviewed statmech and transport records under a curated echo.
-   A record below the floor resolves to the same 404 `handle_not_found` an
-   unknown ref produces, so review state is not leaked to anonymous callers.
+   A record in the withheld set (`rejected`, `deprecated`) resolves to the same
+   404 `handle_not_found` an unknown ref produces, so review state is not leaked to
+   anonymous callers. A record that is merely below the floor is served, badged
+   (ADR 0023 step 7; before step 7 this seam applied the `approved` floor).
 
-   The floor there applies only to handles naming a record the endpoint
+   The gate there applies only to handles naming a record the endpoint
    *returns*. Scoping parents (`species_entry`, `reaction_entry`, …) are
    excluded: they say which records to look under, and gating them would hide
    an approved thermo behind an identity row that merely had not been reviewed

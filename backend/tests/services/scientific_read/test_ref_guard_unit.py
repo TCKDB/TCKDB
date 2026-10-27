@@ -349,28 +349,41 @@ def below_floor(monkeypatch, *refs: str):
 
 
 def test_the_subject_of_a_response_is_never_deleted_as_a_pointer(monkeypatch):
-    """Kills: treating ``record`` / ``records[*]`` as removable. A subject below the record floor means a service forgot
-    its population filter, and the guard fails loud whether or not the evidence rule would withhold the ref."""
+    """Kills: treating ``record`` / ``records[*]`` as removable.
+
+    A row of ``records`` below the record floor means a service forgot its population filter, and the guard fails loud
+    whether or not the evidence rule would withhold the ref. The ``record`` of a detail read is judged by the withheld set
+    instead (ADR 0023 step 7): a withheld one fails loud, one that is merely below the floor is the served answer.
+    """
     monkeypatch.setattr(ref_guard, "POINTER_MODELS", frozenset({SubjectRow}))
     monkeypatch.setattr(ref_guard, "SUBJECT_IDENTITY", {"SubjectRow": ("calculation_ref",)})
     for evidence in (True, False):
-        # Below the floor, and withheld as evidence or merely not reviewed: both fail loud.
+        # Below the floor, and withheld as evidence or merely not reviewed: a list row fails loud either way.
         hide(monkeypatch, *([HIDDEN_CALC] if evidence else []))
         below_floor(monkeypatch, HIDDEN_CALC)
-
-        as_record = SubjectEnvelope(record=SubjectRow(calculation_ref=HIDDEN_CALC))
-        with pytest.raises(ref_guard.SubjectBelowFloor) as caught:
-            run(as_record)
+        as_records = SubjectEnvelope(records=[SubjectRow(calculation_ref=HIDDEN_CALC)])
+        with pytest.raises(ref_guard.SubjectNotShown) as caught:
+            run(as_records)
         # The message names the real defect (a missing population filter), not a registry or optionality remedy.
-        assert "below the read profile's floor was returned as a result" in str(caught.value)
+        assert "the read profile does not show was returned as a result" in str(caught.value)
         assert "population filter is missing" in str(caught.value)
         assert "POINTER_MODELS" not in str(caught.value) and "optional" not in str(caught.value)
-        assert as_record.record is not None
-
-        as_records = SubjectEnvelope(records=[SubjectRow(calculation_ref=HIDDEN_CALC)])
-        with pytest.raises(ref_guard.RefGuardUnplaceable):
-            run(as_records)
         assert len(as_records.records) == 1
+
+    # A detail ``record`` in the withheld set fails loud and is never deleted.
+    hide(monkeypatch, HIDDEN_CALC)
+    below_floor(monkeypatch, HIDDEN_CALC)
+    as_record = SubjectEnvelope(record=SubjectRow(calculation_ref=HIDDEN_CALC))
+    with pytest.raises(ref_guard.SubjectNotShown):
+        run(as_record)
+    assert as_record.record is not None
+
+    # A detail ``record`` that is only below the floor (not withheld) is the served answer, and stays.
+    hide(monkeypatch)
+    below_floor(monkeypatch, HIDDEN_CALC)
+    served = SubjectEnvelope(record=SubjectRow(calculation_ref=HIDDEN_CALC))
+    run(served)
+    assert served.record is not None
 
     # The same class is a pointer anywhere else: withheld evidence goes, a merely-unlisted one stays.
     hide(monkeypatch, HIDDEN_CALC)
@@ -411,12 +424,16 @@ def test_a_subject_whose_identity_is_one_level_down_is_checked_there_and_only_th
     hide(monkeypatch)
     below_floor(monkeypatch, HIDDEN_CALC, HIDDEN_TSE)
 
-    for envelope in (
-        DeepEnvelope(record=DeepSubject(calculation=CalcBlock(calculation_ref=HIDDEN_CALC))),
-        DeepEnvelope(records=[DeepSubject(calculation=CalcBlock(calculation_ref=HIDDEN_CALC))]),
-    ):
-        with pytest.raises(ref_guard.RefGuardUnplaceable):
-            run(envelope)
+    # A listed row below the floor is refused; a detail ``record`` below the floor is the served answer (step 7).
+    with pytest.raises(ref_guard.RefGuardUnplaceable):
+        run(DeepEnvelope(records=[DeepSubject(calculation=CalcBlock(calculation_ref=HIDDEN_CALC))]))
+    run(DeepEnvelope(record=DeepSubject(calculation=CalcBlock(calculation_ref=HIDDEN_CALC))))
+    hide(monkeypatch, HIDDEN_CALC)  # ... and withheld, the detail ``record`` is refused too
+    below_floor(monkeypatch, HIDDEN_CALC, HIDDEN_TSE)
+    with pytest.raises(ref_guard.RefGuardUnplaceable):
+        run(DeepEnvelope(record=DeepSubject(calculation=CalcBlock(calculation_ref=HIDDEN_CALC))))
+    hide(monkeypatch)
+    below_floor(monkeypatch, HIDDEN_CALC, HIDDEN_TSE)
 
     # The parent below the floor is context beside a visible identity: shown, not refused.
     context = DeepEnvelope(

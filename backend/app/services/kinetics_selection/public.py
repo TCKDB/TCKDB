@@ -70,7 +70,7 @@ from app.services.kinetics_selection.models import (
     TargetRequest,
 )
 from app.services.kinetics_selection.selection import KineticsSelection, select_reaction_entry_kinetics
-from app.services.scientific_read.handles import is_ref_handle, resolve_path_handle
+from app.services.scientific_read.handles import is_ref_handle, resolve_selection_handle
 from app.services.scientific_read.profile import current_read_profile
 from app.services.selection_kernel import Outcome
 from app.services.selection_kernel.requested import Eligibility, answer_steps
@@ -93,7 +93,7 @@ def _ref_only(session: Session, model_cls: type, handle: str, *, kind_label: str
     """
     if not is_ref_handle(handle):
         raise ValueError(f"invalid_handle: {handle!r} is not a <prefix>_<body> public ref")
-    return resolve_path_handle(session, model_cls, handle, kind_label=kind_label)
+    return resolve_selection_handle(session, model_cls, handle, kind_label=kind_label)
 
 
 def resolve_reaction_entry_ref(session: Session, ref: str) -> int:

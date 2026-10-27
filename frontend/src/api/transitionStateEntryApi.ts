@@ -192,7 +192,7 @@ export type StructureAssessment = z.infer<typeof structureAssessmentSchema>
 const responseSchema = z.object({
     record: z.object({
         transition_state_entry: entryCoreSchema,
-        // null under `profile=curated` when the owning transition state is not approved: the entry is shown, its owner is not named.
+        // null under `profile=curated` when the owning transition state is rejected or deprecated: the entry is shown, its owner is not named.
         transition_state: tsCoreSchema.nullable(),
         reaction: reactionContextSchema,
         evidence_summary: evidenceSummarySchema,

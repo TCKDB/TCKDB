@@ -62,7 +62,7 @@ from app.services.scientific_read.handles import (
     handle_type_mismatch_error,
     is_ref_handle,
     prefix_for,
-    resolve_conformer_group_handle,
+    resolve_selection_handle,
     resolve_species_entry_handle,
 )
 from app.services.scientific_read.profile import current_read_profile
@@ -107,7 +107,12 @@ def resolve_species_entry_ref(session: Session, ref: str) -> int:
 
 def resolve_group_ref(session: Session, ref: str) -> int:
     return ref_only_handle(
-        session, ConformerGroup, ref, kind_label="conformer_group", resolver=resolve_conformer_group_handle
+        session,
+        ConformerGroup,
+        ref,
+        kind_label="conformer_group",
+        # A select names the group it selects over: the approved record floor decides, as for a list (ADR 0023).
+        resolver=lambda s, handle: resolve_selection_handle(s, ConformerGroup, handle, kind_label="conformer_group"),
     )
 
 

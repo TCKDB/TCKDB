@@ -108,12 +108,13 @@ from app.services.calculation_levels import RoleCalcInfo, derive_levels
 from app.services.composite_verification import verify_composite_calculations
 from app.services.scientific_read.common import (
     build_pagination,
+    detail_visible_statuses,
     fetch_review_badges,
     ids_withheld_as_evidence,
     linked_evidence_predicate,
     reject_client_sort,
-    review_floor_predicate,
     review_summary,
+    shown_predicate,
     temperature_coverage,
     validate_includes,
     validate_pagination,
@@ -345,8 +346,13 @@ def get_reaction_kinetics(
     *,
     reaction_entry_id: int,
     request: KineticsReadRequest,
+    detail: bool = False,
 ) -> ScientificReactionKineticsResponse:
     """Return kinetics records for a reaction entry, sorted by review status, then newest.
+
+    ``detail`` is True when a served detail embeds these records (``/reaction-entries/{id}/full``): under ``curated`` they
+    are then shown with their badge unless rejected or deprecated, and so are the transition-state entries they name (ADR 0023
+    step 7, owner decision Q9). The list route itself (``detail=False``) keeps the approved record floor.
 
     Order: review_rank ASC, created_at DESC, id DESC (the order the exports
     list records in). Coverage and evidence are reported per
@@ -466,7 +472,7 @@ def get_reaction_kinetics(
         record_type=SubmissionRecordType.kinetics,
         record_ids=[k.id for k in kinetics_rows],
     )
-    visible = visible_statuses(
+    visible = (detail_visible_statuses if detail else visible_statuses)(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
@@ -497,7 +503,7 @@ def get_reaction_kinetics(
 
     # Bulk-load TS data for the entry to determine has_transition_state and
     # path-search/IRC chain reachability.
-    ts_entry_ids = _ts_entry_ids_for_reaction(session, reaction_entry_id)
+    ts_entry_ids = _ts_entry_ids_for_reaction(session, reaction_entry_id, detail=detail)
     ts_calc_types = _ts_calc_types_for_entries(session, ts_entry_ids)
 
     # Bulk-load source-calculation metadata used by provenance + checklist.
@@ -1336,15 +1342,16 @@ def _scf_stabilities(
     return dict(rows)
 
 
-def _ts_entry_ids_for_reaction(session: Session, reaction_entry_id: int) -> set[int]:
+def _ts_entry_ids_for_reaction(session: Session, reaction_entry_id: int, *, detail: bool = False) -> set[int]:
     # A transition-state ENTRY is a record (ADR 0023, Q3): only the entries that clear the record floor count here, as in
-    # ``/reactions/browse``. The calculations under a shown entry are evidence (see ``_ts_calc_types_for_entries``).
+    # ``/reactions/browse``; a served detail that embeds these records (``detail=True``) shows the entries it does not
+    # withhold, badged (step 7, Q9). The calculations under a shown entry are evidence (see ``_ts_calc_types_for_entries``).
     rows = session.scalars(
         where_visible(
             select(TransitionStateEntry.id)
             .join(TransitionState, TransitionState.id == TransitionStateEntry.transition_state_id)
             .where(TransitionState.reaction_entry_id == reaction_entry_id),
-            review_floor_predicate(TransitionStateEntry.id, SubmissionRecordType.transition_state_entry),
+            shown_predicate(TransitionStateEntry.id, SubmissionRecordType.transition_state_entry, detail=detail),
         )
     ).all()
     return set(rows)
