@@ -21,8 +21,10 @@ profile that only some endpoints honour is worse than no profile at all,
 because it teaches consumers to trust it. Instead the profile is resolved
 exactly once, in an ``async`` FastAPI dependency registered on the whole
 ``scientific_router`` (``app/api/routes/scientific/_profile.py``), published
-into the :data:`_CURRENT_PROFILE` context variable, and consumed at exactly two
-documented seams:
+into the :data:`_CURRENT_PROFILE` context variable, and consumed at two
+documented seams for the record floor (a third, the evidence-rule helpers
+in ``common.py`` such as ``evidence_withheld_under_profile``, decides what a
+returned record's linked evidence shows):
 
 1. :func:`app.services.scientific_read.common.visible_statuses` — the single
    function every read service already calls to decide which review statuses
@@ -66,7 +68,7 @@ from app.db.models.common import (
 from app.db.models.dataset_release import DatasetRelease
 
 # The review floor the curated profile imposes. Records below ``approved`` are
-# by definition not something TCKDB stands behind.
+# by definition not records a curated list returns.
 CURATED_REVIEW_FLOOR = RecordReviewStatus.approved
 
 

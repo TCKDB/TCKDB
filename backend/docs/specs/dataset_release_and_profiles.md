@@ -6,7 +6,7 @@ Status: implemented (Stage 3). Supersedes the "Open design question" section of
 This spec covers two things that only make sense together:
 
 1. **Read profiles** — how a caller says whether they want the archive of
-   candidates or the value TCKDB stands behind, and how the answer says which
+   candidates or the approved records, and how the answer says which
    one they got.
 2. **Dataset releases** — the attributed, append-only selection layer and the
    immutable, checksummed manifest that makes "the TCKDB value" citable and
@@ -40,7 +40,7 @@ and the release — without mutating the underlying scientific record.
 | Profile | Returns | Says |
 |---|---|---|
 | `exploratory` (**default**) | every visible candidate, with its review/trust state | TCKDB recommends nothing. You are reading the archive. |
-| `curated` | lists, searches and selects return only records at or above the `approved` review floor (the *record floor*); a detail page serves any record that is not `rejected` or `deprecated`, badged, and a returned record's linked evidence is shown with its badge (the *evidence rule*) | A human reviewer accepted the records a list returns. Nothing further is claimed — see `profile_recommendation`. |
+| `curated` | lists, searches, browses, selects and exports return only records at or above the `approved` review floor (the *record floor*); a detail page serves any record that is not `rejected` or `deprecated`, badged, and a returned record's linked evidence is shown with its badge (the *evidence rule*) | A human reviewer accepted the records a list returns. Nothing further is claimed — see `profile_recommendation`. |
 
 Both are machine tokens (`ReadProfile` in `app/db/models/common.py`), never
 prose. The prose lives in this document.
@@ -61,7 +61,7 @@ narrowing**:
   | Token | Means |
   |---|---|
   | `none` | candidates; TCKDB is not telling you which to use (exploratory) |
-  | `approved_floor_only` | the `approved` floor was applied to the records a list, search or select returned, and **nothing more is claimed**; a detail page and linked evidence may be unreviewed and are badged, and `rejected` and `deprecated` are withheld (curated, general read surface) |
+  | `approved_floor_only` | the `approved` floor was applied to the records a list, search, browse, select or export returned, and **nothing more is claimed**; a detail page and linked evidence may be unreviewed and are badged, and `rejected` and `deprecated` are withheld (curated, general read surface) |
   | `tckdb_curated_release` | these records *are* the ones an attributed selection names — emitted **only** by `/scientific/releases/*` |
 
   `tckdb_curated_release` was previously emitted for any curated read once any
@@ -109,12 +109,12 @@ report the profile:
   `deprecated` refs are withheld, except ML-export energy rows, whose calculations stay approved-only.)
   Under `curated` the exports also withhold refs to withheld records, in untyped (`null`)
   mode, a batch of 200 records at a time: **a withheld ref is `null`**, **a
-  hidden member of a list of refs is dropped** from the list, free text that
-  names a hidden record is blanked whole to `null`, and a ref that names no row
-  is treated as hidden. **Exports have no placeholders**; those belong to
-  selection documents. Where a hidden record would supply a *value* (a linearity
+  withheld member of a list of refs is dropped** from the list, free text that
+  names a withheld record is blanked whole to `null`, and a ref that names no row
+  is treated as withheld. **Exports have no placeholders**; those belong to
+  selection documents. Where a withheld record would supply a *value* (a linearity
   witness, a calculation's energy, a barrier) it is left out before anything is
-  derived from it, so no value stands beside a `null`. A hidden ref with nowhere
+  derived from it, so no value stands beside a `null`. A withheld ref with nowhere
   to go (a dict key, or generated CHEMKIN text) aborts the stream or the request
   rather than being emitted. Because a stream cannot change its status once it
   has started, **a missing `export_summary` line means the stream was
@@ -190,13 +190,15 @@ Resolved once, by an `async` router-level dependency
 > theory, correction scheme or scale factor lists. Lists, searches, browses and selects keep the approved floor (a select request resolves the refs it names through
 > `resolve_selection_handle`), and a search row of a reference record still counts that population. No site applies the earlier rule (D6) any longer; the plan of ADR 0023 is complete (step 8 brought the copy in line).
 
-Behaviourally, `curated` is applied at exactly **two** seams, which between
-them cover the whole read surface:
+Behaviourally, `curated` is applied at two seams for the record floor, and a
+third, the evidence-rule helpers (`evidence_withheld_under_profile` and its
+siblings in `common.py`), decides what a returned record's linked evidence
+shows. Between them they cover the whole read surface:
 
 1. `app/services/scientific_read/common.py::visible_statuses` — every *search*
    and *subresource list* read calls it. Under `curated` it raises the floor to
    `approved` and overrides the `include_rejected` / `include_deprecated`
-   opt-ins: "show me what TCKDB stands behind, but also the rejected records"
+   opt-ins: "only approved records, but also the rejected ones"
    is not a coherent request.
 2. `app/services/scientific_read/handles.py::resolve_path_handle` — every
    *detail-by-ref* read resolves its handle here, and roughly half the read

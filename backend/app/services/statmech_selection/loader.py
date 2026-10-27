@@ -542,7 +542,8 @@ def load_population(session: Session, scan: PopulationScan, request: StatmechReq
         m.conformer_group_id for d in declarations for m in d.members if m.conformer_group_id is not None
     }
     group_refs.update(_refs(session, ConformerGroup, declared_group_ids - set(group_refs)))
-    # Hidden == unknown. A group the reader cannot open is not evidence of anything: a record anchored only in it reads as
+    # Withheld == unknown. A group the reader cannot open is not evidence of anything: a record anchored only in it
+    # reads as
     # unanchored and a member declared in it reads as stating no group (as a reference to nothing does). The group a
     # declaration is ABOUT is its target, not evidence; that one stays and is a placeholder token.
     unavailable_groups = unavailable_refs(session, set(group_refs.values()))

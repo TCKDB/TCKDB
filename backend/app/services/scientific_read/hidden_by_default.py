@@ -5,8 +5,10 @@ such record" from "hidden by default". This module computes that count and carri
 
 * :func:`hidden_by_default_block` is the count. It is **one aggregate statement** per list: the matched ids joined to
   their review rows, grouped by status. It makes no statement at all when nothing is excluded by default, and it
-  returns ``None`` under the ``curated`` profile without querying: records below the review floor are withheld with no
-  count, because a count says they exist (ADR 0023 keeps the record floor for lists).
+  returns ``None`` under the ``curated`` profile without querying: the record floor is the profile itself, not a default
+  exclusion a request can lift, so there is no switch to point to and nothing to disclose (ADR 0023: a curated list
+  returns
+  approved records only).
 * :func:`record_hidden_by_default` hands the block to the response boundary through a holder the profile dependency
   installs, the same way the resolved profile reaches it, so a scientific service does not thread it through its
   return value. :func:`stamp_hidden_by_default` writes it into the ``request`` echo at the one boundary every

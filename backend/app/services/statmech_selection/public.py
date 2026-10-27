@@ -14,8 +14,11 @@ else, goes through. It does four things:
 4. builds the response from the decision manifest, so the response and the downloadable manifest cannot disagree.
 
 Visibility of ``excluded_by_review``. Records that fail the effective review floor are listed (and counted) only when
-the read profile has no floor of its own (``exploratory``). Under ``curated`` a record below the floor is one no curated list or
-select returns, so naming or counting it would disclose records the record floor keeps out. The redaction
+the read profile has no floor of its own (``exploratory``). Under ``curated`` a record below the floor is one no
+curated list or
+select returns, so listing it would put a record the record floor keeps out of lists into the answer, and a count of
+such
+records has no switch that lifts it. The redaction
 is made *before* the manifest's checksum is computed (see ``manifest.build_manifest``), so the downloaded manifest
 still verifies and replays.
 """

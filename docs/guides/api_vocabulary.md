@@ -142,7 +142,7 @@ What a **human curator** has said about one scientific record. It is the only vo
 | --- | --- |
 | `not_reviewed` | Nobody has looked at this record. It is the state every deposit lands in, and it is a statement about TCKDB's attention, not about the science: an unreviewed record can be perfectly good. |
 | `under_review` | A curator has this record open. It is entered deliberately by a curator, never by depositing, which is the whole difference from `not_reviewed`. **For example:** Until 2026-08-24 every deposit was stamped `under_review` on arrival, so 1,153 records on the hosted database claimed somebody was looking at them when nobody was. Revision `c1d8f4a25b30` moved them to `not_reviewed`. If you read the hosted API before that date, `under_review` there meant nothing at all. |
-| `approved` | A curator reviewed the record and accepts it. This is the floor the `curated` read profile draws at for lists, searches and selects: they return approved records and nothing below them. A detail page can still serve a record below the floor, with its review badge. |
+| `approved` | A curator reviewed the record and accepts it. This is the floor the `curated` read profile draws at for lists, searches, browses, selects and exports: they return approved records and nothing below them. A detail page can still serve a record below the floor, with its review badge. |
 | `rejected` | A curator reviewed the record and does not accept it. Absent from results unless the request asks for it with `include_rejected=true`. |
 | `deprecated` | The record should no longer be used — superseded by a better one, or withdrawn. It is kept rather than deleted so an existing citation still resolves. Absent from results unless the request asks with `include_deprecated=true`. |
 
@@ -465,7 +465,7 @@ Which contract the response answers under. Always echoed, never inferred: a cons
 | Token | What it means |
 | --- | --- |
 | `exploratory` | Every visible candidate, each with its own review and trust state, and **no recommendation from TCKDB** about which is right. This is the default on every read surface, deliberately: on a corpus that is mostly uncurated a curated default returns an empty page and reads as a broken database. |
-| `curated` | The `approved` review floor decides which records a list, search or select returns. A detail page serves any record that is not `rejected` or `deprecated`, badged, and the linked evidence of a returned record is shown with its badge; only `rejected` and `deprecated` evidence is withheld, and a request cannot lift that. Records are not annotated with any release selection that names them — for an attributed endorsement use the `/api/v1/scientific/releases/*` endpoints. |
+| `curated` | The `approved` review floor decides which records a list, search, browse, select or export returns. A detail page serves any record that is not `rejected` or `deprecated`, badged, and the linked evidence of a returned record is shown (the scientific routes carry the badge in `review_status_by_ref`; a legacy single-record read carries the record's own status in the `X-TCKDB-Review-Status` header); only `rejected` and `deprecated` evidence is withheld, and a request cannot lift that. Records are not annotated with any release selection that names them — for an attributed endorsement use the `/api/v1/scientific/releases/*` endpoints. |
 
 ### Profile recommendation
 
@@ -476,7 +476,7 @@ Whether the records in this response carry a TCKDB recommendation. It is a separ
 | Token | What it means |
 | --- | --- |
 | `none` | These are candidates. TCKDB is not telling you which one to use. |
-| `approved_floor_only` | The `approved` review floor was applied to the records a list, search or select returned, and **nothing more is claimed**. Approval is a human's acceptance of a claim, which is not the same as TCKDB preferring a record over its siblings. A detail page and the linked evidence of a returned record may be unreviewed and carry their review badge; only rejected and deprecated records are withheld. |
+| `approved_floor_only` | The `approved` review floor was applied to the records a list, search, browse, select or export returned, and **nothing more is claimed**. Those records were accepted by a human reviewer, which is not the same as TCKDB preferring them over their siblings. A detail page and the linked evidence of a returned record may be unreviewed: they carry their review badge, and the approval above does not apply to them. Only rejected and deprecated records are withheld. |
 | `tckdb_curated_release` | These records are the ones an attributed, append-only release selection names in a published release. Only the release endpoints emit this. |
 
 ### Dataset release status

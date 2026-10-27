@@ -181,9 +181,11 @@ The per-species read contract now also depends on `?profile=`:
 - `profile=exploratory` (**default**) — unchanged from everything above: all
   candidates, no TCKDB recommendation, explicitly labelled as such in the
   response's `request.profile_recommendation`.
-- `profile=curated` — the review floor rises to `approved`, and the response
-  reports the dataset release backing it (or honestly reports
-  `recommendation: none` when no release has been published yet).
+- `profile=curated` — the review floor rises to `approved` for the records a
+  list, search, browse, select or export returns, and the response reports
+  `profile_recommendation: approved_floor_only` (no release is reported on the
+  general read surface; `release_ref` is null). Linked evidence is shown with
+  its badge; only rejected and deprecated records are withheld (ADR 0023).
 
 The resolved profile is echoed in every scientific response and every dataset
 manifest.

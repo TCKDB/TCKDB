@@ -9,7 +9,8 @@ the scientific reads obey. This module gives them the same three:
   (:func:`~app.services.scientific_read.common.visible_statuses`).
 * **The read profile.** ``?profile=curated`` raises the floor to ``approved`` through that same function, and is
   resolved by the same dependency as on the scientific surface. The record floor decides which rows a list returns
-  and counts. A record's own detail route serves it unless it is rejected or deprecated (ADR 0023 step 7), and a withheld one
+  and counts. A record's own detail route serves it unless it is rejected or deprecated (ADR 0023 step 7), and a
+  withheld one
   answers exactly as an id that names nothing.
 * **Linked evidence (ADR 0023).** The floor decides which rows a list returns; a detail route answers 404 for a withheld record only (step 7). What a returned
   row NAMES (a pointer column, an embedded record such as a conformer group's observations) is linked evidence: under

@@ -3419,8 +3419,8 @@ class TCKDBClient:
         :param temperature_k: One or more temperatures, K.
         :param pressure_bar: One or more pressures, bar.
         :param profile: Read profile this read is answered under
-            (``curated`` applies the approved floor to the records a list
-            returns and shows linked evidence badged; see
+            (``curated`` applies the approved floor to the records a list,
+            search, browse, select or export returns and shows linked evidence badged; see
             ``backend/docs/specs/dataset_release_and_profiles.md``).
             Forwarded like every other typed scientific read method;
             omitted, the server default applies.
@@ -3487,8 +3487,8 @@ class TCKDBClient:
         :param temperature_k: One or more temperatures, K. Required.
         :param pressure_bar: One or more pressures, bar. Required.
         :param profile: Read profile this read is answered under
-            (``curated`` applies the approved floor to the records a list
-            returns and shows linked evidence badged; see
+            (``curated`` applies the approved floor to the records a list,
+            search, browse, select or export returns and shows linked evidence badged; see
             ``backend/docs/specs/dataset_release_and_profiles.md``).
             Forwarded like every other typed scientific read method;
             omitted, the server default applies. Rides the query string,

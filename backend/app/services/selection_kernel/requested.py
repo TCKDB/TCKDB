@@ -8,7 +8,8 @@ machine name and a request field that lifts it. This module holds the pure part,
   only because the caller lifted them;
 * :func:`echo`, the list every answer carries: name, whether applied, and by whose choice.
 
-The read profile's review floor is not here. ``curated`` returns approved records only (the record floor); that happens in :func:`app.services.scientific_read.common.visible_statuses` before any of this runs, and a
+The read profile's review floor is not here. ``curated`` returns approved records only (the record floor); that
+happens in :func:`app.services.scientific_read.common.visible_statuses` before any of this runs, and a
 lifted ``include_rejected`` under it lifts nothing (the echo says ``read_profile``). An override can only lift an
 exclusion within what the read profile already shows.
 """

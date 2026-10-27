@@ -414,14 +414,15 @@ def visible_statuses(
     unless their respective opt-in flag is set; ``min_review_status`` further
     restricts the set to statuses at or above the threshold.
 
-    **Read-profile floor.** This is the one function every scientific read
-    service calls to decide what is visible, which makes it the single place
-    the ``curated`` profile can be applied without an endpoint being able to
-    forget it. Under ``profile=curated`` the floor is raised to ``approved``
-    and the ``include_rejected`` / ``include_deprecated`` opt-ins are
-    overridden — "show me what TCKDB stands behind, but also include the
-    rejected records" is not a coherent request, and honouring it would let a
-    caller cite a rejected record under the curated banner.
+    **Read-profile floor.** This is the one function every scientific list,
+    search and subresource-list service calls to decide which records are
+    visible, so the ``curated`` record floor cannot be forgotten by an
+    endpoint. (A detail read and a returned record's linked evidence follow
+    the evidence rule instead, ADR 0023.) Under ``profile=curated`` the floor
+    is raised to ``approved`` and the ``include_rejected`` /
+    ``include_deprecated`` opt-ins are overridden — "only approved records,
+    but also the rejected ones" is not a coherent request, and honouring it
+    would let a caller cite a rejected record under the curated banner.
 
     The floor only ever *narrows*: a caller who passes a stricter
     ``min_review_status`` than the profile requires keeps their stricter

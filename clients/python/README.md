@@ -301,9 +301,11 @@ completeness, and provenance shape are all decided by the backend per
 ### Curated vs exploratory results: `profile=`
 
 Every scientific read takes an optional `profile=`. `profile="curated"`
-applies the `approved` review floor to the records a list, search or
-select returns, and shows the evidence behind a returned record with its
-review badge (only `rejected` and `deprecated` are withheld). It does not
+applies the `approved` review floor to the records a list, search, browse,
+select or export returns, and shows the evidence behind a returned record
+with its review badge where the response carries one (only `rejected` and
+`deprecated` are withheld; a legacy single-record read states the record's
+own status in the `X-TCKDB-Review-Status` header). It does not
 mean a curator selected those records. `profile="exploratory"` (the
 default when you pass nothing) returns every visible candidate. The
 answering profile comes back in `response["request"]["profile"]` —

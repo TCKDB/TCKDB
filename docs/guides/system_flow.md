@@ -231,7 +231,7 @@ touches the science:
 Every `/scientific/*` endpoint takes `?profile=exploratory|curated`.
 `exploratory` is the default and says, in a machine-readable token, that
 TCKDB recommends nothing; `curated` applies two rules (ADR 0023). The
-*record floor*: a list, search, browse or select returns only records at
+*record floor*: a list, search, browse, select or export returns only records at
 `approved`. The *evidence rule*: a detail page, and the evidence a returned
 record links to, are shown with their review badge (`not_reviewed`,
 `under_review` or `approved`); only `rejected` and `deprecated` are
