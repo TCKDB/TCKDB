@@ -687,7 +687,7 @@ const transitionStateCoreSchema = z.object({
 
 export const transitionStateBrowseRecordSchema = z.object({
     transition_state_entry: transitionStateEntryCoreSchema,
-    // null under `profile=curated` when the owning transition state is not approved (the entry is still shown).
+    // null under `profile=curated` when the owning transition state is rejected or deprecated (the entry is still shown).
     transition_state: transitionStateCoreSchema.nullable(),
     reaction: reactionContextSchema,
     evidence_summary: evidenceSummarySchema,

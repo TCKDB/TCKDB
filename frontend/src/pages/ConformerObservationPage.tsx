@@ -179,7 +179,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                     second row is gone too -- it would only ever
                                     have duplicated the same ref the link itself now
                                     shows. */}
-                                {/* Absent (not "unknown") when the read is curated and the basin is not approved. */}
+                                {/* Absent (not "unknown") when the read is curated and the basin is rejected or deprecated. */}
                                 {group && (
                                     <div>
                                         <dt>Conformer basin</dt>
@@ -332,7 +332,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 )}
             </section>
 
-            {/* The siblings are this basin's other members: with the basin withheld (a curated read of an unapproved
+            {/* The siblings are this basin's other members: with the basin withheld (a curated read of a rejected or deprecated
                 group) naming them would name the basin, so the whole ledger goes with it. */}
             {group && (
                 <section className="ledger-section" aria-labelledby="sibling-ledger">

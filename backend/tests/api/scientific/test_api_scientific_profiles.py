@@ -319,14 +319,16 @@ def test_curated_never_claims_release_backing_on_the_general_read_surface(
     assert echo["profile_release_ref"] is None
 
 
-def test_curated_applies_the_floor_to_detail_by_ref_reads(
+def test_curated_detail_by_ref_serves_unreviewed_and_withholds_rejected(
     client, db_session, _api_curator_user
 ):
     """Roughly half the read services never call ``visible_statuses``.
 
-    A never-reviewed statmech used to come back under ``profile=curated`` with
-    a curated echo. The floor is now applied at handle resolution, which every
-    detail-by-ref read passes through, so it cannot be forgotten.
+    A rejected statmech used to come back under ``profile=curated`` with a
+    curated echo. The withheld set (``rejected``, ``deprecated``) is applied at
+    handle resolution, which every detail-by-ref read passes through, so it
+    cannot be forgotten. A statmech that is merely never reviewed is served,
+    badged (ADR 0023 step 7).
     """
     from app.db.models.app_user import AppUser
     from tests.services.scientific_read._factories import make_statmech
@@ -351,10 +353,25 @@ def test_curated_applies_the_floor_to_detail_by_ref_reads(
         client.get(f"/api/v1/scientific/statmech/{unreviewed.public_ref}").status_code
         == 200
     )
-    # Curated: the unapproved one is simply not part of the surface.
+    # Curated: a never-reviewed one is served, badged; it is below the floor, not withheld.
+    unreviewed_read = client.get(
+        f"/api/v1/scientific/statmech/{unreviewed.public_ref}?profile=curated"
+    )
+    assert unreviewed_read.status_code == 200
+    assert unreviewed_read.json()["review_status_by_ref"][unreviewed.public_ref] == "not_reviewed"
+    # Curated: a rejected one is simply not part of the surface.
+    rejected = make_statmech(db_session, species_entry=entry)
+    set_record_review_status(
+        db_session,
+        record_type=SubmissionRecordType.statmech,
+        record_id=rejected.id,
+        status=RecordReviewStatus.rejected,
+        actor=curator,
+    )
+    db_session.flush()
     assert (
         client.get(
-            f"/api/v1/scientific/statmech/{unreviewed.public_ref}?profile=curated"
+            f"/api/v1/scientific/statmech/{rejected.public_ref}?profile=curated"
         ).status_code
         == 404
     )
@@ -412,16 +429,15 @@ def test_ml_export_manifest_line_carries_the_profile(
 # ---------------------------------------------------------------------------
 
 
-def test_network_kinetics_inherits_the_curated_floor_from_its_solve(
+def test_network_kinetics_inherits_the_curated_withholding_from_its_solve(
     client, db_session, _api_curator_user
 ):
-    """``approved_floor_only`` must be true for *every* endpoint that echoes it.
+    """A withheld solve must be withheld for *every* endpoint that names it.
 
-    ``network_kinetics`` has no ``record_review`` row in principle — a set of
-    k(T,P) coefficients is reviewed as part of the ``network_solve`` that
-    produced it. Being absent from the gate map entirely, it returned 200 with
-    an ``approved_floor_only`` echo while its own parent correctly 404'd, so the
-    response made a false machine-readable claim.
+    ``network_kinetics`` has no ``record_review`` row in principle: a set of k(T,P) coefficients is reviewed as part of the
+    ``network_solve`` that produced it. Being absent from the gate map entirely, it returned 200 while its own parent
+    correctly 404'd. It is served or withheld exactly as its solve is (ADR 0023 step 7: unreviewed is served, rejected is
+    withheld).
     """
     from app.db.models.app_user import AppUser
     from app.db.models.common import (
@@ -468,26 +484,28 @@ def test_network_kinetics_inherits_the_curated_floor_from_its_solve(
     assert client.get(detail).status_code == 200
     assert client.get(parent).status_code == 200
 
-    # Curated, nothing reviewed: the child must 404 exactly like its parent.
-    assert client.get(f"{parent}?profile=curated").status_code == 404
-    assert client.get(f"{detail}?profile=curated").status_code == 404
+    # Curated, nothing reviewed: the child is served like its parent.
+    assert client.get(f"{parent}?profile=curated").status_code == 200
+    response = client.get(f"{detail}?profile=curated")
+    assert response.status_code == 200, response.text
+    # step 8: this asserts the profile copy ("every record shown is at or above the approved floor") on a response that
+    # serves a not-reviewed solve's fit. The copy is stale since step 2 and step 8 rewrites it; update this with it.
+    assert response.json()["request"]["profile_recommendation"] == "approved_floor_only"
 
-    # Approving the parent admits the child.
+    # Rejecting the parent withholds the child exactly like its parent.
     set_record_review_status(
         db_session,
         record_type=SubmissionRecordType.network_solve,
         record_id=solve.id,
-        status=RecordReviewStatus.approved,
+        status=RecordReviewStatus.rejected,
         actor=curator,
     )
     db_session.flush()
-
-    response = client.get(f"{detail}?profile=curated")
-    assert response.status_code == 200, response.text
-    assert response.json()["request"]["profile_recommendation"] == "approved_floor_only"
+    assert client.get(f"{parent}?profile=curated").status_code == 404
+    assert client.get(f"{detail}?profile=curated").status_code == 404
 
 
-def test_every_handle_resolver_is_classified_for_the_curated_floor():
+def test_every_handle_resolver_is_classified_for_the_curated_gate():
     """A new detail resolver must not slip past the floor unnoticed.
 
     ``network_kinetics`` did exactly that. Every ORM class reaching
@@ -503,6 +521,8 @@ def test_every_handle_resolver_is_classified_for_the_curated_floor():
     source = Path(handles.__file__).read_text()
     reaching = set(re.findall(r"resolve_path_handle\(\s*\n?\s*session,\s*(\w+),", source))
     assert reaching, "resolver scan found nothing; did the call shape change?"
+    # ``resolve_selection_handle`` passes its caller's class straight through: not a class of its own to classify.
+    reaching.discard("model_cls")
 
     gated = {cls.__name__ for cls in handles._REVIEWABLE_HANDLE_TYPES}
     parent_derived = {cls.__name__ for cls in handles._PARENT_DERIVED_HANDLE_TYPES}

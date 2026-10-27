@@ -111,9 +111,9 @@ The same rule applies to the transition-state-entry read's `include=statmech` (`
 provenance's source calculations (the thermo's own and the statmech fallback), its target conformer group, statmech link and traced
 conformer refs, its primary level of theory and derived levels, and statmech `include=conformers` (`conformer_group_ref`).
 
-**Not yet covered:** detail-by-ref still applies the record floor (step 7), so a ref to an unreviewed calculation that a curated
-read now names answers 404 on its own route until then; search and select matching on a level or software is unchanged (step 4).
-Supersession notices name a successor that is shown with its badge.
+Detail-by-ref follows the withheld set (step 7): a ref to an unreviewed calculation that a curated read names resolves on its own
+route, badged, and only a `rejected` or `deprecated` one answers 404. Search and select matching on a level or software follows the
+evidence rule (step 4). Supersession notices name a successor that is shown with its badge.
 
 `statmech` also does **not** link to a conformer directly. The
 linkage is at the `species_entry` level: the `include=conformers`

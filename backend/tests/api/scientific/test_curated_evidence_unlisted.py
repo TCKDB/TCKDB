@@ -9,8 +9,8 @@ This module builds the same world with the hidden records left as they are built
 * an entry of an unlisted transition state names its parent, which is context (``TransitionStateCoreBlock.review``);
 * a solve or a fit of an unlisted network names the network.
 
-Each is the twin of a withheld test in the family modules, on the same route. The record itself (``record``) is still the
-approved floor's: an unlisted record answers its own detail route as before (step 7 changes that, not this step).
+Each is the twin of a withheld test in the family modules, on the same route. Since step 7 the record itself (``record``) is
+served too: an unlisted record answers its own detail route, badged (``test_curated_detail_by_ref.py``).
 """
 
 from __future__ import annotations

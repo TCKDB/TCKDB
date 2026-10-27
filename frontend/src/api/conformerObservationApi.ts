@@ -101,7 +101,7 @@ export type ConformerObservationSibling = z.infer<typeof siblingObservationSchem
 
 export interface ConformerObservation {
     conformer_observation: z.infer<typeof observationCoreSchema>
-    // null under `profile=curated` when the group is not approved: the observation is shown, its basin is not named.
+    // null under `profile=curated` when the group is rejected or deprecated: the observation is shown, its basin is not named.
     conformer_group: z.infer<typeof conformerGroupContextSchema> | null
     species: z.infer<typeof speciesContextSchema>
     assignment_scheme?: z.infer<typeof assignmentSchemeSchema> | null

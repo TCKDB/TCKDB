@@ -129,6 +129,7 @@ from app.services.composite_verification import verify_composite_calculation
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    linked_evidence_predicate,
     molecular_formula_expr,
     review_summary,
     validate_includes,
@@ -1016,10 +1017,7 @@ def _build_provenance_and_sections(
                 "has_artifacts"
             ),
             exists()
-            .where(
-                (CalculationDependency.parent_calculation_id == calculation_id)
-                | (CalculationDependency.child_calculation_id == calculation_id)
-            )
+            .where(_dependency_edge_shown(calculation_id))
             .label("has_dependencies"),
             (
                 _exists_for_calc(primary_table, calculation_id)
@@ -1738,6 +1736,24 @@ def _build_energy_correction_components(
 # ---------------------------------------------------------------------------
 # include=dependencies loader
 # ---------------------------------------------------------------------------
+
+
+def _dependency_edge_shown(calculation_id: int):
+    """The dependency edges of *calculation_id* whose OTHER calculation the evidence rule leaves visible.
+
+    The list (``include=dependencies``) loses an edge whose other end is withheld (the ref guard removes the pointer), so
+    the ``has_dependencies`` flag counts the same edges (ADR 0023). With no review floor the predicate is ``None`` and the
+    condition is the plain "any edge touches this calculation".
+    """
+    from sqlalchemy import and_, or_
+
+    parent_edge = CalculationDependency.parent_calculation_id == calculation_id
+    child_edge = CalculationDependency.child_calculation_id == calculation_id
+    child_shown = linked_evidence_predicate(CalculationDependency.child_calculation_id, SubmissionRecordType.calculation)
+    parent_shown = linked_evidence_predicate(CalculationDependency.parent_calculation_id, SubmissionRecordType.calculation)
+    if child_shown is None or parent_shown is None:
+        return or_(parent_edge, child_edge)
+    return or_(and_(parent_edge, child_shown), and_(child_edge, parent_shown))
 
 
 def _build_dependencies(

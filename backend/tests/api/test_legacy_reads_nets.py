@@ -234,7 +234,7 @@ INDEPENDENT_UNGATED_DETAIL = {
 
 def test_the_entry_detail_routes_are_ungated_on_purpose(routes, client, db_session):
     """Entries are scoping parents. The gate-coverage net lists them here, with the reason, and CALLS each route on an
-    unreviewed entry under curated, so an ``ensure_not_below_floor`` written inside the route body is caught too."""
+    unreviewed entry under curated, so a withheld-set check written inside the route body is caught too."""
     from tests.services.scientific_read._factories import (
         make_chem_reaction,
         make_reaction_entry,
@@ -326,9 +326,10 @@ def _gates_of(route) -> dict:
 
 
 def test_every_gated_detail_route_answers_a_hidden_record_as_an_unknown_id(routes, client, db_session):
-    """Cases come from the routers' own gates: every GET whose path has a gated parameter, called with a hidden record
-    and with a missing id under the curated profile, answers identically. Kills: a gated parameter that stops gating."""
-    w, hidden, network = _hidden_world(db_session)
+    """Cases come from the routers' own gates: every GET whose path has a gated parameter, called with a withheld record
+    (rejected) and with a missing id under the curated profile, answers identically. Kills: a gated parameter that stops
+    gating. A record that is merely unreviewed is served since step 7 of ADR 0023 (``test_curated_detail_by_ref.py``)."""
+    w, hidden, network = _hidden_world(db_session, withheld=True)
     tested = 0
     gated_kinds = set()
     for route in _legacy(routes):

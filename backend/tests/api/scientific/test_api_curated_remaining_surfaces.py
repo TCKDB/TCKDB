@@ -298,7 +298,9 @@ def test_thermo_curated_names_its_own_unreviewed_source_calculation(client, db_s
 def test_thermo_curated_does_not_name_its_own_withheld_source_calculation(client, db_session):
     """Kills: filtering only the statmech fallback and not the thermo's own source rows. The calculation is rejected."""
     entry, hidden_sp, shown_freq = _own_sources_world(db_session, hidden_status=RecordReviewStatus.rejected)
-    assert client.get(f"{BASE}/calculations/{hidden_sp.public_ref}", params={"profile": "curated"}).status_code == 404
+    # Its own detail route follows the withheld set too (step 7): served unless rejected or deprecated.
+    detail = client.get(f"{BASE}/calculations/{hidden_sp.public_ref}", params={"profile": "curated"})
+    assert detail.status_code == 404  # rejected
     prov, rec = _provenance(client, entry, "curated")
     assert prov["sp_calculation_ref"] is None
     assert hidden_sp.public_ref not in str(rec)
@@ -459,7 +461,7 @@ def test_statmech_conformers_exploratory_lists_every_group(client, db_session):
     assert [c["conformer_group_ref"] for c in default] == refs
 
 
-# --- review statuses: every status below the floor is hidden, not only ``not_reviewed`` -------------------------
+# --- review statuses: every status below the floor is named as evidence and served by detail unless withheld ----
 
 BELOW_FLOOR = [RecordReviewStatus.under_review, RecordReviewStatus.rejected, RecordReviewStatus.deprecated]
 #: Of the statuses below the floor, the ones the evidence rule withholds (ADR 0023): a nested ref to a record at one of
@@ -471,7 +473,9 @@ WITHHELD = {RecordReviewStatus.rejected, RecordReviewStatus.deprecated}
 def test_thermo_own_source_follows_the_evidence_rule_for_every_status_below_the_floor(client, db_session, status):
     """Kills: hiding only one status, or hiding all of them (the evidence rule withholds rejected and deprecated)."""
     entry, hidden_sp, shown_freq = _own_sources_world(db_session, hidden_status=status)
-    assert client.get(f"{BASE}/calculations/{hidden_sp.public_ref}", params={"profile": "curated"}).status_code == 404
+    # Its own detail route follows the withheld set too (step 7): served unless rejected or deprecated.
+    detail = client.get(f"{BASE}/calculations/{hidden_sp.public_ref}", params={"profile": "curated"})
+    assert detail.status_code == (404 if status in WITHHELD else 200)
     prov, rec = _provenance(client, entry, "curated")
     if status in WITHHELD:
         assert prov["sp_calculation_ref"] is None
@@ -485,7 +489,8 @@ def test_thermo_own_source_follows_the_evidence_rule_for_every_status_below_the_
 def test_statmech_conformer_group_follows_the_evidence_rule_for_every_status_below_the_floor(client, db_session, status):
     """Kills: hiding only one status, or hiding all of them."""
     sm, shown, hidden = _conformer_world(db_session, hidden_status=status)
-    assert client.get(f"{BASE}/conformer-groups/{hidden.public_ref}", params={"profile": "curated"}).status_code == 404
+    detail = client.get(f"{BASE}/conformer-groups/{hidden.public_ref}", params={"profile": "curated"})
+    assert detail.status_code == (404 if status in WITHHELD else 200)
     refs, _ = _conformer_refs(client, sm, "curated")
     if status in WITHHELD:
         assert refs == [shown.public_ref]
