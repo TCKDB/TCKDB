@@ -154,6 +154,20 @@ class MergeReport:
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class _Unique:
+    """One unique key: its key columns (or expressions), whether NULLs are equal, and the predicate of a partial index."""
+
+    keys: list[str]
+    nulls_not_distinct: bool
+    predicate: str | None
+
+
+#: SQLSTATEs the accepted-science guards raise when they refuse a declared repair's write. Anything else is not a
+#: guard refusal and must not be read as one.
+_GUARD_SQLSTATES = frozenset({"22023", "55000", "42501", "23503"})
+
+
 class _Catalogue:
     def __init__(self, session: Session) -> None:
         self._s = session
@@ -201,21 +215,27 @@ class _Catalogue:
         markers = set(_MARKERS.values())
         return [(r.tbl, r.col) for r in rows if r.col not in markers]
 
-    def uniques(self, table: str) -> list[tuple[list[str], bool]]:
+    def uniques(self, table: str) -> list[_Unique]:
+        """Every unique key of ``table``: constraints AND unique indexes (some keys exist only as an index).
+
+        Read from ``pg_index`` so a partial index (it binds only the rows its predicate selects), a nulls-not-distinct
+        one and an expression key are all seen. ``pg_get_indexdef(index, n, true)`` gives the n-th key as a column
+        name or as its expression.
+        """
         if table not in self._uniques:
             rows = self._s.execute(
                 text(
-                    "SELECT array_agg(a.attname ORDER BY k.ord) AS cols, i.indnullsnotdistinct AS nnd "
-                    "FROM pg_constraint c "
-                    "JOIN pg_index i ON i.indexrelid = c.conindid "
-                    "CROSS JOIN LATERAL unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord) "
-                    "JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum "
-                    "WHERE c.contype IN ('p', 'u') AND c.conrelid = CAST(:t AS regclass) "
-                    "GROUP BY c.conname, i.indnullsnotdistinct"
+                    "SELECT i.indexrelid, i.indnullsnotdistinct AS nnd, pg_get_expr(i.indpred, i.indrelid) AS pred, "
+                    "array_agg(pg_get_indexdef(i.indexrelid, k.n, true) ORDER BY k.n) AS keys "
+                    "FROM pg_index i CROSS JOIN LATERAL generate_series(1, i.indnkeyatts::int) AS k(n) "
+                    "WHERE i.indrelid = CAST(:t AS regclass) AND i.indisunique AND i.indisvalid "
+                    "GROUP BY i.indexrelid, i.indnullsnotdistinct, i.indpred, i.indrelid"
                 ),
                 {"t": table},
             )
-            self._uniques[table] = [(list(r.cols), bool(r.nnd)) for r in rows]
+            self._uniques[table] = [
+                _Unique([k.strip('"') for k in r.keys], bool(r.nnd), r.pred) for r in rows
+            ]
         return self._uniques[table]
 
 
@@ -282,13 +302,7 @@ def merge_stereo_identity(session: Session, *, revision: str) -> MergeReport:
     if survivors:
         # Only surviving entries are reassigned. Their groups have all moved to them already, and no merged entry may
         # be walked (the database refuses a write onto one).
-        merged_survivors = session.scalars(
-            text(
-                "SELECT public_ref FROM species_entry WHERE id = ANY(:ids) AND merged_into_species_entry_id IS NOT NULL"
-            ),
-            {"ids": sorted(survivors)},
-        ).all()
-        assert not merged_survivors, f"reassignment would walk merged entries: {merged_survivors}"
+        _refuse_merged_survivors(session, survivors)
         reassignment = reassign_conformer_groups(session, repair_revision=revision, species_entry_ids=sorted(survivors))
         report.conformer_reassignment = reassignment.summary()
     # Run every deferred foreign-key check now: a dangling reference is a failure of this step, and pending trigger
@@ -309,6 +323,16 @@ def _plan_repairs(catalogue: _Catalogue, repairs: _Repairs) -> None:
     # reassignment may write is declared once with the union of both column sets.
     for table, columns in REASSIGNMENT_REPAIR_COLUMNS.items():
         repairs.plan(table, list(columns))
+
+
+def _refuse_merged_survivors(session: Session, survivors: set[int]) -> None:
+    """Raise (not ``assert``: ``PYTHONOPTIMIZE`` strips asserts) if any entry about to be reassigned is merged away."""
+    merged = session.scalars(
+        text("SELECT public_ref FROM species_entry WHERE id = ANY(:ids) AND merged_into_species_entry_id IS NOT NULL"),
+        {"ids": sorted(survivors)},
+    ).all()
+    if merged:
+        raise BlockedMerge(f"the conformer reassignment would walk merged-away species entries: {', '.join(merged)}")
 
 
 #: Foreign keys this step moves by hand, not through the generic mover.
@@ -848,7 +872,16 @@ class _Merger:
                     text(f"UPDATE {table} AS t SET {column} = :s WHERE t.{column} = :l {collisions}"),
                     {"s": survivor, "l": loser},
                 ).rowcount
-        except DBAPIError:
+        except DBAPIError as exc:
+            state = getattr(exc.orig, "sqlstate", None)
+            if state == "23505":
+                # A unique key the collision predicate did not know about: not a guard, and the whole move is undone.
+                raise BlockedMerge(
+                    f"{table}.{column}: moving rows of a merged-away row onto the surviving one violates a unique key "
+                    f"({exc.orig}); a curator decides which stands"
+                ) from exc
+            if state not in _GUARD_SQLSTATES:
+                raise
             logger.info("%s.%s: left on the merged row (an accepted record guards it)", table, column)
             moved = 0
             guarded = True
@@ -869,36 +902,57 @@ class _Merger:
     def _colliding_pairs(self, table: str, column: str, loser: int, survivor: int) -> list[str]:
         """``id`` pairs (``loser row / survivor row``) of the rows that collided, for the operator's list."""
         pairs: list[str] = []
-        for columns, nulls_not_distinct in self.cat.uniques(table):
-            if column not in columns:
-                continue
-            equal = " AND ".join(
-                (f"b.{c} IS NOT DISTINCT FROM t.{c}" if nulls_not_distinct else f"b.{c} = t.{c}")
-                for c in columns
-                if c != column
-            ) or "true"
+        for condition in self._collision_conditions(table, column):
             for row in self.s.execute(
                 text(
-                    f"SELECT to_jsonb(t) ->> 'id' AS t_id, to_jsonb(b) ->> 'id' AS b_id FROM {table} t "
-                    f"JOIN {table} b ON b.{column} = :s AND {equal} WHERE t.{column} = :l"
+                    f"SELECT to_jsonb(t) ->> 'id' AS t_id FROM {table} t WHERE t.{column} = :l AND {condition}"
                 ),
                 {"s": survivor, "l": loser},
             ):
-                pairs.append(f"{table} {row.t_id} / {row.b_id}")
+                pairs.append(f"{table} {row.t_id}")
         return pairs[:20] or [table]
 
-    def _collision_predicate(self, table: str, column: str) -> str:
-        """``AND NOT EXISTS (...)`` clauses keeping a move from violating a unique key the survivor already holds."""
-        clauses = []
-        for columns, nulls_not_distinct in self.cat.uniques(table):
-            if column not in columns:
+    def _collision_conditions(self, table: str, column: str) -> list[str]:
+        """One SQL condition per unique key holding ``column``: true when the row ``t`` would collide with a row ``b``
+        of the survivor (``b.<column> = :s``) once moved. Partial predicates and nulls-not-distinct are honoured; the
+        key and the predicate are evaluated per row through ``ctid``, so an expression key works the same as a column.
+
+        :raises BlockedMerge: When ``column`` occurs inside an expression key, which this cannot compare.
+        """
+
+        def value(key: str, alias: str) -> str:
+            return f"(SELECT {key} FROM {table} x WHERE x.ctid = {alias}.ctid)"
+
+        def holds(unique: _Unique, alias: str) -> str:
+            if unique.predicate is None:
+                return "true"
+            return f"EXISTS (SELECT 1 FROM {table} x WHERE x.ctid = {alias}.ctid AND ({unique.predicate}))"
+
+        conditions = []
+        for unique in self.cat.uniques(table):
+            if column not in unique.keys:
+                if any(re.search(rf"\b{re.escape(column)}\b", key) for key in unique.keys):
+                    raise BlockedMerge(
+                        f"{table}: a unique expression key ({', '.join(unique.keys)}) reads {column}; this step cannot "
+                        "tell whether moving it collides, so a curator checks the rows first"
+                    )
                 continue
-            others = [c for c in columns if c != column]
             equal = " AND ".join(
-                (f"b.{c} IS NOT DISTINCT FROM t.{c}" if nulls_not_distinct else f"b.{c} = t.{c}") for c in others
+                f"{value(k, 'b')} IS NOT DISTINCT FROM {value(k, 't')}"
+                if unique.nulls_not_distinct
+                else f"{value(k, 'b')} = {value(k, 't')}"
+                for k in unique.keys
+                if k != column
             ) or "true"
-            clauses.append(f"AND NOT EXISTS (SELECT 1 FROM {table} b WHERE b.{column} = :s AND {equal})")
-        return " ".join(clauses)
+            conditions.append(
+                f"({holds(unique, 't')} AND EXISTS (SELECT 1 FROM {table} b WHERE b.{column} = :s AND {holds(unique, 'b')} "
+                f"AND {equal}))"
+            )
+        return conditions
+
+    def _collision_predicate(self, table: str, column: str) -> str:
+        """``AND NOT (...)`` clauses keeping a move from violating a unique key the survivor already holds."""
+        return " ".join(f"AND NOT {condition}" for condition in self._collision_conditions(table, column))
 
     def _clear_colliding_group_labels(self, loser: int, survivor: int) -> None:
         cleared = self.s.execute(

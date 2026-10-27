@@ -840,3 +840,149 @@ def test_a_conformer_group_left_on_a_merged_entry_stops_the_migration(harness) -
         merger = _Merger(session, catalogue, _Repairs(session, "test", report, catalogue), report)
         with pytest.raises(BlockedMerge, match=kept_ref):
             merger._assert_no_conformer_rows_left_on_merged_entries()
+
+
+def _aec(conn, entry: int, scheme: int, temperature: float | None) -> int:
+    return conn.scalar(
+        text(
+            "INSERT INTO applied_energy_correction (target_species_entry_id, scheme_id, application_role, value, value_unit, "
+            "temperature_k) VALUES (:e, :s, CAST('zpe' AS energy_correction_application_role), 0.1, "
+            "CAST('hartree' AS energy_unit), :t) RETURNING id"
+        ),
+        {"e": entry, "s": scheme, "t": temperature},
+    )
+
+
+def _scheme(conn) -> int:
+    return conn.scalar(
+        text(
+            "INSERT INTO energy_correction_scheme (kind, name) VALUES (CAST('other' AS energy_correction_scheme_kind), "
+            "'merge-test') RETURNING id"
+        )
+    )
+
+
+def test_a_correction_that_collides_through_a_unique_index_stops_the_migration_and_strands_nothing(harness) -> None:
+    """``uq_applied_energy_correction_dedup`` is a unique INDEX, not a constraint. The loser's identical correction
+    collides with the survivor's, so the migration stops; before the catalogue read indexes, the whole update was
+    rolled back as "guarded" and the loser's other correction was stranded on the merged entry."""
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        ids = _seed(conn)
+        scheme = _scheme(conn)
+        _aec(conn, ids["e_trans"], scheme, None)
+        _aec(conn, ids["e_flat"], scheme, None)
+        _aec(conn, ids["e_flat"], scheme, 298.15)
+    failed = harness.run("upgrade", _MIGRATION.revision, check=False)
+    assert failed.returncode != 0
+    assert "applied_energy_correction" in failed.stderr and "duplicate rows the surviving one already has" in failed.stderr
+
+
+def test_corrections_that_collide_with_nothing_all_move_to_the_survivor(harness) -> None:
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        ids = _seed(conn)
+        scheme = _scheme(conn)
+        _aec(conn, ids["e_trans"], scheme, None)
+        moved = [_aec(conn, ids["e_flat"], scheme, 298.15), _aec(conn, ids["e_flat"], scheme, 500.0)]
+    done = harness.run("upgrade", _MIGRATION.revision, check=False)
+    assert done.returncode == 0, done.stderr[-1500:]
+    with harness.engine.connect() as conn:
+        for correction in moved:
+            assert _value(conn, "SELECT target_species_entry_id FROM applied_energy_correction WHERE id = :i", i=correction) == ids["e_trans"]
+        assert "applied_energy_correction" not in done.stdout.split("left_on_merged_rows")[1].split("merged(")[0]
+
+
+@pytest.mark.parametrize(("sqlstate", "outcome"), [("22023", "listed"), ("23505", "blocked"), ("40001", "raised")])
+def test_only_a_guard_refusal_is_read_as_guarded(harness, monkeypatch, sqlstate: str, outcome: str) -> None:
+    """The error of a move is classified by its SQLSTATE: a guard's refusal leaves the rows and lists them, a unique
+    violation stops the migration, anything else propagates. Nothing else is swallowed as "guarded"."""
+    from sqlalchemy.exc import DBAPIError
+    from sqlalchemy.orm import Session
+
+    from app.services.stereo_identity_merge import BlockedMerge, MergeReport, _Catalogue, _Merger, _plan_repairs, _Repairs
+
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        ids = _seed(conn)
+        kinetics = conn.scalar(
+            text(
+                "INSERT INTO kinetics (reaction_entry_id, scientific_origin, model_kind) VALUES (:r, "
+                "CAST('computed' AS scientific_origin_kind), CAST('arrhenius' AS kinetics_model_kind)) RETURNING id"
+            ),
+            {"r": ids["re_one"]},
+        )
+        conn.execute(
+            text("INSERT INTO kinetics_third_body_efficiency (kinetics_id, collider_species_id, efficiency) VALUES (:k, :s, 2.0)"),
+            {"k": kinetics, "s": ids["s_flat"]},
+        )
+    harness.run("upgrade", _MIGRATION.revision)
+
+    class _Orig(Exception):
+        def __init__(self, state):
+            super().__init__(state)
+            self.sqlstate = state
+
+    with Session(harness.engine) as session:
+        report = MergeReport()
+        catalogue = _Catalogue(session)
+        repairs = _Repairs(session, "test", report, catalogue)
+        _plan_repairs(catalogue, repairs)
+        merger = _Merger(session, catalogue, repairs, report)
+        # The efficiency now sits on the surviving species; run a move of it with the UPDATE made to fail.
+        real = session.execute
+
+        def failing(statement, *args, **kwargs):
+            if str(statement).startswith("UPDATE kinetics_third_body_efficiency AS t"):
+                raise DBAPIError("UPDATE", {}, _Orig(sqlstate))
+            return real(statement, *args, **kwargs)
+
+        monkeypatch.setattr(session, "execute", failing)
+        call = lambda: merger._move("kinetics_third_body_efficiency", "collider_species_id", ids["s_flat"], ids["s_trans"])  # noqa: E731
+        if outcome == "listed":
+            call()
+            assert report.left_on_merged_rows == [("kinetics_third_body_efficiency", "collider_species_id", 1)]
+        elif outcome == "blocked":
+            with pytest.raises(BlockedMerge, match="violates a unique key"):
+                call()
+        else:
+            with pytest.raises(DBAPIError):
+                call()
+
+
+def test_the_catalogue_reads_unique_indexes_with_their_predicates(harness) -> None:
+    from sqlalchemy.orm import Session
+
+    from app.services.stereo_identity_merge import _Catalogue
+
+    harness.run("upgrade", _MIGRATION.revision)
+    with Session(harness.engine) as session:
+        catalogue = _Catalogue(session)
+        correction = {tuple(u.keys): u for u in catalogue.uniques("applied_energy_correction")}
+        dedup = next(u for keys, u in correction.items() if "application_role" in keys)
+        assert dedup.nulls_not_distinct and dedup.predicate is None
+        entry = catalogue.uniques("species_entry")
+        assert any(u.predicate and "merged_into_species_entry_id IS NULL" in u.predicate for u in entry)
+        assert not any(  # the unique indexes of the mergeable tables are all seen, partial ones with their predicate
+            u.predicate is None and "stereo_descriptor" in u.keys for u in entry
+        )
+
+
+def test_reassignment_refuses_to_walk_a_merged_entry(harness) -> None:
+    from sqlalchemy.orm import Session
+
+    from app.services.stereo_identity_merge import BlockedMerge, _refuse_merged_survivors
+
+    harness.run("upgrade", _MIGRATION.revision)
+    with harness.engine.begin() as conn:
+        species = _species(conn, "CC=CC", "IAQRGUVFOMOMEM-UHFFFAOYSA-N")
+        kept = _entry(conn, species, "CC=CC", None)
+        survivor = _second_entry(conn, species, "CC=CC", None)
+        conn.execute(
+            text("UPDATE species_entry SET merged_into_species_entry_id = :s WHERE id = :k"), {"s": survivor, "k": kept}
+        )
+        kept_ref = _value(conn, "SELECT public_ref FROM species_entry WHERE id = :i", i=kept)
+    with Session(harness.engine) as session:
+        _refuse_merged_survivors(session, {survivor})
+        with pytest.raises(BlockedMerge, match=kept_ref):
+            _refuse_merged_survivors(session, {kept, survivor})
