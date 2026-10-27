@@ -64,13 +64,8 @@ from app.api.error_contract import CodedValueError
 from app.chemistry import stereo
 from app.chemistry.species import classify_stereo_kind, identity_mol_from_smiles, strip_isotopes
 from app.db.models.common import StereoKind
-from app.services.conformer_reassignment import (
-    OBSERVATION_COLUMNS,
-    STATMECH_DECLARATION_COLUMNS,
-    STATMECH_MEMBER_COLUMNS,
-    THERMO_COLUMNS,
-    reassign_conformer_groups,
-)
+from app.services.conformer_basin_moves import REASSIGNMENT_REPAIR_COLUMNS
+from app.services.conformer_reassignment import reassign_conformer_groups
 from app.services.public_refs import PREFIXES, make_content_ref
 
 logger = logging.getLogger(__name__)
@@ -92,20 +87,6 @@ _MARKERS = {
 #: Tables whose rows are *about* the kept row itself (curation), so they stay on it instead of moving.
 _STAYS_ON_MERGED_ROW = {
     ("species_entry_review", "species_entry_id"),
-}
-
-#: The columns ``reassign_conformer_groups`` may write, by table. The database allows ONE repair declaration per table
-#: per transaction, and a later declaration for a table already declared is skipped, so a table this step writes
-#: *and* the reassignment may write has to be declared once with the UNION of both column sets. Hard-coded from the
-#: reassignment module's own constants until it exports one mapping; keep in step with ``reassign_conformer_groups``
-#: (every ``repairs.declare(table, columns)`` call in ``app.services.conformer_reassignment``).
-_REASSIGNMENT_REPAIR_COLUMNS: dict[str, tuple[str, ...]] = {
-    # Basin scheme v3 (#825) also writes ``mapped_coords_json``. Replace this mapping with
-    # ``app.services.conformer_basin_moves.REASSIGNMENT_REPAIR_COLUMNS`` once that PR has merged.
-    "conformer_observation": tuple(dict.fromkeys([*OBSERVATION_COLUMNS, "mapped_coords_json"])),
-    "thermo": tuple(THERMO_COLUMNS),
-    "statmech_model_member": tuple(STATMECH_MEMBER_COLUMNS),
-    "statmech_model_declaration": tuple(STATMECH_DECLARATION_COLUMNS),
 }
 
 #: ``structure_determination.identity_hash`` names its owning species entry.
@@ -299,6 +280,15 @@ def merge_stereo_identity(session: Session, *, revision: str) -> MergeReport:
     merger.rehash_dependents()
     merger.reset_survivor_reviews(survivors)
     if survivors:
+        # Only surviving entries are reassigned. Their groups have all moved to them already, and no merged entry may
+        # be walked (the database refuses a write onto one).
+        merged_survivors = session.scalars(
+            text(
+                "SELECT public_ref FROM species_entry WHERE id = ANY(:ids) AND merged_into_species_entry_id IS NOT NULL"
+            ),
+            {"ids": sorted(survivors)},
+        ).all()
+        assert not merged_survivors, f"reassignment would walk merged entries: {merged_survivors}"
         reassignment = reassign_conformer_groups(session, repair_revision=revision, species_entry_ids=sorted(survivors))
         report.conformer_reassignment = reassignment.summary()
     # Run every deferred foreign-key check now: a dangling reference is a failure of this step, and pending trigger
@@ -315,7 +305,9 @@ def _plan_repairs(catalogue: _Catalogue, repairs: _Repairs) -> None:
                 repairs.plan(table, [column])
     repairs.plan("structure_determination", ["identity_hash"])
     repairs.plan("network_state", ["composition_hash"])
-    for table, columns in _REASSIGNMENT_REPAIR_COLUMNS.items():
+    # The database allows ONE repair declaration per table per transaction, so a table this step writes AND the
+    # reassignment may write is declared once with the union of both column sets.
+    for table, columns in REASSIGNMENT_REPAIR_COLUMNS.items():
         repairs.plan(table, list(columns))
 
 

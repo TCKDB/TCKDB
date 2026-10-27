@@ -248,6 +248,59 @@ def test_query_string_search_fields_are_refused_on_a_post(client, db_session):
 # --- refusals and missing things -------------------------------------------------------------------------------------------------------
 
 
+def test_a_basin_a_merge_emptied_is_forwarded_and_the_response_says_so(client, db_session):
+    from app.db.models.species import ConformerGroup
+
+    scene = build(db_session)
+    emptied = ConformerGroup(species_entry_id=scene.group.species_entry_id, label="merged_away")
+    db_session.add(emptied)
+    db_session.flush()
+    emptied.merged_into_conformer_group_id = scene.group.id
+    db_session.flush()
+    forwarded = client.post(URL, json=body_for(scene, target__scope__conformer_group_ref=emptied.public_ref))
+    assert forwarded.status_code == 200, forwarded.text
+    direct = client.post(URL, json=body_for(scene))
+    body = forwarded.json()
+    assert body["forwarded_from_conformer_group_ref"] == emptied.public_ref
+    assert body["request"]["target"]["scope"]["conformer_group_ref"] == scene.group.public_ref
+    assert body["outcome"] == direct.json()["outcome"]
+    assert direct.json()["forwarded_from_conformer_group_ref"] is None
+    # the manifest download says it too, still verifies and replays; a direct request's manifest has no such key
+    manifest = client.post(URL + "/manifest", json=body_for(scene, target__scope__conformer_group_ref=emptied.public_ref))
+    assert manifest.status_code == 200, manifest.text
+    recorded = manifest.json()["request"]
+    assert recorded["forwarded_from_conformer_group_ref"] == emptied.public_ref
+    assert recorded["target"]["scope"]["conformer_group_ref"] == scene.group.public_ref
+    assert manifest_module.replay_matches(manifest.json())
+    assert "forwarded_from_conformer_group_ref" not in client.post(URL + "/manifest", json=body_for(scene)).json()["request"]
+
+
+@pytest.mark.parametrize("path", ["", "/manifest"])
+def test_under_curated_an_emptied_basin_the_floor_hides_is_unknown_not_forwarded(client, db_session, path):
+    """A merge resets the emptied group's review to not_reviewed, so the curated floor hides it. Hidden is unknown: the
+    same 404 an unknown ref gets, never a 200 forwarded to the approved survivor. Exploratory still forwards."""
+    from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+    from app.db.models.species import ConformerGroup
+    from tests.services.statmech_selection.test_service import set_review
+
+    scene = build(db_session)
+    set_review(db_session, record_type=SubmissionRecordType.conformer_group, record_id=scene.group.id, status=RecordReviewStatus.approved)
+    emptied = ConformerGroup(species_entry_id=scene.group.species_entry_id, label="merged_away")
+    db_session.add(emptied)
+    db_session.flush()
+    emptied.merged_into_conformer_group_id = scene.group.id
+    set_review(db_session, record_type=SubmissionRecordType.conformer_group, record_id=emptied.id, status=RecordReviewStatus.not_reviewed)
+    db_session.flush()
+    hidden = client.post(URL + path + "?profile=curated", json=body_for(scene, target__scope__conformer_group_ref=emptied.public_ref))
+    unknown = client.post(URL + path + "?profile=curated", json=body_for(scene, target__scope__conformer_group_ref="cg_" + "a" * 26))
+    assert hidden.status_code == unknown.status_code == 404, (hidden.text, unknown.text)
+    assert hidden.json()["code"] == unknown.json()["code"] == "handle_not_found"
+    # the survivor itself, asked for directly under curated, is answered
+    assert client.post(URL + path + "?profile=curated", json=body_for(scene)).status_code == 200
+    # exploratory reads the emptied group and forwards it
+    assert client.post(URL + path, json=body_for(scene, target__scope__conformer_group_ref=emptied.public_ref)).status_code == 200
+
+
 def test_an_unknown_target_basin_determination_or_declaration_is_a_404(client, db_session):
     scene = build(db_session)
     ghost = "a" * 26

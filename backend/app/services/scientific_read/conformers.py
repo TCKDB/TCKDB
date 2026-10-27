@@ -40,6 +40,7 @@ from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import (
     ConformerAssignmentScheme,
     ConformerGroup,
+    ConformerGroupMergePending,
     ConformerObservation,
     ConformerSelection,
     Species,
@@ -64,6 +65,8 @@ from app.schemas.reads.scientific_conformer import (
     ConformerGroupCoreBlock,
     ConformerGroupEvidenceSummary,
     ConformerGroupFingerprint,
+    ConformerGroupMergePendingBlock,
+    ConformerGroupRefilePendingBlock,
     ConformerObservationCoreBlock,
     ConformerObservationEvidenceSummary,
     ConformerObservationGroupSummary,
@@ -293,7 +296,7 @@ def build_group_record(
     )
 
     cg_core = _build_group_core_block(
-        cg, cg_badge, include_fingerprint="fingerprints" in includes
+        session, cg, cg_badge, include_fingerprint="fingerprints" in includes
     )
 
     observations_block: (
@@ -448,7 +451,7 @@ def get_conformer_observation(
     )
     species_context = _build_species_context(session, cg.species_entry_id)
     cg_core = _build_group_core_block(
-        cg, cg_badge, include_fingerprint="fingerprints" in includes
+        session, cg, cg_badge, include_fingerprint="fingerprints" in includes
     )
 
     record = _build_observation_record(
@@ -659,6 +662,7 @@ def _build_sibling_observation_records(
 
 
 def _build_group_core_block(
+    session: Session,
     cg: ConformerGroup,
     badge: RecordReviewBadge,
     *,
@@ -674,7 +678,48 @@ def _build_group_core_block(
         fingerprint=(
             _build_group_fingerprint(cg) if include_fingerprint else None
         ),
+        merged_into_conformer_group_ref=(
+            cg.merged_into.public_ref if cg.merged_into is not None else None
+        ),
+        wide_basin=(None if cg.basin_is_clique is None else not cg.basin_is_clique),
+        basin_span_deg=cg.basin_span_deg,
+        merge_pending=_pending_merge_of(session, cg.id),
+        refile_pending=_pending_refile_of(session, cg.id),
     )
+
+
+def _pending_refile_of(session: Session, group_id: int) -> ConformerGroupRefilePendingBlock | None:
+    """Structures sitting in this group that owe a re-file into a basin with no group yet, if any."""
+    rows = session.execute(
+        select(ConformerGroupMergePending.reason)
+        .where(
+            ConformerGroupMergePending.absorbed_conformer_group_id == group_id,
+            ConformerGroupMergePending.kept_conformer_group_id.is_(None),
+            ConformerGroupMergePending.completed_at.is_(None),
+        )
+        .order_by(ConformerGroupMergePending.id)
+    ).all()
+    if not rows:
+        return None
+    return ConformerGroupRefilePendingBlock(observation_count=len(rows), reason=rows[0].reason)
+
+
+def _pending_merge_of(session: Session, group_id: int) -> ConformerGroupMergePendingBlock | None:
+    """The merge of this group into another that is still owed, if any (the lowest-numbered target)."""
+    row = session.execute(
+        select(ConformerGroupMergePending.reason, ConformerGroup.public_ref)
+        # an inner join: a re-file owed has no kept group and is a different kind of owed work
+        .join(ConformerGroup, ConformerGroup.id == ConformerGroupMergePending.kept_conformer_group_id)
+        .where(
+            ConformerGroupMergePending.absorbed_conformer_group_id == group_id,
+            ConformerGroupMergePending.completed_at.is_(None),
+        )
+        .order_by(ConformerGroupMergePending.kept_conformer_group_id, ConformerGroupMergePending.id)
+        .limit(1)
+    ).first()
+    if row is None:
+        return None
+    return ConformerGroupMergePendingBlock(target_conformer_group_ref=row.public_ref, reason=row.reason)
 
 
 def _build_group_fingerprint(

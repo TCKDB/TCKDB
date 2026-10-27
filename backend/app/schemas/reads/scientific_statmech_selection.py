@@ -412,6 +412,11 @@ class StatmechSelectionResponse(SelectionStepsAnswer):
     """
 
     request: StatmechSelectionRequestEcho
+    forwarded_from_conformer_group_ref: str | None = Field(
+        default=None,
+        description="Set when the requested basin's conformer group had been merged into another: the ref that was "
+        "asked for. The decision was made on the group that took its members, which is the one the request echoes.",
+    )
     review: StatmechSelectionReview
     versions: dict[str, Any]
     outcome: Outcome

@@ -159,7 +159,7 @@ def _species_entry_conformer_summary(
         visibility.restrict(
             visibility.restrict(
                 select(func.count(ConformerObservation.id))
-                .join(ConformerGroup)
+                .join(ConformerGroup, ConformerGroup.id == ConformerObservation.conformer_group_id)
                 .where(ConformerGroup.species_entry_id == entry_id),
                 ConformerObservation.id,
                 SubmissionRecordType.conformer_observation,
@@ -278,7 +278,7 @@ def list_conformers_for_entry(
     entry_id = entry.id
     matched = (
         select(ConformerObservation.id)
-        .join(ConformerGroup)
+        .join(ConformerGroup, ConformerGroup.id == ConformerObservation.conformer_group_id)
         .where(ConformerGroup.species_entry_id == entry_id)
     )
     disclose_in_header(
@@ -288,7 +288,7 @@ def list_conformers_for_entry(
         visibility.restrict(
             visibility.restrict(
                 select(ConformerObservation)
-                .join(ConformerGroup)
+                .join(ConformerGroup, ConformerGroup.id == ConformerObservation.conformer_group_id)
                 .where(ConformerGroup.species_entry_id == entry_id),
                 ConformerObservation.id,
                 SubmissionRecordType.conformer_observation,

@@ -95,7 +95,12 @@ from app.services.composite_result_resolution import collect_named_composite_dep
 from app.services.conformer_anchoring import (
     anchor_species_calculation_to_observation,
 )
-from app.services.conformer_resolution import resolve_conformer_group
+from app.services.conformer_resolution import (
+    current_conformer_group_targets,
+    primary_structure,
+    resolve_conformer_group,
+    settle_conformer_basin,
+)
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -594,10 +599,6 @@ def persist_computed_reaction_upload(
     # to write. Uniqueness within a species is enforced by the request
     # model, so this map loses nothing.
     observation_id_by_conformer_key: dict[str, dict[str, int]] = {}
-    # The same per-species scoping, to each conformer's group: a thermo target
-    # that names a conformer by key resolves to the group it was assigned to,
-    # and a sibling species's conformer is not in scope.
-    group_id_by_conformer_key: dict[str, dict[str, int]] = {}
     # Review-row targets accumulated as records are written so the
     # caller's ReviewPolicy can be applied at end-of-workflow.
     review_targets: list[RecordRef] = []
@@ -627,7 +628,6 @@ def persist_computed_reaction_upload(
 
         # Conformers
         conformers_by_key = observation_id_by_conformer_key.setdefault(sp.key, {})
-        group_ids_by_key = group_id_by_conformer_key.setdefault(sp.key, {})
         for conf in sp.conformers:
             geom_payload = conf.geometry.to_payload()
             geometry = resolve_geometry_payload(session, geom_payload)
@@ -649,10 +649,12 @@ def persist_computed_reaction_upload(
                 RecordRef(SubmissionRecordType.calculation, calculation.id)
             )
 
-            parsed = parse_xyz(GeometryPayload(xyz_text=conf.geometry.xyz_text))
+            structure = primary_structure(conf.calculation, conf.geometry.xyz_text)
+            parsed = parse_xyz(GeometryPayload(xyz_text=structure.xyz_text))
             conformer_group, fingerprint, scheme = resolve_conformer_group(
                 session, species_entry, label=conf.label, created_by=created_by,
                 smiles=sp.species_entry.smiles, xyz_atoms=parsed.atoms,
+                defining=structure.defining,
             )
             observation = ConformerObservation(
                 conformer_group_id=conformer_group.id,
@@ -666,9 +668,9 @@ def persist_computed_reaction_upload(
             )
             session.add(observation)
             session.flush()
+            settle_conformer_basin(session, observation, fingerprint, smiles=sp.species_entry.smiles)
             observation_id_by_geometry_key[conf.geometry.key] = observation.id
             conformers_by_key[conf.key] = observation.id
-            group_ids_by_key[conf.key] = conformer_group.id
             review_targets.append(
                 RecordRef(SubmissionRecordType.conformer_group, conformer_group.id)
             )
@@ -1394,7 +1396,12 @@ def persist_computed_reaction_upload(
                 session,
                 t,
                 species_entry_id=species_entry.id,
-                conformer_group_ids_by_key=group_id_by_conformer_key.get(sp.key, {}),
+                # Where each conformer is NOW: a later conformer of this bundle can link two basins and
+                # merge the younger into the older, so the group captured when it was filed may be stale.
+                conformer_group_ids_by_key={
+                    key: session.get(ConformerObservation, observation_id).conformer_group_id
+                    for key, observation_id in observation_id_by_conformer_key.get(sp.key, {}).items()
+                },
                 calculations_by_key=calculation_key_to_id,
                 field_prefix=f"species[{sp.key!r}].thermo.",
             )
@@ -2118,7 +2125,7 @@ def persist_computed_reaction_upload(
     )
     apply_review_policy(
         session,
-        targets=review_targets,
+        targets=current_conformer_group_targets(session, review_targets),
         policy=review_policy,
         created_by=created_by,
     )

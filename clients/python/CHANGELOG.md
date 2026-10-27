@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.174.0 - 2026-10-26
+## 0.176.0 - 2026-10-27
 
 A species entry's stereo is a descriptor; the species is the constitution.
 
@@ -10,6 +10,16 @@ A species entry's stereo is a descriptor; the species is the constitution.
   (null while nothing is resolved). Exact structure search takes `isomeric`.
 - Two refusal codes are published (`species_stereo_contradiction`, `species_stereo_label_invalid`). Allenes and longer cumulenes are accepted with a `?`
   axis and the upload warning `species_entry_stereo_not_represented` (a different code from `species_entry_stereo_unresolved`: no further data would settle it).
+
+## 0.174.0 - 2026-10-27
+
+Thermo and statmech selections say when the basin they were asked about was forwarded.
+
+- `ThermoSelectionResponse` and `StatmechSelectionResponse` carry `forwarded_from_conformer_group_ref`: the conformer-group ref that was asked for when
+  that group had been merged into another (the decision is made on the group that took its members, which is the one `request` echoes), otherwise `None`.
+  Additive; nothing is removed.
+- `search_conformers` takes `wide_basin` and `min_span_deg`: list every conformer group that is a wide basin (optimised members linked end to end but not
+  all within tolerance of each other) in one query. They are filters, not a ranking; the order is unchanged.
 
 ## 0.173.0 - 2026-10-26
 

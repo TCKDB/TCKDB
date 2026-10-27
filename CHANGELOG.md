@@ -52,7 +52,7 @@ dataset must never require a code release.
 
 ## The species key is the constitution; stereo lives on the entry (2026-10-26)
 
-- **Backend, `tckdb-schemas` 0.138.0, `tckdb-client` 0.174.0.** A species is its stereo-blind canonical SMILES plus charge and multiplicity; which
+- **Backend, `tckdb-schemas` 0.138.0, `tckdb-client` 0.176.0.** A species is its stereo-blind canonical SMILES plus charge and multiplicity; which
   stereoisomer a deposit is lives on the species entry as a canonical stereo descriptor (`E`, `R,S`, `E,?`; `?` for an element nothing pinned down; one
   string per stereoisomer). Every geometry, the marks in the SMILES and a supplied label each fill the elements the earlier ones left unknown, and any
   element two of them state differently is refused (`species_stereo_contradiction`). `stereo_label` becomes display text; free text is refused. Allene axes
@@ -62,6 +62,66 @@ dataset must never require a code release.
   declared repairs; a collision it cannot express, differently labelled entries that would merge, or two standing release selections for one subject
   stop the migration. The downgrade cannot un-merge, and the upgrade refuses a database that went down through it.
 - New refusal codes `species_stereo_contradiction` and `species_stereo_label_invalid`; new warning `species_entry_stereo_unresolved`.
+
+## Conformer basins are connected components (2026-10-26)
+
+Closes #812. A conformer basin no longer depends on the order its structures were uploaded in.
+
+- **The defect.** A basin was matched against one stored reference, the first structure deposited into it. Three n-butane structures 18 degrees
+  apart (0, 18, 36 against a 20 degree tolerance) made three different partitions from the six orders they can arrive in, and a recompute rebuilt
+  the reference from the first member, so it reproduced the defect. Any calculation type could also create or extend a basin, so a scan point
+  could bridge two minima, and trans and gauche ethylamine (one shared N-H position) shared a basin.
+- **`torsion_basin` version 3.** A basin is a connected component of the species entry's *defining* observations (an `opt` or `composite`
+  primary with a final geometry, not stated as unconverged), two linked when the unchanged `symmetry_existence` rule (20 / 30 degrees) says they share a
+  basin, evaluated both ways round so the symmetry cap cannot make linkage order-dependent. A single point, scan point or partial optimisation is
+  filed into a basin but never links two. A new defining structure matching groups in several basins joins the oldest and the younger groups are
+  merged into it (the emptied row is kept, with `merged_into_conformer_group_id`, and both reviews reset to `not_reviewed`).
+- **The two hydrogens of an `-NH2` or radical `-CH2` top are compared as a pair** under one assignment, so a planar top still matches its swapped
+  form and a pyramidal one no longer matches a structure that shares only one N-H.
+- **The representative is the medoid**, derived from the members (smallest summed best-mapping torsion distance, ties to the lowest observation
+  id) and stored for reads; it is not what an upload is matched against and no energy enters anywhere. A basin whose members are not all within
+  tolerance of each other (a chain) is a *wide basin*: stored (`basin_is_clique = false`, `basin_span_deg`), shown on the conformer-group read as
+  `wide_basin` and `basin_span_deg`, never split automatically.
+- **A merge that touches approved records is owed, not made.** The API role cannot declare a repair, so the bridging observation joins the oldest
+  group and a `conformer_group_merge_pending` row records the merge; the owner-role reassignment completes it through `accepted_science_repair`
+  (`reassign_conformer_groups` over `entries_with_pending_merges`).
+- **Review fixes (same PR).** (1) A bridging upload now takes the pending path for any group that carries a statmech basin declaration or
+  ensemble member, approved or not: the database refuses every edit of those, and the API role cannot declare a repair. (2) The recompute
+  no longer lets one group row claim two basins. (3) A structure that defines nothing is filed again after every upload, by the function
+  the recompute uses, so the recompute straight after an upload is a no-op; one that cannot be moved by the API role is recorded as owed.
+  (4) "Defining" is decided on the output geometries actually attached (an optimisation with no `final` output defines nothing, live and
+  stored alike). (5) `Repairs.declare` raises, by column name, when a declaration already in force in the transaction does not cover the
+  columns reassignment writes; `REASSIGNMENT_REPAIR_COLUMNS` is exported so a migration that declares first can declare the union.
+  (6) A new member updates the stored medoid, clique flag and span from k comparisons instead of k-squared (`basin_distance_sums_json`).
+  (7) A write that cites the `cg_` ref of an emptied group (thermo target, statmech basin declaration or member, kinetics selection locator)
+  is forwarded to the group that took its members. (8) The conformer-group read gains `merge_pending` (the target group's ref and the reason).
+  (9) A wide basin is reported through the Phase D advisory mechanism: `--check wide-basin` on a `cg_` ref (rubric `wide_basin_consistency`,
+  one append-only `record_machine_review` row, no effect on status or trust).
+- **Second review round.** (1) An owed re-file no longer creates a conformer group: the decision to move is taken before any row is made, and a
+  re-file owed is one open `conformer_group_merge_pending` row per observation (`kept_conformer_group_id` NULL, updated in place by later uploads,
+  closed when no longer needed); the owner job creates the target basin's row when it completes it. The read keeps the two kinds of owed work apart
+  (`merge_pending` has a target group; `refile_pending` has none). (2) A move is owed only when a write it makes would be refused or would give the next
+  recompute real work (an approved observation; a thermo/statmech record resting on that very observation; the group's representative when the group has
+  dependents), not whenever the group has a dependent. (3) A group a merge emptied is never matched by the fingerprint-less fallback, and the kinetics
+  selection locator by kind skips it. (4) The thermo and statmech select endpoints forward a basin ref that names an emptied group and say so
+  (`forwarded_from_conformer_group_ref`; `tckdb-client` 0.174.0). (5) The basin is decided on the geometry the recompute reads back, by one shared function
+  (`primary_structure`): the first `final` output, else the first input.
+- **Listing wide basins.** `GET`/`POST /scientific/conformers/search` take `wide_basin` (`true`: `basin_is_clique IS FALSE`; `false`: `IS TRUE`; a group with no
+  optimised member matches neither) and `min_span_deg` (`basin_span_deg >= x`), backed by the partial index `ix_conformer_group_wide_basin`. They are filters:
+  the order is the route's, unchanged, and a review floor applies to the listed groups. The flag is the stored fact about the group's optimised members, as
+  for the representative; the `wide-basin` Phase D check stays on demand. `tckdb-client` `search_conformers(wide_basin=..., min_span_deg=...)`.
+- **Third review round.** (1) `statmech/select` (and its manifest) resolves a basin ref through the visibility guard before forwarding, so under `profile=curated` an
+  emptied group the floor hides is the same 404 as an unknown ref. (2) A re-file moves selections (and unapproved thermo targets) the way an inline merge does; it is owed
+  only when a trigger would refuse: an approved observation, statmech records, an approved thermo, or a selection an accepted kinetics record cites. (3) Conformer search
+  refuses an unknown key on GET (`unknown_query_parameter`) and in the POST body (`extra_forbidden`). (4) A forwarded select records
+  `request.forwarded_from_conformer_group_ref` in its manifest, only when set; no manifest format bump (an optional key, absent otherwise, ignored by older readers; the
+  statmech checksum covers it).
+- **Schema (revision `b7e4c9a2d518`).** Nullable `conformer_group.representative_observation_id`, `merged_into_conformer_group_id`,
+  `basin_is_clique`, `basin_span_deg`; nullable `conformer_observation.mapped_coords_json`; the table `conformer_group_merge_pending`; the version 3
+  scheme row as the default; and a data step that recomputes every entry through the existing declared-repair machinery (dependents follow their own
+  calculation's observation, `content_hash` recomputed, no group deleted). Idempotent. The downgrade makes version 2 the default again and drops what the
+  revision added; it cannot un-merge. The conformer-group read gains `merged_into_conformer_group_ref`, `wide_basin` and `basin_span_deg` (OpenAPI
+  golden regenerated).
 
 ## The client defaults the enthalpy reference declaration (2026-10-26)
 

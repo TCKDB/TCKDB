@@ -14,7 +14,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.models.common import (
     ConformerSelectionKind,
@@ -93,7 +93,12 @@ class ConformersSearchRequest(BaseModel):
     Filters AND-combine. At least one meaningful filter is required —
     requests with only pagination / include / review knobs are rejected
     with 422 ``missing_filter`` to avoid accidental public table scans.
+
+    A key the model does not declare is a 422 (``extra_forbidden``), never ignored: a misspelled filter would otherwise
+    quietly widen the result.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     # --- identity filters ------------------------------------------------
     species_ref: str | None = Field(
@@ -115,6 +120,14 @@ class ConformersSearchRequest(BaseModel):
     assignment_scheme_ref: str | None = Field(
         default=None, max_length=_MAX_PUBLIC_REF_LENGTH
     )
+
+    # --- basin-shape filters ---------------------------------------------
+    #: ``true``: groups whose optimised members are linked end to end but are not all within tolerance of each other
+    #: (a wide basin, ``basin_is_clique = false``). ``false``: groups whose optimised members all are. A group with no
+    #: optimised member has no such fact and matches neither.
+    wide_basin: bool | None = None
+    #: Groups whose largest torsion difference between two optimised members is at least this many degrees.
+    min_span_deg: float | None = Field(default=None, ge=0.0, le=360.0)
 
     # --- evidence filters ------------------------------------------------
     has_observations: bool | None = None

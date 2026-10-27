@@ -65,7 +65,7 @@ merged row is an ordinary empty-looking row; the results stay on the survivor. B
 the upgrade refuses, loudly, a database that still carries the ``merged:`` sentinels the downgrade leaves.
 
 Revision ID: c7e2a9f4d138
-Revises: f3a8c5d1e947
+Revises: b7e4c9a2d518
 Create Date: 2026-10-26
 """
 
@@ -78,7 +78,7 @@ from sqlalchemy.orm import Session
 from alembic import op
 
 revision: str = "c7e2a9f4d138"
-down_revision: Union[str, Sequence[str], None] = "f3a8c5d1e947"
+down_revision: Union[str, Sequence[str], None] = "b7e4c9a2d518"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

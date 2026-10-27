@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
     CHAR,
     BigInteger,
+    Boolean,
     CheckConstraint,
+    DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -295,7 +299,16 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 
 
 class ConformerGroup(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
-    """Store one deduplicated conformational-basin identity for a species entry."""
+    """Store one deduplicated conformational-basin identity for a species entry.
+
+    A basin is a connected component of the entry's *defining* observations (converged optimisations): two are
+    linked when the matcher says they share a basin, and the group is everything the links reach. Identity is
+    geometric only. ``representative_*`` is derived, never identity: the most central defining member (the
+    medoid), kept so reads can show a basin's own torsions. It is not what an upload is matched against.
+
+    A group a merge emptied keeps its row (a cited ``cg_`` ref must resolve) with no representative and
+    ``merged_into_conformer_group_id`` naming the group that took its members.
+    """
 
     __tablename__ = "conformer_group"
 
@@ -315,14 +328,57 @@ class ConformerGroup(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     representative_coords_json: Mapped[Optional[list]] = mapped_column(
         JSONB, nullable=True
     )
+    #: The observation the two ``representative_*`` columns were taken from: the defining member that minimises
+    #: the summed best-mapping torsion distance to the other defining members (ties: lowest id). For a group with
+    #: no defining member (a provisional basin of partly optimised structures) it is the first member filed.
+    representative_observation_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "conformer_observation.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_conformer_group_representative_observation_id",
+            # conformer_group <-> conformer_observation reference each other; the FK from the group is added after
+            # both tables exist, so metadata can be sorted and created.
+            use_alter=True,
+        ),
+        nullable=True,
+    )
+    #: Set on a group emptied by a merge: the group that took its members.
+    merged_into_conformer_group_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "conformer_group.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_conformer_group_merged_into_conformer_group_id",
+        ),
+        nullable=True,
+    )
+    #: Whether every pair of defining members matches (a clique). ``False`` is a *wide basin*: a chain of
+    #: structures each linked to the next, whose ends are further apart than the tolerance. It is reported, never
+    #: split. ``NULL`` when the group has no defining member.
+    basin_is_clique: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    #: The largest per-rotor torsion difference between any two defining members under the best mapping, in degrees.
+    basin_span_deg: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    #: Per defining member (observation id as a string), the summed best-mapping distance to the other defining
+    #: members: what the medoid minimises. Derived and kept so that a new member updates the representative and the
+    #: shape in O(k) comparisons rather than O(k^2). Valid only while its keys are exactly the group's defining
+    #: members; a reader that finds them different rebuilds it.
+    basin_distance_sums_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     species_entry: Mapped["SpeciesEntry"] = relationship(
         back_populates="conformer_groups"
     )
 
+    merged_into: Mapped[Optional["ConformerGroup"]] = relationship(
+        foreign_keys=[merged_into_conformer_group_id], remote_side="ConformerGroup.id"
+    )
+
     observations: Mapped[list["ConformerObservation"]] = relationship(
         back_populates="conformer_group",
         cascade="save-update, merge",
+        foreign_keys="ConformerObservation.conformer_group_id",
     )
 
     selections: Mapped[list["ConformerSelection"]] = relationship(
@@ -332,6 +388,12 @@ class ConformerGroup(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 
     __table_args__ = (
         Index("ix_conformer_group_species_entry_id", "species_entry_id"),
+        # the wide-basin listing: a handful of rows among all groups
+        Index(
+            "ix_conformer_group_wide_basin",
+            "id",
+            postgresql_where="basin_is_clique IS FALSE",
+        ),
         UniqueConstraint(
             "species_entry_id",
             "label",
@@ -375,9 +437,13 @@ class ConformerObservation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
     torsion_fingerprint_json: Mapped[Optional[dict]] = mapped_column(
         JSONB, nullable=True
     )
+    #: The structure in the species' canonical atom order (the coordinates basin matching compares), so an upload
+    #: does not have to re-read ``geometry_atom`` and re-map every member. Derived from the geometry; not the
+    #: stored fingerprint's ``raw_torsions_deg``, which is a display value.
+    mapped_coords_json: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
     conformer_group: Mapped["ConformerGroup"] = relationship(
-        back_populates="observations"
+        back_populates="observations", foreign_keys=[conformer_group_id]
     )
     calculations: Mapped[list["Calculation"]] = relationship(
         back_populates="conformer_observation",
@@ -389,6 +455,100 @@ class ConformerObservation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
 
     __table_args__ = (
         Index("ix_conformer_observation_conformer_group_id", "conformer_group_id"),
+    )
+
+
+class ConformerGroupMergePending(Base, TimestampMixin):
+    """Work a live upload decided on but could not carry out, in two kinds.
+
+    **A merge owed** (``kept_conformer_group_id`` set): two conformer groups the upload linked, whose younger one
+    cannot be emptied by this role.
+
+    **A re-file owed** (``kept_conformer_group_id`` NULL): a structure that defines no basin and now belongs in a basin
+    other than the group it sits in, which this role may not move (it was approved, or a thermo/statmech record cites
+    it as evidence). There is no target group yet, and none is created until the owner role completes the re-file.
+
+    The merge, in detail:
+
+    An upload that links two groups (a structure within tolerance of a defining member of each) merges the younger
+    into the older. When approved records point at the younger group -- an approved observation, thermo target,
+    statmech declaration or member -- only a declared repair may move them, and the API role cannot declare one. The
+    new observation is filed under the older group and this row records the merge still owed. The owner-role
+    reassignment (``reassign_conformer_groups`` over the entries listed here) completes it through
+    ``accepted_science_repair`` and stamps ``completed_at``. Rows are never deleted.
+    """
+
+    __tablename__ = "conformer_group_merge_pending"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+
+    species_entry_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("species_entry.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+    )
+    #: The older group, which keeps its row. ``NULL`` for the other kind of owed work: an observation that must be
+    #: re-filed into a basin that has no group yet (``absorbed_conformer_group_id`` is then the group it sits in now,
+    #: and the owner-role reassignment creates the target row when it completes the re-file).
+    kept_conformer_group_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "conformer_group.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_conformer_group_merge_pending_kept_group",
+        ),
+        nullable=True,
+    )
+    #: The younger group, to be emptied (and kept, with ``merged_into_conformer_group_id`` set).
+    absorbed_conformer_group_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "conformer_group.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_conformer_group_merge_pending_absorbed_group",
+        ),
+        nullable=False,
+    )
+    #: The upload whose structure linked the two groups.
+    conformer_observation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "conformer_observation.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_conformer_group_merge_pending_observation",
+        ),
+        nullable=False,
+    )
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False), nullable=True)
+    completed_by_revision: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "kept_conformer_group_id IS NULL OR kept_conformer_group_id <> absorbed_conformer_group_id",
+            name="kept_differs_from_absorbed",
+        ),
+        UniqueConstraint(
+            "kept_conformer_group_id",
+            "absorbed_conformer_group_id",
+            "conformer_observation_id",
+            name="uq_conformer_group_merge_pending_merge",
+        ),
+        # One OPEN re-file per observation, however many uploads follow; a later upload updates it.
+        Index(
+            "uq_conformer_group_merge_pending_open_refile",
+            "conformer_observation_id",
+            unique=True,
+            postgresql_where="kept_conformer_group_id IS NULL AND completed_at IS NULL",
+        ),
+        Index(
+            "ix_conformer_group_merge_pending_open",
+            "species_entry_id",
+            postgresql_where="completed_at IS NULL",
+        ),
     )
 
 
