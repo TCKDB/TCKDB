@@ -108,6 +108,7 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.kinetics import get_reaction_kinetics
 from app.services.scientific_read.networks import build_network_record
 from app.services.scientific_read.species_identity import (
+    STEREO_DISPLAY,
     species_entry_label_for,
 )
 from app.services.scientific_read.transition_states import (
@@ -595,7 +596,7 @@ def _build_species_section(
             Species.id.label("species_id"),
             Species.smiles,
             molecular_formula_expr(Species.smiles).label("formula"),
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,

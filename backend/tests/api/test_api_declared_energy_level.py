@@ -267,29 +267,6 @@ def test_computed_reaction_bundle_stores_both_declarations(client, db_session):
         "reactant_keys": ["ch3", "h"],
         "product_keys": ["ch3", "h"],
     }
-    # The product side's H atom is a different entry of the same species (a term symbol): the same
-    # entries on both sides would be a null reaction, which is refused.
-    payload["species"].append(
-        {
-            "key": "hx",
-            "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2, "term_symbol": "X"},
-            "conformers": [
-                {
-                    "key": "hxc",
-                    "geometry": {"key": "hxg", "xyz_text": "1\nH\nH 0.0 0.0 0.0"},
-                    "calculation": {
-                        "key": "hxopt",
-                        "type": "opt",
-                        "software_release": _SOFTWARE,
-                        "level_of_theory": _LOT_A,
-                        "opt_converged": True,
-                    },
-                }
-            ],
-            "calculations": [],
-        }
-    )
-    payload["product_keys"] = ["ch3", "hx"]
     resp = client.post("/api/v1/uploads/computed-reaction", json=payload)
     assert resp.status_code == 201, resp.text
 

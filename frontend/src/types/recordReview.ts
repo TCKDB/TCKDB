@@ -185,6 +185,9 @@ export const ReviewQueueSubjectChemistrySchema = z.object({
     electronic_state_label: z.string().nullable().default(null),
     term_symbol: z.string().nullable().default(null),
     stereo_label: z.string().nullable().default(null),
+    // DR-0038: `stereo_label` is NULL while an entry is unresolved; read these, not the NULL.
+    stereo_descriptor: z.string().nullable().default(null),
+    stereo_resolution: z.enum(["resolved", "partial", "unresolved"]).nullable().default(null),
     isotope_key: z.string().nullable().default(null),
     // The transition-state entry's OWN raw SMILES, kept separate from
     // `formula`: the two can disagree (a reaction-shaped string the

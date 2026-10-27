@@ -224,12 +224,12 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 ### 0.139.0 - 2026-10-27
 
-Two refusal codes join the contract. No field is added or removed. The `TransitionStateUploadRequest` example is now `CH3 + H2 -> CH4 + H` (it was
-the degenerate `H + H2 -> H2 + H`, whose two sides are the same entries and are now refused).
+Two refusal codes join the contract. No field is added or removed.
 
-- `reaction_entry_null_reaction` (422): a reaction's reactants and products are the same species entries. A reaction between two entries of *one species*
-  (a cis-trans isomerisation, `Z-2-butene -> E-2-butene`) is valid; give each side the stereo (marks, a stereo label or a geometry) that tells the
-  isomers apart. Raised on the reaction, kinetics, network, transition-state and computed-reaction uploads.
+- `reaction_entry_null_reaction` (422): a reaction's reactants and products are the same species entries and the deposit carries no transition state or
+  kinetics record. A reaction between two entries of *one species* (a cis-trans isomerisation, `Z-2-butene -> E-2-butene`) is valid; give each side the
+  stereo (marks, a stereo label or a geometry) that tells the isomers apart. A degenerate exchange (`H + H2 -> H2 + H`) is accepted when deposited with its
+  transition state (transition-state upload, or `transition_state` in a computed-reaction bundle) or a kinetics record (kinetics upload, or `kinetics`).
 - `network_state_duplicate_composition` (422): two states of one network resolve to the same species entries (two species keys that name one entry, or a
   state declared twice). It used to be an HTTP 500.
 
@@ -434,9 +434,9 @@ If your chemistry is legitimate: Omit one surface, or correct whichever is wrong
 
 `app.services.reaction_resolution:refuse_null_reaction_entry`. block; codes [`reaction_entry_null_reaction`](REFUSAL_CODES.md#c-reaction-entry-null-reaction). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`NetworkUploadRequest`](#s-networkuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest), [`ReactionUploadRequest`](#s-reactionuploadrequest), [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest), [`ContributionBundle`](#s-contributionbundle).
 
-A reaction entry's reactants and products are not the same species entries: some participant differs, at least in its stereo.
+A reaction entry whose reactants and products are the same species entries carries evidence that something happens: a transition state or a kinetics record.
 
-If your chemistry is legitimate: State what differs. Deposit the two isomers as different entries (stereo marks in the SMILES, a stereo label, or a geometry per side). A process that changes nothing about its participants is not a reaction and has no escape.
+If your chemistry is legitimate: Deposit the evidence with the reaction: a transition state (transition-state upload, or ``transition_state`` in a computed-reaction bundle) or a kinetics record (kinetics upload, or ``kinetics`` in a bundle). For a stereo isomerisation, deposit the two isomers as different entries (stereo marks in the SMILES, a stereo label, or a geometry per side).
 
 <a id="k-validate-reaction-charge-conservation"></a>
 
@@ -2187,7 +2187,7 @@ Payload model `app.schemas.workflows.kinetics_upload.KineticsUploadRequest`; JSO
 ### Will be refused if
 
 - [`reaction_charge_not_conserved`](REFUSAL_CODES.md#c-reaction-charge-not-conserved) (422): Reaction reactants total charge {reactant_charge} but products total {product_charge} (reaction_charge_not_conserved).
-- [`reaction_entry_null_reaction`](REFUSAL_CODES.md#c-reaction-entry-null-reaction) (422): The reactants and the products are the same species entries, so this reaction converts nothing into nothing (reaction_entry_null_reaction).
+- [`reaction_entry_null_reaction`](REFUSAL_CODES.md#c-reaction-entry-null-reaction) (422): The reactant and product entries are identical and the deposit carries no transition state, kinetics record or non-identity atom mapping…
 - [`reaction_mass_balance_failed`](REFUSAL_CODES.md#c-reaction-mass-balance-failed) (422): Reaction is not element-balanced (reaction_mass_balance_failed).
 - [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum) (422)
 - [`species_geometry_composition_mismatch`](REFUSAL_CODES.md#c-species-geometry-composition-mismatch) (422): Species geometry is {geometry_formula}, but species_entry.smiles={payload.smiles} is {identity_formula}…
@@ -2414,7 +2414,7 @@ Payload model `app.schemas.workflows.network_upload.NetworkUploadRequest`; JSON 
 ### Will be refused if
 
 - [`reaction_charge_not_conserved`](REFUSAL_CODES.md#c-reaction-charge-not-conserved) (422): Reaction reactants total charge {reactant_charge} but products total {product_charge} (reaction_charge_not_conserved).
-- [`reaction_entry_null_reaction`](REFUSAL_CODES.md#c-reaction-entry-null-reaction) (422): The reactants and the products are the same species entries, so this reaction converts nothing into nothing (reaction_entry_null_reaction).
+- [`reaction_entry_null_reaction`](REFUSAL_CODES.md#c-reaction-entry-null-reaction) (422): The reactant and product entries are identical and the deposit carries no transition state, kinetics record or non-identity atom mapping…
 - [`reaction_mass_balance_failed`](REFUSAL_CODES.md#c-reaction-mass-balance-failed) (422): Reaction is not element-balanced (reaction_mass_balance_failed).
 - [`species_geometry_composition_mismatch`](REFUSAL_CODES.md#c-species-geometry-composition-mismatch) (422): Species geometry is {geometry_formula}, but species_entry.smiles={payload.smiles} is {identity_formula}…
 - [`species_geometry_isotope_mismatch`](REFUSAL_CODES.md#c-species-geometry-isotope-mismatch) (422): Isotope substitution declared in species_entry.smiles does not match the uploaded geometry. smiles={smiles_text}…
@@ -2768,7 +2768,7 @@ Payload model `app.schemas.workflows.reaction_upload.ReactionUploadRequest`; JSO
 ### Will be refused if
 
 - [`reaction_charge_not_conserved`](REFUSAL_CODES.md#c-reaction-charge-not-conserved) (422): Reaction reactants total charge {reactant_charge} but products total {product_charge} (reaction_charge_not_conserved).
-- [`reaction_entry_null_reaction`](REFUSAL_CODES.md#c-reaction-entry-null-reaction) (422): The reactants and the products are the same species entries, so this reaction converts nothing into nothing (reaction_entry_null_reaction).
+- [`reaction_entry_null_reaction`](REFUSAL_CODES.md#c-reaction-entry-null-reaction) (422): The reactant and product entries are identical and the deposit carries no transition state, kinetics record or non-identity atom mapping…
 - [`reaction_mass_balance_failed`](REFUSAL_CODES.md#c-reaction-mass-balance-failed) (422): Reaction is not element-balanced (reaction_mass_balance_failed).
 - [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum) (422)
 - [`species_geometry_composition_mismatch`](REFUSAL_CODES.md#c-species-geometry-composition-mismatch) (422): Species geometry is {geometry_formula}, but species_entry.smiles={payload.smiles} is {identity_formula}…
@@ -3406,7 +3406,7 @@ Payload model `tckdb_schemas.workflows.transition_state_upload.TransitionStateUp
 - [`ts_energy_ordering_source_type_mismatch`](REFUSAL_CODES.md#c-ts-energy-ordering-source-type-mismatch) (422): Transition state '{subject_label}' {field_path}[{record_index}].energies[{energy_index}] takes a '{energy.energy_kind}' energy from a…
 - [`ts_energy_ordering_stated_energy_mismatch`](REFUSAL_CODES.md#c-ts-energy-ordering-stated-energy-mismatch) (422): {field} states {stated} Eh as the '{energy_kind}' energy of '{participant}', but {what} is {stored} Eh (difference {abs(stated - stored)}…
 - [`reaction_charge_not_conserved`](REFUSAL_CODES.md#c-reaction-charge-not-conserved) (422): Reaction reactants total charge {reactant_charge} but products total {product_charge} (reaction_charge_not_conserved).
-- [`reaction_entry_null_reaction`](REFUSAL_CODES.md#c-reaction-entry-null-reaction) (422): The reactants and the products are the same species entries, so this reaction converts nothing into nothing (reaction_entry_null_reaction).
+- [`reaction_entry_null_reaction`](REFUSAL_CODES.md#c-reaction-entry-null-reaction) (422): The reactant and product entries are identical and the deposit carries no transition state, kinetics record or non-identity atom mapping…
 
 ### Routes
 
@@ -3573,7 +3573,7 @@ Validated against `TransitionStateUploadRequest` when this file was generated, a
     "reactants": [
       {
         "species_entry": {
-          "smiles": "[CH3]",
+          "smiles": "[H]",
           "charge": 0,
           "multiplicity": 2
         }
@@ -3589,7 +3589,7 @@ Validated against `TransitionStateUploadRequest` when this file was generated, a
     "products": [
       {
         "species_entry": {
-          "smiles": "C",
+          "smiles": "[H][H]",
           "charge": 0,
           "multiplicity": 1
         }
@@ -3606,7 +3606,7 @@ Validated against `TransitionStateUploadRequest` when this file was generated, a
   "charge": 0,
   "multiplicity": 2,
   "geometry": {
-    "xyz_text": "6\nCH5 transition state\nC 0.0 0.0 0.0\nH 1.08 0.0 0.0\nH -0.54 0.93 0.0\nH -0.54 -0.93 0.0\nH 0.0 0.0 1.35\nH 0.0 0.0 2.1"
+    "xyz_text": "3\nH3 transition state\nH 0.0 0.0 -0.93\nH 0.0 0.0 0.0\nH 0.0 0.0 0.93"
   },
   "primary_opt": {
     "type": "opt",
@@ -3784,7 +3784,7 @@ Payload model `app.schemas.workflows.contribution_bundle.ContributionBundle`; JS
 - [`enthalpy_reference_kind_unrecognized`](REFUSAL_CODES.md#c-enthalpy-reference-kind-unrecognized) (422): '{reference}' is not a recognized enthalpy_reference_kind -- did you mean '{canonical}'?
 - [`thermo_declaration_invalid`](REFUSAL_CODES.md#c-thermo-declaration-invalid) (422): thermodynamic_target.kind {kind} is not recognised; use {' or '.join((repr(member.value) for member in ThermoTargetKind))}.
 - [`reaction_charge_not_conserved`](REFUSAL_CODES.md#c-reaction-charge-not-conserved) (422): Reaction reactants total charge {reactant_charge} but products total {product_charge} (reaction_charge_not_conserved).
-- [`reaction_entry_null_reaction`](REFUSAL_CODES.md#c-reaction-entry-null-reaction) (422): The reactants and the products are the same species entries, so this reaction converts nothing into nothing (reaction_entry_null_reaction).
+- [`reaction_entry_null_reaction`](REFUSAL_CODES.md#c-reaction-entry-null-reaction) (422): The reactant and product entries are identical and the deposit carries no transition state, kinetics record or non-identity atom mapping…
 - [`reaction_mass_balance_failed`](REFUSAL_CODES.md#c-reaction-mass-balance-failed) (422): Reaction is not element-balanced (reaction_mass_balance_failed).
 
 ### Routes

@@ -422,14 +422,29 @@ CHECK_REACTION_CHARGE_CONSERVATION = ScientificCheck(
 def refuse_null_reaction_entry(
     reactant_entries: Sequence[SpeciesEntry],
     product_entries: Sequence[SpeciesEntry],
+    *,
+    has_transition_state: bool = False,
+    has_kinetics: bool = False,
 ) -> None:
-    """Refuse a reaction entry whose two sides are the same species entries.
+    """Refuse a bare reaction entry whose two sides are the same species entries.
 
     Since the species key is the constitution (DR-0038), ``Z-2-butene -> E-2-butene`` has one
-    species on both sides, and the graph reaction (``chem_reaction``) accepts that. What it must
-    not accept is the *entry-level* null reaction: the very same species entries on both sides,
-    which converts nothing into nothing. Compared as multisets of entries, so the order of the
-    participants does not matter and ``A + B -> B + A`` is as null as ``A -> A``.
+    species on both sides, and the graph reaction (``chem_reaction``) accepts that. A reaction
+    entry with the very same species entries on both sides (compared as multisets, so the order of
+    the participants does not matter) converts nothing into nothing *unless the deposit carries
+    evidence that something happens*: a degenerate exchange such as ``H + H2 -> H2 + H`` is real
+    chemistry with a saddle point and a rate. So it is accepted when the same deposit carries a
+    transition state or a kinetics record, and refused only when it carries neither.
+
+    An atom mapping is not a third kind of evidence here: the only routes that accept one
+    (``atom_map`` on a transition-state upload, or on a computed-reaction bundle's transition
+    state) already carry a transition state. No route that creates a reaction entry takes an atom
+    mapping without one.
+
+    A transition state deposited later against an existing reaction entry is not affected: it
+    attaches to the entry and creates no reaction entry, so this check does not run. (A bare
+    same-entries reaction entry cannot exist to be attached to; the degenerate reaction is
+    deposited with its transition state, which creates the entry.)
 
     :raises CodedValueError: ``reaction_entry_null_reaction`` (422). The detail names no row id.
     """
@@ -438,14 +453,22 @@ def refuse_null_reaction_entry(
         e.id for e in product_entries
     ):
         return
+    if has_transition_state or has_kinetics:
+        return
     raise CodedValueError(
         W_REACTION_ENTRY_NULL_REACTION,
-        "The reactants and the products are the same species entries, so this reaction converts "
-        "nothing into nothing (reaction_entry_null_reaction). An isomerisation between two "
-        "stereoisomers of one species is a valid reaction, but its two sides must be different "
-        "entries: give each side the stereo (marks, a stereo label or a geometry) that tells the "
-        "isomers apart.",
-        context={"participants": len(reactant_entries)},
+        "The reactant and product entries are identical and the deposit carries no transition "
+        "state, kinetics record or non-identity atom mapping, so nothing shows that anything "
+        "happens (reaction_entry_null_reaction). Deposit the evidence with the reaction: a "
+        "transition state (the transition-state upload, or `transition_state` in a "
+        "computed-reaction bundle) or a kinetics record (the kinetics upload, or `kinetics` in a "
+        "bundle). For a stereo isomerisation, give each side the stereo (marks, a stereo label or "
+        "a geometry) that makes the two entries different. An identical-entries reaction is "
+        "refused unless a transition state or kinetics is deposited for it.",
+        context={
+            "participants": len(reactant_entries),
+            "missing_evidence": ["transition_state", "kinetics"],
+        },
         message_prefix=False,
     )
 
@@ -455,31 +478,34 @@ CHECK_REACTION_ENTRY_NULL_REACTION = ScientificCheck(
     sort_key=6,
     code="reaction_entry_null_reaction",
     asserts=(
-        "A reaction entry's reactants and products are not the same species entries: some "
-        "participant differs, at least in its stereo."
+        "A reaction entry whose reactants and products are the same species entries carries "
+        "evidence that something happens: a transition state or a kinetics record."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
     tier_rationale=(
-        "Definitional. A reaction that leaves every participant exactly as it was is not a "
-        "reaction, so no correct calculation produces one. Two entries of one species (E and Z "
-        "2-butene) are different participants, so the isomerisation between them is not refused."
+        "Definitional. A reaction that leaves every participant exactly as it was, with no saddle "
+        "point and no rate, is not a reaction, so no correct calculation produces one. Two entries "
+        "of one species (E and Z 2-butene) are different participants, and a degenerate exchange "
+        "(H + H2) deposited with its transition state or rate is real chemistry; neither is refused."
     ),
     adr="0038, 0008",
     enforced_by=(
         PythonCheck(
             refuse_null_reaction_entry,
             note=(
-                "Called before ``resolve_chem_reaction`` on every path that writes reaction-entry "
-                "participants (the reaction upload, which kinetics, networks and transition states "
-                "reuse, and the computed-reaction bundle's canonical and kinetics reactions)."
+                "Called before ``resolve_chem_reaction`` on every path that creates a reaction entry "
+                "(the reaction upload, which kinetics, networks and transition states reuse, and "
+                "the computed-reaction bundle's canonical and kinetics reactions), told whether the "
+                "deposit carries a transition state or kinetics."
             ),
         ),
     ),
     escape_hatch=(
-        "State what differs. Deposit the two isomers as different entries (stereo marks in the "
-        "SMILES, a stereo label, or a geometry per side). A process that changes nothing about its "
-        "participants is not a reaction and has no escape."
+        "Deposit the evidence with the reaction: a transition state (transition-state upload, or "
+        "``transition_state`` in a computed-reaction bundle) or a kinetics record (kinetics upload, "
+        "or ``kinetics`` in a bundle). For a stereo isomerisation, deposit the two isomers as "
+        "different entries (stereo marks in the SMILES, a stereo label, or a geometry per side)."
     ),
 )
 

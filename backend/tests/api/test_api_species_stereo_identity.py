@@ -246,6 +246,24 @@ def test_isomeric_search_finds_only_the_matching_entry(client: TestClient, db_se
     }
 
 
+def test_the_entry_label_says_an_unresolved_or_partial_entry_is_so(client: TestClient, db_session) -> None:
+    """``species_entry_label`` is built from the descriptor and resolution, not the NULL display label."""
+    entries = _seed_2_butene(db_session)
+    partial = _resolve(db_session, "C/C=C/C=CC")
+    achiral = _resolve(db_session, "CCO")
+    db_session.flush()
+
+    def label(ref: str, smiles: str) -> str | None:
+        hit = next(r for r in _hits(client, query_smiles=smiles) if r["species_entry_ref"] == ref)
+        return hit["species_entry_label"]
+
+    assert label(entries["E"].public_ref, "CC=CC") == "E"
+    assert label(entries["Z"].public_ref, "CC=CC") == "Z"
+    assert label(entries["?"].public_ref, "CC=CC") == "? (unresolved)"
+    assert label(partial.public_ref, "CC=CC=CC") == "E,? (partial)"
+    assert label(achiral.public_ref, "CCO") is None
+
+
 # ---------------------------------------------------------------------------
 # Reads say which ``?`` no data can settle
 # ---------------------------------------------------------------------------

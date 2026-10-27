@@ -72,6 +72,7 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.species_identity import (
+    STEREO_DISPLAY,
     species_entry_label_for,
 )
 from app.services.scientific_read.structure_query import constitution_smiles
@@ -922,7 +923,7 @@ def _resolve_participant_labels(
     rows = session.execute(
         select(
             SpeciesEntry.id,
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,

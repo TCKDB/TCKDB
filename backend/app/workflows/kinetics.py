@@ -976,6 +976,7 @@ def persist_kinetics_upload(
             created_by=created_by,
             review_policy=review_policy,
             warnings=warning_sink,
+            has_kinetics=True,  # this upload IS the kinetics record of the reaction
         )
 
     if determination_anchors is not None:

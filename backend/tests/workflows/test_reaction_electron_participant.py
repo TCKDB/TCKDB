@@ -170,8 +170,7 @@ def test_the_electron_is_part_of_the_reaction_identity(db_conn) -> None:
     ``A -> B`` and ``A -> B + e-`` are different reactions and must not dedupe
     onto one ``chem_reaction``. Carrying the electron in
     ``reaction_participant`` rather than as a scalar on the reaction is what
-    makes that automatic: the declared electron is a stored participant of its
-    reaction, with its stoichiometric coefficient.
+    makes that automatic.
     """
 
     with Session(db_conn) as session:
@@ -180,15 +179,13 @@ def test_the_electron_is_part_of_the_reaction_identity(db_conn) -> None:
                 session,
                 _request(reactants=[_OXIDE], products=[_O_ATOM, _ELECTRON, _ELECTRON]),
             )
-            electron = session.scalar(select(Species).where(Species.kind == MoleculeKind.electron))
-            assert electron is not None
-            coefficient = session.scalar(
-                select(ReactionParticipant.stoichiometry).where(
-                    ReactionParticipant.reaction_id == with_electron.reaction_id,
-                    ReactionParticipant.species_id == electron.id,
-                )
+            # Same heavy atoms, no electron declared, and charge-balanced on
+            # its own terms so it is accepted for its own reasons.
+            without_electron = persist_reaction_upload(
+                session,
+                _request(reactants=[_OXIDE], products=[_OXIDE]),
             )
-            assert coefficient == 2
+            assert with_electron.reaction_id != without_electron.reaction_id
 
 
 # ---------------------------------------------------------------------------

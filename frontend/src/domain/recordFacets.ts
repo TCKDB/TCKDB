@@ -73,7 +73,7 @@ const NOT_REPRESENTED_TEXT: Record<string, string> = {
 export function stereoDescription(entry: EntryFacetAxes): string | null {
     const descriptor = entry.stereo_descriptor
     if (descriptor === undefined) return entry.stereo_label ? stereoChip(entry.stereo_label) : null
-    if (descriptor === null) return "Achiral"
+    if (descriptor === null) return entry.stereo_label ? stereoChip(entry.stereo_label) : "Achiral"
     let text: string
     if (entry.stereo_resolution === "partial") text = `Partly resolved (${descriptor})`
     else if (entry.stereo_resolution === "unresolved") text = `Unresolved (${descriptor})`
@@ -141,7 +141,7 @@ export function facetChips(entry: EntryFacetAxes, options?: { includeState?: boo
     // absence misleads nobody. Every other case -- including an unresolved one, whose display
     // `stereo_label` is NULL -- is said.
     const stereo = stereoDescription(entry)
-    if (stereo && entry.stereo_descriptor !== null) chips.push(stereo)
+    if (stereo && stereo !== "Achiral") chips.push(stereo)
     if (entry.isotope_key) chips.push(isotopeChip(entry.isotope_key))
     return chips
 }

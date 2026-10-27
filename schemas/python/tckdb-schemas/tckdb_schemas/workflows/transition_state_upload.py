@@ -207,7 +207,7 @@ class TransitionStateUploadRequest(SchemaBase):
                         "reactants": [
                             {
                                 "species_entry": {
-                                    "smiles": "[CH3]",
+                                    "smiles": "[H]",
                                     "charge": 0,
                                     "multiplicity": 2
                                 }
@@ -223,7 +223,7 @@ class TransitionStateUploadRequest(SchemaBase):
                         "products": [
                             {
                                 "species_entry": {
-                                    "smiles": "C",
+                                    "smiles": "[H][H]",
                                     "charge": 0,
                                     "multiplicity": 1
                                 }
@@ -240,7 +240,7 @@ class TransitionStateUploadRequest(SchemaBase):
                     "charge": 0,
                     "multiplicity": 2,
                     "geometry": {
-                        "xyz_text": "6\nCH5 transition state\nC 0.0 0.0 0.0\nH 1.08 0.0 0.0\nH -0.54 0.93 0.0\nH -0.54 -0.93 0.0\nH 0.0 0.0 1.35\nH 0.0 0.0 2.1"
+                        "xyz_text": "3\nH3 transition state\nH 0.0 0.0 -0.93\nH 0.0 0.0 0.0\nH 0.0 0.0 0.93"
                     },
                     "primary_opt": {
                         "type": "opt",

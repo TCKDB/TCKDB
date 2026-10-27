@@ -2,12 +2,12 @@
 
 ## 0.139.0 - 2026-10-27
 
-Two refusal codes join the contract. No field is added or removed. The `TransitionStateUploadRequest` example is now `CH3 + H2 -> CH4 + H` (it was
-the degenerate `H + H2 -> H2 + H`, whose two sides are the same entries and are now refused).
+Two refusal codes join the contract. No field is added or removed.
 
-- `reaction_entry_null_reaction` (422): a reaction's reactants and products are the same species entries. A reaction between two entries of *one species*
-  (a cis-trans isomerisation, `Z-2-butene -> E-2-butene`) is valid; give each side the stereo (marks, a stereo label or a geometry) that tells the
-  isomers apart. Raised on the reaction, kinetics, network, transition-state and computed-reaction uploads.
+- `reaction_entry_null_reaction` (422): a reaction's reactants and products are the same species entries and the deposit carries no transition state or
+  kinetics record. A reaction between two entries of *one species* (a cis-trans isomerisation, `Z-2-butene -> E-2-butene`) is valid; give each side the
+  stereo (marks, a stereo label or a geometry) that tells the isomers apart. A degenerate exchange (`H + H2 -> H2 + H`) is accepted when deposited with its
+  transition state (transition-state upload, or `transition_state` in a computed-reaction bundle) or a kinetics record (kinetics upload, or `kinetics`).
 - `network_state_duplicate_composition` (422): two states of one network resolve to the same species entries (two species keys that name one entry, or a
   state declared twice). It used to be an HTTP 500.
 

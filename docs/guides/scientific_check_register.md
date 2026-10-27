@@ -206,7 +206,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Omit the participant mappings. They are optional on every path — evidence without them still deposits and still reads back as `irc: present` — so a depositor who cannot resolve the partition per atom is never forced to guess at one. Declaring a participant `molecule_kind: pseudo` skips that participant alone rather than the whole record, because the others' compositions are still well-defined. Isotopologues are safe by construction: both sides are compared through `resolve_element_symbol`, so a geometry written `D` counts as the hydrogen its SMILES spells `[2H]`. A free electron needs no hatch either: it is written as an empty atom list, which this check compares against the empty composition `MoleculeKind.electron` actually has, so a reaction that releases one is held to the same standard as every other rather than having to omit its mappings.
 
-### 6. A reaction entry's reactants and products are not the same species entries: some participant differs, at least in its stereo.
+### 6. A reaction entry whose reactants and products are the same species entries carries evidence that something happens: a transition state or a kinetics record.
 
 | Field | Value |
 | --- | --- |
@@ -215,14 +215,14 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
 | **Governing ADR** | 0038, 0008 |
 
-**Why this tier.** Definitional. A reaction that leaves every participant exactly as it was is not a reaction, so no correct calculation produces one. Two entries of one species (E and Z 2-butene) are different participants, so the isomerisation between them is not refused.
+**Why this tier.** Definitional. A reaction that leaves every participant exactly as it was, with no saddle point and no rate, is not a reaction, so no correct calculation produces one. Two entries of one species (E and Z 2-butene) are different participants, and a degenerate exchange (H + H2) deposited with its transition state or rate is real chemistry; neither is refused.
 
 **Enforced at.**
 
 - `refuse_null_reaction_entry` — `backend/app/services/reaction_resolution.py::refuse_null_reaction_entry`
-  *Called before `resolve_chem_reaction` on every path that writes reaction-entry participants (the reaction upload, which kinetics, networks and transition states reuse, and the computed-reaction bundle's canonical and kinetics reactions).*
+  *Called before `resolve_chem_reaction` on every path that creates a reaction entry (the reaction upload, which kinetics, networks and transition states reuse, and the computed-reaction bundle's canonical and kinetics reactions), told whether the deposit carries a transition state or kinetics.*
 
-**Escape hatch.** State what differs. Deposit the two isomers as different entries (stereo marks in the SMILES, a stereo label, or a geometry per side). A process that changes nothing about its participants is not a reaction and has no escape.
+**Escape hatch.** Deposit the evidence with the reaction: a transition state (transition-state upload, or `transition_state` in a computed-reaction bundle) or a kinetics record (kinetics upload, or `kinetics` in a bundle). For a stereo isomerisation, deposit the two isomers as different entries (stereo marks in the SMILES, a stereo label, or a geometry per side).
 
 ## A structure against its own label
 

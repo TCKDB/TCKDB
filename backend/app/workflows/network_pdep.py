@@ -698,6 +698,7 @@ def persist_network_pdep_upload(
             created_by=created_by,
             review_policy=review_policy,
             warnings=warning_sink,
+            has_transition_state=any(ts.micro_reaction_key == rxn.key for ts in request.transition_states),
         )
         reaction_key_to_entry[rxn.key] = reaction_entry
 

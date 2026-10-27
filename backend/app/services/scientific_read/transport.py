@@ -65,6 +65,7 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.species_identity import (
+    STEREO_DISPLAY,
     species_entry_label_for,
 )
 from app.services.scientific_read.supersession import fetch_supersession_notices
@@ -354,7 +355,7 @@ def _build_species_context(
             # entry of the species this record belongs to. Selected here
             # under their own names because species_entry_label_for()
             # reads them by attribute.
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,

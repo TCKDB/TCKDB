@@ -130,3 +130,74 @@ def test_forward_and_reverse_irreversible_deposits_share_one_chem_reaction(db_co
         ]
         assert _count(session, Species) == 1
         assert _count(session, ChemReaction) == 1
+
+
+# ---------------------------------------------------------------------------
+# Identical entries are accepted when the deposit says something happens
+# ---------------------------------------------------------------------------
+
+_H = {"smiles": "[H]", "charge": 0, "multiplicity": 2}
+_H2 = {"smiles": "[H][H]", "charge": 0, "multiplicity": 1}
+
+
+def _h_exchange_request() -> dict:
+    """``H + H2 -> H2 + H``: the same entries on both sides."""
+    return {
+        "reversible": False,
+        "reactants": [{"species_entry": _H}, {"species_entry": _H2}],
+        "products": [{"species_entry": _H2}, {"species_entry": _H}],
+    }
+
+
+def _exchange_kinetics():
+    from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
+
+    return KineticsUploadRequest(
+        reaction=_h_exchange_request(),
+        scientific_origin="experimental",
+        a=1.0e13,
+        a_units="cm3_mol_s",
+        n=0.0,
+        reported_ea=40.0,
+        reported_ea_units="kj_mol",
+    )
+
+
+def test_a_bare_degenerate_reaction_is_refused_and_the_error_names_the_missing_evidence(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
+        with pytest.raises(CodedValueError) as excinfo:
+            persist_reaction_upload(session, ReactionUploadRequest(**_h_exchange_request()))
+    error = excinfo.value
+    assert error.code == W_REACTION_ENTRY_NULL_REACTION
+    text = str(error)
+    assert "transition state" in text and "kinetics" in text and "atom mapping" in text
+    assert error.context["missing_evidence"] == ["transition_state", "kinetics"]
+
+
+def test_a_degenerate_reaction_with_a_transition_state_is_accepted(db_conn) -> None:
+    from tests.services.test_calculation_geometry_composition import _isolated_session, _ts_payload, _upload_ts
+
+    with _isolated_session(db_conn) as session:
+        ts_entry = _upload_ts(session, _ts_payload())
+        session.flush()
+        assert ts_entry.id is not None
+
+
+def test_a_degenerate_reaction_with_kinetics_but_no_transition_state_is_accepted(db_conn) -> None:
+    from app.workflows.kinetics import persist_kinetics_upload
+
+    with Session(db_conn) as session, session.begin():
+        kinetics = persist_kinetics_upload(session, _exchange_kinetics(), created_by=None)
+        assert kinetics.reaction_entry_id is not None
+
+
+def test_the_transition_state_may_come_after_the_kinetics(db_conn) -> None:
+    """Kinetics first (it creates the reaction entry), the saddle point in a later request."""
+    from app.workflows.kinetics import persist_kinetics_upload
+    from tests.services.test_calculation_geometry_composition import _isolated_session, _ts_payload, _upload_ts
+
+    with _isolated_session(db_conn) as session:
+        persist_kinetics_upload(session, _exchange_kinetics(), created_by=None)
+        ts_entry = _upload_ts(session, _ts_payload())
+        session.flush()
+        assert ts_entry.id is not None

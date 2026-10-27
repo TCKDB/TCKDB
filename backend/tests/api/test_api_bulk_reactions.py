@@ -213,23 +213,18 @@ class TestScenario5_TransitionStateOnly:
             "reaction": {
                 "reversible": True,
                 "reactants": [
-                    {"species_entry": {"smiles": "[CH3]", "charge": 0, "multiplicity": 2}},
+                    {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
                     {"species_entry": {"smiles": "[H][H]", "charge": 0, "multiplicity": 1}},
                 ],
-                # CH3 + H2 -> CH4 + H. (H + H2 -> H + H2 would have the same entries on both sides:
-                # a null reaction, which is refused.)
                 "products": [
-                    {"species_entry": {"smiles": "C", "charge": 0, "multiplicity": 1}},
                     {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+                    {"species_entry": {"smiles": "[H][H]", "charge": 0, "multiplicity": 1}},
                 ],
             },
             "charge": 0,
             "multiplicity": 2,
             "geometry": {
-                "xyz_text": (
-                    "6\nCH5 TS\nC 0.0 0.0 0.0\nH 1.08 0.0 0.0\nH -0.54 0.93 0.0\nH -0.54 -0.93 0.0\n"
-                    "H 0.0 0.0 1.35\nH 0.0 0.0 2.1"
-                ),
+                "xyz_text": "3\nH3 TS\nH 0.0 0.0 0.0\nH 0.0 0.0 0.9\nH 0.0 0.0 1.8",
             },
             "primary_opt": {
                 "type": "opt",
@@ -243,7 +238,7 @@ class TestScenario5_TransitionStateOnly:
                 "level_of_theory": {"method": "CCSD(T)", "basis": "cc-pVTZ"},
                 "freq_result": {"n_imag": 1, "imag_freq_cm1": -1510.0},
             }],
-            "label": "CH3 + H2 TS",
+            "label": "H + H2 collinear TS",
         })
         assert resp.status_code == 201
         data = resp.json()

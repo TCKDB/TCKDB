@@ -1492,11 +1492,6 @@ def test_computed_statmech_without_source_calculations_cannot_back_a_rate(
             species_entry_id=atom_entry.id, scientific_origin="computed"
         )
         session.add(bare)
-        other_entry = make_species_entry(session, atom, term_symbol="X")
-        bare_other = Statmech(
-            species_entry_id=other_entry.id, scientific_origin="computed"
-        )
-        session.add(bare_other)
         session.flush()
 
         request = KineticsUploadRequest(
@@ -1505,13 +1500,8 @@ def test_computed_statmech_without_source_calculations_cannot_back_a_rate(
                 "reactants": [
                     {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}}
                 ],
-                # Two entries of one species, so the reaction is not a null reaction.
                 "products": [
-                    {
-                        "species_entry": {
-                            "smiles": "[H]", "charge": 0, "multiplicity": 2, "term_symbol": "X",
-                        }
-                    }
+                    {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}}
                 ],
             },
             scientific_origin="computed",
@@ -1524,7 +1514,7 @@ def test_computed_statmech_without_source_calculations_cannot_back_a_rate(
                 },
                 {
                     "role": "product", "participant_index": 1,
-                    "statmech_ref": bare_other.public_ref, **_CONVENTIONS,
+                    "statmech_ref": bare.public_ref, **_CONVENTIONS,
                 },
             ],
         )

@@ -947,7 +947,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/reaction_resolution.py`.
 - The body's `context` names the things involved.
-- Message: 'The reactants and the products are the same species entries, so this reaction converts nothing into nothing (reaction_entry_null_reaction). An isomerisation between two stereoisomers of one species is a valid reaction, but its two sides must be different entries: give each side the stereo (marks, a stereo label or a geometry) that tells the isomers apart.'
+- Message: 'The reactant and product entries are identical and the deposit carries no transition state, kinetics record or non-identity atom mapping, so nothing shows that anything happens (reaction_entry_null_reaction). Deposit the evidence with the reaction: a transition state (the transition-state upload, or `transition_state` in a computed-reaction bundle) or a kinetics record (the kinetics upload, or `kinetics` in a bundle). For a stereo isomerisation, give each side the stereo (marks, a stereo label or a geometry) that makes the two entries different. An identical-entries reaction is refused unless a transition state or kinetics is deposited for it.'
 - Scientific check: [`refuse_null_reaction_entry`](PRODUCER_CONTRACT.md#k-refuse-null-reaction-entry).
 
 <a id="c-reaction-mass-balance-failed"></a>

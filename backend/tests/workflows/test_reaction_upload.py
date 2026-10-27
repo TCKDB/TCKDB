@@ -246,15 +246,14 @@ def test_persist_reaction_upload_reuses_species_entries_from_conformer_upload(
                     label="h-conf-a",
                 ),
             ).observation
-            # 2 H -> H2: the reaction must not be a null reaction (the same entry on both sides).
             product_observation = persist_conformer_upload(
                 session,
                 _conformer_request(
-                    smiles="[H][H]",
+                    smiles="[H]",
                     charge=0,
-                    multiplicity=1,
-                    xyz_text="2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74\n",
-                    label="h2-conf",
+                    multiplicity=2,
+                    xyz_text="1\nH atom\nH 0.0 0.0 0.0\n",
+                    label="h-conf-b",
                 ),
             ).observation
 
@@ -271,10 +270,7 @@ def test_persist_reaction_upload_reuses_species_entries_from_conformer_upload(
                 session,
                 ReactionUploadRequest(
                     reversible=False,
-                    reactants=[
-                        {"species_entry_id": reactant_group.species_entry_id},
-                        {"species_entry_id": reactant_group.species_entry_id},
-                    ],
+                    reactants=[{"species_entry_id": reactant_group.species_entry_id}],
                     products=[{"species_entry_id": product_group.species_entry_id}],
                 ),
             )

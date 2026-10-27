@@ -773,7 +773,12 @@ def persist_computed_reaction_upload(
         for i, k in enumerate(request.product_keys)
     ]
 
-    refuse_null_reaction_entry(reactant_entries, product_entries)
+    refuse_null_reaction_entry(
+        reactant_entries,
+        product_entries,
+        has_transition_state=request.transition_state is not None,
+        has_kinetics=bool(request.kinetics),
+    )
 
     chem_reaction = resolve_chem_reaction(
         session,
@@ -1805,7 +1810,8 @@ def persist_computed_reaction_upload(
                 for i, k in enumerate(kin.product_keys)
             ]
 
-            refuse_null_reaction_entry(kin_reactant_entries, kin_product_entries)
+            # A bundle kinetics reaction IS a kinetics record of that reaction.
+            refuse_null_reaction_entry(kin_reactant_entries, kin_product_entries, has_kinetics=True)
 
             kin_chem_rxn = resolve_chem_reaction(
                 session,

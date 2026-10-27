@@ -49,9 +49,10 @@ Two consequences of the species key being the constitution (DR-0038):
   `Z-2-butene -> E-2-butene` has the same species on both sides, which the
   `chem_reaction` accepts. The `reaction_entry` must still change something: one
   whose reactant and product entries are the same is a null reaction and is
-  refused (`reaction_entry_null_reaction`, 422). A degenerate exchange such as
-  `H + H2 -> H + H2` is the same case unless the two sides are told apart (isotopes,
-  a different electronic state), because TCKDB has no way to tell the atoms apart.
+  refused (`reaction_entry_null_reaction`, 422) unless a transition state or a
+  kinetics record is deposited for it. A degenerate exchange such as
+  `H + H2 -> H2 + H` is real chemistry and is accepted with its saddle point or its
+  rate; deposited bare it is refused, because nothing shows that anything happens.
 - **Forward and reverse irreversible deposits share one `chem_reaction`.** The
   reactants and products are sorted per side into the identity hash, so
   `Z -> E` and `E -> Z` (both `reversible = false`) resolve to the same row. What

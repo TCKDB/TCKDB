@@ -49,7 +49,7 @@ _REACTION = {
         {"species_entry": {"smiles": "[H][H]", "charge": 0, "multiplicity": 1}},
     ],
     "products": [
-        {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2, "term_symbol": "X"}},
+        {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
         {"species_entry": {"smiles": "[H][H]", "charge": 0, "multiplicity": 1}},
     ],
 }

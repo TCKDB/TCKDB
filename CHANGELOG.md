@@ -27,17 +27,22 @@ dataset must never require a code release.
 - **Client: `tckdb-client` 0.177.0, `tckdb-schemas` 0.139.0.** Third part of DR-0038. No table or column changes and no migration.
 - A cis-trans isomerisation (`Z-2-butene -> E-2-butene`) is a reaction between two entries of one species. The graph reaction (`chem_reaction`) already
   accepted equal species on both sides (reproduced on `main`; nothing to change there). A `reaction_entry` whose reactant and product **entries** are the same
-  is now refused: `reaction_entry_null_reaction` (422, blocking, no row ids), on the reaction, kinetics, network, transition-state and computed-reaction routes.
+  is now refused unless the deposit carries a transition state or a kinetics record: `reaction_entry_null_reaction` (422, blocking, no row ids; the message names
+  the missing evidence). A degenerate exchange (`H + H2 -> H2 + H`) deposited with its transition state or its rate is accepted, on the transition-state,
+  kinetics, computed-reaction and network routes; a bare one (reaction upload, network reaction list) is refused. An atom mapping counts as no evidence of its own:
+  the only routes that take one already carry a transition state.
   The forward and the reverse irreversible deposit share one `chem_reaction` (its sides are sorted) and differ in their entries' roles.
-  **A degenerate exchange written without isotopes (`H + H2 -> H + H2`) is the same case and is now refused**; the published `TransitionStateUploadRequest`
-  example was that reaction and is now `CH3 + H2 -> CH4 + H`.
 - Two states of one pressure-dependent network with the same composition (two species keys that resolve to one entry, or one state declared twice) were a
   raw `IntegrityError` on `uq_network_state_network_id`, an HTTP 500. They are now refused before any row is written as `network_state_duplicate_composition`
   (422), naming the two local state keys.
 - CHEMKIN export prints each entry's stereo in the `! SMILES=` comment (chem.inp SPECIES, therm.dat, tran.dat, and the network export): the entry's isomeric
   SMILES where it has one, else the constitution SMILES, then `STEREO=<descriptor>`; `STEREO_RESOLUTION=partial|unresolved` marks an incomplete entry and
   `STEREO_NOT_REPRESENTED=axial|cumulene` an element no data can settle. The importer reads the first token after `SMILES=` and ignores the rest.
-- Reads: species-entry records (species search, structure search) gain `stereo_not_represented` (`["axial"]`, `["cumulene"]` or empty).
+- Reads: species-entry records (species search, structure search) gain `stereo_not_represented` (`["axial"]`, `["cumulene"]` or empty). `species_entry_label`
+  (reaction equations, entry links, network state labels, every read that names an entry) is now built from the descriptor and its resolution, so an unresolved
+  entry reads `? (unresolved)` and a partial one `E,? (partial)` instead of no label; the review-queue subject chemistry gains `stereo_descriptor` and
+  `stereo_resolution` beside `stereo_label`. Entries whose stereo is wholly unknown therefore change label text; no stored value changes.
+  Symmetry-cap entries are not listed in `stereo_not_represented` (known gap).
 - Frontend: the species-entry page and entry cards read stereo from the descriptor and its resolution. "Achiral" only for a NULL descriptor; partial and
   unresolved entries say so (their display `stereo_label` is NULL by design); an allene axis says "axial stereo not represented".
 
