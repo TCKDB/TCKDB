@@ -97,6 +97,24 @@ describe("facetChips: includeState (grouped-card redundancy)", () => {
         expect(chips).toEqual(["minimum", "R enantiomer", "isotopologue 13C1"])
     })
 
+    it("says an unresolved or partial entry is so, though its display stereo_label is NULL", () => {
+        const base = { species_entry_kind: "minimum", electronic_state_kind: "ground", stereo_label: null }
+        expect(facetChips({ ...base, stereo_descriptor: "?", stereo_resolution: "unresolved" }))
+            .toContain("Unresolved (?)")
+        expect(facetChips({ ...base, stereo_label: "E,?", stereo_descriptor: "E,?", stereo_resolution: "partial" }))
+            .toContain("Partly resolved (E,?)")
+        expect(facetChips({
+            ...base, stereo_descriptor: "?", stereo_resolution: "unresolved", stereo_not_represented: ["axial"],
+        })).toContain("Unresolved (?) · axial stereo not represented")
+    })
+
+    it("gives an achiral entry (NULL descriptor) no chip", () => {
+        expect(facetChips({
+            species_entry_kind: "minimum", electronic_state_kind: "ground",
+            stereo_label: null, stereo_descriptor: null, stereo_resolution: null,
+        })).toEqual(["minimum", "ground state"])
+    })
+
     it("defaults to includeState: true when the option is omitted entirely", () => {
         expect(facetChips({ species_entry_kind: "minimum", electronic_state_kind: "ground" }))
             .toEqual(["minimum", "ground state"])

@@ -22,6 +22,25 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Stereo isomerisations, duplicate network states, stereo in exports and UI (2026-10-27)
+
+- **Client: `tckdb-client` 0.177.0, `tckdb-schemas` 0.139.0.** Third part of DR-0038. No table or column changes and no migration.
+- A cis-trans isomerisation (`Z-2-butene -> E-2-butene`) is a reaction between two entries of one species. The graph reaction (`chem_reaction`) already
+  accepted equal species on both sides (reproduced on `main`; nothing to change there). A `reaction_entry` whose reactant and product **entries** are the same
+  is now refused: `reaction_entry_null_reaction` (422, blocking, no row ids), on the reaction, kinetics, network, transition-state and computed-reaction routes.
+  The forward and the reverse irreversible deposit share one `chem_reaction` (its sides are sorted) and differ in their entries' roles.
+  **A degenerate exchange written without isotopes (`H + H2 -> H + H2`) is the same case and is now refused**; the published `TransitionStateUploadRequest`
+  example was that reaction and is now `CH3 + H2 -> CH4 + H`.
+- Two states of one pressure-dependent network with the same composition (two species keys that resolve to one entry, or one state declared twice) were a
+  raw `IntegrityError` on `uq_network_state_network_id`, an HTTP 500. They are now refused before any row is written as `network_state_duplicate_composition`
+  (422), naming the two local state keys.
+- CHEMKIN export prints each entry's stereo in the `! SMILES=` comment (chem.inp SPECIES, therm.dat, tran.dat, and the network export): the entry's isomeric
+  SMILES where it has one, else the constitution SMILES, then `STEREO=<descriptor>`; `STEREO_RESOLUTION=partial|unresolved` marks an incomplete entry and
+  `STEREO_NOT_REPRESENTED=axial|cumulene` an element no data can settle. The importer reads the first token after `SMILES=` and ignores the rest.
+- Reads: species-entry records (species search, structure search) gain `stereo_not_represented` (`["axial"]`, `["cumulene"]` or empty).
+- Frontend: the species-entry page and entry cards read stereo from the descriptor and its resolution. "Achiral" only for a NULL descriptor; partial and
+  unresolved entries say so (their display `stereo_label` is NULL by design); an allene axis says "axial stereo not represented".
+
 ## Curated detail pages serve unreviewed records badged (2026-10-26)
 
 - **No client type change.** Step 7 of ADR 0023, the last step. Under `profile=curated`, a detail read (every route that resolves one record by

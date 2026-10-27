@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.139.0 - 2026-10-27
+
+Two refusal codes join the contract. No field is added or removed. The `TransitionStateUploadRequest` example is now `CH3 + H2 -> CH4 + H` (it was
+the degenerate `H + H2 -> H2 + H`, whose two sides are the same entries and are now refused).
+
+- `reaction_entry_null_reaction` (422): a reaction's reactants and products are the same species entries. A reaction between two entries of *one species*
+  (a cis-trans isomerisation, `Z-2-butene -> E-2-butene`) is valid; give each side the stereo (marks, a stereo label or a geometry) that tells the
+  isomers apart. Raised on the reaction, kinetics, network, transition-state and computed-reaction uploads.
+- `network_state_duplicate_composition` (422): two states of one network resolve to the same species entries (two species keys that name one entry, or a
+  state declared twice). It used to be an HTTP 500.
+
 ## 0.138.0 - 2026-10-26
 
 `stereo_label` on a species entry is a stereo descriptor, not free text. Species identity no longer includes stereochemistry (DR-0038).

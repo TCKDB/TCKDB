@@ -512,7 +512,7 @@ def _reaction_payload() -> dict:
             {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
         ],
         "products": [
-            {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+            {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2, "term_symbol": "X"}},
         ],
     }
 

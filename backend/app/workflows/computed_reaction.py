@@ -142,6 +142,7 @@ from app.services.reaction_atom_map import (
 )
 from app.services.reaction_resolution import (
     compress_species_stoichiometry,
+    refuse_null_reaction_entry,
     resolve_chem_reaction,
     validate_transition_state_composition,
 )
@@ -771,6 +772,8 @@ def persist_computed_reaction_upload(
         resolve_species_key(k, species_key_to_entry, field=f"product_keys[{i}]")
         for i, k in enumerate(request.product_keys)
     ]
+
+    refuse_null_reaction_entry(reactant_entries, product_entries)
 
     chem_reaction = resolve_chem_reaction(
         session,
@@ -1801,6 +1804,8 @@ def persist_computed_reaction_upload(
                 )
                 for i, k in enumerate(kin.product_keys)
             ]
+
+            refuse_null_reaction_entry(kin_reactant_entries, kin_product_entries)
 
             kin_chem_rxn = resolve_chem_reaction(
                 session,

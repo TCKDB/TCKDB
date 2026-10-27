@@ -43,6 +43,24 @@ scientific form of that thing.
   (chirality, electronic state, …), with attached kinetics, transport,
   and review state.
 
+Two consequences of the species key being the constitution (DR-0038):
+
+- **A stereo isomerisation is a reaction between two entries of one species.**
+  `Z-2-butene -> E-2-butene` has the same species on both sides, which the
+  `chem_reaction` accepts. The `reaction_entry` must still change something: one
+  whose reactant and product entries are the same is a null reaction and is
+  refused (`reaction_entry_null_reaction`, 422). A degenerate exchange such as
+  `H + H2 -> H + H2` is the same case unless the two sides are told apart (isotopes,
+  a different electronic state), because TCKDB has no way to tell the atoms apart.
+- **Forward and reverse irreversible deposits share one `chem_reaction`.** The
+  reactants and products are sorted per side into the identity hash, so
+  `Z -> E` and `E -> Z` (both `reversible = false`) resolve to the same row. What
+  differs is the `reaction_entry`: its participants carry roles, so the forward
+  entry holds Z as reactant and E as product and the reverse entry the opposite.
+  Kinetics and transition states attach to the entry, which is why they stay
+  separate. A reversible deposit is a different `chem_reaction` (`reversible` is
+  part of the hash).
+
 ### `transition_state` vs `transition_state_entry`
 
 The same split applies to transition states: `transition_state`

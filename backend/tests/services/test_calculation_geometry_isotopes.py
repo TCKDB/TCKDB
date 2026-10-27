@@ -344,7 +344,9 @@ def _ts_payload(*, geometry_isotopes: dict[int, int] | None, deuterated: bool) -
         "reaction": {
             "reversible": True,
             "reactants": [{"species_entry": h}, {"species_entry": h2}],
-            "products": [{"species_entry": h}, {"species_entry": h2}],
+            # The product atom is a different entry of the same species (a term symbol): the same
+            # entries on both sides would be a null reaction, which is refused.
+            "products": [{"species_entry": {**h, "term_symbol": "X"}}, {"species_entry": h2}],
         },
         "primary_opt": {
             "type": "opt",
@@ -467,7 +469,7 @@ def test_ts_reference_sums_every_reactant_not_just_the_first(db_conn) -> None:
         hd = {"smiles": "[2H][H]", "charge": 0, "multiplicity": 1}
         p = _ts_payload(geometry_isotopes=isotopes, deuterated=True)
         p["reaction"]["reactants"] = [{"species_entry": d}, {"species_entry": hd}]
-        p["reaction"]["products"] = [{"species_entry": d}, {"species_entry": hd}]
+        p["reaction"]["products"] = [{"species_entry": {**d, "term_symbol": "X"}}, {"species_entry": hd}]
         return p
 
     with _isolated_session(db_conn) as session:

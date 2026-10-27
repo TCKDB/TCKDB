@@ -13,6 +13,7 @@ from app.schemas.workflows.reaction_upload import (
 from app.services.reaction_resolution import (
     compress_species_stoichiometry,
     inherit_reversible,
+    refuse_null_reaction_entry,
     resolve_chem_reaction,
 )
 from app.services.record_review import (
@@ -112,6 +113,10 @@ def persist_reaction_upload(
         _resolve_participant_upload(session, participant, created_by=created_by)
         for participant in request.products
     ]
+
+    # Equal species on both sides is a legal graph reaction (a stereo isomerisation); equal
+    # *entries* on both sides is a null reaction (DR-0038).
+    refuse_null_reaction_entry(reactant_entries, product_entries)
 
     chem_reaction = resolve_chem_reaction(
         session,

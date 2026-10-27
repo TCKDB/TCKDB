@@ -820,6 +820,7 @@ class SpeciesStructureRecord(TypedDict, total=False):
     stereo_descriptor: str | None
     stereo_resolution: str | None
     stereo_smiles: str | None
+    stereo_not_represented: list[str]
     electronic_state_label: str | None
     term_symbol: str | None
     isotope_key: str | None

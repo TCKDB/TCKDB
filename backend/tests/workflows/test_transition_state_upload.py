@@ -63,7 +63,8 @@ H  0.0  0.0  0.9
 H  0.0  0.0  1.8
 """
 
-# Embedded reaction content: [H] + [H][H] → [H] + [H][H]
+# Embedded reaction content: [H] + [H][H] → [H](X) + [H][H]. The product H atom is a different entry of the
+# same species (a term symbol), because the same entries on both sides would be a null reaction (refused).
 _REACTION = {
     "reversible": True,
     "reactants": [
@@ -71,7 +72,7 @@ _REACTION = {
         {"species_entry": {"smiles": "[H][H]", "charge": 0, "multiplicity": 1}},
     ],
     "products": [
-        {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+        {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2, "term_symbol": "X"}},
         {"species_entry": {"smiles": "[H][H]", "charge": 0, "multiplicity": 1}},
     ],
 }

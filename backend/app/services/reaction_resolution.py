@@ -43,6 +43,9 @@ W_REACTION_MASS_BALANCE_FAILED = "reaction_mass_balance_failed"
 #: Raised when a reaction's two sides do not hold the same total charge.
 W_REACTION_CHARGE_NOT_CONSERVED = "reaction_charge_not_conserved"
 
+#: Raised when a reaction entry's reactants and products are the same species entries.
+W_REACTION_ENTRY_NULL_REACTION = "reaction_entry_null_reaction"
+
 #: Raised when a saddle point is not made of its own reaction's atoms.
 W_TRANSITION_STATE_COMPOSITION_MISMATCH = "transition_state_composition_mismatch"
 
@@ -412,6 +415,71 @@ CHECK_REACTION_CHARGE_CONSERVATION = ScientificCheck(
         "entirely, as it does for elemental balance. Conservation is not "
         "neutrality: any net charge is accepted as long as both sides carry "
         "the same one, so ion-molecule reactions are unaffected."
+    ),
+)
+
+
+def refuse_null_reaction_entry(
+    reactant_entries: Sequence[SpeciesEntry],
+    product_entries: Sequence[SpeciesEntry],
+) -> None:
+    """Refuse a reaction entry whose two sides are the same species entries.
+
+    Since the species key is the constitution (DR-0038), ``Z-2-butene -> E-2-butene`` has one
+    species on both sides, and the graph reaction (``chem_reaction``) accepts that. What it must
+    not accept is the *entry-level* null reaction: the very same species entries on both sides,
+    which converts nothing into nothing. Compared as multisets of entries, so the order of the
+    participants does not matter and ``A + B -> B + A`` is as null as ``A -> A``.
+
+    :raises CodedValueError: ``reaction_entry_null_reaction`` (422). The detail names no row id.
+    """
+
+    if not reactant_entries or Counter(e.id for e in reactant_entries) != Counter(
+        e.id for e in product_entries
+    ):
+        return
+    raise CodedValueError(
+        W_REACTION_ENTRY_NULL_REACTION,
+        "The reactants and the products are the same species entries, so this reaction converts "
+        "nothing into nothing (reaction_entry_null_reaction). An isomerisation between two "
+        "stereoisomers of one species is a valid reaction, but its two sides must be different "
+        "entries: give each side the stereo (marks, a stereo label or a geometry) that tells the "
+        "isomers apart.",
+        context={"participants": len(reactant_entries)},
+        message_prefix=False,
+    )
+
+
+CHECK_REACTION_ENTRY_NULL_REACTION = ScientificCheck(
+    group="Conservation across a reaction",
+    sort_key=6,
+    code="reaction_entry_null_reaction",
+    asserts=(
+        "A reaction entry's reactants and products are not the same species entries: some "
+        "participant differs, at least in its stereo."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    tier_rationale=(
+        "Definitional. A reaction that leaves every participant exactly as it was is not a "
+        "reaction, so no correct calculation produces one. Two entries of one species (E and Z "
+        "2-butene) are different participants, so the isomerisation between them is not refused."
+    ),
+    adr="0038, 0008",
+    enforced_by=(
+        PythonCheck(
+            refuse_null_reaction_entry,
+            note=(
+                "Called before ``resolve_chem_reaction`` on every path that writes reaction-entry "
+                "participants (the reaction upload, which kinetics, networks and transition states "
+                "reuse, and the computed-reaction bundle's canonical and kinetics reactions)."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "State what differs. Deposit the two isomers as different entries (stereo marks in the "
+        "SMILES, a stereo label, or a geometry per side). A process that changes nothing about its "
+        "participants is not a reaction and has no escape."
     ),
 )
 

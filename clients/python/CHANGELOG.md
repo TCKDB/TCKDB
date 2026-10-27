@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.177.0 - 2026-10-27
+
+Stereo isomerisations, duplicate network states, stereo in exports.
+
+- Requires `tckdb-schemas>=0.139.0`.
+- Two refusal codes are published: `reaction_entry_null_reaction` and `network_state_duplicate_composition` (both 422).
+- Reads: species-entry and structure-search records gain `stereo_not_represented` (`axial` / `cumulene`): the elements behind a `?` that no data can settle yet.
+- A CHEMKIN export now prints each entry's stereo (`STEREO=E`, `STEREO_RESOLUTION=partial`, ...) after the `SMILES=` token in its comments; a reader taking
+  the first token after `SMILES=` is unaffected.
+
 ## 0.176.0 - 2026-10-27
 
 A species entry's stereo is a descriptor; the species is the constitution.

@@ -362,6 +362,10 @@ class SpeciesEntryScientificRecord(BaseModel):
     stereo_resolution: StereoResolution | None = None
     #: Canonical isomeric SMILES of a fully resolved configuration, where one can be written.
     stereo_smiles: str | None = None
+    #: Stereo elements whose ``?`` no data can settle yet: ``axial`` (an allene axis) and
+    #: ``cumulene`` (cis/trans across a longer cumulated chain). Empty for every other entry,
+    #: so a ``?`` in the descriptor with this empty means "not yet supplied".
+    stereo_not_represented: list[str] = Field(default_factory=list)
     electronic_state_label: str | None = None
     term_symbol: str | None = None
     isotope_key: str | None = None

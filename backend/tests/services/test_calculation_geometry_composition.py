@@ -259,8 +259,10 @@ def _ts_payload(*, irc_point_xyz: str | None = None) -> dict:
                 {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
                 {"species_entry": {"smiles": "[H][H]", "charge": 0, "multiplicity": 1}},
             ],
+            # The products' H atom is a different entry of the same species (a term symbol), so the
+            # two sides are not the same entries: that would be a null reaction (refused).
             "products": [
-                {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+                {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2, "term_symbol": "X"}},
                 {"species_entry": {"smiles": "[H][H]", "charge": 0, "multiplicity": 1}},
             ],
         },

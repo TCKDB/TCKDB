@@ -101,9 +101,14 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # connected component of its optimised structures, so a chain can be wider than the matching tolerance; TCKDB
     # reports that and never splits it (any automatic cut would put back an arbitrary threshold or an order
     # dependence), and a curator needs a finding to read. One entry, different tier from every blocking entry.
-    assert 10 <= len(REGISTER) <= 48, (
+    #
+    # Raised 48 -> 49 (2026-10-27) for DR-0038: ``reaction_entry_null_reaction``. With the species key the constitution,
+    # a stereo isomerisation has one species on both sides, so "the sides differ" can no longer be read off the
+    # species; the entry-level rule is the definitional one (a reaction that changes no participant is not a
+    # reaction) and the only blocking claim about a reaction's entries. One entry, joining its conservation group.
+    assert 10 <= len(REGISTER) <= 49, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~48 the inclusion test ('could this check be wrong "
+        "the system; above ~49 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 

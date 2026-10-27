@@ -58,6 +58,47 @@ describe("EntryIdentity: no pill boxes, every fact exactly once", () => {
         expect(screen.queryByText("Stereochemistry")).not.toBeInTheDocument()
     })
 
+    describe("stereochemistry is read from the descriptor and its resolution (DR-0038)", () => {
+        function stereoRow() {
+            const facts = screen.getByRole("list", { name: "Record facts" })
+            return within(facts).getByText("Stereochemistry").nextElementSibling
+        }
+
+        it("says 'Achiral' only for a NULL descriptor", () => {
+            renderEntry(baseEntry({ stereo_label: null, stereo_descriptor: null, stereo_resolution: null }))
+            expect(stereoRow()).toHaveTextContent("Achiral")
+        })
+
+        it("does not read the NULL display label of an unresolved entry as 'not distinguished' or 'achiral'", () => {
+            // Display `stereo_label` is NULL while nothing is resolved; the descriptor is `?`.
+            renderEntry(baseEntry({ stereo_label: null, stereo_descriptor: "?", stereo_resolution: "unresolved" }))
+            expect(stereoRow()).toHaveTextContent("Unresolved (?)")
+            expect(screen.queryByText(/achiral/i)).not.toBeInTheDocument()
+        })
+
+        it("shows a partly resolved entry as such", () => {
+            renderEntry(baseEntry({ stereo_label: "E,?", stereo_descriptor: "E,?", stereo_resolution: "partial" }))
+            expect(stereoRow()).toHaveTextContent("Partly resolved (E,?)")
+        })
+
+        it("shows a resolved entry in words, with its stereo SMILES", () => {
+            renderEntry(baseEntry({
+                stereo_label: "E", stereo_descriptor: "E", stereo_resolution: "resolved", stereo_smiles: "C/C=C/C",
+            }))
+            expect(stereoRow()).toHaveTextContent("E isomer")
+            const facts = screen.getByRole("list", { name: "Record facts" })
+            expect(within(facts).getByText("Stereo SMILES").nextElementSibling).toHaveTextContent("C/C=C/C")
+        })
+
+        it("says 'axial stereo not represented' for an allene axis", () => {
+            renderEntry(baseEntry({
+                stereo_label: null, stereo_descriptor: "?", stereo_resolution: "unresolved",
+                stereo_not_represented: ["axial"],
+            }))
+            expect(stereoRow()).toHaveTextContent("axial stereo not represented")
+        })
+    })
+
     it("renders Term symbol and Isotopologue rows only when the entry carries them", () => {
         const { rerender } = renderEntry(baseEntry())
         expect(screen.queryByText("Term symbol")).not.toBeInTheDocument()

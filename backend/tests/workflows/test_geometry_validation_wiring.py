@@ -474,6 +474,9 @@ def _reaction_payload_h2o_self() -> dict:
                     "smiles": "O",
                     "charge": 0,
                     "multiplicity": 1,
+                    # A different entry of the same species, so the two sides are not the same
+                    # entries (a null reaction, refused).
+                    "term_symbol": "X",
                 },
                 "conformers": [
                     {

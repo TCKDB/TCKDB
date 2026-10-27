@@ -101,6 +101,7 @@ from __future__ import annotations
 import logging
 from collections import Counter
 from dataclasses import dataclass, field, replace
+from functools import lru_cache
 
 from rdkit import Chem
 from rdkit.Chem import AllChem, rdCIPLabeler, rdDetermineBonds
@@ -327,6 +328,26 @@ def _cumulated_bonds(
             kind = _AXIAL if len(members) % 2 == 0 else _CUMULENE
             elements.append(StereoElement(kind, (ends[0], ends[1]), (low, 2 if kind == _AXIAL else 3, high)))
     return cumulated, elements
+
+
+@lru_cache(maxsize=8192)
+def unrepresented_stereo_kinds(smiles: str) -> tuple[str, ...]:
+    """Stereo elements of a molecule that the descriptor vocabulary cannot state yet.
+
+    ``axial`` (an allene axis) and ``cumulene`` (cis/trans across a longer cumulated chain) are
+    always ``?`` in an entry's descriptor and no data settles them, so a reader must not take
+    that ``?`` for "not yet supplied". Empty for a SMILES that does not parse, or a molecule
+    with neither. (The symmetry-cap case is not listed here: it needs the full resolution.)
+    """
+
+    from app.chemistry.species import identity_mol_from_smiles
+
+    try:
+        frame = frame_from_mol(identity_mol_from_smiles(smiles))
+    except ValueError:
+        return ()
+    kinds = {element.kind for element in frame.elements}
+    return tuple(kind for kind in (_AXIAL, _CUMULENE) if kind in kinds)
 
 
 def frame_from_mol(marked: Chem.Mol) -> StereoFrame:

@@ -14,6 +14,11 @@ export type EntryFacetAxes = {
     electronic_state_label?: string | null
     term_symbol?: string | null
     stereo_label?: string | null
+    /** The entry's stereo key (DR-0038): one CIP token per potential stereo element, `null` only for an achiral species. */
+    stereo_descriptor?: string | null
+    stereo_resolution?: string | null
+    /** Stereo elements whose `?` no data can settle yet (`axial`, `cumulene`). */
+    stereo_not_represented?: string[] | null
     isotope_key?: string | null
 }
 
@@ -41,6 +46,40 @@ export function stereoChip(label: string): string {
     if (label === "R" || label === "S") return `${label} enantiomer`
     if (label === "E" || label === "Z") return `${label} isomer`
     return label
+}
+
+const NOT_REPRESENTED_TEXT: Record<string, string> = {
+    axial: "axial stereo not represented",
+    cumulene: "cumulene cis/trans stereo not represented",
+}
+
+/**
+ * What an entry's stereo is, in words -- from the descriptor and its resolution, never from the
+ * display `stereo_label` alone. `stereo_label` is deliberately NULL for an entry whose every stereo
+ * element is unknown (DR-0038), so reading that NULL as "not stereochemically distinguished" says
+ * the opposite of the truth: the entry IS a stereo-capable molecule whose configuration nobody
+ * pinned down. The cases:
+ *
+ * - descriptor `null` -> "Achiral" (the molecule has no stereo element at all);
+ * - `resolved` -> "E isomer", "R enantiomer", or the descriptor for several elements ("R,S");
+ * - `partial` -> "Partly resolved (E,?)";
+ * - `unresolved` -> "Unresolved (?)";
+ * - an element no data can settle (`stereo_not_represented`) is named, so the `?` is not read
+ *   as "not yet supplied": "axial stereo not represented".
+ *
+ * A response from before the descriptor existed (field absent, not `null`) falls back to
+ * `stereo_label`, and returns `null` (nothing to say) when that is absent too.
+ */
+export function stereoDescription(entry: EntryFacetAxes): string | null {
+    const descriptor = entry.stereo_descriptor
+    if (descriptor === undefined) return entry.stereo_label ? stereoChip(entry.stereo_label) : null
+    if (descriptor === null) return "Achiral"
+    let text: string
+    if (entry.stereo_resolution === "partial") text = `Partly resolved (${descriptor})`
+    else if (entry.stereo_resolution === "unresolved") text = `Unresolved (${descriptor})`
+    else text = stereoChip(descriptor)
+    const notes = (entry.stereo_not_represented ?? []).map((kind) => NOT_REPRESENTED_TEXT[kind] ?? `${kind} stereo not represented`)
+    return notes.length > 0 ? `${text} · ${notes.join(" · ")}` : text
 }
 
 function isotopeChip(key: string): string {
@@ -98,7 +137,11 @@ export function facetChips(entry: EntryFacetAxes, options?: { includeState?: boo
             .join(" · ")
         if (extra) chips.push(extra)
     }
-    if (entry.stereo_label) chips.push(stereoChip(entry.stereo_label))
+    // An achiral entry contributes no chip: "achiral" on every ordinary card is noise, and its
+    // absence misleads nobody. Every other case -- including an unresolved one, whose display
+    // `stereo_label` is NULL -- is said.
+    const stereo = stereoDescription(entry)
+    if (stereo && entry.stereo_descriptor !== null) chips.push(stereo)
     if (entry.isotope_key) chips.push(isotopeChip(entry.isotope_key))
     return chips
 }
