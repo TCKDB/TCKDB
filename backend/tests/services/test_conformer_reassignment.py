@@ -1065,6 +1065,8 @@ def _owed_refile_scenario(session, *, blocker: str):
         thermo = _target_thermo(session, entry, session.get(ConformerGroup, group), [calc])
         if blocker == "approved_thermo_evidence":
             _approve(session, SubmissionRecordType.thermo, thermo.id)
+        else:  # reviewed at some point, but never approved: the review row exists, the approval does not
+            ensure_record_review(session, record_type=SubmissionRecordType.thermo, record_id=thermo.id)
     elif blocker == "statmech_evidence":
         calc = session.scalars(select(Calculation).where(Calculation.conformer_observation_id == sp)).first()
         _basin_declaration(session, entry, session.get(ConformerGroup, group), calc)

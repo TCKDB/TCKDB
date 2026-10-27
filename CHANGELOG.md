@@ -80,6 +80,12 @@ Closes #812. A conformer basin no longer depends on the order its structures wer
   optimised member matches neither) and `min_span_deg` (`basin_span_deg >= x`), backed by the partial index `ix_conformer_group_wide_basin`. They are filters:
   the order is the route's, unchanged, and a review floor applies to the listed groups. The flag is the stored fact about the group's optimised members, as
   for the representative; the `wide-basin` Phase D check stays on demand. `tckdb-client` `search_conformers(wide_basin=..., min_span_deg=...)`.
+- **Third review round.** (1) `statmech/select` (and its manifest) resolves a basin ref through the visibility guard before forwarding, so under `profile=curated` an
+  emptied group the floor hides is the same 404 as an unknown ref. (2) A re-file moves selections (and unapproved thermo targets) the way an inline merge does; it is owed
+  only when a trigger would refuse: an approved observation, statmech records, an approved thermo, or a selection an accepted kinetics record cites. (3) Conformer search
+  refuses an unknown key on GET (`unknown_query_parameter`) and in the POST body (`extra_forbidden`). (4) A forwarded select records
+  `request.forwarded_from_conformer_group_ref` in its manifest, only when set; no manifest format bump (an optional key, absent otherwise, ignored by older readers; the
+  statmech checksum covers it).
 - **Schema (revision `b7e4c9a2d518`).** Nullable `conformer_group.representative_observation_id`, `merged_into_conformer_group_id`,
   `basin_is_clique`, `basin_span_deg`; nullable `conformer_observation.mapped_coords_json`; the table `conformer_group_merge_pending`; the version 3
   scheme row as the default; and a data step that recomputes every entry through the existing declared-repair machinery (dependents follow their own
