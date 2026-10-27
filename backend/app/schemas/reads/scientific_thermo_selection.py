@@ -272,6 +272,11 @@ class ThermoSelectionResponse(SelectionStepsAnswer):
     """The decision, its basis, and everything it rests on, as public refs only."""
 
     request: ThermoSelectionRequestEcho
+    forwarded_from_conformer_group_ref: str | None = Field(
+        default=None,
+        description="Set when the requested conformer group had been merged into another: the ref that was asked "
+        "for. The decision was made on the group that took its members, which is the one the request echoes.",
+    )
     review: ThermoSelectionReview
     policy: ThermoSelectionPolicyInfo
     outcome: ThermoSelectionOutcome

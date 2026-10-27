@@ -1934,6 +1934,11 @@ Table conformer_group {
   note text
   representative_fingerprint_json jsonb
   representative_coords_json jsonb
+  representative_observation_id bigint [ref: > conformer_observation.id]
+  merged_into_conformer_group_id bigint [ref: > conformer_group.id]
+  basin_is_clique boolean
+  basin_span_deg double
+  basin_distance_sums_json jsonb
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
   public_ref string [not null]
@@ -1947,6 +1952,30 @@ Table conformer_group {
   Note: 'Store one deduplicated conformational-basin identity for a species entry.'
 }
 
+Table conformer_group_merge_pending {
+  id bigint [pk, not null]
+  species_entry_id bigint [not null, ref: > species_entry.id]
+  kept_conformer_group_id bigint [ref: > conformer_group.id]
+  absorbed_conformer_group_id bigint [not null, ref: > conformer_group.id]
+  conformer_observation_id bigint [not null, ref: > conformer_observation.id]
+  reason text [not null]
+  completed_at timestamp
+  completed_by_revision string
+  created_at timestamp [not null, default: 'now']
+
+  indexes {
+    species_entry_id [name: 'ix_conformer_group_merge_pending_open']
+    conformer_observation_id [unique, name: 'uq_conformer_group_merge_pending_open_refile']
+    (kept_conformer_group_id, absorbed_conformer_group_id, conformer_observation_id) [unique, name: 'uq_conformer_group_merge_pending_merge']
+  }
+
+  checks {
+    `kept_conformer_group_id IS NULL OR kept_conformer_group_id <> absorbed_conformer_group_id` [name: 'ck_conformer_group_merge_pending_kept_differs_from_absorbed']
+  }
+
+  Note: 'Work a live upload decided on but could not carry out, in two kinds.'
+}
+
 Table conformer_observation {
   id bigint [pk, not null]
   conformer_group_id bigint [not null, ref: > conformer_group.id]
@@ -1954,6 +1983,7 @@ Table conformer_observation {
   scientific_origin ScientificOriginKind [not null, default: 'computed']
   note text
   torsion_fingerprint_json jsonb
+  mapped_coords_json jsonb
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
   public_ref string [not null]

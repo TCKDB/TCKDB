@@ -82,9 +82,10 @@ def select_species_thermo(
     """
     _refuse_unknown_query_keys(request)
     entry_id = resolve_species_entry_ref(session, species_entry_ref)
-    selection, _ = run_selection(session, species_entry_id=entry_id, body=body)
+    selection, forwarded_from = run_selection(session, species_entry_id=entry_id, body=body)
     manifest = redact_manifest(selection.manifest, withhold_excluded=profile_has_floor())
     payload = build_response(selection, body=body, species_entry_ref=species_entry_ref, manifest=manifest)
+    payload.forwarded_from_conformer_group_ref = forwarded_from
     stamp_read_profile(payload)
     attach_review_statuses(payload)
     return payload

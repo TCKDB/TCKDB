@@ -131,6 +131,31 @@ class ConformerGroupFingerprint(BaseModel):
     torsions: list[ConformerRotorTorsion]
 
 
+class ConformerGroupMergePendingBlock(BaseModel):
+    """A merge of this group into another that an upload decided on but could not carry out.
+
+    Approved records point at this group, and only the owner-role reassignment may move them (through a declared
+    repair). Until that runs, the group still holds its members and the upload that linked it is filed under the
+    target group. Absent once the merge is completed.
+    """
+
+    target_conformer_group_ref: str
+    reason: str
+
+
+class ConformerGroupRefilePendingBlock(BaseModel):
+    """Structures in this group that must be re-filed into another basin, which this role may not do yet.
+
+    A structure that defines no basin (a single point, a scan point, a partial optimisation) belongs in the basin whose
+    representative it matches, and that moved. The structure was approved, or a record rests on it, so only the owner
+    role may move it. There is no target group to name: the basin it belongs in may not have a group yet, and none is
+    created until the owner role completes the re-file. Absent once completed.
+    """
+
+    observation_count: int
+    reason: str
+
+
 class ConformerGroupCoreBlock(BaseModel):
     """Direct conformer-group-row metadata.
 
@@ -141,7 +166,21 @@ class ConformerGroupCoreBlock(BaseModel):
     is surfaced as ``fingerprint``, populated only under
     ``include=fingerprints`` (``None`` otherwise, and ``None`` when the
     row itself carries no fingerprint blob or an internally inconsistent
-    one — see ``_build_group_fingerprint``).
+    one — see ``_build_group_fingerprint``). The fingerprint is the
+    basin's most central member's (its medoid), derived from the members
+    and not part of the basin's identity.
+
+    ``merged_into_conformer_group_ref`` is set on a group a merge emptied:
+    its members live in the group it names, so a ``cg_`` ref cited before the
+    merge resolves forward. ``wide_basin`` is ``True`` when the basin's
+    optimised members are not all within tolerance of each other (a chain of
+    structures, reported for curation and never split) and ``False`` when
+    they are; ``None`` when the group has no optimised member.
+    ``basin_span_deg`` is the largest torsion difference between two of
+    them, in degrees. ``merge_pending`` is set while a merge of this group
+    into another is owed (see :class:`ConformerGroupMergePendingBlock`); ``refile_pending`` is set while structures in it
+    owe a re-file into a basin with no group yet (see :class:`ConformerGroupRefilePendingBlock`). The two are different
+    work: the first has a target group, the second does not.
     """
 
     conformer_group_id: int | None = None
@@ -151,6 +190,11 @@ class ConformerGroupCoreBlock(BaseModel):
     created_at: datetime
     review: RecordReviewBadge
     fingerprint: ConformerGroupFingerprint | None = None
+    merged_into_conformer_group_ref: str | None = None
+    wide_basin: bool | None = None
+    basin_span_deg: float | None = None
+    merge_pending: ConformerGroupMergePendingBlock | None = None
+    refile_pending: ConformerGroupRefilePendingBlock | None = None
 
 
 class ConformerObservationCoreBlock(BaseModel):

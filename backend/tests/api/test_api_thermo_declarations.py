@@ -258,6 +258,54 @@ def test_species_bundle_round_trips_target_by_conformer_key_and_protocol_by_calc
     assert record["protocol"]["supporting_calculations"] == [{"calculation_ref": calc.public_ref}]
 
 
+def test_a_target_named_by_conformer_key_follows_a_basin_merge_made_by_a_later_conformer(client, db_session):
+    """c0 (0 degrees) and c1 (36) are two basins; c2 (18) links them, so the younger group is merged into the older.
+
+    The thermo names c1 by key. It must point at the group c1 lives in NOW, not at the one c1 was filed under first.
+    """
+    from tests.services.test_basin_matching import with_dihedral
+
+    def conformer(key: str, degrees: float) -> dict:
+        atoms = with_dihedral("CCCC", "[CH3][CH2][CH2][CH3]", degrees)
+        xyz = "\n".join([str(len(atoms)), key] + [f"{s} {x:.6f} {y:.6f} {z:.6f}" for s, x, y, z in atoms])
+        return {
+            "key": key,
+            "geometry": {"xyz_text": xyz},
+            "primary_calculation": {
+                "key": f"opt_{key}", "type": "opt", "software_release": SOFTWARE, "level_of_theory": LOT,
+                "opt_result": {"converged": True},
+            },
+        }
+
+    bundle = _species_bundle(
+        species_entry={"smiles": "CCCC", "charge": 0, "multiplicity": 1},
+        conformers=[conformer("c0", 0.0), conformer("c1", 36.0), conformer("c2", 18.0)],
+        thermo=_bundle_thermo(thermodynamic_target={"kind": "single_conformer", "conformer_key": "c1"}),
+    )
+    response = client.post(SPECIES, json=bundle)
+    assert response.status_code == 201, response.text
+
+    row = _only_thermo(db_session)
+    holding = {o.conformer_group_id for o in db_session.scalars(select(ConformerObservation))}
+    assert len(holding) == 1, "the three optimised structures are one basin"
+    assert row.target_conformer_group_id == holding.pop()
+    groups = db_session.scalars(
+        select(ConformerGroup).where(ConformerGroup.species_entry_id == row.species_entry_id).order_by(ConformerGroup.id)
+    ).all()
+    assert len(groups) == 2 and groups[1].merged_into_conformer_group_id == groups[0].id  # the emptied row is kept
+    assert row.target_conformer_group_id == groups[0].id
+    # the review of the basin belongs to the group that holds the observations, not to the row the first conformer
+    # was filed under before a later one merged it away
+    from app.db.models.record_review import RecordReview
+
+    reviewed = set(
+        db_session.scalars(
+            select(RecordReview.record_id).where(RecordReview.record_type == SubmissionRecordType.conformer_group)
+        )
+    )
+    assert groups[0].id in reviewed and groups[1].id not in reviewed
+
+
 def test_species_bundle_refuses_a_conformer_or_calculation_nothing_declared(client, db_session):
     bad_conformer = _bundle_thermo(thermodynamic_target={"kind": "single_conformer", "conformer_key": "c9"})
     response = client.post(SPECIES, json=_species_bundle(thermo=bad_conformer))

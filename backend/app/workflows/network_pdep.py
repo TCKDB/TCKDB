@@ -84,7 +84,12 @@ from app.services.composite_result_resolution import collect_named_composite_dep
 from app.services.conformer_anchoring import (
     anchor_species_calculation_to_observation,
 )
-from app.services.conformer_resolution import resolve_conformer_group
+from app.services.conformer_resolution import (
+    current_conformer_group_targets,
+    primary_structure,
+    resolve_conformer_group,
+    settle_conformer_basin,
+)
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import (
@@ -486,7 +491,8 @@ def persist_network_pdep_upload(
             )
 
             # Create conformer group + observation (with torsion matching)
-            parsed = parse_xyz(GeometryPayload(xyz_text=conf.geometry.xyz_text))
+            structure = primary_structure(conf.calculation, conf.geometry.xyz_text)
+            parsed = parse_xyz(GeometryPayload(xyz_text=structure.xyz_text))
             conformer_group, fingerprint, scheme = resolve_conformer_group(
                 session,
                 species_entry,
@@ -494,6 +500,7 @@ def persist_network_pdep_upload(
                 created_by=created_by,
                 smiles=sp.species_entry.smiles,
                 xyz_atoms=parsed.atoms,
+                defining=structure.defining,
             )
             observation = ConformerObservation(
                 conformer_group_id=conformer_group.id,
@@ -507,6 +514,7 @@ def persist_network_pdep_upload(
             )
             session.add(observation)
             session.flush()
+            settle_conformer_basin(session, observation, fingerprint, smiles=sp.species_entry.smiles)
             observation_id_by_geometry_key[conf.geometry.key] = observation.id
             observation_id_by_conformer_key.setdefault(sp.key, {})[
                 conf.key
@@ -1504,7 +1512,7 @@ def persist_network_pdep_upload(
 
     apply_review_policy(
         session,
-        targets=review_targets,
+        targets=current_conformer_group_targets(session, review_targets),
         policy=review_policy,
         created_by=created_by,
     )

@@ -259,6 +259,11 @@ the gap.
 | `note` | TEXT | yes | — | — | — | not documented |
 | `representative_fingerprint_json` | JSONB | yes | — | — | — | not documented |
 | `representative_coords_json` | JSONB | yes | — | — | — | not documented |
+| `representative_observation_id` | BIGINT | yes | — | conformer_observation.id | — | not documented |
+| `merged_into_conformer_group_id` | BIGINT | yes | — | conformer_group.id | — | not documented |
+| `basin_is_clique` | BOOLEAN | yes | — | — | — | not documented |
+| `basin_span_deg` | FLOAT | yes | — | — | — | not documented |
+| `basin_distance_sums_json` | JSONB | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
@@ -448,6 +453,7 @@ the gap.
 | `scientific_origin` | ScientificOriginKind (enum) | no | computed | — | `computed`, `experimental`, `estimated` | not documented |
 | `note` | TEXT | yes | — | — | — | not documented |
 | `torsion_fingerprint_json` | JSONB | yes | — | — | — | not documented |
+| `mapped_coords_json` | JSONB | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `created_by` | BIGINT | yes | — | app_user.id | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
@@ -1585,6 +1591,28 @@ the gap.
 **Check constraints:**
 
 - `ck_chem_reaction_reaction_family_raw_requires_source_note`: `reaction_family_raw IS NULL OR reaction_family_source_note IS NOT NULL`
+
+### `conformer_group_merge_pending`
+
+**Role:** role not stated on the model
+
+**Purpose:** Work a live upload decided on but could not carry out, in two kinds.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `species_entry_id` | BIGINT | no | — | species_entry.id | — | not documented |
+| `kept_conformer_group_id` | BIGINT | yes | — | conformer_group.id | — | not documented |
+| `absorbed_conformer_group_id` | BIGINT | no | — | conformer_group.id | — | not documented |
+| `conformer_observation_id` | BIGINT | no | — | conformer_observation.id | — | not documented |
+| `reason` | TEXT | no | — | — | — | not documented |
+| `completed_at` | TIMESTAMP WITHOUT TIME ZONE | yes | — | — | — | not documented |
+| `completed_by_revision` | VARCHAR(64) | yes | — | — | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_conformer_group_merge_pending_kept_differs_from_absorbed`: `kept_conformer_group_id IS NULL OR kept_conformer_group_id <> absorbed_conformer_group_id`
 
 ### `dataset_release`
 

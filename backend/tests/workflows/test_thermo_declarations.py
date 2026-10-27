@@ -127,6 +127,19 @@ def test_a_single_conformer_target_stores_its_group(db_session):
     assert thermo.target_conformer_group_id == group.id
 
 
+def test_a_target_citing_a_group_a_merge_emptied_is_stored_on_the_group_that_took_its_members(db_session):
+    entry = _entry(db_session)
+    survivor = make_conformer_group(db_session, entry, label="conformer_1")
+    emptied = make_conformer_group(db_session, entry, label="conformer_2")
+    emptied.merged_into_conformer_group_id = survivor.id
+    db_session.flush()
+    thermo = persist_thermo_upload(
+        db_session,
+        _request(thermodynamic_target={"kind": "single_conformer", "conformer_group_ref": emptied.public_ref}),
+    )
+    assert thermo.target_conformer_group_id == survivor.id
+
+
 # ---------------------------------------------------------------------------
 # Refusals at the service
 # ---------------------------------------------------------------------------

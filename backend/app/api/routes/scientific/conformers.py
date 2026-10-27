@@ -60,10 +60,16 @@ search_router = APIRouter(prefix="/conformers")
 _POST_ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 
 
+# GET: every declared search field plus the profile keys. Derived from the request model so a new filter cannot be
+# refused here by oversight, and a misspelt one is refused rather than ignored.
+_GET_ALLOWED_QS_KEYS: set[str] = set(ConformersSearchRequest.model_fields) | set(PROFILE_QUERY_KEYS)
+
+
 @search_router.get(
     "/search", response_model=ScientificConformersSearchResponse
 )
 def scientific_conformers_search_get(
+    request: Request,
     session: Session = Depends(get_db),
     species_ref: str | None = Query(None),
     species_entry_ref: str | None = Query(None),
@@ -72,6 +78,14 @@ def scientific_conformers_search_get(
     selection_kind: ConformerSelectionKind | None = Query(None),
     has_selection: bool | None = Query(None),
     assignment_scheme_ref: str | None = Query(None),
+    wide_basin: bool | None = Query(
+        None,
+        description="true: only wide basins (optimised members linked end to end but not all within tolerance of "
+        "each other); false: only basins whose optimised members all are. Groups with no optimised member match neither.",
+    ),
+    min_span_deg: float | None = Query(
+        None, ge=0.0, le=360.0, description="Largest torsion difference between two optimised members, at least this."
+    ),
     has_observations: bool | None = Query(None),
     has_calculations: bool | None = Query(None),
     has_geometries: bool | None = Query(None),
@@ -107,6 +121,16 @@ def scientific_conformers_search_get(
     review knobs are not enough — see
     ``backend/docs/specs/scientific_conformer_reads.md``.
     """
+    unknown = set(request.query_params.keys()) - _GET_ALLOWED_QS_KEYS
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "unknown_query_parameter: query-string keys "
+                f"{sorted(unknown)!r} are not conformer search filters; "
+                "an unrecognised key is refused rather than ignored."
+            ),
+        )
     request_obj = ConformersSearchRequest(
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,
@@ -115,6 +139,8 @@ def scientific_conformers_search_get(
         selection_kind=selection_kind,
         has_selection=has_selection,
         assignment_scheme_ref=assignment_scheme_ref,
+        wide_basin=wide_basin,
+        min_span_deg=min_span_deg,
         has_observations=has_observations,
         has_calculations=has_calculations,
         has_geometries=has_geometries,

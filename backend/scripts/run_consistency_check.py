@@ -17,7 +17,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", required=True,
                         choices=("thermo", "external-cp", "thermo-kinetics", "gibbs-self", "hess", "kirchhoff",
-                                     "isotope-identity"))
+                                     "isotope-identity", "wide-basin"))
     parser.add_argument("--target-ref", required=True)
     parser.add_argument("--comparison-thermo-ref")
     parser.add_argument("--reverse-kinetics-ref")
@@ -29,7 +29,7 @@ def main(argv=None):
               "thermo -- REPLACES the default grid (point temperatures, plus 298.15 when s298 is stored); "
               "thermo-kinetics -- the grid, required; "
               "kirchhoff -- ADDED to the default grid {298.15} + temperatures of points carrying h; "
-              "external-cp, gibbs-self, hess, isotope-identity -- not accepted. "
+              "external-cp, gibbs-self, hess, isotope-identity, wide-basin -- not accepted. "
               "A neighbour comparison (--comparison-thermo-ref) requires it."),
     )
     parser.add_argument("--commit", action="store_true")

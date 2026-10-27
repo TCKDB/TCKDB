@@ -98,7 +98,12 @@ from app.services.charge_multiplicity_extraction import (
 )
 from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
-from app.services.conformer_resolution import resolve_conformer_group
+from app.services.conformer_resolution import (
+    current_conformer_group_targets,
+    primary_structure,
+    resolve_conformer_group,
+    settle_conformer_basin,
+)
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -354,7 +359,8 @@ def persist_computed_species_upload(
     for conf_in in request.conformers:
         geometry = resolve_geometry_payload(session, conf_in.geometry)
 
-        parsed = parse_xyz(GeometryPayload(xyz_text=conf_in.geometry.xyz_text))
+        structure = primary_structure(conf_in.primary_calculation, conf_in.geometry.xyz_text)
+        parsed = parse_xyz(GeometryPayload(xyz_text=structure.xyz_text))
         conformer_group, fingerprint, scheme = resolve_conformer_group(
             session,
             species_entry,
@@ -362,6 +368,7 @@ def persist_computed_species_upload(
             created_by=created_by,
             smiles=request.species_entry.smiles,
             xyz_atoms=parsed.atoms,
+            defining=structure.defining,
         )
         observation = ConformerObservation(
             conformer_group_id=conformer_group.id,
@@ -375,6 +382,7 @@ def persist_computed_species_upload(
         )
         session.add(observation)
         session.flush()
+        settle_conformer_basin(session, observation, fingerprint, smiles=request.species_entry.smiles)
 
         # Step 4: primary opt + additionals. We replicate the
         # /uploads/conformers anchor-and-link logic here because the
@@ -574,8 +582,11 @@ def persist_computed_species_upload(
     }
     # The same total namespace, to each conformer's group: a thermo target
     # that names a conformer by key resolves to the group it was assigned to.
+    # Read off the observation, not the group captured when it was filed: a later
+    # conformer of this bundle can link two basins and merge the younger into the
+    # older, and the observation is where the survivor shows.
     conformer_keys_to_group_id: dict[str, int] = {
-        outcome.conformer_in_bundle.key: outcome.group_id
+        outcome.conformer_in_bundle.key: outcome.observation.conformer_group_id
         for outcome in conformer_outcomes
     }
     calc_keys_to_id: dict[str, Calculation] = {}
@@ -947,7 +958,7 @@ def persist_computed_species_upload(
     )
     apply_review_policy(
         session,
-        targets=review_targets,
+        targets=current_conformer_group_targets(session, review_targets),
         policy=review_policy,
         created_by=created_by,
     )
