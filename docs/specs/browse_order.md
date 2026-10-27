@@ -115,9 +115,9 @@ offers these filters reads them the same way:
 - **Only linked calculations.** A record matches through the calculations it actually links to, never through a sibling's,
   its species entry's or the level's other uses (no borrowed provenance). A record that links no calculation matches no
   provenance filter, an `unclassified` family filter included.
-- **Below the read profile's floor.** Under `curated` a calculation below the floor contributes nothing to a match, so a
-  filter on `method=b3lyp` cannot keep a record because of a calculation the reader cannot open. (ADR 0023 step 4 will change
-  how linked evidence is matched, in the shared helpers; a rejected or deprecated calculation will still never match.)
+- **Withheld evidence.** Under `curated` a rejected or deprecated calculation contributes nothing to a match, so a
+  filter on `method=b3lyp` cannot keep a record because of a calculation the reader cannot open. A not-reviewed calculation does
+  match: linked evidence is matched by the evidence rule (ADR 0023 step 4).
 - **No primary calculation.** A record's displayed `primary_calculation` is a display choice and decides no filter.
 
 The provenance fields are `level_of_theory_ref` / `level_of_theory_id` (where a route offers it), `method`, `basis`,
@@ -345,9 +345,10 @@ The block sits in `request.hidden_by_default` on the scientific lists, and at th
 - It has one key per exclusion the request left at its default, counted over the records that matched the other filters. An exclusion the
   request lifted is absent; with both lifted (or nothing hidden) the block is `null`. A status a `min_review_status` removes anyway is a
   filter's doing and is not counted. A species list hides *entries* (`"counted": "species_entries"`), since a species has no review state.
-- **Exploratory only.** Under `curated` the block is always `null` and no count, total or summary differs in a way that reveals a record below
-  the floor (decision D6: hidden == unknown == absent); the response says only that the floor applies (`profile_recommendation:
-  approved_floor_only`).
+- **Exploratory only.** Under `curated` the block is always `null` and no list count, total or summary differs in a way that reveals a record below
+  the record floor (a list returns approved records only); the response says only that the floor was applied to the records it
+  returned (`profile_recommendation: approved_floor_only`). A record's own detail page is not a list: it is served badged unless
+  the record is rejected or deprecated (ADR 0023).
 - **Cost.** One aggregate statement per list (none when nothing is excluded by default, none under curated). Lists that already hold the
   candidates' review statuses in memory count them with no extra statement; structure search takes it from the aggregate it already ran.
 
@@ -429,9 +430,9 @@ nothing is withheld as evidence: a rejected calculation still takes part in a ma
 `include_deprecated` govern the records a route returns, not the evidence behind them, and a default exclusion is disclosed by
 `hidden_by_default`. That asymmetry is by design (the ADR records it).
 
-**The read profile's floor is not a default.** Under `curated` the floor is `approved` and hidden equals unknown equals
-absent. No select request can lift it: `include_rejected` and `include_deprecated` lift nothing under it (the echo says
-`source: read_profile`), and nothing below the floor is counted or named. An override can only lift an exclusion within what
+**The read profile's floor is not a default.** Under `curated` a select returns approved records only (the record floor),
+and nothing below it is counted or named. No select request can lift it: `include_rejected` and `include_deprecated` lift nothing under it (the echo says
+`source: read_profile`). An override can only lift an exclusion within what
 the read profile already shows. What a lifted default does change under `curated` is limited to approved records, such as an
 approved record whose evidence rubric hard-fails.
 
@@ -447,7 +448,10 @@ format is refused, not read as the defaults.
 - `rejected` and `deprecated` records are hidden by default; a request opts in with `include_rejected` or
   `include_deprecated`. The `curated` read profile never shows them.
 - The `exploratory` read profile shows `approved`, `under_review` and `not_reviewed` records.
-- The `curated` read profile has a review floor of `approved`: nothing below it is returned, counted or named.
+- The `curated` read profile has a record floor of `approved`: a list, search, browse, select or export returns approved records only, and
+  a list does not count or name the ones below it. A record's own detail page and the evidence a returned record links to are served
+  badged unless rejected or deprecated (ADR 0023). A listed row's nested pointer (a supersession successor, say) may name an
+  unreviewed record, badged.
 
 Visibility and ordering are independent: hiding a record never reorders the rest, and ordering never reveals a hidden
 one.

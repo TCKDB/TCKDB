@@ -111,8 +111,10 @@ _REVIEW = Vocabulary(
             token="approved",
             means=(
                 "A curator reviewed the record and accepts it. This is the "
-                "floor the `curated` read profile draws at: a curated read "
-                "returns approved records and nothing below them."
+                "floor the `curated` read profile draws at for lists, searches, "
+                "browses, selects and exports: they return approved records and "
+                "nothing below them. A detail page can still serve a record "
+                "below the floor, with its review badge."
             ),
         ),
         Term(
@@ -629,8 +631,15 @@ _READ_PROFILE = Vocabulary(
         Term(
             token="curated",
             means=(
-                "Only records at or above the `approved` review floor. Records "
-                "are not annotated with any release selection that names them — "
+                "The `approved` review floor decides which records a list, search, "
+                "browse, select or export returns. A detail page serves any "
+                "record that is not `rejected` or `deprecated`, badged, and the "
+                "linked evidence of a returned record is shown (with its badge "
+                "where the response carries `review_status_by_ref`; a legacy "
+                "single-record read carries the record's own status in the "
+                "`X-TCKDB-Review-Status` header); only `rejected` and "
+                "`deprecated` evidence is withheld, and a request cannot lift "
+                "that. Records are not annotated with any release selection that names them — "
                 "for an attributed endorsement use the "
                 "`/api/v1/scientific/releases/*` endpoints."
             ),
@@ -657,10 +666,14 @@ _PROFILE_RECOMMENDATION = Vocabulary(
         Term(
             token="approved_floor_only",
             means=(
-                "Every record shown is at or above the `approved` review floor "
-                "and **nothing more is claimed**. A human accepted each of "
-                "them, which is not the same as TCKDB preferring them over "
-                "their siblings."
+                "The `approved` review floor was applied to the records a list, "
+                "search, browse, select or export returned, and **nothing more "
+                "is claimed**. Those records were accepted by a human reviewer, "
+                "which is not the same as TCKDB preferring them over their "
+                "siblings. A detail page and the linked evidence of a returned "
+                "record may be unreviewed: they carry their review badge, and "
+                "the approval above does not apply to them. Only rejected and "
+                "deprecated records are withheld."
             ),
         ),
         Term(

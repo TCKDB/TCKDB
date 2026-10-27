@@ -242,8 +242,15 @@ echoed in the response's `request` block.
 - **`exploratory`** (the default) — every visible candidate, with its
   review state. TCKDB makes **no recommendation**; you are reading the
   archive. `request.profile_recommendation` says `none`.
-- **`curated`** — records at or above the `approved` review floor,
-  reported alongside the dataset release backing them.
+- **`curated`** — two rules. The *record floor*: a list, search,
+  browse, select or export returns only records at or above `approved`. The *evidence rule*:
+  a detail page, and the evidence a returned record links to (its source
+  calculations, say), are shown with their review badge; only `rejected`
+  and `deprecated` are withheld. Review approves a claim and does not
+  cascade, so an approved record can rest on unreviewed evidence, and
+  `curated` shows you that rather than hiding it. It reports
+  `profile_recommendation: approved_floor_only`: the floor was applied to
+  the records returned, and nothing further is claimed.
 
 ### `dataset_release` and `release_selection`
 

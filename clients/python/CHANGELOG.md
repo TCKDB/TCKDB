@@ -11,6 +11,14 @@ A species entry's stereo is a descriptor; the species is the constitution.
 - Two refusal codes are published (`species_stereo_contradiction`, `species_stereo_label_invalid`). Allenes and longer cumulenes are accepted with a `?`
   axis and the upload warning `species_entry_stereo_not_represented` (a different code from `species_entry_stereo_unresolved`: no further data would settle it).
 
+## 0.175.0 - 2026-10-27
+
+The README and docstrings describe the `curated` profile as it works.
+
+- Documentation only; no behaviour change. `profile="curated"` applies the `approved` floor to the records a list, search, browse, select or export returns, and
+  shows the evidence behind a returned record with its review badge. Only `rejected` and `deprecated` records are withheld. The typed-dict notes
+  that said "not approved" now say "rejected or deprecated".
+
 ## 0.174.0 - 2026-10-27
 
 Thermo and statmech selections say when the basin they were asked about was forwarded.
