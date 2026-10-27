@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.175.0 - 2026-10-27
+
+The README and docstrings describe the `curated` profile as it works.
+
+- Documentation only; no behaviour change. `profile="curated"` applies the `approved` floor to the records a list, search, browse, select or export returns, and
+  shows the evidence behind a returned record with its review badge. Only `rejected` and `deprecated` records are withheld. The typed-dict notes
+  that said "not approved" now say "rejected or deprecated".
+
 ## 0.174.0 - 2026-10-27
 
 Thermo and statmech selections say when the basin they were asked about was forwarded.

@@ -21,13 +21,18 @@ profile that only some endpoints honour is worse than no profile at all,
 because it teaches consumers to trust it. Instead the profile is resolved
 exactly once, in an ``async`` FastAPI dependency registered on the whole
 ``scientific_router`` (``app/api/routes/scientific/_profile.py``), published
-into the :data:`_CURRENT_PROFILE` context variable, and consumed at exactly two
-documented seams:
+into the :data:`_CURRENT_PROFILE` context variable, and consumed at two
+documented seams for the record floor (a third, the evidence-rule helpers
+in ``common.py`` such as ``evidence_withheld_under_profile``, decides what a
+returned record's linked evidence shows):
 
 1. :func:`app.services.scientific_read.common.visible_statuses` — the single
    function every read service already calls to decide which review statuses
-   are visible. ``curated`` raises the floor to ``approved`` there, so it
-   cannot be forgotten by an endpoint.
+   are visible to a list, search or select. ``curated`` raises the record floor
+   to ``approved`` there, so it cannot be forgotten by an endpoint. (A detail
+   page and a returned record's linked evidence follow the evidence rule of
+   ADR 0023 instead: they are served badged, and only ``rejected`` and
+   ``deprecated`` are withheld.)
 2. :func:`app.services.scientific_read.internal_ids.apply_internal_ids_visibility`
    — the one function every enveloped scientific route returns through, which
    calls :func:`stamp_read_profile` to write the resolved profile into the
@@ -63,7 +68,7 @@ from app.db.models.common import (
 from app.db.models.dataset_release import DatasetRelease
 
 # The review floor the curated profile imposes. Records below ``approved`` are
-# by definition not something TCKDB stands behind.
+# by definition not records a curated list returns.
 CURATED_REVIEW_FLOOR = RecordReviewStatus.approved
 
 

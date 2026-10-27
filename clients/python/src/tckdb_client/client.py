@@ -1012,8 +1012,9 @@ class TCKDBClient:
         re-derivation, no unit conversion (native hartree/bohr²). Raises
         the appropriate :class:`~tckdb_client.errors.TCKDBHTTPError`
         (404, ``hessian_not_found``) when the calculation carries no
-        stored Hessian. Under ``profile="curated"`` a calculation below the
-        approved review floor answers 404 as an unknown id does.
+        stored Hessian. Under ``profile="curated"`` a rejected or deprecated
+        calculation answers 404 as an unknown id does; one that is merely
+        unreviewed is served.
         """
         return self.request_json(
             "GET",
@@ -3417,8 +3418,9 @@ class TCKDBClient:
         :param network_kinetics_ref_or_id: Integer id or ``nkin_…`` ref.
         :param temperature_k: One or more temperatures, K.
         :param pressure_bar: One or more pressures, bar.
-        :param profile: Read profile selecting which curated view of the
-            archive this read is answered from (see
+        :param profile: Read profile this read is answered under
+            (``curated`` applies the approved floor to the records a list,
+            search, browse, select or export returns and shows linked evidence badged; see
             ``backend/docs/specs/dataset_release_and_profiles.md``).
             Forwarded like every other typed scientific read method;
             omitted, the server default applies.
@@ -3484,8 +3486,9 @@ class TCKDBClient:
         :param network_ref_or_id: Integer id or ``net_…`` ref.
         :param temperature_k: One or more temperatures, K. Required.
         :param pressure_bar: One or more pressures, bar. Required.
-        :param profile: Read profile selecting which curated view of the
-            archive this read is answered from (see
+        :param profile: Read profile this read is answered under
+            (``curated`` applies the approved floor to the records a list,
+            search, browse, select or export returns and shows linked evidence badged; see
             ``backend/docs/specs/dataset_release_and_profiles.md``).
             Forwarded like every other typed scientific read method;
             omitted, the server default applies. Rides the query string,

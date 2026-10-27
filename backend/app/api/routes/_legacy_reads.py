@@ -8,9 +8,10 @@ the scientific reads obey. This module gives them the same three:
   ``include_deprecated`` is set (:class:`LegacyVisibility`), by the same function the scientific reads use
   (:func:`~app.services.scientific_read.common.visible_statuses`).
 * **The read profile.** ``?profile=curated`` raises the floor to ``approved`` through that same function, and is
-  resolved by the same dependency as on the scientific surface. A record below the floor is absent from a list and from
-  a count. Its own detail route serves it unless it is rejected or deprecated (ADR 0023 step 7), and a withheld one answers
-  exactly as an id that names nothing (hidden == unknown == absent).
+  resolved by the same dependency as on the scientific surface. The record floor decides which rows a list returns
+  and counts. A record's own detail route serves it unless it is rejected or deprecated (ADR 0023 step 7), and a
+  withheld one
+  answers exactly as an id that names nothing.
 * **Linked evidence (ADR 0023).** The floor decides which rows a list returns; a detail route answers 404 for a withheld record only (step 7). What a returned
   row NAMES (a pointer column, an embedded record such as a conformer group's observations) is linked evidence: under
   ``curated`` only a rejected or deprecated record is blanked or dropped, and one that is merely below the floor is named as
@@ -82,7 +83,7 @@ class EntityListResponse(PaginatedResponse[T], Generic[T]):
     profile: ReadProfile = ReadProfile.exploratory
     profile_recommendation: ProfileRecommendation = ProfileRecommendation.none
     #: Exploratory only: how many records each default exclusion hid, and how to include them. ``None`` when nothing
-    #: was excluded by default, and always under ``curated`` (no count of records below the floor, decision D6).
+    #: was excluded by default, and always under ``curated`` (which reports no count of records below the floor).
     hidden_by_default: HiddenByDefault | None = None
 
 
@@ -170,7 +171,7 @@ HIDDEN_HEADER = "X-TCKDB-Hidden-By-Default"
 REVIEW_STATUS_HEADER = "X-TCKDB-Review-Status"
 
 #: The id a withheld record is replaced by before the route runs: it names no row, so the route answers for the withheld
-#: record exactly as it answers for an id that does not exist (hidden == unknown). Shared by the path-parameter gates and
+#: record exactly as it answers for an id that does not exist. Shared by the path-parameter gates and
 #: the id-typed filters.
 ABSENT_ID = -1
 
@@ -518,7 +519,7 @@ def _wrap(endpoint: Any, gates: dict[str, Gate], path_params: set[str], served_p
             for param, gate in gates.items():
                 value = kwargs.get(param)
                 if isinstance(value, int) and _hidden_ids(session, gate.record_type, {value}, _evidence_statuses()):
-                    # A withheld record is the id of nothing (hidden == unknown); see ``ABSENT_ID``.
+                    # A withheld record is the id of nothing; see ``ABSENT_ID``.
                     kwargs[param] = ABSENT_ID
                     continue
                 if isinstance(value, int) and param == served_param:

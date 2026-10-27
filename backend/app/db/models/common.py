@@ -2017,7 +2017,18 @@ class ReadProfile(str, Enum):
     ``exploratory``  every visible candidate, with its review/trust state.
                      TCKDB makes **no recommendation** about which candidate
                      is right; the caller is looking at the archive.
-    ``curated``      only records at or above the ``approved`` review floor.
+    ``curated``      the ``approved`` review floor decides which **records** a
+                     list, search, browse, select or export returns (approved
+                     only). A detail page serves any record that is not
+                     ``rejected`` or ``deprecated``, with its review badge,
+                     and the linked evidence of a returned record is shown
+                     with its badge too; only ``rejected`` and ``deprecated``
+                     evidence is withheld, and a request cannot lift that
+                     (ADR 0023). The badge is carried
+                     where the response carries ``review_status_by_ref``; a
+                     legacy ``/api/v1/*`` single-record read carries only the
+                     served record's own status, in the
+                     ``X-TCKDB-Review-Status`` header.
                      Records are **not** annotated with the release selection
                      that names them — no such per-record annotation exists —
                      so the accompanying
@@ -2044,13 +2055,18 @@ class ProfileRecommendation(str, Enum):
 
     ``none``                    the records are candidates. TCKDB is not
                                 telling you which one to use.
-    ``approved_floor_only``     every record shown is at or above the
-                                ``approved`` review floor, and **nothing more
-                                is claimed**. No attributed
-                                ``release_selection`` stands behind these
-                                specific records; a human reviewer accepted
-                                them, which is not the same as TCKDB
-                                recommending them over their siblings.
+    ``approved_floor_only``     the ``approved`` review floor was applied to
+                                the records a list, search, browse, select or
+                                export returned, and **nothing more is
+                                claimed**. Those records were accepted by a
+                                human reviewer, which is not the same as TCKDB
+                                recommending them over their siblings, and no
+                                attributed ``release_selection`` stands behind
+                                them. A detail page and the linked evidence of
+                                a returned record may be unreviewed: they
+                                carry their review badge, and the approval
+                                above does not apply to them. ``rejected`` and
+                                ``deprecated`` records are withheld.
     ``tckdb_curated_release``   these records *are* the ones an attributed,
                                 append-only ``release_selection`` names, in a
                                 published release. Only the

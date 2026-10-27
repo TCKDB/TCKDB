@@ -60,8 +60,9 @@ endpoint refuses with a coded 422 (`structure_selection_population_too_large`, `
 `structure_selection_traversal_too_deep`, `structure_selection_manifest_too_large`). A caller can never raise the
 manifest byte bound.
 
-Under the curated profile, records below the floor behave as missing everywhere: lineage, validation evidence,
-counts and depth. The manifest then withholds the excluded population (`excluded_by_review_withheld: true`) so that it
+Under the curated profile, the basins and groups a selection returns are approved records (the record floor). Their evidence
+(lineage, validation evidence, the calculations a basin rests on) is read with its badge, and only rejected and deprecated
+evidence behaves as missing, in counts and depth too. The manifest withholds the excluded population (`excluded_by_review_withheld: true`) so that it
 still replays.
 
 ## Reading the answer

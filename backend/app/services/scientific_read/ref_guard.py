@@ -1056,7 +1056,7 @@ def _geometry_identity_is_empty(node: BaseModel) -> bool:
 
 #: Blocks that must not survive as an empty shell once their contents were withheld: the field that holds one is set
 #: to ``None``, exactly as when there was never anything to show. A client cannot tell "every owner withheld" from
-#: "no owner" (hidden equals unknown). ``model -> is it empty``.
+#: "no owner" (withheld equals unknown). ``model -> is it empty``.
 COLLAPSE_WHEN_EMPTY: Mapping[type, Any] = {GeometryIdentity: _geometry_identity_is_empty}
 
 
@@ -1404,9 +1404,10 @@ def _withhold_placeholders(session: Session, facts: Any, *, profile: ResolvedRea
 
 
 def unavailable_refs(session: Session, refs: Collection[str]) -> set[str]:
-    """Refs a selection treats as unavailable under the profile in force: hidden, or naming no row.
+    """Refs a selection treats as unavailable under the profile in force: withheld, or naming no row.
 
-    Hidden == unknown: evidence that points at a record the reader cannot open reads exactly like evidence that points at
+    Withheld == unknown: evidence that points at a record the reader cannot open reads exactly like evidence that
+    points at
     nothing. Empty (and no statement) without a review floor, so an exploratory selection is unchanged; a release-backed
     profile is left alone as everywhere in the guard. ``session`` is the selection's own snapshot session.
     """

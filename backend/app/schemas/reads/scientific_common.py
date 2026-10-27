@@ -39,7 +39,7 @@ class HiddenByDefault(BaseModel):
     Reported only under the ``exploratory`` profile, and only for an exclusion the request left at its default
     (``include_rejected`` / ``include_deprecated`` not set). ``counts`` has one key per such exclusion, counted over the
     records that matched the request's other filters. Under ``curated`` the block is never present: records below the
-    review floor are withheld without a count (decision D6: hidden == unknown == absent).
+    review floor are left out of a list and are not counted (the record floor, ADR 0023).
     """
 
     counts: dict[str, int]
@@ -80,10 +80,14 @@ class ProfiledRequestEcho(BaseModel):
     ``profile``                 which contract the response answers under.
     ``profile_recommendation``  whether TCKDB endorses these records. Never
                                 inferred from ``profile`` alone: a curated
-                                read of a database with no published release
-                                still reports ``none``.
-    ``profile_release_ref``     the dataset release backing a curated read,
-                                when one exists.
+                                read on the general read surface reports
+                                ``approved_floor_only`` (the approved floor
+                                was applied to the records returned, nothing
+                                more), whether or not a release has been
+                                published.
+    ``profile_release_ref``     the dataset release a response was resolved
+                                through. Only the release routes set it; it
+                                is always null on the general read surface.
 
     All three are machine tokens. The prose explanation lives in
     ``backend/docs/specs/dataset_release_and_profiles.md``, never in the value.

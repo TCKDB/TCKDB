@@ -1,6 +1,7 @@
 """A record as the evidence checks should see it when some of its source calculations are unavailable.
 
-Hidden == unknown. A source calculation the reader cannot open (hidden under ``curated``, or naming no row) is treated by
+Withheld == unknown. A source calculation the reader cannot open (withheld under ``curated`` because it is rejected
+or deprecated, or naming no row) is treated by
 a selection exactly like a calculation that was never linked: the trust evidence checks of a thermo or kinetics record
 must not count it, and must not be satisfied or failed by what it holds. The checks run over the ORM record and read
 ``source_calculations`` and everything else by attribute, so a thin view that answers ``source_calculations`` without the
