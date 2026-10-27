@@ -900,7 +900,14 @@ def test_only_a_guard_refusal_is_read_as_guarded(harness, monkeypatch, sqlstate:
     from sqlalchemy.exc import DBAPIError
     from sqlalchemy.orm import Session
 
-    from app.services.stereo_identity_merge import BlockedMerge, MergeReport, _Catalogue, _Merger, _plan_repairs, _Repairs
+    from app.services.stereo_identity_merge import (
+        BlockedMerge,
+        MergeReport,
+        _Catalogue,
+        _Merger,
+        _plan_repairs,
+        _Repairs,
+    )
 
     harness.run("upgrade", _MIGRATION.parent)
     with harness.engine.begin() as conn:
