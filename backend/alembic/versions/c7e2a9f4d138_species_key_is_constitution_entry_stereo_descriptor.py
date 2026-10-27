@@ -42,7 +42,8 @@ survivor's review; and re-runs the conformer reassignment on the survivors. Noth
 
 Accepted (approved) rows change only through the declared-repair path of ``e2c9a4f7b163``: one declaration per guarded table,
 naming exactly the columns written; the trigger is not disabled or weakened. A row the path cannot express (a primary-key
-column under an approved record) or that would duplicate one the survivor already holds is left on the kept row and listed.
+column under an approved record) is left on the kept row and listed; a row that would duplicate one the survivor already holds
+stops the migration, since both would be served as live.
 The curation recorded about a kept row (reviews, machine reviews, release selections, supersession edges, assessments,
 idempotency bodies, per-user entry reviews) is never moved: it describes that row.
 
@@ -180,25 +181,18 @@ def _install_guards(bind) -> None:
             marker text := TG_ARGV[0];
             changed text[];
         BEGIN
-            -- A merged-away row is a record of what it was: it may not be edited, except by a repair someone declared
-            -- in this transaction (the accepted-science path), and an update that changes nothing is let through.
+            -- A merged-away row is a record of what it was and is frozen, absolutely: these tables carry no
+            -- accepted-science guard, so no repair can be declared for them either. An update that changes nothing is
+            -- let through. A later change to a merged row is a migration that replaces this trigger.
             IF (to_jsonb(OLD) ->> marker) IS NULL OR to_jsonb(NEW) = to_jsonb(OLD) THEN
                 RETURN NEW;
             END IF;
             changed := ARRAY(
                 SELECT key FROM jsonb_each(to_jsonb(NEW)) WHERE (to_jsonb(OLD) -> key) IS DISTINCT FROM value
             );
-            -- Like the other accepted-science triggers: only the columns the declaration names may change.
-            IF EXISTS (
-                SELECT 1 FROM public.accepted_science_repair
-                 WHERE target_table = TG_TABLE_NAME AND xact_id = (pg_current_xact_id())::text::bigint
-                   AND declared_columns @> changed
-            ) THEN
-                RETURN NEW;
-            END IF;
             RAISE EXCEPTION USING ERRCODE = '23514',
                 MESSAGE = format('a merged-away %I row cannot be edited (columns %s)', TG_TABLE_NAME, array_to_string(changed, ', ')),
-                HINT = 'it is kept as it was; edit the row it was merged into, or declare a repair naming those columns';
+                HINT = format('merged rows are frozen; edit the row it was merged into, or change this with a migration replacing trg_%s_freeze_merged', TG_TABLE_NAME);
         END;
         $$
         """

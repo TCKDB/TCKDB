@@ -499,36 +499,6 @@ def test_entries_with_different_old_labels_and_nothing_to_separate_them_stop_the
         }
 
 
-def test_rows_that_cannot_move_stay_on_the_kept_row_and_are_listed(harness) -> None:
-    """Two third-body efficiencies for what becomes one collider: the survivor keeps its own, the other stays put."""
-    harness.run("upgrade", _MIGRATION.parent)
-    with harness.engine.begin() as conn:
-        ids = _seed(conn)
-        kinetics = conn.scalar(
-            text(
-                "INSERT INTO kinetics (reaction_entry_id, scientific_origin, model_kind) "
-                "VALUES (:r, CAST('computed' AS scientific_origin_kind), CAST('arrhenius' AS kinetics_model_kind)) RETURNING id"
-            ),
-            {"r": ids["re_one"]},
-        )
-        for species in (ids["s_trans"], ids["s_flat"]):
-            conn.execute(
-                text("INSERT INTO kinetics_third_body_efficiency (kinetics_id, collider_species_id, efficiency) VALUES (:k, :s, 2.0)"),
-                {"k": kinetics, "s": species},
-            )
-    completed = harness.run("upgrade", _MIGRATION.revision, check=False)
-    assert completed.returncode == 0, completed.stderr[-3000:]
-    assert "kinetics_third_body_efficiency" in completed.stdout
-    with harness.engine.connect() as conn:
-        rows = sorted(
-            r.collider_species_id
-            for r in conn.execute(
-                text("SELECT collider_species_id FROM kinetics_third_body_efficiency WHERE kinetics_id = :k"), {"k": kinetics}
-            )
-        )
-        assert rows == sorted([ids["s_trans"], ids["s_flat"]])
-
-
 def test_downgrade_does_not_fail_on_what_the_upgrade_produced(harness) -> None:
     canonical = make_content_ref(
         PREFIXES["Species"], "species:smiles=N=N;charge=0;multiplicity=1;stereo_kind=ez_isomer"
@@ -770,3 +740,103 @@ def test_a_clean_database_can_go_down_and_up_again(harness) -> None:
     harness.run("upgrade", _MIGRATION.revision)
     harness.run("downgrade", _MIGRATION.parent)
     harness.run("upgrade", _MIGRATION.revision)
+
+
+def _two_capped_entries(harness, tmp_path, first_smiles: str, second_smiles: str):
+    """Two species rows that become one tetraene species, each with one entry marked as its SMILES says."""
+    _capped_env(harness, tmp_path)
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        refs = []
+        for n, smiles in enumerate((first_smiles, second_smiles)):
+            species = _species(conn, smiles, f"ZZZZZZZZZZZZZZ-{'AB'[n]}QQQQQQQQA-N")
+            entry = _entry(conn, species, smiles, None)
+            refs.append(_value(conn, "SELECT public_ref FROM species_entry WHERE id = :i", i=entry))
+    return refs
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        ("C/C=C/C=C/C=C/C=C/C", "CC=CC=CC=CC=CC"),  # fully marked against unmarked
+        ("C/C=C/C=CC=CC=CC", "CC=C/C=C/C=CC=CC"),  # disjoint partials
+    ],
+    ids=["marked_vs_unmarked", "disjoint_partials"],
+)
+def test_past_the_cap_entries_that_do_not_say_the_same_do_not_merge(harness, tmp_path, first, second) -> None:
+    refs = _two_capped_entries(harness, tmp_path, first, second)
+    failed = harness.run("upgrade", _MIGRATION.revision, check=False)
+    assert failed.returncode != 0
+    assert "too symmetric" in failed.stderr and all(ref in failed.stderr for ref in refs)
+
+
+def test_past_the_cap_entries_with_no_evidence_on_either_side_merge(harness, tmp_path) -> None:
+    _two_capped_entries(harness, tmp_path, "CC=CC=CC=CC=CC", "C(C)=CC=CC=CC=CC")
+    done = harness.run("upgrade", _MIGRATION.revision, check=False)
+    assert done.returncode == 0, done.stderr[-1500:]
+    with harness.engine.connect() as conn:
+        assert _value(conn, "SELECT count(*) FROM species_entry WHERE merged_into_species_entry_id IS NOT NULL") == 1
+
+
+def _collider_efficiencies(harness, first: float, second: float):
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        ids = _seed(conn)
+        kinetics = conn.scalar(
+            text(
+                "INSERT INTO kinetics (reaction_entry_id, scientific_origin, model_kind) "
+                "VALUES (:r, CAST('computed' AS scientific_origin_kind), CAST('arrhenius' AS kinetics_model_kind)) RETURNING id"
+            ),
+            {"r": ids["re_one"]},
+        )
+        for species, value in ((ids["s_trans"], first), (ids["s_flat"], second)):
+            conn.execute(
+                text("INSERT INTO kinetics_third_body_efficiency (kinetics_id, collider_species_id, efficiency) VALUES (:k, :s, :v)"),
+                {"k": kinetics, "s": species, "v": value},
+            )
+    return harness.run("upgrade", _MIGRATION.revision, check=False)
+
+
+@pytest.mark.parametrize(("first", "second"), [(2.0, 5.0), (2.0, 2.0)], ids=["differing", "identical"])
+def test_a_collider_the_survivor_already_has_stops_the_migration(harness, first, second) -> None:
+    """Two efficiencies for what becomes one collider would both be served as live, so a curator picks one: this holds
+    whether the values differ or not, because an identical copy is listed beside the original just the same."""
+    failed = _collider_efficiencies(harness, first, second)
+    assert failed.returncode != 0
+    assert "kinetics_third_body_efficiency" in failed.stderr and "duplicate rows the surviving one already has" in failed.stderr
+    with harness.engine.connect() as conn:
+        # Nothing was half-applied: the database is still at the parent revision.
+        assert "merged_into_species_id" not in {
+            r[0] for r in conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'species'"))
+        }
+
+
+def test_a_conformer_group_left_on_a_merged_entry_stops_the_migration(harness) -> None:
+    """The stop itself: a group still on a merged-away entry would be walked by the next step that sweeps every entry with
+    a group, and written to against the database's refusal. Built at head, where the markers and triggers exist."""
+    from sqlalchemy.orm import Session
+
+    from app.services.stereo_identity_merge import (
+        BlockedMerge,
+        MergeReport,
+        _Catalogue,
+        _Merger,
+        _Repairs,
+    )
+
+    harness.run("upgrade", _MIGRATION.revision)
+    with harness.engine.begin() as conn:
+        species = _species(conn, "CC=CC", "IAQRGUVFOMOMEM-UHFFFAOYSA-N")
+        kept = _entry(conn, species, "CC=CC", None)
+        survivor = _second_entry(conn, species, "CC=CC", None)
+        conn.execute(text("INSERT INTO conformer_group (species_entry_id, label) VALUES (:e, 'left behind')"), {"e": kept})
+        conn.execute(
+            text("UPDATE species_entry SET merged_into_species_entry_id = :s WHERE id = :k"), {"s": survivor, "k": kept}
+        )
+        kept_ref = _value(conn, "SELECT public_ref FROM species_entry WHERE id = :i", i=kept)
+    with Session(harness.engine) as session:
+        report = MergeReport()
+        catalogue = _Catalogue(session)
+        merger = _Merger(session, catalogue, _Repairs(session, "test", report, catalogue), report)
+        with pytest.raises(BlockedMerge, match=kept_ref):
+            merger._assert_no_conformer_rows_left_on_merged_entries()

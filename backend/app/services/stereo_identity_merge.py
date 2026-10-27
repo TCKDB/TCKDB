@@ -32,8 +32,8 @@ Frozen rows
 Rows under an accepted record change only through the declared-repair path (``accepted_science_repair``, one declaration
 per guarded table naming exactly the columns written); the trigger is never disabled. A hash that covers a re-pointed id
 is recomputed in the same declaration, for the rows that moved only. A row the path cannot express (a primary-key column
-under an approved record, or a row that would duplicate one the survivor already has) is **left on the kept row and
-listed**; it is not forced, and the kept row forwards.
+under an approved record) is **left on the kept row and listed**; it is not forced, and the kept row forwards. A row that
+would duplicate one the survivor already has stops the migration instead: both would be served as live.
 
 What stops the migration (and why)
 ----------------------------------
@@ -777,16 +777,22 @@ class _Merger:
         different tokens at one position are two configurations, and a curator decides. No evidence on either side, or
         identical tokens, lets the merge proceed.
         """
-        entries = [(r, self.cap_evidence.get(r.id, ())) for r in group if self.cap_evidence.get(r.id)]
-        for i, (first, a) in enumerate(entries):
-            for second, b in entries[i + 1 :]:
-                if any(x != "?" and y != "?" and x != y for x, y in zip(a, b, strict=False)):
-                    raise BlockedMerge(
-                        "species entries too symmetric for the stereo descriptor would merge although their sources "
-                        "name different configurations at the symmetric positions "
-                        f"({first.public_ref}: {','.join(a)}; {second.public_ref}: {','.join(b)}); a curator decides "
-                        "whether they are one configuration"
-                    )
+        entries = [(r, self.cap_evidence.get(r.id, ())) for r in group if r.id in self.cap_evidence]
+        if not any(evidence for _r, evidence in entries):
+            return  # nobody has evidence at the symmetric positions: nothing distinguishes them
+        # Otherwise every member must carry the identical tokens: a letter against a ``?`` is a difference too, because
+        # the entry without evidence may be any configuration, and merging it into a stated one would lose that.
+        width = max(len(evidence) for _r, evidence in entries)
+        padded = [(r, evidence or ("?",) * width) for r, evidence in entries]
+        first, a = padded[0]
+        for second, b in padded[1:]:
+            if a != b:
+                raise BlockedMerge(
+                    "species entries too symmetric for the stereo descriptor would merge although their sources do "
+                    "not say the same at the symmetric positions "
+                    f"({first.public_ref}: {','.join(a)}; {second.public_ref}: {','.join(b)}); a curator decides "
+                    "whether they are one configuration"
+                )
 
     def _assert_no_double_standing_selection(self, group) -> None:
         """Stop when merging this group would leave one subject with two standing release selections.
@@ -853,10 +859,41 @@ class _Merger:
         except DBAPIError:
             logger.info("%s.%s: left on the merged row (an accepted record guards it)", table, column)
             moved = 0
+            guarded = True
+        else:
+            guarded = False
         self.report.rows_repointed += moved or 0
         left = count - (moved or 0)
+        if left and not guarded:
+            # What did not move collided with a row the survivor already has. Two rows for one thing would both be read
+            # as live, so a curator picks one.
+            raise BlockedMerge(
+                f"{table}.{column}: {left} row(s) of a merged-away row duplicate rows the surviving one already has "
+                f"({', '.join(self._colliding_pairs(table, column, loser, survivor))}); a curator decides which stands"
+            )
         if left:
             self.report.left_on_merged_rows.append((table, column, left))
+
+    def _colliding_pairs(self, table: str, column: str, loser: int, survivor: int) -> list[str]:
+        """``id`` pairs (``loser row / survivor row``) of the rows that collided, for the operator's list."""
+        pairs: list[str] = []
+        for columns, nulls_not_distinct in self.cat.uniques(table):
+            if column not in columns:
+                continue
+            equal = " AND ".join(
+                (f"b.{c} IS NOT DISTINCT FROM t.{c}" if nulls_not_distinct else f"b.{c} = t.{c}")
+                for c in columns
+                if c != column
+            ) or "true"
+            for row in self.s.execute(
+                text(
+                    f"SELECT to_jsonb(t) ->> 'id' AS t_id, to_jsonb(b) ->> 'id' AS b_id FROM {table} t "
+                    f"JOIN {table} b ON b.{column} = :s AND {equal} WHERE t.{column} = :l"
+                ),
+                {"s": survivor, "l": loser},
+            ):
+                pairs.append(f"{table} {row.t_id} / {row.b_id}")
+        return pairs[:20] or [table]
 
     def _collision_predicate(self, table: str, column: str) -> str:
         """``AND NOT EXISTS (...)`` clauses keeping a move from violating a unique key the survivor already holds."""
