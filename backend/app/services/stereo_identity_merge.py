@@ -163,9 +163,10 @@ class _Unique:
     predicate: str | None
 
 
-#: SQLSTATEs the accepted-science guards raise when they refuse a declared repair's write. Anything else is not a
-#: guard refusal and must not be read as one.
-_GUARD_SQLSTATES = frozenset({"22023", "55000", "42501", "23503"})
+#: The one SQLSTATE a guard raises when it refuses a declared repair's write (55000, object not in the required state).
+#: The guards' other codes are not refusals: 23503 is a lock on a missing record or a change naming no declaration,
+#: 22023 an unsupported record type or a malformed declaration (a bug), 42501 the wrong declaring role. Those propagate.
+_GUARD_SQLSTATES = frozenset({"55000"})
 
 
 class _Catalogue:

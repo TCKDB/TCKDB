@@ -893,7 +893,7 @@ def test_corrections_that_collide_with_nothing_all_move_to_the_survivor(harness)
         assert "applied_energy_correction" not in done.stdout.split("left_on_merged_rows")[1].split("merged(")[0]
 
 
-@pytest.mark.parametrize(("sqlstate", "outcome"), [("22023", "listed"), ("23505", "blocked"), ("40001", "raised")])
+@pytest.mark.parametrize(("sqlstate", "outcome"), [("55000", "listed"), ("23505", "blocked"), ("23503", "raised"), ("22023", "raised"), ("42501", "raised"), ("40001", "raised")])
 def test_only_a_guard_refusal_is_read_as_guarded(harness, monkeypatch, sqlstate: str, outcome: str) -> None:
     """The error of a move is classified by its SQLSTATE: a guard's refusal leaves the rows and lists them, a unique
     violation stops the migration, anything else propagates. Nothing else is swallowed as "guarded"."""
