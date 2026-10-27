@@ -336,8 +336,8 @@ class KineticsDetailRecord(TypedDict, total=False):
     # produced. ``null`` means not stated, never "standalone" or "universally valid". Under ``profile="curated"``
     # ``determination`` is also ``null`` when its target (a transition-state entry or a network channel) is
     # rejected or deprecated, ``tunneling_application`` is ``null`` when it cites a rejected or deprecated entry or
-    # calculation, and
-    # ``provenance["irc"]`` is ``null`` when its calculation is rejected or deprecated. An unreviewed one is shown.
+    # calculation, and ``provenance["irc"]`` is ``null`` when its calculation is rejected or deprecated. An
+    # unreviewed one is shown.
     determination: JSONDict | None
     applicability: JSONDict | None
     protocol: JSONDict | None
@@ -629,8 +629,7 @@ class NetworkSolveRecord(TypedDict, total=False):
 
     network_solve: Required[JSONDict]
     # ``None`` when the read used ``profile="curated"`` and the network this solve belongs to is rejected or
-    # deprecated: the solve
-    # is shown, the network is not named (the key is always present).
+    # deprecated: the solve is shown, the network is not named (the key is always present).
     network: Required[JSONDict | None]
     evidence_summary: Required[JSONDict]
     available_sections: Required[JSONDict]
@@ -647,8 +646,7 @@ class NetworkSolveRecord(TypedDict, total=False):
 class NetworkKineticsRecord(TypedDict, total=False):
     network_kinetics: Required[JSONDict]
     # ``None`` when the read used ``profile="curated"`` and the network is rejected or deprecated: the fit is shown
-    # (it is
-    # reviewed through its solve), the network is not named (the key is always present).
+    # (it is reviewed through its solve), the network is not named (the key is always present).
     network: Required[JSONDict | None]
     network_solve: Required[JSONDict]
     network_channel: Required[JSONDict]
@@ -875,8 +873,7 @@ class TransitionStateEntryRecord(TypedDict, total=False):
 
     transition_state_entry: Required[JSONDict]
     # ``None`` when the read used ``profile="curated"`` and the owning transition state is rejected or deprecated:
-    # the entry is
-    # shown, the transition state it belongs to is not named (the key is always present).
+    # the entry is shown, the transition state it belongs to is not named (the key is always present).
     transition_state: Required[JSONDict | None]
     reaction: Required[JSONDict]
     evidence_summary: Required[JSONDict]

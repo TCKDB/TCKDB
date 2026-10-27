@@ -1,8 +1,9 @@
 # Exploratory reads by default, with mandatory disclosure
 
-<!-- Note (ADR 0023): the sentence below saying `curated` is "reported alongside the dataset release backing them" is superseded.
-`curated` reports `profile_recommendation: approved_floor_only` and no release on the general read surface; ADR 0023 also
-narrows what the approved floor covers (records returned by a list, search, browse, select or export, not evidence or detail pages). -->
+> Superseded in part by [ADR 0023](0023-curated-profile-floor-applies-to-records-linked-evidence-is-badged.md). The sentence below
+> saying `curated` is "reported alongside the dataset release backing them" no longer holds: `curated` reports
+> `profile_recommendation: approved_floor_only` and no release on the general read surface. ADR 0023 also narrows what the
+> approved floor covers: the records a list, search, browse, select or export returns, not detail pages or linked evidence.
 
 TCKDB serves `/api/v1/scientific/*` under an explicit read profile. `exploratory` — every visible candidate, with its review state, carrying no TCKDB recommendation — is the **default**; `curated` — records at or above the `approved` review floor, reported alongside the dataset release backing them — is opt-in via `?profile=curated`. The miscitation risk this creates is answered by disclosure rather than by narrowing: the resolved profile and a separate `profile_recommendation` token are echoed in every scientific response and in every dataset manifest, and `exploratory` states in machine-readable form that TCKDB endorses nothing. The two tokens are deliberately not redundant, and the disclosure only works if it is *true*: `curated` on the general read surface reports `approved_floor_only` — a human reviewer accepted these records, which is not the same as TCKDB recommending them over their siblings. The stronger `tckdb_curated_release` is emitted only by `/scientific/releases/*`, where every record served was resolved through an attributed selection. An earlier version emitted it for any curated read once any release existed, because the backing release was resolved per *database* rather than per record; that claimed an endorsement for records no curator had ever looked at, including candidates a curator had explicitly passed over, and it turned the mitigation into the misinformation it was meant to prevent.
 

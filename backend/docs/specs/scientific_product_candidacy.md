@@ -184,7 +184,7 @@ The per-species read contract now also depends on `?profile=`:
 - `profile=curated` — the review floor rises to `approved` for the records a
   list, search, browse, select or export returns, and the response reports
   `profile_recommendation: approved_floor_only` (no release is reported on the
-  general read surface; `release_ref` is null). Linked evidence is shown with
+  general read surface; `profile_release_ref` is null). Linked evidence is shown with
   its badge; only rejected and deprecated records are withheld (ADR 0023).
 
 The resolved profile is echoed in every scientific response and every dataset

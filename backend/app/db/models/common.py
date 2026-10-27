@@ -2024,8 +2024,8 @@ class ReadProfile(str, Enum):
                      and the linked evidence of a returned record is shown
                      with its badge too; only ``rejected`` and ``deprecated``
                      evidence is withheld, and a request cannot lift that
-                     (ADR 0023). The badge is carried in
-                     ``review_status_by_ref`` on the scientific routes; a
+                     (ADR 0023). The badge is carried
+                     where the response carries ``review_status_by_ref``; a
                      legacy ``/api/v1/*`` single-record read carries only the
                      served record's own status, in the
                      ``X-TCKDB-Review-Status`` header.

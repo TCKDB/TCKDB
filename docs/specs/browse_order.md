@@ -450,7 +450,8 @@ format is refused, not read as the defaults.
 - The `exploratory` read profile shows `approved`, `under_review` and `not_reviewed` records.
 - The `curated` read profile has a record floor of `approved`: a list, search, browse, select or export returns approved records only, and
   a list does not count or name the ones below it. A record's own detail page and the evidence a returned record links to are served
-  badged unless rejected or deprecated (ADR 0023).
+  badged unless rejected or deprecated (ADR 0023). A listed row's nested pointer (a supersession successor, say) may name an
+  unreviewed record, badged.
 
 Visibility and ordering are independent: hiding a record never reorders the rest, and ordering never reveals a hidden
 one.

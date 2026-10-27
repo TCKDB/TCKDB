@@ -24,10 +24,8 @@ Internal match taxonomy (grounded in three axes):
 Visibility, order and selection (docs/specs/browse_order.md):
 - Every read applies the scientific reads' default visibility (rejected and deprecated records are hidden unless
   ``include_rejected`` / ``include_deprecated`` is set) and their read profile (``?profile=curated`` lists only
-  records at
-  ``approved``, with no count of the ones below it; a record's own detail page and the evidence it links are served
-  badged,
-  and only rejected and deprecated ones are withheld, ADR 0023).
+  records at ``approved``, with no count of the ones below it; a record's own detail page and the evidence it links
+  are served badged, and only rejected and deprecated ones are withheld, ADR 0023).
 - Records are listed in the display order (review status, then deposition time newest first, then id descending),
   echoed in ``order``. The first record is the first in display order, never a recommendation.
 - ``selection=lowest_energy|latest|earliest`` is an explicit request to narrow a list. What it did is stated in

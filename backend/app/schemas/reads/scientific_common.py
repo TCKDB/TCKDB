@@ -80,10 +80,14 @@ class ProfiledRequestEcho(BaseModel):
     ``profile``                 which contract the response answers under.
     ``profile_recommendation``  whether TCKDB endorses these records. Never
                                 inferred from ``profile`` alone: a curated
-                                read of a database with no published release
-                                still reports ``none``.
-    ``profile_release_ref``     the dataset release backing a curated read,
-                                when one exists.
+                                read on the general read surface reports
+                                ``approved_floor_only`` (the approved floor
+                                was applied to the records returned, nothing
+                                more), whether or not a release has been
+                                published.
+    ``profile_release_ref``     the dataset release a response was resolved
+                                through. Only the release routes set it; it
+                                is always null on the general read surface.
 
     All three are machine tokens. The prose explanation lives in
     ``backend/docs/specs/dataset_release_and_profiles.md``, never in the value.
