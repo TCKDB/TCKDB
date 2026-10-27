@@ -324,3 +324,16 @@ def test_every_ref_a_curated_response_names_resolves_under_curated(client, db_se
             if status != 200:
                 failures.append(f"{ref} named by a curated response answers {status} on {template}")
     assert not failures, "\n".join(failures)
+
+
+def test_a_curated_network_detail_lists_an_unreviewed_solve_with_its_badge(client, db_session, world):
+    """ADR 0023 step 7 (D-b), second pin: the solve is an embedded record of a served network, so it is listed, badged."""
+    from app.db.models.network import Network
+
+    solve = world.hidden["nsolve_h"]
+    network = db_session.get(Network, solve.network_id)
+    response = client.get(f"{BASE}/networks/{network.public_ref}", params={"profile": "curated", "include": "solves"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert solve.public_ref in [s["network_solve_ref"] for s in body["record"]["solves"]]
+    assert body["review_status_by_ref"][solve.public_ref] in UNLISTED

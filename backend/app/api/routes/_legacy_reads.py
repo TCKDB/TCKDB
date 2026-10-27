@@ -178,13 +178,14 @@ ABSENT_ID = -1
 REVIEW_STATUS_HEADER_SPEC = {
     "description": (
         "Under profile=curated, the review status (not_reviewed, under_review, approved, ...) of the single record this "
-        "response serves. Absent under the default profile, on lists, and on sub-resource lists."
+        "response serves. Absent under the default profile, on lists, and on any response that is not the single gated "
+        "record itself (sub-resource lists, and single-object sub-resources such as /calculations/{id}/sp-result)."
     ),
     "schema": {"type": "string"},
 }
 HIDDEN_HEADER_SPEC = {
     "description": (
-        "On a list that is a bare JSON array: how many records each default exclusion hid, as `rejected=1; deprecated=2`. "
+        "On a list that is a bare JSON array: how many records each default exclusion hid, as `deprecated=2; rejected=1` (keys sorted). "
         "Absent when nothing was excluded and always absent under profile=curated."
     ),
     "schema": {"type": "string"},
@@ -194,7 +195,7 @@ HIDDEN_HEADER_SPEC = {
 def disclose_in_header(response: Response, block: HiddenByDefault | None) -> None:
     """A list that is a bare JSON array has no envelope to carry ``hidden_by_default``; it goes in a header.
 
-    ``rejected=1; deprecated=2``, one entry per default exclusion. Absent when nothing was excluded by default and
+    ``deprecated=2; rejected=1``, one entry per default exclusion. Absent when nothing was excluded by default and
     always absent under ``curated`` (no count of records below the floor).
     """
     if block is None:

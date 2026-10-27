@@ -26,7 +26,8 @@ WRAPPER_COLLECTIONS = {"has_validation_evidence"}
 
 
 def _plural(name: str) -> tuple[str, ...]:
-    return (name, name + "s", name[:-1] if name.endswith("s") else name)
+    irregular = (name[:-1] + "ies",) if name.endswith("y") else ()  # entry -> entries
+    return (name, name + "s", *irregular, name[:-1] if name.endswith("s") else name)
 
 
 def _collection(holders: list[dict], name: str):
@@ -36,6 +37,12 @@ def _collection(holders: list[dict], name: str):
             if isinstance(value, list):
                 return candidate, value
     return None, None
+
+
+def _is_ts_concept(holders, node) -> bool:
+    """The wrapper exemption is for the transition-state concept record only (its availability block's holder)."""
+    record = holders[0] if holders else node
+    return "transition_state" in record and "transition_state_entry" not in record
 
 
 def inconsistencies(node, holders=None, path="record", is_sibling_record=False) -> list[str]:
@@ -55,7 +62,7 @@ def inconsistencies(node, holders=None, path="record", is_sibling_record=False) 
         ("transition_state_entry" in node or "conformer_observation" in node) and "evidence_summary" in node
     )
     for key, value in node.items():
-        if isinstance(value, bool) and key.startswith("has_") and key not in WRAPPER_COLLECTIONS:
+        if isinstance(value, bool) and key.startswith("has_") and not (key in WRAPPER_COLLECTIONS and _is_ts_concept(holders, node)):
             name, items = _collection(here, key[4:])
             if items is None:
                 continue
