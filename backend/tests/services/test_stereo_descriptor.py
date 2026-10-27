@@ -470,6 +470,21 @@ def test_past_the_automorphism_cap_symmetric_elements_are_unknown_and_flagged(mo
         assert resolve(spelling).descriptor == capped.descriptor, spelling
 
 
+def test_past_the_cap_the_warning_says_different_configurations_share_the_entry(monkeypatch) -> None:
+    from app.services.species_resolution import stereo_unresolved_warning
+
+    monkeypatch.setattr(stereo, "_AUTOMORPHISM_CAP", 2)
+    resolved = resolve("C/C=C/C=C/C=C/C=C/C")
+    assert resolved.descriptor == "?,?,?,?" and resolved.unrepresented == ("symmetry",)
+    assert resolved.evidence == ("E", "E", "E", "E"), "what the marks said, kept for the migration's comparison"
+    warning = stereo_unresolved_warning(resolved)
+    assert warning is not None and warning.code == stereo.W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED
+    assert (
+        "too symmetric for the stereo descriptor to tell its configurations apart" in warning.message
+        and "different configurations" in warning.message
+    )
+
+
 def test_isotopic_stereo_gets_a_descriptor_but_the_species_does_not() -> None:
     r, s = resolve("C[C@H]([2H])O"), resolve("C[C@@H]([2H])O")
     assert {r.descriptor, s.descriptor} == {"R", "S"}
@@ -507,3 +522,22 @@ def test_a_label_that_does_not_fit_the_molecule_is_refused(smiles: str, label: s
     with pytest.raises(CodedValueError) as excinfo:
         resolve(smiles, label=label)
     assert excinfo.value.code == stereo.W_SPECIES_STEREO_LABEL_INVALID
+
+
+def test_past_the_cap_sources_that_disagree_are_a_contradiction_not_an_invalid_label(monkeypatch) -> None:
+    """The sources are compared before their symmetric positions are collapsed to ``?``."""
+    monkeypatch.setattr(stereo, "_AUTOMORPHISM_CAP", 2)
+    all_e = "C/C=C/C=C/C=C/C=C/C"
+    with pytest.raises(CodedValueError) as excinfo:
+        resolve(all_e, label="Z,Z,Z,Z")
+    assert excinfo.value.code == stereo.W_SPECIES_STEREO_CONTRADICTION
+    # An agreeing label is accepted, and so is a partial one that does not clash.
+    assert resolve(all_e, label="E,E,E,E").unrepresented == ("symmetry",)
+    assert resolve(all_e, label="E,?,?,?").unrepresented == ("symmetry",)
+    with pytest.raises(CodedValueError) as excinfo:
+        resolve(all_e, label="E,Z,?,?")
+    assert excinfo.value.code == stereo.W_SPECIES_STEREO_CONTRADICTION
+    centres = "C[C@H](O)[C@@H](O)[C@@H](C)O"  # R, r, S: two centres in one symmetry class
+    with pytest.raises(CodedValueError) as excinfo:
+        resolve(centres, label="R,r,R")
+    assert excinfo.value.code in (stereo.W_SPECIES_STEREO_CONTRADICTION, stereo.W_SPECIES_STEREO_LABEL_INVALID)

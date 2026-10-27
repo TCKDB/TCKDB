@@ -178,21 +178,27 @@ def _install_guards(bind) -> None:
         AS $$
         DECLARE
             marker text := TG_ARGV[0];
+            changed text[];
         BEGIN
             -- A merged-away row is a record of what it was: it may not be edited, except by a repair someone declared
             -- in this transaction (the accepted-science path), and an update that changes nothing is let through.
             IF (to_jsonb(OLD) ->> marker) IS NULL OR to_jsonb(NEW) = to_jsonb(OLD) THEN
                 RETURN NEW;
             END IF;
+            changed := ARRAY(
+                SELECT key FROM jsonb_each(to_jsonb(NEW)) WHERE (to_jsonb(OLD) -> key) IS DISTINCT FROM value
+            );
+            -- Like the other accepted-science triggers: only the columns the declaration names may change.
             IF EXISTS (
                 SELECT 1 FROM public.accepted_science_repair
                  WHERE target_table = TG_TABLE_NAME AND xact_id = (pg_current_xact_id())::text::bigint
+                   AND declared_columns @> changed
             ) THEN
                 RETURN NEW;
             END IF;
             RAISE EXCEPTION USING ERRCODE = '23514',
-                MESSAGE = format('a merged-away %I row cannot be edited', TG_TABLE_NAME),
-                HINT = 'it is kept as it was; edit the row it was merged into, or declare a repair';
+                MESSAGE = format('a merged-away %I row cannot be edited (columns %s)', TG_TABLE_NAME, array_to_string(changed, ', ')),
+                HINT = 'it is kept as it was; edit the row it was merged into, or declare a repair naming those columns';
         END;
         $$
         """
@@ -240,11 +246,11 @@ def upgrade() -> None:
             "     + (SELECT count(*) FROM species_entry WHERE stereo_label LIKE 'merged:%')"
         )
     ).scalar_one()
-    if sentinels:
+    if sentinels or bind.execute(sa.text("SELECT to_regclass('public.tckdb_c7e2a9f4d138_downgraded')")).scalar():
         raise RuntimeError(
-            f"{sentinels} row(s) carry a 'merged:' sentinel left by the downgrade of revision {revision}; this database "
-            "has been through that downgrade and cannot be upgraded through it again. Restore it from a backup taken "
-            "before the first upgrade."
+            f"This database went down through revision {revision} after rows had been merged ({sentinels} 'merged:' "
+            "sentinel row(s); table tckdb_c7e2a9f4d138_downgraded) and cannot be upgraded through it again: the downgrade "
+            "forgets which rows were merged. Restore it from a backup taken before the first upgrade."
         )
     postgresql.ENUM("resolved", "partial", "unresolved", name="stereo_resolution").create(bind, checkfirst=True)
     op.add_column("species_entry", sa.Column("stereo_descriptor", sa.Text(), nullable=True))
@@ -309,6 +315,21 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
+    # Record that merges are being forgotten, so a later upgrade can refuse instead of running unguarded over rows it
+    # would treat as live. Only when something was merged: a clean database may go down and up again.
+    merged = bind.execute(
+        sa.text(
+            "SELECT (SELECT count(*) FROM species WHERE merged_into_species_id IS NOT NULL) "
+            "     + (SELECT count(*) FROM species_entry WHERE merged_into_species_entry_id IS NOT NULL) "
+            "     + (SELECT count(*) FROM chem_reaction WHERE merged_into_chem_reaction_id IS NOT NULL)"
+        )
+    ).scalar_one()
+    if merged:
+        op.execute(
+            "CREATE TABLE IF NOT EXISTS public.tckdb_c7e2a9f4d138_downgraded "
+            "(ran_at timestamptz NOT NULL DEFAULT now(), merged_rows_forgotten integer NOT NULL)"
+        )
+        op.execute(f"INSERT INTO public.tckdb_c7e2a9f4d138_downgraded (merged_rows_forgotten) VALUES ({int(merged)})")
     for table, column, _target, _marker in _foreign_keys_into_mergeable(bind):
         op.execute(f"DROP TRIGGER IF EXISTS {f'trg_mt_{table}_{column}'[:63]} ON public.{table}")
     for table, _marker in _MERGEABLE:

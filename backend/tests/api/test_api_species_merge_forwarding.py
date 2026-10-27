@@ -412,3 +412,22 @@ def test_a_letter_on_an_allene_is_refused_before_anything_is_stored(client: Test
     assert response.status_code == 422, response.text
     assert response.json()["code"] == "species_stereo_label_invalid"
     assert "axial stereo (Ra/Sa)" in response.json()["detail"] and "not supported yet" in response.json()["detail"]
+
+
+def test_no_declared_repair_can_lift_the_freeze_of_these_tables(db_session) -> None:
+    """The three identity tables carry no accepted-science guard, so a repair cannot even be declared for them: the freeze is
+    absolute, for every column. (The trigger still checks the declared columns, so it stays column-limited if one is added.)"""
+    _survivor, _loser, loser_species = _merged_pair(db_session)
+    with pytest.raises(DBAPIError, match="carries no accepted-science guard"):
+        with db_session.begin_nested():
+            db_session.execute(
+                text(
+                    "INSERT INTO accepted_science_repair (target_table, declared_columns, alembic_revision, reason) "
+                    "VALUES ('species', CAST('{inchi_key}' AS text[]), 'test-freeze', 'test')"
+                )
+            )
+    for column in ("inchi_key", "smiles", "charge"):
+        with pytest.raises(DBAPIError, match="cannot be edited"):
+            with db_session.begin_nested():
+                value = "9" if column == "charge" else "'Y'"
+                db_session.execute(text(f"UPDATE species SET {column} = {value} WHERE id = :i"), {"i": loser_species.id})

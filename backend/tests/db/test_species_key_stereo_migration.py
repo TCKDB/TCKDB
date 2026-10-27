@@ -692,3 +692,81 @@ def test_a_merged_away_row_cannot_be_edited_and_a_database_that_went_down_cannot
     again = harness.run("upgrade", _MIGRATION.revision, check=False)
     assert again.returncode != 0
     assert "cannot be upgraded through it again" in again.stderr
+
+
+def _capped_env(harness, tmp_path) -> None:
+    """Make the alembic subprocess see a tiny automorphism cap, as a monkeypatch cannot cross the process boundary."""
+    (tmp_path / "sitecustomize.py").write_text(
+        "import sys\n"
+        f"sys.path.insert(0, {str(harness.root)!r})\n"
+        "try:\n"
+        "    import app.chemistry.stereo as _s\n"
+        "except ImportError:  # a helper interpreter without the app: nothing to patch\n"
+        "    pass\n"
+        "else:\n"
+        "    _s._AUTOMORPHISM_CAP = 2\n"
+    )
+    existing = harness.env.get("PYTHONPATH")
+    harness.env["PYTHONPATH"] = str(tmp_path) + (f":{existing}" if existing else "")
+
+
+_TETRAENE_KEY = "C/C=C/C=C/C=C/C=C/C"
+
+
+def test_past_the_cap_entries_with_different_evidence_do_not_merge_silently(harness, tmp_path) -> None:
+    """Deca-2,4,6,8-tetraene has two automorphisms; with the cap at 2 its symmetric positions are stated as ``?``. Two
+    spellings that are different configurations must not be lumped by the migration."""
+    _capped_env(harness, tmp_path)
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        first = _species(conn, _TETRAENE_KEY, "ZZZZZZZZZZZZZZ-ONEGZZNKSA-N")
+        second = _species(conn, "C/C=C/C=C\\C=C/C=C/C", "ZZZZZZZZZZZZZZ-ARJAWSKDSA-N")
+        refs = [
+            _value(conn, "SELECT public_ref FROM species_entry WHERE id = :i", i=_entry(conn, sp, smi, None))
+            for sp, smi in ((first, _TETRAENE_KEY), (second, "C/C=C/C=C\\C=C/C=C/C"))
+        ]
+    failed = harness.run("upgrade", _MIGRATION.revision, check=False)
+    assert failed.returncode != 0
+    assert "too symmetric" in failed.stderr and all(ref in failed.stderr for ref in refs)
+
+
+def test_past_the_cap_entries_with_identical_evidence_merge_and_are_listed(harness, tmp_path) -> None:
+    _capped_env(harness, tmp_path)
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        first = _species(conn, _TETRAENE_KEY, "ZZZZZZZZZZZZZZ-ONEGZZNKSA-N")
+        second = _species(conn, "C(\\C)=C/C=C/C=C/C=C/C", "ZZZZZZZZZZZZZZ-OWOJBTEDSA-N")
+        _entry(conn, first, _TETRAENE_KEY, None)
+        _entry(conn, second, "C(\\C)=C/C=C/C=C/C=C/C", None)
+    done = harness.run("upgrade", _MIGRATION.revision, check=False)
+    assert done.returncode == 0, done.stderr[-1500:]
+    assert "symmetry_past_cap_entries=['spe_" in done.stdout
+    with harness.engine.connect() as conn:
+        assert _value(conn, "SELECT count(*) FROM species_entry WHERE merged_into_species_entry_id IS NOT NULL") == 1
+
+
+def test_no_conformer_rows_stay_on_merged_entries_and_a_species_only_downgrade_still_guards_the_upgrade(harness) -> None:
+    """A later step that sweeps every entry with a conformer group (the basin reassignment) must meet no merged entry;
+    and a database that went down after merging species, with no row renamed, still refuses to go up again."""
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        ids = _seed(conn)
+    harness.run("upgrade", _MIGRATION.revision)
+    with harness.engine.connect() as conn:
+        assert _value(
+            conn,
+            "SELECT count(*) FROM conformer_group g JOIN species_entry e ON e.id = g.species_entry_id "
+            "WHERE e.merged_into_species_entry_id IS NOT NULL",
+        ) == 0
+        assert _value(conn, "SELECT count(*) FROM conformer_group WHERE species_entry_id = :i", i=ids["e_trans"]) == 2
+    harness.run("downgrade", _MIGRATION.parent)
+    with harness.engine.connect() as conn:
+        assert _value(conn, "SELECT to_regclass('public.tckdb_c7e2a9f4d138_downgraded') IS NOT NULL")
+    again = harness.run("upgrade", _MIGRATION.revision, check=False)
+    assert again.returncode != 0 and "cannot be upgraded through it again" in again.stderr
+
+
+def test_a_clean_database_can_go_down_and_up_again(harness) -> None:
+    harness.run("upgrade", _MIGRATION.revision)
+    harness.run("downgrade", _MIGRATION.parent)
+    harness.run("upgrade", _MIGRATION.revision)

@@ -99,7 +99,8 @@ element. Ring size does not matter.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from collections import Counter
+from dataclasses import dataclass, field, replace
 
 from rdkit import Chem
 from rdkit.Chem import AllChem, rdCIPLabeler, rdDetermineBonds
@@ -226,6 +227,9 @@ class ResolvedStereo:
     stereo_smiles: str | None
     unrepresented: tuple[str, ...] = ()
     unknown_elements: int = 0
+    #: Past the automorphism cap only: the tokens the first informative source gave at the positions that were then
+    #: stated as ``?`` (``?`` elsewhere). The migration compares them before it lets two such entries merge.
+    evidence: tuple[str, ...] = ()
 
     @property
     def label(self) -> str | None:
@@ -704,6 +708,7 @@ def _alignments(frame: StereoFrame, tokens, isomers) -> list[tuple[str, ...]]:
     """The isomers' token vectors aligned onto ``tokens`` positions that agree with them."""
 
     aligned = []
+    tokens = mask_capped(frame, tokens)
     perms = element_permutations(frame)
     for vector, _mol in isomers:
         for perm in perms:
@@ -950,24 +955,97 @@ def resolve_stereo(
         return ResolvedStereo(None, None, None)
 
     named: list[tuple[str, list[str]]] = []
+    raw_sources: list[list[str]] = []
     geometries = [g for g in geometries if g]
     for k, source in enumerate(geometries, 1):
         xyz, isotopes = (source, None) if isinstance(source, str) else source
         tokens = geometry_tokens(frame, xyz, isotopes)
         if tokens is not None:
+            raw_sources.append(tokens)
             named.append(("geometry" if len(geometries) == 1 else f"conformer geometry {k}", mask_capped(frame, tokens)))
     if use_marks:
-        named.append(("SMILES stereo marks", mask_capped(frame, mark_tokens(frame))))
+        marks = mark_tokens(frame)
+        raw_sources.append(marks)
+        named.append(("SMILES stereo marks", mask_capped(frame, marks)))
     if supplied_label is not None:
-        named.append(("supplied stereo_label", mask_capped(frame, parse_supplied_label(frame, supplied_label))))
+        label_tokens = parse_supplied_label(frame, supplied_label)
+        raw_sources.append(label_tokens)
+        named.append(("supplied stereo_label", mask_capped(frame, label_tokens)))
 
+    evidence = _symmetric_evidence(frame, raw_sources)
+    _refuse_disagreement_past_the_cap(frame, list(zip((n for n, _ in named), raw_sources, strict=True)))
     current = [UNKNOWN] * len(frame.elements)
     owner = ""
     for name, tokens in named:
         current = merge_sources(frame, current, tokens, first=owner or "earlier source", second=name)
         owner = name if not owner else f"{owner} and {name}"
     current = refine(frame, current)
-    return finish(frame, current)
+    result = finish(frame, current)
+    return replace(result, evidence=evidence) if evidence else result
+
+
+def _refuse_disagreement_past_the_cap(frame: StereoFrame, sources: list[tuple[str, list[str]]]) -> None:
+    """Past the cap, compare the sources BEFORE their symmetric positions are collapsed to ``?``.
+
+    No automorphism alignment is available there, but the tokens of one symmetry class are interchangeable by
+    definition, so a class is compared as a multiset: two sources that both state a whole class must state the same
+    tokens, and a source that states only part of it must not state a token the other (complete) one lacks. That
+    refuses a real disagreement (``R,R`` marks against an ``S,S`` label) as a contradiction instead of hiding it.
+
+    :raises CodedValueError: ``species_stereo_contradiction``.
+    """
+
+    mask = mask_capped(frame, ["x"] * len(frame.elements))
+    if not frame.cache.get("capped"):
+        return
+    classes: dict = {}
+    for i, element in enumerate(frame.elements):
+        if mask[i] == UNKNOWN:
+            classes.setdefault(element.key, []).append(i)
+    for a in range(len(sources)):
+        for b in range(a + 1, len(sources)):
+            (first, ta), (second, tb) = sources[a], sources[b]
+            for members in classes.values():
+                stated_a = Counter(ta[i] for i in members if ta[i] != UNKNOWN)
+                stated_b = Counter(tb[i] for i in members if tb[i] != UNKNOWN)
+                full_a = sum(stated_a.values()) == len(members)
+                full_b = sum(stated_b.values()) == len(members)
+                if full_a and full_b:
+                    clash = stated_a != stated_b
+                elif full_a:
+                    clash = bool(stated_b - stated_a)
+                elif full_b:
+                    clash = bool(stated_a - stated_b)
+                else:
+                    clash = False
+                if clash:
+                    raise CodedValueError(
+                        W_SPECIES_STEREO_CONTRADICTION,
+                        f"The stereochemistry given by the {first} contradicts the {second} at positions of this "
+                        "molecule that are interchangeable by symmetry. A contradiction is refused rather than "
+                        "resolved in either direction; correct the SMILES marks, the geometry or the label so they "
+                        "describe one configuration.",
+                        context={"sources": [first, second]},
+                        message_prefix=False,
+                    )
+
+
+def _symmetric_evidence(frame: StereoFrame, sources: list[list[str]]) -> tuple[str, ...]:
+    """Past the cap: what the first informative source said at the positions that are stated as ``?``.
+
+    Empty when the cap was not hit or no source said anything there. The positions are those of the source's own atom
+    order, so two entries of one configuration can differ here; a comparison that finds a difference is therefore
+    conservative (it stops a merge), never permissive.
+    """
+
+    masked = mask_capped(frame, ["x"] * len(frame.elements))
+    if not frame.cache.get("capped"):
+        return ()
+    for tokens in sources:
+        evidence = tuple(t if masked[i] == UNKNOWN else UNKNOWN for i, t in enumerate(tokens))
+        if any(t != UNKNOWN for t in evidence):
+            return evidence
+    return ()
 
 
 def finish(frame: StereoFrame, tokens, *, with_smiles: bool = True) -> ResolvedStereo:

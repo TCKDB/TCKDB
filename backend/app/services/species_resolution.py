@@ -770,8 +770,8 @@ _NOT_REPRESENTED_TEXT = {
         "cis/trans stereo across this cumulene is not yet represented: its cis and trans forms are stored in one entry"
     ),
     "symmetry": (
-        "this molecule's symmetry is too large to canonicalise its stereo descriptor, so the stereo elements inside "
-        "its symmetry classes are not represented: their configurations are stored in one entry"
+        "this molecule is too symmetric for the stereo descriptor to tell its configurations apart: different "
+        "configurations of the stereo elements inside its symmetry classes are stored in one entry"
     ),
 }
 

@@ -363,6 +363,8 @@ class _Merger:
         self.touched_reactions: set[int] = set()
         #: Each entry's label as it was deposited: ``stereo_label`` is rewritten to its derived display text.
         self.old_labels: dict[int, str | None] = {}
+        #: Entries whose symmetry is past the cap: what their sources said at the positions stated as ``?``.
+        self.cap_evidence: dict[int, tuple[str, ...]] = {}
 
     # -- species -----------------------------------------------------------
 
@@ -607,6 +609,7 @@ class _Merger:
                     )
                     if "symmetry" in resolved.unrepresented:
                         self.report.symmetry_capped.append(row.public_ref)
+                        self.cap_evidence[row.id] = resolved.evidence
                     # A contradictory entry keeps the label text it was deposited with, for the curator.
                     label = row.stereo_label if contradicted else resolved.label
                     self._count_label(row, frame, resolved, contradicted)
@@ -735,6 +738,7 @@ class _Merger:
                     "first: "
                     + ", ".join(f"{r.public_ref} (label {self.old_labels.get(r.id)!r})" for r in group)
                 )
+            self._assert_cap_evidence_agrees(group)
             self._assert_no_double_standing_selection(group)
             survivor = group[0]
             for loser in group[1:]:
@@ -742,7 +746,47 @@ class _Merger:
                 self.report.merged_refs.append(("species_entry", loser.public_ref, survivor.public_ref))
                 self.report.entries_merged += 1
             survivors.add(survivor.id)
+        self._assert_no_conformer_rows_left_on_merged_entries()
         return survivors
+
+    def _assert_no_conformer_rows_left_on_merged_entries(self) -> None:
+        """A later conformer reassignment walks every entry that has a group; none may be a merged one.
+
+        Groups (and with them their observations) move to the survivor like every other result. One that could not
+        move would be walked, and written to, by the next step that sweeps all entries, and the database refuses a
+        write onto a merged entry; so the migration stops here and says which.
+        """
+        left = self.s.execute(
+            text(
+                "SELECT e.public_ref, count(*) AS groups FROM conformer_group g "
+                "JOIN species_entry e ON e.id = g.species_entry_id "
+                "WHERE e.merged_into_species_entry_id IS NOT NULL GROUP BY e.public_ref ORDER BY e.public_ref"
+            )
+        ).all()
+        if left:
+            raise BlockedMerge(
+                "conformer groups stayed on merged-away species entries (a repair could not move them): "
+                + ", ".join(f"{r.public_ref} ({r.groups})" for r in left)
+            )
+
+    def _assert_cap_evidence_agrees(self, group) -> None:
+        """Stop when two entries past the automorphism cap would merge although their evidence differs.
+
+        Past the cap the symmetric positions are stated as ``?``, so a merge there could lump distinct isomers without
+        anyone being told. Their sources' tokens at those positions, taken before they were collapsed, are compared; two
+        different tokens at one position are two configurations, and a curator decides. No evidence on either side, or
+        identical tokens, lets the merge proceed.
+        """
+        entries = [(r, self.cap_evidence.get(r.id, ())) for r in group if self.cap_evidence.get(r.id)]
+        for i, (first, a) in enumerate(entries):
+            for second, b in entries[i + 1 :]:
+                if any(x != "?" and y != "?" and x != y for x, y in zip(a, b, strict=False)):
+                    raise BlockedMerge(
+                        "species entries too symmetric for the stereo descriptor would merge although their sources "
+                        "name different configurations at the symmetric positions "
+                        f"({first.public_ref}: {','.join(a)}; {second.public_ref}: {','.join(b)}); a curator decides "
+                        "whether they are one configuration"
+                    )
 
     def _assert_no_double_standing_selection(self, group) -> None:
         """Stop when merging this group would leave one subject with two standing release selections.
