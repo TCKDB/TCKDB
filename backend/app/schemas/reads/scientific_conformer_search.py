@@ -116,6 +116,14 @@ class ConformersSearchRequest(BaseModel):
         default=None, max_length=_MAX_PUBLIC_REF_LENGTH
     )
 
+    # --- basin-shape filters ---------------------------------------------
+    #: ``true``: groups whose optimised members are linked end to end but are not all within tolerance of each other
+    #: (a wide basin, ``basin_is_clique = false``). ``false``: groups whose optimised members all are. A group with no
+    #: optimised member has no such fact and matches neither.
+    wide_basin: bool | None = None
+    #: Groups whose largest torsion difference between two optimised members is at least this many degrees.
+    min_span_deg: float | None = Field(default=None, ge=0.0, le=360.0)
+
     # --- evidence filters ------------------------------------------------
     has_observations: bool | None = None
     has_calculations: bool | None = None

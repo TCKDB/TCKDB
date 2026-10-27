@@ -310,6 +310,12 @@ class ConformerGroup(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 
     __table_args__ = (
         Index("ix_conformer_group_species_entry_id", "species_entry_id"),
+        # the wide-basin listing: a handful of rows among all groups
+        Index(
+            "ix_conformer_group_wide_basin",
+            "id",
+            postgresql_where="basin_is_clique IS FALSE",
+        ),
         UniqueConstraint(
             "species_entry_id",
             "label",

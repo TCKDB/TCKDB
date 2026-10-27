@@ -97,6 +97,8 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "selection_kind",
     "has_selection",
     "assignment_scheme_ref",
+    "wide_basin",
+    "min_span_deg",
     "has_observations",
     "has_calculations",
     "has_geometries",
@@ -197,6 +199,7 @@ def search_conformers(
         has_selection=request.has_selection,
         assignment_scheme_id=assignment_scheme_id,
     )
+    stmt = _apply_basin_shape_filters(stmt, wide_basin=request.wide_basin, min_span_deg=request.min_span_deg)
     stmt = _apply_observation_filters(
         stmt,
         has_observations=request.has_observations,
@@ -406,6 +409,21 @@ def _apply_observation_filters(
     if has_observations is not None:
         ex = _shown_observations_of_group().exists()
         stmt = stmt.where(ex if has_observations else ~ex)
+    return stmt
+
+
+def _apply_basin_shape_filters(stmt, *, wide_basin: bool | None, min_span_deg: float | None):
+    """The stored shape of a basin (``basin_is_clique``, ``basin_span_deg``), derived from its optimised members.
+
+    ``wide_basin=true`` is ``basin_is_clique IS FALSE``; ``wide_basin=false`` is ``IS TRUE``; a group with no
+    optimised member has NULL and matches neither. Ordering is the route's, unchanged: nothing here ranks.
+    """
+    if wide_basin is not None:
+        stmt = stmt.where(
+            ConformerGroup.basin_is_clique.is_(False) if wide_basin else ConformerGroup.basin_is_clique.is_(True)
+        )
+    if min_span_deg is not None:
+        stmt = stmt.where(ConformerGroup.basin_span_deg >= min_span_deg)
     return stmt
 
 

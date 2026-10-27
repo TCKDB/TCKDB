@@ -76,6 +76,10 @@ Closes #812. A conformer basin no longer depends on the order its structures wer
   selection locator by kind skips it. (4) The thermo and statmech select endpoints forward a basin ref that names an emptied group and say so
   (`forwarded_from_conformer_group_ref`; `tckdb-client` 0.174.0). (5) The basin is decided on the geometry the recompute reads back, by one shared function
   (`primary_structure`): the first `final` output, else the first input.
+- **Listing wide basins.** `GET`/`POST /scientific/conformers/search` take `wide_basin` (`true`: `basin_is_clique IS FALSE`; `false`: `IS TRUE`; a group with no
+  optimised member matches neither) and `min_span_deg` (`basin_span_deg >= x`), backed by the partial index `ix_conformer_group_wide_basin`. They are filters:
+  the order is the route's, unchanged, and a review floor applies to the listed groups. The flag is the stored fact about the group's optimised members, as
+  for the representative; the `wide-basin` Phase D check stays on demand. `tckdb-client` `search_conformers(wide_basin=..., min_span_deg=...)`.
 - **Schema (revision `b7e4c9a2d518`).** Nullable `conformer_group.representative_observation_id`, `merged_into_conformer_group_id`,
   `basin_is_clique`, `basin_span_deg`; nullable `conformer_observation.mapped_coords_json`; the table `conformer_group_merge_pending`; the version 3
   scheme row as the default; and a data step that recomputes every entry through the existing declared-repair machinery (dependents follow their own

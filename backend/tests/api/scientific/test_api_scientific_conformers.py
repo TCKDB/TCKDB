@@ -2745,3 +2745,63 @@ def test_search_no_forbidden_payload_keys(client, db_session):
                 _walk(item)
 
     _walk(body)
+
+
+def _wide_basin_scene(db_session):
+    _, entry = _make_species_entry(db_session)
+    wide = make_conformer_group(db_session, entry, label="wide")
+    tight = make_conformer_group(db_session, entry, label="tight")
+    provisional = make_conformer_group(db_session, entry, label="provisional")
+    wide.basin_is_clique, wide.basin_span_deg = False, 36.0
+    tight.basin_is_clique, tight.basin_span_deg = True, 10.0
+    db_session.flush()
+    return entry, wide, tight, provisional
+
+
+def _refs(body) -> set[str]:
+    return {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+
+
+def test_search_wide_basin_lists_exactly_the_wide_groups(client, db_session):
+    entry, wide, tight, provisional = _wide_basin_scene(db_session)
+    only_wide = client.get(_search_url(species_entry_ref=entry.public_ref, wide_basin="true")).json()
+    assert _refs(only_wide) == {wide.public_ref}
+    only_tight = client.get(_search_url(species_entry_ref=entry.public_ref, wide_basin="false")).json()
+    assert _refs(only_tight) == {tight.public_ref}  # the group with no optimised member matches neither
+    assert only_wide["request"]["filter"]["wide_basin"] is True
+    # on its own, with no other filter, it is a meaningful filter
+    alone = client.get(_search_url(wide_basin="true")).json()
+    assert wide.public_ref in _refs(alone) and tight.public_ref not in _refs(alone)
+    assert provisional.public_ref not in _refs(alone)
+
+
+def test_search_min_span_deg_and_the_post_body(client, db_session):
+    entry, wide, tight, _provisional = _wide_basin_scene(db_session)
+    both = client.get(_search_url(species_entry_ref=entry.public_ref, min_span_deg="5")).json()
+    assert _refs(both) == {wide.public_ref, tight.public_ref}
+    assert _refs(client.get(_search_url(species_entry_ref=entry.public_ref, min_span_deg="20")).json()) == {wide.public_ref}
+    posted = client.post(_search_url(), json={"species_entry_ref": entry.public_ref, "wide_basin": True})
+    assert posted.status_code == 200 and _refs(posted.json()) == {wide.public_ref}
+    posted = client.post(_search_url(), json={"min_span_deg": 20.0})
+    assert wide.public_ref in _refs(posted.json()) and tight.public_ref not in _refs(posted.json())
+    assert client.get(_search_url(species_entry_ref=entry.public_ref, min_span_deg="-1")).status_code == 422
+    assert client.post(_search_url(), json={"wide_basin": "maybe"}).status_code == 422
+    # a query-string filter on POST is refused, as for every other filter
+    assert client.post(_search_url(wide_basin="true"), json={"species_entry_ref": entry.public_ref}).status_code == 422
+
+
+def test_search_wide_basin_keeps_the_route_order_and_the_review_floor(client, db_session):
+    entry, wide, tight, _ = _wide_basin_scene(db_session)
+    second = make_conformer_group(db_session, entry, label="wide2")
+    second.basin_is_clique, second.basin_span_deg = False, 50.0
+    db_session.flush()
+    body = client.get(_search_url(species_entry_ref=entry.public_ref, wide_basin="true")).json()
+    plain = client.get(_search_url(species_entry_ref=entry.public_ref)).json()
+    # the same relative order as the unfiltered listing: a span is a filter fact, never a sort key
+    order = [r["conformer_group"]["conformer_group_ref"] for r in plain["records"]]
+    listed = [r["conformer_group"]["conformer_group_ref"] for r in body["records"]]
+    assert listed == [r for r in order if r in set(listed)] and len(listed) == 2
+    assert body["request"]["sort"] == plain["request"]["sort"]
+    # a review floor applies to the listed groups
+    floor = client.get(_search_url(species_entry_ref=entry.public_ref, wide_basin="true", min_review_status="approved")).json()
+    assert _refs(floor) == set()

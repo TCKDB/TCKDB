@@ -217,6 +217,12 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
+        "ix_conformer_group_wide_basin",
+        "conformer_group",
+        ["id"],
+        postgresql_where=sa.text("basin_is_clique IS FALSE"),
+    )
+    op.create_index(
         "uq_conformer_group_merge_pending_open_refile",
         "conformer_group_merge_pending",
         ["conformer_observation_id"],
@@ -270,6 +276,7 @@ def downgrade() -> None:
         sa.text("UPDATE conformer_assignment_scheme SET is_default = true WHERE name = :name AND version = 2"),
         {"name": _NAME},
     )
+    op.drop_index("ix_conformer_group_wide_basin", table_name="conformer_group")
     op.drop_index("uq_conformer_group_merge_pending_open_refile", table_name="conformer_group_merge_pending")
     op.drop_index("ix_conformer_group_merge_pending_open", table_name="conformer_group_merge_pending")
     op.drop_table("conformer_group_merge_pending")

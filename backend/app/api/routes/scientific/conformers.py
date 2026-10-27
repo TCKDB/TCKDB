@@ -72,6 +72,14 @@ def scientific_conformers_search_get(
     selection_kind: ConformerSelectionKind | None = Query(None),
     has_selection: bool | None = Query(None),
     assignment_scheme_ref: str | None = Query(None),
+    wide_basin: bool | None = Query(
+        None,
+        description="true: only wide basins (optimised members linked end to end but not all within tolerance of "
+        "each other); false: only basins whose optimised members all are. Groups with no optimised member match neither.",
+    ),
+    min_span_deg: float | None = Query(
+        None, ge=0.0, le=360.0, description="Largest torsion difference between two optimised members, at least this."
+    ),
     has_observations: bool | None = Query(None),
     has_calculations: bool | None = Query(None),
     has_geometries: bool | None = Query(None),
@@ -115,6 +123,8 @@ def scientific_conformers_search_get(
         selection_kind=selection_kind,
         has_selection=has_selection,
         assignment_scheme_ref=assignment_scheme_ref,
+        wide_basin=wide_basin,
+        min_span_deg=min_span_deg,
         has_observations=has_observations,
         has_calculations=has_calculations,
         has_geometries=has_geometries,

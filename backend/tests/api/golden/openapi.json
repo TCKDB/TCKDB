@@ -15719,6 +15719,19 @@
               }
             ]
           },
+          "min_span_deg": {
+            "anyOf": [
+              {
+                "maximum": 360.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Span Deg"
+          },
           "offset": {
             "default": 0,
             "title": "Offset",
@@ -15802,6 +15815,17 @@
               }
             ],
             "title": "Species Ref"
+          },
+          "wide_basin": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wide Basin"
           },
           "workflow_tool": {
             "anyOf": [
@@ -93321,6 +93345,44 @@
                 }
               ],
               "title": "Assignment Scheme Ref"
+            }
+          },
+          {
+            "description": "true: only wide basins (optimised members linked end to end but not all within tolerance of each other); false: only basins whose optimised members all are. Groups with no optimised member match neither.",
+            "in": "query",
+            "name": "wide_basin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true: only wide basins (optimised members linked end to end but not all within tolerance of each other); false: only basins whose optimised members all are. Groups with no optimised member match neither.",
+              "title": "Wide Basin"
+            }
+          },
+          {
+            "description": "Largest torsion difference between two optimised members, at least this.",
+            "in": "query",
+            "name": "min_span_deg",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 360.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Largest torsion difference between two optimised members, at least this.",
+              "title": "Min Span Deg"
             }
           },
           {
