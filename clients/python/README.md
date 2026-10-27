@@ -301,11 +301,13 @@ completeness, and provenance shape are all decided by the backend per
 ### Curated vs exploratory results: `profile=`
 
 Every scientific read takes an optional `profile=`. `profile="curated"`
-asks for the results TCKDB stands behind; `profile="exploratory"` (the
-default when you pass nothing) returns everything that matched. The
+applies the `approved` review floor to the records a list, search or
+select returns, and shows the evidence behind a returned record with its
+review badge (only `rejected` and `deprecated` are withheld). It does not
+mean a curator selected those records. `profile="exploratory"` (the
+default when you pass nothing) returns every visible candidate. The
 answering profile comes back in `response["request"]["profile"]` —
-read that rather than assuming you got what you asked for, because a
-deployment with no curated selection answers exploratorily.
+read that rather than assuming you got what you asked for.
 
 ```python
 kinetics = client.search_kinetics(reactants=["C[CH2]"], profile="curated")

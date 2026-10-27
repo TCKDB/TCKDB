@@ -181,7 +181,7 @@ class CalculationOwnerSummary(BaseModel):
     guarantees this.
 
     **One exception, under ``profile=curated`` only.** When the owning
-    transition-state entry is hidden (not approved), the ref guard withholds
+    transition-state entry is withheld (rejected or deprecated), the ref guard withholds
     the whole ``transition_state_entry`` block, so ``kind`` can be
     ``"transition_state_entry"`` while *both* owners are ``null``. That is
     "the owner is not shown", not "the calculation has no owner". The default

@@ -697,7 +697,7 @@ def _build_species_records(
     review_status = _species_entry_review(session, species_entry_id)
 
     # A calculation the profile hides is not part of this species' world: its energies, frequencies, Hessian,
-    # geometry and conformer links are left out, not blanked (hidden equals unknown).
+    # geometry and conformer links are left out, not blanked (the ML export's energy rows keep their calculations approved-only, ADR 0023 Q7).
     calcs = session.scalars(
         where_visible(
             select(Calculation).where(Calculation.species_entry_id == species_entry_id),

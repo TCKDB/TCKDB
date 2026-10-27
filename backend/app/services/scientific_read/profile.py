@@ -26,8 +26,11 @@ documented seams:
 
 1. :func:`app.services.scientific_read.common.visible_statuses` — the single
    function every read service already calls to decide which review statuses
-   are visible. ``curated`` raises the floor to ``approved`` there, so it
-   cannot be forgotten by an endpoint.
+   are visible to a list, search or select. ``curated`` raises the record floor
+   to ``approved`` there, so it cannot be forgotten by an endpoint. (A detail
+   page and a returned record's linked evidence follow the evidence rule of
+   ADR 0023 instead: they are served badged, and only ``rejected`` and
+   ``deprecated`` are withheld.)
 2. :func:`app.services.scientific_read.internal_ids.apply_internal_ids_visibility`
    — the one function every enveloped scientific route returns through, which
    calls :func:`stamp_read_profile` to write the resolved profile into the

@@ -1404,9 +1404,9 @@ def _withhold_placeholders(session: Session, facts: Any, *, profile: ResolvedRea
 
 
 def unavailable_refs(session: Session, refs: Collection[str]) -> set[str]:
-    """Refs a selection treats as unavailable under the profile in force: hidden, or naming no row.
+    """Refs a selection treats as unavailable under the profile in force: withheld, or naming no row.
 
-    Hidden == unknown: evidence that points at a record the reader cannot open reads exactly like evidence that points at
+    Withheld == unknown: evidence that points at a record the reader cannot open reads exactly like evidence that points at
     nothing. Empty (and no statement) without a review floor, so an exploratory selection is unchanged; a release-backed
     profile is left alone as everywhere in the guard. ``session`` is the selection's own snapshot session.
     """

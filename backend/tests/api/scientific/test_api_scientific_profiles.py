@@ -488,8 +488,8 @@ def test_network_kinetics_inherits_the_curated_withholding_from_its_solve(
     assert client.get(f"{parent}?profile=curated").status_code == 200
     response = client.get(f"{detail}?profile=curated")
     assert response.status_code == 200, response.text
-    # step 8: this asserts the profile copy ("every record shown is at or above the approved floor") on a response that
-    # serves a not-reviewed solve's fit. The copy is stale since step 2 and step 8 rewrites it; update this with it.
+    # The token says the approved floor was applied to the records a list returns and nothing further. A not-reviewed
+    # solve's fit is served here, badged, on a detail read (ADR 0023 step 7), and the token still holds.
     assert response.json()["request"]["profile_recommendation"] == "approved_floor_only"
 
     # Rejecting the parent withholds the child exactly like its parent.

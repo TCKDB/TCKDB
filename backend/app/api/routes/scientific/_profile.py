@@ -39,9 +39,12 @@ from app.services.scientific_read.ref_guard import (
 _PROFILE_DESCRIPTION = (
     "Read contract. 'exploratory' (default) returns every visible candidate "
     "with its review state and carries no TCKDB recommendation. 'curated' "
-    "restricts results to records at or above the 'approved' review floor and "
-    "claims nothing further (profile_recommendation='approved_floor_only'); it "
-    "does NOT mean a curator selected these records. For records an attributed "
+    "applies the 'approved' review floor to the records a list, search or "
+    "select returns. A detail page serves any record that is not rejected or "
+    "deprecated, and the linked evidence of a returned record is shown with its "
+    "review badge; only rejected and deprecated records are withheld. It claims "
+    "nothing further (profile_recommendation='approved_floor_only'); it does "
+    "NOT mean a curator selected these records. For records an attributed "
     "release selection actually names, use /api/v1/scientific/releases/*."
 )
 

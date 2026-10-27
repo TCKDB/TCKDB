@@ -2017,7 +2017,13 @@ class ReadProfile(str, Enum):
     ``exploratory``  every visible candidate, with its review/trust state.
                      TCKDB makes **no recommendation** about which candidate
                      is right; the caller is looking at the archive.
-    ``curated``      only records at or above the ``approved`` review floor.
+    ``curated``      the ``approved`` review floor decides which **records** a
+                     list, search or select returns (approved only). A detail
+                     page serves any record that is not ``rejected`` or
+                     ``deprecated``, with its review badge, and the linked
+                     evidence of a returned record is shown with its badge
+                     too; only ``rejected`` and ``deprecated`` evidence is
+                     withheld, and a request cannot lift that (ADR 0023).
                      Records are **not** annotated with the release selection
                      that names them — no such per-record annotation exists —
                      so the accompanying
@@ -2044,9 +2050,13 @@ class ProfileRecommendation(str, Enum):
 
     ``none``                    the records are candidates. TCKDB is not
                                 telling you which one to use.
-    ``approved_floor_only``     every record shown is at or above the
-                                ``approved`` review floor, and **nothing more
-                                is claimed**. No attributed
+    ``approved_floor_only``     the ``approved`` review floor was applied to
+                                the records a list, search or select returned,
+                                and **nothing more is claimed**. A detail page
+                                and the linked evidence of a returned record
+                                may be unreviewed and carry their review
+                                badge; ``rejected`` and ``deprecated`` records
+                                are withheld. No attributed
                                 ``release_selection`` stands behind these
                                 specific records; a human reviewer accepted
                                 them, which is not the same as TCKDB

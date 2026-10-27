@@ -394,10 +394,10 @@ def _network_context(session: Session, ids: set[int]) -> dict[int, tuple[str, st
 
 
 def unavailable_evidence(session: Session, rows: list[Kinetics]) -> frozenset[str]:
-    """The calculations and network solves these records cite that the reader cannot open: hidden, or naming no row.
+    """The calculations and network solves these records cite that the reader cannot open: withheld, or naming no row.
 
-    Hidden == unknown: such evidence is treated exactly like a reference to nothing, so a hidden supporting calculation
-    (a source link, a protocol citation) or a hidden network solve does not count under ``curated``. Empty, with no
+    Withheld == unknown: such evidence is treated exactly like a reference to nothing, so a withheld supporting calculation
+    (a source link, a protocol citation) or a withheld network solve does not count under ``curated``. Empty, with no
     statement, without a review floor: an exploratory selection is unchanged.
     """
     refs: set[str] = set()

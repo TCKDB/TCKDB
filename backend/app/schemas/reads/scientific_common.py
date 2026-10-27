@@ -39,7 +39,7 @@ class HiddenByDefault(BaseModel):
     Reported only under the ``exploratory`` profile, and only for an exclusion the request left at its default
     (``include_rejected`` / ``include_deprecated`` not set). ``counts`` has one key per such exclusion, counted over the
     records that matched the request's other filters. Under ``curated`` the block is never present: records below the
-    review floor are withheld without a count (decision D6: hidden == unknown == absent).
+    review floor are left out of a list and are not counted (the record floor, ADR 0023).
     """
 
     counts: dict[str, int]

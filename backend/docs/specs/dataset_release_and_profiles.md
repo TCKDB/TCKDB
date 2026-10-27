@@ -40,7 +40,7 @@ and the release — without mutating the underlying scientific record.
 | Profile | Returns | Says |
 |---|---|---|
 | `exploratory` (**default**) | every visible candidate, with its review/trust state | TCKDB recommends nothing. You are reading the archive. |
-| `curated` | records at or above the `approved` review floor | A human reviewer accepted these. Nothing further is claimed — see `profile_recommendation`. |
+| `curated` | lists, searches and selects return only records at or above the `approved` review floor (the *record floor*); a detail page serves any record that is not `rejected` or `deprecated`, badged, and a returned record's linked evidence is shown with its badge (the *evidence rule*) | A human reviewer accepted the records a list returns. Nothing further is claimed — see `profile_recommendation`. |
 
 Both are machine tokens (`ReadProfile` in `app/db/models/common.py`), never
 prose. The prose lives in this document.
@@ -61,7 +61,7 @@ narrowing**:
   | Token | Means |
   |---|---|
   | `none` | candidates; TCKDB is not telling you which to use (exploratory) |
-  | `approved_floor_only` | every record shown is `approved`, and **nothing more is claimed** (curated, general read surface) |
+  | `approved_floor_only` | the `approved` floor was applied to the records a list, search or select returned, and **nothing more is claimed**; a detail page and linked evidence may be unreviewed and are badged, and `rejected` and `deprecated` are withheld (curated, general read surface) |
   | `tckdb_curated_release` | these records *are* the ones an attributed selection names — emitted **only** by `/scientific/releases/*` |
 
   `tckdb_curated_release` was previously emitted for any curated read once any
@@ -105,9 +105,9 @@ report the profile:
   in every dataset manifest" means for them. They capture the profile
   *eagerly*, because a streaming generator can outlive the request-scoped
   context that holds it.
-  (Export withholding below is the earlier rule; the evidence rule described in the banner at the end of section 2.4 will narrow it in a
-  later step, except ML-export energy rows, whose calculations stay approved-only.)
-  Under `curated` the exports also withhold hidden refs, in untyped (`null`)
+  (Export withholding follows the evidence rule described in the banner at the end of section 2.4: only `rejected` and
+  `deprecated` refs are withheld, except ML-export energy rows, whose calculations stay approved-only.)
+  Under `curated` the exports also withhold refs to withheld records, in untyped (`null`)
   mode, a batch of 200 records at a time: **a withheld ref is `null`**, **a
   hidden member of a list of refs is dropped** from the list, free text that
   names a hidden record is blanked whole to `null`, and a ref that names no row
@@ -188,7 +188,7 @@ Resolved once, by an `async` router-level dependency
 > serves any record that is not `rejected` or `deprecated`, badged, and answers 404 only for those two (Q1). What a served detail
 > embeds follows the evidence rule: a `/full` participant or entry (Q9), a supersession successor (Q5), and the usage a level of
 > theory, correction scheme or scale factor lists. Lists, searches, browses and selects keep the approved floor (a select request resolves the refs it names through
-> `resolve_selection_handle`), and a search row of a reference record still counts that population. Nothing is left on the earlier rule (D6).
+> `resolve_selection_handle`), and a search row of a reference record still counts that population. No site applies the earlier rule (D6) any longer; the plan of ADR 0023 is complete (step 8 brought the copy in line).
 
 Behaviourally, `curated` is applied at exactly **two** seams, which between
 them cover the whole read surface:

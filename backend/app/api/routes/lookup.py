@@ -23,8 +23,9 @@ Internal match taxonomy (grounded in three axes):
 
 Visibility, order and selection (docs/specs/browse_order.md):
 - Every read applies the scientific reads' default visibility (rejected and deprecated records are hidden unless
-  ``include_rejected`` / ``include_deprecated`` is set) and their read profile (``?profile=curated`` withholds records
-  below the ``approved`` floor, with no count of them: hidden == unknown == absent).
+  ``include_rejected`` / ``include_deprecated`` is set) and their read profile (``?profile=curated`` lists only records at
+  ``approved``, with no count of the ones below it; a record's own detail page and the evidence it links are served badged,
+  and only rejected and deprecated ones are withheld, ADR 0023).
 - Records are listed in the display order (review status, then deposition time newest first, then id descending),
   echoed in ``order``. The first record is the first in display order, never a recommendation.
 - ``selection=lowest_energy|latest|earliest`` is an explicit request to narrow a list. What it did is stated in
@@ -232,7 +233,7 @@ class LookupResponse(BaseModel):
     results: list[LookupResultItem] = Field(default_factory=list)
     #: The display order of the records in ``results``, within each ``resource_type`` (identity rows first).
     order: OrderEcho = Field(default_factory=lambda: _DISPLAY_ORDER.model_copy(deep=True))
-    #: The read profile this lookup answered under; ``curated`` withholds records below the approved floor.
+    #: The read profile this lookup answered under; ``curated`` lists only records at the approved floor.
     profile: ReadProfile = ReadProfile.exploratory
     profile_recommendation: ProfileRecommendation = ProfileRecommendation.none
     #: Exploratory only: how many records the default visibility hid and how to include them. Never present under
@@ -850,7 +851,7 @@ def lookup_species(
     Uses the same canonicalization as uploads: SMILES → canonical SMILES
     → InChI key.  Returns the species and all matching entries with
     availability summaries. The summaries count the records the request shows (rejected and deprecated ones are
-    left out unless included; ``profile=curated`` counts approved records only).
+    left out unless included; ``profile=curated`` counts approved records only (a list-level floor)).
     """
     inputs = {"smiles": smiles, "charge": charge, "multiplicity": multiplicity}
     query = LookupQuery(kind="species", inputs=inputs)

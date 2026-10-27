@@ -230,8 +230,15 @@ touches the science:
 
 Every `/scientific/*` endpoint takes `?profile=exploratory|curated`.
 `exploratory` is the default and says, in a machine-readable token, that
-TCKDB recommends nothing; `curated` raises the review floor to `approved`
-and reports the release backing it. The resolved profile is echoed in
+TCKDB recommends nothing; `curated` applies two rules (ADR 0023). The
+*record floor*: a list, search, browse or select returns only records at
+`approved`. The *evidence rule*: a detail page, and the evidence a returned
+record links to, are shown with their review badge (`not_reviewed`,
+`under_review` or `approved`); only `rejected` and `deprecated` are
+withheld, and a request cannot lift that. It reports
+`profile_recommendation: approved_floor_only`, which claims no more than
+that the floor was applied to the records returned; an attributed selection
+is served only by the release endpoints. The resolved profile is echoed in
 **every** scientific response and every dataset manifest, from one seam
 (`scientific_read/internal_ids.py::apply_internal_ids_visibility`) so no
 endpoint can quietly opt out.
