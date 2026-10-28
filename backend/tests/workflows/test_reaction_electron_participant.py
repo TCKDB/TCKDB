@@ -175,15 +175,19 @@ def test_the_electron_is_part_of_the_reaction_identity(db_conn) -> None:
 
     with Session(db_conn) as session:
         with session.begin():
+            # Photodetachment: OH- -> OH + e-.
             with_electron = persist_reaction_upload(
                 session,
-                _request(reactants=[_OXIDE], products=[_O_ATOM, _ELECTRON, _ELECTRON]),
+                _request(reactants=[_HYDROXIDE], products=[{"smiles": "[OH]", "charge": 0, "multiplicity": 2}, _ELECTRON]),
             )
-            # Same heavy atoms, no electron declared, and charge-balanced on
-            # its own terms so it is accepted for its own reasons.
+            # Same reactant and the same heavy atoms, no electron declared, and charge-balanced on
+            # its own terms (OH- -> O.- + H.), so it is accepted for its own reasons.
             without_electron = persist_reaction_upload(
                 session,
-                _request(reactants=[_OXIDE], products=[_OXIDE]),
+                _request(
+                    reactants=[_HYDROXIDE],
+                    products=[{"smiles": "[O-]", "charge": -1, "multiplicity": 2}, _H_ATOM],
+                ),
             )
             assert with_electron.reaction_id != without_electron.reaction_id
 

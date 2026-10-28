@@ -1304,6 +1304,34 @@ def test_computed_reaction_statmech_forgot_sp_is_refused(client):
         "reactant_keys": ["ch3", "h"],
         "product_keys": ["ch3", "h"],
     }
+    # CH3 + H -> CH4: the two sides must differ (the same entries on both sides is a bare null reaction).
+    payload["species"].append(
+        {
+            "key": "ch4",
+            "species_entry": {"smiles": "C", "charge": 0, "multiplicity": 1},
+            "conformers": [
+                {
+                    "key": "ch4c",
+                    "geometry": {
+                        "key": "ch4g",
+                        "xyz_text": (
+                            "5\nmethane\nC 0.000 0.000 0.000\nH 0.629 0.629 0.629\nH -0.629 -0.629 0.629\n"
+                            "H -0.629 0.629 -0.629\nH 0.629 -0.629 -0.629"
+                        ),
+                    },
+                    "calculation": {
+                        "key": "ch4opt",
+                        "type": "opt",
+                        "software_release": _SOFTWARE,
+                        "level_of_theory": _LOT_A,
+                        "opt_converged": True,
+                    },
+                }
+            ],
+            "calculations": [],
+        }
+    )
+    payload["product_keys"] = ["ch4"]
     resp = client.post("/api/v1/uploads/computed-reaction", json=payload)
     body = _assert_code(resp, _REQUIRES_SP_STATMECH)
     assert "uncovered_opt_calculation_refs" in body["context"]
@@ -1367,6 +1395,34 @@ def test_computed_reaction_statmech_declared_energy_level_is_honored(client):
         "reactant_keys": ["ch3", "h"],
         "product_keys": ["ch3", "h"],
     }
+    # CH3 + H -> CH4: the two sides must differ (the same entries on both sides is a bare null reaction).
+    payload["species"].append(
+        {
+            "key": "ch4",
+            "species_entry": {"smiles": "C", "charge": 0, "multiplicity": 1},
+            "conformers": [
+                {
+                    "key": "ch4c",
+                    "geometry": {
+                        "key": "ch4g",
+                        "xyz_text": (
+                            "5\nmethane\nC 0.000 0.000 0.000\nH 0.629 0.629 0.629\nH -0.629 -0.629 0.629\n"
+                            "H -0.629 0.629 -0.629\nH 0.629 -0.629 -0.629"
+                        ),
+                    },
+                    "calculation": {
+                        "key": "ch4opt",
+                        "type": "opt",
+                        "software_release": _SOFTWARE,
+                        "level_of_theory": _LOT_A,
+                        "opt_converged": True,
+                    },
+                }
+            ],
+            "calculations": [],
+        }
+    )
+    payload["product_keys"] = ["ch4"]
     resp = client.post("/api/v1/uploads/computed-reaction", json=payload)
     body = _assert_code(resp, _REQUIRES_SP_STATMECH)
     assert "declared_level_of_theory_ref" in body["context"]

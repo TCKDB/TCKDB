@@ -191,6 +191,71 @@ def test_a_degenerate_reaction_with_kinetics_but_no_transition_state_is_accepted
         assert kinetics.reaction_entry_id is not None
 
 
+def _degenerate_bundle(*, transition_state: bool, kinetics: bool) -> dict:
+    """The CH3 + H -> CH4 bundle with its sides made identical (CH3 + H on both), plus the chosen evidence."""
+    import copy
+
+    from tests.workflows.test_computed_reaction_upload import _minimal_payload
+
+    payload = copy.deepcopy(_minimal_payload())
+    payload["product_keys"] = list(payload["reactant_keys"])
+    if not transition_state:
+        del payload["transition_state"]
+    if kinetics:
+        payload["kinetics"][0]["product_keys"] = list(payload["reactant_keys"])
+    else:
+        payload["kinetics"] = []
+    return payload
+
+
+def _persist_bundle(session, payload: dict):
+    from app.schemas.workflows.computed_reaction_upload import ComputedReactionUploadRequest
+    from app.workflows.computed_reaction import persist_computed_reaction_upload
+
+    return persist_computed_reaction_upload(session, ComputedReactionUploadRequest(**payload))
+
+
+def test_a_bundle_with_a_transition_state_accepts_a_same_entries_reaction(db_conn) -> None:
+    from tests.workflows.test_computed_reaction_upload import _isolated_session
+
+    with _isolated_session(db_conn) as session:
+        assert _persist_bundle(session, _degenerate_bundle(transition_state=True, kinetics=False))
+
+
+def test_a_bundle_with_kinetics_but_no_transition_state_accepts_a_same_entries_reaction(db_conn) -> None:
+    from tests.workflows.test_computed_reaction_upload import _isolated_session
+
+    with _isolated_session(db_conn) as session:
+        assert _persist_bundle(session, _degenerate_bundle(transition_state=False, kinetics=True))
+
+
+def test_a_bundle_with_neither_refuses_a_same_entries_reaction(db_conn) -> None:
+    from tests.workflows.test_computed_reaction_upload import _isolated_session
+
+    with _isolated_session(db_conn) as session:
+        with pytest.raises(CodedValueError) as excinfo:
+            _persist_bundle(session, _degenerate_bundle(transition_state=False, kinetics=False))
+    assert excinfo.value.code == W_REACTION_ENTRY_NULL_REACTION
+
+
+def test_a_pdep_micro_reaction_named_by_a_transition_state_accepts_a_same_entries_reaction(db_conn) -> None:
+    """The elimination micro reaction of the C2H5OO fixture, made degenerate: reactants equal products."""
+    import copy
+
+    from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
+    from app.workflows.network_pdep import persist_network_pdep_upload
+    from tests.workflows.test_network_pdep_upload import _full_payload
+
+    payload = copy.deepcopy(_full_payload(include_solve=False))
+    micro = next(r for r in payload["micro_reactions"] if r["key"] == "rxn_ho2_elim")
+    micro["products"] = copy.deepcopy(micro["reactants"])
+    for ts in payload["transition_states"]:
+        ts.pop("validation_evidence", None)  # its IRC partition was written for the original products
+    with Session(db_conn) as session, session.begin():
+        network = persist_network_pdep_upload(session, NetworkPDepUploadRequest(**payload))
+        assert network.id is not None
+
+
 def test_the_transition_state_may_come_after_the_kinetics(db_conn) -> None:
     """Kinetics first (it creates the reaction entry), the saddle point in a later request."""
     from app.workflows.kinetics import persist_kinetics_upload
