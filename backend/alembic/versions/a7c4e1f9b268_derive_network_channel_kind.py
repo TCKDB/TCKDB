@@ -25,7 +25,7 @@ migration. Only ``kind`` can change under that declaration.
 every derived kind is still a member of the old type, and which rows were relabelled is not
 something the old schema can ask to remember.
 
-Revision ID: d3f8a1c5b9e2
+Revision ID: a7c4e1f9b268
 Revises: c7e2a9f4d138
 """
 
@@ -35,7 +35,7 @@ from sqlalchemy import text
 
 from alembic import op
 
-revision: str = "d3f8a1c5b9e2"
+revision: str = "a7c4e1f9b268"
 down_revision: Union[str, Sequence[str], None] = "c7e2a9f4d138"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -53,7 +53,7 @@ _DERIVED = """
 """
 
 _REASON = (
-    "d3f8a1c5b9e2: network_channel.kind is derived from the kinds of the channel's source and sink "
+    "a7c4e1f9b268: network_channel.kind is derived from the kinds of the channel's source and sink "
     "states. Recompute kind for every channel whose stored kind differs; no other column is touched."
 )
 
@@ -78,8 +78,10 @@ def upgrade() -> None:
     unclassifiable = bind.execute(
         text(
             """
-            SELECT c.channel_key, src.kind::text AS source_kind, snk.kind::text AS sink_kind
+            SELECT c.channel_key, n.public_ref AS network_ref,
+                   src.kind::text AS source_kind, snk.kind::text AS sink_kind
               FROM network_channel c
+              JOIN network n ON n.id = c.network_id
               JOIN network_state src ON src.id = c.source_state_id
               JOIN network_state snk ON snk.id = c.sink_state_id
              WHERE src.kind::text NOT IN ('well', 'bimolecular', 'termolecular')
@@ -89,7 +91,7 @@ def upgrade() -> None:
         )
     ).all()
     if unclassifiable:
-        listing = "; ".join(f"{r.channel_key} ({r.source_kind} -> {r.sink_kind})" for r in unclassifiable)
+        listing = "; ".join(f"{r.network_ref}/{r.channel_key} ({r.source_kind} -> {r.sink_kind})" for r in unclassifiable)
         raise RuntimeError(
             f"{len(unclassifiable)} network_channel row(s) join a state whose kind is not well, "
             f"bimolecular or termolecular, so their channel kind cannot be derived: {listing}. "

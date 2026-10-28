@@ -160,3 +160,16 @@ def test_over_http_the_mismatch_is_a_422_with_the_code(client) -> None:
     assert body["code"] == CODE
     assert body["context"]["channel_key"] == "association_path"
     assert body["context"]["derived_kind"] == "association"
+
+
+def test_a_plain_string_kind_that_disagrees_is_a_coded_422_not_a_500(db_conn) -> None:
+    request = NetworkPDepUploadRequest(**_parallel_path_payload())
+    channels = [c.model_copy(update={"kind": "exchange"}) for c in request.channels[:1]] + request.channels[1:]
+    request = NetworkPDepUploadRequest.model_construct(**{**dict(request), "channels": channels})
+    assert channels[0].kind == "exchange" and not isinstance(channels[0].kind, NetworkChannelKind)
+    with Session(db_conn) as session, session.begin():
+        with pytest.raises(CodedValueError) as caught:
+            persist_network_pdep_upload(session, request)
+        assert caught.value.code == CODE
+        assert "exchange" in str(caught.value) and "id=" not in str(caught.value)
+        session.rollback()

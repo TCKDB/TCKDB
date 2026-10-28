@@ -1,4 +1,4 @@
-"""``d3f8a1c5b9e2`` recomputes every channel's kind from its states and drops 'stabilization'."""
+"""``a7c4e1f9b268`` recomputes every channel's kind from its states and drops 'stabilization'."""
 
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
@@ -14,7 +14,7 @@ from app.db.base import Base
 from app.db.models.common import SubmissionRecordType
 from tests.db.test_accepted_science_immutability import _actor, _approve
 
-_PATH = Path(__file__).resolve().parents[2] / "alembic/versions/d3f8a1c5b9e2_derive_network_channel_kind.py"
+_PATH = Path(__file__).resolve().parents[2] / "alembic/versions/a7c4e1f9b268_derive_network_channel_kind.py"
 
 
 def _load(db_session, monkeypatch):
@@ -70,7 +70,7 @@ def _enum_values(db_session) -> list[str]:
 def _repair_count(db_session) -> int:
     return db_session.scalar(
         text(
-            "SELECT count(*) FROM accepted_science_repair WHERE alembic_revision = 'd3f8a1c5b9e2' "
+            "SELECT count(*) FROM accepted_science_repair WHERE alembic_revision = 'a7c4e1f9b268' "
             "AND target_table = 'network_channel' AND declared_columns = ARRAY['kind']"
         )
     )
@@ -148,7 +148,7 @@ def test_upgrade_recomputes_kinds_maps_stabilization_and_drops_the_value(db_sess
         for row in db_session.execute(
             text("SELECT c.record_id, c.row_identity, c.before_json, c.after_json "
                  "FROM accepted_science_repair_change c JOIN accepted_science_repair r ON r.id = c.repair_id "
-                 "WHERE r.alembic_revision = 'd3f8a1c5b9e2' AND c.target_table = 'network_channel'")
+                 "WHERE r.alembic_revision = 'a7c4e1f9b268' AND c.target_table = 'network_channel'")
         )
     }
     assert ledger == {

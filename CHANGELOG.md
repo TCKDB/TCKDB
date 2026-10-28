@@ -24,7 +24,7 @@ dataset must never require a code release.
 
 ## Derive network channel kind from its states (2026-10-28)
 
-- **Client: `tckdb-client` 0.178.0, `tckdb-schemas` 0.140.0.** Migration `d3f8a1c5b9e2` rebuilds the `network_channel_kind` enum.
+- **Client: `tckdb-client` 0.178.0, `tckdb-schemas` 0.140.0.** Migration `a7c4e1f9b268` rebuilds the `network_channel_kind` enum.
 - A channel's kind is a function of its two states: well to well is `isomerization`, bimolecular/termolecular to well `association`, well to bimolecular/termolecular
   `dissociation`, bimolecular/termolecular to bimolecular/termolecular `exchange`. Termolecular is treated like bimolecular, so every pair has a kind.
 - The upload field `kind` is optional. Omitted, the server fills it in; supplied and agreeing, accepted; supplied and disagreeing, refused as

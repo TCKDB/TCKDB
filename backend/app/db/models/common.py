@@ -1410,8 +1410,11 @@ class NetworkChannelKind(str, Enum):
         well to bimolecular or termolecular.
 
     ``exchange``
-        bimolecular or termolecular to bimolecular or termolecular, including well-skipping
-        channels and stereo isomerisation of a fragment set.
+        bimolecular or termolecular to bimolecular or termolecular, including stereo
+        isomerisation of a fragment set.
+
+    The kind comes from the two endpoints whatever the channel's mechanism: a well-skipping channel
+    that ends at a well is ``association`` or ``dissociation``, not ``exchange``.
     """
     isomerization = "isomerization"
     association = "association"

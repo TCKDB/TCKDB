@@ -986,15 +986,16 @@ def persist_network_pdep_upload(
         # The kind is a function of the two states. The request validator already filled or checked it;
         # it is derived again here because a request built with ``model_construct`` skips validators.
         derived_kind = NetworkChannelKind(derive_channel_kind(source_row.kind, sink_row.kind).value)
-        if ch_in.kind is not None and ch_in.kind != derived_kind:
+        supplied_kind = None if ch_in.kind is None else NetworkChannelKind(ch_in.kind)
+        if supplied_kind is not None and supplied_kind != derived_kind:
             raise CodedValueError(
                 W_NETWORK_CHANNEL_KIND_MISMATCH,
-                f"channel '{ch_in.key}' declares kind='{ch_in.kind.value}' but its states make it "
+                f"channel '{ch_in.key}' declares kind='{supplied_kind.value}' but its states make it "
                 f"kind='{derived_kind.value}'. Omit kind to have it derived.",
                 context={
                     "field": f"channels[{ch_index}].kind",
                     "channel_key": ch_in.key,
-                    "supplied_kind": ch_in.kind.value,
+                    "supplied_kind": supplied_kind.value,
                     "derived_kind": derived_kind.value,
                 },
                 message_prefix=False,

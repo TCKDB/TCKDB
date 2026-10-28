@@ -142,7 +142,7 @@
 .net-pes-connector-dissociation {
     stroke: var(--chart-series-5);
 }
-/* Any channel kind other than the four enum values -- a defensive fourth colour, same convention as the old
+/* Any channel kind other than the four enum values -- a defensive fallback colour, same convention as the old
    edge diagram's own `.net-edge-other`. */
 .net-pes-connector-other {
     stroke: var(--chart-series-4);
