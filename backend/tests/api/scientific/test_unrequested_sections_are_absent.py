@@ -211,7 +211,7 @@ def corpus(client, db_session) -> dict[str, Any]:
         network=network,
         source_state=source_state,
         sink_state=sink_state,
-        kind=NetworkChannelKind.isomerization,
+        kind=NetworkChannelKind.dissociation,
     )
     solve = make_network_solve(
         session, network=network, kind=NetworkSolveKind.computed

@@ -563,10 +563,31 @@ class SpeciesEntryStateKind(str, Enum):
 
 
 class NetworkChannelKind(str, Enum):
+    """Macroscopic type of a network channel, derived from the states it joins.
+
+    A channel is directed (source to sink). Its kind follows from the kinds of its two states, with
+    termolecular treated exactly like bimolecular. A deposit may omit ``kind``; if it supplies one
+    it is checked against this rule, and a disagreement is refused as ``network_channel_kind_mismatch``.
+
+    ``isomerization``
+        well to well.
+
+    ``association``
+        bimolecular or termolecular to well.
+
+    ``dissociation``
+        well to bimolecular or termolecular.
+
+    ``exchange``
+        bimolecular or termolecular to bimolecular or termolecular, including stereo
+        isomerisation of a fragment set.
+
+    The kind comes from the two endpoints whatever the channel's mechanism: a well-skipping channel
+    that ends at a well is ``association`` or ``dissociation``, not ``exchange``.
+    """
     isomerization = "isomerization"
     association = "association"
     dissociation = "dissociation"
-    stabilization = "stabilization"
     exchange = "exchange"
 
 

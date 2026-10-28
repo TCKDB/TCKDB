@@ -139,8 +139,10 @@
 .net-pes-connector-exchange {
     stroke: var(--chart-series-2);
 }
-/* Any channel kind other than the three enum values measured against the
-   live archive -- a defensive fourth colour, same convention as the old
+.net-pes-connector-dissociation {
+    stroke: var(--chart-series-5);
+}
+/* Any channel kind other than the four enum values -- a defensive fallback colour, same convention as the old
    edge diagram's own `.net-edge-other`. */
 .net-pes-connector-other {
     stroke: var(--chart-series-4);
@@ -195,6 +197,9 @@
 }
 .net-legend-line-exchange {
     background: var(--chart-series-2);
+}
+.net-legend-line-dissociation {
+    background: var(--chart-series-5);
 }
 .net-legend-line-other {
     background: var(--chart-series-4);

@@ -128,6 +128,19 @@ describe("NetworkDiagram -- invariant 1: a saddle point is drawn only for a chan
     })
 })
 
+describe("NetworkDiagram -- a dissociation channel has its own connector style, not the generic one", () => {
+    it("colours a drawn dissociation saddle and its legend entry as dissociation, never as other", () => {
+        // channel_9: well (hash_n1) -> bimolecular (hash_n3), with a deposited barrier.
+        const channels = [...HYDRAZINE_CHANNELS, channel("channel_9", "dissociation", "hash_n1", "hash_n3", true)]
+        const barriers = [...HYDRAZINE_BARRIERS, barrier("channel_9", 400.0, 19.1)]
+        const { container } = renderDiagram(HYDRAZINE_STATES, channels, HYDRAZINE_ENERGIES, barriers)
+        expect(container.querySelector(".net-pes-ts-bar.net-pes-connector-dissociation")).not.toBeNull()
+        expect(container.querySelector(".net-legend-line-dissociation")).not.toBeNull()
+        expect(container.querySelector(".net-pes-connector-other")).toBeNull()
+        expect(container.querySelector(".net-legend-line-other")).toBeNull()
+    })
+})
+
 describe("NetworkDiagram -- saddle height is source_energy + forward_barrier_kj_mol, rendered on the peak", () => {
     it("shows 274.7, never the bare forward barrier (94.6) or the reverse-derived figure alone", () => {
         const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)

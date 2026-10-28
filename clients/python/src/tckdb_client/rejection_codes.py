@@ -223,6 +223,7 @@ class RejectionCode(str, Enum):
     MULTIPLE_STRUCTURE_QUERIES = "multiple_structure_queries"
     N_IMAG_CONTRADICTS_MINIMUM = "n_imag_contradicts_minimum"
     NETWORK_CHANNEL_KEY_UNDECLARED = "network_channel_key_undeclared"
+    NETWORK_CHANNEL_KIND_MISMATCH = "network_channel_kind_mismatch"
     NETWORK_DECLARATION_INVALID = "network_declaration_invalid"
     NETWORK_DECLARATION_VERSION_UNSUPPORTED = "network_declaration_version_unsupported"
     NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH = "network_energy_source_subject_mismatch"
@@ -556,6 +557,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.MULTIPLE_STRUCTURE_QUERIES,
         RejectionCode.N_IMAG_CONTRADICTS_MINIMUM,
         RejectionCode.NETWORK_CHANNEL_KEY_UNDECLARED,
+        RejectionCode.NETWORK_CHANNEL_KIND_MISMATCH,
         RejectionCode.NETWORK_DECLARATION_INVALID,
         RejectionCode.NETWORK_DECLARATION_VERSION_UNSUPPORTED,
         RejectionCode.NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH,
@@ -911,6 +913,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.MULTIPLE_STRUCTURE_QUERIES: frozenset({422}),
     RejectionCode.N_IMAG_CONTRADICTS_MINIMUM: frozenset({422}),
     RejectionCode.NETWORK_CHANNEL_KEY_UNDECLARED: frozenset({422}),
+    RejectionCode.NETWORK_CHANNEL_KIND_MISMATCH: frozenset({422}),
     RejectionCode.NETWORK_DECLARATION_INVALID: frozenset({422}),
     RejectionCode.NETWORK_DECLARATION_VERSION_UNSUPPORTED: frozenset({422}),
     RejectionCode.NETWORK_ENERGY_SOURCE_SUBJECT_MISMATCH: frozenset({422}),

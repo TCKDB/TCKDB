@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.140.0 - 2026-10-28
+
+A network channel's `kind` is derived from the two states it joins. One refusal code joins the contract.
+
+- `kind` on a PDep channel is optional. Omit it and the server fills it in; supply it and it must agree. well to well is `isomerization`, bimolecular or
+  termolecular to well is `association`, well to bimolecular or termolecular is `dissociation`, and bimolecular or termolecular to bimolecular or termolecular is
+  `exchange` (including a stereo isomerisation of a fragment set, and well-skipping channels). `tckdb_schemas.network_channel_kind.derive_channel_kind` is the rule.
+- `network_channel_kind_mismatch` (422): a supplied `kind` disagrees with the kind derived from the channel's states. The detail names the channel's local key, the
+  supplied kind and the derived kind.
+- `stabilization` is removed from `NetworkChannelKind`; nothing used it. A payload that sends it is refused as an unknown enum value.
+
 ## 0.139.0 - 2026-10-27
 
 Three refusal codes join the contract. No field is added or removed.

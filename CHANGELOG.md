@@ -22,6 +22,18 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Derive network channel kind from its states (2026-10-28)
+
+- **Client: `tckdb-client` 0.178.0, `tckdb-schemas` 0.140.0.** Migration `a7c4e1f9b268` rebuilds the `network_channel_kind` enum.
+- A channel's kind is a function of its two states: well to well is `isomerization`, bimolecular/termolecular to well `association`, well to bimolecular/termolecular
+  `dissociation`, bimolecular/termolecular to bimolecular/termolecular `exchange`. Termolecular is treated like bimolecular, so every pair has a kind.
+- The upload field `kind` is optional. Omitted, the server fills it in; supplied and agreeing, accepted; supplied and disagreeing, refused as
+  `network_channel_kind_mismatch` (422), naming the channel key, the supplied kind and the derived kind.
+- `stabilization` is removed from the enum (nothing used it). The migration recomputes every stored channel kind from its states (as a declared repair on the one column `kind`),
+  stops with a list if a channel joins a state it cannot classify, and recreates the PostgreSQL enum.
+- The PDep ingestion script uses the shared rule and raises on a pair it cannot map instead of defaulting to `isomerization`.
+- Frontend: `dissociation` channels have their own connector style and legend entry.
+
 ## Stereo isomerisations, duplicate network states, stereo in exports and UI (2026-10-27)
 
 - **Client: `tckdb-client` 0.177.0, `tckdb-schemas` 0.139.0.** Third part of DR-0038. No table or column changes and no migration.

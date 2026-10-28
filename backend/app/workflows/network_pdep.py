@@ -22,6 +22,7 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.network_channel_kind import W_NETWORK_CHANNEL_KIND_MISMATCH, derive_channel_kind
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.api.error_contract import CodedValueError
@@ -35,6 +36,7 @@ from app.db.models.common import (
     CalculationGeometryRole,
     CalculationType,
     EnergyCorrectionConvention,
+    NetworkChannelKind,
     NetworkSpeciesRole,
     SubmissionRecordType,
 )
@@ -971,19 +973,38 @@ def persist_network_pdep_upload(
     # ------------------------------------------------------------------
     channel_key_to_row: dict[str, NetworkChannel] = {}
     for ch_index, ch_in in enumerate(request.channels):
+        source_row = resolve_network_state_key(
+            ch_in.source_state_key,
+            state_key_to_row,
+            field=f"channels[{ch_index}].source_state_key",
+        )
+        sink_row = resolve_network_state_key(
+            ch_in.sink_state_key,
+            state_key_to_row,
+            field=f"channels[{ch_index}].sink_state_key",
+        )
+        # The kind is a function of the two states. The request validator already filled or checked it;
+        # it is derived again here because a request built with ``model_construct`` skips validators.
+        derived_kind = NetworkChannelKind(derive_channel_kind(source_row.kind, sink_row.kind).value)
+        supplied_kind = None if ch_in.kind is None else NetworkChannelKind(ch_in.kind)
+        if supplied_kind is not None and supplied_kind != derived_kind:
+            raise CodedValueError(
+                W_NETWORK_CHANNEL_KIND_MISMATCH,
+                f"channel '{ch_in.key}' declares kind='{supplied_kind.value}' but its states make it "
+                f"kind='{derived_kind.value}'. Omit kind to have it derived.",
+                context={
+                    "field": f"channels[{ch_index}].kind",
+                    "channel_key": ch_in.key,
+                    "supplied_kind": supplied_kind.value,
+                    "derived_kind": derived_kind.value,
+                },
+                message_prefix=False,
+            )
         channel_row = NetworkChannel(
             network_id=network.id,
-            source_state_id=resolve_network_state_key(
-                ch_in.source_state_key,
-                state_key_to_row,
-                field=f"channels[{ch_index}].source_state_key",
-            ).id,
-            sink_state_id=resolve_network_state_key(
-                ch_in.sink_state_key,
-                state_key_to_row,
-                field=f"channels[{ch_index}].sink_state_key",
-            ).id,
-            kind=ch_in.kind,
+            source_state_id=source_row.id,
+            sink_state_id=sink_row.id,
+            kind=derived_kind,
             mechanism=ch_in.mechanism,
             channel_key=ch_in.key,
         )

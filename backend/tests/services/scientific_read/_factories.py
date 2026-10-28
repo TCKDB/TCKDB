@@ -1804,18 +1804,32 @@ def make_network_channel(
     network,
     source_state,
     sink_state,
-    kind,
+    kind=None,
     channel_key: str | None = None,
 ):
     """Create a NetworkChannel.
+
+    ``kind`` is derived from the two states (``derive_channel_kind``), as the upload path does. A fixture
+    may still name it, but it must agree with the states: a disagreeing kind is the one thing the
+    schema no longer lets anyone store, so the factory refuses it too.
 
     ``channel_key`` is NOT NULL in the schema — it is the producer-visible
     identity that lets parallel mechanistic paths share endpoints — so a
     unique default is derived from the endpoints when the caller does not
     care which key it gets.
     """
+    from tckdb_schemas.network_channel_kind import derive_channel_kind
+
+    from app.db.models.common import NetworkChannelKind
     from app.db.models.network_pdep import NetworkChannel
 
+    derived = NetworkChannelKind(derive_channel_kind(source_state.kind, sink_state.kind).value)
+    if kind is not None and NetworkChannelKind(kind) is not derived:
+        raise AssertionError(
+            f"fixture channel kind {NetworkChannelKind(kind).value!r} disagrees with its states "
+            f"({source_state.kind.value} -> {sink_state.kind.value} is {derived.value!r})"
+        )
+    kind = derived
     row = NetworkChannel(
         network_id=network.id,
         source_state_id=source_state.id,
