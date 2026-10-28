@@ -277,6 +277,72 @@ def test_a_reversed_fit_in_another_order_is_evidence(db_conn) -> None:
         assert entry_ids == {canonical.id}
 
 
+def test_a_reordered_fit_stores_its_interpretations_against_the_canonical_participant_order(db_conn) -> None:
+    """``[h, ch3]`` against the canonical ``[ch3, h]``: ``reactant:1`` must name CH3's statmech, not H's."""
+    import copy
+
+    from app.db.models.kinetics import Kinetics, KineticsInterpretationAssignment
+    from app.db.models.statmech import Statmech
+    from tests.workflows.test_computed_reaction_upload import _isolated_session, _minimal_payload
+
+    def entry(session, smiles: str, multiplicity: int):
+        resolved = resolve_species_entry(
+            session, SpeciesEntryIdentityPayload(smiles=smiles, charge=0, multiplicity=multiplicity)
+        )
+        session.flush()
+        return resolved
+
+    conventions = {
+        "ensemble_policy": "single_structure",
+        "standard_state_convention": "ideal_gas_1_bar",
+        "degeneracy_interpretation": "reaction_path_degeneracy",
+    }
+    with _isolated_session(db_conn) as session:
+        statmechs = {}
+        for key, smiles, mult in (("ch3", "[CH3]", 2), ("h", "[H]", 2), ("ch4", "C", 1)):
+            row = Statmech(species_entry_id=entry(session, smiles, mult).id, scientific_origin="experimental")
+            session.add(row)
+            statmechs[key] = row
+        session.flush()
+
+        payload = copy.deepcopy(_minimal_payload())
+        del payload["transition_state"]
+        fit = payload["kinetics"][0]
+        fit["scientific_origin"] = "experimental"
+        fit["reactant_keys"] = ["h", "ch3"]  # canonical is ["ch3", "h"]
+        fit["interpretation_assignments"] = [
+            {"role": "reactant", "participant_index": 1, "statmech_ref": statmechs["h"].public_ref, **conventions},
+            {"role": "reactant", "participant_index": 2, "statmech_ref": statmechs["ch3"].public_ref, **conventions},
+            {"role": "product", "participant_index": 1, "statmech_ref": statmechs["ch4"].public_ref, **conventions},
+        ]
+        _persist_bundle(session, payload)
+
+        kinetics = session.scalars(select(Kinetics).order_by(Kinetics.id.desc())).first()
+        rows = session.scalars(
+            select(KineticsInterpretationAssignment)
+            .where(KineticsInterpretationAssignment.kinetics_id == kinetics.id)
+            .order_by(KineticsInterpretationAssignment.subject_key)
+        ).all()
+        stored = {r.subject_key: r.statmech_id for r in rows}
+        # Canonical reactant 1 is CH3 and reactant 2 is H, whatever order the fit wrote them in.
+        assert stored == {
+            "reactant:1": statmechs["ch3"].id,
+            "reactant:2": statmechs["h"].id,
+            "product:1": statmechs["ch4"].id,
+        }
+
+
+def test_participant_positions_follow_the_entry_and_repeated_entries_map_in_order() -> None:
+    from types import SimpleNamespace
+
+    from app.workflows.computed_reaction import _canonical_participant_positions
+
+    h, x = SimpleNamespace(id=1), SimpleNamespace(id=2)
+    # fit [h, x, h] against canonical [x, h, h]: x is canonical 1; the first h is canonical 2, the second 3.
+    assert _canonical_participant_positions([h, x, h], [x, h, h]) == {1: 2, 2: 1, 3: 3}
+    assert _canonical_participant_positions([h, h], [h, h]) == {1: 1, 2: 2}
+
+
 def test_a_pdep_micro_reaction_named_by_a_transition_state_accepts_a_same_entries_reaction(db_conn) -> None:
     """The elimination micro reaction of the C2H5OO fixture, made degenerate: reactants equal products."""
     import copy

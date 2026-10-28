@@ -574,6 +574,38 @@ def _collect_bundle_provenance_warnings(
     return warnings
 
 
+def _canonical_participant_positions(fit_entries, canonical_entries) -> dict[int, int]:
+    """Map a fit's 1-based participant positions to the canonical entry's, matching on entry identity.
+
+    A fit attached to the canonical reaction entry may list the same entries in another order
+    (``[h, ch3]`` against ``[ch3, h]``). Anything keyed by participant position (an interpretation's
+    ``reactant:1``) must follow the entry it names, not the fit's own ordering. A repeated entry maps
+    deterministically: the i-th occurrence in the fit is the i-th occurrence in the canonical list.
+    """
+    seen: dict[int, int] = {}
+    positions: dict[int, int] = {}
+    for fit_index, entry in enumerate(fit_entries, start=1):
+        occurrence = seen.get(entry.id, 0)
+        seen[entry.id] = occurrence + 1
+        matches = [i for i, c in enumerate(canonical_entries, start=1) if c.id == entry.id]
+        positions[fit_index] = matches[occurrence]
+    return positions
+
+
+def _assignments_in_canonical_order(assignments, fit_reactants, fit_products, canonical_reactants, canonical_products):
+    """The fit's interpretation assignments, re-indexed onto the canonical entry's participant order."""
+    reactant_map = _canonical_participant_positions(fit_reactants, canonical_reactants)
+    product_map = _canonical_participant_positions(fit_products, canonical_products)
+    remapped = []
+    for assignment in assignments:
+        if assignment.role == "reactant":
+            assignment = assignment.model_copy(update={"participant_index": reactant_map[assignment.participant_index]})
+        elif assignment.role == "product":
+            assignment = assignment.model_copy(update={"participant_index": product_map[assignment.participant_index]})
+        remapped.append(assignment)
+    return remapped
+
+
 def _fit_is_for_reaction(kin, species_key_to_entry, reactant_entries, product_entries) -> bool:
     """Whether a bundle kinetics fit is for the bundle's own reaction (DR-0038 null-reaction evidence).
 
@@ -1928,25 +1960,32 @@ def persist_computed_reaction_upload(
             kin.network_kinetics_ref,
             field=f"{kin_field_prefix}network_kinetics_ref",
         )
+        fit_reactant_entries = [
+            resolve_species_key(k, species_key_to_entry, field=f"kinetics[{kin_index}].reactant_keys[{i}]")
+            for i, k in enumerate(kin.reactant_keys)
+        ]
+        fit_product_entries = [
+            resolve_species_key(k, species_key_to_entry, field=f"kinetics[{kin_index}].product_keys[{i}]")
+            for i, k in enumerate(kin.product_keys)
+        ]
+        if kin_entry is canonical_reaction_entry:
+            # The fit is stored on the canonical entry, so its participant positions are the canonical entry's.
+            interpretation_assignments = _assignments_in_canonical_order(
+                kin.interpretation_assignments,
+                fit_reactant_entries,
+                fit_product_entries,
+                reactant_entries,
+                product_entries,
+            )
+            reactant_entries_for_fit, product_entries_for_fit = reactant_entries, product_entries
+        else:
+            interpretation_assignments = kin.interpretation_assignments
+            reactant_entries_for_fit, product_entries_for_fit = fit_reactant_entries, fit_product_entries
         resolved_interpretations = resolve_interpretation_assignments(
             session,
-            kin.interpretation_assignments,
-            reactant_entries=[
-                resolve_species_key(
-                    k,
-                    species_key_to_entry,
-                    field=f"kinetics[{kin_index}].reactant_keys[{i}]",
-                )
-                for i, k in enumerate(kin.reactant_keys)
-            ],
-            product_entries=[
-                resolve_species_key(
-                    k,
-                    species_key_to_entry,
-                    field=f"kinetics[{kin_index}].product_keys[{i}]",
-                )
-                for i, k in enumerate(kin.product_keys)
-            ],
+            interpretation_assignments,
+            reactant_entries=reactant_entries_for_fit,
+            product_entries=product_entries_for_fit,
             created_by=created_by,
             reaction_entry=kin_entry,
             ts_scope="reaction",

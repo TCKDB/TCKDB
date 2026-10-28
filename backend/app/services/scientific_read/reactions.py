@@ -70,6 +70,7 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.keyset import Paging
+from app.services.scientific_read.reaction_participants import collapse_occurrences, format_reaction_equation
 from app.services.scientific_read.species_identity import (
     STEREO_DISPLAY,
     species_entry_label_for,
@@ -1059,13 +1060,6 @@ def _collapsed_participants(
     rebuilds the equation from the rows read ``2 H + 2 H`` (4 H). ``stoichiometry`` is now this entry's own count on
     this side, ``participant_index`` the first position it was written at.
     """
-    counts: dict[int, int] = {}
-    first_index: dict[int, int] = {}
-    for se, row_role, idx in sorted(participants, key=lambda p: (p[1].value, p[2])):
-        if row_role != role:
-            continue
-        counts[se] = counts.get(se, 0) + 1
-        first_index.setdefault(se, idx)
     return [
         ReactionParticipantSummary(
             species_entry_id=se,
@@ -1074,23 +1068,10 @@ def _collapsed_participants(
             smiles=smiles_by_entry_species.get(se, ""),
             formula=formulas_by_entry_species.get(se),
             stoichiometry=count,
-            participant_index=first_index[se],
+            participant_index=first_index,
         )
-        for se, count in counts.items()
+        for se, count, first_index in collapse_occurrences(participants, role)
     ]
-
-
-def _format_equation(
-    reactants: list[ReactionParticipantSummary],
-    products: list[ReactionParticipantSummary],
-    reversible: bool,
-) -> str:
-    arrow = "<=>" if reversible else "->"
-    # The written form: a participant that occurs twice is written twice (``[H] + [H]``); the rows carry the
-    # count as ``stoichiometry`` instead of repeating.
-    left = " + ".join(p.smiles for p in reactants for _ in range(p.stoichiometry))
-    right = " + ".join(p.smiles for p in products for _ in range(p.stoichiometry))
-    return f"{left} {arrow} {right}"
 
 
 def _materialize_and_sort_reaction_records(
@@ -1137,7 +1118,11 @@ def _materialize_and_sort_reaction_records(
             smiles_by_entry_species,
             formulas_by_entry_species,
         )
-        equation = _format_equation(reactants, products, chem.reversible)
+        equation = format_reaction_equation(
+            [(idx, smiles_by_entry_species.get(se, "")) for se, role, idx in participants if role == ReactionRole.reactant],
+            [(idx, smiles_by_entry_species.get(se, "")) for se, role, idx in participants if role == ReactionRole.product],
+            chem.reversible,
+        )
         records.append(
             ReactionScientificRecord(
                 reaction_id=chem.id,

@@ -57,6 +57,27 @@ def test_h_plus_h_gives_h2_lists_the_h_entry_once_with_coefficient_two(client, d
     assert record["equation"] == "[H] + [H] -> [H][H]"
 
 
+def test_interleaved_occurrences_serve_the_same_order_indices_and_equation_on_every_surface(client, db_session) -> None:
+    """``H + H2 + H -> H2 + H2``: ``/full`` and search agree on row order, first positions and the equation."""
+    ref = _entry_ref(client, db_session, _post(client, [_H, _H2, _H], [_H2, _H2]))
+
+    full = _full(client, ref)
+    record = _search(client, ref)
+
+    def rows(side):
+        return [(p["smiles"], p["stoichiometry"], p["participant_index"]) for p in side]
+
+    # Distinct entries in order of first position written: H at 1 (twice), H2 at 2.
+    expected = [("[H]", 2, 1), ("[H][H]", 1, 2)]
+    assert rows(full["species"]["reactants"]) == expected
+    assert rows(record["reactants"]) == expected
+    assert rows(full["species"]["products"]) == rows(record["products"]) == [("[H][H]", 2, 1)]
+
+    # One equation string for the one entry, as written, on every surface.
+    written = "[H] + [H][H] + [H] <=> [H][H] + [H][H]".replace("<=>", "->")
+    assert record["equation"] == full["reaction_entry"]["equation"] == written
+
+
 def test_a_coefficient_one_reaction_lists_every_participant_once_with_one(client, db_session) -> None:
     ref = _entry_ref(client, db_session, _post(client, [_H2], [_H, _H]))
     record = _search(client, ref)

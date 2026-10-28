@@ -106,6 +106,7 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.kinetics import get_reaction_kinetics
 from app.services.scientific_read.networks import build_network_record
+from app.services.scientific_read.reaction_participants import collapse_occurrences, format_reaction_equation
 from app.services.scientific_read.species_identity import (
     STEREO_DISPLAY,
     species_entry_label_for,
@@ -614,40 +615,29 @@ def _build_species_section(
         record_ids=[r[0] for r in rows],
     )
 
-    # One structure-participant row is stored per OCCURRENCE (``H + H -> H2`` has two rows for the one H entry).
-    # Each distinct entry is served once per side, carrying how many times it occurs: the count of ITS rows, not the
-    # species-level coefficient, so two entries of one species on a side each keep their own count.
-    occurrences: dict[tuple[int, ReactionRole], int] = {}
-    for row in rows:
-        key = (row.species_entry_id, row.role)
-        occurrences[key] = occurrences.get(key, 0) + 1
-    served: set[tuple[int, ReactionRole]] = set()
+    # One structure-participant row is stored per OCCURRENCE; each distinct entry is served once per side, at the
+    # first position it was written at, with its own occurrence count (the shared rule in ``reaction_participants``).
+    visible = [r for r in rows if badge_by_entry[r.species_entry_id].status in visible_review_statuses]
+    occurrence_rows = [(r.species_entry_id, r.role, r.participant_index) for r in visible]
+    row_by_entry = {(r.species_entry_id, r.role): r for r in visible}
 
     reactants: list[ReactionFullSpeciesParticipant] = []
     products: list[ReactionFullSpeciesParticipant] = []
-    for row in rows:
-        species_entry_id = row.species_entry_id
-        role = row.role
-        badge = badge_by_entry[species_entry_id]
-        if badge.status not in visible_review_statuses:
-            continue
-        if (species_entry_id, role) in served:
-            continue
-        served.add((species_entry_id, role))
-        participant = ReactionFullSpeciesParticipant(
-            species_entry_id=species_entry_id,
-            species_entry_ref=row.public_ref,
-            species_entry_label=species_entry_label_for(row),
-            smiles=row.smiles,
-            formula=row.formula,
-            stoichiometry=occurrences[(species_entry_id, role)],
-            participant_index=row.participant_index,
-            review=badge,
-        )
-        if role == ReactionRole.reactant:
-            reactants.append(participant)
-        else:
-            products.append(participant)
+    for role, bucket in ((ReactionRole.reactant, reactants), (ReactionRole.product, products)):
+        for species_entry_id, count, first_index in collapse_occurrences(occurrence_rows, role):
+            row = row_by_entry[(species_entry_id, role)]
+            bucket.append(
+                ReactionFullSpeciesParticipant(
+                    species_entry_id=species_entry_id,
+                    species_entry_ref=row.public_ref,
+                    species_entry_label=species_entry_label_for(row),
+                    smiles=row.smiles,
+                    formula=row.formula,
+                    stoichiometry=count,
+                    participant_index=first_index,
+                    review=badge_by_entry[species_entry_id],
+                )
+            )
 
     reactants.sort(
         key=lambda p: (REVIEW_RANK[p.review.status], p.participant_index, p.species_entry_id)
@@ -1629,15 +1619,8 @@ def _format_entry_equation(
             ReactionEntryStructureParticipant.reaction_entry_id == entry.id
         )
     ).all()
-    reactants = sorted(
+    return format_reaction_equation(
         [(idx, smiles) for role, idx, smiles in rows if role == ReactionRole.reactant],
-        key=lambda x: x[0],
-    )
-    products = sorted(
         [(idx, smiles) for role, idx, smiles in rows if role == ReactionRole.product],
-        key=lambda x: x[0],
+        chem is None or chem.reversible,
     )
-    arrow = "<=>" if (chem is None or chem.reversible) else "->"
-    left = " + ".join(s for _, s in reactants)
-    right = " + ".join(s for _, s in products)
-    return f"{left} {arrow} {right}"

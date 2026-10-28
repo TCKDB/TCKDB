@@ -35,8 +35,10 @@ dataset must never require a code release.
   separately, so in general `A -> B` and `B -> A` are two rows) and differ in their entries' roles.
 - **Reaction participant rows are one per distinct entry per side.** `reactions/search`, `/browse`, `/full` and the review queue served one row per occurrence
   (`H + H -> H2`: two H rows) while each row also carried the species-level coefficient (2), so a consumer summing the rows read 4 H. Each distinct entry is now served
-  once per side with `stoichiometry` = how many times it occurs there; two entries of one species on a side each keep their own count. The served `equation` string is
-  unchanged (`[H] + [H] -> [H][H]`). Consumers: the web app already collapses repeated rows (it now reads the right count), the Python client CLI prints `2 H`; nothing depended on the repeated rows.
+  once per side with `stoichiometry` = how many times it occurs there; two entries of one species on a side each keep their own count. Rows are ordered by the first position each entry was written at, and `participant_index`
+  is that first position, on every surface (one shared rule, `reaction_participants.py`). The equation string is built by one shared function from the occurrence rows, as written (every
+  occurrence, in participant order: `[H] + [H][H] + [H] -> ...`), so search, browse, `/full`'s `reaction_entry.equation` and the transition-state read give the same string for the same
+  entry. Against `main` that string is unchanged on every surface (an intermediate form that grouped repeated entries on search never shipped). Consumers: the web app already collapses repeated rows (it now reads the right count), the Python client CLI prints `2 H`; nothing depended on the repeated rows.
 - A computed-reaction bundle's kinetics fit whose entries are the bundle reaction's (same direction, any order) attaches to the canonical reaction entry instead of getting an
   entry of its own; a reverse-direction fit of a non-degenerate reaction still keeps its own entry (pinned by an existing test).
 - Entry labels for incomplete stereo are flat: `? unresolved`, `E,? partial`.

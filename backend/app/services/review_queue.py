@@ -428,6 +428,8 @@ def _resolve_reaction_entry_chemistry(
         key = (row.reaction_entry_ref, row.role, row.species_entry_ref)
         if key in seen:
             seen[key].stoichiometry += 1
+            # The first position written, whatever order the rows arrive in (the rule in ``reaction_participants``).
+            seen[key].participant_index = min(seen[key].participant_index, row.participant_index)
             continue
         participant = ReactionEquationParticipant(
             species_entry_ref=row.species_entry_ref,
