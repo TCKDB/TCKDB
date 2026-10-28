@@ -47,10 +47,10 @@ def _reaction_payload() -> dict:
     return {
         "reversible": True,
         "reactants": [
-            {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+            {"species_entry": {"smiles": "CC=O", "charge": 0, "multiplicity": 1}},
         ],
         "products": [
-            {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+            {"species_entry": {"smiles": "C=CO", "charge": 0, "multiplicity": 1}},
         ],
     }
 

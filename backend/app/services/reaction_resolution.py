@@ -43,6 +43,9 @@ W_REACTION_MASS_BALANCE_FAILED = "reaction_mass_balance_failed"
 #: Raised when a reaction's two sides do not hold the same total charge.
 W_REACTION_CHARGE_NOT_CONSERVED = "reaction_charge_not_conserved"
 
+#: Raised when a reaction entry's reactants and products are the same species entries.
+W_REACTION_ENTRY_NULL_REACTION = "reaction_entry_null_reaction"
+
 #: Raised when a saddle point is not made of its own reaction's atoms.
 W_TRANSITION_STATE_COMPOSITION_MISMATCH = "transition_state_composition_mismatch"
 
@@ -412,6 +415,100 @@ CHECK_REACTION_CHARGE_CONSERVATION = ScientificCheck(
         "entirely, as it does for elemental balance. Conservation is not "
         "neutrality: any net charge is accepted as long as both sides carry "
         "the same one, so ion-molecule reactions are unaffected."
+    ),
+)
+
+
+def refuse_null_reaction_entry(
+    reactant_entries: Sequence[SpeciesEntry],
+    product_entries: Sequence[SpeciesEntry],
+    *,
+    has_transition_state: bool = False,
+    has_kinetics: bool = False,
+) -> None:
+    """Refuse a bare reaction entry whose two sides are the same species entries.
+
+    Since the species key is the constitution (DR-0038), ``Z-2-butene -> E-2-butene`` has one
+    species on both sides, and the graph reaction (``chem_reaction``) accepts that. A reaction
+    entry with the very same species entries on both sides (compared as multisets, so the order of
+    the participants does not matter) converts nothing into nothing *unless the deposit carries
+    evidence that something happens*: a degenerate exchange such as ``H + H2 -> H2 + H`` is real
+    chemistry with a saddle point and a rate. So it is accepted when the same deposit carries a
+    transition state or a kinetics record, and refused only when it carries neither.
+
+    An atom mapping is not a third kind of evidence here: the only routes that accept one
+    (``atom_map`` on a transition-state upload, or on a computed-reaction bundle's transition
+    state) already carry a transition state. No route that creates a reaction entry takes an atom
+    mapping without one.
+
+    A transition state deposited later against an existing reaction entry is not affected: it
+    attaches to the entry and creates no reaction entry, so this check does not run. The rule is
+    enforced on write from DR-0038's third part onward: a bare same-entries reaction entry cannot be
+    created now, and a degenerate reaction arrives with its transition state or kinetics. A database
+    whose entries were merged by the stereo-identity migration could in principle already hold one
+    (the merge re-points structure participants generically); nothing here repairs such a row, since
+    existing data is development data and a migration would stop with a list instead.
+
+    :raises CodedValueError: ``reaction_entry_null_reaction`` (422). The detail names no row id.
+    """
+
+    if not reactant_entries or Counter(e.id for e in reactant_entries) != Counter(
+        e.id for e in product_entries
+    ):
+        return
+    if has_transition_state or has_kinetics:
+        return
+    raise CodedValueError(
+        W_REACTION_ENTRY_NULL_REACTION,
+        "The reactant and product entries are identical and the deposit carries no transition "
+        "state, kinetics record or non-identity atom mapping, so nothing shows that anything "
+        "happens (reaction_entry_null_reaction). Deposit the evidence with the reaction: a "
+        "transition state (the transition-state upload, or `transition_state` in a "
+        "computed-reaction bundle) or a kinetics record (the kinetics upload, or `kinetics` in a "
+        "bundle). For a stereo isomerisation, give each side the stereo (marks, a stereo label or "
+        "a geometry) that makes the two entries different. An identical-entries reaction is "
+        "refused unless a transition state or kinetics is deposited for it.",
+        context={
+            "participants": len(reactant_entries),
+            "missing_evidence": ["transition_state", "kinetics"],
+        },
+        message_prefix=False,
+    )
+
+
+CHECK_REACTION_ENTRY_NULL_REACTION = ScientificCheck(
+    group="Conservation across a reaction",
+    sort_key=6,
+    code="reaction_entry_null_reaction",
+    asserts=(
+        "A reaction entry whose reactants and products are the same species entries carries "
+        "evidence that something happens: a transition state or a kinetics record."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    tier_rationale=(
+        "Definitional. A reaction that leaves every participant exactly as it was, with no saddle "
+        "point and no rate, is not a reaction, so no correct calculation produces one. Two entries "
+        "of one species (E and Z 2-butene) are different participants, and a degenerate exchange "
+        "(H + H2) deposited with its transition state or rate is real chemistry; neither is refused."
+    ),
+    adr="0038, 0008",
+    enforced_by=(
+        PythonCheck(
+            refuse_null_reaction_entry,
+            note=(
+                "Called before ``resolve_chem_reaction`` on every path that creates a reaction entry "
+                "(the reaction upload, which kinetics, networks and transition states reuse, and "
+                "the computed-reaction bundle's canonical and kinetics reactions), told whether the "
+                "deposit carries a transition state or kinetics."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "Deposit the evidence with the reaction: a transition state (transition-state upload, or "
+        "``transition_state`` in a computed-reaction bundle) or a kinetics record (kinetics upload, "
+        "or ``kinetics`` in a bundle). For a stereo isomerisation, deposit the two isomers as "
+        "different entries (stereo marks in the SMILES, a stereo label, or a geometry per side)."
     ),
 )
 

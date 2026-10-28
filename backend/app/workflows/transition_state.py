@@ -129,6 +129,7 @@ def persist_transition_state_upload(
         created_by=created_by,
         review_policy=review_policy,
         warnings=warnings,
+        has_transition_state=True,  # this upload IS the saddle point of the reaction
     )
 
     # 2. Create TS concept + candidate entry

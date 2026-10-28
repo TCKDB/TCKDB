@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 344 | `backend/app/api/code_catalogue.py` |
-| **total** | **684** | |
+| Refusal codes a caller can receive | 347 | `backend/app/api/code_catalogue.py` |
+| **total** | **687** | |
 
 ## How a record is named
 
@@ -807,7 +807,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (279 codes)
+### HTTP 422 (282 codes)
 
 | Code | Names |
 | --- | --- |
@@ -950,6 +950,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `network_kinetics_rate_units_missing` | a thing |
 | `network_selection_population_too_large` | a relationship — read `context` |
 | `network_selection_snapshot_too_large` | a relationship — read `context` |
+| `network_state_duplicate_composition` | a relationship — read `context` |
+| `network_state_duplicate_participant` | a relationship — read `context` |
 | `network_state_energy_sum_mismatch` | a relationship — read `context` |
 | `network_state_key_undeclared` | a thing |
 | `non_finite_value` | a thing |
@@ -966,6 +968,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `rationale_required` | a thing |
 | `reaction_charge_not_conserved` | a relationship — read `context` |
 | `reaction_entry_handle_conflict` | a relationship — read `context` |
+| `reaction_entry_null_reaction` | a relationship — read `context` |
 | `reaction_handle_conflict` | a relationship — read `context` |
 | `reaction_mass_balance_failed` | a relationship — read `context` |
 | `reaction_reversible_required` | a thing |

@@ -177,9 +177,9 @@ class ReactionParticipantRecord(TypedDict, total=False):
     """One reactant/product participant, from ``reactions/search`` or ``/browse``.
 
     ``formula`` is the RDKit Hill-notation formula derived from ``smiles``
-    (``null`` when the SMILES fails to parse); ``stoichiometry`` is the
-    graph-identity coefficient ("this equation consumes two of this
-    species"), not a property of any one deposit. Same shape as
+    (``null`` when the SMILES fails to parse); ``stoichiometry`` is how many
+    times this species entry occurs on this side of the reaction entry
+    (``H + H -> H2`` lists the one H entry once, with 2). Same shape as
     ``ReactionFullSpeciesParticipant`` on ``get_reaction_full``'s
     ``species.reactants`` / ``species.products``.
     """
@@ -820,6 +820,7 @@ class SpeciesStructureRecord(TypedDict, total=False):
     stereo_descriptor: str | None
     stereo_resolution: str | None
     stereo_smiles: str | None
+    stereo_not_represented: list[str]
     electronic_state_label: str | None
     term_symbol: str | None
     isotope_key: str | None

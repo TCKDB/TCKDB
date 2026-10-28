@@ -24,7 +24,45 @@ this guarantee the day it is written rather than the day someone notices.
 
 from __future__ import annotations
 
-from app.db.models.common import SpeciesEntryStateKind
+from sqlalchemy import case, literal
+
+from app.db.models.common import SpeciesEntryStateKind, StereoResolution
+from app.db.models.species import SpeciesEntry
+
+#: SQL counterpart of :func:`stereo_display`, for queries that select the label inputs by column
+#: (``STEREO_DISPLAY.label("stereo_display")``): the descriptor, with `` partial`` or `` unresolved``
+#: after it when an element is unknown, and the stored ``stereo_label`` when there is no descriptor.
+STEREO_DISPLAY = case(
+    (SpeciesEntry.stereo_descriptor.is_(None), SpeciesEntry.stereo_label),
+    (
+        SpeciesEntry.stereo_resolution == StereoResolution.unresolved,
+        SpeciesEntry.stereo_descriptor + literal(" unresolved"),
+    ),
+    (
+        SpeciesEntry.stereo_resolution == StereoResolution.partial,
+        SpeciesEntry.stereo_descriptor + literal(" partial"),
+    ),
+    else_=SpeciesEntry.stereo_descriptor,
+)
+
+
+def stereo_display(descriptor: str | None, resolution, label: str | None) -> str | None:
+    """The stereo part of an entry's discriminator label (DR-0038).
+
+    ``stereo_label`` is NULL while an entry's stereo is wholly unknown, so a label built from it alone
+    leaves an unresolved entry looking unlabelled. This is built from the descriptor and its resolution
+    instead, as the entry page does: the descriptor; ``E,? partial``; ``? unresolved``. NULL only for
+    an achiral species (no descriptor), where it falls back to whatever label is stored.
+    """
+
+    if descriptor is None:
+        return label
+    value = getattr(resolution, "value", resolution)
+    if value == "unresolved":
+        return f"{descriptor} unresolved"
+    if value == "partial":
+        return f"{descriptor} partial"
+    return descriptor
 
 #: The display counterparts of the columns of ``uq_species_entry_species_id`` other than
 #: ``species_id``. ``stereo_label`` is the display text of the key column ``stereo_descriptor``:
@@ -104,7 +142,11 @@ def species_entry_label_for(entry) -> str | None:
     The keyword form above stays for callers that hold the values loose.
     """
     return species_entry_label(
-        stereo_label=entry.stereo_label,
+        stereo_label=(
+            entry.stereo_display
+            if hasattr(entry, "stereo_display")  # a selected row, labelled by the query
+            else stereo_display(entry.stereo_descriptor, entry.stereo_resolution, entry.stereo_label)
+        ),
         electronic_state_kind=entry.electronic_state_kind,
         electronic_state_label=entry.electronic_state_label,
         term_symbol=entry.term_symbol,

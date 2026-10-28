@@ -375,6 +375,7 @@ def test_record_envelope_matches_search_shape(client, db_session):
         "stereo_descriptor",
         "stereo_resolution",
         "stereo_smiles",
+        "stereo_not_represented",
         "electronic_state_label",
         "term_symbol",
         "isotope_key",

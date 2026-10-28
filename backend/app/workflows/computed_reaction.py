@@ -142,6 +142,7 @@ from app.services.reaction_atom_map import (
 )
 from app.services.reaction_resolution import (
     compress_species_stoichiometry,
+    refuse_null_reaction_entry,
     resolve_chem_reaction,
     validate_transition_state_composition,
 )
@@ -573,6 +574,57 @@ def _collect_bundle_provenance_warnings(
     return warnings
 
 
+def _canonical_participant_positions(fit_entries, canonical_entries) -> dict[int, int]:
+    """Map a fit's 1-based participant positions to the canonical entry's, matching on entry identity.
+
+    A fit attached to the canonical reaction entry may list the same entries in another order
+    (``[h, ch3]`` against ``[ch3, h]``). Anything keyed by participant position (an interpretation's
+    ``reactant:1``) must follow the entry it names, not the fit's own ordering. A repeated entry maps
+    deterministically: the i-th occurrence in the fit is the i-th occurrence in the canonical list.
+    """
+    seen: dict[int, int] = {}
+    positions: dict[int, int] = {}
+    for fit_index, entry in enumerate(fit_entries, start=1):
+        occurrence = seen.get(entry.id, 0)
+        seen[entry.id] = occurrence + 1
+        matches = [i for i, c in enumerate(canonical_entries, start=1) if c.id == entry.id]
+        positions[fit_index] = matches[occurrence]
+    return positions
+
+
+def _assignments_in_canonical_order(assignments, fit_reactants, fit_products, canonical_reactants, canonical_products):
+    """The fit's interpretation assignments, re-indexed onto the canonical entry's participant order."""
+    reactant_map = _canonical_participant_positions(fit_reactants, canonical_reactants)
+    product_map = _canonical_participant_positions(fit_products, canonical_products)
+    remapped = []
+    for assignment in assignments:
+        if assignment.role == "reactant":
+            assignment = assignment.model_copy(update={"participant_index": reactant_map[assignment.participant_index]})
+        elif assignment.role == "product":
+            assignment = assignment.model_copy(update={"participant_index": product_map[assignment.participant_index]})
+        remapped.append(assignment)
+    return remapped
+
+
+def _fit_is_for_reaction(kin, species_key_to_entry, reactant_entries, product_entries) -> bool:
+    """Whether a bundle kinetics fit is for the bundle's own reaction (DR-0038 null-reaction evidence).
+
+    True when the fit's reactant and product entries equal the reaction's, as multisets and in any order.
+    Bundle fits are not tied to the bundle's reaction, so a fit for another reaction must not count as
+    evidence that this one happens; and such a fit attaches to the canonical reaction entry.
+    """
+    from collections import Counter
+
+    def ids(keys):
+        return Counter(resolve_species_key(k, species_key_to_entry, field="kinetics").id for k in keys)
+
+    mine = (Counter(e.id for e in reactant_entries), Counter(e.id for e in product_entries))
+    fit = (ids(kin.reactant_keys), ids(kin.product_keys))
+    # Same direction, any order. (For a same-entries reaction the two directions are one, so a "reversed" fit is
+    # covered; for any other reaction a reverse-direction fit is a record of its own and keeps its own entry.)
+    return fit == mine
+
+
 def persist_computed_reaction_upload(
     session: Session,
     request: ComputedReactionUploadRequest,
@@ -771,6 +823,18 @@ def persist_computed_reaction_upload(
         resolve_species_key(k, species_key_to_entry, field=f"product_keys[{i}]")
         for i, k in enumerate(request.product_keys)
     ]
+
+    refuse_null_reaction_entry(
+        reactant_entries,
+        product_entries,
+        has_transition_state=request.transition_state is not None,
+        # A fit is evidence for THIS reaction only if its entries are this reaction's (either direction, any
+        # order); a fit for another reaction gets an entry of its own and says nothing about this one.
+        has_kinetics=any(
+            _fit_is_for_reaction(kin, species_key_to_entry, reactant_entries, product_entries)
+            for kin in request.kinetics
+        ),
+    )
 
     chem_reaction = resolve_chem_reaction(
         session,
@@ -1777,10 +1841,12 @@ def persist_computed_reaction_upload(
         # ``reaction_entry_structure_participant`` requires it, and the
         # direction-specific ordering is the scientific record we want
         # kinetics to point at.
+        # A fit whose entries are the bundle reaction's (either direction, any order) is a rate of THIS reaction
+        # and attaches to the canonical entry; only a fit for a different set of entries gets an entry of its own.
         is_canonical_direction = (
             list(kin.reactant_keys) == canonical_reactant_keys
             and list(kin.product_keys) == canonical_product_keys
-        )
+        ) or _fit_is_for_reaction(kin, species_key_to_entry, reactant_entries, product_entries)
 
         if is_canonical_direction:
             kin_entry = canonical_reaction_entry
@@ -1801,6 +1867,9 @@ def persist_computed_reaction_upload(
                 )
                 for i, k in enumerate(kin.product_keys)
             ]
+
+            # A bundle kinetics reaction IS a kinetics record of that reaction.
+            refuse_null_reaction_entry(kin_reactant_entries, kin_product_entries, has_kinetics=True)
 
             kin_chem_rxn = resolve_chem_reaction(
                 session,
@@ -1891,25 +1960,32 @@ def persist_computed_reaction_upload(
             kin.network_kinetics_ref,
             field=f"{kin_field_prefix}network_kinetics_ref",
         )
+        fit_reactant_entries = [
+            resolve_species_key(k, species_key_to_entry, field=f"kinetics[{kin_index}].reactant_keys[{i}]")
+            for i, k in enumerate(kin.reactant_keys)
+        ]
+        fit_product_entries = [
+            resolve_species_key(k, species_key_to_entry, field=f"kinetics[{kin_index}].product_keys[{i}]")
+            for i, k in enumerate(kin.product_keys)
+        ]
+        if kin_entry is canonical_reaction_entry:
+            # The fit is stored on the canonical entry, so its participant positions are the canonical entry's.
+            interpretation_assignments = _assignments_in_canonical_order(
+                kin.interpretation_assignments,
+                fit_reactant_entries,
+                fit_product_entries,
+                reactant_entries,
+                product_entries,
+            )
+            reactant_entries_for_fit, product_entries_for_fit = reactant_entries, product_entries
+        else:
+            interpretation_assignments = kin.interpretation_assignments
+            reactant_entries_for_fit, product_entries_for_fit = fit_reactant_entries, fit_product_entries
         resolved_interpretations = resolve_interpretation_assignments(
             session,
-            kin.interpretation_assignments,
-            reactant_entries=[
-                resolve_species_key(
-                    k,
-                    species_key_to_entry,
-                    field=f"kinetics[{kin_index}].reactant_keys[{i}]",
-                )
-                for i, k in enumerate(kin.reactant_keys)
-            ],
-            product_entries=[
-                resolve_species_key(
-                    k,
-                    species_key_to_entry,
-                    field=f"kinetics[{kin_index}].product_keys[{i}]",
-                )
-                for i, k in enumerate(kin.product_keys)
-            ],
+            interpretation_assignments,
+            reactant_entries=reactant_entries_for_fit,
+            product_entries=product_entries_for_fit,
             created_by=created_by,
             reaction_entry=kin_entry,
             ts_scope="reaction",

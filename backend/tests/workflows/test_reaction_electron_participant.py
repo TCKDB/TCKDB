@@ -170,22 +170,38 @@ def test_the_electron_is_part_of_the_reaction_identity(db_conn) -> None:
     ``A -> B`` and ``A -> B + e-`` are different reactions and must not dedupe
     onto one ``chem_reaction``. Carrying the electron in
     ``reaction_participant`` rather than as a scalar on the reaction is what
-    makes that automatic.
+    makes that automatic. Asserted on the stored hash itself, not on two
+    reactions that happen to differ in their product species.
     """
+
+    from app.db.models.common import ReactionRole
+    from app.services.reaction_resolution import reaction_stoichiometry_hash
 
     with Session(db_conn) as session:
         with session.begin():
-            with_electron = persist_reaction_upload(
+            # Photodetachment: OH- -> OH + e-.
+            entry = persist_reaction_upload(
                 session,
-                _request(reactants=[_OXIDE], products=[_O_ATOM, _ELECTRON, _ELECTRON]),
+                _request(reactants=[_HYDROXIDE], products=[{"smiles": "[OH]", "charge": 0, "multiplicity": 2}, _ELECTRON]),
             )
-            # Same heavy atoms, no electron declared, and charge-balanced on
-            # its own terms so it is accepted for its own reasons.
-            without_electron = persist_reaction_upload(
-                session,
-                _request(reactants=[_OXIDE], products=[_OXIDE]),
-            )
-            assert with_electron.reaction_id != without_electron.reaction_id
+            reaction = session.get(ChemReaction, entry.reaction_id)
+            electron = session.scalar(select(Species).where(Species.kind == MoleculeKind.electron))
+            participants = session.scalars(
+                select(ReactionParticipant).where(ReactionParticipant.reaction_id == reaction.id)
+            ).all()
+            assert electron.id in {p.species_id for p in participants}
+
+            def hash_of(rows) -> str:
+                return reaction_stoichiometry_hash(
+                    reversible=reaction.reversible,
+                    reactants={p.species_id: p.stoichiometry for p in rows if p.role == ReactionRole.reactant},
+                    products={p.species_id: p.stoichiometry for p in rows if p.role == ReactionRole.product},
+                )
+
+            # The stored hash is the one over every participant, electron included, and leaving the
+            # electron out gives a different hash: that is what keeps A -> B and A -> B + e- apart.
+            assert reaction.stoichiometry_hash == hash_of(participants)
+            assert reaction.stoichiometry_hash != hash_of([p for p in participants if p.species_id != electron.id])
 
 
 # ---------------------------------------------------------------------------

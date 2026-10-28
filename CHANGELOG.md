@@ -22,6 +22,44 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Stereo isomerisations, duplicate network states, stereo in exports and UI (2026-10-27)
+
+- **Client: `tckdb-client` 0.177.0, `tckdb-schemas` 0.139.0.** Third part of DR-0038. No table or column changes and no migration.
+- A cis-trans isomerisation (`Z-2-butene -> E-2-butene`) is a reaction between two entries of one species. The graph reaction (`chem_reaction`) already
+  accepted equal species on both sides (reproduced on `main`; nothing to change there). A `reaction_entry` whose reactant and product **entries** are the same
+  is now refused unless the deposit carries a transition state or a kinetics record: `reaction_entry_null_reaction` (422, blocking, no row ids; the message names
+  the missing evidence). A degenerate exchange (`H + H2 -> H2 + H`) deposited with its transition state or its rate is accepted, on the transition-state,
+  kinetics, computed-reaction and network routes; a bare one (reaction upload, network reaction list) is refused. An atom mapping counts as no evidence of its own:
+  the only routes that take one already carry a transition state.
+  A stereo isomerisation and its reverse (both irreversible) share one `chem_reaction` because both sides hold the same species (the hash keys the two sides
+  separately, so in general `A -> B` and `B -> A` are two rows) and differ in their entries' roles.
+- **Reaction participant rows are one per distinct entry per side.** `reactions/search`, `/browse`, `/full` and the review queue served one row per occurrence
+  (`H + H -> H2`: two H rows) while each row also carried the species-level coefficient (2), so a consumer summing the rows read 4 H. Each distinct entry is now served
+  once per side with `stoichiometry` = how many times it occurs there; two entries of one species on a side each keep their own count. Rows are ordered by the first position each entry was written at, and `participant_index`
+  is that first position, on every surface (one shared rule, `reaction_participants.py`). The equation string is built by one shared function from the occurrence rows, as written (every
+  occurrence, in participant order: `[H] + [H][H] + [H] -> ...`), so search, browse, `/full`'s `reaction_entry.equation` and the transition-state read give the same string for the same
+  entry. Against `main` that string is unchanged on every surface (an intermediate form that grouped repeated entries on search never shipped). Consumers: the web app already collapses repeated rows (it now reads the right count), the Python client CLI prints `2 H`; nothing depended on the repeated rows.
+- A computed-reaction bundle's kinetics fit whose entries are the bundle reaction's (same direction, any order) attaches to the canonical reaction entry instead of getting an
+  entry of its own; a reverse-direction fit of a non-degenerate reaction still keeps its own entry (pinned by an existing test).
+- Entry labels for incomplete stereo are flat: `? unresolved`, `E,? partial`.
+- One state of a pressure-dependent network naming the same species entry twice (two species keys that resolve to one entry) was a raw `UniqueViolation` on
+  `pk_network_state_participant` (HTTP 500); it is now `network_state_duplicate_participant` (422, a sibling of `..._duplicate_composition`: it is about one state's
+  own participants, and its remedy is a `stoichiometry`).
+- Reaction search flattens stereo marks per DR-0038, so a search for `C/C=C\C -> C/C=C/C` also returns entries whose sides are unresolved (`? -> E`). That is by design.
+- Two states of one pressure-dependent network with the same composition (two species keys that resolve to one entry, or one state declared twice) were a
+  raw `IntegrityError` on `uq_network_state_network_id`, an HTTP 500. They are now refused before any row is written as `network_state_duplicate_composition`
+  (422), naming the two local state keys.
+- CHEMKIN export prints each entry's stereo in the `! SMILES=` comment (chem.inp SPECIES, therm.dat, tran.dat, and the network export): the entry's isomeric
+  SMILES where it has one, else the constitution SMILES, then `STEREO=<descriptor>`; `STEREO_RESOLUTION=partial|unresolved` marks an incomplete entry and
+  `STEREO_NOT_REPRESENTED=axial|cumulene` an element no data can settle. The importer reads the first token after `SMILES=` and ignores the rest.
+- Reads: species-entry records (species search, structure search) gain `stereo_not_represented` (`["axial"]`, `["cumulene"]` or empty). `species_entry_label`
+  (reaction equations, entry links, network state labels, every read that names an entry) is now built from the descriptor and its resolution, so an unresolved
+  entry reads `? unresolved` and a partial one `E,? partial` instead of no label; the review-queue subject chemistry gains `stereo_descriptor` and
+  `stereo_resolution` beside `stereo_label`. Entries whose stereo is wholly unknown therefore change label text; no stored value changes.
+  Symmetry-cap entries are not listed in `stereo_not_represented` (known gap).
+- Frontend: the species-entry page and entry cards read stereo from the descriptor and its resolution. "Achiral" only for a NULL descriptor; partial and
+  unresolved entries say so (their display `stereo_label` is NULL by design); an allene axis says "axial stereo not represented".
+
 ## Curated detail pages serve unreviewed records badged (2026-10-26)
 
 - **No client type change.** Step 7 of ADR 0023, the last step. Under `profile=curated`, a detail read (every route that resolves one record by

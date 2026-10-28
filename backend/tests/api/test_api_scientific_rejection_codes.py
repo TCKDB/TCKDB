@@ -105,6 +105,24 @@ class TestConservationAcrossAReaction:
         body = _assert_code(response, "reaction_charge_not_conserved")
         assert "conserved across a reaction" in str(body["detail"])
 
+    def test_the_same_entry_on_both_sides_names_the_null_reaction(self, client):
+        entry = {"smiles": "C/C=C/C", "charge": 0, "multiplicity": 1}
+        response = client.post(
+            "/api/v1/uploads/reactions",
+            json=_reaction_payload([entry], [entry]),
+        )
+        body = _assert_code(response, "reaction_entry_null_reaction")
+        assert "id=" not in str(body["detail"])
+
+    def test_an_isomerisation_between_two_entries_of_one_species_is_accepted(self, client):
+        e = {"smiles": "C/C=C/C", "charge": 0, "multiplicity": 1}
+        z = {"smiles": "C/C=C\\C", "charge": 0, "multiplicity": 1}
+        response = client.post(
+            "/api/v1/uploads/reactions",
+            json=_reaction_payload([z], [e]),
+        )
+        assert response.status_code == 201, response.text
+
 
 # ---------------------------------------------------------------------------
 # A structure against its own label

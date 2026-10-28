@@ -30,7 +30,7 @@ from app.schemas.reads.scientific_network_kinetics_search import (
 # The entry discriminator is shared with the species and structure searches;
 # see app/services/scientific_read/species_identity.py for why it has one
 # definition rather than one per surface.
-from app.services.scientific_read.species_identity import species_entry_label
+from app.services.scientific_read.species_identity import STEREO_DISPLAY, species_entry_label
 
 
 def build_network_state_composition(
@@ -56,7 +56,7 @@ def build_network_state_composition(
             SpeciesEntry.public_ref.label("species_entry_ref"),
             Species.public_ref.label("species_ref"),
             Species.smiles.label("canonical_smiles"),
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
@@ -82,7 +82,7 @@ def build_network_state_composition(
             species_ref=row.species_ref,
             canonical_smiles=row.canonical_smiles,
             species_entry_label=species_entry_label(
-                stereo_label=row.stereo_label,
+                stereo_label=row.stereo_display,
                 electronic_state_kind=row.electronic_state_kind,
                 electronic_state_label=row.electronic_state_label,
                 term_symbol=row.term_symbol,

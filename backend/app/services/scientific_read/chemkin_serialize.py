@@ -32,6 +32,7 @@ from pydantic import ValidationError
 from tckdb_schemas.thermo import ThermoNASACreate
 
 from app.chemistry.arrhenius import ArrheniusRangeError, a_at_unit_t0
+from app.chemistry.stereo import unrepresented_stereo_kinds
 from app.db.models.common import ArrheniusAUnits, KineticsModelKind
 from app.services.scientific_read.export import (
     ExportGap,
@@ -106,6 +107,53 @@ def _composition(smiles: str) -> Counter | None:
     for atom in mol.GetAtoms():
         counts[atom.GetSymbol().upper()] += 1
     return counts
+
+
+def structure_comment(
+    smiles: str,
+    *,
+    stereo_descriptor: str | None,
+    stereo_resolution,
+    stereo_smiles: str | None,
+) -> str:
+    """The ``SMILES=`` traceability text for one species entry, with its stereo (DR-0038).
+
+    The species SMILES is the stereo-blind constitution, so an entry's stereo is printed beside it
+    rather than left to be read as "not distinguished":
+
+    * ``SMILES=`` is the entry's ``stereo_smiles`` when it has one (a fully resolved configuration
+      that can be written as a SMILES), otherwise the constitution SMILES;
+    * ``STEREO=`` is the descriptor, one token per stereo element (``E``, ``R,S``, ``E,?``), and is
+      absent for an achiral species (descriptor ``NULL``);
+    * ``STEREO_RESOLUTION=partial|unresolved`` marks an entry in which some element is still
+      unknown, so a ``?`` is never read as a statement;
+    * ``STEREO_NOT_REPRESENTED=axial|cumulene`` marks an element no data can settle yet (an allene
+      axis), whose mirror-image forms share the entry.
+
+    The first token after ``SMILES=`` is the structure; a reader that takes only that token (the
+    CHEMKIN importer does) ignores the rest.
+    """
+
+    if stereo_descriptor is None:
+        return f"SMILES={smiles}"
+    text = f"SMILES={stereo_smiles or smiles}  STEREO={stereo_descriptor}"
+    resolution = getattr(stereo_resolution, "value", stereo_resolution)
+    if resolution and resolution != "resolved":
+        text += f"  STEREO_RESOLUTION={resolution}"
+    kinds = unrepresented_stereo_kinds(smiles)
+    if kinds:
+        text += f"  STEREO_NOT_REPRESENTED={'+'.join(kinds)}"
+    return text
+
+
+def _species_structure_comment(sr: SpeciesExportRecord) -> str:
+    entry = sr.species_entry
+    return structure_comment(
+        sr.species.smiles,
+        stereo_descriptor=entry.stereo_descriptor,
+        stereo_resolution=entry.stereo_resolution,
+        stereo_smiles=entry.stereo_smiles,
+    )
 
 
 def _sanitize_name(raw: str) -> str:
@@ -317,7 +365,7 @@ def _build_therm_dat(
             gaps.append(ExportGap(kind="thermo_nasa", ref=ref, detail="; ".join(reasons)))
             continue
         lines.append(
-            f"! {names[se_id]}  SMILES={sr.species.smiles}  ref={sr.species.public_ref}"
+            f"! {names[se_id]}  {_species_structure_comment(sr)}  ref={sr.species.public_ref}"
         )
         lines.extend(_nasa_card(names[se_id], comp, nasa_thermo))
     lines.append("END")
@@ -563,7 +611,7 @@ def _build_chem_inp(
     for sr in record_set.species_records:
         se_id = sr.species_entry.id
         lines.append(
-            f"{names[se_id]}   ! SMILES={sr.species.smiles} "
+            f"{names[se_id]}   ! {_species_structure_comment(sr)} "
             f"ref={sr.species.public_ref}"
         )
     lines.append("END")
@@ -759,7 +807,7 @@ def _build_tran_dat(
             f"{names[se_id]:<16}{geom:>4d}"
             f"{tr.epsilon_over_k_k:>10.3f}{tr.sigma_angstrom:>10.3f}"
             f"{dipole:>10.3f}{polar:>10.3f}{zrot:>10.3f}"
-            f"    ! SMILES={sr.species.smiles} ref={sr.species.public_ref}"
+            f"    ! {_species_structure_comment(sr)} ref={sr.species.public_ref}"
             f" linearity={geom_source}"
         )
     return "\n".join(lines) + "\n"

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.139.0 - 2026-10-27
+
+Three refusal codes join the contract. No field is added or removed.
+
+- `network_state_duplicate_participant` (422): one state of a PDep network names the same species entry twice (two species keys that resolve to one entry). It used
+  to be an HTTP 500. Name the species once with its `stoichiometry`, or say what differs (stereo marks, a stereo label or a geometry).
+
+- `reaction_entry_null_reaction` (422): a reaction's reactants and products are the same species entries and the deposit carries no transition state or
+  kinetics record. A reaction between two entries of *one species* (a cis-trans isomerisation, `Z-2-butene -> E-2-butene`) is valid; give each side the
+  stereo (marks, a stereo label or a geometry) that tells the isomers apart. A degenerate exchange (`H + H2 -> H2 + H`) is accepted when deposited with its
+  transition state (transition-state upload, or `transition_state` in a computed-reaction bundle) or a kinetics record (kinetics upload, or `kinetics`).
+- `network_state_duplicate_composition` (422): two states of one network resolve to the same species entries (two species keys that name one entry, or a
+  state declared twice). It used to be an HTTP 500.
+
 ## 0.138.0 - 2026-10-26
 
 `stereo_label` on a species entry is a stereo descriptor, not free text. Species identity no longer includes stereochemistry (DR-0038).

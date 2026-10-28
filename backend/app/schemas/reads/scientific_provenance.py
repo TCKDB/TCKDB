@@ -200,12 +200,11 @@ class ReactionFullSpeciesParticipant(BaseModel):
     ``formula`` is the Hill-notation formula RDKit derives from ``smiles``
     (``app.services.scientific_read.common.molecular_formula_expr``, the
     same expression the species surface serves); ``null`` when ``smiles``
-    fails to parse. ``stoichiometry`` is the graph-identity coefficient
-    from ``chem_reaction.reaction_participant`` -- the reaction-level fact
-    ("this equation consumes two of this species"), joined by
-    ``(reaction_id, species_id, role)`` and *not* a property of this
-    particular deposit's structure-participant row, which lists a
-    repeated species once regardless of how many times it reacts.
+    fails to parse. ``stoichiometry`` is how many times THIS species entry occurs on this side of the entry's own
+    equation (``H + H -> H2`` serves the one H entry once, with ``stoichiometry`` 2). A deposit stores one
+    structure-participant row per occurrence; each distinct entry is served once per side, so a consumer that sums
+    ``stoichiometry`` over the rows gets the right count. It is the entry's count, not the species-level coefficient
+    (two entries of one species on one side each keep their own).
     """
 
     species_entry_id: int

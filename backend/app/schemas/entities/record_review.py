@@ -10,6 +10,7 @@ from app.db.models.common import (
     RecordReviewStatus,
     SpeciesEntryStateKind,
     StationaryPointKind,
+    StereoResolution,
     SubmissionRecordType,
 )
 from app.schemas.common import (
@@ -154,6 +155,14 @@ class ReviewQueueSubjectChemistry(SchemaBase):
     electronic_state_label: str | None = None
     term_symbol: str | None = None
     stereo_label: str | None = None
+    stereo_descriptor: str | None = Field(
+        default=None,
+        description=(
+            "The species entry's stereo key (DR-0038), null only for an achiral species. `stereo_label` is "
+            "its display text and is null while nothing is resolved, which must not be read as achiral."
+        ),
+    )
+    stereo_resolution: StereoResolution | None = None
     isotope_key: str | None = None
     unmapped_smiles: str | None = Field(
         default=None,

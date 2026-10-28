@@ -113,6 +113,7 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.reaction_participants import format_reaction_equation
 from app.services.scientific_read.species_calculations_search import (
     _build_energy_block,
     _load_sp_lot_pairs,
@@ -985,12 +986,11 @@ def _format_equation(
     ).all()
     if not rows:
         return None
-    reactants = [r.smiles for r in rows if r.role == ReactionRole.reactant]
-    products = [r.smiles for r in rows if r.role == ReactionRole.product]
+    reactants = [(r.participant_index, r.smiles) for r in rows if r.role == ReactionRole.reactant]
+    products = [(r.participant_index, r.smiles) for r in rows if r.role == ReactionRole.product]
     if not reactants and not products:
         return None
-    arrow = "<=>" if reversible else "->"
-    return f"{' + '.join(reactants)} {arrow} {' + '.join(products)}"
+    return format_reaction_equation(reactants, products, reversible)
 
 
 # ---------------------------------------------------------------------------

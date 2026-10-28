@@ -1203,6 +1203,7 @@ _ENTRY_RECORD_FIELDS = {
     "stereo_descriptor",
     "stereo_resolution",
     "stereo_smiles",
+    "stereo_not_represented",
     "electronic_state_label",
     "term_symbol",
     "isotope_key",

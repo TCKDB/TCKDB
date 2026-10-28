@@ -13,6 +13,7 @@ from app.schemas.workflows.reaction_upload import (
 from app.services.reaction_resolution import (
     compress_species_stoichiometry,
     inherit_reversible,
+    refuse_null_reaction_entry,
     resolve_chem_reaction,
 )
 from app.services.record_review import (
@@ -92,11 +93,17 @@ def persist_reaction_upload(
     created_by: int | None = None,
     review_policy: ReviewPolicy | None = ReviewPolicy(),
     warnings: list[UploadWarning] | None = None,
+    has_transition_state: bool = False,
+    has_kinetics: bool = False,
 ) -> ReactionEntry:
     """Persist a complete reaction upload workflow.
 
     :param session: Active SQLAlchemy session.
     :param request: Workflow-facing reaction upload payload.
+    :param has_transition_state: The same deposit carries a transition state for this reaction. With
+        ``has_kinetics`` it is the evidence that lets identical reactant and product entries through
+        (``reaction_entry_null_reaction`` otherwise).
+    :param has_kinetics: The same deposit carries a kinetics record for this reaction.
     :param created_by: Optional application user id for newly created rows.
     :param warnings: Optional sink for non-blocking warnings (a reaction stored under both
         ``reversible`` values reports ``reaction_reversible_twin``).
@@ -112,6 +119,16 @@ def persist_reaction_upload(
         _resolve_participant_upload(session, participant, created_by=created_by)
         for participant in request.products
     ]
+
+    # Equal species on both sides is a legal graph reaction (a stereo isomerisation); equal
+    # *entries* on both sides is a null reaction unless the deposit carries a transition state or
+    # kinetics (DR-0038).
+    refuse_null_reaction_entry(
+        reactant_entries,
+        product_entries,
+        has_transition_state=has_transition_state,
+        has_kinetics=has_kinetics,
+    )
 
     chem_reaction = resolve_chem_reaction(
         session,

@@ -152,6 +152,8 @@ class ScientificSpeciesStructureSearchRecord(BaseModel):
     stereo_descriptor: str | None = None
     stereo_resolution: StereoResolution | None = None
     stereo_smiles: str | None = None
+    #: See ``SpeciesEntryScientificRecord.stereo_not_represented``.
+    stereo_not_represented: list[str] = Field(default_factory=list)
     electronic_state_label: str | None = None
     term_symbol: str | None = None
     isotope_key: str | None = None

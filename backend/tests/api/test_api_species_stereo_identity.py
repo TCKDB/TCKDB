@@ -244,3 +244,49 @@ def test_isomeric_search_finds_only_the_matching_entry(client: TestClient, db_se
     assert {r["species_entry_ref"] for r in _hits(client, query_smiles="CC=CC", isomeric=True)} == {
         entries["?"].public_ref
     }
+
+
+def test_the_entry_label_says_an_unresolved_or_partial_entry_is_so(client: TestClient, db_session) -> None:
+    """``species_entry_label`` is built from the descriptor and resolution, not the NULL display label."""
+    entries = _seed_2_butene(db_session)
+    partial = _resolve(db_session, "C/C=C/C=CC")
+    achiral = _resolve(db_session, "CCO")
+    db_session.flush()
+
+    def label(ref: str, smiles: str) -> str | None:
+        hit = next(r for r in _hits(client, query_smiles=smiles) if r["species_entry_ref"] == ref)
+        return hit["species_entry_label"]
+
+    assert label(entries["E"].public_ref, "CC=CC") == "E"
+    assert label(entries["Z"].public_ref, "CC=CC") == "Z"
+    assert label(entries["?"].public_ref, "CC=CC") == "? unresolved"
+    assert label(partial.public_ref, "CC=CC=CC") == "E,? partial"
+    assert label(achiral.public_ref, "CCO") is None
+
+
+# ---------------------------------------------------------------------------
+# Reads say which ``?`` no data can settle
+# ---------------------------------------------------------------------------
+
+
+def test_reads_flag_an_allene_axis_as_not_represented_and_a_plain_unknown_as_unknown(
+    client: TestClient, db_session
+) -> None:
+    """``stereo_not_represented`` lets a reader tell "not yet supplied" from "cannot be stated yet"."""
+    allene = _resolve(db_session, "CC=C=CC")
+    butene = _resolve(db_session, "CC=CC")
+    db_session.flush()
+
+    allene_hit = _hits(client, query_smiles="CC=C=CC")
+    assert [r["species_entry_ref"] for r in allene_hit] == [allene.public_ref]
+    assert allene_hit[0]["stereo_descriptor"] == "?"
+    assert allene_hit[0]["stereo_not_represented"] == ["axial"]
+
+    butene_hit = _hits(client, query_smiles="CC=CC")
+    assert [r["species_entry_ref"] for r in butene_hit] == [butene.public_ref]
+    assert butene_hit[0]["stereo_not_represented"] == []
+
+    species = client.get(
+        "/api/v1/scientific/species/search", params={"species_entry_ref": allene.public_ref}
+    ).json()["records"][0]["entries"]
+    assert species[0]["stereo_not_represented"] == ["axial"]

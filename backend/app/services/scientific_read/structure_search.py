@@ -44,6 +44,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError
+from app.chemistry.stereo import unrepresented_stereo_kinds
 from app.db.models.common import (
     RecordReviewStatus,
     SubmissionRecordType,
@@ -719,6 +720,11 @@ def _build_record(
         stereo_descriptor=entry.stereo_descriptor,
         stereo_resolution=entry.stereo_resolution,
         stereo_smiles=entry.stereo_smiles,
+        stereo_not_represented=(
+            list(unrepresented_stereo_kinds(species.smiles))
+            if entry.stereo_descriptor is not None and "?" in entry.stereo_descriptor
+            else []
+        ),
         electronic_state_label=entry.electronic_state_label,
         term_symbol=entry.term_symbol,
         isotope_key=entry.isotope_key,

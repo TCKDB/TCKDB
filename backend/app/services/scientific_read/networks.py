@@ -119,6 +119,7 @@ from app.services.scientific_read.network_channel_chemistry import (
 )
 from app.services.scientific_read.network_declarations import solve_declarations, solve_determinations
 from app.services.scientific_read.species_identity import (
+    STEREO_DISPLAY,
     species_entry_label_for,
 )
 
@@ -496,7 +497,7 @@ def _build_species(
             Species.smiles,
             Species.inchi_key,
             NetworkSpecies.role,
-            SpeciesEntry.stereo_label,
+            STEREO_DISPLAY.label("stereo_display"),
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,

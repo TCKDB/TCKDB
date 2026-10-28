@@ -42419,7 +42419,7 @@
         "type": "object"
       },
       "ReactionFullSpeciesParticipant": {
-        "description": "Reactant or product side participant in /full.\n\nPhase B: ``species_entry_ref`` is the public stable handle for the\nparticipant species entry.\n\n``smiles`` is the *species'* graph identity, shared by every entry\nunder it, so two participants that are different stereoisomers of\none species render identically from it alone -- the hydrazine\nnetwork's ``N=N`` carries a ``Z`` entry and an ``E`` entry, and an\nisomerisation between them reads as running from a species to\nitself. ``species_entry_label`` is what tells them apart: ``\"E\"``,\n``\"Z\"``, ``\"excited T1\"``, or ``None`` for the plain ground-state,\nstereo-unlabelled entry. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`.\n\nNote that the record's ``equation`` string is still rendered from\n``smiles`` alone and therefore still collapses two such\nparticipants. Changing it would change a served value that\nconsumers parse, so it is left alone here; render from\n``species_entry_label`` if you need the equation to be unambiguous.\n\n``formula`` is the Hill-notation formula RDKit derives from ``smiles``\n(``app.services.scientific_read.common.molecular_formula_expr``, the\nsame expression the species surface serves); ``null`` when ``smiles``\nfails to parse. ``stoichiometry`` is the graph-identity coefficient\nfrom ``chem_reaction.reaction_participant`` -- the reaction-level fact\n(\"this equation consumes two of this species\"), joined by\n``(reaction_id, species_id, role)`` and *not* a property of this\nparticular deposit's structure-participant row, which lists a\nrepeated species once regardless of how many times it reacts.",
+        "description": "Reactant or product side participant in /full.\n\nPhase B: ``species_entry_ref`` is the public stable handle for the\nparticipant species entry.\n\n``smiles`` is the *species'* graph identity, shared by every entry\nunder it, so two participants that are different stereoisomers of\none species render identically from it alone -- the hydrazine\nnetwork's ``N=N`` carries a ``Z`` entry and an ``E`` entry, and an\nisomerisation between them reads as running from a species to\nitself. ``species_entry_label`` is what tells them apart: ``\"E\"``,\n``\"Z\"``, ``\"excited T1\"``, or ``None`` for the plain ground-state,\nstereo-unlabelled entry. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`.\n\nNote that the record's ``equation`` string is still rendered from\n``smiles`` alone and therefore still collapses two such\nparticipants. Changing it would change a served value that\nconsumers parse, so it is left alone here; render from\n``species_entry_label`` if you need the equation to be unambiguous.\n\n``formula`` is the Hill-notation formula RDKit derives from ``smiles``\n(``app.services.scientific_read.common.molecular_formula_expr``, the\nsame expression the species surface serves); ``null`` when ``smiles``\nfails to parse. ``stoichiometry`` is how many times THIS species entry occurs on this side of the entry's own\nequation (``H + H -> H2`` serves the one H entry once, with ``stoichiometry`` 2). A deposit stores one\nstructure-participant row per occurrence; each distinct entry is served once per side, so a consumer that sums\n``stoichiometry`` over the rows gets the right count. It is the entry's count, not the species-level coefficient\n(two entries of one species on one side each keep their own).",
         "properties": {
           "formula": {
             "anyOf": [
@@ -42488,7 +42488,7 @@
         "type": "string"
       },
       "ReactionParticipantSummary": {
-        "description": "Reactant or product participant within a reaction-entry record.\n\nPhase B: ``species_entry_ref`` is the public stable handle for the\nparticipant species entry.\n\n``smiles`` is the *species'* graph identity, shared by every entry\nunder it, so two participants that are different stereoisomers of\none species render identically from it alone -- the hydrazine\nnetwork's ``N=N`` carries a ``Z`` entry and an ``E`` entry, and an\nisomerisation between them reads as running from a species to\nitself. ``species_entry_label`` is what tells them apart: ``\"E\"``,\n``\"Z\"``, ``\"excited T1\"``, or ``None`` for the plain ground-state,\nstereo-unlabelled entry. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`.\n\nNote that the record's ``equation`` string is still rendered from\n``smiles`` alone and therefore still collapses two such\nparticipants. Changing it would change a served value that\nconsumers parse, so it is left alone here; render from\n``species_entry_label`` if you need the equation to be unambiguous.\n\n``formula`` and ``stoichiometry`` mirror\n``ReactionFullSpeciesParticipant`` (``scientific_provenance.py``) — the\nsame RDKit Hill-notation expression and the same\n``chem_reaction.reaction_participant`` coefficient, so a search row and\na ``/full`` participant row render identically.",
+        "description": "Reactant or product participant within a reaction-entry record.\n\nPhase B: ``species_entry_ref`` is the public stable handle for the\nparticipant species entry.\n\n``smiles`` is the *species'* graph identity, shared by every entry\nunder it, so two participants that are different stereoisomers of\none species render identically from it alone -- the hydrazine\nnetwork's ``N=N`` carries a ``Z`` entry and an ``E`` entry, and an\nisomerisation between them reads as running from a species to\nitself. ``species_entry_label`` is what tells them apart: ``\"E\"``,\n``\"Z\"``, ``\"excited T1\"``, or ``None`` for the plain ground-state,\nstereo-unlabelled entry. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`.\n\nNote that the record's ``equation`` string is still rendered from\n``smiles`` alone and therefore still collapses two such\nparticipants. Changing it would change a served value that\nconsumers parse, so it is left alone here; render from\n``species_entry_label`` if you need the equation to be unambiguous.\n\n``formula`` and ``stoichiometry`` mirror ``ReactionFullSpeciesParticipant`` (``scientific_provenance.py``): each\ndistinct species entry is served once per side, ``stoichiometry`` being how many times it occurs there\n(``H + H -> H2`` serves the one H entry once, with 2), so a search row and a ``/full`` row render identically.",
         "properties": {
           "formula": {
             "anyOf": [
@@ -45956,6 +45956,18 @@
               }
             ]
           },
+          "stereo_descriptor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The species entry's stereo key (DR-0038), null only for an achiral species. `stereo_label` is its display text and is null while nothing is resolved, which must not be read as achiral.",
+            "title": "Stereo Descriptor"
+          },
           "stereo_label": {
             "anyOf": [
               {
@@ -45966,6 +45978,16 @@
               }
             ],
             "title": "Stereo Label"
+          },
+          "stereo_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StereoResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "term_symbol": {
             "anyOf": [
@@ -51683,6 +51705,13 @@
             ],
             "title": "Stereo Label"
           },
+          "stereo_not_represented": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Stereo Not Represented",
+            "type": "array"
+          },
           "stereo_resolution": {
             "anyOf": [
               {
@@ -54691,6 +54720,13 @@
               }
             ],
             "title": "Stereo Label"
+          },
+          "stereo_not_represented": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Stereo Not Represented",
+            "type": "array"
           },
           "stereo_resolution": {
             "anyOf": [

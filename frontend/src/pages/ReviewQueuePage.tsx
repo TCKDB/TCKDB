@@ -274,6 +274,8 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
                 electronic_state_label: subject.chemistry.electronic_state_label,
                 term_symbol: subject.chemistry.term_symbol,
                 stereo_label: subject.chemistry.stereo_label,
+                stereo_descriptor: subject.chemistry.stereo_descriptor,
+                stereo_resolution: subject.chemistry.stereo_resolution,
                 isotope_key: subject.chemistry.isotope_key,
             },
             { includeState: false },

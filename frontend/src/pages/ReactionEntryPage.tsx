@@ -28,6 +28,8 @@ import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { levelOfTheoryPath } from "../domain/methodsLinks"
+import { buildEquationSides, type EquationParticipant } from "../domain/reactionEquation"
+import { stereoChip } from "../domain/recordFacets"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 
@@ -194,7 +196,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                                     </div>
                                     <div className="record-identity-fact-wide">
                                         <dt>Equation (as deposited)</dt>
-                                        <dd><code className="data">{entry.equation}</code></dd>
+                                        <dd><code className="data">{equationWithEntries(entry.equation, entry.reversible, species.reactants, species.products)}</code></dd>
                                     </div>
                                 </dl>
                             </div>
@@ -322,6 +324,28 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
 // is the reference rather than it being in the same column as Formula")
 // is untouched: this table still never folds the species-entry ref or
 // its copy button into the identity cell.
+/**
+ * The served `equation` string is the written form and is left as the server wrote it. When the participant rows
+ * are loaded this line is rebuilt from them instead, so that each side's entries read apart: a Z to E isomerisation
+ * is `CC=CC => CC=CC` in the served string (both participants are entries of one species) and
+ * `CC=CC [Z] -> CC=CC [E]` here. Built from the same collapsed sides as the hero equation (one participant per
+ * distinct entry, a coefficient only when it is greater than 1), with the server's arrows: `->` irreversible,
+ * `<=>` reversible. Falls back to the served string when the participants are not loaded.
+ */
+function equationWithEntries(
+    served: string,
+    reversible: boolean,
+    reactants: ReactionEntrySpeciesParticipant[],
+    products: ReactionEntrySpeciesParticipant[],
+): string {
+    if (reactants.length === 0 || products.length === 0) return served
+    const sides = buildEquationSides(reactants, products)
+    const side = (participants: EquationParticipant[]) => participants
+        .map((p) => `${p.coefficient > 1 ? `${p.coefficient} ` : ""}${p.smiles}${p.speciesEntryLabel ? ` [${p.speciesEntryLabel}]` : ""}`)
+        .join(" + ")
+    return `${side(sides.reactants)} ${reversible ? "<=>" : "->"} ${side(sides.products)}`
+}
+
 function ParticipantsTable({ label, participants }: {
     label: "Reactants" | "Products"
     participants: ReactionEntrySpeciesParticipant[]
@@ -345,6 +369,9 @@ function ParticipantsTable({ label, participants }: {
                                     <Link to={`/species-entries/${participant.species_entry_ref}`}>
                                         <SpeciesFace smiles={participant.smiles} formula={participant.formula} />
                                     </Link>
+                                    {participant.species_entry_label && (
+                                        <span className="reaction-equation-chip"> · {stereoChip(participant.species_entry_label)}</span>
+                                    )}
                                 </td>
                                 <td data-label="Ref">
                                     <code className="data">{participant.species_entry_ref}</code>

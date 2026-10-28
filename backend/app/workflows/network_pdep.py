@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tckdb_schemas.upload_warning import UploadWarning
 
+from app.api.error_contract import CodedValueError
 from app.chemistry.geometry import parse_xyz
 from app.db.models.calculation import (
     Calculation,
@@ -289,11 +290,77 @@ def _barrier_owner_check(
     return check
 
 
+#: Two states of one network resolve to the same participants (DR-0038).
+W_NETWORK_STATE_DUPLICATE_COMPOSITION = "network_state_duplicate_composition"
+
+
+#: One state names the same species entry twice (two species keys that resolve to one entry).
+W_NETWORK_STATE_DUPLICATE_PARTICIPANT = "network_state_duplicate_participant"
+
+
 def _composition_hash(participants: list[tuple[int, int]]) -> str:
     """Compute a canonical SHA-256 hash for a network state composition."""
     canonical = sorted(participants)
     encoded = json.dumps(canonical, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def refuse_duplicate_state_compositions(
+    states: list[Any], species_key_to_entry: dict[str, Any]
+) -> None:
+    """Refuse a network whose states do not all have a distinct composition.
+
+    A state is the multiset of its participants' species *entries*, and
+    ``uq_network_state_network_id`` keeps one state per (network, composition). Two states that
+    resolve to the same entries (two species keys that name one entry, or one state declared
+    twice) used to reach the database and surface as a raw ``IntegrityError`` (HTTP 500). They
+    are refused here, before any state row is written, naming the local state keys.
+
+    :raises CodedValueError: ``network_state_duplicate_composition`` (422).
+    """
+
+    first_by_hash: dict[str, tuple[int, str]] = {}
+    for state_index, state_in in enumerate(states):
+        participants = [
+            (
+                resolve_species_key(
+                    p.species_key,
+                    species_key_to_entry,
+                    field=f"states[{state_index}].participants[{i}].species_key",
+                ).id,
+                p.stoichiometry,
+            )
+            for i, p in enumerate(state_in.participants)
+        ]
+        entry_ids = [entry_id for entry_id, _ in participants]
+        if len(set(entry_ids)) != len(entry_ids):
+            raise CodedValueError(
+                W_NETWORK_STATE_DUPLICATE_PARTICIPANT,
+                f"State {state_in.key!r} lists the same species entry more than once "
+                "(network_state_duplicate_participant): two of its species keys resolve to one entry. "
+                "Name the species once and give its `stoichiometry`, or say what differs between the two "
+                "(stereo marks, a stereo label or a geometry on the species).",
+                context={"state_key": state_in.key, "state": f"states[{state_index}]"},
+                message_prefix=False,
+            )
+        comp_hash = _composition_hash(participants)
+        if comp_hash in first_by_hash:
+            first_index, first_key = first_by_hash[comp_hash]
+            raise CodedValueError(
+                W_NETWORK_STATE_DUPLICATE_COMPOSITION,
+                f"States {first_key!r} and {state_in.key!r} have the same composition "
+                "(network_state_duplicate_composition): their participants resolve to the same "
+                "species entries, and a network holds one state per composition. If they are "
+                "meant to be different, say what differs (stereo marks, a stereo label or a "
+                "geometry on the species that stand for different isomers); if not, declare the "
+                "state once.",
+                context={
+                    "states": [f"states[{first_index}]", f"states[{state_index}]"],
+                    "state_keys": [first_key, state_in.key],
+                },
+                message_prefix=False,
+            )
+        first_by_hash[comp_hash] = (state_index, state_in.key)
 
 
 def _persist_calculation(
@@ -646,6 +713,7 @@ def persist_network_pdep_upload(
             created_by=created_by,
             review_policy=review_policy,
             warnings=warning_sink,
+            has_transition_state=any(ts.micro_reaction_key == rxn.key for ts in request.transition_states),
         )
         reaction_key_to_entry[rxn.key] = reaction_entry
 
@@ -813,6 +881,8 @@ def persist_network_pdep_upload(
     # Every calculation of the upload is flushed: an opt or sp at a named
     # composite method's level is reported once, as on every other route.
     warning_sink.extend(collect_named_composite_deposit_warnings(session, calculation_key_to_id.values()))
+
+    refuse_duplicate_state_compositions(request.states, species_key_to_entry)
 
     # ------------------------------------------------------------------
     # 6. Resolve network-level provenance and create network
