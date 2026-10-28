@@ -4,31 +4,31 @@
   "algorithm": 6,
   "pins": {
     "computed_calculation": {
-      "1": "642ddc060abe6d3e806e9edff92b2623eee2bf45293047c52c81478d34f301eb"
+      "1": "f2e983b4bb0e7f7fcf23f2cc6d77b776ed44e23153979adfc5c0c47152e24f72"
     },
     "computed_kinetics": {
-      "1": "e238e043fb023aff7b40a3a2838f345298a88c3f82610e6fb12037af3b8d9702"
+      "1": "a10a968eaa7519bf81f93ff93b35b7b931f9fd82bf30a2347f203e5e362452ee"
     },
     "computed_statmech": {
-      "1": "7fe4bf00f4230fc337159af1500191be266ec44d4fe7a6a2c65f20fd958d204d"
+      "1": "a11e1891c04754946bf180ce5e3d0deef4fe95e6b5300bf3d396cd6bf51dea7f"
     },
     "computed_thermo": {
-      "1": "c1fdf07bcf116692bfde62e27546b76222f8d9336423bf66dece5ec83220be45"
+      "1": "8f50ad61bbfb6631245961af6e404508af9d7efe7d1c0e2d1d25a70152d7f7fb"
     },
     "computed_transition_state": {
-      "2": "e4ba069ddb24e40b090741bc35f27d9166c79decdeb9e19d394c07968d71ef81"
+      "2": "5f6f09b3204e6c49fa5a8cfca6e2c888e29fee5988ded57d68e7bca2d2e05a95"
     },
     "computed_transport": {
-      "1": "23d1baed9a538453e07c4a75a53c8c9170ad5e60b0f9abbe5cd92846e8728fc9"
+      "1": "9df1633baaa551e4a2e9571bc1a459155dbb46c38007a0413b346e2e4670ced6"
     },
     "computed_ts_statmech": {
-      "1": "f969c099b3f65bb3e491719032b0bdbb8100bf8126477243d58825edc1f3cd8f"
+      "1": "ec7b8ac3a2dcf57bf09f9689262fb84f07f6ff175d84cffb40820134b9ecb61e"
     },
     "tckdb_reproducibility": {
-      "1": "53210334c9470a6da9d482ffcb1c96596bd1f8278be6fa2588a44c40487e1648"
+      "1": "2e0f9070706dfb8a0d8162b0429ca0788220112933a2e27a0e2bef2e702cfd5d"
     },
     "tckdb_reproducibility_ts_statmech": {
-      "1": "5bc446bd0400a48cea1ef86119d40b023b529cf38a34f10d5d2ad8ddd16930c0"
+      "1": "9eabeab64df0cf722bed3685197522e9675e369754b080a08d2a86b2497b80ca"
     }
   },
   "unbumped_overrides": [
@@ -167,6 +167,51 @@
       "name": "tckdb_reproducibility_ts_statmech",
       "version": 1,
       "reason": "DR-0038 stereo identity decides nothing new. Every closure gained the StereoResolution enum (reached through the new SpeciesEntry column). computed_transition_state also gained the merged_refs field on the response echo; the two reproducibility rubrics also gained snapshot_defaults.DERIVED_COLUMNS, which makes is_unchanged_default skip the stereo descriptor/resolution/smiles and merged_into_* columns. Those columns did not exist in any stored snapshot, so no earlier verdict or digest changes."
+    },
+    {
+      "name": "computed_calculation",
+      "version": 1,
+      "reason": "Network channel kind is derived from its states and NetworkChannelKind lost its unused 'stabilization' member. Every closure reaches that enum through the network models; no check or grading decides anything new, and no stored assessment read the channel kind."
+    },
+    {
+      "name": "computed_kinetics",
+      "version": 1,
+      "reason": "Network channel kind is derived from its states and NetworkChannelKind lost its unused 'stabilization' member. Every closure reaches that enum through the network models; no check or grading decides anything new, and no stored assessment read the channel kind."
+    },
+    {
+      "name": "computed_statmech",
+      "version": 1,
+      "reason": "Network channel kind is derived from its states and NetworkChannelKind lost its unused 'stabilization' member. Every closure reaches that enum through the network models; no check or grading decides anything new, and no stored assessment read the channel kind."
+    },
+    {
+      "name": "computed_thermo",
+      "version": 1,
+      "reason": "Network channel kind is derived from its states and NetworkChannelKind lost its unused 'stabilization' member. Every closure reaches that enum through the network models; no check or grading decides anything new, and no stored assessment read the channel kind."
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "Network channel kind is derived from its states and NetworkChannelKind lost its unused 'stabilization' member. Every closure reaches that enum through the network models; no check or grading decides anything new, and no stored assessment read the channel kind."
+    },
+    {
+      "name": "computed_transport",
+      "version": 1,
+      "reason": "Network channel kind is derived from its states and NetworkChannelKind lost its unused 'stabilization' member. Every closure reaches that enum through the network models; no check or grading decides anything new, and no stored assessment read the channel kind."
+    },
+    {
+      "name": "computed_ts_statmech",
+      "version": 1,
+      "reason": "Network channel kind is derived from its states and NetworkChannelKind lost its unused 'stabilization' member. Every closure reaches that enum through the network models; no check or grading decides anything new, and no stored assessment read the channel kind."
+    },
+    {
+      "name": "tckdb_reproducibility",
+      "version": 1,
+      "reason": "Network channel kind is derived from its states and NetworkChannelKind lost its unused 'stabilization' member. Every closure reaches that enum through the network models; no check or grading decides anything new, and no stored assessment read the channel kind."
+    },
+    {
+      "name": "tckdb_reproducibility_ts_statmech",
+      "version": 1,
+      "reason": "Network channel kind is derived from its states and NetworkChannelKind lost its unused 'stabilization' member. Every closure reaches that enum through the network models; no check or grading decides anything new, and no stored assessment read the channel kind."
     }
   ]
 }
