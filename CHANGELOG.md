@@ -33,6 +33,13 @@ dataset must never require a code release.
   the only routes that take one already carry a transition state.
   A stereo isomerisation and its reverse (both irreversible) share one `chem_reaction` because both sides hold the same species (the hash keys the two sides
   separately, so in general `A -> B` and `B -> A` are two rows) and differ in their entries' roles.
+- **Reaction participant rows are one per distinct entry per side.** `reactions/search`, `/browse`, `/full` and the review queue served one row per occurrence
+  (`H + H -> H2`: two H rows) while each row also carried the species-level coefficient (2), so a consumer summing the rows read 4 H. Each distinct entry is now served
+  once per side with `stoichiometry` = how many times it occurs there; two entries of one species on a side each keep their own count. The served `equation` string is
+  unchanged (`[H] + [H] -> [H][H]`). Consumers: the web app already collapses repeated rows (it now reads the right count), the Python client CLI prints `2 H`; nothing depended on the repeated rows.
+- A computed-reaction bundle's kinetics fit whose entries are the bundle reaction's (same direction, any order) attaches to the canonical reaction entry instead of getting an
+  entry of its own; a reverse-direction fit of a non-degenerate reaction still keeps its own entry (pinned by an existing test).
+- Entry labels for incomplete stereo are flat: `? unresolved`, `E,? partial`.
 - One state of a pressure-dependent network naming the same species entry twice (two species keys that resolve to one entry) was a raw `UniqueViolation` on
   `pk_network_state_participant` (HTTP 500); it is now `network_state_duplicate_participant` (422, a sibling of `..._duplicate_composition`: it is about one state's
   own participants, and its remedy is a `stoichiometry`).
@@ -45,7 +52,7 @@ dataset must never require a code release.
   `STEREO_NOT_REPRESENTED=axial|cumulene` an element no data can settle. The importer reads the first token after `SMILES=` and ignores the rest.
 - Reads: species-entry records (species search, structure search) gain `stereo_not_represented` (`["axial"]`, `["cumulene"]` or empty). `species_entry_label`
   (reaction equations, entry links, network state labels, every read that names an entry) is now built from the descriptor and its resolution, so an unresolved
-  entry reads `?[unresolved]` and a partial one `E,?[partial]` instead of no label; the review-queue subject chemistry gains `stereo_descriptor` and
+  entry reads `? unresolved` and a partial one `E,? partial` instead of no label; the review-queue subject chemistry gains `stereo_descriptor` and
   `stereo_resolution` beside `stereo_label`. Entries whose stereo is wholly unknown therefore change label text; no stored value changes.
   Symmetry-cap entries are not listed in `stereo_not_represented` (known gap).
 - Frontend: the species-entry page and entry cards read stereo from the descriptor and its resolution. "Achiral" only for a NULL descriptor; partial and

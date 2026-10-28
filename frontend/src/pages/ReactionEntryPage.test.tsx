@@ -827,7 +827,7 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
         const base = mockFull()
         handleFull({
             ...base,
-            reaction_entry: { ...base.reaction_entry, equation: "CC=CC => CC=CC", reversible: false },
+            reaction_entry: { ...base.reaction_entry, equation: "CC=CC -> CC=CC", reversible: false },
             species: {
                 reactants: [{
                     species_entry_ref: "spe_z", species_entry_label: "Z", smiles: "CC=CC", formula: "C4H8",
@@ -842,11 +842,43 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
         const { container } = page()
         await screen.findByText("kin_test1")
         const fact = Array.from(container.querySelectorAll(".record-identity-header dt")).find((el) => el.textContent === "Equation (as deposited)")
-        expect(fact?.nextElementSibling?.textContent).toBe("CC=CC [Z] => CC=CC [E]")
+        expect(fact?.nextElementSibling?.textContent).toBe("CC=CC [Z] -> CC=CC [E]")
         const reactantCell = container.querySelector('table[aria-label="Reactant participants"] td[data-label="Species"]')
         expect(reactantCell?.textContent).toContain("Z isomer")
         const productCell = container.querySelector('table[aria-label="Product participants"] td[data-label="Species"]')
         expect(productCell?.textContent).toContain("E isomer")
+    })
+
+    function factText(container: HTMLElement): string | null | undefined {
+        const fact = Array.from(container.querySelectorAll(".record-identity-header dt")).find((el) => el.textContent === "Equation (as deposited)")
+        return fact?.nextElementSibling?.textContent
+    }
+
+    // `/full` serves each distinct entry once per side with its own occurrence count (`H + H -> H2` is ONE H row,
+    // stoichiometry 2). Both the hero equation and the as-deposited line read the coefficient from that row.
+    it("H + H -> H2 shows 2 H in both the hero equation and the as-deposited line", async () => {
+        const base = mockFull()
+        handleFull({
+            ...base,
+            reaction_entry: { ...base.reaction_entry, equation: "[H] + [H] -> [H][H]", reversible: false },
+            species: {
+                reactants: [{ species_entry_ref: "spe_h", smiles: "[H]", formula: "H", stoichiometry: 2, participant_index: 1, review: { status: "not_reviewed" } }],
+                products: [{ species_entry_ref: "spe_h2", smiles: "[H][H]", formula: "H2", stoichiometry: 1, participant_index: 1, review: { status: "not_reviewed" } }],
+            },
+        })
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        expect(factText(container)).toBe("2 [H] -> [H][H]")
+        const hero = container.querySelector("h1")?.textContent ?? ""
+        expect(hero).toMatch(/^2 /)
+        expect(hero).not.toMatch(/4/)
+    })
+
+    it("a coefficient-one reaction shows no coefficients", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        expect(factText(container)).toBe("O + [CH3] <=> C + [OH]")
     })
 
     it("every participant ref still appears exactly once outside References -- moved column, not a new/lost mention", async () => {

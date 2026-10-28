@@ -146,7 +146,6 @@ from app.db.models.reaction import (
     ChemReaction,
     ReactionEntry,
     ReactionEntryStructureParticipant,
-    ReactionParticipant,
 )
 from app.db.models.record_review import RecordReview
 from app.db.models.species import Species, SpeciesEntry
@@ -418,36 +417,27 @@ def _resolve_reaction_entry_chemistry(
         .where(ReactionEntry.public_ref.in_(refs))
     ).all()
 
-    reaction_ids = {row.reaction_id for row in rows}
-    stoichiometry_by_key: dict[tuple[int, int, ReactionRole], int] = {}
-    if reaction_ids:
-        stoich_rows = session.execute(
-            select(
-                ReactionParticipant.reaction_id,
-                ReactionParticipant.species_id,
-                ReactionParticipant.role,
-                ReactionParticipant.stoichiometry,
-            ).where(ReactionParticipant.reaction_id.in_(reaction_ids))
-        ).all()
-        stoichiometry_by_key = {
-            (r.reaction_id, r.species_id, r.role): r.stoichiometry for r in stoich_rows
-        }
-
     reversible_by_ref: dict[str, bool] = {}
     reactants_by_ref: dict[str, list[ReactionEquationParticipant]] = {}
     products_by_ref: dict[str, list[ReactionEquationParticipant]] = {}
+    # One structure-participant row is stored per occurrence (``H + H -> H2``: two rows, one H entry). Each distinct
+    # entry is served once per side with its own occurrence count as ``stoichiometry``.
+    seen: dict[tuple[str, ReactionRole, str], ReactionEquationParticipant] = {}
     for row in rows:
         reversible_by_ref[row.reaction_entry_ref] = row.reversible
+        key = (row.reaction_entry_ref, row.role, row.species_entry_ref)
+        if key in seen:
+            seen[key].stoichiometry += 1
+            continue
         participant = ReactionEquationParticipant(
             species_entry_ref=row.species_entry_ref,
             species_entry_label=species_entry_label_for(row),
             smiles=row.smiles,
             formula=row.formula,
-            stoichiometry=stoichiometry_by_key.get(
-                (row.reaction_id, row.species_id, row.role), 1
-            ),
+            stoichiometry=1,
             participant_index=row.participant_index,
         )
+        seen[key] = participant
         bucket = (
             reactants_by_ref
             if row.role is ReactionRole.reactant

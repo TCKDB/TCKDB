@@ -37,7 +37,6 @@ from app.db.models.reaction import (
     ReactionEntry,
     ReactionEntryStructureParticipant,
     ReactionFamily,
-    ReactionParticipant,
 )
 from app.db.models.reaction_atom_map import (
     ReactionAtomMap,
@@ -584,9 +583,6 @@ def _build_species_section(
     reaction_entry_id: int,
     visible_review_statuses: set,
 ) -> ReactionFullSpecies:
-    entry = session.get(ReactionEntry, reaction_entry_id)
-    reaction_id = entry.reaction_id if entry is not None else None
-
     rows = session.execute(
         select(
             ReactionEntryStructureParticipant.species_entry_id,
@@ -618,23 +614,14 @@ def _build_species_section(
         record_ids=[r[0] for r in rows],
     )
 
-    # Graph-identity stoichiometry lives on ``chem_reaction.reaction_participant``,
-    # keyed by (reaction_id, species_id, role) -- not on the per-deposit
-    # structure-participant row, which lists a repeated species once
-    # regardless of how many times it reacts (see ReactionFullSpeciesParticipant's
-    # docstring).
-    stoichiometry_by_key: dict[tuple[int, ReactionRole], int] = {}
-    if reaction_id is not None:
-        stoichiometry_by_key = {
-            (species_id, role): stoichiometry
-            for species_id, role, stoichiometry in session.execute(
-                select(
-                    ReactionParticipant.species_id,
-                    ReactionParticipant.role,
-                    ReactionParticipant.stoichiometry,
-                ).where(ReactionParticipant.reaction_id == reaction_id)
-            ).all()
-        }
+    # One structure-participant row is stored per OCCURRENCE (``H + H -> H2`` has two rows for the one H entry).
+    # Each distinct entry is served once per side, carrying how many times it occurs: the count of ITS rows, not the
+    # species-level coefficient, so two entries of one species on a side each keep their own count.
+    occurrences: dict[tuple[int, ReactionRole], int] = {}
+    for row in rows:
+        key = (row.species_entry_id, row.role)
+        occurrences[key] = occurrences.get(key, 0) + 1
+    served: set[tuple[int, ReactionRole]] = set()
 
     reactants: list[ReactionFullSpeciesParticipant] = []
     products: list[ReactionFullSpeciesParticipant] = []
@@ -644,13 +631,16 @@ def _build_species_section(
         badge = badge_by_entry[species_entry_id]
         if badge.status not in visible_review_statuses:
             continue
+        if (species_entry_id, role) in served:
+            continue
+        served.add((species_entry_id, role))
         participant = ReactionFullSpeciesParticipant(
             species_entry_id=species_entry_id,
             species_entry_ref=row.public_ref,
             species_entry_label=species_entry_label_for(row),
             smiles=row.smiles,
             formula=row.formula,
-            stoichiometry=stoichiometry_by_key.get((row.species_id, role), 1),
+            stoichiometry=occurrences[(species_entry_id, role)],
             participant_index=row.participant_index,
             review=badge,
         )

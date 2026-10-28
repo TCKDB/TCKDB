@@ -28,6 +28,7 @@ import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { levelOfTheoryPath } from "../domain/methodsLinks"
+import { buildEquationSides, type EquationParticipant } from "../domain/reactionEquation"
 import { stereoChip } from "../domain/recordFacets"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
@@ -324,10 +325,12 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
 // is untouched: this table still never folds the species-entry ref or
 // its copy button into the identity cell.
 /**
- * The served `equation` is rendered from the species' SMILES alone (a served value consumers parse, so it is left
- * alone), which reads `CC=CC => CC=CC` for a Z to E isomerisation: both participants are entries of one species.
- * Here each participant carries its entry's label (stereo and state) in brackets, so the two sides read apart.
- * Falls back to the served string when the participants are not loaded.
+ * The served `equation` string is the written form and is left as the server wrote it. When the participant rows
+ * are loaded this line is rebuilt from them instead, so that each side's entries read apart: a Z to E isomerisation
+ * is `CC=CC => CC=CC` in the served string (both participants are entries of one species) and
+ * `CC=CC [Z] -> CC=CC [E]` here. Built from the same collapsed sides as the hero equation (one participant per
+ * distinct entry, a coefficient only when it is greater than 1), with the server's arrows: `->` irreversible,
+ * `<=>` reversible. Falls back to the served string when the participants are not loaded.
  */
 function equationWithEntries(
     served: string,
@@ -336,10 +339,11 @@ function equationWithEntries(
     products: ReactionEntrySpeciesParticipant[],
 ): string {
     if (reactants.length === 0 || products.length === 0) return served
-    const side = (participants: ReactionEntrySpeciesParticipant[]) => participants
-        .map((p) => `${p.stoichiometry > 1 ? `${p.stoichiometry} ` : ""}${p.smiles}${p.species_entry_label ? ` [${p.species_entry_label}]` : ""}`)
+    const sides = buildEquationSides(reactants, products)
+    const side = (participants: EquationParticipant[]) => participants
+        .map((p) => `${p.coefficient > 1 ? `${p.coefficient} ` : ""}${p.smiles}${p.speciesEntryLabel ? ` [${p.speciesEntryLabel}]` : ""}`)
         .join(" + ")
-    return `${side(reactants)} ${reversible ? "<=>" : "=>"} ${side(products)}`
+    return `${side(sides.reactants)} ${reversible ? "<=>" : "->"} ${side(sides.products)}`
 }
 
 function ParticipantsTable({ label, participants }: {

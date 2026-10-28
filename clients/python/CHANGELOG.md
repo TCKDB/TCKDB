@@ -7,7 +7,9 @@ Stereo isomerisations, duplicate network states, stereo in exports.
 - Requires `tckdb-schemas>=0.139.0`.
 - Three refusal codes are published: `reaction_entry_null_reaction`, `network_state_duplicate_composition` and `network_state_duplicate_participant` (all 422).
 - Reads: species-entry and structure-search records gain `stereo_not_represented` (`axial` / `cumulene`): the elements behind a `?` that no data can settle yet.
-- `species_entry_label` is built from the descriptor and resolution (`?[unresolved]`, `E,?[partial]`); the review-queue subject chemistry carries
+- Reaction participant rows (`reactants` / `products` on search, browse and `get_reaction_full`) are one per distinct entry per side, with `stoichiometry` the number of
+  times that entry occurs (`H + H -> H2` lists the one H entry once, with 2). Summing `stoichiometry` over a side now gives the right count.
+- `species_entry_label` is built from the descriptor and resolution (`? unresolved`, `E,? partial`); the review-queue subject chemistry carries
   `stereo_descriptor` and `stereo_resolution`.
 - A CHEMKIN export now prints each entry's stereo (`STEREO=E`, `STEREO_RESOLUTION=partial`, ...) after the `SMILES=` token in its comments; a reader taking
   the first token after `SMILES=` is unaffected.

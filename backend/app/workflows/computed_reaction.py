@@ -577,9 +577,9 @@ def _collect_bundle_provenance_warnings(
 def _fit_is_for_reaction(kin, species_key_to_entry, reactant_entries, product_entries) -> bool:
     """Whether a bundle kinetics fit is for the bundle's own reaction (DR-0038 null-reaction evidence).
 
-    True when the fit's reactant and product entries equal the reaction's, as multisets and in either
-    direction. Bundle fits are not tied to the bundle's reaction, so a fit for another reaction must not
-    count as evidence that this one happens.
+    True when the fit's reactant and product entries equal the reaction's, as multisets and in any order.
+    Bundle fits are not tied to the bundle's reaction, so a fit for another reaction must not count as
+    evidence that this one happens; and such a fit attaches to the canonical reaction entry.
     """
     from collections import Counter
 
@@ -588,7 +588,9 @@ def _fit_is_for_reaction(kin, species_key_to_entry, reactant_entries, product_en
 
     mine = (Counter(e.id for e in reactant_entries), Counter(e.id for e in product_entries))
     fit = (ids(kin.reactant_keys), ids(kin.product_keys))
-    return fit == mine or fit == (mine[1], mine[0])
+    # Same direction, any order. (For a same-entries reaction the two directions are one, so a "reversed" fit is
+    # covered; for any other reaction a reverse-direction fit is a record of its own and keeps its own entry.)
+    return fit == mine
 
 
 def persist_computed_reaction_upload(
@@ -1807,10 +1809,12 @@ def persist_computed_reaction_upload(
         # ``reaction_entry_structure_participant`` requires it, and the
         # direction-specific ordering is the scientific record we want
         # kinetics to point at.
+        # A fit whose entries are the bundle reaction's (either direction, any order) is a rate of THIS reaction
+        # and attaches to the canonical entry; only a fit for a different set of entries gets an entry of its own.
         is_canonical_direction = (
             list(kin.reactant_keys) == canonical_reactant_keys
             and list(kin.product_keys) == canonical_product_keys
-        )
+        ) or _fit_is_for_reaction(kin, species_key_to_entry, reactant_entries, product_entries)
 
         if is_canonical_direction:
             kin_entry = canonical_reaction_entry

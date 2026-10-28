@@ -263,7 +263,18 @@ def test_a_reversed_fit_in_another_order_is_evidence(db_conn) -> None:
     payload["kinetics"][0]["reactant_keys"] = ["h", "ch3"]
     payload["kinetics"][0]["product_keys"] = ["h", "ch3"]
     with _isolated_session(db_conn) as session:
-        assert _persist_bundle(session, payload)
+        before = _count(session, ReactionEntry)
+        summary = _persist_bundle(session, payload)
+        assert summary
+        # The reordered fit is a rate of this reaction: it sits on the canonical entry, and no second
+        # reaction entry is created for it.
+        assert _count(session, ReactionEntry) == before + 1
+        from app.db.models.kinetics import Kinetics
+
+        entry_ids = {k.reaction_entry_id for k in session.scalars(select(Kinetics)).all()}
+        assert len(entry_ids) == 1
+        canonical = session.scalars(select(ReactionEntry).order_by(ReactionEntry.id.desc())).first()
+        assert entry_ids == {canonical.id}
 
 
 def test_a_pdep_micro_reaction_named_by_a_transition_state_accepts_a_same_entries_reaction(db_conn) -> None:
