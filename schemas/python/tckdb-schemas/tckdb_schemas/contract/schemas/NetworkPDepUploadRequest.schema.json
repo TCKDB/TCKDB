@@ -3234,7 +3234,7 @@
     },
     "NetworkChannelIn": {
       "additionalProperties": false,
-      "description": "A directed phenomenological channel between two network states.\n\n:param source_state_key: Local key of the source state.\n:param sink_state_key: Local key of the sink state.\n:param kind: Macroscopic channel classification (association, ...).\n:param mechanism: Mechanistic attribution. Defaults to ``elementary``, so\n    an existing payload that names its ``microreaction_paths`` is\n    unaffected.\n:param microreaction_paths: The elementary step(s) this channel is\n    attributed to.\n\nThe two classification axes are orthogonal. ``kind`` says what the channel\ndoes macroscopically; ``mechanism`` says what evidence stands behind it:\n\n- ``elementary`` (the default) requires at least one ``microreaction_path``.\n  Omitting the paths is an incomplete deposit, not a declaration, and is\n  rejected.\n- ``well_skipping`` declares a chemically-activated channel whose flux\n  passes *through* one or more energized wells before the products separate\n  — ``NH2 + NH2 → H + N2H3`` proceeding via energized ``N2H4*`` is the\n  canonical case. There is no single elementary step or saddle point to\n  name, so ``microreaction_paths`` must be empty; the channel's backing is\n  the network topology plus the master-equation solve. Declaring it is not\n  taken on trust: ``NetworkPDepUploadRequest`` checks that the endpoints are\n  *not* joined by a single elementary step and *are* joined by a chain of\n  elementary steps whose intermediates are all wells.",
+      "description": "A directed phenomenological channel between two network states.\n\n:param source_state_key: Local key of the source state.\n:param sink_state_key: Local key of the sink state.\n:param kind: Optional. The channel's macroscopic type, derived from its two states: well to well is\n    ``isomerization``, bimolecular/termolecular to well ``association``, well to bimolecular/termolecular\n    ``dissociation``, bimolecular/termolecular to bimolecular/termolecular ``exchange``. Omit it and the server\n    fills it in; supply it and it must agree, or the deposit is refused as ``network_channel_kind_mismatch``.\n:param mechanism: Mechanistic attribution. Defaults to ``elementary``, so\n    an existing payload that names its ``microreaction_paths`` is\n    unaffected.\n:param microreaction_paths: The elementary step(s) this channel is\n    attributed to.\n\nThe two classification axes are orthogonal. ``kind`` says what the channel\ndoes macroscopically; ``mechanism`` says what evidence stands behind it:\n\n- ``elementary`` (the default) requires at least one ``microreaction_path``.\n  Omitting the paths is an incomplete deposit, not a declaration, and is\n  rejected.\n- ``well_skipping`` declares a chemically-activated channel whose flux\n  passes *through* one or more energized wells before the products separate\n  — ``NH2 + NH2 → H + N2H3`` proceeding via energized ``N2H4*`` is the\n  canonical case. There is no single elementary step or saddle point to\n  name, so ``microreaction_paths`` must be empty; the channel's backing is\n  the network topology plus the master-equation solve. Declaring it is not\n  taken on trust: ``NetworkPDepUploadRequest`` checks that the endpoints are\n  *not* joined by a single elementary step and *are* joined by a chain of\n  elementary steps whose intermediates are all wells.",
       "properties": {
         "key": {
           "minLength": 1,
@@ -3242,7 +3242,15 @@
           "type": "string"
         },
         "kind": {
-          "$ref": "#/$defs/NetworkChannelKind"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NetworkChannelKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "mechanism": {
           "$ref": "#/$defs/NetworkChannelMechanism",
@@ -3269,18 +3277,17 @@
       "required": [
         "key",
         "source_state_key",
-        "sink_state_key",
-        "kind"
+        "sink_state_key"
       ],
       "title": "NetworkChannelIn",
       "type": "object"
     },
     "NetworkChannelKind": {
+      "description": "Macroscopic type of a network channel, derived from the states it joins.\n\nA channel is directed (source to sink). Its kind follows from the kinds of its two states, with\ntermolecular treated exactly like bimolecular. A deposit may omit ``kind``; if it supplies one\nit is checked against this rule, and a disagreement is refused as ``network_channel_kind_mismatch``.\n\n``isomerization``\n    well to well.\n\n``association``\n    bimolecular or termolecular to well.\n\n``dissociation``\n    well to bimolecular or termolecular.\n\n``exchange``\n    bimolecular or termolecular to bimolecular or termolecular, including well-skipping\n    channels and stereo isomerisation of a fragment set.",
       "enum": [
         "isomerization",
         "association",
         "dissociation",
-        "stabilization",
         "exchange"
       ],
       "title": "NetworkChannelKind",

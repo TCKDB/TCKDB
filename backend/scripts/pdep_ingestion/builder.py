@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from tckdb_schemas.frequency_completeness import atom_count_of_xyz
+from tckdb_schemas.network_channel_kind import derive_channel_kind
 
 from scripts.arc_ingestion.arkane_parser import map_a_units
 
@@ -874,12 +875,6 @@ def build_network_pdep_payload(
     # ------------------------------------------------------------------
     # Channels + channel_kinetics (one per fitted pdepreaction)
     # ------------------------------------------------------------------
-    _KIND = {
-        ("well", "well"): "isomerization",
-        ("bimolecular", "well"): "association",
-        ("well", "bimolecular"): "dissociation",
-        ("bimolecular", "bimolecular"): "exchange",
-    }
     channels: list[dict] = []
     channel_kinetics: list[dict] = []
     channel_barriers: list[dict] = []
@@ -918,7 +913,12 @@ def build_network_pdep_payload(
             )
         seen_channel_pairs.add(pair)
         pmin_bar, pmax_bar = _fit_bounds_bar_kelvin(fit)  # honours atm/bar; K
-        kind = _KIND.get((state_kind[src], state_kind[snk]), "isomerization")
+        try:
+            kind = derive_channel_kind(state_kind[src], state_kind[snk]).value
+        except ValueError as exc:
+            # Unreachable for the state kinds this script writes; kept so an unmappable pair can never be
+            # silently labelled as something else.
+            raise ValueError(f"cannot derive a channel kind for {src!r} -> {snk!r}: {exc}") from exc
         channel_key = f"channel_{len(channels) + 1}"
         channels.append(
             {

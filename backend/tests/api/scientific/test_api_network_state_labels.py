@@ -132,7 +132,7 @@ def _hydrazine_network(db_session) -> dict:
     for source, sink, kind in (
         (well, states["e"], NetworkChannelKind.dissociation),
         (well, states["z"], NetworkChannelKind.dissociation),
-        (states["e"], states["z"], NetworkChannelKind.isomerization),
+        (states["e"], states["z"], NetworkChannelKind.exchange),
     ):
         channel = make_network_channel(
             db_session,

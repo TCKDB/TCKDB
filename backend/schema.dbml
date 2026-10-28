@@ -444,7 +444,6 @@ enum NetworkChannelKind {
   isomerization
   association
   dissociation
-  stabilization
   exchange
 }
 

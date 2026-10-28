@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.178.0 - 2026-10-28
+
+A network channel's kind is derived from its states.
+
+- Requires `tckdb-schemas>=0.140.0`.
+- One refusal code is published: `network_channel_kind_mismatch` (422).
+
 ## 0.177.0 - 2026-10-27
 
 Stereo isomerisations, duplicate network states, stereo in exports.

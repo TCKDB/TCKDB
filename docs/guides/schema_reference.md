@@ -2244,7 +2244,7 @@ the gap.
 | `network_id` | BIGINT | no | — | network.id | — | not documented |
 | `source_state_id` | BIGINT | no | — | network_state.id | — | not documented |
 | `sink_state_id` | BIGINT | no | — | network_state.id | — | not documented |
-| `kind` | NetworkChannelKind (enum) | no | — | — | `isomerization`, `association`, `dissociation`, `stabilization`, `exchange` | not documented |
+| `kind` | NetworkChannelKind (enum) | no | — | — | `isomerization`, `association`, `dissociation`, `exchange` | ``kind`` is derived from the kinds of the source and sink states and stored: well to well is ``isomerization``, bimolecular or termolecular to well ``association``, well to bimolecular or termolecular ``dissociation``, and bimolecular or termolecular to bimolecular or termolecular ``exchange``. An upload may omit it; one that supplies it must agree. |
 | `mechanism` | NetworkChannelMechanism (enum) | no | elementary | — | `elementary`, `well_skipping` | not documented |
 | `channel_key` | TEXT | no | — | — | — | not documented |
 

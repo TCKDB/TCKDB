@@ -81,6 +81,7 @@ from tckdb_schemas.local_key_codes import (
     W_TRANSITION_STATE_KEY_UNDECLARED,
     undeclared_key_error,
 )
+from tckdb_schemas.network_channel_kind import W_NETWORK_CHANNEL_KIND_MISMATCH, derive_channel_kind
 from tckdb_schemas.network_declarations import (
     W_NETWORK_DECLARATION_INVALID,
     NetworkBarrierBasis,
@@ -603,7 +604,10 @@ class NetworkChannelIn(SchemaBase):
 
     :param source_state_key: Local key of the source state.
     :param sink_state_key: Local key of the sink state.
-    :param kind: Macroscopic channel classification (association, ...).
+    :param kind: Optional. The channel's macroscopic type, derived from its two states: well to well is
+        ``isomerization``, bimolecular/termolecular to well ``association``, well to bimolecular/termolecular
+        ``dissociation``, bimolecular/termolecular to bimolecular/termolecular ``exchange``. Omit it and the server
+        fills it in; supply it and it must agree, or the deposit is refused as ``network_channel_kind_mismatch``.
     :param mechanism: Mechanistic attribution. Defaults to ``elementary``, so
         an existing payload that names its ``microreaction_paths`` is
         unaffected.
@@ -630,7 +634,7 @@ class NetworkChannelIn(SchemaBase):
     key: str = Field(min_length=1)
     source_state_key: str = Field(min_length=1)
     sink_state_key: str = Field(min_length=1)
-    kind: NetworkChannelKind
+    kind: NetworkChannelKind | None = None
     mechanism: NetworkChannelMechanism = NetworkChannelMechanism.elementary
     microreaction_paths: list["NetworkChannelMicroReactionIn"] = Field(
         default_factory=list
@@ -2440,6 +2444,38 @@ class NetworkPDepUploadRequest(SchemaBase):
                     "topology; without it there is no evidence for this "
                     "channel at all."
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_channel_kind_from_states(self) -> Self:
+        """Fill each channel's ``kind`` from its states, and refuse one that disagrees.
+
+        The kind is a function of the source and sink state kinds (``derive_channel_kind``), so an
+        omitted kind is filled in and a supplied one is only ever a claim to check. Runs after
+        ``validate_key_references`` (both endpoints name declared states) and after
+        ``validate_well_skipping_channels``, so a topology refusal is reported before a kind one.
+        """
+        state_kind = {state.key: state.kind for state in self.states}
+        for index, channel in enumerate(self.channels):
+            derived = NetworkChannelKind(
+                derive_channel_kind(state_kind[channel.source_state_key], state_kind[channel.sink_state_key]).value
+            )
+            if channel.kind is not None and channel.kind != derived:
+                raise CodedValidationError(
+                    W_NETWORK_CHANNEL_KIND_MISMATCH,
+                    f"channel '{channel.key}' declares kind='{channel.kind.value}' but joins a "
+                    f"{state_kind[channel.source_state_key]} state to a {state_kind[channel.sink_state_key]} "
+                    f"state, which is kind='{derived.value}'. Omit kind to have it derived, or send "
+                    f"'{derived.value}'.",
+                    context={
+                        "field": f"channels[{index}].kind",
+                        "channel_key": channel.key,
+                        "supplied_kind": channel.kind.value,
+                        "derived_kind": derived.value,
+                    },
+                    message_prefix=False,
+                )
+            channel.kind = derived
         return self
 
     @model_validator(mode="after")

@@ -40,7 +40,7 @@ import { Disclosure } from "./Disclosure"
  * (never invented a connector for; grouped and captioned instead).
  *
  * SCOPE DECISION (owner's brief asked for this, explicitly, not just the
- * code): channel `kind` (isomerization/association/exchange) and
+ * code): channel `kind` (isomerization/association/dissociation/exchange) and
  * `has_kinetics` still encode the drawn connectors' colour/dash -- both
  * are still meaningful facts about the 4 (today) channels that actually
  * get drawn. What does NOT carry over is the old size-based
@@ -218,7 +218,7 @@ function NetworkPesChannelFieldset({ saddles, hiddenChannelKeys, onToggle }: {
 // Legend -- shape/colour/dash encoding, counts computed live (never hardcoded)
 // ---------------------------------------------------------------------------
 
-const CONNECTOR_KIND_ORDER = ["isomerization", "association", "exchange"]
+const CONNECTOR_KIND_ORDER = ["isomerization", "association", "dissociation", "exchange"]
 
 function pesConnectorKindClass(kind: string): string {
     return CONNECTOR_KIND_ORDER.includes(kind) ? `net-pes-connector-${kind}` : "net-pes-connector-other"
