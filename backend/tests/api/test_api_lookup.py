@@ -507,7 +507,7 @@ class TestSelectionModes:
 def _reaction_payload() -> dict:
     return {
         "reversible": True,
-        "reaction_family": "H_Abstraction",
+        "reaction_family": "intra_H_migration",
         "reactants": [
             {"species_entry": {"smiles": "CC=O", "charge": 0, "multiplicity": 1}},
         ],
@@ -566,8 +566,8 @@ class TestReactionLookup:
         assert rxn["links"]["self"].startswith("/api/v1/reactions/")
         # The identifier is what a client filters on; the display name is
         # derived at read time and is never stored.
-        assert rxn["summary"]["reaction_family"] == "H_Abstraction"
-        assert rxn["summary"]["reaction_family_display"] == "Hydrogen Abstraction"
+        assert rxn["summary"]["reaction_family"] == "intra_H_migration"
+        assert rxn["summary"]["reaction_family_display"] == "Intra Hydrogen migration"
 
     def test_entry_includes_participant_structure(self, client):
         client.post("/api/v1/uploads/reactions", json=_reaction_payload())

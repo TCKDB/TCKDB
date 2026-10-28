@@ -244,6 +244,7 @@ class RejectionCode(str, Enum):
     NETWORK_SELECTION_SNAPSHOT_TOO_LARGE = "network_selection_snapshot_too_large"
     NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE = "network_solve_reported_requires_literature"
     NETWORK_STATE_DUPLICATE_COMPOSITION = "network_state_duplicate_composition"
+    NETWORK_STATE_DUPLICATE_PARTICIPANT = "network_state_duplicate_participant"
     NETWORK_STATE_ENERGY_SUM_MISMATCH = "network_state_energy_sum_mismatch"
     NETWORK_STATE_KEY_UNDECLARED = "network_state_key_undeclared"
     NON_FINITE_VALUE = "non_finite_value"
@@ -574,6 +575,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.NETWORK_SELECTION_POPULATION_TOO_LARGE,
         RejectionCode.NETWORK_SELECTION_SNAPSHOT_TOO_LARGE,
         RejectionCode.NETWORK_STATE_DUPLICATE_COMPOSITION,
+        RejectionCode.NETWORK_STATE_DUPLICATE_PARTICIPANT,
         RejectionCode.NETWORK_STATE_ENERGY_SUM_MISMATCH,
         RejectionCode.NETWORK_STATE_KEY_UNDECLARED,
         RejectionCode.NON_FINITE_VALUE,
@@ -930,6 +932,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.NETWORK_SELECTION_SNAPSHOT_TOO_LARGE: frozenset({422}),
     RejectionCode.NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE: frozenset({409}),
     RejectionCode.NETWORK_STATE_DUPLICATE_COMPOSITION: frozenset({422}),
+    RejectionCode.NETWORK_STATE_DUPLICATE_PARTICIPANT: frozenset({422}),
     RejectionCode.NETWORK_STATE_ENERGY_SUM_MISMATCH: frozenset({422}),
     RejectionCode.NETWORK_STATE_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.NON_FINITE_VALUE: frozenset({422}),

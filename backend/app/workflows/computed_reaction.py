@@ -574,6 +574,23 @@ def _collect_bundle_provenance_warnings(
     return warnings
 
 
+def _fit_is_for_reaction(kin, species_key_to_entry, reactant_entries, product_entries) -> bool:
+    """Whether a bundle kinetics fit is for the bundle's own reaction (DR-0038 null-reaction evidence).
+
+    True when the fit's reactant and product entries equal the reaction's, as multisets and in either
+    direction. Bundle fits are not tied to the bundle's reaction, so a fit for another reaction must not
+    count as evidence that this one happens.
+    """
+    from collections import Counter
+
+    def ids(keys):
+        return Counter(resolve_species_key(k, species_key_to_entry, field="kinetics").id for k in keys)
+
+    mine = (Counter(e.id for e in reactant_entries), Counter(e.id for e in product_entries))
+    fit = (ids(kin.reactant_keys), ids(kin.product_keys))
+    return fit == mine or fit == (mine[1], mine[0])
+
+
 def persist_computed_reaction_upload(
     session: Session,
     request: ComputedReactionUploadRequest,
@@ -777,7 +794,12 @@ def persist_computed_reaction_upload(
         reactant_entries,
         product_entries,
         has_transition_state=request.transition_state is not None,
-        has_kinetics=bool(request.kinetics),
+        # A fit is evidence for THIS reaction only if its entries are this reaction's (either direction, any
+        # order); a fit for another reaction gets an entry of its own and says nothing about this one.
+        has_kinetics=any(
+            _fit_is_for_reaction(kin, species_key_to_entry, reactant_entries, product_entries)
+            for kin in request.kinetics
+        ),
     )
 
     chem_reaction = resolve_chem_reaction(

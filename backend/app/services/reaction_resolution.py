@@ -442,9 +442,12 @@ def refuse_null_reaction_entry(
     mapping without one.
 
     A transition state deposited later against an existing reaction entry is not affected: it
-    attaches to the entry and creates no reaction entry, so this check does not run. (A bare
-    same-entries reaction entry cannot exist to be attached to; the degenerate reaction is
-    deposited with its transition state, which creates the entry.)
+    attaches to the entry and creates no reaction entry, so this check does not run. The rule is
+    enforced on write from DR-0038's third part onward: a bare same-entries reaction entry cannot be
+    created now, and a degenerate reaction arrives with its transition state or kinetics. A database
+    whose entries were merged by the stereo-identity migration could in principle already hold one
+    (the merge re-points structure participants generically); nothing here repairs such a row, since
+    existing data is development data and a migration would stop with a list instead.
 
     :raises CodedValueError: ``reaction_entry_null_reaction`` (422). The detail names no row id.
     """

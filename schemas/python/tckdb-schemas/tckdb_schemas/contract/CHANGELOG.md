@@ -2,7 +2,10 @@
 
 ## 0.139.0 - 2026-10-27
 
-Two refusal codes join the contract. No field is added or removed.
+Three refusal codes join the contract. No field is added or removed.
+
+- `network_state_duplicate_participant` (422): one state of a PDep network names the same species entry twice (two species keys that resolve to one entry). It used
+  to be an HTTP 500. Name the species once with its `stoichiometry`, or say what differs (stereo marks, a stereo label or a geometry).
 
 - `reaction_entry_null_reaction` (422): a reaction's reactants and products are the same species entries and the deposit carries no transition state or
   kinetics record. A reaction between two entries of *one species* (a cis-trans isomerisation, `Z-2-butene -> E-2-butene`) is valid; give each side the

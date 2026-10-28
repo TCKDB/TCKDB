@@ -823,6 +823,32 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
         expect(link?.textContent).toBe("O (H2O)")
     })
 
+    it("a stereo isomerisation reads apart: the equation fact and the participant cells carry each entry's stereo", async () => {
+        const base = mockFull()
+        handleFull({
+            ...base,
+            reaction_entry: { ...base.reaction_entry, equation: "CC=CC => CC=CC", reversible: false },
+            species: {
+                reactants: [{
+                    species_entry_ref: "spe_z", species_entry_label: "Z", smiles: "CC=CC", formula: "C4H8",
+                    stoichiometry: 1, participant_index: 0, review: { status: "not_reviewed" },
+                }],
+                products: [{
+                    species_entry_ref: "spe_e", species_entry_label: "E", smiles: "CC=CC", formula: "C4H8",
+                    stoichiometry: 1, participant_index: 0, review: { status: "not_reviewed" },
+                }],
+            },
+        })
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const fact = Array.from(container.querySelectorAll(".record-identity-header dt")).find((el) => el.textContent === "Equation (as deposited)")
+        expect(fact?.nextElementSibling?.textContent).toBe("CC=CC [Z] => CC=CC [E]")
+        const reactantCell = container.querySelector('table[aria-label="Reactant participants"] td[data-label="Species"]')
+        expect(reactantCell?.textContent).toContain("Z isomer")
+        const productCell = container.querySelector('table[aria-label="Product participants"] td[data-label="Species"]')
+        expect(productCell?.textContent).toContain("E isomer")
+    })
+
     it("every participant ref still appears exactly once outside References -- moved column, not a new/lost mention", async () => {
         handleFull(mockFull())
         const { container } = page()

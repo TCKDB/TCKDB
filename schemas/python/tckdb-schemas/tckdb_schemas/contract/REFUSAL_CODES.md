@@ -899,6 +899,14 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: 'States {first_key} and {state_in.key} have the same composition (network_state_duplicate_composition): their participants resolve to the same species entries, and a network holds one state per composition. If they are meant to be different, say what differs (stereo marks, a stereo label or a geometry on the species that stand for different isomers); if not, declare the state once.'
 
+<a id="c-network-state-duplicate-participant"></a>
+
+#### `network_state_duplicate_participant`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/workflows/network_pdep.py`.
+- The body's `context` names the things involved.
+- Message: 'State {state_in.key} lists the same species entry more than once (network_state_duplicate_participant): two of its species keys resolve to one entry. Name the species once and give its `stoichiometry`, or say what differs between the two (stereo marks, a stereo label or a geometry on the species).'
+
 <a id="c-network-state-energy-sum-mismatch"></a>
 
 #### `network_state_energy_sum_mismatch`

@@ -111,7 +111,8 @@ def test_the_same_entry_set_in_another_order_is_still_a_null_reaction(db_conn) -
 
 
 def test_forward_and_reverse_irreversible_deposits_share_one_chem_reaction(db_conn) -> None:
-    """Both directions are one graph reaction (the sides are sorted); the entries tell them apart."""
+    """Z->E and E->Z are one graph reaction because both sides hold the same species (the hash keys the two
+    sides separately, so in general A->B and B->A are two rows); the entries tell the directions apart."""
     with Session(db_conn) as session, session.begin():
         cis = _flat_entry(session, _CIS_XYZ)
         trans = _flat_entry(session, _TRANS_XYZ)
@@ -236,6 +237,33 @@ def test_a_bundle_with_neither_refuses_a_same_entries_reaction(db_conn) -> None:
         with pytest.raises(CodedValueError) as excinfo:
             _persist_bundle(session, _degenerate_bundle(transition_state=False, kinetics=False))
     assert excinfo.value.code == W_REACTION_ENTRY_NULL_REACTION
+
+
+def test_a_fit_for_another_reaction_is_not_evidence_for_a_bare_same_entries_reaction(db_conn) -> None:
+    """``CH4 -> CH4`` with no TS, whose only kinetics fit is ``CH3 + H -> CH4``, is still bare."""
+    import copy
+
+    from tests.workflows.test_computed_reaction_upload import _isolated_session, _minimal_payload
+
+    payload = copy.deepcopy(_minimal_payload())
+    payload["reactant_keys"] = ["ch4"]
+    payload["product_keys"] = ["ch4"]
+    del payload["transition_state"]
+    assert payload["kinetics"][0]["reactant_keys"] == ["ch3", "h"]
+    with _isolated_session(db_conn) as session:
+        with pytest.raises(CodedValueError) as excinfo:
+            _persist_bundle(session, payload)
+    assert excinfo.value.code == W_REACTION_ENTRY_NULL_REACTION
+
+
+def test_a_reversed_fit_in_another_order_is_evidence(db_conn) -> None:
+    from tests.workflows.test_computed_reaction_upload import _isolated_session
+
+    payload = _degenerate_bundle(transition_state=False, kinetics=True)
+    payload["kinetics"][0]["reactant_keys"] = ["h", "ch3"]
+    payload["kinetics"][0]["product_keys"] = ["h", "ch3"]
+    with _isolated_session(db_conn) as session:
+        assert _persist_bundle(session, payload)
 
 
 def test_a_pdep_micro_reaction_named_by_a_transition_state_accepts_a_same_entries_reaction(db_conn) -> None:

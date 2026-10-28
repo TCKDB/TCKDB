@@ -259,8 +259,8 @@ def test_the_entry_label_says_an_unresolved_or_partial_entry_is_so(client: TestC
 
     assert label(entries["E"].public_ref, "CC=CC") == "E"
     assert label(entries["Z"].public_ref, "CC=CC") == "Z"
-    assert label(entries["?"].public_ref, "CC=CC") == "? (unresolved)"
-    assert label(partial.public_ref, "CC=CC=CC") == "E,? (partial)"
+    assert label(entries["?"].public_ref, "CC=CC") == "?[unresolved]"
+    assert label(partial.public_ref, "CC=CC=CC") == "E,?[partial]"
     assert label(achiral.public_ref, "CCO") is None
 
 

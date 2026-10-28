@@ -73,6 +73,34 @@ def test_two_species_keys_that_resolve_to_one_entry_collide_the_same_way(db_conn
         assert excinfo.value.code == CODE
 
 
+def _state_with_two_keys_for_one_entry_payload() -> dict:
+    """One state whose two participants are different species keys that resolve to one entry."""
+    payload = _full_payload(include_solve=False)
+    base = next(s for s in payload["species"] if s["key"] == "ethylperoxy")
+    payload["species"].append({"key": "twin", "species_entry": deepcopy(base["species_entry"])})
+    payload = _add_state(payload, "well_pair", "ethylperoxy")
+    state = next(s for s in payload["states"] if s["key"] == "well_pair")
+    state["participants"].append({"species_key": "twin"})
+    return payload
+
+
+def test_two_keys_for_one_entry_inside_a_state_are_a_coded_422_not_a_500(db_conn) -> None:
+    """It used to be a raw ``UniqueViolation`` on ``pk_network_state_participant`` (HTTP 500)."""
+    with Session(db_conn) as session, session.begin():
+        request = NetworkPDepUploadRequest(**_state_with_two_keys_for_one_entry_payload())
+        with pytest.raises(CodedValueError) as excinfo:
+            persist_network_pdep_upload(session, request)
+    error = excinfo.value
+    assert error.code == "network_state_duplicate_participant"
+    assert "well_pair" in str(error) and "id=" not in str(error)
+
+
+def test_over_http_a_duplicate_participant_is_a_422(client) -> None:
+    response = client.post("/api/v1/uploads/networks/pdep", json=_state_with_two_keys_for_one_entry_payload())
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "network_state_duplicate_participant"
+
+
 def test_the_unmodified_network_still_uploads(db_conn) -> None:
     with Session(db_conn) as session, session.begin():
         network = persist_network_pdep_upload(

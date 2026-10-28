@@ -224,7 +224,10 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 ### 0.139.0 - 2026-10-27
 
-Two refusal codes join the contract. No field is added or removed.
+Three refusal codes join the contract. No field is added or removed.
+
+- `network_state_duplicate_participant` (422): one state of a PDep network names the same species entry twice (two species keys that resolve to one entry). It used
+  to be an HTTP 500. Name the species once with its `stoichiometry`, or say what differs (stereo marks, a stereo label or a geometry).
 
 - `reaction_entry_null_reaction` (422): a reaction's reactants and products are the same species entries and the deposit carries no transition state or
   kinetics record. A reaction between two entries of *one species* (a cis-trans isomerisation, `Z-2-butene -> E-2-butene`) is valid; give each side the
@@ -2706,6 +2709,7 @@ Nested models (94; fields and rules in the [model reference](#model-reference)):
 | [`network_energy_source_type_mismatch`](REFUSAL_CODES.md#c-network-energy-source-type-mismatch) | 422 | route handler |
 | [`network_solve_reported_requires_literature`](REFUSAL_CODES.md#c-network-solve-reported-requires-literature) | 409 | heuristic: the handler names table `network_solve`, constraint `ck_network_solve_reported_requires_literature` |
 | [`network_state_duplicate_composition`](REFUSAL_CODES.md#c-network-state-duplicate-composition) | 422 | route handler |
+| [`network_state_duplicate_participant`](REFUSAL_CODES.md#c-network-state-duplicate-participant) | 422 | route handler |
 | [`network_state_energy_sum_mismatch`](REFUSAL_CODES.md#c-network-state-energy-sum-mismatch) | 422 | route handler |
 | [`network_state_key_undeclared`](REFUSAL_CODES.md#c-network-state-key-undeclared) | 422 | payload validation; route handler |
 | [`transition_state_key_undeclared`](REFUSAL_CODES.md#c-transition-state-key-undeclared) | 422 | payload validation; route handler |
@@ -9395,7 +9399,7 @@ Enums with more than 8 values, linked from the fields that take them.
 
 ## Refusal code reference
 
-The per-code reference (204 codes) is its own file, `REFUSAL_CODES.md`, beside this one in the installed package. Every code in a table above links to its entry there. Each entry gives the code's HTTP status, how it arrives, where it is defined, the sentence written beside it at its raise site, and the scientific check behind it; the file ends with the client-facing codes no producer route was traced to. Find it with `python -m tckdb_schemas.contract --codes` (prints the path) or `tckdb_schemas.contract.refusal_codes_path()`; read it with `refusal_codes_markdown()`.
+The per-code reference (205 codes) is its own file, `REFUSAL_CODES.md`, beside this one in the installed package. Every code in a table above links to its entry there. Each entry gives the code's HTTP status, how it arrives, where it is defined, the sentence written beside it at its raise site, and the scientific check behind it; the file ends with the client-facing codes no producer route was traced to. Find it with `python -m tckdb_schemas.contract --codes` (prints the path) or `tckdb_schemas.contract.refusal_codes_path()`; read it with `refusal_codes_markdown()`.
 
 ## Write routes that are not producer surfaces
 

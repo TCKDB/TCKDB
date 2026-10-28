@@ -53,14 +53,17 @@ Two consequences of the species key being the constitution (DR-0038):
   kinetics record is deposited for it. A degenerate exchange such as
   `H + H2 -> H2 + H` is real chemistry and is accepted with its saddle point or its
   rate; deposited bare it is refused, because nothing shows that anything happens.
-- **Forward and reverse irreversible deposits share one `chem_reaction`.** The
-  reactants and products are sorted per side into the identity hash, so
-  `Z -> E` and `E -> Z` (both `reversible = false`) resolve to the same row. What
-  differs is the `reaction_entry`: its participants carry roles, so the forward
-  entry holds Z as reactant and E as product and the reverse entry the opposite.
-  Kinetics and transition states attach to the entry, which is why they stay
-  separate. A reversible deposit is a different `chem_reaction` (`reversible` is
-  part of the hash).
+- **A stereo isomerisation and its reverse share one `chem_reaction`, because
+  both sides hold the same species.** The identity hash keys the reactant side and
+  the product side separately (each sorted), so in general `A -> B` and `B -> A`
+  are two rows (irreversible `CC=O -> C=CO` and its reverse are not the same
+  row). `Z-2-butene -> E-2-butene` and `E -> Z` (both `reversible = false`) hash
+  alike only because reactants and products are both `{2-butene}`. What
+  tells them apart is the `reaction_entry`: its participants carry roles, so the
+  forward entry holds Z as reactant and E as product and the reverse entry the
+  opposite. Kinetics and transition states attach to the entry, which is why they
+  stay separate. A reversible deposit is a different `chem_reaction`
+  (`reversible` is part of the hash).
 
 ### `transition_state` vs `transition_state_entry`
 

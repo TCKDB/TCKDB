@@ -28,6 +28,7 @@ import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { levelOfTheoryPath } from "../domain/methodsLinks"
+import { stereoChip } from "../domain/recordFacets"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 
@@ -194,7 +195,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                                     </div>
                                     <div className="record-identity-fact-wide">
                                         <dt>Equation (as deposited)</dt>
-                                        <dd><code className="data">{entry.equation}</code></dd>
+                                        <dd><code className="data">{equationWithEntries(entry.equation, entry.reversible, species.reactants, species.products)}</code></dd>
                                     </div>
                                 </dl>
                             </div>
@@ -322,6 +323,25 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
 // is the reference rather than it being in the same column as Formula")
 // is untouched: this table still never folds the species-entry ref or
 // its copy button into the identity cell.
+/**
+ * The served `equation` is rendered from the species' SMILES alone (a served value consumers parse, so it is left
+ * alone), which reads `CC=CC => CC=CC` for a Z to E isomerisation: both participants are entries of one species.
+ * Here each participant carries its entry's label (stereo and state) in brackets, so the two sides read apart.
+ * Falls back to the served string when the participants are not loaded.
+ */
+function equationWithEntries(
+    served: string,
+    reversible: boolean,
+    reactants: ReactionEntrySpeciesParticipant[],
+    products: ReactionEntrySpeciesParticipant[],
+): string {
+    if (reactants.length === 0 || products.length === 0) return served
+    const side = (participants: ReactionEntrySpeciesParticipant[]) => participants
+        .map((p) => `${p.stoichiometry > 1 ? `${p.stoichiometry} ` : ""}${p.smiles}${p.species_entry_label ? ` [${p.species_entry_label}]` : ""}`)
+        .join(" + ")
+    return `${side(reactants)} ${reversible ? "<=>" : "=>"} ${side(products)}`
+}
+
 function ParticipantsTable({ label, participants }: {
     label: "Reactants" | "Products"
     participants: ReactionEntrySpeciesParticipant[]
@@ -345,6 +365,9 @@ function ParticipantsTable({ label, participants }: {
                                     <Link to={`/species-entries/${participant.species_entry_ref}`}>
                                         <SpeciesFace smiles={participant.smiles} formula={participant.formula} />
                                     </Link>
+                                    {participant.species_entry_label && (
+                                        <span className="reaction-equation-chip"> · {stereoChip(participant.species_entry_label)}</span>
+                                    )}
                                 </td>
                                 <td data-label="Ref">
                                     <code className="data">{participant.species_entry_ref}</code>

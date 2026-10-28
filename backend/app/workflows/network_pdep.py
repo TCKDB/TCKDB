@@ -294,6 +294,10 @@ def _barrier_owner_check(
 W_NETWORK_STATE_DUPLICATE_COMPOSITION = "network_state_duplicate_composition"
 
 
+#: One state names the same species entry twice (two species keys that resolve to one entry).
+W_NETWORK_STATE_DUPLICATE_PARTICIPANT = "network_state_duplicate_participant"
+
+
 def _composition_hash(participants: list[tuple[int, int]]) -> str:
     """Compute a canonical SHA-256 hash for a network state composition."""
     canonical = sorted(participants)
@@ -328,6 +332,17 @@ def refuse_duplicate_state_compositions(
             )
             for i, p in enumerate(state_in.participants)
         ]
+        entry_ids = [entry_id for entry_id, _ in participants]
+        if len(set(entry_ids)) != len(entry_ids):
+            raise CodedValueError(
+                W_NETWORK_STATE_DUPLICATE_PARTICIPANT,
+                f"State {state_in.key!r} lists the same species entry more than once "
+                "(network_state_duplicate_participant): two of its species keys resolve to one entry. "
+                "Name the species once and give its `stoichiometry`, or say what differs between the two "
+                "(stereo marks, a stereo label or a geometry on the species).",
+                context={"state_key": state_in.key, "state": f"states[{state_index}]"},
+                message_prefix=False,
+            )
         comp_hash = _composition_hash(participants)
         if comp_hash in first_by_hash:
             first_index, first_key = first_by_hash[comp_hash]
