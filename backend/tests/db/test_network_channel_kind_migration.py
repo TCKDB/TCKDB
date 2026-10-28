@@ -8,6 +8,7 @@ import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
 from app.db.base import Base
 from app.db.models.common import SubmissionRecordType
@@ -107,7 +108,7 @@ def _kinds(db_session, channels: dict[str, int]) -> dict[str, str]:
 
 
 @pytest.mark.parametrize("approved", [False, True])
-def test_upgrade_recomputes_kinds_maps_stabilization_and_drops_the_value(db_session, monkeypatch, approved):
+def test_upgrade_recomputes_kinds_maps_stabilization_and_drops_the_value(db_session, monkeypatch, capsys, approved):
     migration = _load(db_session, monkeypatch)
     migration.downgrade()  # back to the enum that still has 'stabilization'
     assert "stabilization" in _enum_values(db_session)
@@ -117,11 +118,44 @@ def test_upgrade_recomputes_kinds_maps_stabilization_and_drops_the_value(db_sess
     assert _kinds(db_session, channels)["stab"] == "stabilization"
 
     repairs_before = _repair_count(db_session)
+    if approved:
+        # Frozen for real: without a declaration the guard refuses the very same UPDATE.
+        with pytest.raises(DBAPIError), db_session.begin_nested():
+            db_session.execute(
+                text("UPDATE network_channel SET kind = 'exchange' WHERE id = :id"), {"id": channels["ok"]}
+            )
+    capsys.readouterr()
 
     migration.upgrade()
+    out = capsys.readouterr().out
 
     assert _kinds(db_session, channels) == _EXPECTED
     assert _enum_values(db_session) == ["isomerization", "association", "dissociation", "exchange"]
+    # every changed channel is listed as (network ref, channel key, old kind, new kind); the clean one is not
+    ref = db_session.scalar(text("SELECT public_ref FROM network WHERE id = :id"), {"id": network})
+    for key, old in (("wrong_iso", "isomerization"), ("stab", "stabilization"), ("wrong_diss", "association"),
+                     ("wrong_exch", "dissociation")):
+        assert f"network_channel.kind changed: {ref}/{key}: {old} -> {_EXPECTED[key]}" in out
+    assert f"{ref}/ok" not in out
+    assert "4 changed (1 stabilization)" in out
+    # the guard was never disabled, and every change is in the repair ledger, old -> new
+    assert db_session.scalar(
+        text("SELECT tgenabled FROM pg_trigger WHERE tgrelid = 'public.network_channel'::regclass "
+             "AND tgname LIKE 'trg_as_%' LIMIT 1")
+    ) == "O"
+    ledger = {
+        (row.record_id and row.row_identity["id"]): (row.before_json["kind"], row.after_json["kind"])
+        for row in db_session.execute(
+            text("SELECT c.record_id, c.row_identity, c.before_json, c.after_json "
+                 "FROM accepted_science_repair_change c JOIN accepted_science_repair r ON r.id = c.repair_id "
+                 "WHERE r.alembic_revision = 'd3f8a1c5b9e2' AND c.target_table = 'network_channel'")
+        )
+    }
+    assert ledger == {
+        channels[key]: (old, _EXPECTED[key])
+        for key, old in (("wrong_iso", "isomerization"), ("stab", "stabilization"), ("wrong_diss", "association"),
+                         ("wrong_exch", "dissociation"))
+    }
     # one declared repair on the single column, in this transaction
     assert _repair_count(db_session) == repairs_before + 1
 
@@ -149,3 +183,17 @@ def test_upgrade_stops_with_a_list_when_a_state_kind_cannot_be_classified(db_ses
     db_session.execute(text("UPDATE network_state SET kind = 'unimolecular' WHERE id = :id"), {"id": other})
     with pytest.raises(RuntimeError, match="odd_channel"):
         migration.upgrade()
+
+
+def test_a_clean_database_prints_zero_changed(db_session, monkeypatch, capsys):
+    migration = _load(db_session, monkeypatch)
+    db_session.execute(text("DELETE FROM network_channel"))
+    network = _network(db_session)
+    well, bimol = _state(db_session, network, "well"), _state(db_session, network, "bimolecular")
+    _channel(db_session, network, bimol, well, "association", "fine")
+    capsys.readouterr()
+    migration.upgrade()
+    out = capsys.readouterr().out
+    assert "0 changed\n" in out
+    assert "network_channel.kind changed" not in out
+    assert "0 changed (0 stabilization), 1 unchanged, 1 channels" in out

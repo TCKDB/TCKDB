@@ -12,8 +12,8 @@ This revision
 1. refuses to run if any channel joins a state whose kind it cannot classify (the list is in the
    error), so nothing is ever labelled by guess;
 2. recomputes ``network_channel.kind`` for every channel whose stored kind differs from the derived
-   one -- including any ``stabilization`` row, which maps to ``association`` or whatever its states
-   say;
+   one -- including any ``stabilization`` row, which maps to whatever its states say -- and prints each
+   change as (network ref / channel key, old kind, new kind), or ``0 changed``;
 3. rebuilds the ``network_channel_kind`` PostgreSQL enum without ``stabilization`` (Postgres cannot
    drop an enum value, so the type is recreated and the column re-cast).
 
@@ -96,6 +96,25 @@ def upgrade() -> None:
             "Fix or remove them, then re-run."
         )
 
+    changes = bind.execute(
+        text(
+            f"""
+            SELECT c.id AS channel_id, c.network_id, n.public_ref AS network_ref, c.channel_key,
+                   c.kind::text AS old_kind, ({_DERIVED}) AS new_kind
+              FROM network_channel AS c
+              JOIN network AS n ON n.id = c.network_id
+              JOIN network_state AS src ON src.id = c.source_state_id
+              JOIN network_state AS snk ON snk.id = c.sink_state_id
+             WHERE c.kind::text IS DISTINCT FROM ({_DERIVED})
+             ORDER BY c.id
+            """
+        )
+    ).all()
+    total = bind.execute(text("SELECT count(*) FROM network_channel")).scalar_one()
+
+    # ``network_channel`` is frozen once its network is accepted (``c6f2a9d4e7b1``: ``network_channel`` is a
+    # direct child of root ``network``), so the recompute runs under a declared repair of the one column
+    # ``kind`` (``e2c9a4f7b163``). The guard is never disabled.
     bind.execute(
         text(
             """
@@ -105,19 +124,52 @@ def upgrade() -> None:
         ),
         {"revision": revision, "reason": _REASON},
     )
-    # Every derived value is already a member of the old type, so recompute first; the re-cast in
-    # _rebuild_enum then cannot meet 'stabilization'.
-    bind.execute(
-        text(
-            f"""
-            UPDATE network_channel AS c
-               SET kind = ({_DERIVED})::network_channel_kind
-              FROM network_state AS src, network_state AS snk
-             WHERE src.id = c.source_state_id
-               AND snk.id = c.sink_state_id
-               AND c.kind::text IS DISTINCT FROM ({_DERIVED})
-            """
+    for change in changes:
+        # Never overwrite silently: every changed channel is named (network ref / channel key, old, new).
+        print(
+            f"[{revision}] network_channel.kind changed: {change.network_ref}/{change.channel_key}: "
+            f"{change.old_kind} -> {change.new_kind}"
         )
+        bind.execute(
+            text(
+                "UPDATE network_channel SET kind = CAST(:new AS network_channel_kind) WHERE id = :id"
+            ),
+            {"new": change.new_kind, "id": change.channel_id},
+        )
+        # The guard records a row under an accepted network; this records the rest, so the ledger covers
+        # every row written, old -> new.
+        bind.execute(
+            text(
+                """
+                INSERT INTO accepted_science_repair_change (
+                    repair_id, record_type, record_id, target_schema, target_table,
+                    row_identity, changed_columns, before_json, after_json
+                )
+                SELECT declaration.id, 'network', :network_id, 'public', 'network_channel',
+                       jsonb_build_object('id', CAST(:id AS bigint)), ARRAY['kind'],
+                       jsonb_build_object('kind', CAST(:old AS text)),
+                       jsonb_build_object('kind', CAST(:new AS text))
+                  FROM accepted_science_repair AS declaration
+                 WHERE declaration.target_table = 'network_channel'
+                   AND declaration.xact_id = (pg_current_xact_id())::text::bigint
+                   AND NOT tckdb_record_is_accepted(
+                           CAST('network' AS submission_record_type), CAST(:network_id AS bigint)
+                       )
+                """
+            ),
+            {
+                "id": change.channel_id,
+                "network_id": change.network_id,
+                "old": change.old_kind,
+                "new": change.new_kind,
+            },
+        )
+    if not changes:
+        print("0 changed")
+    stabilization = sum(1 for change in changes if change.old_kind == "stabilization")
+    print(
+        f"[{revision}] network channel kind: {len(changes)} changed "
+        f"({stabilization} stabilization), {total - len(changes)} unchanged, {total} channels"
     )
     _rebuild_enum(_NEW_VALUES)
 
