@@ -385,23 +385,41 @@ def _thermo_body(smiles: str) -> dict:
     }
 
 
-def test_an_allene_deposit_is_accepted_and_the_warning_names_the_lumping(client: TestClient) -> None:
+def test_an_allene_deposit_with_no_data_is_accepted_and_asks_for_a_geometry_or_label(client: TestClient) -> None:
     warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=C=CC")))
-    assert _UNRESOLVED not in warnings, "no further data would settle an axis, so this is not a request for more"
-    assert (
-        "axial stereo (Ra/Sa) is not yet represented: both mirror-image forms of this allene are stored in one entry"
-        in warnings[_NOT_REPRESENTED]
-    )
+    assert _NOT_REPRESENTED not in warnings, "a geometry or a stereo_label would settle the axis"
+    assert "Ra/Sa allene axis" in warnings[_UNRESOLVED]
 
 
-def test_a_butatriene_deposit_is_accepted_and_the_warning_says_cis_trans_is_not_represented(client: TestClient) -> None:
-    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=C=C=CC")))
-    assert "cis/trans stereo across this cumulene is not yet represented" in warnings[_NOT_REPRESENTED]
+def test_an_allene_deposited_with_a_label_has_no_stereo_warning(client: TestClient) -> None:
+    body = _thermo_body("CC=C=CC")
+    body["species_entry"]["stereo_label"] = "Sa"
+    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=body))
+    assert _NOT_REPRESENTED not in warnings and _UNRESOLVED not in warnings
+
+
+def test_a_small_ring_allene_deposit_is_accepted_and_the_warning_says_it_is_not_represented(client: TestClient) -> None:
+    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("C1=C=C(C)CCC1")))
+    assert "cyclic allene in a ring of eight or fewer atoms is not represented" in warnings[_NOT_REPRESENTED]
     assert _UNRESOLVED not in warnings
 
 
-def test_an_allene_with_an_unknown_centre_says_both(client: TestClient) -> None:
-    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=C=CC(C)O")))
+def test_an_allene_deposited_with_marks_only_says_marks_are_not_read(client: TestClient) -> None:
+    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=[C@]=CC")))
+    assert "allene marks are not read" in warnings[_NOT_REPRESENTED]
+    assert "geometry or a stereo_label" in warnings[_NOT_REPRESENTED]
+
+
+def test_a_butatriene_deposit_is_accepted_and_asks_for_a_geometry_or_label(client: TestClient) -> None:
+    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=C=C=CC")))
+    assert _NOT_REPRESENTED not in warnings
+    assert "E/Z cumulene" in warnings[_UNRESOLVED]
+    marked = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("C/C=C=C=C/C")))
+    assert "marks on a cumulene" in marked[_NOT_REPRESENTED]
+
+
+def test_a_small_ring_allene_with_an_unknown_centre_says_both(client: TestClient) -> None:
+    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("C1=C=C(C)C(C)CC1")))
     assert "1 other stereo element(s) are also unknown" in warnings[_NOT_REPRESENTED]
 
 
@@ -411,7 +429,7 @@ def test_a_letter_on_an_allene_is_refused_before_anything_is_stored(client: Test
     response = client.post("/api/v1/uploads/thermo", json=body)
     assert response.status_code == 422, response.text
     assert response.json()["code"] == "species_stereo_label_invalid"
-    assert "axial stereo (Ra/Sa)" in response.json()["detail"] and "not supported yet" in response.json()["detail"]
+    assert "allene axis (Ra or Sa)" in response.json()["detail"]
 
 
 def test_no_declared_repair_can_lift_the_freeze_of_these_tables(db_session) -> None:

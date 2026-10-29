@@ -355,16 +355,18 @@ class SpeciesEntryScientificRecord(BaseModel):
     species_entry_kind: StationaryPointKind
     electronic_state_kind: SpeciesEntryStateKind
     stereo_label: str | None = None
-    #: The entry's stereo key (DR-0038): ``R``/``S``/``E``/``Z``/``?`` per potential
-    #: stereo element, ``null`` only when the species is achiral. ``stereo_label`` is
+    #: The entry's stereo key (DR-0038): ``R``/``S``/``E``/``Z``/``Ra``/``Sa``/``?`` per potential
+    #: stereo element (``Ra``/``Sa``: an allene axis), ``null`` only when the species is achiral. ``stereo_label`` is
     #: its display text (``null`` while nothing is resolved); this is the key.
     stereo_descriptor: str | None = None
     stereo_resolution: StereoResolution | None = None
     #: Canonical isomeric SMILES of a fully resolved configuration, where one can be written.
     stereo_smiles: str | None = None
-    #: Stereo elements whose ``?`` no data can settle yet: ``axial`` (an allene axis) and
-    #: ``cumulene`` (cis/trans across a longer cumulated chain). Empty for every other entry,
-    #: so a ``?`` in the descriptor with this empty means "not yet supplied".
+    #: Why a ``?`` of this entry's molecule can never be settled by data: ``axial_small_ring`` (a cyclic
+    #: allene in a ring of eight or fewer atoms) and ``allene_dependent`` (a centre or double bond whose
+    #: stereogenicity depends on an allene's sense) and ``cumulene_tied_end`` (a cumulated chain with a tied pair of
+    #: stereo-bearing arms at one end). Empty for every other entry, so a ``?`` in the descriptor
+    #: with this empty means "not yet supplied": a geometry or a stereo_label would settle it.
     stereo_not_represented: list[str] = Field(default_factory=list)
     electronic_state_label: str | None = None
     term_symbol: str | None = None

@@ -90,12 +90,12 @@ describe("EntryIdentity: no pill boxes, every fact exactly once", () => {
             expect(within(facts).getByText("Stereo SMILES").nextElementSibling).toHaveTextContent("C/C=C/C")
         })
 
-        it("says 'axial stereo not represented' for an allene axis", () => {
+        it("says the ring is not represented for a small cyclic allene", () => {
             renderEntry(baseEntry({
                 stereo_label: null, stereo_descriptor: "?", stereo_resolution: "unresolved",
-                stereo_not_represented: ["axial"],
+                stereo_not_represented: ["axial_small_ring"],
             }))
-            expect(stereoRow()).toHaveTextContent("axial stereo not represented")
+            expect(stereoRow()).toHaveTextContent("cyclic allene (ring of 8 or fewer) stereo not represented")
         })
     })
 

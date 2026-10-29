@@ -135,6 +135,14 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 
     The resolved identity tuple is unique, with nullable identity components
     deduped in PostgreSQL using `NULLS NOT DISTINCT`.
+
+    * ``stereo_descriptor`` is the stereo key (DR-0038): one comma-separated token per potential
+      stereo element, ordered by canonical atom rank. Tokens: ``R`` ``S`` (centre), ``r`` ``s``
+      (pseudo-asymmetric centre), ``E`` ``Z`` (double bond, or an odd cumulene), ``e`` ``z`` (pseudo-asymmetric
+      double bond), ``Ra`` ``Sa`` (the axis of an allene or any even cumulene; ``Ra`` is IUPAC ``M``, a negative
+      torsion between the two CIP-higher substituents, and ``Sa`` is ``P``), ``-`` (not stereogenic in this
+      configuration) and ``?`` (unknown, or not representable). Allene and cumulene tokens are read from geometry
+      only; ``NULL`` only for an achiral species.
     """
 
     __tablename__ = "species_entry"
@@ -270,7 +278,7 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         Index("ix_species_entry_species_id", "species_id"),
         Index("ix_species_entry_stereo_smiles", "stereo_smiles"),
         CheckConstraint(
-            "stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSrsEZez?-](,[RSrsEZez?-])*$'",
+            "stereo_descriptor IS NULL OR stereo_descriptor ~ '^(Ra|Sa|[RSrsEZez?-])(,(Ra|Sa|[RSrsEZez?-]))*$'",
             name="stereo_descriptor_vocabulary",
         ),
         CheckConstraint(

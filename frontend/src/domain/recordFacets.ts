@@ -43,14 +43,16 @@ function stateChip(kind: string, label?: string | null, termSymbol?: string | nu
 // component's own comment for the report this fixes ("why ... does it not
 // show ... E isomer like it does for Review etc.").
 export function stereoChip(label: string): string {
+    if (label === "Ra" || label === "Sa") return `${label} allene`
     if (label === "R" || label === "S") return `${label} enantiomer`
     if (label === "E" || label === "Z") return `${label} isomer`
     return label
 }
 
 const NOT_REPRESENTED_TEXT: Record<string, string> = {
-    axial: "axial stereo not represented",
-    cumulene: "cumulene cis/trans stereo not represented",
+    axial_small_ring: "cyclic allene (ring of 8 or fewer) stereo not represented",
+    allene_dependent: "stereo that depends on an allene's sense not represented",
+    cumulene_tied_end: "cumulene with stereo-bearing arms at one end: stereo not represented",
 }
 
 /**
@@ -65,7 +67,7 @@ const NOT_REPRESENTED_TEXT: Record<string, string> = {
  * - `partial` -> "Partly resolved (E,?)";
  * - `unresolved` -> "Unresolved (?)";
  * - an element no data can settle (`stereo_not_represented`) is named, so the `?` is not read
- *   as "not yet supplied": "axial stereo not represented".
+ *   as "not yet supplied": "cyclic allene (ring of 8 or fewer) stereo not represented".
  *
  * A response from before the descriptor existed (field absent, not `null`) falls back to
  * `stereo_label`, and returns `null` (nothing to say) when that is absent too.

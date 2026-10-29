@@ -387,55 +387,43 @@ def test_unknown_stays_unknown_when_the_configuration_does_not_decide_the_centre
     ("smiles", "kind"),
     [("CC=C=CC", "axial"), ("CC=C=C=C=CC", "axial"), ("CC=C=C=CC", "cumulene"), ("C1=C=C(C)CCC1", "axial")],
 )
-def test_a_stereogenic_cumulene_is_one_element_and_always_unknown(smiles: str, kind: str) -> None:
+def test_a_stereogenic_cumulene_is_one_element_and_unknown_without_data(smiles: str, kind: str) -> None:
     assert [e.kind for e in frame(smiles).elements] == [kind]
     r = resolve(smiles)
     assert (r.descriptor, r.resolution) == ("?", StereoResolution.unresolved)
-    assert r.unrepresented == (kind,)
-    assert r.unknown_elements == 0
+    if smiles == "C1=C=C(C)CCC1":  # a ring of six: never read, so no data would settle it
+        assert r.unrepresented == ("axial_small_ring",) and r.unknown_elements == 0
+    else:
+        assert r.unrepresented == () and r.unknown_elements == 1
 
 
 @pytest.mark.parametrize("size", [6, 7, 8, 9])
-def test_cyclic_allenes_of_every_ring_size_carry_an_unknown_axis(size: int) -> None:
+def test_cyclic_allenes_of_every_ring_size_carry_an_unknown_axis_without_data(size: int) -> None:
     smiles = "C1=C=C(C)" + "C" * (size - 3) + "1"
     r = resolve(smiles)
-    assert r.descriptor == "?" and r.unrepresented == ("axial",), smiles
+    assert r.descriptor == "?", smiles
+    assert r.unrepresented == (("axial_small_ring",) if size <= 8 else ()), smiles
     assert resolve(smiles, label="?").descriptor == "?"
 
 
-@pytest.mark.parametrize("label", ["Ra", "R", "E"])
-def test_a_letter_at_an_axial_position_is_refused(label: str) -> None:
+@pytest.mark.parametrize("label", ["R", "E", "Sa,Ra", "e"])
+def test_a_wrong_letter_at_an_axial_position_is_refused(label: str) -> None:
     with pytest.raises(CodedValueError) as excinfo:
         resolve("CC=C=CC", label=label)
     assert excinfo.value.code == stereo.W_SPECIES_STEREO_LABEL_INVALID
 
 
-def test_the_axial_refusal_says_axial_stereo_is_not_supported_yet() -> None:
+def test_the_axial_refusal_names_the_axis_tokens() -> None:
     with pytest.raises(CodedValueError) as excinfo:
         resolve("CC=C=CC", label="R")
-    assert "axial stereo (Ra/Sa)" in str(excinfo.value) and "not supported yet" in str(excinfo.value)
-
-
-def test_both_mirror_images_of_an_allene_share_one_entry() -> None:
-    a = resolve("CC=C=CC", xyz=embed_xyz("CC=C=CC", seed=3))
-    b = resolve("CC=C=CC", xyz=embed_xyz("CC=C=CC", seed=11))
-    assert a.descriptor == b.descriptor == "?"
+    assert "allene axis (Ra or Sa)" in str(excinfo.value)
 
 
 def test_an_allene_beside_a_centre_keeps_the_centre_and_stays_partial() -> None:
     r = resolve("CC=C=C[C@H](C)O")
     assert r.resolution == StereoResolution.partial
     assert sorted(r.descriptor.split(",")) in (["?", "R"], ["?", "S"])
-    assert r.unrepresented == ("axial",) and r.unknown_elements == 0
-
-
-def test_butatriene_is_not_labelled_by_rdkit_so_it_is_unknown_and_flagged() -> None:
-    """RDKit parses no stereo from ``C/C=C=C=C/C`` marks and perceives none from 3D (probed on 2025.09), so the
-    cis/trans element across a cumulene is stated as ``?`` with its own flag."""
-    for smiles in ("C/C=C=C=C/C", "C/C=C=C=C\\C", "CC=C=C=CC"):
-        r = resolve(smiles)
-        assert (r.descriptor, r.unrepresented) == ("?", ("cumulene",)), smiles
-    assert resolve("CC=C=C=CC", xyz=embed_xyz("CC=C=C=CC")).descriptor == "?"
+    assert r.unrepresented == () and r.unknown_elements == 1
 
 
 @pytest.mark.parametrize("smiles", ["C=C=C", "C=C=CC", "C=C=O", "CS(=O)(=O)C", "O=C=O"])
