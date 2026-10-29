@@ -101,6 +101,7 @@ from app.services.conformer_resolution import (
     resolve_conformer_group,
     settle_conformer_basin,
 )
+from app.services.deposit_warnings import note_calculation_keys
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -146,7 +147,6 @@ from app.services.reaction_resolution import (
     resolve_chem_reaction,
     validate_transition_state_composition,
 )
-from app.services.deposit_warnings import note_calculation_keys
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,

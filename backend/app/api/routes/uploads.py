@@ -55,6 +55,7 @@ from app.services.artifact_storage import (
     MAX_ENCODED_ARTIFACT_LEN,
 )
 from app.services.atomic_electronic_warnings import collect_atomic_electronic_warnings
+from app.services.deposit_warnings import persist_deposit_warnings
 from app.services.frequency_geometry_linearity import (
     computed_species_linearity_warnings,
     inline_calculation_linearity_warnings,
@@ -78,7 +79,6 @@ from app.services.upload_reconciliation import (
     reconcile_species_entry,
     stationary_point_warnings,
 )
-from app.services.deposit_warnings import persist_deposit_warnings
 from app.services.upload_request_warnings import (
     computed_reaction_request_warnings,
     conformer_request_warnings,

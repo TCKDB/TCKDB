@@ -55,7 +55,7 @@ T = CalculationType
 APPROVED = RecordReviewStatus.approved
 BASE = "/api/v1/scientific"
 
-EXPECTED_THERMO_LIST_STATEMENTS = 20  # measured identical on origin/main
+EXPECTED_THERMO_LIST_STATEMENTS = 21  # origin/main: 20, plus the one record_warnings lookup a thermo read now makes
 EXPECTED_STATMECH_SEARCH_CONFORMERS_STATEMENTS = 60  # measured identical on origin/main, n=8
 EXPECTED_CURATED_EXTRA_STATEMENTS = 0
 #: The central ref guard resolves every ref of a response in one batched statement (independent of the page size), on

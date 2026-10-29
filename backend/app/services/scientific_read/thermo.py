@@ -81,7 +81,7 @@ from app.schemas.reads.scientific_thermo import (
 )
 from app.services.calculation_levels import RoleCalcInfo, derive_levels, withhold_levels_from_calculations
 from app.services.composite_verification import verify_composite_calculations
-from app.services.deposit_warnings import deposit_warnings_by_ref
+from app.services.deposit_warnings import deposit_record_warnings
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -742,7 +742,7 @@ def get_species_thermo(
         species_entry_ref=species_entry_ref,
         review_summary=summary,
         records=returned,
-        warnings_by_ref=deposit_warnings_by_ref(
+        record_warnings=deposit_record_warnings(
             session,
             SubmissionRecordType.thermo,
             {r.thermo_id: r.thermo_ref for r in returned},

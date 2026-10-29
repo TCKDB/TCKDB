@@ -32,8 +32,8 @@ dataset must never require a code release.
   "nothing fired" and "never checked" differ. A warning whose subject is a shared identity row (species entry, reaction, literature, a ref fragment) is never put on that row: it goes
   to the result record this deposit created, or, with none, to the submission alone. Each submission writes its own rows. The table refuses UPDATE, DELETE and TRUNCATE
   always (as `record_reproducibility_assessment` does), under an approved record too; INSERT stays open so a later artifact upload can add a warning.
-- **Read.** `warnings_by_ref` sits in the envelope of every detail read (calculation, transition-state entry and concept, statmech, transport, network solve, conformer
-  observation) and of the per-parent kinetics and thermo reads, by default, keyed by the record's public ref like `review_status_by_ref`. List and search responses do
+- **Read.** `record_warnings` sits in the envelope of every detail read (calculation, transition-state entry and concept, statmech, transport, network solve, conformer
+  observation) and of the per-parent kinetics and thermo reads, by default, a list with one entry per record the response names, each carrying its public ref. List and search responses do
   not carry it. `status` is `recorded` (items are exactly what fired, possibly none) or `not_recorded` (deposited before this change). Warnings never change a value,
   order a list or gate selection, and the curated profile shows them like any other evidence.
 - **Upload responses** are unchanged except that each warning has an optional `context` (`charge_mismatch`, `multiplicity_mismatch`, `sp_energy_payload_log_mismatch`

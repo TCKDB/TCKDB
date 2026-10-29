@@ -63,6 +63,7 @@ from app.schemas.workflows.contribution_bundle import (
 )
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.services.contribution_bundle_dry_run import dry_run_contribution_bundle
+from app.services.deposit_warnings import persist_deposit_warnings
 from app.services.literature_metadata import failure_scope
 from app.services.literature_resolution import prefetch_literature_metadata
 from app.services.record_review import ReviewPolicy
@@ -72,7 +73,6 @@ from app.services.submission import (
     link_record,
     mark_ingestion_succeeded,
 )
-from app.services.deposit_warnings import persist_deposit_warnings
 from app.services.upload_request_warnings import (
     kinetics_request_warnings,
     thermo_request_warnings,

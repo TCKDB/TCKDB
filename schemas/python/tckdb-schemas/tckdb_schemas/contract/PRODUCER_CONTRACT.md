@@ -229,7 +229,7 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 - `UploadWarning.context` (`dict | None`, default `null`) holds the values that triggered the warning as the check saw them, for example the declared and
   the logged charge for `charge_mismatch`. A check that states none leaves it `null`. It never carries a database id.
 - The upload response is otherwise unchanged. A client that reads `field`, `code` and `message` keeps working; every warning now also carries a `context` key.
-- The server stores each warning beside the record it concerns and shows it on that record's reads (`warnings_by_ref`); see the backend changelog.
+- The server stores each warning beside the record it concerns and shows it on that record's reads (`record_warnings`); see the backend changelog.
 
 ### 0.141.0 - 2026-10-29
 

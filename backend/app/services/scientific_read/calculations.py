@@ -126,8 +126,8 @@ from app.schemas.reads.scientific_common import (
     WorkflowToolReleaseSummary,
 )
 from app.services.composite_verification import verify_composite_calculation
+from app.services.deposit_warnings import deposit_record_warnings
 from app.services.execution_environment_integrity import manifest_integrity_evidence
-from app.services.deposit_warnings import deposit_warnings_by_ref
 from app.services.scientific_read.common import (
     fetch_review_badges,
     linked_evidence_predicate,
@@ -327,7 +327,7 @@ def get_calculation(
         request=RequestEcho(include=sorted(includes)),
         review_summary=summary,
         record=record,
-        warnings_by_ref=deposit_warnings_by_ref(
+        record_warnings=deposit_record_warnings(
             session, SubmissionRecordType.calculation, {calc.id: calc.public_ref}
         ),
     )

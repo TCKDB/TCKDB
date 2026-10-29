@@ -197,7 +197,7 @@ class CodeChannel(str, Enum):
     #: alongside a *successful* upload. The warn tier's surface; it has
     #: been machine-readable since the class was written. The deposit also
     #: stores each warning beside the record it concerns (``deposit_warning``),
-    #: so the same code reaches a later reader in ``warnings_by_ref`` on that
+    #: so the same code reaches a later reader in ``record_warnings`` on that
     #: record's detail read.
     upload_warning = "upload_warning"
 

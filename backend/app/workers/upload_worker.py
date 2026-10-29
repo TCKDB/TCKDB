@@ -28,10 +28,10 @@ from app.db.models.common import SubmissionStatus, UploadJobKind, UploadJobStatu
 from app.db.models.submission import Submission
 from app.db.models.upload_job import UploadJob
 from app.schemas.upload_warning import UploadWarning
+from app.services.deposit_warnings import persist_deposit_warnings
 from app.services.public_refs import public_refs_by_id
 from app.services.record_review import ReviewPolicy
 from app.services.submission import mark_ingestion_failed, mark_ingestion_succeeded
-from app.services.deposit_warnings import persist_deposit_warnings
 from app.services.upload_request_warnings import (
     computed_reaction_request_warnings,
     conformer_request_warnings,

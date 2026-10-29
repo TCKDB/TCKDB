@@ -17078,33 +17078,6 @@
         "title": "DepositWarningItem",
         "type": "object"
       },
-      "DepositWarningsFragment": {
-        "additionalProperties": false,
-        "description": "The warnings stored for one record.",
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/DepositWarningItem"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "status": {
-            "enum": [
-              "recorded",
-              "not_recorded"
-            ],
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "status",
-          "items"
-        ],
-        "title": "DepositWarningsFragment",
-        "type": "object"
-      },
       "DerivedSinglePointEnergy": {
         "description": "A same-level-of-theory single-point-equivalent, read off an ``opt``.\n\nA geometry optimisation computes the electronic energy at its final\ngeometry; running a separate ``sp`` calculation at the *same* level of\ntheory would reproduce that number, not a different one (the house\nrule behind ``docs/decisions`` on SP-vs-opt energy). When the opt's\nowner — a conformer observation for a species-owned calculation, a\ntransition-state entry for a TS-owned one, whichever owner the\ncalculation actually has — has no independent ``sp`` calculation at\nthe ``opt``'s own ``level_of_theory_id``, this block offers the opt's\nown ``final_energy_hartree`` as the value a caller would otherwise\nhave gone looking for under ``calculation_type=sp``.\n\nThis is a **read-time derivation, never a fabricated record**: no\n``calculation`` row is created, and it is computed fresh on every\nresponse rather than stored. ``calculation_count``,\n``evidence_coverage.sp``, and ``has_sp`` are all read from real\n``sp`` calculation rows only and never see this value — see\n:mod:`app.services.scientific_read.conformers` (species) and\n:mod:`app.services.scientific_read.transition_states` (transition\nstates).\n\nOnly ever attached to an ``opt`` calculation's :class:`CalculationEnergyBlock`\n(never to an ``sp`` one — a real ``sp`` result is never replaced by a\nderivation), and only when the *same* owner (conformer observation or\ntransition-state entry) has no ``sp`` calculation at the *same*\n``level_of_theory_id``. An ``sp`` at a **different** level of theory,\nor on a **different** owner of the same kind, is a different number\nand does not suppress this block.",
         "properties": {
@@ -43331,6 +43304,38 @@
         "title": "RecordReviewStatus",
         "type": "string"
       },
+      "RecordWarnings": {
+        "additionalProperties": false,
+        "description": "The warnings stored for one record.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DepositWarningItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "record_ref": {
+            "title": "Record Ref",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "recorded",
+              "not_recorded"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_ref",
+          "status",
+          "items"
+        ],
+        "title": "RecordWarnings",
+        "type": "object"
+      },
       "RegisterRequest": {
         "properties": {
           "email": {
@@ -47826,6 +47831,13 @@
           "record": {
             "$ref": "#/components/schemas/ScientificCalculationRecord"
           },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
+          },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_calculation__RequestEcho"
           },
@@ -47845,13 +47857,6 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
-          },
-          "warnings_by_ref": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/DepositWarningsFragment"
-            },
-            "title": "Warnings By Ref",
-            "type": "object"
           }
         },
         "required": [
@@ -48750,6 +48755,13 @@
           "record": {
             "$ref": "#/components/schemas/ScientificConformerObservationRecord"
           },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
+          },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_conformer__RequestEcho"
           },
@@ -48769,13 +48781,6 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
-          },
-          "warnings_by_ref": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/DepositWarningsFragment"
-            },
-            "title": "Warnings By Ref",
-            "type": "object"
           }
         },
         "required": [
@@ -50518,6 +50523,13 @@
           "record": {
             "$ref": "#/components/schemas/ScientificNetworkSolveRecord"
           },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
+          },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_network__RequestEcho"
           },
@@ -50537,13 +50549,6 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
-          },
-          "warnings_by_ref": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/DepositWarningsFragment"
-            },
-            "title": "Warnings By Ref",
-            "type": "object"
           }
         },
         "required": [
@@ -51029,6 +51034,13 @@
             "title": "Reaction Entry Ref",
             "type": "string"
           },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
+          },
           "records": {
             "items": {
               "$ref": "#/components/schemas/KineticsRecord"
@@ -51055,13 +51067,6 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
-          },
-          "warnings_by_ref": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/DepositWarningsFragment"
-            },
-            "title": "Warnings By Ref",
-            "type": "object"
           },
           "watermark": {
             "anyOf": [
@@ -52098,6 +52103,13 @@
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
           },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
+          },
           "records": {
             "items": {
               "$ref": "#/components/schemas/ThermoRecord"
@@ -52134,13 +52146,6 @@
             "title": "Species Entry Ref",
             "type": "string"
           },
-          "warnings_by_ref": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/DepositWarningsFragment"
-            },
-            "title": "Warnings By Ref",
-            "type": "object"
-          },
           "watermark": {
             "anyOf": [
               {
@@ -52168,6 +52173,13 @@
           "record": {
             "$ref": "#/components/schemas/ScientificStatmechRecord"
           },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
+          },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_statmech__RequestEcho"
           },
@@ -52187,13 +52199,6 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
-          },
-          "warnings_by_ref": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/DepositWarningsFragment"
-            },
-            "title": "Warnings By Ref",
-            "type": "object"
           }
         },
         "required": [
@@ -52540,6 +52545,13 @@
           "record": {
             "$ref": "#/components/schemas/ScientificTransitionStateRecord"
           },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
+          },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_transition_state__RequestEcho"
           },
@@ -52559,13 +52571,6 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
-          },
-          "warnings_by_ref": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/DepositWarningsFragment"
-            },
-            "title": "Warnings By Ref",
-            "type": "object"
           }
         },
         "required": [
@@ -52582,6 +52587,13 @@
           "record": {
             "$ref": "#/components/schemas/ScientificTransitionStateEntryRecord"
           },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
+          },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_transition_state__RequestEcho"
           },
@@ -52601,13 +52613,6 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
-          },
-          "warnings_by_ref": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/DepositWarningsFragment"
-            },
-            "title": "Warnings By Ref",
-            "type": "object"
           }
         },
         "required": [
@@ -53022,6 +53027,13 @@
           "record": {
             "$ref": "#/components/schemas/ScientificTransportRecord"
           },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
+          },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_transport__RequestEcho"
           },
@@ -53041,13 +53053,6 @@
           },
           "review_summary": {
             "$ref": "#/components/schemas/ReviewStatusSummary"
-          },
-          "warnings_by_ref": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/DepositWarningsFragment"
-            },
-            "title": "Warnings By Ref",
-            "type": "object"
           }
         },
         "required": [

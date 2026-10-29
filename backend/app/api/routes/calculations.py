@@ -97,15 +97,15 @@ from app.services.calculation_parameter_extraction import (
 from app.services.charge_multiplicity_extraction import (
     try_reconcile_charge_multiplicity_from_output_upload,
 )
+from app.services.deposit_warnings import persist_deposit_warnings
 from app.services.hessian_extraction import (
     try_extract_hessian_from_artifact_upload,
 )
-from app.services.deposit_warnings import persist_deposit_warnings
-from app.services.record_review import RecordRef
 from app.services.input_geometry_extraction import (
     try_extract_input_geometry_from_artifact_upload,
 )
 from app.services.public_refs import PREFIXES
+from app.services.record_review import RecordRef
 from app.services.scientific_read.handles import (
     canonical_level_of_theory_id,
     handle_type_mismatch_error,

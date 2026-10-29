@@ -285,9 +285,9 @@ def deposit_warnings_for(
     return out
 
 
-def deposit_warnings_by_ref(session: Session, record_type: RT, id_to_ref: dict[int, str]) -> dict[str, Any]:
-    """The read envelope's ``warnings_by_ref``: ``{public_ref: DepositWarningsFragment}`` for the records named."""
-    from app.schemas.reads.scientific_deposit_warnings import DepositWarningsFragment
+def deposit_record_warnings(session: Session, record_type: RT, id_to_ref: dict[int, str]) -> list[Any]:
+    """The read envelope's ``record_warnings``: one ``RecordWarnings`` per record the response names, in the given order."""
+    from app.schemas.reads.scientific_deposit_warnings import RecordWarnings
 
     stored = deposit_warnings_for(session, record_type, id_to_ref)
-    return {ref: DepositWarningsFragment.model_validate(stored[rid]) for rid, ref in id_to_ref.items()}
+    return [RecordWarnings(record_ref=ref, **stored[rid]) for rid, ref in id_to_ref.items()]

@@ -96,7 +96,7 @@ disagree, this one is right by construction.
 | Channel | Entries | What a consumer can do with it |
 | --- | --- | --- |
 | `error_envelope` | 24 | the `code` field of the 422 error body — a client can branch on it |
-| `upload_warning` | 12 | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `warnings_by_ref` on every detail read of that record |
+| `upload_warning` | 12 | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on every detail read of that record |
 | `trust_label` | 1 | a read-time trust label (`HardFailReason`), not any refusal |
 | `database_constraint` | 1 | PostgreSQL only, so the refusal is a 409 rather than a 422 — named, where the constraint declares a rejection code |
 | `none` | 11 | *nothing carries a code* |
@@ -326,7 +326,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | --- | --- |
 | **Tier** | `warn` |
 | **Code** | `charge_mismatch`, `multiplicity_mismatch` |
-| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `warnings_by_ref` on every detail read of that record |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on every detail read of that record |
 | **Governing ADR** | 0008 |
 
 **Why this tier.** **Placed against the ADR's own reasoning, deliberately.** ADR 0008 names both findings as direct contradictions between a declaration and the parsed evidence, therefore definitional, therefore belonging at the blocking tier — and then defers the promotion, because promoting a warning to a blocker rejects payloads that are accepted today. These checks have never fired on real data, so their false-positive rate is unknown and promoting them first would be unsafe. The register records the gap rather than hiding it: this is the clearest case in TCKDB of a check sitting one tier below where its own governing decision puts it.
@@ -405,7 +405,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | --- | --- |
 | **Tier** | `warn` |
 | **Code** | `n_imag_contradicts_minimum`, `n_imag_higher_order_saddle`, `n_imag_suggests_transition_state` |
-| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `warnings_by_ref` on every detail read of that record |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on every detail read of that record |
 | **Governing ADR** | 0008 |
 
 **Why this tier.** The carve-out is the scientific content. A van der Waals complex is held together by intermolecular forces and its stretch, bends and hindered internal rotations sit below roughly 50 cm-1 — the region where numerical noise in a finite-difference or quadrature-grid Hessian is comparable to the true curvature. A small imaginary mode there is usually a grid artifact, so refusing it would force an expensive re-run for a physically meaningless mode. This is what earns `vdw_complex` a separate enum member: it is the only place the two minimum kinds behave differently.
@@ -423,7 +423,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | --- | --- |
 | **Tier** | `warn` |
 | **Code** | `transition_state_extra_imaginary_modes_below_tau`, `transition_state_extra_imaginary_mode_above_tau`, `transition_state_extra_imaginary_modes_not_assessable` |
-| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `warnings_by_ref` on every detail read of that record |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on every detail read of that record |
 | **Governing ADR** | 0012 |
 
 **Why this tier.** The extra modes cannot be classified from the frequency list, so refusing the deposit would assert a determination the deposit does not contain the information to support — an expectation about numerical quality wearing the costume of a definition. They can also be simply correct: a harmonic model is inapplicable to a torsion, a ring pucker or an intermolecular mode in a loose complex, and a transition state can sit at a maximum of a torsional profile while being a perfectly correct reactive bottleneck, in which case the extra negative eigenvalue is not an artefact but exactly right. Warning rather than blocking is also the only choice that preserves evidence: a record carrying all three frequencies and the full protocol can be reassessed under a better rule in five years, while a refused deposit leaves nothing behind.
@@ -458,7 +458,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | --- | --- |
 | **Tier** | `warn` |
 | **Code** | `transition_state_imaginary_frequency_too_small` |
-| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `warnings_by_ref` on every detail read of that record |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on every detail read of that record |
 | **Governing ADR** | 0008, 0012 |
 
 **Why this tier.** ADR 0008's worked counter-example, and the sharpest statement of the whole rule. A very soft imaginary mode is suspicious — often an under-converged geometry or a coarse integration grid — but it can be perfectly real, because flat barriers and variational transition states genuinely produce them. Magnitude is therefore a quality expectation, never a definition, and a check that could fire on a correct novel result must not block.
@@ -493,7 +493,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | --- | --- |
 | **Tier** | `warn` |
 | **Code** | `transition_state_missing_irc_evidence` |
-| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `warnings_by_ref` on every detail read of that record |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on every detail read of that record |
 | **Governing ADR** | 0008 |
 
 **Why this tier.** Absence, not contradiction. Refusing a transition state without an IRC would lose the saddle point entirely, and a saddle point with no IRC is an incomplete record rather than a false one. The evidence is recommended, not required.
@@ -549,7 +549,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | --- | --- |
 | **Tier** | `warn` |
 | **Code** | `freq_list_linear_mode_count_for_bent_geometry`, `freq_list_bent_mode_count_for_linear_geometry` |
-| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `warnings_by_ref` on every detail read of that record |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on every detail read of that record |
 | **Governing ADR** | 0008 |
 
 **Why this tier.** An expectation, not a definition, and ADR 0008 is explicit that only the latter may block. The verdict rests on a *tolerance* — on where the line between collinear and bent is drawn — and a rule whose answer moves when a constant moves is an expectation by construction. Unlike the `3N` ceiling, which no correct deposit can trip, both of these can: a genuinely quasi-linear molecule sits on no side of the line; a producer who deposited `3N - 6` vibrations plus one rigid-body eigenvalue on purpose deposited something true; and a partial or frozen-atom Hessian on a linear molecule produces `3N - 6` modes honestly. So the check declines to answer in the ambiguous band and annotates rather than refuses outside it. It is also the *second* judgement on one list: the wire package's `freq_list_incomplete_for_geometry` floor keeps exactly the strength an atom count can prove, and this adds only the strength coordinates can. That is also why the short-list direction is a code of its own rather than an extension of that floor — `3N - 6` *is* the floor's threshold and it warns strictly below, so the wire package cannot reach this case at all, and emitting its code from here would put a coordinate-dependent trigger behind a string whose contract is that an atom count proves it.
@@ -576,7 +576,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | --- | --- |
 | **Tier** | `warn` |
 | **Code** | `transition_state_energy_ordering_mixed_levels` |
-| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `warnings_by_ref` on every detail read of that record |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on every detail read of that record |
 | **Governing ADR** | 0008 |
 
 **Why this tier.** An expectation, not a definition. An ordering across levels is usually a mistake, but a deliberate one (a literature well against a computed saddle point) is a legitimate record, so refusing it would lose correct science; the warning names the gap instead (ADR 0008).
@@ -614,7 +614,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | --- | --- |
 | **Tier** | `warn` |
 | **Code** | `transition_state_energy_ordering_not_compared`, `network_state_energy_sum_not_compared`, `network_energy_zpe_source_absent` |
-| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `warnings_by_ref` on every detail read of that record |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on every detail read of that record |
 | **Governing ADR** | 0008 |
 
 **Why this tier.** Absence, not contradiction. A stored energy or zero-point energy that is not stated, an E0 with no electronic energy to pair, or a pairing TCKDB cannot establish leaves nothing to contradict; refusing would lose a record that may be right. The energy is stored as not compared with its reason, and the warning names it (ADR 0008).
@@ -765,7 +765,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | --- | --- |
 | **Tier** | `warn` |
 | **Code** | `reaction_atom_map_absent` |
-| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `warnings_by_ref` on every detail read of that record |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on every detail read of that record |
 | **Governing ADR** | 0011, 0008 |
 
 **Why this tier.** Absence, not contradiction. An unmapped reaction is an incomplete record rather than a false one — the rate constant is still the rate constant and what is missing is the mechanistic detail. Blocking would reject correct science over evidence the depositor may not have, and would make every reaction already in the database undepositable.
@@ -783,7 +783,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | --- | --- |
 | **Tier** | `warn` |
 | **Code** | `reaction_atom_map_participants_incomplete`, `reaction_atom_map_atoms_incomplete` |
-| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `warnings_by_ref` on every detail read of that record |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on every detail read of that record |
 | **Governing ADR** | 0011, 0008 |
 
 **Why this tier.** Absence again, at finer grain. A partial map is a true-but-partial record; only a map that contradicts *itself* is refused, and that is handled at the blocking tier by `validate_reaction_atom_map` and by the constraints on `reaction_atom_map_pair`.
@@ -866,7 +866,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | --- | --- |
 | **Tier** | `structural` |
 | **Code** | `reported_network_solve` |
-| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `warnings_by_ref` on every detail read of that record |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on every detail read of that record |
 | **Governing ADR** | 0010, 0008 |
 
 **Why this tier.** The blocking half is definitional: a computed solve with *zero* state energies contradicts its own kind, and a reported solve with no literature would assert rates carrying neither a derivation nor a source. The accepting half is why the token exists at all — published PLOG and Chebyshev fits are correct, common, citable science, so the coverage rules that are right for a solve run here could fire on a correct result and must not block. They warn instead, on every read path that reaches a rate.
@@ -889,7 +889,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | --- | --- |
 | **Tier** | `structural` |
 | **Code** | `network_wide_energy_transfer_scope` |
-| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `warnings_by_ref` on every detail read of that record |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on every detail read of that record |
 | **Governing ADR** | 0009, 0008 |
 
 **Why this tier.** A network-wide ⟨ΔE⟩down is correct, common, published science — Arkane, RMG and MESS inputs routinely specify a single `SingleExponentialDown` applied network-wide — so a check demanding one entry per (well x collider) pair could fire on a correct result and must not block. It is an expectation about *resolution*, not a definition. What stays definitional still blocks: a `per_well` entry naming no well contradicts itself, a `network_wide` entry naming one contradicts itself, and a payload mixing the two is genuinely ambiguous.

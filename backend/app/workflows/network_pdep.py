@@ -93,6 +93,7 @@ from app.services.conformer_resolution import (
     resolve_conformer_group,
     settle_conformer_basin,
 )
+from app.services.deposit_warnings import note_calculation_keys
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import (
@@ -134,7 +135,6 @@ from app.services.reaction_atom_map import persist_reaction_atom_map
 from app.services.reaction_resolution import (
     validate_transition_state_composition,
 )
-from app.services.deposit_warnings import note_calculation_keys
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,

@@ -40,7 +40,6 @@ from app.db.models.common import (
 from app.schemas.reads.scientific_calculation import (
     CalculationGeometryLinkSummary,
 )
-from app.schemas.reads.scientific_deposit_warnings import DepositWarningsFragment
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     ProfiledRequestEcho,
@@ -50,6 +49,7 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
+from app.schemas.reads.scientific_deposit_warnings import RecordWarnings
 
 # ---------------------------------------------------------------------------
 # Request
@@ -718,9 +718,9 @@ class ScientificConformerObservationDetailResponse(ScientificResponse):
     """Response envelope for
     ``GET /scientific/conformer-observations/{handle}``."""
 
-    #: The deposit-time warnings of each record this response names, by public ref (see
+    #: The deposit-time warnings of each record this response names, with its public ref (see
     #: ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
-    warnings_by_ref: dict[str, DepositWarningsFragment] = Field(default_factory=dict)
+    record_warnings: list[RecordWarnings] = Field(default_factory=list)
     request: RequestEcho
     review_summary: ReviewStatusSummary
     record: ScientificConformerObservationRecord

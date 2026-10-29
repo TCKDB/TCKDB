@@ -298,13 +298,14 @@ class TestProvenanceMissingEmitsWarnings:
         self, client: TestClient
     ) -> None:
         """Warnings use the same ``{field, code, message}`` shape as the
-        rest of the upload reconciliation system — no bespoke fields."""
+        rest of the upload reconciliation system — no bespoke fields. ``context`` is the one
+        optional addition (the values that triggered the warning; ``null`` when none)."""
         resp = client.post("/api/v1/uploads/thermo", json=_thermo_payload())
         assert resp.status_code == 201
         warnings = resp.json()["warnings"]
         assert warnings, "expected provenance warnings to be present"
         for w in warnings:
-            assert set(w.keys()) == {"field", "code", "message"}
+            assert set(w.keys()) == {"field", "code", "message", "context"}
             assert w["code"].startswith("missing_")
             assert w["message"]
 

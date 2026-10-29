@@ -38,8 +38,8 @@ def _owned_calculation(session) -> Calculation:
 
 
 def _warnings_of(body: dict, ref: str) -> dict:
-    fragment = body["warnings_by_ref"][ref]
-    assert set(fragment) == {"status", "items"}
+    (fragment,) = [w for w in body["record_warnings"] if w["record_ref"] == ref]
+    assert set(fragment) == {"record_ref", "status", "items"}
     return fragment
 
 
@@ -97,8 +97,8 @@ def test_list_and_search_responses_do_not_carry_warnings(client, db_session):
     calc_ref = result["calculation_key_refs"]["ts-freq"]
     search = client.get("/api/v1/scientific/calculations/search", params={"calculation_type": "freq", "limit": 5})
     assert search.status_code == 200, search.text[:300]
-    assert "warnings_by_ref" not in search.json()
-    assert "warnings_by_ref" in client.get(f"/api/v1/scientific/calculations/{calc_ref}").json()
+    assert "record_warnings" not in search.json()
+    assert "record_warnings" in client.get(f"/api/v1/scientific/calculations/{calc_ref}").json()
 
 
 # ---------------------------------------------------------------------------
@@ -120,19 +120,27 @@ def test_a_clean_deposit_reads_recorded_with_no_items(client, db_session):
     assert body["warnings"] == []
     calc_ref = body["primary_calculation"]["calculation_ref"]
     read = client.get(f"/api/v1/scientific/calculations/{calc_ref}")
-    assert _warnings_of(read.json(), calc_ref) == {"status": "recorded", "items": []}
+    assert _warnings_of(read.json(), calc_ref) == {"record_ref": calc_ref, "status": "recorded", "items": []}
 
     observation = db_session.get(ConformerObservation, body["id"])
     obs_read = client.get(f"/api/v1/scientific/conformer-observations/{observation.public_ref}")
     assert obs_read.status_code == 200, obs_read.text[:300]
-    assert _warnings_of(obs_read.json(), observation.public_ref) == {"status": "recorded", "items": []}
+    assert _warnings_of(obs_read.json(), observation.public_ref) == {
+        "record_ref": observation.public_ref,
+        "status": "recorded",
+        "items": [],
+    }
 
 
 def test_a_record_from_before_warnings_were_stored_reads_not_recorded(client, db_session):
     calc = _owned_calculation(db_session)  # written with no deposit, so no marker: how every old record looks
     read = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}")
     assert read.status_code == 200
-    assert _warnings_of(read.json(), calc.public_ref) == {"status": "not_recorded", "items": []}
+    assert _warnings_of(read.json(), calc.public_ref) == {
+        "record_ref": calc.public_ref,
+        "status": "not_recorded",
+        "items": [],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -311,3 +319,24 @@ def test_stored_register_entries_match_the_generated_register():
         for code in re.findall(r"`([a-z_0-9]+)`", code_line):
             declared[code] = number
     assert declared == REGISTER_ENTRY
+
+
+def test_the_curated_profile_shows_the_warnings_of_an_approved_record(client, db_session):
+    result = _ok(_post_bundle(client, _bundle([])))
+    tse = db_session.get(TransitionStateEntry, result["transition_state_entry_id"])
+    curator = AppUser(username="warning-curated-curator", role=AppUserRole.curator)
+    db_session.add(curator)
+    db_session.flush()
+    for record_type, record_id in (
+        (SubmissionRecordType.transition_state_entry, tse.id),
+        (SubmissionRecordType.transition_state, tse.transition_state_id),
+    ):
+        ensure_record_review(db_session, record_type=record_type, record_id=record_id)
+        set_record_review_status(
+            db_session, record_type=record_type, record_id=record_id, status=RecordReviewStatus.approved, actor=curator
+        )
+    read = client.get(f"/api/v1/scientific/transition-state-entries/{tse.public_ref}", params={"profile": "curated"})
+    assert read.status_code == 200, read.text[:400]
+    fragment = _warnings_of(read.json(), tse.public_ref)
+    assert fragment["status"] == "recorded"
+    assert _MISSING_IRC in _codes(fragment)

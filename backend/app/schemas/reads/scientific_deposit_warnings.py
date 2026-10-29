@@ -2,8 +2,9 @@
 
 Warnings are what a deposit tripped when it was accepted (the ``warn`` tier of the scientific check register).
 They are stored beside the record they concern and shown on every detail read of it, by default, in the
-envelope's ``warnings_by_ref`` (keyed by the record's public ref, like ``review_status_by_ref``). List and
-search responses do not carry them. A warning never changes a value, orders a list or gates selection.
+envelope's ``record_warnings`` list (one entry per record the response names, each carrying that record's public
+ref). List and search responses do not carry them. A warning never changes a value, orders a list or gates
+selection.
 
 ``status`` answers the question a bare empty list cannot:
 
@@ -37,13 +38,15 @@ class DepositWarningItem(BaseModel):
     check_version: int
 
 
-class DepositWarningsFragment(BaseModel):
+class RecordWarnings(BaseModel):
     """The warnings stored for one record."""
 
     model_config = ConfigDict(extra="forbid")
 
+    #: The public ref of the record these warnings are about.
+    record_ref: str
     status: Literal["recorded", "not_recorded"]
     items: list[DepositWarningItem]
 
 
-__all__ = ["DepositWarningItem", "DepositWarningsFragment"]
+__all__ = ["DepositWarningItem", "RecordWarnings"]
