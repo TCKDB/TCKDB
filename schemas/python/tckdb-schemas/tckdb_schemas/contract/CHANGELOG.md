@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.142.0 - 2026-10-29
+
+A species entry declared a minimum is judged by the size of its imaginary modes against the protocol's tolerance, instead of being refused for any imaginary mode. One warning code joins the contract. No field is added or removed.
+
+- `minimum_imaginary_modes_below_tau` (a warning, not a refusal): every imaginary mode on an entry declared a `minimum` is below `tau`. The record is accepted. The same record was refused as `n_imag_contradicts_minimum` before.
+- `tau` is the one the transition-state rule already uses, resolved per calculation from the parameters you deposit (`freq.hessian_method`, `grid.quality`, `opt.convergence`): 15, 30, 50 or 80 cm-1 by protocol, and 50 cm-1 when the protocol is not recorded. A -15 cm-1 mode on a minimum with no recorded protocol is now accepted.
+- A mode at or above `tau` is refused as before (`n_imag_contradicts_minimum`), and so is a list where any mode is at or above `tau`. Counted modes whose magnitudes were not deposited are refused too: a mode nobody measured is never assumed soft. Deposit the frequency list (`freq_result.modes`) or, for one imaginary mode, `imag_freq_cm1`.
+- The refusal and the warning name the `tau` that decided them. `evaluate_species_entry_frequency` gains the optional keywords `imaginary_modes` and `tau`; without them a lone `imag_freq_cm1` with `n_imag == 1` is judged against the "protocol not recorded" row.
+- The escape hatches for a mode at or above `tau` are unchanged: declare `species_entry_kind='vdw_complex'`, or deposit the structure as a transition state.
+- A van der Waals complex keeps its own warning (`n_imag_contradicts_minimum` as a warning); the transition-state rule is unchanged.
+- The server stores the `tau` that decided it on the frequency result (`imaginary_mode_tau_cm1` and its basis) and stores `imaginary_mode_structural_flag` as `false` (judged and not flagged). No column is added.
+
 ## 0.141.0 - 2026-10-29
 
 An allene's axis and an odd cumulene's cis/trans are now part of the stereo descriptor. No field is added or removed.

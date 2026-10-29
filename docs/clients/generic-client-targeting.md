@@ -452,9 +452,33 @@ The distinction worth building on is what a client should *do*:
 | `species_geometry_composition_mismatch`, `species_geometry_isotope_mismatch`, `species_smiles_charge_mismatch` | the structure you deposited and the label you gave it describe different molecules | fix the payload and retry — one of the two is a typo |
 | `reaction_mass_balance_failed`, `reaction_charge_not_conserved`, `transition_state_composition_mismatch`, `transition_state_charge_mismatch` | the reaction as written is not a reaction | stop and investigate; retrying the same thing cannot help |
 | `atom_map_*`, `transition_state_irc_mapping_element_mismatch` | the mechanism you described contradicts itself, or an index counts against the wrong geometry | correct the mapping; note that indices are geometry-relative (ADR 0011) |
-| `transition_state_no_imaginary_mode`, `transition_state_reaction_coordinate_*`, `n_imag_contradicts_minimum` | the frequency evidence contradicts the kind of stationary point declared | re-declare the entry as what it is, or deposit no frequency evidence |
+| `transition_state_no_imaginary_mode`, `transition_state_reaction_coordinate_*`, `n_imag_contradicts_minimum` | the frequency evidence contradicts the kind of stationary point declared; for a minimum, at least one imaginary mode is at or above the protocol's tolerance `tau` (or its magnitude was not deposited) | re-declare the entry as what it is, or deposit no frequency evidence; for a minimum, deposit the full frequency list so each mode can be judged against `tau` |
 | `arrhenius_a_units_molecularity_mismatch` | `a_units` do not have the dimensionality the reaction order requires | fix the unit token |
 | `validation_error` | a refusal that carries no more specific code | read `detail`; and please report it, because a scientific refusal reaching you as this is a gap |
+
+### A soft imaginary mode on a minimum
+
+A species entry declared a minimum is not refused for a small imaginary
+mode. Integration-grid noise, a very soft torsion or a loose convergence
+produce -10 to -40 cm-1 modes in correct calculations, so each imaginary
+mode is compared with `tau`, the noise floor of the protocol that produced it.
+
+- **Below `tau`:** the entry is accepted with the warning
+  `minimum_imaginary_modes_below_tau`, and the server records the `tau`
+  that decided it on the frequency result.
+- **At or above `tau`:** `n_imag_contradicts_minimum` (422), as before.
+  Re-optimise or declare the entry as what it is; a van der Waals complex
+  (`species_entry_kind='vdw_complex'`) or a transition-state payload are the
+  doors that remain.
+- **Where `tau` comes from:** the parameters you deposit on the frequency
+  calculation (`freq.hessian_method`, `grid.quality`, `opt.convergence`):
+  15, 30, 50 or 80 cm-1 by protocol, and 50 cm-1 when the protocol is not
+  recorded. An analytic Hessian on a tight grid has the smallest `tau`, so
+  depositing the protocol makes the check stricter, not looser.
+- **What to send:** the frequency list (`freq_result.modes`), or
+  `imag_freq_cm1` when exactly one mode is imaginary. A count with no
+  magnitudes cannot be judged and is refused, because a mode nobody measured
+  is never assumed soft.
 
 ### What `context` carries, and when it is empty
 

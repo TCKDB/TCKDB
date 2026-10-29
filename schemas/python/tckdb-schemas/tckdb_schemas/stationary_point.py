@@ -2,9 +2,10 @@
 
 The Hessian eigenvalue spectrum is what a stationary point *is*: zero
 imaginary modes is a minimum, one is a first-order saddle point, two or
-more is a higher-order saddle. For minima that statement survives the
-translation into a database row unchanged, and this module still refuses
-a minimum whose own frequency evidence contradicts it.
+more is a higher-order saddle. For minima that statement survives only
+above the noise floor: this module refuses a minimum whose own frequency
+evidence shows an imaginary mode at or above tau, and accepts one whose
+modes are all below it (ADR 0012's 2026-10-29 note).
 
 For transition states it does not survive, and
 `ADR 0012 <../../../../docs/adr/0012-imaginary-modes-are-judged-by-magnitude-not-counted.md>`_
@@ -22,7 +23,8 @@ What replaces it is narrower and does survive:
 ======================  ==========================================  =====================
 declared                rule                                        tier
 ======================  ==========================================  =====================
-``minimum``             ``n_imag == 0``                             block
+``minimum``             no imaginary mode at or above τ             block
+``minimum``             imaginary modes, all below τ                warn
 ``vdw_complex``         ``n_imag == 0`` *expected*                  warn
 transition state        at least one imaginary mode                 block
 transition state        exactly one designated reaction coordinate  block
@@ -40,21 +42,24 @@ execution provenance the record actually carries — see
 :func:`resolve_tau` — and every finding it decides carries the τ it used
 and why, so a reader can re-decide later.
 
-**τ never decides between blocking and warning.** Every blocking rule
-above is a contract about what the record *says*, not about magnitude;
-τ only separates a quiet warning from a flagged one. That is what makes
-it safe to resolve τ from provenance that a payload may or may not
-carry: missing provenance changes how loudly a record is flagged, never
-whether it is accepted.
+**For a transition state τ never decides between blocking and warning.**
+Every blocking transition-state rule above is a contract about what the
+record *says*, not about magnitude; τ only separates a quiet warning from
+a flagged one. That is what makes it safe to resolve τ from provenance
+that a payload may or may not carry: missing provenance changes how loudly
+a record is flagged, never whether it is accepted. **For a declared minimum
+τ is the line between the warning and the refusal**, and missing provenance
+leaves that line at the conservative "protocol not recorded" value.
 
 Why the two minimum kinds split, given that a van der Waals complex is
 formally also a minimum:
 
 * A covalently bound **minimum** whose own frequency evidence reports an
-  imaginary mode is mislabelled. The correct response is to re-optimise
-  on a tighter integration grid or to declare it as something else, so
-  refusing the deposit is right — no correct calculation produces the
-  record as submitted.
+  imaginary mode at or above τ is mislabelled. The correct response is to
+  re-optimise on a tighter integration grid or to declare it as something
+  else, so refusing the deposit is right. Below τ the protocol cannot tell
+  the sign of the curvature from zero, correct published calculations
+  carry such modes, and the record is accepted with a warning.
 * A **van der Waals complex** is held together by intermolecular forces,
   and its intermolecular stretch, bends and hindered internal rotations
   sit below roughly 50 cm⁻¹. That is the region where numerical noise in

@@ -97,8 +97,8 @@ from tckdb_schemas.shared.calculation_in import (
     CalculationIn,
     GeometryIn,
     calculation_in_to_with_results_payload,
-    species_entry_frequency_findings,
     frequency_completeness_findings,
+    species_entry_frequency_findings,
     transition_state_frequency_findings,
 )
 from tckdb_schemas.stationary_point import (

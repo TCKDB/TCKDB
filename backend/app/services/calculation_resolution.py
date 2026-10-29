@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session
 from sqlalchemy.sql import ColumnElement
 from tckdb_schemas.coded_error import CodedValidationError
+from tckdb_schemas.enums import StationaryPointKind
 from tckdb_schemas.fragments.calculation import (
     CALCULATION_SOFTWARE_RELEASE_REQUIRED,
     assert_assembled_not_primary,
@@ -18,7 +19,6 @@ from tckdb_schemas.fragments.calculation import (
 )
 from tckdb_schemas.fragments.version import ParserStamp
 from tckdb_schemas.sp_energy_components import check_sp_energy_components
-from tckdb_schemas.enums import StationaryPointKind
 from tckdb_schemas.stationary_point import (
     W_MINIMUM_IMAGINARY_MODES_BELOW_TAU,
     TauBasis,

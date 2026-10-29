@@ -3,7 +3,8 @@
 ======================  ==========================================  =====================
 declared                rule                                        tier
 ======================  ==========================================  =====================
-``minimum``             ``n_imag == 0``                             block
+``minimum``             no imaginary mode at or above τ             block
+``minimum``             imaginary modes, all below τ                warn
 ``vdw_complex``         ``n_imag == 0`` *expected*                  warn
 transition state        at least one imaginary mode                 block
 transition state        exactly one designated reaction coordinate  block
@@ -13,9 +14,10 @@ transition state        an extra imaginary mode at or above τ       warn + stru
 transition state        ``|ω_RC| >= 100 cm⁻¹``                      warn
 ======================  ==========================================  =====================
 
-The minimum rules are unchanged by ADR 0012 and are definitions: no
-correct calculation produces a covalently bound minimum with an imaginary
-mode. The transition-state blocking rules are *contracts about what the
+A minimum's blocking rule is a definition only above the noise floor
+(ADR 0012's 2026-10-29 note): no correct calculation produces a covalently
+bound minimum with an imaginary mode at or above τ, but correct published
+calculations do carry modes below it. The transition-state blocking rules are *contracts about what the
 record says*, not about magnitude — ADR 0012 retired ``n_imag == 1``
 because two scientifically correct calculations of the same saddle point
 can return ``n_imag == 1`` and ``n_imag == 3``, so the count was a gate a
@@ -631,6 +633,14 @@ class TestConformerUploadRequest:
         assert findings
         assert _tiers(findings) == {ValidationTier.warn}
 
+    def test_minimum_with_a_soft_mode_is_accepted_and_warns(self) -> None:
+        request = ConformerUploadRequest(
+            **_conformer_payload(1, imag_freq_cm1=-15.0)
+        )
+        assert _codes(request.stationary_point_findings()) == {
+            W_MINIMUM_IMAGINARY_MODES_BELOW_TAU
+        }
+
     def test_zero_imaginary_modes_is_accepted(self) -> None:
         request = ConformerUploadRequest(**_conformer_payload(0))
         assert request.stationary_point_findings() == []
@@ -767,6 +777,15 @@ class TestComputedSpeciesBundle:
         )
         assert _tiers(request.stationary_point_findings()) == {ValidationTier.warn}
 
+    def test_minimum_with_a_soft_mode_is_accepted_and_warns(self) -> None:
+        request = ComputedSpeciesUploadRequest(
+            species_entry=_SPECIES_ENTRY,
+            conformers=[_bundle_conformer(1, -15.0)],
+        )
+        assert _codes(request.stationary_point_findings()) == {
+            W_MINIMUM_IMAGINARY_MODES_BELOW_TAU
+        }
+
     def test_zero_imaginary_modes_is_accepted(self) -> None:
         request = ComputedSpeciesUploadRequest(
             species_entry=_SPECIES_ENTRY,
@@ -831,6 +850,19 @@ class TestBundleSpeciesBlocks:
     def test_vdw_complex_is_accepted_and_warns(self, model, n_imag: int) -> None:
         species = model(**_bundle_species(n_imag, kind="vdw_complex"))
         assert _tiers(species.stationary_point_findings()) == {ValidationTier.warn}
+
+    @pytest.mark.parametrize("model", _SPECIES_BLOCKS)
+    def test_minimum_with_a_soft_mode_is_accepted_and_warns(self, model) -> None:
+        species = model(**_bundle_species(1, imag_freq_cm1=-15.0))
+        assert _codes(species.stationary_point_findings()) == {
+            W_MINIMUM_IMAGINARY_MODES_BELOW_TAU
+        }
+
+    @pytest.mark.parametrize("model", _SPECIES_BLOCKS)
+    def test_minimum_with_a_stiff_mode_is_rejected(self, model) -> None:
+        with pytest.raises(ValidationError) as exc:
+            model(**_bundle_species(1, imag_freq_cm1=-80.0))
+        assert W_N_IMAG_CONTRADICTS_MINIMUM in str(exc.value)
 
     @pytest.mark.parametrize("model", _SPECIES_BLOCKS)
     def test_zero_imaginary_modes_is_accepted(self, model) -> None:
