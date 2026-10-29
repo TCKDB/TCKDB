@@ -35,6 +35,7 @@ from app.db.models.common import (
     TorsionTreatmentKind,
 )
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
+from app.schemas.reads.scientific_deposit_warnings import DepositWarningsFragment
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     LiteratureSummary,
@@ -451,6 +452,9 @@ class ScientificStatmechRecord(BaseModel):
 class ScientificStatmechDetailResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/statmech/{handle}``."""
 
+    #: The deposit-time warnings of each record this response names, by public ref (see
+    #: ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    warnings_by_ref: dict[str, DepositWarningsFragment] = Field(default_factory=dict)
     request: RequestEcho
     review_summary: ReviewStatusSummary
     record: ScientificStatmechRecord

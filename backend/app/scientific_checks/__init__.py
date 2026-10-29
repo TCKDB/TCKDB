@@ -195,7 +195,10 @@ class CodeChannel(str, Enum):
     #: The ``code`` field of an
     #: :class:`~tckdb_schemas.upload_warning.UploadWarning` returned
     #: alongside a *successful* upload. The warn tier's surface; it has
-    #: been machine-readable since the class was written.
+    #: been machine-readable since the class was written. The deposit also
+    #: stores each warning beside the record it concerns (``deposit_warning``),
+    #: so the same code reaches a later reader in ``warnings_by_ref`` on that
+    #: record's detail read.
     upload_warning = "upload_warning"
 
     #: A read-time label — a ``HardFailReason`` from the trust evaluator.

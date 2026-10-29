@@ -72,6 +72,7 @@ from app.services.submission import (
     link_record,
     mark_ingestion_succeeded,
 )
+from app.services.deposit_warnings import persist_deposit_warnings
 from app.services.upload_request_warnings import (
     kinetics_request_warnings,
     thermo_request_warnings,
@@ -254,6 +255,7 @@ def _import_thermo_bundle(
                 warnings, local_ref=local_ref, record_type=DryRunRecordType.thermo
             )
         )
+        persist_deposit_warnings(session, review_policy.submission_id, warnings)
         records.append(
             ContributionBundleSubmittedRecord(
                 record_type=SubmittedRecordType.thermo,
@@ -310,6 +312,7 @@ def _import_kinetics_bundle(
                 warnings, local_ref=local_ref, record_type=DryRunRecordType.kinetics
             )
         )
+        persist_deposit_warnings(session, review_policy.submission_id, warnings)
         records.append(
             ContributionBundleSubmittedRecord(
                 record_type=SubmittedRecordType.kinetics,

@@ -279,6 +279,7 @@ def reconcile_charge_multiplicity(
                         f"output log ({parsed.charge:+d}). The declared value "
                         "is kept unchanged and flagged for reviewer attention."
                     ),
+                    context={"declared": declared_charge, "logged": parsed.charge, "software": parsed.software},
                 )
             )
 
@@ -296,6 +297,11 @@ def reconcile_charge_multiplicity(
                         f"({parsed.multiplicity}). The declared value is kept "
                         "unchanged and flagged for reviewer attention."
                     ),
+                    context={
+                        "declared": declared_multiplicity,
+                        "logged": parsed.multiplicity,
+                        "software": parsed.software,
+                    },
                 )
             )
 

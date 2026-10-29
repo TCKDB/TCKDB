@@ -189,6 +189,11 @@ def reconcile_sp_energy(
                     "recorded value is kept unchanged and flagged for "
                     "reviewer attention."
                 ),
+                context={
+                    "recorded_hartree": payload_energy_hartree,
+                    "log_hartree": log_energy,
+                    "delta_hartree": delta,
+                },
             ),
         )
 
@@ -205,6 +210,7 @@ def reconcile_sp_energy(
                     "No single-point energy was provided; filled "
                     f"{log_energy:.8f} Ha re-derived from the output log."
                 ),
+                context={"log_hartree": log_energy},
             ),
         )
 

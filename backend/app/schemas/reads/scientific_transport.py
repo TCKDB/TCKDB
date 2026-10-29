@@ -30,6 +30,7 @@ from app.db.models.common import (
     TransportCalculationRole,
 )
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
+from app.schemas.reads.scientific_deposit_warnings import DepositWarningsFragment
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     LiteratureSummary,
@@ -232,6 +233,9 @@ class ScientificTransportRecord(BaseModel):
 class ScientificTransportDetailResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/transport/{handle}``."""
 
+    #: The deposit-time warnings of each record this response names, by public ref (see
+    #: ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    warnings_by_ref: dict[str, DepositWarningsFragment] = Field(default_factory=dict)
     request: RequestEcho
     review_summary: ReviewStatusSummary
     record: ScientificTransportRecord

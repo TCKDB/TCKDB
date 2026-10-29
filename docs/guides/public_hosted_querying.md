@@ -289,6 +289,42 @@ dropped, and duplicates are deduplicated server-side.
 `internal_ids`**. Unknown tokens — or tokens known but illegal for
 that endpoint — return 422.
 
+## Deposit-time warnings (`warnings_by_ref`)
+
+When a deposit is accepted, the depositor is told which expectations it tripped (the `warn` tier of the
+[scientific check register](scientific_check_register.md)): a transition state with no IRC evidence, a declared
+multiplicity that disagrees with the log, an atom map that is missing. TCKDB stores each of those beside the record it
+concerns, and shows them to anyone who reads the record.
+
+Where: the envelope of a detail read carries `warnings_by_ref`, keyed by the record's public ref (the same shape as
+`review_status_by_ref`). It is present by default on the reads of a calculation, a transition-state entry (the concept
+read names each of its entries), a statmech, a transport record, a network solve and a conformer observation, and on the
+per-parent kinetics (`/reaction-entries/{ref}/kinetics`) and thermo (`/species-entries/{ref}/thermo`) reads. List and
+search responses do not carry it. There is no `include=` token for it.
+
+```json
+"warnings_by_ref": {
+  "tse_...": {
+    "status": "recorded",
+    "items": [
+      {"code": "transition_state_missing_irc_evidence", "message": "...", "field": "transition_state.validation_evidence",
+       "register_entry": 19, "context": null, "check_version": 1}
+    ]
+  }
+}
+```
+
+* `status: "recorded"` means the deposit's warnings were stored with this record. `items` is then exactly what fired,
+  and is empty when nothing did.
+* `status: "not_recorded"` means the record was deposited before TCKDB stored warnings. That is not the same as none:
+  nothing can be said either way.
+* `items` lists every stored warning, from every submission that deposited or later added evidence to the record
+  (an artifact uploaded afterwards can add one). `register_entry` is the register's entry number, and is `null` for the
+  many codes the register does not list. `context` holds the values that triggered the warning when the check stated them.
+
+A warning never changes a value, orders a list, or gates a selection, and the curated profile shows them as it shows any
+other evidence. They are a statement about the deposit, not a verdict on the science.
+
 ## Internal IDs
 
 Internal integer IDs (`species_id`, `species_entry_id`, `geom_id`, etc.)

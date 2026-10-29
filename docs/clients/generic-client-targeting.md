@@ -528,7 +528,12 @@ what a sentence needs, and these are already structured.
 
 A warning is not a refusal: an accepted upload returns `201` with a
 `warnings` list whose entries carry their own `code`. The register's
-`upload_warning` rows are those.
+`upload_warning` rows are those. Each warning may also carry a `context` (the
+values that triggered it; `null` when the check states none). The same warnings
+are stored with the records the deposit created and shown to every later reader
+as `warnings_by_ref` on those records' detail reads (see
+`docs/guides/public_hosted_querying.md`), so what you are told at deposit is what
+a reader of the record is told.
 
 ---
 

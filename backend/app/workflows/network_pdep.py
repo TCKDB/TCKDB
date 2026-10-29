@@ -134,6 +134,7 @@ from app.services.reaction_atom_map import persist_reaction_atom_map
 from app.services.reaction_resolution import (
     validate_transition_state_composition,
 )
+from app.services.deposit_warnings import note_calculation_keys
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,
@@ -1601,6 +1602,7 @@ def persist_network_pdep_upload(
         )
         session.flush()
 
+    note_calculation_keys(session, calculation_key_to_id)
     apply_review_policy(
         session,
         targets=current_conformer_group_targets(session, review_targets),

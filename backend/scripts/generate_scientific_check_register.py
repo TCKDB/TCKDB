@@ -77,7 +77,8 @@ _CHANNEL_BLURB = {
     ),
     CodeChannel.upload_warning: (
         "the `code` field of an `UploadWarning` returned alongside the "
-        "accepted upload"
+        "accepted upload, and stored with the record it concerns, which shows "
+        "it under `warnings_by_ref` on every detail read of that record"
     ),
     CodeChannel.trust_label: (
         "a read-time trust label (`HardFailReason`), not any refusal"

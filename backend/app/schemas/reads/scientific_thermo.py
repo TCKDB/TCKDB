@@ -22,6 +22,7 @@ from app.db.models.common import (
 from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
 from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
+from app.schemas.reads.scientific_deposit_warnings import DepositWarningsFragment
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
     CursorToken,
@@ -364,6 +365,9 @@ class ScientificSpeciesThermoResponse(ScientificResponse):
     public stable handle for the response's path-parameter resource.
     """
 
+    #: The deposit-time warnings of each record this response names, by public ref (see
+    #: ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    warnings_by_ref: dict[str, DepositWarningsFragment] = Field(default_factory=dict)
     request: RequestEcho
     species_entry_id: int
     species_entry_ref: str

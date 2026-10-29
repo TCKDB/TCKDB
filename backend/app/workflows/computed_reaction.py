@@ -146,6 +146,7 @@ from app.services.reaction_resolution import (
     resolve_chem_reaction,
     validate_transition_state_composition,
 )
+from app.services.deposit_warnings import note_calculation_keys
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,
@@ -2199,6 +2200,7 @@ def persist_computed_reaction_upload(
         RecordRef(SubmissionRecordType.applied_energy_correction, aid)
         for aid in applied_correction_ids
     )
+    note_calculation_keys(session, calculation_key_to_id)
     apply_review_policy(
         session,
         targets=current_conformer_group_targets(session, review_targets),
