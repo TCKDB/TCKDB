@@ -262,7 +262,7 @@ def test_warning_shape_matches_shared_upload_warning_pattern() -> None:
     for w in warnings:
         assert isinstance(w, UploadWarning)
         # Exact field set from the shared primitive
-        assert set(w.model_dump().keys()) == {"field", "code", "message"}
+        assert set(w.model_dump().keys()) == {"field", "code", "message", "context"}
         # Codes are machine-readable tokens
         assert w.code.startswith("missing_")
         # Field names match the request schema attribute

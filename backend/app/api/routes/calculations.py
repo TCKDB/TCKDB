@@ -97,7 +97,7 @@ from app.services.calculation_parameter_extraction import (
 from app.services.charge_multiplicity_extraction import (
     try_reconcile_charge_multiplicity_from_output_upload,
 )
-from app.services.deposit_warnings import persist_deposit_warnings
+from app.services.deposit_warnings import store_deposit_warnings
 from app.services.hessian_extraction import (
     try_extract_hessian_from_artifact_upload,
 )
@@ -851,7 +851,7 @@ def upload_calculation_artifacts(
     # Stored beside the calculation under the submission it joined. No marker row: this is not a re-check of the
     # deposit, only what the new evidence earned. With no submission to join there is nothing to store them under.
     if deposit_submission is not None and warnings:
-        persist_deposit_warnings(
+        store_deposit_warnings(
             session,
             deposit_submission.id,
             warnings,

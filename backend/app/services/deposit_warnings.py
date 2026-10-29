@@ -10,7 +10,7 @@ A warning is born from a payload position (``field``), before or while rows are
 written, and carries no record id. Every upload workflow ends in
 ``apply_review_policy`` with the full set of records it created or reused and the
 submission they belong to; that call notes the targets here (``note_deposit_targets``)
-and the route or worker later calls :func:`persist_deposit_warnings` with the final
+and the route or worker later calls :func:`store_deposit_warnings` with the final
 warning list. Workflows that hold a bundle-local calculation key map also note it
 (``note_calculation_keys``), which is the payload-key to row map.
 
@@ -186,7 +186,7 @@ def _insert(session: Session, rows: list[dict[str, Any]]) -> None:
     )
 
 
-def persist_deposit_warnings(
+def store_deposit_warnings(
     session: Session,
     submission_id: int | None,
     warnings: Iterable[UploadWarning],
