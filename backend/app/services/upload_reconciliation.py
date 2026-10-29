@@ -555,17 +555,22 @@ def reconcile_species_entry_full(
     additional = additional_calcs or []
 
     # Layer 1: structural n_imag checks
-    freq_result = None
+    # The calculation that owns the evidence is needed, not just its
+    # result block: tau is resolved from that calculation's own recorded
+    # parameters, so a declared minimum is judged against the protocol
+    # that produced it.
     if primary_calc is not None:
-        freq_result = extract_freq_result(primary_calc, additional)
-    if freq_result is not None and freq_result.n_imag is not None:
-        warnings.extend(
-            _check_n_imag(
-                payload.species_entry_kind,
-                freq_result.n_imag,
-                freq_result.imag_freq_cm1,
-            )
-        )
+        for calc in (primary_calc, *additional):
+            if calc.freq_result is not None and calc.freq_result.n_imag is not None:
+                warnings.extend(
+                    stationary_point_warnings(
+                        calc.species_entry_frequency_findings(
+                            payload.species_entry_kind,
+                            location="species_entry_kind",
+                        )
+                    )
+                )
+                break
 
     # Layer 1b: parser-fidelity check across all freq-bearing calcs.
     if primary_calc is not None:

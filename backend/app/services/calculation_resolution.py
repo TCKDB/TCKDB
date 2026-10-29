@@ -18,7 +18,12 @@ from tckdb_schemas.fragments.calculation import (
 )
 from tckdb_schemas.fragments.version import ParserStamp
 from tckdb_schemas.sp_energy_components import check_sp_energy_components
-from tckdb_schemas.stationary_point import TauBasis, has_structural_flag
+from tckdb_schemas.enums import StationaryPointKind
+from tckdb_schemas.stationary_point import (
+    W_MINIMUM_IMAGINARY_MODES_BELOW_TAU,
+    TauBasis,
+    has_structural_flag,
+)
 from tckdb_schemas.structure_declarations import (
     W_STRUCTURE_DECLARATION_INVALID,
     ActualProtocolDeclaration,
@@ -1374,6 +1379,31 @@ def persist_calculation_result(
                     location="freq_result"
                 )
             )
+
+        # A species entry declared a minimum whose imaginary modes were
+        # all below tau was accepted on the strength of that tau, so the
+        # tau stored is the one that decided it -- the schema-side
+        # resolution, not the producing program's assumed default above,
+        # which could be smaller and would make the stored record
+        # contradict its own acceptance. The flag is stored as false:
+        # judged under the minimum rule and not flagged, which is a
+        # different fact from NULL (never judged). A minimum with no
+        # imaginary mode, or a van der Waals complex (which has its own
+        # warning path), keeps NULL.
+        entry = calculation.species_entry
+        if (
+            designated is None
+            and entry is not None
+            and entry.kind.value == StationaryPointKind.minimum.value
+            and any(
+                finding.code == W_MINIMUM_IMAGINARY_MODES_BELOW_TAU
+                for finding in calc_upload.species_entry_frequency_findings(
+                    StationaryPointKind.minimum, location="freq_result"
+                )
+            )
+        ):
+            tau = calc_upload.tau_resolution()
+            structural_flag = False
 
         session.add(
             CalculationFreqResult(

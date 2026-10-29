@@ -415,6 +415,13 @@ def resolve_tau_from_parameters(
 #: code names the *finding*; the declared kind decides the tier.
 W_N_IMAG_CONTRADICTS_MINIMUM = "n_imag_contradicts_minimum"
 
+#: Every imaginary mode on an entry declared a minimum is below tau, the
+#: protocol-resolved noise floor (ADR 0012, extended to minima by its
+#: 2026-10-29 note). Accepted with a warning and the deciding tau recorded;
+#: a mode at or above tau keeps the refusal under
+#: ``W_N_IMAG_CONTRADICTS_MINIMUM`` / ``W_N_IMAG_HIGHER_ORDER_SADDLE``.
+W_MINIMUM_IMAGINARY_MODES_BELOW_TAU = "minimum_imaginary_modes_below_tau"
+
 #: Two or more imaginary modes. Folded into the blocking message for
 #: ``minimum``; reported as a warning for ``vdw_complex``.
 W_N_IMAG_HIGHER_ORDER_SADDLE = "n_imag_higher_order_saddle"
@@ -591,26 +598,48 @@ def evaluate_species_entry_frequency(
     imag_freq_cm1: float | None = None,
     *,
     location: str,
+    imaginary_modes: Sequence[ImaginaryMode] | None = None,
+    tau: TauResolution | None = None,
 ) -> list[StationaryPointFinding]:
     """Judge one species entry's declared kind against its own frequency evidence.
 
-    Untouched by ADR 0012, which changed the transition-state rule only.
+    ADR 0012 changed the transition-state rule; its 2026-10-29 note extends
+    the same magnitude judgement to a declared ``minimum``: imaginary modes
+    all below tau are a numerical artefact the protocol cannot tell from
+    zero (warn), and one at or above tau is real negative curvature
+    (refuse).
 
     :param kind: The stationary-point kind the uploader declared.
     :param n_imag: Imaginary-mode count parsed from the frequency evidence
         deposited with that same entry. ``None`` means no evidence was
         supplied — absence is not contradiction, so nothing is reported.
     :param imag_freq_cm1: Magnitude of the imaginary mode, if reported.
-        Only consulted for ``vdw_complex``, to tell a soft intermolecular
-        artifact from a genuine reaction coordinate.
+        For ``vdw_complex`` it tells a soft intermolecular artifact from a
+        genuine reaction coordinate. For ``minimum`` it is the magnitude
+        of the only mode when ``n_imag == 1`` and no mode list is given.
     :param location: Path to the offending payload element.
+    :param imaginary_modes: The imaginary modes of the deposited list.
+        Used for ``minimum`` only. When fewer magnitudes are available
+        than ``n_imag`` counts, the rest are not assumed soft and the
+        refusal stands.
+    :param tau: The protocol-derived threshold, from :func:`resolve_tau`.
+        Used for ``minimum`` only; ``None`` selects the "protocol not
+        recorded" row, exactly as the transition-state rule does.
     :returns: Findings, possibly empty. Never raises.
     """
     if n_imag is None or n_imag <= 0:
         return []
 
     if kind == StationaryPointKind.minimum:
-        return [_minimum_contradiction(n_imag, location=location)]
+        return [
+            _minimum_finding(
+                n_imag,
+                imag_freq_cm1,
+                imaginary_modes,
+                tau if tau is not None else resolve_tau(),
+                location=location,
+            )
+        ]
 
     if kind == StationaryPointKind.vdw_complex:
         return _vdw_complex_findings(n_imag, imag_freq_cm1, location=location)
@@ -621,8 +650,61 @@ def evaluate_species_entry_frequency(
     return []
 
 
+def _minimum_magnitudes(
+    n_imag: int,
+    imag_freq_cm1: float | None,
+    imaginary_modes: Sequence[ImaginaryMode] | None,
+) -> list[float] | None:
+    """Magnitudes of every imaginary mode of a minimum, or ``None``.
+
+    ``None`` means the evidence cannot account for all ``n_imag`` modes,
+    and a mode nobody measured is never assumed soft.
+    """
+    if imaginary_modes:
+        magnitudes = [mode.magnitude_cm1 for mode in imaginary_modes]
+    elif n_imag == 1 and imag_freq_cm1 is not None:
+        magnitudes = [abs(imag_freq_cm1)]
+    else:
+        return None
+    if len(magnitudes) < n_imag:
+        return None
+    return magnitudes
+
+
+def _minimum_finding(
+    n_imag: int,
+    imag_freq_cm1: float | None,
+    imaginary_modes: Sequence[ImaginaryMode] | None,
+    tau: TauResolution,
+    *,
+    location: str,
+) -> StationaryPointFinding:
+    magnitudes = _minimum_magnitudes(n_imag, imag_freq_cm1, imaginary_modes)
+    if magnitudes is not None and all(m < tau.tau_cm1 for m in magnitudes):
+        listed = ", ".join(f"{m:.1f}" for m in sorted(magnitudes, reverse=True))
+        return StationaryPointFinding(
+            tier=ValidationTier.warn,
+            code=W_MINIMUM_IMAGINARY_MODES_BELOW_TAU,
+            location=location,
+            tau=tau,
+            message=(
+                f"{location}: species_entry_kind is 'minimum' and the "
+                f"frequency analysis reports {n_imag} imaginary mode"
+                f"{'s' if n_imag != 1 else ''} ({listed} cm-1), all below "
+                f"tau = {tau.tau_cm1:.0f} cm-1, where the sign of the "
+                f"curvature is not determined at this protocol "
+                f"({W_MINIMUM_IMAGINARY_MODES_BELOW_TAU}). The record is "
+                f"accepted, with tau recorded alongside it. {tau.reason} "
+                f"{_REMEDIATION}"
+            ),
+        )
+    return _minimum_contradiction(
+        n_imag, tau=tau, assessable=magnitudes is not None, location=location
+    )
+
+
 def _minimum_contradiction(
-    n_imag: int, *, location: str
+    n_imag: int, *, tau: TauResolution, assessable: bool, location: str
 ) -> StationaryPointFinding:
     if n_imag == 1:
         detail = (
@@ -636,20 +718,32 @@ def _minimum_contradiction(
             f"({W_N_IMAG_HIGHER_ORDER_SADDLE}) — neither a minimum nor a "
             f"transition state."
         )
+    if assessable:
+        why = (
+            f"At least one is at or above tau = {tau.tau_cm1:.0f} cm-1, so "
+            f"at this protocol the negative curvature is real rather than "
+            f"numerical noise. "
+        )
+    else:
+        why = (
+            "The magnitude of every imaginary mode was not deposited, so "
+            "they cannot be judged against tau and none is assumed soft. "
+        )
     return StationaryPointFinding(
         tier=ValidationTier.block,
         code=W_N_IMAG_CONTRADICTS_MINIMUM,
         location=location,
+        tau=tau,
         message=(
             f"{location}: species_entry_kind is 'minimum' but the frequency "
             f"analysis reports {n_imag} imaginary mode"
             f"{'s' if n_imag != 1 else ''} "
-            f"({W_N_IMAG_CONTRADICTS_MINIMUM}). A minimum has zero imaginary "
-            f"modes by definition. {detail} Re-optimise on a tighter "
-            f"integration grid, or declare the entry as what it actually is. "
-            f"If the soft mode is intermolecular and this is a van der Waals "
-            f"complex, declare species_entry_kind='vdw_complex', which "
-            f"records the mode with a warning instead."
+            f"({W_N_IMAG_CONTRADICTS_MINIMUM}). {why}{detail} "
+            f"Re-optimise on a tighter integration grid, or declare the "
+            f"entry as what it actually is. If the soft mode is "
+            f"intermolecular and this is a van der Waals complex, declare "
+            f"species_entry_kind='vdw_complex', which records the mode with "
+            f"a warning instead. {tau.reason}"
         ),
     )
 
@@ -1069,6 +1163,7 @@ __all__ = [
     "TauBasis",
     "TauResolution",
     "ValidationTier",
+    "W_MINIMUM_IMAGINARY_MODES_BELOW_TAU",
     "W_N_IMAG_CONTRADICTS_MINIMUM",
     "W_N_IMAG_HIGHER_ORDER_SADDLE",
     "W_N_IMAG_SUGGESTS_TS",

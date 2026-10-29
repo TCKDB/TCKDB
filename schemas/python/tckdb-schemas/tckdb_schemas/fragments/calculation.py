@@ -20,6 +20,7 @@ from tckdb_schemas.enums import (
     IRCDirection,
     PathSearchMethod,
     SCFStabilityStatus,
+    StationaryPointKind,
 )
 from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
 from tckdb_schemas.fragments.calculation_origin import CalculationOriginMetadata
@@ -36,6 +37,7 @@ from tckdb_schemas.stationary_point import (
     ImaginaryMode,
     StationaryPointFinding,
     TauResolution,
+    evaluate_species_entry_frequency,
     evaluate_transition_state_frequency,
     resolve_tau_from_parameters,
 )
@@ -1504,6 +1506,26 @@ class CalculationWithResultsPayload(CalculationPayload):
             reaction_coordinate_mode_index=(
                 self.freq_result.reaction_coordinate_mode_index
             ),
+            tau=self.tau_resolution(),
+        )
+
+    def species_entry_frequency_findings(
+        self, kind: StationaryPointKind, *, location: str
+    ) -> list[StationaryPointFinding]:
+        """Judge this calculation's frequency evidence against a declared species-entry kind.
+
+        The adapter every species-entry path uses, so a declared minimum
+        is judged against the same tau (from this calculation's own
+        recorded parameters) however it was deposited.
+        """
+        if self.freq_result is None:
+            return []
+        return evaluate_species_entry_frequency(
+            kind,
+            self.freq_result.n_imag,
+            self.freq_result.imag_freq_cm1,
+            location=location,
+            imaginary_modes=self.freq_result.imaginary_modes(),
             tau=self.tau_resolution(),
         )
 

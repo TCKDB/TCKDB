@@ -18,6 +18,7 @@ from tckdb_schemas.enums import (
     CalculationQuality,
     CalculationType,
     ImaginaryModeDisposition,
+    StationaryPointKind,
 )
 from tckdb_schemas.fragments.artifact import ArtifactIn
 from tckdb_schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
@@ -49,6 +50,7 @@ from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 from tckdb_schemas.sp_energy_components import SP_ENERGY_COMPONENTS_DESCRIPTION, check_sp_energy_components
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
+    evaluate_species_entry_frequency,
     evaluate_transition_state_frequency,
     resolve_tau_from_parameters,
 )
@@ -305,6 +307,31 @@ def transition_state_frequency_findings(
         reaction_coordinate_mode_index=(
             freq_result.reaction_coordinate_mode_index
         ),
+        tau=resolve_tau_from_parameters(
+            (observation.canonical_key, observation.canonical_value)
+            for observation in (calc_in.parameters or ())
+        ),
+    )
+
+
+def species_entry_frequency_findings(
+    calc_in: "CalculationIn", kind: StationaryPointKind, *, location: str
+) -> list[StationaryPointFinding]:
+    """Judge a bundle-local calculation's frequency evidence against a species-entry kind.
+
+    The bundle form of
+    :meth:`CalculationWithResultsPayload.species_entry_frequency_findings`:
+    one owner, one tau resolution, however the entry was deposited.
+    """
+    freq_result = freq_result_of(calc_in)
+    if freq_result is None:
+        return []
+    return evaluate_species_entry_frequency(
+        kind,
+        freq_result.n_imag,
+        freq_result.imag_freq_cm1,
+        location=location,
+        imaginary_modes=freq_result.imaginary_modes(),
         tau=resolve_tau_from_parameters(
             (observation.canonical_key, observation.canonical_value)
             for observation in (calc_in.parameters or ())

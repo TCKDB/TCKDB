@@ -49,6 +49,7 @@ from tckdb_schemas.stationary_point import (
     TAU_PARAMETER_KEYS,
     TAU_PROTOCOL_NOT_RECORDED_CM1,
     TS_IMAGINARY_FREQUENCY_MIN_CM1,
+    W_MINIMUM_IMAGINARY_MODES_BELOW_TAU,
     W_N_IMAG_CONTRADICTS_MINIMUM,
     W_N_IMAG_HIGHER_ORDER_SADDLE,
     W_N_IMAG_SUGGESTS_TS,
@@ -143,10 +144,13 @@ _TAU_THRESHOLD = ProvenanceThreshold(
         f"``protocol_not_recorded`` as the basis. The fallback is deliberately "
         f"the *conservative* row rather than the analytic one: assuming the "
         f"better case would flag genuine quadrature noise as a real "
-        f"higher-order saddle. Crucially, tau never decides between blocking "
-        f"and warning — every blocking rule here is a contract about what the "
-        f"record says, not about magnitude — so missing provenance changes how "
-        f"loudly a record is flagged and never whether it is accepted."
+        f"higher-order saddle. For a transition state tau never decides between "
+        f"blocking and warning — every blocking rule there is a contract about "
+        f"what the record says, not about magnitude — so missing provenance "
+        f"changes how loudly a record is flagged and never whether it is "
+        f"accepted. For a declared minimum tau is the line between the warning "
+        f"and the refusal, so missing provenance leaves that line at "
+        f"{TAU_PROTOCOL_NOT_RECORDED_CM1:.0f} cm-1, the same conservative row."
     ),
     rationale=(
         "The Hessian noise floor is flat in omega-squared, not in omega, so "
@@ -248,18 +252,23 @@ CHECK_MINIMUM_ZERO_IMAGINARY_MODES = ScientificCheck(
     code=W_N_IMAG_CONTRADICTS_MINIMUM,
     asserts=(
         "A species entry declared a minimum has no imaginary vibrational "
-        "modes."
+        "mode at or above the tolerance of the protocol that produced it."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
     tier_rationale=(
-        "Definitional. A covalently bound minimum whose own frequency "
-        "evidence reports an imaginary mode is mislabelled: the correct "
-        "response is to re-optimise on a tighter integration grid or to "
-        "declare it as something else, so refusing the deposit rejects no "
-        "correct calculation."
+        "Definitional above the protocol's tolerance. A covalently bound "
+        "minimum whose own frequency evidence reports an imaginary mode at "
+        "or above tau is mislabelled: at that protocol the negative "
+        "curvature is real, so the correct response is to re-optimise or to "
+        "declare the entry as something else, and refusing the deposit "
+        "rejects no correct calculation. Below tau the protocol cannot tell "
+        "the sign of the curvature from zero, so refusing would reject "
+        "correct published calculations; that case is the warning declared "
+        "next, not a refusal."
     ),
-    adr="0008",
+    adr="0008, 0012",
+    thresholds=(_TAU_THRESHOLD,),
     enforced_by=(
         PythonCheck(
             evaluate_species_entry_frequency,
@@ -267,7 +276,10 @@ CHECK_MINIMUM_ZERO_IMAGINARY_MODES = ScientificCheck(
                 "One imaginary mode and two-or-more are folded into a single "
                 "blocking message that names "
                 f"``{W_N_IMAG_HIGHER_ORDER_SADDLE}`` for the higher-order "
-                "case. A stationary-point kind the module has not been taught "
+                "case. The refusal stands when any deposited mode is at or "
+                "above tau, and when the magnitudes of the modes were not "
+                "deposited (a mode nobody measured is never assumed soft). "
+                "A stationary-point kind the module has not been taught "
                 "about produces no findings — adding an enum member must be a "
                 "deliberate decision, not a default."
             ),
@@ -276,7 +288,8 @@ CHECK_MINIMUM_ZERO_IMAGINARY_MODES = ScientificCheck(
     escape_hatch=(
         "Declare ``species_entry_kind='vdw_complex'``, which records the same "
         "mode with a warning instead, or deposit the structure through a "
-        "transition-state payload if the single imaginary mode is real."
+        "transition-state payload if the single imaginary mode is real. A "
+        "mode below tau needs no escape: it is accepted with a warning."
     ),
 )
 
@@ -331,13 +344,15 @@ CHECK_TRANSITION_STATE_EXTRA_IMAGINARY_MODES = ScientificCheck(
     group="Stationary points",
     sort_key=4,
     code=(
+        W_MINIMUM_IMAGINARY_MODES_BELOW_TAU,
         W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU,
         W_TS_EXTRA_IMAGINARY_MODE_ABOVE_TAU,
         W_TS_EXTRA_IMAGINARY_MODES_NOT_ASSESSABLE,
     ),
     asserts=(
         "A transition state's imaginary modes other than the reaction "
-        "coordinate are judged by magnitude against a tolerance read from the "
+        "coordinate, and every imaginary mode on a species entry declared a "
+        "minimum, are judged by magnitude against a tolerance read from the "
         "protocol that produced them, not by counting them."
     ),
     tier=CheckTier.warn,
@@ -371,6 +386,22 @@ CHECK_TRANSITION_STATE_EXTRA_IMAGINARY_MODES = ScientificCheck(
                 "tau that decided it are persisted on ``calc_freq_result`` "
                 "rather than recomputed, so a later parser improvement cannot "
                 "silently re-label historical records."
+            ),
+        ),
+        PythonCheck(
+            evaluate_species_entry_frequency,
+            note=(
+                "The minimum case of the same judgement, added 2026-10-29. "
+                "When every imaginary mode of a declared minimum is below tau "
+                f"the record is accepted with "
+                f"``{W_MINIMUM_IMAGINARY_MODES_BELOW_TAU}``; at or above tau "
+                "the blocking minimum rule above still refuses it. The tau "
+                "that decided it is persisted on ``calc_freq_result`` "
+                "(``imaginary_mode_tau_cm1`` and its basis) with the "
+                "structural flag stored as false, meaning judged and not "
+                "flagged, rather than recomputed later. The read-time "
+                "imaginary-mode projections report beside the warning and "
+                "never gate it."
             ),
         ),
     ),

@@ -35,7 +35,6 @@ from tckdb_schemas.statmech_bits import (
 )
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
-    evaluate_species_entry_frequency,
     raise_for_blocking_findings,
 )
 from tckdb_schemas.structure_declarations import (
@@ -464,11 +463,8 @@ class ConformerUploadRequest(SchemaBase):
             if calc.freq_result is None:
                 continue
             findings.extend(
-                evaluate_species_entry_frequency(
-                    kind,
-                    calc.freq_result.n_imag,
-                    calc.freq_result.imag_freq_cm1,
-                    location=f"{label}.freq_result",
+                calc.species_entry_frequency_findings(
+                    kind, location=f"{label}.freq_result"
                 )
             )
             findings.extend(

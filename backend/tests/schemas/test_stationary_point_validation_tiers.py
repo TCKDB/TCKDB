@@ -46,6 +46,7 @@ from tckdb_schemas.stationary_point import (
     TAU_ANALYTIC_TIGHT_CM1,
     TAU_PROTOCOL_NOT_RECORDED_CM1,
     TS_IMAGINARY_FREQUENCY_MIN_CM1,
+    W_MINIMUM_IMAGINARY_MODES_BELOW_TAU,
     W_N_IMAG_CONTRADICTS_MINIMUM,
     W_N_IMAG_HIGHER_ORDER_SADDLE,
     W_N_IMAG_SUGGESTS_TS,
@@ -129,15 +130,106 @@ class TestSpeciesEntryEvaluator:
         assert _codes(findings) == {W_N_IMAG_CONTRADICTS_MINIMUM}
         assert "calc" in findings[0].message
 
-    def test_minimum_blocking_is_magnitude_blind(self) -> None:
-        """ADR 0008 forbids a magnitude threshold on a blocking check."""
-        soft = evaluate_species_entry_frequency(
-            SchemasStationaryPointKind.minimum, 1, _SOFT_CM1, location="c"
+    # -- ADR 0012 note, 2026-10-29: a minimum is judged by magnitude against tau --
+
+    def test_a_soft_mode_on_a_minimum_is_accepted_with_a_warning(self) -> None:
+        """The reproduction: -15 cm-1, no recorded protocol. Refused before."""
+        findings = evaluate_species_entry_frequency(
+            SchemasStationaryPointKind.minimum, 1, -15.0, location="c"
         )
-        stiff = evaluate_species_entry_frequency(
-            SchemasStationaryPointKind.minimum, 1, _STIFF_CM1, location="c"
+        assert _tiers(findings) == {ValidationTier.warn}
+        assert _codes(findings) == {W_MINIMUM_IMAGINARY_MODES_BELOW_TAU}
+        (finding,) = findings
+        assert finding.tau is not None
+        assert finding.tau.tau_cm1 == TAU_PROTOCOL_NOT_RECORDED_CM1
+        assert finding.tau.basis is TauBasis.protocol_not_recorded
+        # Judged and not flagged: this never sets the structural flag.
+        assert finding.structural_flag is False
+
+    def test_a_stiff_mode_on_a_minimum_still_blocks(self) -> None:
+        findings = evaluate_species_entry_frequency(
+            SchemasStationaryPointKind.minimum, 1, -80.0, location="c"
         )
-        assert _tiers(soft) == _tiers(stiff) == {ValidationTier.block}
+        assert _tiers(findings) == {ValidationTier.block}
+        assert _codes(findings) == {W_N_IMAG_CONTRADICTS_MINIMUM}
+
+    def test_the_boundary_is_tau_and_a_mode_at_tau_blocks(self) -> None:
+        tau = resolve_tau()
+        below = evaluate_species_entry_frequency(
+            SchemasStationaryPointKind.minimum,
+            1,
+            -(tau.tau_cm1 - 0.1),
+            location="c",
+            tau=tau,
+        )
+        at = evaluate_species_entry_frequency(
+            SchemasStationaryPointKind.minimum, 1, -tau.tau_cm1, location="c", tau=tau
+        )
+        assert _tiers(below) == {ValidationTier.warn}
+        assert _tiers(at) == {ValidationTier.block}
+
+    def test_the_boundary_moves_with_the_recorded_protocol(self) -> None:
+        """-20 cm-1 is noise with no protocol (tau 50) and real curvature under
+        an analytic Hessian on a tight grid (tau 15)."""
+        tight = resolve_tau(
+            HessianMethod.analytic, grid_quality="ultrafine", opt_convergence="tight"
+        )
+        unrecorded = evaluate_species_entry_frequency(
+            SchemasStationaryPointKind.minimum, 1, -20.0, location="c"
+        )
+        under_tight = evaluate_species_entry_frequency(
+            SchemasStationaryPointKind.minimum, 1, -20.0, location="c", tau=tight
+        )
+        assert _tiers(unrecorded) == {ValidationTier.warn}
+        assert _tiers(under_tight) == {ValidationTier.block}
+        # The refusal names the tau that decided it.
+        assert under_tight[0].tau == tight
+        assert "tau = 15 cm-1" in under_tight[0].message
+
+    def test_several_soft_modes_are_accepted_when_all_are_listed(self) -> None:
+        modes = [ImaginaryMode(-12.0, mode_index=1), ImaginaryMode(-9.0, mode_index=2)]
+        findings = evaluate_species_entry_frequency(
+            SchemasStationaryPointKind.minimum,
+            2,
+            -12.0,
+            location="c",
+            imaginary_modes=modes,
+        )
+        assert _codes(findings) == {W_MINIMUM_IMAGINARY_MODES_BELOW_TAU}
+
+    def test_one_stiff_mode_among_soft_ones_blocks(self) -> None:
+        modes = [ImaginaryMode(-12.0, mode_index=1), ImaginaryMode(-90.0, mode_index=2)]
+        findings = evaluate_species_entry_frequency(
+            SchemasStationaryPointKind.minimum,
+            2,
+            -12.0,
+            location="c",
+            imaginary_modes=modes,
+        )
+        assert _tiers(findings) == {ValidationTier.block}
+
+    def test_a_mode_nobody_measured_is_never_assumed_soft(self) -> None:
+        """Counted but not described: two modes, one magnitude."""
+        one_listed = evaluate_species_entry_frequency(
+            SchemasStationaryPointKind.minimum,
+            2,
+            -12.0,
+            location="c",
+            imaginary_modes=[ImaginaryMode(-12.0, mode_index=1)],
+        )
+        no_magnitude = evaluate_species_entry_frequency(
+            SchemasStationaryPointKind.minimum, 1, None, location="c"
+        )
+        assert _tiers(one_listed) == {ValidationTier.block}
+        assert _tiers(no_magnitude) == {ValidationTier.block}
+
+    def test_a_vdw_complex_keeps_its_own_warning_path(self) -> None:
+        findings = evaluate_species_entry_frequency(
+            SchemasStationaryPointKind.vdw_complex, 1, -15.0, location="c"
+        )
+        assert _codes(findings) == {W_N_IMAG_CONTRADICTS_MINIMUM}
+        assert _tiers(findings) == {ValidationTier.warn}
+        assert all(f.tau is None for f in findings)
 
     @pytest.mark.parametrize("n_imag", [1, 2, 7])
     def test_vdw_complex_never_blocks(self, n_imag: int) -> None:

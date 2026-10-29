@@ -483,7 +483,10 @@ def test_a_minimum_claim_is_supported_only_by_no_imaginary_mode_or_by_every_one_
     # Every imaginary mode below tau (the default tau is 50 cm-1): supported, and the owner's warning is an advisory.
     soft = minimum_verdict(1, (1, -12.0, None), kind=kind, imag_freq=-12.0)
     assert soft.physically_eligible and soft.claim.supported
-    assert "stationary_point_finding:n_imag_contradicts_minimum" in soft.advisory and "imaginary_modes_below_tau" in soft.advisory
+    # The owner's own finding differs by kind: a minimum below tau is the accepted-with-warning case (ADR 0012
+    # note, 2026-10-29); a van der Waals complex keeps its original warning.
+    owner_code = "minimum_imaginary_modes_below_tau" if kind == "minimum" else "n_imag_contradicts_minimum"
+    assert f"stationary_point_finding:{owner_code}" in soft.advisory and "imaginary_modes_below_tau" in soft.advisory
     # A stiff mode is real negative curvature (ADR 0012): the owner's warning tier is not a verdict that this is a minimum.
     stiff = minimum_verdict(1, (1, -420.0, None), kind=kind, imag_freq=-420.0)
     assert stiff.blocking == ("curvature_contradicts_claim",) and not stiff.physically_eligible
