@@ -767,6 +767,11 @@ _NOT_REPRESENTED_TEXT = {
         "a cyclic allene in a ring of eight or fewer atoms is not represented, whatever the geometry: both "
         "mirror-image forms are stored in one entry"
     ),
+    stereo.R_CUMULENE_TIED_END: (
+        "a cumulated chain has a pair of stereo-bearing arms at one end (for example two allenyl or two carbinol "
+        "groups), so its configuration depends on the senses of those arms, which is not represented: its "
+        "configurations are stored in one entry"
+    ),
     stereo.R_ALLENE_DEPENDENT: (
         "a stereocentre or double bond whose stereogenicity depends on the sense of an allene is not "
         "represented: its configurations are stored in one entry"

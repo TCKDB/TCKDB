@@ -52,6 +52,7 @@ export function stereoChip(label: string): string {
 const NOT_REPRESENTED_TEXT: Record<string, string> = {
     axial_small_ring: "cyclic allene (ring of 8 or fewer) stereo not represented",
     allene_dependent: "stereo that depends on an allene's sense not represented",
+    cumulene_tied_end: "cumulene with stereo-bearing arms at one end: stereo not represented",
 }
 
 /**

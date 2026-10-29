@@ -31,7 +31,7 @@ dataset must never require a code release.
 - Not read: SMILES marks on an allene (RDKit drops them on sanitising and no validated reader exists), `/` `\` marks on a cumulene (validated against InChI for
   butatrienes, but InChI writes no stereo layer for five cumulated double bonds, so the reader is not shipped), and cyclic allenes in rings of eight or fewer atoms.
 - `species_entry_stereo_not_represented` now means only: the symmetry cap, a cyclic allene in a ring of eight or fewer, a centre or double bond that depends
-  on an allene's sense (`CC=C=CC(C)C=C=CC` has four stereoisomers but three possible descriptors), and an allene or cumulene deposited with only SMILES marks.
+  on an allene's sense (`CC=C=CC(C)C=C=CC` has four stereoisomers but three possible descriptors), a cumulated chain with a tied pair of stereo-bearing arms at one end (`cumulene_tied_end`, a never-settled `?` element), and an allene or cumulene deposited with only SMILES marks.
   A `?` that a geometry or a label could settle is `species_entry_stereo_unresolved`. The read field `stereo_not_represented` and the CHEMKIN marker follow.
 - Migration `e5b2c8d1f947`: the descriptor check constraint accepts `Ra` / `Sa`; every live entry with a `?` allene or cumulene is re-read from its linked
   geometries and filled in place when they agree (printed as `entry ref: old -> new`, or `0 changed`). Entries whose geometries disagree, entries without a

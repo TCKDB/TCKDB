@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from rdkit import Chem
 from sqlalchemy import text
 
 from app.api.error_contract import CodedValueError
@@ -26,6 +27,7 @@ from app.chemistry import stereo
 from app.chemistry.species import identity_mol_from_smiles
 
 _CHAIN = ("axial", "cumulene")
+_CUMULATED = Chem.MolFromSmarts("[*]=[*]=[*]")
 
 
 @dataclass
@@ -114,36 +116,42 @@ def fill_cumulene_stereo(bind, *, revision: str, apply: bool = True) -> FillRepo
             "       e.electronic_state_kind::text AS state_kind, e.electronic_state_label, e.term_symbol, "
             "       e.isotope_key, mol_to_smiles(e.mol)::text AS mol_smiles, s.smiles AS species_smiles "
             "FROM species_entry e JOIN species s ON s.id = e.species_id "
-            "WHERE e.stereo_descriptor LIKE '%?%' AND s.kind::text = 'molecule' ORDER BY e.id"
+            "WHERE e.stereo_descriptor IS NOT NULL AND s.kind::text = 'molecule' ORDER BY e.id"
         )
     ).all()
     planned: list[tuple[object, stereo.ResolvedStereo]] = []
     for row in rows:
+        smiles = row.mol_smiles or row.species_smiles
+        probe = Chem.MolFromSmiles(smiles)
+        if probe is None or not probe.HasSubstructMatch(_CUMULATED):
+            continue  # no cumulated chain: nothing this step looks at
         try:
-            frame = stereo.frame_from_mol(identity_mol_from_smiles(row.mol_smiles or row.species_smiles))
+            frame = stereo.frame_from_mol(identity_mol_from_smiles(smiles))
         except (ValueError, CodedValueError):
             continue
         tokens = row.stereo_descriptor.split(",")
         settleable = [e for e in frame.elements if e.kind in _CHAIN and not e.never_settled]
         mismatch = len(tokens) != len(frame.elements)
-        if not settleable and not mismatch:
+        if (not settleable or "?" not in tokens) and not mismatch:
             continue
         report.examined += 1
         if row.merged_into is not None:
             report.merged_skipped.append(row.public_ref)
             continue
         if mismatch:
-            if any(t != stereo.UNKNOWN for t in tokens):
-                report.unreadable.append(
-                    f"{row.public_ref}: descriptor {row.stereo_descriptor!r} has {len(tokens)} token(s) but the "
-                    f"molecule now has {len(frame.elements)} stereo element(s)"
-                )
-                continue
-            label = None  # all unknown: nothing to carry over
-        else:
-            label = row.stereo_descriptor
+            # The key's shape is never rewritten here (a molecule whose cumulated chain now counts as an element,
+            # for instance one with a tied stereo-bearing pair at an end, has a longer key than the stored one):
+            # the entry is listed and left, and a curator decides.
+            report.unreadable.append(
+                f"{row.public_ref}: descriptor no longer fits: {row.stereo_descriptor!r} has {len(tokens)} token(s) "
+                f"but the molecule now has {len(frame.elements)} stereo element(s)"
+            )
+            continue
+        label = row.stereo_descriptor
+        if "?" not in tokens:
+            continue
         geometries = _geometries(bind, row.id)
-        if not geometries and not mismatch:
+        if not geometries:
             report.without_geometry.append(row.public_ref)
             continue
         try:

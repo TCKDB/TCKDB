@@ -127,9 +127,10 @@ def structure_comment(
       absent for an achiral species (descriptor ``NULL``);
     * ``STEREO_RESOLUTION=partial|unresolved`` marks an entry in which some element is still
       unknown, so a ``?`` is never read as a statement;
-    * ``STEREO_NOT_REPRESENTED=axial_small_ring|allene_dependent`` marks an element no data can
-      settle (a cyclic allene in a ring of eight or fewer, or a centre or double bond that depends on
-      an allene's sense), whose isomers share the entry.
+    * ``STEREO_NOT_REPRESENTED=axial_small_ring|allene_dependent|cumulene_tied_end`` marks an element
+      no data can settle (a cyclic allene in a ring of eight or fewer, a centre or double bond that depends on
+      an allene's sense, or a cumulated chain with a tied pair of stereo-bearing arms at one end), whose
+      isomers share the entry.
 
     The first token after ``SMILES=`` is the structure; a reader that takes only that token (the
     CHEMKIN importer does) ignores the rest.

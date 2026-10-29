@@ -149,6 +149,8 @@ DESCRIPTOR_PATTERN = r"^(Ra|Sa|[RSrsEZez?-])(,(Ra|Sa|[RSrsEZez?-]))*$"
 
 #: Reasons an element is stated ``?`` that no further data would settle (``ResolvedStereo.unrepresented``).
 R_AXIAL_SMALL_RING = "axial_small_ring"
+#: A cumulated chain with a tied pair of stereo-bearing substituents at an end: stereogenic through the arms' senses.
+R_CUMULENE_TIED_END = "cumulene_tied_end"
 R_ALLENE_DEPENDENT = "allene_dependent"
 R_AXIAL_MARKS = "axial_marks"
 R_CUMULENE_MARKS = "cumulene_marks"
@@ -203,14 +205,31 @@ class StereoElement:
     chain: tuple[int, ...] = ()
     #: Chain elements only: size of the smallest ring through the whole chain, 0 when acyclic.
     ring_size: int = 0
+    #: Chain elements only: an end carries a tied pair of stereo-bearing substituents (``CC=C=CC(C=C=CC)=C=C(C)Cl``).
+    #: The chain is then stereogenic through the senses of those arms, which needs a token we do not compute.
+    tied_end: bool = False
 
     @property
     def never_settled(self) -> bool:
         """True when no data can settle this element (it is stated ``?`` always)."""
 
-        return self.kind == _ALLENE_DEPENDENT or (
-            self.kind == _AXIAL and 0 < self.ring_size <= _SMALL_RING_MAX
+        return (
+            self.kind == _ALLENE_DEPENDENT
+            or self.tied_end
+            or (self.kind == _AXIAL and 0 < self.ring_size <= _SMALL_RING_MAX)
         )
+
+    @property
+    def reason(self) -> str | None:
+        """The ``not_represented`` reason of a never-settled element, else ``None``."""
+
+        if self.kind == _ALLENE_DEPENDENT:
+            return R_ALLENE_DEPENDENT
+        if self.tied_end:
+            return R_CUMULENE_TIED_END
+        if self.never_settled:
+            return R_AXIAL_SMALL_RING
+        return None
 
 
 @dataclass(frozen=True)
@@ -309,7 +328,7 @@ def constitution_mol(marked: Chem.Mol) -> Chem.Mol:
 
 
 def _cumulated_bonds(
-    mol_h: Chem.Mol, ranks_h: list[int], ranks: list[int]
+    mol_h: Chem.Mol, ranks_h: list[int], ranks: list[int], potential=()
 ) -> tuple[set[int], list[StereoElement]]:
     """Double bonds that belong to a cumulated chain, and the chains that are stereo elements.
 
@@ -342,13 +361,15 @@ def _cumulated_bonds(
     cumulated: set[int] = set()
     elements: list[StereoElement] = []
     rings = [set(r) for r in mol_h.GetRingInfo().AtomRings()]
+    #: (ends, other substituents per end, path, kind, ring size) of every chain whose ends can be stereogenic
+    candidates: list[tuple[list[int], list[list[int]], list[int], str, int]] = []
     for members in chains.values():
         if len(members) < 2:
             continue
         cumulated.update(members)
         member_set = set(members)
         ends = [a for a, bonds in by_atom.items() if len([x for x in bonds if x in member_set]) == 1]
-        capable = 0
+        end_others: list[list[int]] = []
         for end in ends:
             atom = mol_h.GetAtomWithIdx(end)
             chain_neighbours = {
@@ -356,34 +377,65 @@ def _cumulated_bonds(
                 for n in atom.GetNeighbors()
                 if mol_h.GetBondBetweenAtoms(end, n.GetIdx()).GetIdx() in member_set
             }
-            others = [n.GetIdx() for n in atom.GetNeighbors() if n.GetIdx() not in chain_neighbours]
-            if len(others) == 2 and ranks_h[others[0]] != ranks_h[others[1]]:
-                capable += 1
-        if capable == 2:
-            path = [ends[0]]
-            previous = -1
-            while path[-1] != ends[1]:
-                here = path[-1]
-                step = next(
-                    n.GetIdx()
-                    for n in mol_h.GetAtomWithIdx(here).GetNeighbors()
-                    if n.GetIdx() != previous
-                    and mol_h.GetBondBetweenAtoms(here, n.GetIdx()).GetIdx() in member_set
-                )
-                previous = here
-                path.append(step)
-            ring_size = min((len(r) for r in rings if set(path) <= r), default=0)
-            low, high = sorted((ranks[ends[0]], ranks[ends[1]]))
-            kind = _AXIAL if len(members) % 2 == 0 else _CUMULENE
-            elements.append(
-                StereoElement(
-                    kind,
-                    (ends[0], ends[1]),
-                    (low, 2 if kind == _AXIAL else 3, high),
-                    chain=tuple(path),
-                    ring_size=ring_size,
-                )
+            end_others.append([n.GetIdx() for n in atom.GetNeighbors() if n.GetIdx() not in chain_neighbours])
+        if len(ends) != 2 or any(len(o) != 2 for o in end_others):
+            continue
+        path = [ends[0]]
+        previous = -1
+        while path[-1] != ends[1]:
+            here = path[-1]
+            step = next(
+                n.GetIdx()
+                for n in mol_h.GetAtomWithIdx(here).GetNeighbors()
+                if n.GetIdx() != previous and mol_h.GetBondBetweenAtoms(here, n.GetIdx()).GetIdx() in member_set
             )
+            previous = here
+            path.append(step)
+        ring_size = min((len(r) for r in rings if set(path) <= r), default=0)
+        kind = _AXIAL if len(members) % 2 == 0 else _CUMULENE
+        candidates.append((ends, end_others, path, kind, ring_size))
+
+    def element(ends, path, kind, ring_size, tied_end):
+        low, high = sorted((ranks[ends[0]], ranks[ends[1]]))
+        return StereoElement(
+            kind,
+            (ends[0], ends[1]),
+            (low, 2 if kind == _AXIAL else 3, high),
+            chain=tuple(path),
+            ring_size=ring_size,
+            tied_end=tied_end,
+        )
+
+    # Stereo content: every ordinary centre and double bond RDKit lists, plus the chains accepted so far.
+    content: set[int] = set()
+    for info in potential:
+        if info.type == Chem.StereoType.Atom_Tetrahedral:
+            content.add(info.centeredOn)
+        elif info.type == Chem.StereoType.Bond_Double and info.centeredOn not in cumulated:
+            bond = mol_h.GetBondWithIdx(info.centeredOn)
+            content.update((bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()))
+    pending = []
+    for ends, end_others, path, kind, ring_size in candidates:
+        tied = [ranks_h[o[0]] == ranks_h[o[1]] for o in end_others]
+        if not any(tied):
+            elements.append(element(ends, path, kind, ring_size, False))
+            content.update(path)
+        else:
+            pending.append((ends, end_others, path, kind, ring_size, tied))
+    changed = True
+    while changed and pending:
+        changed = False
+        for item in list(pending):
+            ends, end_others, path, kind, ring_size, tied = item
+            ok = all(
+                (not is_tied) or any(_branch(mol_h, m, end) & content for m in others)
+                for end, others, is_tied in zip(ends, end_others, tied, strict=True)
+            )
+            if ok:
+                elements.append(element(ends, path, kind, ring_size, True))
+                content.update(path)
+                pending.remove(item)
+                changed = True
     return cumulated, elements
 
 
@@ -545,13 +597,8 @@ def unrepresented_stereo_kinds(smiles: str) -> tuple[str, ...]:
         frame = frame_from_mol(identity_mol_from_smiles(smiles))
     except ValueError:
         return ()
-    reasons = set()
-    for element in frame.elements:
-        if element.kind == _ALLENE_DEPENDENT:
-            reasons.add(R_ALLENE_DEPENDENT)
-        elif element.never_settled:
-            reasons.add(R_AXIAL_SMALL_RING)
-    return tuple(r for r in (R_AXIAL_SMALL_RING, R_ALLENE_DEPENDENT) if r in reasons)
+    reasons = {e.reason for e in frame.elements if e.reason}
+    return tuple(r for r in (R_AXIAL_SMALL_RING, R_ALLENE_DEPENDENT, R_CUMULENE_TIED_END) if r in reasons)
 
 
 def frame_from_mol(marked: Chem.Mol) -> StereoFrame:
@@ -569,9 +616,10 @@ def frame_from_mol(marked: Chem.Mol) -> StereoFrame:
     constitution_h = Chem.AddHs(constitution)
     ranks = list(Chem.CanonicalRankAtoms(constitution, breakTies=False))
     ranks_h = list(Chem.CanonicalRankAtoms(constitution_h, breakTies=False))
-    skipped, found = _cumulated_bonds(constitution_h, ranks_h, ranks)
+    potential = list(Chem.FindPotentialStereo(constitution_h))
+    skipped, found = _cumulated_bonds(constitution_h, ranks_h, ranks, potential)
 
-    for info in Chem.FindPotentialStereo(constitution_h):
+    for info in potential:
         if info.type == Chem.StereoType.Atom_Tetrahedral:
             atom = info.centeredOn
             found.append(StereoElement(_TETRAHEDRAL, (atom,), (ranks[atom], 0, ranks[atom])))
@@ -1335,11 +1383,11 @@ def parse_supplied_label(frame: StereoFrame, label: str) -> list[str]:
         )
     for position, (token, element) in enumerate(zip(tokens, frame.elements, strict=True), 1):
         if element.never_settled and token != UNKNOWN:
-            why = (
-                "depends on the sense of an allene, which is not represented"
-                if element.kind == _ALLENE_DEPENDENT
-                else f"is a cyclic allene in a ring of {_SMALL_RING_MAX} or fewer, which is not represented"
-            )
+            why = {
+                R_ALLENE_DEPENDENT: "depends on the sense of an allene, which is not represented",
+                R_CUMULENE_TIED_END: "is a cumulated chain with a pair of stereo-bearing arms at one end, which is not represented",
+                R_AXIAL_SMALL_RING: f"is a cyclic allene in a ring of {_SMALL_RING_MAX} or fewer, which is not represented",
+            }[element.reason or R_AXIAL_SMALL_RING]
             raise _label_invalid(f"token {position} ({token!r}) names an element that {why}; say '?'", expected)
         allowed = {
             _TETRAHEDRAL: TETRAHEDRAL_TOKENS,
@@ -1366,6 +1414,8 @@ def parse_supplied_label(frame: StereoFrame, label: str) -> list[str]:
 def _element_noun(element: StereoElement) -> str:
     if element.kind == _ALLENE_DEPENDENT:
         return "an element that depends on the sense of an allene (only '?')"
+    if element.tied_end:
+        return "a cumulated chain with stereo-bearing arms at one end (only '?')"
     if element.never_settled:
         return f"a cyclic allene in a ring of {_SMALL_RING_MAX} or fewer (only '?')"
     return {
@@ -1379,6 +1429,8 @@ def _element_noun(element: StereoElement) -> str:
 def _kind_text(element: StereoElement) -> str:
     if element.kind == _ALLENE_DEPENDENT:
         return "? (depends on an allene's sense, not represented)"
+    if element.tied_end:
+        return "? (cumulated chain with stereo-bearing arms at one end, not represented)"
     if element.never_settled:
         return f"? (cyclic allene, ring of {_SMALL_RING_MAX} or fewer, not represented)"
     return {
@@ -1530,7 +1582,7 @@ def _with_marks_only_reasons(frame: StereoFrame, tokens, result: ResolvedStereo)
     open_axial = sum(
         1 for e, t in zip(frame.elements, tokens, strict=True) if e.kind == _AXIAL and not e.never_settled and t == UNKNOWN
     )
-    open_cumulene = sum(1 for e, t in zip(frame.elements, tokens, strict=True) if e.kind == _CUMULENE and t == UNKNOWN)
+    open_cumulene = sum(1 for e, t in zip(frame.elements, tokens, strict=True) if e.kind == _CUMULENE and not e.never_settled and t == UNKNOWN)
     reasons = set(result.unrepresented)
     removed = 0
     if open_axial and allene_marks_present(frame):
@@ -1627,10 +1679,8 @@ def finish(frame: StereoFrame, tokens, *, with_smiles: bool = True) -> ResolvedS
     )
     reasons: list[str] = []
     for e in frame.elements:
-        if e.kind == _ALLENE_DEPENDENT and R_ALLENE_DEPENDENT not in reasons:
-            reasons.append(R_ALLENE_DEPENDENT)
-        elif e.never_settled and e.kind == _AXIAL and R_AXIAL_SMALL_RING not in reasons:
-            reasons.append(R_AXIAL_SMALL_RING)
+        if e.reason and e.reason not in reasons:
+            reasons.append(e.reason)
     reasons.sort()
     stated_unknown = 0
     if frame.cache.get("capped"):

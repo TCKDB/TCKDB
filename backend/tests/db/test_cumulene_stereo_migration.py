@@ -423,3 +423,21 @@ def test_a_stored_dash_on_an_allene_dependent_double_bond_is_listed_and_left(db_
     out = capsys.readouterr().out
     assert _state(db_session, entry)[0] == stored
     assert ref in out and "entry left as it was" in out
+
+
+TIED_END_ROWS = {
+    "allenyl arms": ("CC=C=CC(C=C=CC)=C=C(C)Cl", "?,?"),
+    "carbinol arms (letters, no ?)": ("CC(O)C(C(C)O)=C=C(C)Cl", "R,S"),
+    "carbinol arms on a butatriene": ("CC(O)C(C(C)O)=C=C=C(C)Cl", "R,S"),
+}
+
+
+@pytest.mark.parametrize("name", list(TIED_END_ROWS))
+def test_an_entry_whose_key_no_longer_fits_is_listed_and_its_shape_is_left(db_session, old_world, capsys, name) -> None:
+    smiles, stored = TIED_END_ROWS[name]
+    entry, ref = _entry(db_session, _species(db_session, smiles), smiles, stored, "resolved" if "?" not in stored else "unresolved")
+    old_world.upgrade()
+    out = capsys.readouterr().out
+    assert _state(db_session, entry)[0] == stored
+    assert ref in out and "descriptor no longer fits" in out
+    assert "0 filled" in out

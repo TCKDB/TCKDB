@@ -6,10 +6,10 @@ Allene `Ra`/`Sa` and odd-cumulene `E`/`Z` in the entry stereo descriptor.
 
 - Requires `tckdb-schemas>=0.141.0`.
 - Reads: `stereo_not_represented` on species-entry and structure-search records now lists `axial_small_ring` (a cyclic allene in a ring of eight or fewer) and
-  `allene_dependent` (a centre or double bond that depends on an allene's sense). It no longer lists `axial` or `cumulene`: an open-chain allene or cumulene with
+  `allene_dependent` (a centre or double bond that depends on an allene's sense) and `cumulene_tied_end` (a cumulated chain with a tied pair of stereo-bearing arms at one end). It no longer lists `axial` or `cumulene`: an open-chain allene or cumulene with
   a `?` is simply not settled yet.
 - `stereo_descriptor` and `stereo_label` can hold `Ra` / `Sa`. `stereo_smiles` is `null` for any entry with an allene or cumulene element.
-- A CHEMKIN export prints `STEREO_NOT_REPRESENTED=axial_small_ring|allene_dependent` in place of `axial|cumulene`.
+- A CHEMKIN export prints `STEREO_NOT_REPRESENTED=axial_small_ring|allene_dependent|cumulene_tied_end` in place of `axial|cumulene`.
 
 ## 0.178.0 - 2026-10-28
 

@@ -616,14 +616,10 @@ TIE_PATTERNS = {
 
 @pytest.mark.parametrize(("name", "case"), list(TIE_PATTERNS.items()))
 def test_every_tie_pattern_flags_a_dependent_element_and_never_deduces_a_dash(name: str, case) -> None:
-    import random
-
     smiles, dependent, count = case
     molecule = Chem.MolFromSmiles(smiles)
-    spellings = [smiles]
-    for seed in range(8):  # the answer must not depend on the order the atoms are written in
-        random.seed(seed)
-        spellings.append(Chem.MolToSmiles(molecule, doRandom=True))
+    # the answer must not depend on the order the atoms are written in (deterministic random spellings)
+    spellings = [smiles, *Chem.MolToRandomSmilesVect(molecule, 8, randomSeed=2718)]
     for spelling in spellings:
         f = frame(spelling)
         kinds = [e.kind for e in f.elements]
@@ -690,3 +686,77 @@ def test_the_ordinary_analogue_of_the_double_bond_case_really_has_both_ends_as_e
 
     labels = {",".join(t) for t, _ in stereo.stereoisomers(frame("CC(Cl)C(C(C)Cl)=C(C(C)O)C(C)O"))}
     assert len(labels) == 10 and any(label.startswith(("E", "Z", "e", "z")) for label in labels)
+
+
+# ---------------------------------------------------------------------------
+# A cumulated chain whose end carries a tied pair that bears stereo (review blocker)
+# ---------------------------------------------------------------------------
+
+TIED_END_CASES = {
+    "allenyl arms": "CC=C=CC(C=C=CC)=C=C(C)Cl",
+    "carbinol arms on an allene": "CC(O)C(C(C)O)=C=C(C)Cl",
+    "carbinol arms on a butatriene": "CC(O)C(C(C)O)=C=C=C(C)Cl",
+    "carbinol arms at both ends": "CC(O)C(C(C)O)=C=C(C(C)O)C(C)O",
+}
+
+
+@pytest.mark.parametrize(("name", "smiles"), list(TIED_END_CASES.items()))
+def test_a_chain_with_a_stereo_bearing_tied_pair_at_an_end_is_a_never_settled_element(name: str, smiles: str) -> None:
+    molecule = Chem.MolFromSmiles(smiles)
+    for spelling in (smiles, *Chem.MolToRandomSmilesVect(molecule, 6, randomSeed=99)):
+        f = frame(spelling)
+        tied = [e for e in f.elements if e.kind in ("axial", "cumulene") and e.tied_end]
+        assert len(tied) == 1 and tied[0].never_settled, (name, spelling)
+        isomers = stereo.stereoisomers(f)
+        position = f.elements.index(tied[0])
+        assert all(t[position] == "?" for t, _ in isomers), (name, spelling)
+        assert stereo.unrepresented_stereo_kinds(spelling) == (stereo.R_CUMULENE_TIED_END,)
+        r = resolve(spelling)
+        assert stereo.R_CUMULENE_TIED_END in r.unrepresented
+
+
+def test_the_allenyl_repro_has_the_central_allene_unknown_beside_the_two_read_axes() -> None:
+    f = frame("CC=C=CC(C=C=CC)=C=C(C)Cl")
+    assert sorted((e.kind, e.tied_end) for e in f.elements) == [("axial", False), ("axial", False), ("axial", True)]
+    labels = {",".join(t) for t, _ in stereo.stereoisomers(f)}
+    assert all(label.count("?") == 1 for label in labels) and len(labels) == 3
+
+
+def test_a_tied_pair_without_stereo_content_gives_no_element() -> None:
+    # two methyls at one end: an ordinary chain whose other end is distinct (read as usual), not a tied-end element
+    f = frame("CC=C=CC(C)=C=C(C)Cl")
+    assert [e.tied_end for e in f.elements] == [False, False]
+    assert not any(e.tied_end for e in frame("CC(C)=C=C(C)Cl").elements)
+    assert frame("CC(C)=C=C(C)C").elements == ()
+
+
+@pytest.mark.parametrize(("name", "smiles"), list(TIED_END_CASES.items()))
+def test_a_label_cannot_state_a_tied_end_element(name: str, smiles: str) -> None:
+    f = frame(smiles)
+    position = next(i for i, e in enumerate(f.elements) if e.tied_end)
+    tokens = ["R" if e.kind == "tetrahedral" else "Ra" for e in f.elements]
+    for token in ("Ra", "Sa", "E", "Z", "R", "-"):
+        tokens[position] = token
+        with pytest.raises(CodedValueError) as excinfo:
+            resolve(smiles, label=",".join(tokens))
+        assert excinfo.value.code == stereo.W_SPECIES_STEREO_LABEL_INVALID, (name, token)
+    tokens[position] = "?"
+    resolve(smiles, label=",".join(t if t != "R" else "?" for t in tokens))
+
+
+@pytest.mark.parametrize("smiles", ["CC=C=CC(C=C=CC)=C=C(C)Cl", "CC(O)C(C(C)O)=C=C(C)Cl"])
+def test_a_relaxed_geometry_leaves_the_tied_end_unknown_with_its_reason(smiles: str) -> None:
+    position = next(i for i, e in enumerate(frame(smiles).elements) if e.tied_end)
+    for seed in range(3):
+        m = _uff(smiles, seed)
+        for variant in (m, fx.mirror(m)):
+            r = resolve(smiles, geometries=[variant])
+            assert r.descriptor.split(",")[position] == "?"
+            assert stereo.R_CUMULENE_TIED_END in r.unrepresented
+            w = stereo_unresolved_warning(r)
+            assert w is not None and w.code == stereo.W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED
+            assert "stereo-bearing arms" in w.message
+
+
+def test_an_unrelated_ring_allene_is_not_mistaken_for_a_tied_end() -> None:
+    assert not any(e.tied_end for e in frame("C1=C=C(C)CCCCCC1").elements)

@@ -364,7 +364,8 @@ class SpeciesEntryScientificRecord(BaseModel):
     stereo_smiles: str | None = None
     #: Why a ``?`` of this entry's molecule can never be settled by data: ``axial_small_ring`` (a cyclic
     #: allene in a ring of eight or fewer atoms) and ``allene_dependent`` (a centre or double bond whose
-    #: stereogenicity depends on an allene's sense). Empty for every other entry, so a ``?`` in the descriptor
+    #: stereogenicity depends on an allene's sense) and ``cumulene_tied_end`` (a cumulated chain with a tied pair of
+    #: stereo-bearing arms at one end). Empty for every other entry, so a ``?`` in the descriptor
     #: with this empty means "not yet supplied": a geometry or a stereo_label would settle it.
     stereo_not_represented: list[str] = Field(default_factory=list)
     electronic_state_label: str | None = None

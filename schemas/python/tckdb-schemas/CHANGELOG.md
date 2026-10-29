@@ -13,7 +13,7 @@ An allene's axis and an odd cumulene's cis/trans are now part of the stereo desc
 - The tokens are read from geometry only. SMILES marks on an allene, and `/` `\` marks on a cumulene, are not read. A cyclic allene in a ring of eight or fewer
   atoms is never read, whatever the geometry.
 - `species_entry_stereo_not_represented` now means only: the symmetry cap, a cyclic allene in a ring of eight or fewer, a centre or double bond whose
-  stereogenicity depends on an allene's sense, and an allene or cumulene given only as SMILES marks. A `?` that a geometry or a label could settle is
+  stereogenicity depends on an allene's sense, a cumulated chain with a tied pair of stereo-bearing arms at one end, and an allene or cumulene given only as SMILES marks. A `?` that a geometry or a label could settle is
   `species_entry_stereo_unresolved`.
 
 ## 0.140.0 - 2026-10-28
