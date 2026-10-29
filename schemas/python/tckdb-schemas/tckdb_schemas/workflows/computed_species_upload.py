@@ -31,6 +31,7 @@ from tckdb_schemas.enums import (
     CalculationType,
     RigidRotorKind,
     ScientificOriginKind,
+    StationaryPointKind,
     StatmechTreatmentKind,
     ThermoCalculationRole,
     TorsionTreatmentKind,
@@ -85,6 +86,7 @@ from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     evaluate_species_entry_frequency,
     raise_for_blocking_findings,
+    resolve_tau_from_parameters,
 )
 from tckdb_schemas.structure_declarations import (
     StructureDeterminationDeclaration,
@@ -334,6 +336,34 @@ class CalculationInBundle(SchemaBase):
                     )
                 seen.add(c.constraint_index)
         return self
+
+    def species_entry_frequency_findings(
+        self, kind: StationaryPointKind, *, location: str
+    ) -> list[StationaryPointFinding]:
+        """Judge this calculation's frequency evidence against a declared species-entry kind.
+
+        The bundle twin of
+        :meth:`CalculationWithResultsPayload.species_entry_frequency_findings`:
+        same owner, and tau resolved from this calculation's own recorded
+        parameters, so a minimum is judged against the protocol that
+        produced it.
+        """
+        if self.freq_result is None:
+            return []
+        return evaluate_species_entry_frequency(
+            kind,
+            self.freq_result.n_imag,
+            self.freq_result.imag_freq_cm1,
+            location=location,
+            imaginary_modes=self.freq_result.imaginary_modes(),
+            reaction_coordinate_mode_index=(
+                self.freq_result.reaction_coordinate_mode_index
+            ),
+            tau=resolve_tau_from_parameters(
+                (observation.canonical_key, observation.canonical_value)
+                for observation in (self.parameters or ())
+            ),
+        )
 
     def frequency_completeness_findings(
         self, *, location: str, fallback_xyz_text: str | None = None
@@ -1068,11 +1098,8 @@ class ComputedSpeciesUploadRequest(SchemaBase):
                     f"['{calc.key}'].freq_result"
                 )
                 findings.extend(
-                    evaluate_species_entry_frequency(
-                        kind,
-                        calc.freq_result.n_imag,
-                        calc.freq_result.imag_freq_cm1,
-                        location=location,
+                    calc.species_entry_frequency_findings(
+                        kind, location=location
                     )
                 )
                 findings.extend(

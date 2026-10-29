@@ -97,13 +97,12 @@ from tckdb_schemas.shared.calculation_in import (
     CalculationIn,
     GeometryIn,
     calculation_in_to_with_results_payload,
-    freq_evidence,
     frequency_completeness_findings,
+    species_entry_frequency_findings,
     transition_state_frequency_findings,
 )
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
-    evaluate_species_entry_frequency,
     raise_for_blocking_findings,
 )
 from tckdb_schemas.workflows.computed_species_upload import (
@@ -349,10 +348,9 @@ class NetworkSpeciesIn(SchemaBase):
                 f"species['{self.key}'].conformers['{conformer.key}']"
                 f".calculation['{conformer.calculation.key}']"
             )
-            n_imag, imag_freq_cm1 = freq_evidence(conformer.calculation)
             findings.extend(
-                evaluate_species_entry_frequency(
-                    kind, n_imag, imag_freq_cm1, location=location
+                species_entry_frequency_findings(
+                    conformer.calculation, kind, location=location
                 )
             )
             findings.extend(
@@ -364,11 +362,8 @@ class NetworkSpeciesIn(SchemaBase):
             )
         for calc in self.calculations:
             location = f"species['{self.key}'].calculations['{calc.key}']"
-            n_imag, imag_freq_cm1 = freq_evidence(calc)
             findings.extend(
-                evaluate_species_entry_frequency(
-                    kind, n_imag, imag_freq_cm1, location=location
-                )
+                species_entry_frequency_findings(calc, kind, location=location)
             )
             findings.extend(
                 frequency_completeness_findings(

@@ -22,6 +22,17 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A minimum's imaginary modes are judged against tau (2026-10-29)
+
+- **Client: `tckdb-client` unchanged (its validation does not mirror this rule), `tckdb-schemas` 0.142.0.** No migration: the frequency result already carries `imaginary_mode_tau_cm1`, its basis and `imaginary_mode_structural_flag`.
+- A species entry declared a `minimum` used to be refused for any imaginary mode. Now each imaginary mode is compared with `tau`, resolved by `resolve_tau` from the calculation's recorded protocol exactly as for a transition state (15 / 30 / 50 / 80 cm-1; 50 cm-1 when the protocol is not recorded).
+  All modes below `tau`: accepted with the new warning `minimum_imaginary_modes_below_tau`. Any mode at or above `tau`: refused as before (`n_imag_contradicts_minimum`), with the same doors (`vdw_complex`, or a transition-state payload).
+  A count with no deposited magnitudes is still refused: a mode nobody measured is never assumed soft.
+- Stored: the deciding `tau` and its basis on `calc_freq_result`, and `imaginary_mode_structural_flag = false` (judged and not flagged; `NULL` stays "never judged"). The stored tau is the one the deposit was judged at, not the assumed-default tau of the 2026-09-04 amendment.
+- A minimum that designates a reaction coordinate is refused (`n_imag_contradicts_minimum`; it was refused before as well, for its imaginary mode). Every frequency calculation on a conformer upload is judged, each warning located at its own `calculations[i].freq_result`.
+- Unchanged: the transition-state rules, the van der Waals complex warning path, and every stored row. Read-time imaginary-mode projections report beside the warning and never gate it.
+- Scientific check register entries 15 and 17 and ADR 0012 / 0008 (amendment and note) are updated; the depositor guide gains "A soft imaginary mode on a minimum".
+
 ## Allene Ra/Sa and odd-cumulene E/Z in the stereo descriptor (2026-10-29)
 
 - **Client: `tckdb-client` 0.179.0, `tckdb-schemas` 0.141.0.** Migration `e5b2c8d1f947` (a new revision: `species_entry` is deployed). Closes #827; known limits in #832.
