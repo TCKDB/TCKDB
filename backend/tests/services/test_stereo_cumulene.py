@@ -576,3 +576,94 @@ def test_the_ring_case_label_cannot_state_the_centre(smiles: str) -> None:
 
 def test_a_ring_with_one_allene_keeps_its_ordinary_centre() -> None:
     assert "allene_dependent" not in [e.kind for e in frame("CC1CCCCC=C=CCCCC1").elements]
+
+
+# ---------------------------------------------------------------------------
+# Every tie pattern, not one shape (review blocker): a centre with two tied PAIRS, four identical arms, spiro
+# ---------------------------------------------------------------------------
+
+SPIRO = "C12(C=C=CCCCC=C=C1)C=C=CCCCC=C=C2"
+ACYCLIC_2_2 = "CC=C=CC(C=C=CC)(C=C=CCC)C=C=CCC"
+TETRA_ALLENYL = "C(C=C=CC)(C=C=CC)(C=C=CC)C=C=CC"
+TWO_ONE_ONE = "CC=C=CC(C=C=CC)(C)O"
+
+#: template -> (is the centre allene-dependent?, number of descriptors enumerated)
+TIE_PATTERNS = {
+    "spiro, two allenes per ring": (SPIRO, True, 6),
+    "quaternary 2+2": (ACYCLIC_2_2, True, 9),
+    "four identical arms": (TETRA_ALLENYL, True, 5),
+    "2+1+1": (TWO_ONE_ONE, True, 3),
+    "ring pair, three ranks": ("CC1C=C=CCCCCC=C=C1", True, 3),
+    "double bond with tied allenyl arms": ("CC=C=CC(=CC)C=C=CC", True, 3),
+    # ordinary centres that must stay a correct '-': the swap of the tied arms fixes the axes, or a tied group
+    # holds no stereo content at all
+    "spiro, one allene per ring": ("C12(CCCCC=C=CCCCC1)CCCCC=C=CCCCC2", False, 3),
+    "one ring allene opposite a centre": ("CC1CCCCC=C=CCCCC1", False, 2),
+    "allene beside an ordinary centre": ("CC=C=CC(C)O", False, 4),
+    "gem-dimethyl between allenes": ("CC=C=CC(C)(C)C=C=CC", False, 3),
+    "symmetric cyclohexane between allenes": ("CC=C=CC1(C=C=CC)CCCCC1", False, 3),
+    "gem-diethyl, one tied allene pair": ("CC=C=CC(C=C=CC)(CC)CC", False, 3),
+}
+
+
+@pytest.mark.parametrize(("name", "case"), list(TIE_PATTERNS.items()))
+def test_every_tie_pattern_flags_a_dependent_element_and_never_deduces_a_dash(name: str, case) -> None:
+    smiles, dependent, count = case
+    f = frame(smiles)
+    kinds = [e.kind for e in f.elements]
+    assert ("allene_dependent" in kinds) is dependent, (name, kinds)
+    isomers = stereo.stereoisomers(f)
+    descriptors = {",".join(t) for t, _ in isomers}
+    assert len(descriptors) == count, (name, sorted(descriptors))
+    if dependent:
+        for t, _ in isomers:
+            assert "-" not in t, (name, t)  # a '-' beside an allene axis would be a deduction nothing supports
+        assert stereo.R_ALLENE_DEPENDENT in resolve(smiles).unrepresented
+
+
+def _uff(smiles: str, seed: int) -> Chem.Mol:
+    mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
+    assert AllChem.EmbedMolecule(mol, randomSeed=seed) == 0
+    AllChem.UFFOptimizeMolecule(mol, maxIters=2000)
+    return mol
+
+
+@pytest.mark.parametrize("smiles", [SPIRO, ACYCLIC_2_2, TETRA_ALLENYL, TWO_ONE_ONE])
+def test_a_relaxed_geometry_and_its_mirror_never_state_the_dependent_centre(smiles: str) -> None:
+    order = [e.kind for e in frame(smiles).elements]
+    dependent = order.index("allene_dependent")
+    for seed in range(3):
+        m = _uff(smiles, seed)
+        for variant in (m, fx.mirror(m)):
+            r = resolve(smiles, geometries=[variant])
+            tokens = r.descriptor.split(",")
+            assert tokens[dependent] == "?" and "-" not in tokens, (smiles, seed, r.descriptor)
+            assert stereo.R_ALLENE_DEPENDENT in r.unrepresented
+        read = tokens_of(smiles, m)
+        mirrored = tokens_of(smiles, fx.mirror(m))
+        for a, b in zip(read, mirrored, strict=True):
+            if a in ("Ra", "Sa"):
+                assert b == ("Sa" if a == "Ra" else "Ra")
+
+
+def tokens_of(smiles: str, geometry: Chem.Mol) -> list[str]:
+    return stereo.geometry_tokens(frame(smiles), fx.xyz(geometry), isotopes_of(geometry))
+
+
+@pytest.mark.parametrize("smiles", [SPIRO, ACYCLIC_2_2, TETRA_ALLENYL])
+def test_a_label_cannot_state_a_tie_pattern_centre(smiles: str) -> None:
+    order = [e.kind for e in frame(smiles).elements]
+    dependent = order.index("allene_dependent")
+    for token in ("-", "R", "r"):
+        tokens = ["Ra"] * len(order)
+        tokens[dependent] = token
+        with pytest.raises(CodedValueError) as excinfo:
+            resolve(smiles, label=",".join(tokens))
+        assert excinfo.value.code == stereo.W_SPECIES_STEREO_LABEL_INVALID
+
+
+def test_a_spiro_with_one_allene_per_ring_keeps_its_dash() -> None:
+    smiles = "C12(CCCCC=C=CCCCC1)CCCCC=C=CCCCC2"
+    labels = {",".join(t) for t, _ in stereo.stereoisomers(frame(smiles))}
+    assert labels == {"Ra,Ra,-", "Ra,Sa,-", "Sa,Sa,-"}
+    assert stereo.R_ALLENE_DEPENDENT not in resolve(smiles, label="Ra,Sa,-").unrepresented

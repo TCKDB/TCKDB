@@ -401,31 +401,65 @@ def _branch(mol_h: Chem.Mol, start: int, block: int) -> set[int]:
     return seen
 
 
-def _tied_arms_with_allene(
-    mol_h: Chem.Mol, centre: int, neighbours: list[int], ranks_h: list[int], axial_atoms: set[int], chains=()
-):
-    """The pair of constitutionally equal arms of ``centre`` that each contain an allene, else ``None``.
+def _tied_group_depends_on_allene(
+    mol_h: Chem.Mol,
+    centre: int,
+    neighbours: list[int],
+    ranks_h: list[int],
+    chains: list[tuple[int, ...]],
+    content_atoms: set[int],
+) -> bool:
+    """Whether ``centre`` has a group of constitutionally equal neighbours whose arms hold allene axes.
 
-    When a ring joins the two arms they are one branch. The element is then still tied to the allenes whenever the
-    ring holds at least two axes: the centre sits between them, and with opposite senses (``Ra,Sa``) it is
-    pseudo-asymmetric, which RDKit's perception and the allene-blind enumeration cannot see. A ring with a single
-    axis is left to RDKit (an axis fixed by the symmetry swap does not make the centre conditional).
+    Every tie pattern is looked at (3+1, 2+2, 2+1+1, four identical): the neighbours are grouped by rank and each
+    group of two or more is tested on its own. Swapping two tied arms inverts the centre and leaves every ``Ra`` /
+    ``Sa`` unchanged, so the centre is genuinely stereogenic whenever the arms carry enantiomorphic axes, and
+    neither RDKit nor the allene-blind enumeration can see that. A group qualifies when
+
+    * two or more of its arms are independent branches that each contain an axis, or
+    * arms joined by a ring (or a spiro or bridged system: they share a branch once the centre is removed) hold two
+      or more axes in that joined branch.
+
+    Joined arms with a single axis (two arms of one ring, the axis opposite the centre) do not qualify: the swap
+    that exchanges them is a symmetry of that ring and fixes the axis, so the centre is an ordinary one.
+
+    A centre is stereogenic only if *every* tied group can differ in sense, so a tied group whose arms hold no
+    stereo content at all (the two hydrogens of a CH2, a pair of methyls) makes the centre ordinary whatever else
+    it carries; ``content_atoms`` are the atoms of every stereo element.
     """
 
+    axial_atoms = {a for chain in chains for a in chain}
     by_rank: dict[int, list[int]] = {}
     for n in neighbours:
         by_rank.setdefault(ranks_h[n], []).append(n)
-    pairs = [group for group in by_rank.values() if len(group) == 2]
-    if len(pairs) != 1:
-        return None
-    first, second = pairs[0]
-    arm_first = _branch(mol_h, first, centre)
-    if second in arm_first:  # a ring joins the arms
-        inside = [c for c in chains if set(c) <= arm_first]
-        return pairs[0] if len(inside) >= 2 else None
-    if arm_first & axial_atoms and _branch(mol_h, second, centre) & axial_atoms:
-        return pairs[0]
-    return None
+    tied = [g for g in by_rank.values() if len(g) >= 2]
+    for members in tied:
+        if not any(_branch(mol_h, m, centre) & content_atoms for m in members):
+            return False
+    qualifies = False
+    for members in tied:
+        branches = {m: _branch(mol_h, m, centre) for m in members}
+        remaining = list(members)
+        independent_with_axis = 0
+        while remaining:
+            component = [remaining.pop(0)]
+            joined = set(branches[component[0]])
+            grew = True
+            while grew:
+                grew = False
+                for other in list(remaining):
+                    if other in joined or branches[other] & joined:
+                        remaining.remove(other)
+                        component.append(other)
+                        joined |= branches[other]
+                        grew = True
+            if len(component) == 1:
+                independent_with_axis += bool(joined & axial_atoms)
+            elif sum(1 for chain in chains if set(chain) <= joined) >= 2:
+                qualifies = True
+        if independent_with_axis >= 2:
+            qualifies = True
+    return qualifies
 
 
 def _allene_dependent_elements(
@@ -434,24 +468,24 @@ def _allene_dependent_elements(
     """Centres and double bonds that are stereogenic only through the sense of an allene.
 
     ``CC=C=CC(C)C=C=CC``: the middle carbon carries two constitutionally equal arms, so RDKit sees no stereo
-    element there. When the arms are enantiomorphic (``Ra`` against ``Sa``) it is a pseudo-asymmetric centre.
-    Neither RDKit's perception nor its CIP labeller can see allene chirality, so the element is listed and
-    always stated ``?``; it is never deduced non-stereogenic.
+    element there. When the arms are enantiomorphic (``Ra`` against ``Sa``) it is a pseudo-asymmetric centre. The
+    same holds for every other tie pattern (a spiro or quaternary centre with two tied pairs, four identical arms,
+    arms joined by a ring). Neither RDKit's perception nor its CIP labeller can see allene chirality, so the
+    element is listed and always stated ``?``; it is never deduced non-stereogenic. Over-flagging is safe (``?``
+    and a warning); a wrong ``-`` is not.
     """
 
     chains = [e.chain for e in found if e.kind == _AXIAL]
-    axial_atoms = {a for chain in chains for a in chain}
-    if not axial_atoms:
+    if not chains:
         return []
+    content_atoms = {a for e in found for a in (e.chain or e.atoms)}
     extra: list[StereoElement] = []
     for atom in mol_h.GetAtoms():
         idx = atom.GetIdx()
         if atom.GetDegree() != 4:
             continue
         neighbours = [n.GetIdx() for n in atom.GetNeighbors()]
-        if len({ranks_h[n] for n in neighbours}) != 3:
-            continue
-        if _tied_arms_with_allene(mol_h, idx, neighbours, ranks_h, axial_atoms, chains) is not None:
+        if _tied_group_depends_on_allene(mol_h, idx, neighbours, ranks_h, chains, content_atoms):
             extra.append(StereoElement(_ALLENE_DEPENDENT, (idx,), (ranks[idx], 0, ranks[idx])))
     for bond in mol_h.GetBonds():
         if bond.GetBondType() != Chem.BondType.DOUBLE or bond.GetIdx() in skipped:
@@ -465,7 +499,7 @@ def _allene_dependent_elements(
                 verdicts.append(None)
             elif ranks_h[others[0]] != ranks_h[others[1]]:
                 verdicts.append("distinct")
-            elif _tied_arms_with_allene(mol_h, here, [*others, there], ranks_h, axial_atoms, chains) is not None:
+            elif _tied_group_depends_on_allene(mol_h, here, others, ranks_h, chains, content_atoms):
                 verdicts.append("allene")
             else:
                 verdicts.append(None)

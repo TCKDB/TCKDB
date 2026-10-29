@@ -385,3 +385,20 @@ def test_downgrade_without_axis_tokens_restores_the_old_vocabulary_and_upgrade_r
     assert _state(db_session, entry)[0] == "E"
     migration.upgrade()
     _entry(db_session, _species(db_session, "CC=C=C(C)C"), "CC=C=C(C)C", "Sa", "resolved")
+
+
+SPIRO_RINGS = "C12(C=C=CCCCC=C=C1)C=C=CCCCC=C=C2"
+
+
+def test_a_stored_dash_on_a_spiro_centre_is_listed_and_left(db_session, old_world, capsys) -> None:
+    entry, ref = _entry(db_session, _species(db_session, SPIRO_RINGS), SPIRO_RINGS, "?,?,?,?,-")
+    from rdkit.Chem import AllChem
+
+    mol = Chem.AddHs(Chem.MolFromSmiles(SPIRO_RINGS))
+    AllChem.EmbedMolecule(mol, randomSeed=1)
+    AllChem.UFFOptimizeMolecule(mol, maxIters=2000)
+    _geometry(db_session, entry, mol)
+    old_world.upgrade()
+    out = capsys.readouterr().out
+    assert _state(db_session, entry)[0] == "?,?,?,?,-"
+    assert ref in out and "entry left as it was" in out
