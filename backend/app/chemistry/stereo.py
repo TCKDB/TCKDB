@@ -447,7 +447,7 @@ def _allene_dependent_elements(
         if bond.GetBondType() != Chem.BondType.DOUBLE or bond.GetIdx() in skipped:
             continue
         begin, end = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
-        verdicts = []
+        verdicts: list[str | None] = []
         for here, there in ((begin, end), (end, begin)):
             atom = mol_h.GetAtomWithIdx(here)
             others = [n.GetIdx() for n in atom.GetNeighbors() if n.GetIdx() != there]
@@ -924,8 +924,8 @@ def cumulene_marks_present(frame: StereoFrame) -> bool:
 
     sides = frame.cache.get("mark_sides")
     if sides is None:
-        sides = _mark_sides(frame)
-        frame.cache["mark_sides"] = sides if sides is not None else {}
+        sides = _mark_sides(frame) or {}
+        frame.cache["mark_sides"] = sides
     return any(
         end in sides for e in frame.elements if e.kind == _CUMULENE for end in (e.chain[0], e.chain[-1])
     )
