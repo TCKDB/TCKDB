@@ -395,7 +395,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 **Enforced at.**
 
 - `evaluate_species_entry_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::evaluate_species_entry_frequency`
-  *One imaginary mode and two-or-more are folded into a single blocking message that names `n_imag_higher_order_saddle` for the higher-order case. The refusal stands when any deposited mode is at or above tau, and when the magnitudes of the modes were not deposited (a mode nobody measured is never assumed soft). A stationary-point kind the module has not been taught about produces no findings — adding an enum member must be a deliberate decision, not a default.*
+  *One imaginary mode and two-or-more are folded into a single blocking message that names `n_imag_higher_order_saddle` for the higher-order case. The refusal stands when any deposited mode is at or above tau, and when the magnitudes of the modes were not deposited (a mode nobody measured is never assumed soft). The same code also refuses a reaction-coordinate designation on a minimum, because a minimum has no reaction coordinate. A stationary-point kind the module has not been taught about produces no findings — adding an enum member must be a deliberate decision, not a default.*
 
 **Thresholds.**
 
