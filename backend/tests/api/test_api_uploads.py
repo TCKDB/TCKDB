@@ -203,10 +203,20 @@ class TestMinimumImaginaryModeBlocks:
 
     def test_minimum_with_higher_order_saddle_returns_422(self, client):
         payload = _hydrogen_conformer_payload(label="conf-saddle")
-        payload["additional_calculations"] = [_freq_calc(n_imag=2)]
+        payload["additional_calculations"] = [
+            _freq_calc(n_imag=2, frequencies=[-300.0, -200.0, 900.0, 1500.0])
+        ]
         resp = client.post("/api/v1/uploads/conformers", json=payload)
         assert resp.status_code == 422
         assert "n_imag_higher_order_saddle" in resp.text
+
+    def test_minimum_with_unmeasured_modes_names_no_saddle_order(self, client):
+        payload = _hydrogen_conformer_payload(label="conf-unmeasured")
+        payload["additional_calculations"] = [_freq_calc(n_imag=2)]
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 422
+        assert "freq_result.modes" in resp.text
+        assert "higher-order saddle" not in resp.text
 
     def test_minimum_with_a_stiff_imaginary_mode_returns_422(self, client):
         """A mode at or above the protocol's tau is real curvature, so a

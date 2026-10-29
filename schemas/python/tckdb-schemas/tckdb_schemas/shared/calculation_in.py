@@ -332,6 +332,7 @@ def species_entry_frequency_findings(
         freq_result.imag_freq_cm1,
         location=location,
         imaginary_modes=freq_result.imaginary_modes(),
+        reaction_coordinate_mode_index=freq_result.reaction_coordinate_mode_index,
         tau=resolve_tau_from_parameters(
             (observation.canonical_key, observation.canonical_value)
             for observation in (calc_in.parameters or ())

@@ -16,7 +16,7 @@
       "1": "8f50ad61bbfb6631245961af6e404508af9d7efe7d1c0e2d1d25a70152d7f7fb"
     },
     "computed_transition_state": {
-      "2": "5f6f09b3204e6c49fa5a8cfca6e2c888e29fee5988ded57d68e7bca2d2e05a95"
+      "2": "2d75b2b9333afb57ca44918d63f2626da6484711d01f8fd0187feb532a1d8df1"
     },
     "computed_transport": {
       "1": "9df1633baaa551e4a2e9571bc1a459155dbb46c38007a0413b346e2e4670ced6"
@@ -212,6 +212,11 @@
       "name": "tckdb_reproducibility_ts_statmech",
       "version": 1,
       "reason": "Network channel kind is derived from its states and NetworkChannelKind lost its unused 'stabilization' member. Every closure reaches that enum through the network models; no check or grading decides anything new, and no stored assessment read the channel kind."
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "The fingerprint reaches structure_selection/assessment.py:_minimum_support and tckdb_schemas.stationary_point.evaluate_species_entry_frequency, which changed for declared minima (ADR 0012 note, 2026-10-29). Transition-state grading cannot change: _minimum_support returns early with entry_kind_is_not_a_minimum for a transition-state subject, and evaluate_transition_state_frequency is untouched."
     }
   ]
 }

@@ -356,6 +356,9 @@ class CalculationInBundle(SchemaBase):
             self.freq_result.imag_freq_cm1,
             location=location,
             imaginary_modes=self.freq_result.imaginary_modes(),
+            reaction_coordinate_mode_index=(
+                self.freq_result.reaction_coordinate_mode_index
+            ),
             tau=resolve_tau_from_parameters(
                 (observation.canonical_key, observation.canonical_value)
                 for observation in (self.parameters or ())

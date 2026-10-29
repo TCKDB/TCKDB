@@ -67,8 +67,10 @@ from app.services.monatomic import single_atom_element
 # Which of these can actually reach *this* module depends on the declared
 # kind, because the four rules split by kind:
 #
-# * ``minimum`` with any imaginary mode is refused at the schema tier, so
-#   ``W_N_IMAG_CONTRADICTS_MINIMUM`` never arrives here for a minimum.
+# * ``minimum`` with an imaginary mode at or above tau is refused at the
+#   schema tier, so ``W_N_IMAG_CONTRADICTS_MINIMUM`` never arrives here
+#   for a minimum; one whose modes are all below tau is accepted and
+#   arrives as ``W_MINIMUM_IMAGINARY_MODES_BELOW_TAU``.
 # * ``vdw_complex`` is formally a minimum too, but its intermolecular
 #   modes sit low enough that a small imaginary mode is usually Hessian
 #   grid noise rather than evidence. Refusing it would force an expensive
@@ -350,8 +352,10 @@ def _check_n_imag(
     Delegates the physics and the tier split to
     :mod:`tckdb_schemas.stationary_point` so this path and the schema
     tier cannot disagree about the same record. In practice that means
-    only ``vdw_complex`` produces anything here: a declared ``minimum``
-    with an imaginary mode was already refused.
+    only ``vdw_complex`` produces anything here with a bare ``n_imag``:
+    a declared ``minimum`` with an imaginary mode at or above tau was
+    already refused, and one below tau needs the calculation's recorded
+    protocol, which :func:`reconcile_species_entry_full` supplies.
 
     ``field`` stays ``species_entry_kind`` because this entry point is
     reached from routes that hand over a bare identity payload with no
@@ -505,9 +509,10 @@ def reconcile_species_entry(
     statmech data are available for richer deduction-based checks.
 
     :param freq_imag_freq_cm1: Magnitude of the imaginary mode in cm⁻¹,
-        when the evidence reports one. Only consulted for
-        ``vdw_complex``, to tell a soft intermolecular artifact from a
-        mode too stiff to be anything but a reaction coordinate.
+        when the evidence reports one. For ``vdw_complex``, it tells a
+        soft intermolecular artifact from a mode too stiff to be anything
+        but a reaction coordinate; for ``minimum`` it is judged against
+        tau, with no recorded protocol on this path.
     """
     warnings: list[UploadWarning] = list(term_symbol_warnings(payload))
     warnings.extend(stereo_unresolved_warnings(payload, geometries))
@@ -559,18 +564,21 @@ def reconcile_species_entry_full(
     # result block: tau is resolved from that calculation's own recorded
     # parameters, so a declared minimum is judged against the protocol
     # that produced it.
+    #
+    # Every frequency calculation is judged, each under its own location:
+    # a soft mode on a second frequency job must not be accepted unseen
+    # because an earlier one reported none.
     if primary_calc is not None:
-        for calc in (primary_calc, *additional):
+        for index, calc in enumerate((primary_calc, *additional)):
             if calc.freq_result is not None and calc.freq_result.n_imag is not None:
                 warnings.extend(
                     stationary_point_warnings(
                         calc.species_entry_frequency_findings(
                             payload.species_entry_kind,
-                            location="species_entry_kind",
+                            location=f"calculations[{index}].freq_result",
                         )
                     )
                 )
-                break
 
     # Layer 1b: parser-fidelity check across all freq-bearing calcs.
     if primary_calc is not None:

@@ -174,3 +174,70 @@ def test_a_minimum_without_imaginary_modes_stores_no_flag(client, db_session):
     assert resp.status_code == 201, resp.text
     assert "minimum_imaginary_modes_below_tau" not in _codes(resp)
     assert _stored_freq(db_session).imaginary_mode_structural_flag is None
+
+
+def _freq(n_imag: int, imag_freq_cm1: float | None = None, **extra) -> dict:
+    return {
+        "type": "freq",
+        "software_release": {"name": "Gaussian", "version": "16"},
+        "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+        "freq_result": {"n_imag": n_imag, "imag_freq_cm1": imag_freq_cm1, **extra},
+    }
+
+
+def test_a_soft_mode_on_a_second_frequency_calculation_is_judged_and_located(client):
+    """Only the first frequency calculation used to be judged, so a soft mode on
+    a later one was accepted with no warning at all."""
+    payload = _payload(imag_freq_cm1=-15.0, label="min-two-freq")
+    payload["additional_calculations"] = [_freq(0), _freq(1, -15.0)]
+    resp = client.post("/api/v1/uploads/conformers", json=payload)
+    assert resp.status_code == 201, resp.text
+    located = [
+        w for w in resp.json()["warnings"] if w["code"] == "minimum_imaginary_modes_below_tau"
+    ]
+    assert len(located) == 1
+    # Primary is index 0, the clean frequency job 1, the soft one 2.
+    assert located[0]["field"] == "calculations[2].freq_result"
+
+
+def test_a_stiff_mode_on_a_second_frequency_calculation_is_refused(client):
+    payload = _payload(imag_freq_cm1=-15.0, label="min-two-freq-stiff")
+    payload["additional_calculations"] = [_freq(0), _freq(1, -80.0)]
+    resp = client.post("/api/v1/uploads/conformers", json=payload)
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "n_imag_contradicts_minimum"
+
+
+def test_the_job_path_judges_every_frequency_calculation():
+    """The conformer job builds its warnings from the same function the route
+    does; assert it directly, without going through HTTP."""
+    from app.schemas.workflows.conformer_upload import ConformerUploadRequest
+    from app.services.upload_request_warnings import conformer_request_warnings
+
+    payload = _payload(imag_freq_cm1=-15.0, label="min-job")
+    payload["additional_calculations"] = [_freq(0), _freq(1, -15.0)]
+    warnings = conformer_request_warnings(ConformerUploadRequest(**payload))
+    fields = [w.field for w in warnings if w.code == "minimum_imaginary_modes_below_tau"]
+    assert fields == ["calculations[2].freq_result"]
+
+
+def test_a_minimum_that_designates_a_reaction_coordinate_is_refused(client):
+    """A minimum has no reaction coordinate. Accepted before this check, such a
+    record was judged at tau 50 but stored under the transition-state rule at
+    the assumed tau of 30."""
+    payload = _payload(imag_freq_cm1=-40.0, label="min-with-rc")
+    payload["additional_calculations"] = [
+        _freq(
+            1,
+            -40.0,
+            reaction_coordinate_mode_index=1,
+            modes=[
+                {"mode_index": 1, "frequency_cm1": -40.0, "is_imaginary": True},
+                {"mode_index": 2, "frequency_cm1": 900.0, "is_imaginary": False},
+                {"mode_index": 3, "frequency_cm1": 1500.0, "is_imaginary": False},
+            ],
+        )
+    ]
+    resp = client.post("/api/v1/uploads/conformers", json=payload)
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "n_imag_contradicts_minimum"

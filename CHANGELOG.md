@@ -29,6 +29,7 @@ dataset must never require a code release.
   All modes below `tau`: accepted with the new warning `minimum_imaginary_modes_below_tau`. Any mode at or above `tau`: refused as before (`n_imag_contradicts_minimum`), with the same doors (`vdw_complex`, or a transition-state payload).
   A count with no deposited magnitudes is still refused: a mode nobody measured is never assumed soft.
 - Stored: the deciding `tau` and its basis on `calc_freq_result`, and `imaginary_mode_structural_flag = false` (judged and not flagged; `NULL` stays "never judged"). The stored tau is the one the deposit was judged at, not the assumed-default tau of the 2026-09-04 amendment.
+- A minimum that designates a reaction coordinate is refused (`n_imag_contradicts_minimum`; it was refused before as well, for its imaginary mode). Every frequency calculation on a conformer upload is judged, each warning located at its own `calculations[i].freq_result`.
 - Unchanged: the transition-state rules, the van der Waals complex warning path, and every stored row. Read-time imaginary-mode projections report beside the warning and never gate it.
 - Scientific check register entries 15 and 17 and ADR 0012 / 0008 (amendment and note) are updated; the depositor guide gains "A soft imaginary mode on a minimum".
 

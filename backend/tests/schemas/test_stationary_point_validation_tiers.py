@@ -225,6 +225,59 @@ class TestSpeciesEntryEvaluator:
         assert _tiers(one_listed) == {ValidationTier.block}
         assert _tiers(no_magnitude) == {ValidationTier.block}
 
+    def test_a_minimum_that_designates_a_reaction_coordinate_is_refused(self) -> None:
+        """A minimum has no reaction coordinate. Without this the record was
+        accepted at tau 50 yet stored under the transition-state rule."""
+        findings = evaluate_species_entry_frequency(
+            SchemasStationaryPointKind.minimum,
+            1,
+            -40.0,
+            location="c",
+            imaginary_modes=[ImaginaryMode(-40.0, mode_index=1)],
+            reaction_coordinate_mode_index=1,
+        )
+        assert _tiers(findings) == {ValidationTier.block}
+        assert _codes(findings) == {W_N_IMAG_CONTRADICTS_MINIMUM}
+        assert "designates a reaction coordinate" in findings[0].message
+
+    def test_unmeasured_modes_say_what_to_supply_and_name_no_saddle_order(self) -> None:
+        (finding,) = evaluate_species_entry_frequency(
+            SchemasStationaryPointKind.minimum, 2, None, location="c"
+        )
+        assert "freq_result.modes" in finding.message
+        assert "imag_freq_cm1" in finding.message
+        assert "higher-order saddle" not in finding.message
+
+    def test_one_real_mode_plus_noise_points_to_a_transition_state(self) -> None:
+        """-300 and -10: under ADR 0012 one real mode plus noise, not a
+        higher-order saddle."""
+        (finding,) = evaluate_species_entry_frequency(
+            SchemasStationaryPointKind.minimum,
+            2,
+            -300.0,
+            location="c",
+            imaginary_modes=[
+                ImaginaryMode(-300.0, mode_index=1),
+                ImaginaryMode(-10.0, mode_index=2),
+            ],
+        )
+        assert finding.code == W_N_IMAG_CONTRADICTS_MINIMUM
+        assert "higher-order saddle" not in finding.message
+        assert "transition-state" in finding.message
+
+    def test_two_real_modes_are_a_higher_order_saddle(self) -> None:
+        (finding,) = evaluate_species_entry_frequency(
+            SchemasStationaryPointKind.minimum,
+            2,
+            -300.0,
+            location="c",
+            imaginary_modes=[
+                ImaginaryMode(-300.0, mode_index=1),
+                ImaginaryMode(-200.0, mode_index=2),
+            ],
+        )
+        assert "higher-order saddle" in finding.message
+
     def test_a_vdw_complex_keeps_its_own_warning_path(self) -> None:
         findings = evaluate_species_entry_frequency(
             SchemasStationaryPointKind.vdw_complex, 1, -15.0, location="c"
@@ -737,7 +790,45 @@ class TestStandaloneProductUploads:
 # ---------------------------------------------------------------------------
 
 
-def _bundle_conformer(n_imag: int, imag_freq_cm1: float | None = None) -> dict:
+#: Analytic Hessian, fine grid, tight optimisation: tau = 15 cm-1.
+_TIGHT_PARAMETERS = [
+    {
+        "raw_key": "anfreq",
+        "raw_value": "true",
+        "canonical_key": "freq.hessian_method",
+        "canonical_value": "analytic",
+        "section": "freq",
+    },
+    {
+        "raw_key": "grid",
+        "raw_value": "ultrafine",
+        "canonical_key": "grid.quality",
+        "canonical_value": "ultrafine",
+        "section": "integral",
+    },
+    {
+        "raw_key": "tight",
+        "raw_value": "true",
+        "canonical_key": "opt.convergence",
+        "canonical_value": "tight",
+        "section": "opt",
+    },
+]
+
+
+def _bundle_conformer(
+    n_imag: int,
+    imag_freq_cm1: float | None = None,
+    *,
+    parameters: list[dict] | None = None,
+) -> dict:
+    conformer = _bundle_conformer_base(n_imag, imag_freq_cm1)
+    if parameters is not None:
+        conformer["additional_calculations"][0]["parameters"] = parameters
+    return conformer
+
+
+def _bundle_conformer_base(n_imag: int, imag_freq_cm1: float | None) -> dict:
     return {
         "key": "c1",
         "geometry": {"xyz_text": _XYZ},
@@ -786,6 +877,23 @@ class TestComputedSpeciesBundle:
             W_MINIMUM_IMAGINARY_MODES_BELOW_TAU
         }
 
+    def test_a_tight_recorded_protocol_moves_the_boundary(self) -> None:
+        """-20 cm-1 is noise with no protocol (tau 50) and real curvature
+        under the recorded analytic/fine-grid/tight protocol (tau 15)."""
+        accepted = ComputedSpeciesUploadRequest(
+            species_entry=_SPECIES_ENTRY,
+            conformers=[_bundle_conformer(1, -20.0)],
+        )
+        assert _codes(accepted.stationary_point_findings()) == {
+            W_MINIMUM_IMAGINARY_MODES_BELOW_TAU
+        }
+        with pytest.raises(ValidationError) as exc:
+            ComputedSpeciesUploadRequest(
+                species_entry=_SPECIES_ENTRY,
+                conformers=[_bundle_conformer(1, -20.0, parameters=_TIGHT_PARAMETERS)],
+            )
+        assert W_N_IMAG_CONTRADICTS_MINIMUM in str(exc.value)
+
     def test_zero_imaginary_modes_is_accepted(self) -> None:
         request = ComputedSpeciesUploadRequest(
             species_entry=_SPECIES_ENTRY,
@@ -804,6 +912,16 @@ def _bundle_species(
     *,
     kind: str = "minimum",
     imag_freq_cm1: float | None = None,
+    parameters: list[dict] | None = None,
+) -> dict:
+    species = _bundle_species_base(n_imag, kind, imag_freq_cm1)
+    if parameters is not None:
+        species["calculations"][0]["parameters"] = parameters
+    return species
+
+
+def _bundle_species_base(
+    n_imag: int, kind: str, imag_freq_cm1: float | None
 ) -> dict:
     return {
         "key": "s1",
@@ -863,6 +981,32 @@ class TestBundleSpeciesBlocks:
         with pytest.raises(ValidationError) as exc:
             model(**_bundle_species(1, imag_freq_cm1=-80.0))
         assert W_N_IMAG_CONTRADICTS_MINIMUM in str(exc.value)
+
+    @pytest.mark.parametrize("model", _SPECIES_BLOCKS)
+    def test_a_tight_recorded_protocol_moves_the_boundary(self, model) -> None:
+        accepted = model(**_bundle_species(1, imag_freq_cm1=-20.0))
+        assert _codes(accepted.stationary_point_findings()) == {
+            W_MINIMUM_IMAGINARY_MODES_BELOW_TAU
+        }
+        with pytest.raises(ValidationError) as exc:
+            model(
+                **_bundle_species(
+                    1, imag_freq_cm1=-20.0, parameters=_TIGHT_PARAMETERS
+                )
+            )
+        assert W_N_IMAG_CONTRADICTS_MINIMUM in str(exc.value)
+
+    @pytest.mark.parametrize("model", _SPECIES_BLOCKS)
+    def test_a_minimum_that_designates_a_reaction_coordinate_is_rejected(
+        self, model
+    ) -> None:
+        payload = _bundle_species(1, imag_freq_cm1=-40.0)
+        calc = payload["calculations"][0]
+        calc["freq_frequencies_cm1"] = [-40.0, 800.0, 1500.0]
+        calc["freq_reaction_coordinate_mode_index"] = 1
+        with pytest.raises(ValidationError) as exc:
+            model(**payload)
+        assert "designates a reaction coordinate" in str(exc.value)
 
     @pytest.mark.parametrize("model", _SPECIES_BLOCKS)
     def test_zero_imaginary_modes_is_accepted(self, model) -> None:

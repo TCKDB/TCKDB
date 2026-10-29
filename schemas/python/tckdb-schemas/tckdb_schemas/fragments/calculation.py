@@ -1526,6 +1526,9 @@ class CalculationWithResultsPayload(CalculationPayload):
             self.freq_result.imag_freq_cm1,
             location=location,
             imaginary_modes=self.freq_result.imaginary_modes(),
+            reaction_coordinate_mode_index=(
+                self.freq_result.reaction_coordinate_mode_index
+            ),
             tau=self.tau_resolution(),
         )
 
