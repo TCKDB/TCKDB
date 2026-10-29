@@ -583,6 +583,7 @@ def test_a_ring_with_one_allene_keeps_its_ordinary_centre() -> None:
 # ---------------------------------------------------------------------------
 
 SPIRO = "C12(C=C=CCCCC=C=C1)C=C=CCCCC=C=C2"
+BOND_ALLENYL_CARBINOL = "CC=C=CC(C=C=CC)=C(C(C)O)C(C)O"
 ACYCLIC_2_2 = "CC=C=CC(C=C=CC)(C=C=CCC)C=C=CCC"
 TETRA_ALLENYL = "C(C=C=CC)(C=C=CC)(C=C=CC)C=C=CC"
 TWO_ONE_ONE = "CC=C=CC(C=C=CC)(C)O"
@@ -603,22 +604,37 @@ TIE_PATTERNS = {
     "gem-dimethyl between allenes": ("CC=C=CC(C)(C)C=C=CC", False, 3),
     "symmetric cyclohexane between allenes": ("CC=C=CC1(C=C=CC)CCCCC1", False, 3),
     "gem-diethyl, one tied allene pair": ("CC=C=CC(C=C=CC)(CC)CC", False, 3),
+    # the R/S-bearing arms must be tested as a tied group too, whichever group is met first
+    "tied allenyl pair beside tied carbinol pair": ("CC(O)C(C=C=CC)(C=C=CC)C(C)O", True, 9),
+    "tied carbinol pair beside tied allenyl pair": ("CC=C=CC(C=C=CC)(C(C)O)C(C)O", True, 9),
+    # double bonds follow the same rule: an allenyl pair at one end and ordinary stereo at the other is flagged,
+    # and a non-stereo identical pair (two methyls) at the other end is an ordinary non-stereogenic bond
+    "double bond: allenyl pair against carbinol pair": ("CC=C=CC(C=C=CC)=C(C(C)O)C(C)O", True, 9),
+    "double bond: allenyl pair against methyls": ("CC=C=CC(C=C=CC)=C(C)C", False, 3),
 }
 
 
 @pytest.mark.parametrize(("name", "case"), list(TIE_PATTERNS.items()))
 def test_every_tie_pattern_flags_a_dependent_element_and_never_deduces_a_dash(name: str, case) -> None:
+    import random
+
     smiles, dependent, count = case
-    f = frame(smiles)
-    kinds = [e.kind for e in f.elements]
-    assert ("allene_dependent" in kinds) is dependent, (name, kinds)
-    isomers = stereo.stereoisomers(f)
-    descriptors = {",".join(t) for t, _ in isomers}
-    assert len(descriptors) == count, (name, sorted(descriptors))
-    if dependent:
-        for t, _ in isomers:
-            assert "-" not in t, (name, t)  # a '-' beside an allene axis would be a deduction nothing supports
-        assert stereo.R_ALLENE_DEPENDENT in resolve(smiles).unrepresented
+    molecule = Chem.MolFromSmiles(smiles)
+    spellings = [smiles]
+    for seed in range(8):  # the answer must not depend on the order the atoms are written in
+        random.seed(seed)
+        spellings.append(Chem.MolToSmiles(molecule, doRandom=True))
+    for spelling in spellings:
+        f = frame(spelling)
+        kinds = [e.kind for e in f.elements]
+        assert ("allene_dependent" in kinds) is dependent, (name, spelling, kinds)
+        isomers = stereo.stereoisomers(f)
+        descriptors = {",".join(t) for t, _ in isomers}
+        assert len(descriptors) == count, (name, spelling, sorted(descriptors))
+        if dependent:
+            for t, _ in isomers:
+                assert "-" not in t, (name, spelling, t)  # a '-' beside an allene axis is a deduction nothing supports
+            assert stereo.R_ALLENE_DEPENDENT in resolve(spelling).unrepresented
 
 
 def _uff(smiles: str, seed: int) -> Chem.Mol:
@@ -628,7 +644,7 @@ def _uff(smiles: str, seed: int) -> Chem.Mol:
     return mol
 
 
-@pytest.mark.parametrize("smiles", [SPIRO, ACYCLIC_2_2, TETRA_ALLENYL, TWO_ONE_ONE])
+@pytest.mark.parametrize("smiles", [SPIRO, ACYCLIC_2_2, TETRA_ALLENYL, TWO_ONE_ONE, BOND_ALLENYL_CARBINOL])
 def test_a_relaxed_geometry_and_its_mirror_never_state_the_dependent_centre(smiles: str) -> None:
     order = [e.kind for e in frame(smiles).elements]
     dependent = order.index("allene_dependent")
@@ -667,3 +683,10 @@ def test_a_spiro_with_one_allene_per_ring_keeps_its_dash() -> None:
     labels = {",".join(t) for t, _ in stereo.stereoisomers(frame(smiles))}
     assert labels == {"Ra,Ra,-", "Ra,Sa,-", "Sa,Sa,-"}
     assert stereo.R_ALLENE_DEPENDENT not in resolve(smiles, label="Ra,Sa,-").unrepresented
+
+
+def test_the_ordinary_analogue_of_the_double_bond_case_really_has_both_ends_as_enantiomorphic_pairs() -> None:
+    """``CC(Cl)C(C(C)Cl)=C(C(C)O)C(C)O`` has 10 isomers with E/Z at the bond: why the allenyl version may not be ``-``."""
+
+    labels = {",".join(t) for t, _ in stereo.stereoisomers(frame("CC(Cl)C(C(C)Cl)=C(C(C)O)C(C)O"))}
+    assert len(labels) == 10 and any(label.startswith(("E", "Z", "e", "z")) for label in labels)

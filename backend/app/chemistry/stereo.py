@@ -401,15 +401,17 @@ def _branch(mol_h: Chem.Mol, start: int, block: int) -> set[int]:
     return seen
 
 
-def _tied_group_depends_on_allene(
+def _tied_group_status(
     mol_h: Chem.Mol,
     centre: int,
     neighbours: list[int],
     ranks_h: list[int],
     chains: list[tuple[int, ...]],
     content_atoms: set[int],
-) -> bool:
-    """Whether ``centre`` has a group of constitutionally equal neighbours whose arms hold allene axes.
+) -> tuple[bool, bool]:
+    """``(every tied group has stereo content, some tied group holds allene axes in the sense below)`` for ``centre``.
+
+    Whether ``centre`` has a group of constitutionally equal neighbours whose arms hold allene axes.
 
     Every tie pattern is looked at (3+1, 2+2, 2+1+1, four identical): the neighbours are grouped by rank and each
     group of two or more is tested on its own. Swapping two tied arms inverts the centre and leaves every ``Ra`` /
@@ -435,7 +437,7 @@ def _tied_group_depends_on_allene(
     tied = [g for g in by_rank.values() if len(g) >= 2]
     for members in tied:
         if not any(_branch(mol_h, m, centre) & content_atoms for m in members):
-            return False
+            return False, False
     qualifies = False
     for members in tied:
         branches = {m: _branch(mol_h, m, centre) for m in members}
@@ -459,7 +461,21 @@ def _tied_group_depends_on_allene(
                 qualifies = True
         if independent_with_axis >= 2:
             qualifies = True
-    return qualifies
+    return True, qualifies
+
+
+def _tied_group_depends_on_allene(
+    mol_h: Chem.Mol,
+    centre: int,
+    neighbours: list[int],
+    ranks_h: list[int],
+    chains: list[tuple[int, ...]],
+    content_atoms: set[int],
+) -> bool:
+    """A centre is allene-dependent when some tied group qualifies and every tied group has stereo content."""
+
+    every_group_has_content, qualifies = _tied_group_status(mol_h, centre, neighbours, ranks_h, chains, content_atoms)
+    return every_group_has_content and qualifies
 
 
 def _allene_dependent_elements(
@@ -491,6 +507,9 @@ def _allene_dependent_elements(
         if bond.GetBondType() != Chem.BondType.DOUBLE or bond.GetIdx() in skipped:
             continue
         begin, end = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
+        # Same rule as for a centre: an end with distinct substituents is compatible; an end with a tied pair is
+        # compatible only if the pair carries stereo content (axes -> "allene", ordinary R/S or E/Z -> "content"),
+        # and the bond is flagged when some end is "allene" and no end is incompatible.
         verdicts: list[str | None] = []
         for here, there in ((begin, end), (end, begin)):
             atom = mol_h.GetAtomWithIdx(here)
@@ -499,10 +518,9 @@ def _allene_dependent_elements(
                 verdicts.append(None)
             elif ranks_h[others[0]] != ranks_h[others[1]]:
                 verdicts.append("distinct")
-            elif _tied_group_depends_on_allene(mol_h, here, others, ranks_h, chains, content_atoms):
-                verdicts.append("allene")
             else:
-                verdicts.append(None)
+                has_content, qualifies = _tied_group_status(mol_h, here, others, ranks_h, chains, content_atoms)
+                verdicts.append(None if not has_content else "allene" if qualifies else "content")
         if None in verdicts or "allene" not in verdicts:
             continue
         low, high = sorted((ranks[begin], ranks[end]))

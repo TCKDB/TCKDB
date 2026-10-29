@@ -402,3 +402,24 @@ def test_a_stored_dash_on_a_spiro_centre_is_listed_and_left(db_session, old_worl
     out = capsys.readouterr().out
     assert _state(db_session, entry)[0] == "?,?,?,?,-"
     assert ref in out and "entry left as it was" in out
+
+
+BOND_CASE = "CC=C=CC(C=C=CC)=C(C(C)O)C(C)O"
+
+
+def test_a_stored_dash_on_an_allene_dependent_double_bond_is_listed_and_left(db_session, old_world, capsys) -> None:
+    from rdkit.Chem import AllChem
+
+    order = [e.kind for e in stereo.frame_from_mol(identity_mol_from_smiles(BOND_CASE)).elements]
+    stored = ["?"] * len(order)
+    stored[order.index("allene_dependent")] = "-"
+    stored = ",".join(t if t == "?" or t == "-" else "R" for t in stored)
+    entry, ref = _entry(db_session, _species(db_session, BOND_CASE), BOND_CASE, stored)
+    mol = Chem.AddHs(Chem.MolFromSmiles(BOND_CASE))
+    AllChem.EmbedMolecule(mol, randomSeed=1)
+    AllChem.UFFOptimizeMolecule(mol, maxIters=2000)
+    _geometry(db_session, entry, mol)
+    old_world.upgrade()
+    out = capsys.readouterr().out
+    assert _state(db_session, entry)[0] == stored
+    assert ref in out and "entry left as it was" in out
