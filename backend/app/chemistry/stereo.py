@@ -4,7 +4,7 @@ A *species* is a constitution: the stereo-blind canonical SMILES plus charge and
 multiplicity. Stereochemistry is resolved only on the *species entry*, as a
 canonical **stereo descriptor** string: one token per potential stereo element,
 ``R``/``S`` for a tetrahedral centre, ``E``/``Z`` for a stereogenic double bond,
-``?`` for an element nothing pinned down. Examples: ``E``, ``R,S``, ``E,?``.
+``Ra``/``Sa`` for an allene axis, ``?`` for an element nothing pinned down. Examples: ``E``, ``R,S``, ``E,?``, ``Ra``.
 
 Vocabulary
 ----------
@@ -82,18 +82,16 @@ frame keeps them: ``C[C@H]([2H])O`` has a stereocentre (CIP ranks by mass number
 although CH2D-CH2OH's species is ethanol. ``stereo_smiles`` is written without
 isotopes and is therefore left NULL where stripping them would lose the stereo.
 
-Not yet represented
--------------------
-A stereogenic cumulene (a cumulated chain whose two ends each carry two different
-substituents) is a stereo element, and an entry carries it as ``?`` always: an
-even number of cumulated double bonds (an allene) has an axis (Ra/Sa), an odd
-number of three or more (a butatriene) has cis/trans isomers, and RDKit's CIP
-labeller names neither from marks or from coordinates. The deposit is accepted,
-with the :data:`W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED` warning, and both
-mirror-image forms of an allene land in one entry (a known lumping of real
-isomers). A supplied label may only say ``?`` there. A cumulated chain that is
-not stereogenic (allene itself, a ketene, sulfone S=O bonds) contributes no
-element. Ring size does not matter.
+Cumulated chains
+----------------
+A cumulated chain whose two ends each carry two different substituents is a stereo element, anchored at its two
+end atoms. With an even number of double bonds (an allene) it is an axis: ``Ra`` or ``Sa`` (``Ra`` is IUPAC ``M``).
+With an odd number of three or more it is ``E``/``Z``. RDKit perceives neither (no CIP label, marks dropped on
+sanitising, nothing from 3D), so both are read from geometry here: the torsion about the end-to-end axis between the
+two CIP-higher substituents (:func:`chain_geometry_token`; an allene must lie between 10 and 170 degrees, an odd
+cumulene within 30 degrees of planar). Allene SMILES marks and, for now, cumulene ``/`` ``\\`` marks are not read
+(:data:`CUMULENE_MARKS_READ`). Stated ``?`` whatever the data: a cyclic allene in a ring of eight or fewer atoms, and
+a centre or double bond whose stereogenicity depends on an allene's sense (:data:`_ALLENE_DEPENDENT`). See DR-0038.
 """
 
 from __future__ import annotations
@@ -129,8 +127,9 @@ W_SPECIES_STEREO_LABEL_INVALID = "species_stereo_label_invalid"
 #: The non-blocking warning for an entry that ends with at least one ``?`` that data could have settled.
 W_SPECIES_ENTRY_STEREO_UNRESOLVED = "species_entry_stereo_unresolved"
 
-#: The non-blocking warning for an entry with a stereo element the vocabulary cannot yet state (an allene's
-#: axis, cis/trans across a longer cumulene, a symmetry class past the automorphism cap): real isomers share the entry.
+#: The non-blocking warning for an entry with a stereo element that no further data would settle (a symmetry class
+#: past the automorphism cap, a cyclic allene in a ring of eight or fewer, an element that depends on an allene's
+#: sense, an allene or cumulene given only as SMILES marks): real isomers may share the entry.
 W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED = "species_entry_stereo_not_represented"
 
 UNKNOWN = "?"
@@ -252,10 +251,10 @@ class ResolvedStereo:
         ``descriptor`` is ``None``.
     :param stereo_smiles: Canonical isomeric SMILES of the fully resolved
         configuration, when one can be written and round-trips.
-    :param unrepresented: Why some ``?`` cannot be settled by any data: ``axial``
-        (allene axis), ``cumulene`` (cis/trans across a longer cumulene),
-        ``symmetry`` (a symmetry class past the automorphism cap). Empty when
-        every ``?`` is an element the data left unknown.
+    :param unrepresented: Why some ``?`` cannot be settled by the data in hand:
+        ``axial_small_ring``, ``allene_dependent``, ``axial_marks``,
+        ``cumulene_marks``, ``symmetry`` (a symmetry class past the automorphism
+        cap). Empty when every ``?`` is an element the data left unknown.
     :param unknown_elements: How many ``?`` are elements the data could settle.
     """
 
@@ -456,7 +455,7 @@ def _allene_dependent_elements(
                 verdicts.append(None)
             elif ranks_h[others[0]] != ranks_h[others[1]]:
                 verdicts.append("distinct")
-            elif _tied_arms_with_allene(mol_h, here, others + [there], ranks_h, axial_atoms) is not None:
+            elif _tied_arms_with_allene(mol_h, here, [*others, there], ranks_h, axial_atoms) is not None:
                 verdicts.append("allene")
             else:
                 verdicts.append(None)

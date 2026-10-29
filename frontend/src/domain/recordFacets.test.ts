@@ -104,8 +104,18 @@ describe("facetChips: includeState (grouped-card redundancy)", () => {
         expect(facetChips({ ...base, stereo_label: "E,?", stereo_descriptor: "E,?", stereo_resolution: "partial" }))
             .toContain("Partly resolved (E,?)")
         expect(facetChips({
-            ...base, stereo_descriptor: "?", stereo_resolution: "unresolved", stereo_not_represented: ["axial"],
-        })).toContain("Unresolved (?) · axial stereo not represented")
+            ...base, stereo_descriptor: "?", stereo_resolution: "unresolved", stereo_not_represented: ["axial_small_ring"],
+        })).toContain("Unresolved (?) · cyclic allene (ring of 8 or fewer) stereo not represented")
+    })
+
+    it("names an allene axis token and a cumulene's E/Z", () => {
+        const base = { species_entry_kind: "minimum", electronic_state_kind: "ground", stereo_smiles: null }
+        expect(facetChips({ ...base, stereo_label: "Ra", stereo_descriptor: "Ra", stereo_resolution: "resolved" }))
+            .toContain("Ra allene")
+        expect(facetChips({ ...base, stereo_label: "R,Sa", stereo_descriptor: "R,Sa", stereo_resolution: "resolved" }))
+            .toContain("R,Sa")
+        expect(facetChips({ ...base, stereo_label: "E", stereo_descriptor: "E", stereo_resolution: "resolved" }))
+            .toContain("E isomer")
     })
 
     it("gives an achiral entry (NULL descriptor) no chip", () => {

@@ -60,7 +60,7 @@ ALLENES = ["CC=C=CC", "CC(Cl)=C=C(F)C", "CC=C=C(F)Cl", "[2H]C=C=CC", "CC=C=CC(C)
 @pytest.mark.parametrize("smiles", ALLENES)
 def test_allene_enantiomers_get_opposite_axis_tokens(smiles: str) -> None:
     m = fx.build(smiles, -90.0)
-    axial = [i for i, e in enumerate(frame(smiles).elements) if e.kind == "axial"][0]
+    axial = next(i for i, e in enumerate(frame(smiles).elements) if e.kind == "axial")
     assert tokens(smiles, m)[axial] == "Ra"
     assert tokens(smiles, fx.mirror(m))[axial] == "Sa"
     assert tokens(smiles, fx.build(smiles, 90.0))[axial] == "Sa"

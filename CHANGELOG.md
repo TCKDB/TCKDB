@@ -22,6 +22,22 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Allene Ra/Sa and odd-cumulene E/Z in the stereo descriptor (2026-10-29)
+
+- **Client: `tckdb-client` 0.179.0, `tckdb-schemas` 0.141.0.** Migration `e5b2c8d1f947` (a new revision: `species_entry` is deployed). Closes #827; known limits in #832.
+- The descriptor gains two whole tokens, `Ra` and `Sa`, for an allene's axis (`Ra` = IUPAC `M`, `Sa` = `P`). An odd cumulene (a butatriene and longer) takes `E` / `Z`.
+  Both are read from geometry: the torsion between the two CIP-higher substituents about the end-to-end axis. An allene must lie between 10 and 170 degrees
+  (a flat axis is not read), an odd cumulene within 30 degrees of planar.
+- Not read: SMILES marks on an allene (RDKit drops them on sanitising and no validated reader exists), `/` `\` marks on a cumulene (validated against InChI for
+  butatrienes, but InChI writes no stereo layer for five cumulated double bonds, so the reader is not shipped), and cyclic allenes in rings of eight or fewer atoms.
+- `species_entry_stereo_not_represented` now means only: the symmetry cap, a cyclic allene in a ring of eight or fewer, a centre or double bond that depends
+  on an allene's sense (`CC=C=CC(C)C=C=CC` has four stereoisomers but three possible descriptors), and an allene or cumulene deposited with only SMILES marks.
+  A `?` that a geometry or a label could settle is `species_entry_stereo_unresolved`. The read field `stereo_not_represented` and the CHEMKIN marker follow.
+- Migration `e5b2c8d1f947`: the descriptor check constraint accepts `Ra` / `Sa`; every live entry with a `?` allene or cumulene is re-read from its linked
+  geometries and filled in place when they agree (printed as `entry ref: old -> new`, or `0 changed`). Entries whose geometries disagree, entries without a
+  geometry and merged-away entries are listed and left. A fill that would collide with a live entry stops the migration with a list. `downgrade()` stops with a
+  list if any entry holds `Ra` / `Sa`.
+
 ## Derive network channel kind from its states (2026-10-28)
 
 - **Client: `tckdb-client` 0.178.0, `tckdb-schemas` 0.140.0.** Migration `a7c4e1f9b268` rebuilds the `network_channel_kind` enum.

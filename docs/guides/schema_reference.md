@@ -391,7 +391,7 @@ the gap.
 | `mol` | mol (RDKit cartridge structure) | yes | — | — | — | not documented |
 | `unmapped_smiles` | TEXT | yes | — | — | — | not documented |
 | `stereo_label` | TEXT | yes | — | — | — | not documented |
-| `stereo_descriptor` | TEXT | yes | — | — | — | not documented |
+| `stereo_descriptor` | TEXT | yes | — | — | — | ``stereo_descriptor`` is the stereo key (DR-0038): one comma-separated token per potential stereo element, ordered by canonical atom rank. Tokens: ``R`` ``S`` (centre), ``r`` ``s`` (pseudo-asymmetric centre), ``E`` ``Z`` (double bond, or an odd cumulene), ``e`` ``z`` (pseudo-asymmetric double bond), ``Ra`` ``Sa`` (the axis of an allene or any even cumulene; ``Ra`` is IUPAC ``M``, a negative torsion between the two CIP-higher substituents, and ``Sa`` is ``P``), ``-`` (not stereogenic in this configuration) and ``?`` (unknown, or not representable). Allene and cumulene tokens are read from geometry only; ``NULL`` only for an achiral species. |
 | `stereo_resolution` | StereoResolution (enum) | yes | — | — | `resolved`, `partial`, `unresolved` | not documented |
 | `stereo_smiles` | TEXT | yes | — | — | — | not documented |
 | `merged_into_species_entry_id` | BIGINT | yes | — | species_entry.id | — | not documented |
@@ -408,7 +408,7 @@ the gap.
 **Check constraints:**
 
 - `ck_species_entry_not_merged_into_itself`: `merged_into_species_entry_id IS NULL OR merged_into_species_entry_id <> id`
-- `ck_species_entry_stereo_descriptor_vocabulary`: `stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSrsEZez?-](,[RSrsEZez?-])*$'`
+- `ck_species_entry_stereo_descriptor_vocabulary`: `stereo_descriptor IS NULL OR stereo_descriptor ~ '^(Ra|Sa|[RSrsEZez?-])(,(Ra|Sa|[RSrsEZez?-]))*$'`
 - `ck_species_entry_stereo_resolution_iff_descriptor`: `(stereo_descriptor IS NULL) = (stereo_resolution IS NULL)`
 
 ### `workflow_tool`

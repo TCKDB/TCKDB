@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.141.0 - 2026-10-29
+
+An allene's axis and an odd cumulene's cis/trans are now part of the stereo descriptor. No field is added or removed.
+
+- `stereo_label` (and the stored `stereo_descriptor`) accept two more whole tokens: `Ra` and `Sa`, the axis of an allene (or any cumulene with an even number of
+  double bonds). `Ra` is IUPAC's `M` (a negative torsion between the two CIP-higher substituents), `Sa` is `P`. The pattern is now
+  `(Ra|Sa|[RSrsEZez?-])(,(Ra|Sa|[RSrsEZez?-]))*`.
+- A cumulene with an odd number of double bonds (a butatriene and longer) takes `E` or `Z`, as a double bond does.
+- A supplied label may be `Ra`, `Sa` or `?` at an allene axis, `E`, `Z` or `?` at an odd cumulene; anything else is `species_stereo_label_invalid`. A label that
+  contradicts the geometry is `species_stereo_contradiction`.
+- The tokens are read from geometry only. SMILES marks on an allene, and `/` `\` marks on a cumulene, are not read. A cyclic allene in a ring of eight or fewer
+  atoms is never read, whatever the geometry.
+- `species_entry_stereo_not_represented` now means only: the symmetry cap, a cyclic allene in a ring of eight or fewer, a centre or double bond whose
+  stereogenicity depends on an allene's sense, and an allene or cumulene given only as SMILES marks. A `?` that a geometry or a label could settle is
+  `species_entry_stereo_unresolved`.
+
 ## 0.140.0 - 2026-10-28
 
 A network channel's `kind` is derived from the two states it joins. One refusal code joins the contract.
