@@ -515,3 +515,12 @@ def test_cip_priority_probe_agrees_with_rdkit_on_ordinary_double_bonds() -> None
                 assert ("Z" if abs(t) < 90 else "E") == b.GetProp("_CIPCode"), (smiles, seed)
                 checked += 1
     assert checked >= 20
+
+
+def test_a_geometry_the_cip_probe_cannot_handle_says_nothing_instead_of_failing(monkeypatch) -> None:
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("labeller failure")
+
+    geometry = fx.build("CC=C=CC", 90.0)
+    monkeypatch.setattr(stereo, "cip_higher_substituent", boom)
+    assert tokens("CC=C=CC", geometry) == ["?"]

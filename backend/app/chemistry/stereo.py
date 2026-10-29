@@ -1050,7 +1050,10 @@ def geometry_tokens(
     tokens: list[str] = []
     for element in frame.elements:
         if element.kind in _CHAIN_KINDS:
-            tokens.append(chain_geometry_token(element, mol, mapping))
+            try:
+                tokens.append(chain_geometry_token(element, mol, mapping))
+            except (ValueError, RuntimeError, KeyError):  # a geometry the labeller cannot probe says nothing
+                tokens.append(UNKNOWN)
         elif element.kind == _ALLENE_DEPENDENT:
             tokens.append(UNKNOWN)
         elif element.kind == _TETRAHEDRAL:
