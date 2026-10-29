@@ -26,6 +26,7 @@ from app.services.conformer_resolution import (
     resolve_conformer_group,
     settle_conformer_basin,
 )
+from app.services.deposit_warnings import note_calculation_keys
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -361,6 +362,16 @@ def persist_conformer_upload(
     review_targets.extend(
         RecordRef(SubmissionRecordType.applied_energy_correction, aec.id)
         for aec in applied_corrections
+    )
+    note_calculation_keys(
+        session,
+        {
+            "calculation": calculation.id,
+            **{f"additional_calculations[{i}]": c.id for i, c in enumerate(additional_calcs)},
+            # ``calculations[i]`` counts the primary first, then the additional ones.
+            "calculations[0]": calculation.id,
+            **{f"calculations[{i + 1}]": c.id for i, c in enumerate(additional_calcs)},
+        },
     )
     apply_review_policy(
         session,

@@ -77,6 +77,7 @@ REGISTER_ENTRY: dict[str, int] = {
     "n_imag_contradicts_minimum": 16,
     "n_imag_higher_order_saddle": 16,
     "n_imag_suggests_transition_state": 16,
+    "minimum_imaginary_modes_below_tau": 17,
     "transition_state_extra_imaginary_modes_below_tau": 17,
     "transition_state_extra_imaginary_mode_above_tau": 17,
     "transition_state_extra_imaginary_modes_not_assessable": 17,
@@ -97,6 +98,7 @@ REGISTER_ENTRY: dict[str, int] = {
 
 _CALCULATION_SUBJECT_PREFIXES = (
     "n_imag_",
+    "minimum_imaginary_modes_",
     "transition_state_extra_imaginary",
     "transition_state_imaginary_frequency",
     "freq_list_",
@@ -166,6 +168,15 @@ def _resolve(warning: UploadWarning, targets: list[_Target], calc_keys: dict[str
         calc_id = calc_keys.get(key)
         if calc_id is not None:
             return _Target(RT.calculation, calc_id)
+    # Positional labels a workflow registered (``calculation``, ``additional_calculations[0]``, ``primary_opt``):
+    # the longest label that is a path prefix of the field names its calculation.
+    positional = [
+        (label, calc_id)
+        for label, calc_id in calc_keys.items()
+        if warning.field == label or warning.field.startswith((f"{label}.", f"{label}["))
+    ]
+    if positional:
+        return _Target(RT.calculation, max(positional, key=lambda item: len(item[0]))[1])
     non_calcs = [t for t in anchorable if t.record_type is not RT.calculation]
     primary = non_calcs[0] if non_calcs else (calcs[0] if calcs else None)
     if _is_calculation_subject(warning.code):

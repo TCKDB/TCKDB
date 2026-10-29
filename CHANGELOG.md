@@ -24,7 +24,7 @@ dataset must never require a code release.
 
 ## Deposit-time warnings are shown with the record when it is read (2026-10-29)
 
-- **Client: `tckdb-client` 0.180.0, `tckdb-schemas` 0.142.0.** Migration `f7a2c9e4b183`: a new table, `deposit_warning` (no deployed table is touched, no backfill).
+- **Client: `tckdb-client` 0.180.0, `tckdb-schemas` 0.143.0.** Migration `f7a2c9e4b183`: a new table, `deposit_warning` (no deployed table is touched, no backfill).
 - Until now a deposit's `warn`-tier findings reached the depositor once, in the upload response, and survived only inside the upload job's result. A later reader of
   the stored record saw none of them. Each warning is now stored beside the record it concerns, in the same transaction as the deposit, and shown on the record's reads.
 - **Storage.** One row per (submission, record, code, field), with the code's register entry (`NULL` for the many codes the register does not list), the payload
@@ -43,6 +43,17 @@ dataset must never require a code release.
   the ThermoML file route.
 - **Register.** The `upload_warning` channel now reads "returned alongside the accepted upload, and stored with the record it concerns". The register still has 49 entries.
 - Known limits: #835 (most codes are not in the register) and #836 (the atomic-electronic warnings are not emitted on every path).
+
+## A minimum's imaginary modes are judged against tau (2026-10-29)
+
+- **Client: `tckdb-client` unchanged (its validation does not mirror this rule), `tckdb-schemas` 0.142.0.** No migration: the frequency result already carries `imaginary_mode_tau_cm1`, its basis and `imaginary_mode_structural_flag`.
+- A species entry declared a `minimum` used to be refused for any imaginary mode. Now each imaginary mode is compared with `tau`, resolved by `resolve_tau` from the calculation's recorded protocol exactly as for a transition state (15 / 30 / 50 / 80 cm-1; 50 cm-1 when the protocol is not recorded).
+  All modes below `tau`: accepted with the new warning `minimum_imaginary_modes_below_tau`. Any mode at or above `tau`: refused as before (`n_imag_contradicts_minimum`), with the same doors (`vdw_complex`, or a transition-state payload).
+  A count with no deposited magnitudes is still refused: a mode nobody measured is never assumed soft.
+- Stored: the deciding `tau` and its basis on `calc_freq_result`, and `imaginary_mode_structural_flag = false` (judged and not flagged; `NULL` stays "never judged"). The stored tau is the one the deposit was judged at, not the assumed-default tau of the 2026-09-04 amendment.
+- A minimum that designates a reaction coordinate is refused (`n_imag_contradicts_minimum`; it was refused before as well, for its imaginary mode). Every frequency calculation on a conformer upload is judged, each warning located at its own `calculations[i].freq_result`.
+- Unchanged: the transition-state rules, the van der Waals complex warning path, and every stored row. Read-time imaginary-mode projections report beside the warning and never gate it.
+- Scientific check register entries 15 and 17 and ADR 0012 / 0008 (amendment and note) are updated; the depositor guide gains "A soft imaginary mode on a minimum".
 
 ## Allene Ra/Sa and odd-cumulene E/Z in the stereo descriptor (2026-10-29)
 

@@ -340,3 +340,22 @@ def test_the_curated_profile_shows_the_warnings_of_an_approved_record(client, db
     fragment = _warnings_of(read.json(), tse.public_ref)
     assert fragment["status"] == "recorded"
     assert _MISSING_IRC in _codes(fragment)
+
+
+def test_a_sub_tolerance_mode_on_a_minimum_is_stored_on_the_frequency_calculation(client):
+    from tests.api.test_api_minimum_imaginary_tau import _payload
+
+    response = client.post("/api/v1/uploads/conformers", json=_payload(imag_freq_cm1=-15.0))
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert "minimum_imaginary_modes_below_tau" in {w["code"] for w in body["warnings"]}
+
+    freq_ref = body["additional_calculations"][0]["calculation_ref"]
+    primary_ref = body["primary_calculation"]["calculation_ref"]
+    freq = _warnings_of(client.get(f"/api/v1/scientific/calculations/{freq_ref}").json(), freq_ref)
+    assert freq["status"] == "recorded"
+    item = next(i for i in freq["items"] if i["code"] == "minimum_imaginary_modes_below_tau")
+    assert item["register_entry"] == 17
+    # Not on the sp it was deposited beside.
+    primary = _warnings_of(client.get(f"/api/v1/scientific/calculations/{primary_ref}").json(), primary_ref)
+    assert "minimum_imaginary_modes_below_tau" not in _codes(primary)

@@ -109,7 +109,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - **[9]** The multiset of isotopic substitutions declared in a species entry's SMILES equals the multiset carried by the geometry deposited under it.
 - **[10]** Every geometry linked to a calculation is made of the atoms of the subject that calculation is filed under -- the species entry's own formula, or, for a transition state, the sum of its reaction's reactants.
 - **[13]** An optimisation's output geometry still describes the species it was declared for — the optimiser handed back the molecule it was given.
-- **[17]** A transition state's imaginary modes other than the reaction coordinate are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
+- **[17]** A transition state's imaginary modes other than the reaction coordinate, and every imaginary mode on a species entry declared a minimum, are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
 - **[37]** A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
 
 ## Entries
@@ -381,23 +381,38 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Three, and they are the point of the rule. Deposit no frequency evidence: `n_imag=None` produces no findings at all, because absence is never contradiction. Or deposit the extra imaginary modes honestly — designate the reaction coordinate and give each other mode a disposition (`torsion`, `rigid_body_residue`, `intermolecular`, `ring_pucker`, `symmetry_breaking`, or an explicit `unassigned`) — and a genuine higher-order saddle is accepted with a warning and a structural flag. Or, if the extra mode really is the barrier, designate *it*. What has no door is refusing to say which mode is the reaction coordinate.
 
-### 15. A species entry declared a minimum has no imaginary vibrational modes.
+### 15. A species entry declared a minimum has no imaginary vibrational mode at or above the tolerance of the protocol that produced it.
 
 | Field | Value |
 | --- | --- |
 | **Tier** | `block` |
 | **Code** | `n_imag_contradicts_minimum` |
 | **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
-| **Governing ADR** | 0008 |
+| **Governing ADR** | 0008, 0012 |
 
-**Why this tier.** Definitional. A covalently bound minimum whose own frequency evidence reports an imaginary mode is mislabelled: the correct response is to re-optimise on a tighter integration grid or to declare it as something else, so refusing the deposit rejects no correct calculation.
+**Why this tier.** Definitional above the protocol's tolerance. A covalently bound minimum whose own frequency evidence reports an imaginary mode at or above tau is mislabelled: at that protocol the negative curvature is real, so the correct response is to re-optimise or to declare the entry as something else, and refusing the deposit rejects no correct calculation. Below tau the protocol cannot tell the sign of the curvature from zero, so refusing would reject correct published calculations; that case is the warning declared next, not a refusal.
 
 **Enforced at.**
 
 - `evaluate_species_entry_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::evaluate_species_entry_frequency`
-  *One imaginary mode and two-or-more are folded into a single blocking message that names `n_imag_higher_order_saddle` for the higher-order case. A stationary-point kind the module has not been taught about produces no findings — adding an enum member must be a deliberate decision, not a default.*
+  *One imaginary mode and two-or-more are folded into a single blocking message that names `n_imag_higher_order_saddle` for the higher-order case. The refusal stands when any deposited mode is at or above tau, and when the magnitudes of the modes were not deposited (a mode nobody measured is never assumed soft). The same code also refuses a reaction-coordinate designation on a minimum, because a minimum has no reaction coordinate. A stationary-point kind the module has not been taught about produces no findings — adding an enum member must be a deliberate decision, not a default.*
 
-**Escape hatch.** Declare `species_entry_kind='vdw_complex'`, which records the same mode with a warning instead, or deposit the structure through a transition-state payload if the single imaginary mode is real.
+**Thresholds.**
+
+- `tau` — **not a constant.** Resolved per record, in cm-1, by `resolve_tau` (`schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::resolve_tau`) from the recorded execution provenance `freq.hessian_method`, `grid.quality`, `opt.convergence`.
+  The Hessian noise floor is flat in omega-squared, not in omega, so the uncertainty in a frequency diverges as omega goes to zero: at 300 cm-1 the sign is never in doubt, at 20 cm-1 it is indeterminate. Where the crossover sits depends on how the second derivatives were built, on what integration grid, and how tightly the geometry was converged. The same -42 cm-1 is real negative curvature under an analytic Hessian on a tight grid and indistinguishable from zero under a numerical one on a default grid, so it cannot be classified from the frequency list at all — only against the protocol that produced it. A constant here would be a claim about physics that is false.
+
+  | recorded protocol | `tau` / cm-1 |
+  | --- | --- |
+  | analytic Hessian, tight grid, tight optimisation | 15 |
+  | analytic Hessian, default grid and tolerances | 30 |
+  | finite-difference Hessian from analytic gradients | 50 |
+  | finite-difference Hessian from energies | 80 |
+  | Hessian method not recorded | 50 |
+
+  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — tau is 50 cm-1 and the record stores `protocol_not_recorded` as the basis. The fallback is deliberately the *conservative* row rather than the analytic one: assuming the better case would flag genuine quadrature noise as a real higher-order saddle. For a transition state tau never decides between blocking and warning — every blocking rule there is a contract about what the record says, not about magnitude — so missing provenance changes how loudly a record is flagged and never whether it is accepted. For a declared minimum tau is the line between the warning and the refusal, so missing provenance leaves that line at 50 cm-1, the same conservative row.
+
+**Escape hatch.** Declare `species_entry_kind='vdw_complex'`, which records the same mode with a warning instead, or deposit the structure through a transition-state payload if the single imaginary mode is real. A mode below tau needs no escape: it is accepted with a warning.
 
 ### 16. A van der Waals complex is formally a minimum, so an imaginary mode on one is recorded and flagged rather than refused — unless the mode is too stiff to be an intermolecular one, which suggests a genuine reaction coordinate.
 
@@ -417,12 +432,12 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** This *is* the escape hatch for the blocking minimum rule. Its own cost is that a genuinely mislabelled saddle point deposited as a van der Waals complex is accepted with a warning.
 
-### 17. A transition state's imaginary modes other than the reaction coordinate are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
+### 17. A transition state's imaginary modes other than the reaction coordinate, and every imaginary mode on a species entry declared a minimum, are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
 
 | Field | Value |
 | --- | --- |
 | **Tier** | `warn` |
-| **Code** | `transition_state_extra_imaginary_modes_below_tau`, `transition_state_extra_imaginary_mode_above_tau`, `transition_state_extra_imaginary_modes_not_assessable` |
+| **Code** | `minimum_imaginary_modes_below_tau`, `transition_state_extra_imaginary_modes_below_tau`, `transition_state_extra_imaginary_mode_above_tau`, `transition_state_extra_imaginary_modes_not_assessable` |
 | **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on every detail read of that record |
 | **Governing ADR** | 0012 |
 
@@ -432,6 +447,8 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 - `evaluate_transition_state_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::evaluate_transition_state_frequency`
   *Above tau the record is flagged as well as warned: the flag is ADR 0012's answer to 'warnings get ignored', excluding the record from default transition-state consumption without creating the incentive to edit the frequency list that a hard block creates. Below tau it is warned only. The flag and the tau that decided it are persisted on `calc_freq_result` rather than recomputed, so a later parser improvement cannot silently re-label historical records.*
+- `evaluate_species_entry_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::evaluate_species_entry_frequency`
+  *The minimum case of the same judgement, added 2026-10-29. When every imaginary mode of a declared minimum is below tau the record is accepted with `minimum_imaginary_modes_below_tau`; at or above tau the blocking minimum rule above still refuses it. The tau that decided it is persisted on `calc_freq_result` (`imaginary_mode_tau_cm1` and its basis) with the structural flag stored as false, meaning judged and not flagged, rather than recomputed later. The read-time imaginary-mode projections report beside the warning and never gate it.*
 
 **Thresholds.**
 
@@ -446,7 +463,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   | finite-difference Hessian from energies | 80 |
   | Hessian method not recorded | 50 |
 
-  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — tau is 50 cm-1 and the record stores `protocol_not_recorded` as the basis. The fallback is deliberately the *conservative* row rather than the analytic one: assuming the better case would flag genuine quadrature noise as a real higher-order saddle. Crucially, tau never decides between blocking and warning — every blocking rule here is a contract about what the record says, not about magnitude — so missing provenance changes how loudly a record is flagged and never whether it is accepted.
+  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — tau is 50 cm-1 and the record stores `protocol_not_recorded` as the basis. The fallback is deliberately the *conservative* row rather than the analytic one: assuming the better case would flag genuine quadrature noise as a real higher-order saddle. For a transition state tau never decides between blocking and warning — every blocking rule there is a contract about what the record says, not about magnitude — so missing provenance changes how loudly a record is flagged and never whether it is accepted. For a declared minimum tau is the line between the warning and the refusal, so missing provenance leaves that line at 50 cm-1, the same conservative row.
 
 **Escape hatch.** None is needed — the check never refuses. Its cost runs the other way: a genuine higher-order saddle, a torsional maximum and a valley-ridge inflection are all accepted, and only the structural flag separates them from a clean first-order saddle for a consumer who reads it.
 
@@ -483,7 +500,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   | finite-difference Hessian from energies | 80 |
   | Hessian method not recorded | 50 |
 
-  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — tau is 50 cm-1 and the record stores `protocol_not_recorded` as the basis. The fallback is deliberately the *conservative* row rather than the analytic one: assuming the better case would flag genuine quadrature noise as a real higher-order saddle. Crucially, tau never decides between blocking and warning — every blocking rule here is a contract about what the record says, not about magnitude — so missing provenance changes how loudly a record is flagged and never whether it is accepted.
+  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — tau is 50 cm-1 and the record stores `protocol_not_recorded` as the basis. The fallback is deliberately the *conservative* row rather than the analytic one: assuming the better case would flag genuine quadrature noise as a real higher-order saddle. For a transition state tau never decides between blocking and warning — every blocking rule there is a contract about what the record says, not about magnitude — so missing provenance changes how loudly a record is flagged and never whether it is accepted. For a declared minimum tau is the line between the warning and the refusal, so missing provenance leaves that line at 50 cm-1, the same conservative row.
 
 **Escape hatch.** None is needed — the check never refuses. A referee should read the threshold as a tunable reporting line, not a claim about physics.
 

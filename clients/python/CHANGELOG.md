@@ -4,7 +4,7 @@
 
 Deposit-time warnings are shown with the record when it is read.
 
-- Requires `tckdb-schemas>=0.142.0`.
+- Requires `tckdb-schemas>=0.143.0`.
 - Every `UploadWarning` dict in an upload result's `warnings` carries a `context` key (`null` when the check stated no values).
 - Detail reads of a calculation, a transition-state entry (and its concept), a statmech, a transport record, a network solve and a conformer observation, and the
   per-parent kinetics and thermo reads, carry `record_warnings`: `[{"record_ref": ..., "status": "recorded" | "not_recorded", "items": [...]}]`. `not_recorded` means the
