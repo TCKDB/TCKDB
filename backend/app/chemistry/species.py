@@ -113,6 +113,9 @@ def identity_mol_from_smiles(smiles: str) -> Chem.Mol:
             atom.SetIsotope(0)
     ident = Chem.RemoveHs(ident)
     Chem.SanitizeMol(ident)
+    # Sanitisation drops the marks of a cumulene (and an allene's chirality mark); keep the text so the stereo
+    # layer can read them again (app.chemistry.stereo).
+    ident.SetProp(stereo.SMILES_PROP, smiles)
     return ident
 
 

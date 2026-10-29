@@ -3700,7 +3700,7 @@ Table species_entry {
 
   checks {
     `merged_into_species_entry_id IS NULL OR merged_into_species_entry_id <> id` [name: 'ck_species_entry_not_merged_into_itself']
-    `stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSrsEZez?-](,[RSrsEZez?-])*$'` [name: 'ck_species_entry_stereo_descriptor_vocabulary']
+    `stereo_descriptor IS NULL OR stereo_descriptor ~ '^(Ra|Sa|[RSrsEZez?-])(,(Ra|Sa|[RSrsEZez?-]))*$'` [name: 'ck_species_entry_stereo_descriptor_vocabulary']
     `(stereo_descriptor IS NULL) = (stereo_resolution IS NULL)` [name: 'ck_species_entry_stereo_resolution_iff_descriptor']
   }
 

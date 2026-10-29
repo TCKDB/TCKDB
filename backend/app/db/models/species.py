@@ -270,7 +270,7 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         Index("ix_species_entry_species_id", "species_id"),
         Index("ix_species_entry_stereo_smiles", "stereo_smiles"),
         CheckConstraint(
-            "stereo_descriptor IS NULL OR stereo_descriptor ~ '^[RSrsEZez?-](,[RSrsEZez?-])*$'",
+            "stereo_descriptor IS NULL OR stereo_descriptor ~ '^(Ra|Sa|[RSrsEZez?-])(,(Ra|Sa|[RSrsEZez?-]))*$'",
             name="stereo_descriptor_vocabulary",
         ),
         CheckConstraint(

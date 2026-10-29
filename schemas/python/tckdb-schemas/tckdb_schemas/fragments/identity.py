@@ -31,7 +31,7 @@ from tckdb_schemas.enums import (
 from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
 
 #: The closed vocabulary of a stereo descriptor (and of ``stereo_label``).
-STEREO_DESCRIPTOR_PATTERN = re.compile(r"[RSrsEZez?-](,[RSrsEZez?-])*")
+STEREO_DESCRIPTOR_PATTERN = re.compile(r"(Ra|Sa|[RSrsEZez?-])(,(Ra|Sa|[RSrsEZez?-]))*")
 
 _IDENTITY_TEXT_FIELDS = (
     "unmapped_smiles",
@@ -292,8 +292,8 @@ class SpeciesEntryIdentityPayload(
             return value
         if not STEREO_DESCRIPTOR_PATTERN.fullmatch(value.strip()):
             raise ValueError(
-                "stereo_label must be stereo descriptor tokens R, S, r, s, E, Z, e, z, - "
-                "(not stereogenic here) or ? (unknown), comma-separated, one per stereo "
+                "stereo_label must be stereo descriptor tokens R, S, r, s, E, Z, e, z, Ra, Sa "
+                "(an allene axis), - (not stereogenic here) or ? (unknown), comma-separated, one per stereo "
                 "element in canonical order (for example 'E' or 'R,S' or 'E,?'); free "
                 "text such as 'trans' is not accepted"
             )
