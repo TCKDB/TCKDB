@@ -251,7 +251,28 @@ def test_entries_of_one_species_that_differ_in_state_do_not_collide(db_session) 
     assert _state(db_session, first)[0] == _state(db_session, second)[0] == "Ra"
 
 
-def test_filled_entries_with_a_stored_review_are_reported_as_restaling(db_session, old_world, capsys) -> None:
+def _assessment(db_session, entry: int, ref: str) -> None:
+    db_session.execute(
+        text(
+            "INSERT INTO record_reproducibility_assessment (record_type, record_id, grade, rubric_name, rubric_version, "
+            "context_hash, context_json, assessor_kind, public_ref) VALUES "
+            "(CAST('species_entry' AS submission_record_type), :e, CAST('described' AS reproducibility_grade), 'r', 1, "
+            "repeat('b', 64), CAST('{}' AS jsonb), CAST('system' AS reproducibility_assessor_kind), :ref)"
+        ),
+        {"e": entry, "ref": ref},
+    )
+
+
+def test_filled_entries_with_a_stored_assessment_are_reported_as_restaling(db_session, old_world, capsys) -> None:
+    entry, _ = _entry(db_session, _species(db_session, "CC=C=CC"), "CC=C=CC", "?")
+    _geometry(db_session, entry, fx.build("CC=C=CC", -90.0))
+    _assessment(db_session, entry, "rra_cumulene_test_1")
+    old_world.upgrade()
+    out = capsys.readouterr().out
+    assert "1 reproducibility assessment(s)" in out and "will read as stale" in out
+
+
+def test_a_human_review_row_is_not_a_digest_and_is_not_counted(db_session, old_world, capsys) -> None:
     entry, _ = _entry(db_session, _species(db_session, "CC=C=CC"), "CC=C=CC", "?")
     _geometry(db_session, entry, fx.build("CC=C=CC", -90.0))
     db_session.execute(
@@ -262,8 +283,55 @@ def test_filled_entries_with_a_stored_review_are_reported_as_restaling(db_sessio
         {"e": entry},
     )
     old_world.upgrade()
+    assert "so none restales" in capsys.readouterr().out
+
+
+def test_entries_without_a_geometry_are_listed_by_ref_and_not_double_counted(db_session, old_world, capsys) -> None:
+    entry, ref = _entry(db_session, _species(db_session, "CC=C=CC"), "CC=C=CC", "?")
+    old_world.upgrade()
     out = capsys.readouterr().out
-    assert "1 record review(s)" in out and "will read as stale" in out
+    assert f"no linked geometry, entry left as it was: {ref}" in out
+    assert "0 filled" in out and "1 left (no linked geometry)" in out
+    assert _state(db_session, entry)[0] == "?"
+
+
+RING = "CC1C=C=CCCCCC=C=C1"
+
+
+def _embedded(smiles: str, seed: int = 3) -> Chem.Mol:
+    from rdkit.Chem import AllChem
+
+    mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
+    AllChem.EmbedMolecule(mol, randomSeed=seed)
+    return mol
+
+
+def test_a_stored_minus_on_an_allene_dependent_centre_is_listed_and_left(db_session, old_world, capsys) -> None:
+    entry, ref = _entry(db_session, _species(db_session, RING), RING, "?,?,-")
+    _geometry(db_session, entry, _embedded(RING))
+    old_world.upgrade()
+    out = capsys.readouterr().out
+    assert _state(db_session, entry)[0] == "?,?,-"
+    assert ref in out and "entry left as it was" in out
+
+
+def test_the_fill_never_writes_a_state_for_an_allene_dependent_element(db_session, monkeypatch) -> None:
+    from dataclasses import replace
+
+    entry, ref = _entry(db_session, _species(db_session, RING), RING, "?,?,?")
+    _geometry(db_session, entry, _embedded(RING))
+    real = cumulene_stereo_fill.stereo.resolve_stereo
+    order = [e.kind for e in stereo.frame_from_mol(identity_mol_from_smiles(RING)).elements]
+
+    def with_a_dash(*args, **kwargs):
+        tokens = ["Ra", "Sa", "Sa"]
+        tokens[order.index("allene_dependent")] = "-"
+        return replace(real(*args, **kwargs), descriptor=",".join(tokens))
+
+    monkeypatch.setattr(cumulene_stereo_fill.stereo, "resolve_stereo", with_a_dash)
+    report = cumulene_stereo_fill.fill_cumulene_stereo(db_session.connection(), revision="t")
+    assert report.changes == [] and any(ref in line for line in report.unreadable)
+    assert _state(db_session, entry)[0] == "?,?,?"
 
 
 def test_with_no_stored_review_on_a_filled_entry_nothing_restales(db_session, old_world, capsys) -> None:

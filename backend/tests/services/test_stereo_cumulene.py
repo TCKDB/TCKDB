@@ -524,3 +524,55 @@ def test_a_geometry_the_cip_probe_cannot_handle_says_nothing_instead_of_failing(
     geometry = fx.build("CC=C=CC", 90.0)
     monkeypatch.setattr(stereo, "cip_higher_substituent", boom)
     assert tokens("CC=C=CC", geometry) == ["?"]
+
+
+# ---------------------------------------------------------------------------
+# A centre between two allenes that share a ring (review blocker)
+# ---------------------------------------------------------------------------
+
+RING_BETWEEN_ALLENES = ["CC1C=C=CCCCCC=C=C1", "OC1C=C=CCCCCCCC=C=C1"]
+
+
+@pytest.mark.parametrize("smiles", RING_BETWEEN_ALLENES)
+def test_a_centre_between_two_ring_allenes_is_allene_dependent_never_non_stereogenic(smiles: str) -> None:
+    f = frame(smiles)
+    assert sorted(e.kind for e in f.elements) == ["allene_dependent", "axial", "axial"]
+    isomers = stereo.stereoisomers(f)
+    assert all("-" not in t for t, _ in isomers)
+    assert {",".join(t) for t, _ in isomers} == {"Ra,Ra,?", "Ra,Sa,?", "Sa,Sa,?"}
+    assert stereo.unrepresented_stereo_kinds(smiles) == (stereo.R_ALLENE_DEPENDENT,)
+    assert stereo.R_ALLENE_DEPENDENT in resolve(smiles).unrepresented
+
+
+@pytest.mark.parametrize("smiles", RING_BETWEEN_ALLENES)
+def test_the_ring_case_from_geometry_leaves_the_centre_unknown(smiles: str) -> None:
+    read = 0
+    for seed in range(12):
+        m = Chem.AddHs(Chem.MolFromSmiles(smiles))
+        if AllChem.EmbedMolecule(m, randomSeed=seed) != 0:
+            continue
+        r = resolve(smiles, geometries=[m])
+        assert "-" not in r.descriptor.split(","), (seed, r.descriptor)
+        if r.descriptor.count("?") == 1:
+            read += 1
+            assert stereo.R_ALLENE_DEPENDENT in r.unrepresented
+            assert r.resolution == StereoResolution.partial
+    assert read
+
+
+@pytest.mark.parametrize("smiles", RING_BETWEEN_ALLENES)
+def test_the_ring_case_label_cannot_state_the_centre(smiles: str) -> None:
+    dependent = [e.kind for e in frame(smiles).elements].index("allene_dependent")
+    for token in ("-", "r", "s", "R"):
+        tokens = ["Ra", "Ra", "Ra"]
+        tokens[dependent] = token
+        with pytest.raises(CodedValueError) as excinfo:
+            resolve(smiles, label=",".join(tokens))
+        assert excinfo.value.code == stereo.W_SPECIES_STEREO_LABEL_INVALID
+    tokens = ["Ra", "Ra", "Ra"]
+    tokens[dependent] = "?"
+    assert resolve(smiles, label=",".join(tokens)).resolution == StereoResolution.partial
+
+
+def test_a_ring_with_one_allene_keeps_its_ordinary_centre() -> None:
+    assert "allene_dependent" not in [e.kind for e in frame("CC1CCCCC=C=CCCCC1").elements]

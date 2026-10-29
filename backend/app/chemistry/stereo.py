@@ -401,8 +401,16 @@ def _branch(mol_h: Chem.Mol, start: int, block: int) -> set[int]:
     return seen
 
 
-def _tied_arms_with_allene(mol_h: Chem.Mol, centre: int, neighbours: list[int], ranks_h: list[int], axial_atoms: set[int]):
-    """The pair of constitutionally equal arms of ``centre`` that each contain an allene, else ``None``."""
+def _tied_arms_with_allene(
+    mol_h: Chem.Mol, centre: int, neighbours: list[int], ranks_h: list[int], axial_atoms: set[int], chains=()
+):
+    """The pair of constitutionally equal arms of ``centre`` that each contain an allene, else ``None``.
+
+    When a ring joins the two arms they are one branch. The element is then still tied to the allenes whenever the
+    ring holds at least two axes: the centre sits between them, and with opposite senses (``Ra,Sa``) it is
+    pseudo-asymmetric, which RDKit's perception and the allene-blind enumeration cannot see. A ring with a single
+    axis is left to RDKit (an axis fixed by the symmetry swap does not make the centre conditional).
+    """
 
     by_rank: dict[int, list[int]] = {}
     for n in neighbours:
@@ -412,8 +420,9 @@ def _tied_arms_with_allene(mol_h: Chem.Mol, centre: int, neighbours: list[int], 
         return None
     first, second = pairs[0]
     arm_first = _branch(mol_h, first, centre)
-    if second in arm_first:  # a ring joins the arms: not a pair of independent arms
-        return None
+    if second in arm_first:  # a ring joins the arms
+        inside = [c for c in chains if set(c) <= arm_first]
+        return pairs[0] if len(inside) >= 2 else None
     if arm_first & axial_atoms and _branch(mol_h, second, centre) & axial_atoms:
         return pairs[0]
     return None
@@ -430,7 +439,8 @@ def _allene_dependent_elements(
     always stated ``?``; it is never deduced non-stereogenic.
     """
 
-    axial_atoms = {a for e in found if e.kind == _AXIAL for a in e.chain}
+    chains = [e.chain for e in found if e.kind == _AXIAL]
+    axial_atoms = {a for chain in chains for a in chain}
     if not axial_atoms:
         return []
     extra: list[StereoElement] = []
@@ -441,7 +451,7 @@ def _allene_dependent_elements(
         neighbours = [n.GetIdx() for n in atom.GetNeighbors()]
         if len({ranks_h[n] for n in neighbours}) != 3:
             continue
-        if _tied_arms_with_allene(mol_h, idx, neighbours, ranks_h, axial_atoms) is not None:
+        if _tied_arms_with_allene(mol_h, idx, neighbours, ranks_h, axial_atoms, chains) is not None:
             extra.append(StereoElement(_ALLENE_DEPENDENT, (idx,), (ranks[idx], 0, ranks[idx])))
     for bond in mol_h.GetBonds():
         if bond.GetBondType() != Chem.BondType.DOUBLE or bond.GetIdx() in skipped:
@@ -455,7 +465,7 @@ def _allene_dependent_elements(
                 verdicts.append(None)
             elif ranks_h[others[0]] != ranks_h[others[1]]:
                 verdicts.append("distinct")
-            elif _tied_arms_with_allene(mol_h, here, [*others, there], ranks_h, axial_atoms) is not None:
+            elif _tied_arms_with_allene(mol_h, here, [*others, there], ranks_h, axial_atoms, chains) is not None:
                 verdicts.append("allene")
             else:
                 verdicts.append(None)

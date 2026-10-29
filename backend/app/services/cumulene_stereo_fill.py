@@ -35,15 +35,16 @@ class FillReport:
     merged_skipped: list[str] = field(default_factory=list)
     disagreements: list[str] = field(default_factory=list)
     unreadable: list[str] = field(default_factory=list)
-    without_geometry: int = 0
+    without_geometry: list[str] = field(default_factory=list)
     unsettled: int = 0
+    #: Stored digests that take ``species_entry.stereo_label`` and sit on a filled entry whose label changed.
+    stale_assessments: int = 0
     stale_machine_reviews: int = 0
-    stale_record_reviews: int = 0
 
     def summary(self) -> str:
         return (
             f"{len(self.changes)} filled, {self.unsettled} left (geometries do not settle the element), "
-            f"{self.without_geometry} left (no linked geometry), {len(self.disagreements)} left (geometries "
+            f"{len(self.without_geometry)} left (no linked geometry), {len(self.disagreements)} left (geometries "
             f"disagree), {len(self.unreadable)} left (descriptor unreadable), {len(self.merged_skipped)} merged "
             f"row(s) skipped, {self.examined} candidate(s) examined"
         )
@@ -142,10 +143,9 @@ def fill_cumulene_stereo(bind, *, revision: str, apply: bool = True) -> FillRepo
         else:
             label = row.stereo_descriptor
         geometries = _geometries(bind, row.id)
-        if not geometries:
-            report.without_geometry += 1
-            if not mismatch:
-                continue
+        if not geometries and not mismatch:
+            report.without_geometry.append(row.public_ref)
+            continue
         try:
             resolved = stereo.resolve_stereo(frame, geometries=geometries, supplied_label=label, use_marks=False)
         except CodedValueError as exc:
@@ -156,6 +156,17 @@ def fill_cumulene_stereo(bind, *, revision: str, apply: bool = True) -> FillRepo
             continue
         if resolved.descriptor == row.stereo_descriptor:
             report.unsettled += 1
+            continue
+        # An element that depends on an allene's sense (or a small-ring allene) is never stated by this step:
+        # a '-' there would be a deduction no source supports, so such a row is listed and left.
+        blocked = [
+            e for e, t in zip(frame.elements, resolved.descriptor.split(","), strict=False) if e.never_settled and t != "?"
+        ]
+        if blocked:
+            report.unreadable.append(
+                f"{row.public_ref}: {resolved.descriptor!r} would state an element that depends on an allene's "
+                "sense (or a small-ring allene); that element is only ever '?'"
+            )
             continue
         planned.append((row, resolved))
 
@@ -211,20 +222,41 @@ def fill_cumulene_stereo(bind, *, revision: str, apply: bool = True) -> FillRepo
                 },
             )
     if changed_ids:
-        report.stale_machine_reviews = bind.execute(
-            text(
-                "SELECT count(*) FROM record_machine_review "
-                "WHERE record_type::text = 'species_entry' AND record_id = ANY(:ids)"
-            ),
-            {"ids": changed_ids},
-        ).scalar_one()
-        report.stale_record_reviews = bind.execute(
-            text(
-                "SELECT count(*) FROM record_review WHERE record_type::text = 'species_entry' AND record_id = ANY(:ids)"
-            ),
-            {"ids": changed_ids},
-        ).scalar_one()
+        report.stale_assessments, report.stale_machine_reviews = _stale_digests(bind, changed_ids)
     return report
+
+
+def _stale_digests(bind, entry_ids: list[int]) -> tuple[int, int]:
+    """Stored digests that take ``species_entry.stereo_label``, on or about the entries in ``entry_ids``.
+
+    * Reproducibility assessments of the entry itself (``reproducibility_rubric._mapped_columns`` snapshots every
+      column that is not in ``snapshot_defaults.DERIVED_COLUMNS``, and ``stereo_label`` is not).
+    * Machine reviews whose consistency inputs embed the entry's columns (``consistency.core.snapshot``): thermo
+      records of the entry (Gibbs self-consistency) and kinetics of a reaction entry that has it as a structure
+      participant (thermo-kinetics and tunnelling inputs).
+
+    Reporting only, an upper bound: a review is counted whether or not a check of it has run since.
+    """
+
+    assessments = bind.execute(
+        text(
+            "SELECT count(*) FROM record_reproducibility_assessment "
+            "WHERE record_type::text = 'species_entry' AND record_id = ANY(:ids)"
+        ),
+        {"ids": entry_ids},
+    ).scalar_one()
+    reviews = bind.execute(
+        text(
+            "SELECT count(*) FROM record_machine_review r WHERE "
+            "(r.record_type::text = 'thermo' AND r.record_id IN "
+            "   (SELECT id FROM thermo WHERE species_entry_id = ANY(:ids))) "
+            "OR (r.record_type::text = 'kinetics' AND r.record_id IN "
+            "   (SELECT k.id FROM kinetics k JOIN reaction_entry_structure_participant p "
+            "      ON p.reaction_entry_id = k.reaction_entry_id WHERE p.species_entry_id = ANY(:ids)))"
+        ),
+        {"ids": entry_ids},
+    ).scalar_one()
+    return assessments, reviews
 
 
 def print_report(report: FillReport, revision: str) -> None:
@@ -236,15 +268,17 @@ def print_report(report: FillReport, revision: str) -> None:
         print(f"[{revision}] merged species_entry skipped (frozen): {ref}")
     for line in report.disagreements:
         print(f"[{revision}] geometries disagree, entry left as it was: {line}")
+    for ref in report.without_geometry:
+        print(f"[{revision}] no linked geometry, entry left as it was: {ref}")
     for line in report.unreadable:
         print(f"[{revision}] entry left as it was: {line}")
     print(f"[{revision}] cumulene stereo fill: {report.summary()}")
-    if report.stale_machine_reviews or report.stale_record_reviews:
+    if report.stale_assessments or report.stale_machine_reviews:
         print(
-            f"[{revision}] {report.stale_machine_reviews} machine review(s) and {report.stale_record_reviews} "
-            "record review(s) sit on filled entries whose stereo_label changed; stereo_label is part of the "
-            "species_entry digest (stereo_descriptor, stereo_resolution and stereo_smiles are not), so those "
-            "reviews will read as stale."
+            f"[{revision}] {report.stale_assessments} reproducibility assessment(s) and {report.stale_machine_reviews} "
+            "machine review(s) take the stereo_label of a filled entry whose label changed (stereo_label is part "
+            "of the species_entry digest; stereo_descriptor, stereo_resolution and stereo_smiles are not), so they "
+            "will read as stale."
         )
     else:
-        print(f"[{revision}] no stored review sits on an entry whose stereo_label changed, so none restales")
+        print(f"[{revision}] no stored digest takes the stereo_label of a filled entry whose label changed, so none restales")
