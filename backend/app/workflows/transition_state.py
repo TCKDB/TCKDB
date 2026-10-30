@@ -234,6 +234,7 @@ def persist_transition_state_upload(
             source_conformer_observation_id=None,
             source_calculation_id=None,
             created_by=created_by,
+            field=f"applied_energy_corrections[{index}]",
             warnings_out=warnings,
         )
 

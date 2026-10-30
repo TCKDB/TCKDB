@@ -551,6 +551,7 @@ def persist_thermo_upload(
                 target_species_entry_id=species_entry.id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                field=f"applied_energy_corrections[{correction_index}]",
                 warnings_out=warnings_out,
             )
         )

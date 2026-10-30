@@ -108,6 +108,7 @@ from app.services.deposit_warnings import (
     attribute_warnings,
     note_anchor,
     note_calculation_keys,
+    note_preferred_scope_anchor,
 )
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
@@ -969,13 +970,15 @@ def persist_computed_species_upload(
             f"conformers[{outcome.conformer_in_bundle.key!r}]",
             SubmissionRecordType.conformer_observation,
             outcome.observation.id,
+            scope="",
         )
     if thermo_row is not None:
-        note_anchor(session, "thermo", SubmissionRecordType.thermo, thermo_row.id)
+        note_anchor(session, "thermo", SubmissionRecordType.thermo, thermo_row.id, scope="")
     if statmech_row is not None:
-        note_anchor(session, "statmech", SubmissionRecordType.statmech, statmech_row.id)
+        note_anchor(session, "statmech", SubmissionRecordType.statmech, statmech_row.id, scope="")
     if transport_row is not None:
-        note_anchor(session, "transport", SubmissionRecordType.transport, transport_row.id)
+        note_anchor(session, "transport", SubmissionRecordType.transport, transport_row.id, scope="")
+    note_preferred_scope_anchor(session, "applied_energy_corrections", "")
     apply_review_policy(
         session,
         targets=current_conformer_group_targets(session, review_targets),
@@ -1187,6 +1190,7 @@ def _persist_thermo_block(
             source_conformer_observation_id=source_conf_id,
             source_calculation_id=source_calc_id,
             created_by=created_by,
+            field=f"thermo.applied_energy_corrections[{i}]",
             warnings_out=warnings,
         )
         applied_correction_ids.append(applied.id)
@@ -1265,6 +1269,7 @@ def _persist_top_level_applied_corrections(
             source_conformer_observation_id=source_conf_id,
             source_calculation_id=source_calc_id,
             created_by=created_by,
+            field=f"applied_energy_corrections[{i}]",
             warnings_out=warnings,
         )
         applied_correction_ids.append(applied.id)

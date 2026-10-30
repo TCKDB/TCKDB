@@ -220,6 +220,23 @@ def _first_note(session: Session, warning: UploadWarning) -> bool:
     return True
 
 
+def note_preferred_scope_anchor(
+    session: Session,
+    path: str,
+    scope: str,
+    prefer: tuple[RT, ...] = (RT.thermo, RT.statmech, RT.transport, RT.conformer_observation),
+) -> None:
+    """``path`` (a correction applied to a species) is about that species' result record: the first type in ``prefer``
+    that the deposit wrote exactly one of inside ``scope``. Nothing is noted when there is none, and the warning then
+    cannot be placed."""
+    anchors: list[tuple[str, RT, int, str | None, bool]] = session.info.get(_ANCHORS_KEY, [])
+    for record_type in prefer:
+        records = {(a[1], a[2]) for a in anchors if a[3] == scope and a[1] is record_type}
+        if len(records) == 1:
+            note_anchor(session, path, *next(iter(records)))
+            return
+
+
 def note_warning_subject(session: Session, warning: UploadWarning, record_type: RT, record_id: int) -> None:
     """The producer of ``warning`` knows which row it is about (matched by content, consumed in emission order)."""
     if not _first_note(session, warning):
@@ -324,9 +341,10 @@ def _place_all(warnings, *, targets, calc_keys, anchors, subjects) -> list[list[
 
 
 def _json_safe(value: Any) -> Any:
-    """``value`` with no NaN, Infinity or non-JSON type left in it (those become strings)."""
+    """``value`` with no NaN, Infinity or non-JSON type left in it: a non-finite number becomes null (what the upload response
+    already shows for it), anything else that is not JSON becomes its text."""
     if isinstance(value, float):
-        return value if math.isfinite(value) else str(value)
+        return value if math.isfinite(value) else None
     if value is None or isinstance(value, (bool, int, str)):
         return value
     if isinstance(value, dict):

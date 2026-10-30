@@ -450,3 +450,58 @@ def test_a_fan_out_path_takes_a_provenance_gap_for_every_record_but_never_an_ide
     assert gap == {(RT.kinetics, 9001), (RT.kinetics, 9002)}
     (identity,) = [r for r in rows if r.code == "literature_title_mismatch"]
     assert identity.record_type is None
+
+
+def _two_kinetics_bundle() -> dict:
+    payload = _bundle([])
+    second = dict(payload["kinetics"][0])
+    second.update({"a": 3.4e12, "n": 0.1, "tmin_k": 500.0, "tmax_k": 2000.0, "note": "second fit"})
+    payload["kinetics"] = [payload["kinetics"][0], second]
+    return payload
+
+
+def test_each_of_two_kinetics_fits_keeps_the_warning_about_itself(client):
+    session = client._db_session
+    response = client.post("/api/v1/uploads/computed-reaction", json=_two_kinetics_bundle())
+    assert response.status_code == 201, response.text[:400]
+    body = response.json()
+    assert len(body["kinetics_ids"]) == 2
+    for index, kinetics_id in enumerate(body["kinetics_ids"]):
+        (row,) = _row(
+            session, body["submission_id"], "missing_level_of_theory_provenance", f"kinetics[{index}].energy_level_of_theory"
+        )
+        assert (row.record_type, row.record_id) == (RT.kinetics, kinetics_id)
+    # And a bundle-root gap is on both.
+    fan = _row(session, body["submission_id"], "missing_workflow_tool_provenance", "workflow_tool_release")
+    assert {r.record_id for r in fan} == set(body["kinetics_ids"])
+
+
+def _two_species_composite_delta_bundle() -> dict:
+    payload = _computed_reaction()
+    # ``_computed_reaction`` carries one composite_delta correction on its first species; give a second species the same.
+    first = payload["species"][0]
+    for species in payload["species"][1:]:
+        correction = dict(first["applied_energy_corrections"][0])
+        correction["source_calculation_key"] = f"{species['key']}-sp"
+        species["applied_energy_corrections"] = [correction]
+        break
+    return payload
+
+
+def test_the_composite_delta_warning_is_about_the_species_it_was_applied_to(client):
+    session = client._db_session
+    response = client.post("/api/v1/uploads/computed-reaction", json=_two_species_composite_delta_bundle())
+    assert response.status_code == 201, response.text[:600]
+    body = response.json()
+    fields = [w["field"] for w in body["warnings"] if w["code"] == "composite_delta_prefer_scheme_terms"]
+    assert len(fields) == 2 and all(f.startswith("species[") and ".applied_energy_corrections[" in f for f in fields), fields
+    rows = _stored(session, body["submission_id"], "composite_delta_prefer_scheme_terms")
+    assert len(rows) == 2
+    smiles = set()
+    for row in rows:
+        assert row.record_type is RT.thermo, (row.field, row.record_type)
+        assert row.field.startswith("species[") and row.field.endswith(".applied_energy_corrections[0].application_role")
+        thermo = session.get(Thermo, row.record_id)
+        key = row.field.split("'")[1]
+        smiles.add((key, thermo.species_entry.species.smiles))
+    assert len(smiles) == 2 and len({s for _k, s in smiles}) == 2

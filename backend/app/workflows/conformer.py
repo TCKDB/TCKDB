@@ -308,6 +308,7 @@ def persist_conformer_upload(
                 source_conformer_observation_id=source_conf_id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                field=f"applied_energy_corrections[{index}]",
                 warnings_out=provenance_warnings,
             )
         )

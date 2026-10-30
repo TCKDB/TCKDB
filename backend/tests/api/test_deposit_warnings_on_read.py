@@ -547,7 +547,7 @@ def test_a_failure_to_store_warnings_does_not_veto_a_job(client, db_session, mon
     assert db_session.scalar(select(func.count()).select_from(DepositWarning).where(DepositWarning.submission_id == queued.json()["submission_id"])) == 0
 
 
-def test_a_context_with_nan_or_infinity_is_stored_as_json_safe_text(client, db_session):
+def test_a_context_with_nan_or_infinity_is_stored_as_null(client, db_session):
     from tckdb_schemas.upload_warning import UploadWarning
 
     from app.services.deposit_warnings import store_deposit_warnings
@@ -567,7 +567,7 @@ def test_a_context_with_nan_or_infinity_is_stored_as_json_safe_text(client, db_s
         mark_checked=False,
     )
     (row,) = db_session.scalars(select(DepositWarning).where(DepositWarning.record_id == calc.id, DepositWarning.code.is_not(None))).all()
-    assert row.context == {"delta": "nan", "big": "inf", "ok": 1.5}
+    assert row.context == {"delta": None, "big": None, "ok": 1.5}
 
 
 def test_a_hidden_ref_in_a_warning_context_blanks_the_context_not_the_entry(client, db_session):
@@ -616,3 +616,31 @@ def test_a_hidden_ref_in_a_warning_context_blanks_the_context_not_the_entry(clie
     assert by_code["sp_energy_payload_log_mismatch"]["message"] == "plain"
     assert by_code["charge_mismatch"]["message"] in ("", None)
     assert hidden.public_ref not in read.text
+
+
+def test_a_nan_context_reads_exactly_as_the_upload_response_showed_it(client, db_session, monkeypatch):
+    """The depositor's response and a later reader's view agree: a non-finite number is null in both."""
+    from tckdb_schemas.upload_warning import UploadWarning
+
+    import app.api.routes.uploads as uploads
+    from tests.api.test_api_uploads import _transition_state_payload
+
+    real = uploads.transition_state_request_warnings
+    extra = UploadWarning(
+        field="validation_evidence",
+        code="sp_energy_payload_log_mismatch",
+        message="nan context",
+        context={"delta_hartree": float("nan"), "ok": 1.5, "nested": {"big": float("inf")}},
+    )
+    monkeypatch.setattr(uploads, "transition_state_request_warnings", lambda request: [*real(request), extra])
+
+    response = client.post("/api/v1/uploads/transition-states", json=_transition_state_payload())
+    assert response.status_code == 201, response.text[:400]
+    body = response.json()
+    (returned,) = [w for w in body["warnings"] if w["code"] == "sp_energy_payload_log_mismatch"]
+    tse = db_session.get(TransitionStateEntry, body["id"])
+    fragment = _warnings_of(
+        client.get(f"/api/v1/scientific/transition-state-entries/{tse.public_ref}").json(), tse.public_ref
+    )
+    (read,) = [i for i in fragment["items"] if i["code"] == "sp_energy_payload_log_mismatch"]
+    assert returned["context"] == read["context"] == {"delta_hartree": None, "ok": 1.5, "nested": {"big": None}}

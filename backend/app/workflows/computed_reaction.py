@@ -103,7 +103,12 @@ from app.services.conformer_resolution import (
     resolve_conformer_group,
     settle_conformer_basin,
 )
-from app.services.deposit_warnings import note_anchor, note_calculation_keys, note_warning_subject
+from app.services.deposit_warnings import (
+    note_anchor,
+    note_calculation_keys,
+    note_preferred_scope_anchor,
+    note_warning_subject,
+)
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -1290,6 +1295,7 @@ def persist_computed_reaction_upload(
                 source_conformer_observation_id=source_conf_id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                field=f"species[{sp.key!r}].applied_energy_corrections[{i}]",
                 warnings_out=sp_energy_warnings,
             )
             applied_correction_ids.append(applied.id)
@@ -1354,6 +1360,7 @@ def persist_computed_reaction_upload(
                 source_conformer_observation_id=source_conf_id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                field=f"transition_state.applied_energy_corrections[{i}]",
                 warnings_out=sp_energy_warnings,
             )
             applied_correction_ids.append(applied.id)
@@ -2251,6 +2258,11 @@ def persist_computed_reaction_upload(
         for aid in applied_correction_ids
     )
     note_calculation_keys(session, calculation_key_to_id)
+    for sp in request.species:
+        if sp.applied_energy_corrections:
+            note_preferred_scope_anchor(
+                session, f"species[{sp.key!r}].applied_energy_corrections", f"species[{sp.key!r}]"
+            )
     apply_review_policy(
         session,
         targets=current_conformer_group_targets(session, review_targets),
