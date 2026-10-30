@@ -422,3 +422,31 @@ def test_an_identity_subject_warning_with_no_single_result_record_marks_the_reco
     assert {(r.record_type, r.record_id) for r in _markers(session, submission.id) if r.record_type} == {
         (RT.calculation, t.record_id) for t in targets
     }
+
+
+def test_a_fan_out_path_takes_a_provenance_gap_for_every_record_but_never_an_identity_warning(client):
+    from app.db.models.app_user import AppUser
+    from app.db.models.common import SubmissionKind
+    from app.services.deposit_warnings import note_anchor, note_deposit_targets, store_deposit_warnings
+    from app.services.record_review import RecordRef
+    from app.services.submission import create_submission
+
+    session = client._db_session
+    user = session.scalars(select(AppUser).where(AppUser.username == "testuser")).one()
+    submission = create_submission(session, created_by=user.id, submission_kind=SubmissionKind.kinetics)
+    note_deposit_targets(session, submission.id, [RecordRef(RT.kinetics, 9001), RecordRef(RT.kinetics, 9002)])
+    for record_id in (9001, 9002):
+        note_anchor(session, "literature", RT.kinetics, record_id, fan_out=True)
+    store_deposit_warnings(
+        session,
+        submission.id,
+        [
+            UploadWarning(field="literature", code="missing_literature_provenance", message="no citation"),
+            UploadWarning(field="literature.title", code="literature_title_mismatch", message="shared identity row"),
+        ],
+    )
+    rows = _stored(session, submission.id)
+    gap = {(r.record_type, r.record_id) for r in rows if r.code == "missing_literature_provenance"}
+    assert gap == {(RT.kinetics, 9001), (RT.kinetics, 9002)}
+    (identity,) = [r for r in rows if r.code == "literature_title_mismatch"]
+    assert identity.record_type is None
