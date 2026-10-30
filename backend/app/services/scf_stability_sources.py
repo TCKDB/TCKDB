@@ -39,10 +39,12 @@ from tckdb_schemas.upload_warning import UploadWarning
 
 from app.api.error_contract import CodedValueError
 from app.db.models.calculation import Calculation, CalculationSCFStability
+from app.db.models.common import SubmissionRecordType
 from app.services.calculation_ownership import (
     W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
     assert_calculation_owned_by,
 )
+from app.services.deposit_warnings import note_warning_subject
 from app.services.local_key_resolution import resolve_calculation_key
 
 #: The measuring job ran at a different level of theory than the calculation
@@ -142,37 +144,37 @@ def link_scf_stability_sources(
             and owner.conformer_observation_id is None
             and owner.transition_state_entry_id is None
         ):
-            warnings.append(
-                UploadWarning(
-                    field=field,
-                    code=W_SCF_STABILITY_SOURCE_CONFORMER_UNVERIFIED,
-                    message=(
-                        f"Neither '{owner_key}' nor '{source_key}', the job named as having "
-                        f"measured its stability verdict, is tied to a conformer (no conformer_key, "
-                        f"and no geometry_key naming a conformer's geometry), so whether they are "
-                        f"on the same conformer cannot be checked. The link is stored as stated; "
-                        f"give both calculations a conformer_key to have it checked."
-                    ),
-                )
+            unverified = UploadWarning(
+                field=field,
+                code=W_SCF_STABILITY_SOURCE_CONFORMER_UNVERIFIED,
+                message=(
+                    f"Neither '{owner_key}' nor '{source_key}', the job named as having "
+                    f"measured its stability verdict, is tied to a conformer (no conformer_key, "
+                    f"and no geometry_key naming a conformer's geometry), so whether they are "
+                    f"on the same conformer cannot be checked. The link is stored as stated; "
+                    f"give both calculations a conformer_key to have it checked."
+                ),
             )
+            note_warning_subject(session, unverified, SubmissionRecordType.calculation, owner.id)
+            warnings.append(unverified)
         if (
             warnings is not None
             and source.lot_id is not None
             and owner.lot_id is not None
             and source.lot_id != owner.lot_id
         ):
-            warnings.append(
-                UploadWarning(
-                    field=field,
-                    code=W_SCF_STABILITY_SOURCE_LEVEL_MISMATCH,
-                    message=(
-                        f"'{source_key}', the job that measured the stability "
-                        f"verdict on '{owner_key}', ran at a different level "
-                        f"of theory. The verdict describes the measuring "
-                        f"job's wavefunction, not the carrying calculation's."
-                    ),
-                )
+            mismatch = UploadWarning(
+                field=field,
+                code=W_SCF_STABILITY_SOURCE_LEVEL_MISMATCH,
+                message=(
+                    f"'{source_key}', the job that measured the stability "
+                    f"verdict on '{owner_key}', ran at a different level "
+                    f"of theory. The verdict describes the measuring "
+                    f"job's wavefunction, not the carrying calculation's."
+                ),
             )
+            note_warning_subject(session, mismatch, SubmissionRecordType.calculation, owner.id)
+            warnings.append(mismatch)
         row = session.get(CalculationSCFStability, owner.id)
         if row is None:
             # The block was declared, so its row was written when the

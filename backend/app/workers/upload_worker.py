@@ -28,7 +28,7 @@ from app.db.models.common import SubmissionStatus, UploadJobKind, UploadJobStatu
 from app.db.models.submission import Submission
 from app.db.models.upload_job import UploadJob
 from app.schemas.upload_warning import UploadWarning
-from app.services.deposit_warnings import store_deposit_warnings
+from app.services.deposit_warnings import reset_deposit_notes, store_deposit_warnings
 from app.services.public_refs import public_refs_by_id
 from app.services.record_review import ReviewPolicy
 from app.services.submission import mark_ingestion_failed, mark_ingestion_succeeded
@@ -597,6 +597,7 @@ def run_one_job(session: Session, job: UploadJob) -> None:
         else ReviewPolicy()
     )
 
+    reset_deposit_notes(session)
     result = handler(session, job, policy)
 
     if submission is not None:

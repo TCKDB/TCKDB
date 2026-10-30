@@ -67,10 +67,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Protocol
 
+from sqlalchemy.orm import object_session
 from tckdb_schemas.local_key_codes import W_CONFORMER_KEY_UNDECLARED
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.db.models.calculation import Calculation
+from app.db.models.common import SubmissionRecordType
+from app.services.deposit_warnings import note_warning_subject
 from app.services.local_key_resolution import resolve_declared_key
 
 #: A species-owned calculation named neither a conformer nor a resolvable
@@ -177,17 +180,18 @@ def anchor_species_calculation_to_observation(
         calculation.conformer_observation_id = observation_id
         return
 
-    warnings.append(
-        UploadWarning(
-            field=field,
-            code=W_CALCULATION_ANCHOR_UNRESOLVED,
-            message=(
-                f"Calculation '{calc_in.key}' named neither a 'conformer_key' "
-                f"nor a 'geometry_key', so nothing said which conformer basin "
-                f"it is evidence for. It is stored, but it is anchored to no "
-                f"conformer observation and basin-scoped reads will not count "
-                f"it. Set 'conformer_key' to one of this species's conformer "
-                f"keys to anchor it."
-            ),
-        )
+    unresolved = UploadWarning(
+        field=field,
+        code=W_CALCULATION_ANCHOR_UNRESOLVED,
+        message=(
+            f"Calculation '{calc_in.key}' named neither a 'conformer_key' "
+            f"nor a 'geometry_key', so nothing said which conformer basin "
+            f"it is evidence for. It is stored, but it is anchored to no "
+            f"conformer observation and basin-scoped reads will not count "
+            f"it. Set 'conformer_key' to one of this species's conformer "
+            f"keys to anchor it."
+        ),
     )
+    if object_session(calculation) is not None:
+        note_warning_subject(object_session(calculation), unresolved, SubmissionRecordType.calculation, calculation.id)
+    warnings.append(unresolved)

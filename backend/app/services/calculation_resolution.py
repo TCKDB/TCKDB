@@ -65,6 +65,7 @@ from app.db.models.common import (
     IRCDirection,
     ParameterSource,
     SoftwareReconciliationStatus,
+    SubmissionRecordType,
 )
 from app.db.models.execution_environment import ExecutionEnvironmentManifest
 from app.db.models.geometry import Geometry
@@ -96,6 +97,7 @@ from app.services.calculation_levels import geometries_are_one_structure
 from app.services.calculation_scan_resolution import persist_calculation_scan
 from app.services.composite_result_resolution import persist_composite_result
 from app.services.composite_scheme_resolution import ensure_named_method_binding, resolve_declared_scheme_level
+from app.services.deposit_warnings import note_warning_subject
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.hessian_method_inference import infer_hessian_method
@@ -1054,15 +1056,15 @@ def collect_converged_opt_energy_warnings(
         has_artifact = r.id in artifact_calc_ids
         if has_energy and has_artifact:
             continue  # (b): evidenced own energy stands in for an sp.
-        warnings.append(
-            UploadWarning(
-                field="opt_result",
-                code=W_CONVERGED_OPT_NO_USABLE_ENERGY,
-                message=_converged_opt_energy_warning_message(
-                    has_energy=has_energy, has_artifact=has_artifact
-                ),
-            )
+        warning = UploadWarning(
+            field="opt_result",
+            code=W_CONVERGED_OPT_NO_USABLE_ENERGY,
+            message=_converged_opt_energy_warning_message(
+                has_energy=has_energy, has_artifact=has_artifact
+            ),
         )
+        note_warning_subject(session, warning, SubmissionRecordType.calculation, r.id)
+        warnings.append(warning)
     return warnings
 
 
@@ -2508,19 +2510,19 @@ def persist_additional_calculations(
                 )
             elif warnings is not None:
                 expected = _DEPENDENCY_ROLE_TO_PARENT_TYPE[dep_role]
-                warnings.append(
-                    UploadWarning(
-                        field=f"additional_calculations[{position}]",
-                        code=W_DEPENDENCY_EDGE_NOT_INFERRED,
-                        message=(
-                            f"{upload_label} was stored but not linked to the "
-                            f"primary calculation: role '{dep_role.value}' "
-                            f"needs a parent of type '{expected.value}' and "
-                            f"the primary calculation is type "
-                            f"'{primary_calc.type.value}'."
-                        ),
-                    )
+                edge_warning = UploadWarning(
+                    field=f"additional_calculations[{position}]",
+                    code=W_DEPENDENCY_EDGE_NOT_INFERRED,
+                    message=(
+                        f"{upload_label} was stored but not linked to the "
+                        f"primary calculation: role '{dep_role.value}' "
+                        f"needs a parent of type '{expected.value}' and "
+                        f"the primary calculation is type "
+                        f"'{primary_calc.type.value}'."
+                    ),
                 )
+                note_warning_subject(session, edge_warning, SubmissionRecordType.calculation, child_calc.id)
+                warnings.append(edge_warning)
 
         # Inverted-edge case: path_search is a TS-guess generator, so the
         # primary opt is ``optimized_from`` the path search rather than the

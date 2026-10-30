@@ -115,7 +115,7 @@ from app.schemas.reads.scientific_conformer import (
     ConformerObservationGroupSummary,
     ConformerObservationSiblingSummary,
 )
-from app.schemas.reads.scientific_deposit_warnings import RecordWarnings
+from app.schemas.reads.scientific_deposit_warnings import DepositWarningItem, RecordWarnings
 from app.schemas.reads.scientific_frequency_scale_factor import FrequencyScaleFactorUsageSummary
 from app.schemas.reads.scientific_geometry import (
     GeometryIdentity,
@@ -360,6 +360,8 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
 POINTER_FIELDS: frozenset[tuple[type[BaseModel], str]] = frozenset(
     {
         (KineticsProvenance, "irc"),
+        # The values a warning quotes: a hidden ref inside blanks them, and the warning itself stays.
+        (DepositWarningItem, "context"),
     }
 )
 

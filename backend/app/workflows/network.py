@@ -7,6 +7,7 @@ from app.db.models.network import Network
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.network_upload import NetworkUploadRequest
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
+from app.services.deposit_warnings import note_anchor
 from app.services.network_resolution import persist_network, resolve_network_upload
 from app.services.record_review import (
     RecordRef,
@@ -85,6 +86,7 @@ def persist_network_upload(
     )
     network = persist_network(session, network_create, created_by=created_by)
 
+    note_anchor(session, "", SubmissionRecordType.network, network.id)
     apply_review_policy(
         session,
         targets=[RecordRef(SubmissionRecordType.network, network.id)],

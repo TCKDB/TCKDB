@@ -43,7 +43,7 @@ def upgrade() -> None:
     op.create_table(
         "deposit_warning",
         sa.Column("id", sa.BigInteger(), nullable=False),
-        sa.Column("submission_id", sa.BigInteger(), nullable=False),
+        sa.Column("submission_id", sa.BigInteger(), nullable=True),
         sa.Column(
             "record_type",
             postgresql.ENUM(name="submission_record_type", create_type=False),
@@ -55,6 +55,7 @@ def upgrade() -> None:
         sa.Column("field", sa.Text(), nullable=True),
         sa.Column("message", sa.Text(), nullable=True),
         sa.Column("context", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("content_hash", sa.Text(), nullable=True),
         sa.Column("check_version", sa.SmallInteger(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=False), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_deposit_warning")),
@@ -70,9 +71,14 @@ def upgrade() -> None:
             name=op.f("ck_deposit_warning_record_both_or_neither"),
         ),
         sa.CheckConstraint(
-            "(code IS NULL AND register_entry IS NULL AND field IS NULL AND message IS NULL AND context IS NULL) "
-            "OR (code IS NOT NULL AND field IS NOT NULL AND message IS NOT NULL)",
+            "(code IS NULL AND register_entry IS NULL AND field IS NULL AND message IS NULL AND context IS NULL "
+            "AND content_hash IS NULL) "
+            "OR (code IS NOT NULL AND field IS NOT NULL AND message IS NOT NULL AND content_hash IS NOT NULL AND content_hash ~ '^[0-9a-f]{64}$')",
             name=op.f("ck_deposit_warning_marker_or_complete"),
+        ),
+        sa.CheckConstraint(
+            "submission_id IS NOT NULL OR (record_type IS NOT NULL AND code IS NOT NULL)",
+            name=op.f("ck_deposit_warning_submission_or_record_warning"),
         ),
         sa.CheckConstraint(
             "context IS NULL OR jsonb_typeof(context) = 'object'",
@@ -82,8 +88,7 @@ def upgrade() -> None:
             "submission_id",
             "record_type",
             "record_id",
-            "code",
-            "field",
+            "content_hash",
             name="uq_deposit_warning_identity",
             postgresql_nulls_not_distinct=True,
         ),

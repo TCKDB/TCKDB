@@ -93,7 +93,7 @@ from app.services.conformer_resolution import (
     resolve_conformer_group,
     settle_conformer_basin,
 )
-from app.services.deposit_warnings import note_calculation_keys
+from app.services.deposit_warnings import note_anchor, note_calculation_keys
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import (
@@ -597,6 +597,13 @@ def persist_network_pdep_upload(
                     SubmissionRecordType.conformer_observation, observation.id
                 )
             )
+            note_anchor(
+                session,
+                f"species[{sp.key!r}].conformers[{conf.key!r}]",
+                SubmissionRecordType.conformer_observation,
+                observation.id,
+                scope=f"species[{sp.key!r}]",
+            )
 
             # Anchor the calculation to this conformer observation
             calculation.conformer_observation_id = observation.id
@@ -650,6 +657,20 @@ def persist_network_pdep_upload(
             review_targets.append(
                 RecordRef(SubmissionRecordType.transport, transport_row.id)
             )
+            note_anchor(
+                session,
+                f"species[{sp_index}].transport",
+                SubmissionRecordType.transport,
+                transport_row.id,
+                scope=f"species[{sp.key!r}]",
+            )
+            note_anchor(
+                session,
+                f"species[{sp.key!r}].transport",
+                SubmissionRecordType.transport,
+                transport_row.id,
+                scope=f"species[{sp.key!r}]",
+            )
 
     # ------------------------------------------------------------------
     # 3c. Process species-level statmech (reuses the bundle's shared seam)
@@ -672,6 +693,14 @@ def persist_network_pdep_upload(
             review_targets.append(
                 RecordRef(SubmissionRecordType.statmech, statmech_row.id)
             )
+            for statmech_path in (f"species[{sp_index}].statmech", f"species[{sp.key!r}].statmech"):
+                note_anchor(
+                    session,
+                    statmech_path,
+                    SubmissionRecordType.statmech,
+                    statmech_row.id,
+                    scope=f"species[{sp.key!r}]",
+                )
 
     # ------------------------------------------------------------------
     # 4. Resolve micro reactions
@@ -756,6 +785,15 @@ def persist_network_pdep_upload(
         review_targets.append(
             RecordRef(SubmissionRecordType.transition_state_entry, ts_entry.id)
         )
+        note_anchor(
+            session,
+            f"transition_states[{ts_index}]",
+            SubmissionRecordType.transition_state_entry,
+            ts_entry.id,
+        )
+        note_anchor(
+            session, f"transition_states[{ts_in.key!r}]", SubmissionRecordType.transition_state_entry, ts_entry.id
+        )
 
         # Resolve TS geometry
         ts_geom_payload = ts_in.geometry.to_payload()
@@ -817,6 +855,12 @@ def persist_network_pdep_upload(
             )
             if ts_statmech is not None:
                 review_targets.append(RecordRef(SubmissionRecordType.statmech, ts_statmech.id))
+                note_anchor(
+                    session,
+                    f"transition_states[{ts_index}].statmech",
+                    SubmissionRecordType.statmech,
+                    ts_statmech.id,
+                )
 
         persist_transition_state_validation_evidence(
             session,
@@ -1155,6 +1199,7 @@ def persist_network_pdep_upload(
         review_targets.append(
             RecordRef(SubmissionRecordType.network_solve, solve.id)
         )
+        note_anchor(session, "solve", SubmissionRecordType.network_solve, solve.id)
 
         # Bath gas
         for bg_index, bg in enumerate(solve_in.bath_gas):
@@ -1603,6 +1648,7 @@ def persist_network_pdep_upload(
         session.flush()
 
     note_calculation_keys(session, calculation_key_to_id)
+    note_anchor(session, "", SubmissionRecordType.network, network.id)
     apply_review_policy(
         session,
         targets=current_conformer_group_targets(session, review_targets),

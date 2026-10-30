@@ -5,9 +5,9 @@ once, in the upload response, and then survive only inside the upload job's
 result. This table keeps each one beside the record it concerns, so a reader of
 that record can see that it tripped an expectation when it was deposited.
 
-**One row per (submission, record, code, field).** Each submission writes its own
-rows; a re-deposit does not touch an earlier submission's. The unique key drops a
-duplicate within one submission.
+**One row per (submission, record, content hash).** Each submission writes its own
+rows; a re-deposit does not touch an earlier submission's. The unique key drops only a
+truly identical warning (same code, field, message and context) within one submission and record.
 
 **Marker rows.** A row with ``code IS NULL`` says "this record was checked by this
 submission at ``check_version``", whether or not anything fired. It is what lets a
@@ -61,10 +61,12 @@ class DepositWarning(Base):
     __tablename__ = "deposit_warning"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    submission_id: Mapped[int] = mapped_column(
+    #: The submission that produced the row. NULL only for a warning an artifact upload earned when the
+    #: calculation had no live submission to join; such a row must name a record.
+    submission_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey("submission.id", name="fk_deposit_warning_submission", deferrable=True, initially="IMMEDIATE"),
-        nullable=False,
+        nullable=True,
     )
     record_type: Mapped[Optional[SubmissionRecordType]] = mapped_column(
         SAEnum(SubmissionRecordType, name="submission_record_type", create_type=False), nullable=True
@@ -79,6 +81,8 @@ class DepositWarning(Base):
     message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     #: The values that triggered the warning, as the producer stated them.
     context: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    #: SHA-256 of code, field, message and canonical context: only truly identical warnings dedupe.
+    content_hash: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     #: The version of the warning set that judged the deposit.
     check_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, server_default=func.now())
@@ -89,9 +93,14 @@ class DepositWarning(Base):
             name="record_both_or_neither",
         ),
         CheckConstraint(
-            "(code IS NULL AND register_entry IS NULL AND field IS NULL AND message IS NULL AND context IS NULL) "
-            "OR (code IS NOT NULL AND field IS NOT NULL AND message IS NOT NULL)",
+            "(code IS NULL AND register_entry IS NULL AND field IS NULL AND message IS NULL AND context IS NULL "
+            "AND content_hash IS NULL) "
+            "OR (code IS NOT NULL AND field IS NOT NULL AND message IS NOT NULL AND content_hash IS NOT NULL AND content_hash ~ '^[0-9a-f]{64}$')",
             name="marker_or_complete",
+        ),
+        CheckConstraint(
+            "submission_id IS NOT NULL OR (record_type IS NOT NULL AND code IS NOT NULL)",
+            name="submission_or_record_warning",
         ),
         CheckConstraint(
             "context IS NULL OR jsonb_typeof(context) = 'object'",
@@ -101,8 +110,7 @@ class DepositWarning(Base):
             "submission_id",
             "record_type",
             "record_id",
-            "code",
-            "field",
+            "content_hash",
             name="uq_deposit_warning_identity",
             postgresql_nulls_not_distinct=True,
         ),

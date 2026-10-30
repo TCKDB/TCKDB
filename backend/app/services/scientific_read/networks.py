@@ -172,6 +172,7 @@ def get_network(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([badge]),
         record=record,
+        record_warnings=deposit_record_warnings(session, SubmissionRecordType.network, {n.id: n.public_ref}),
     )
 
 

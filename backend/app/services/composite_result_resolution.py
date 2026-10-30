@@ -70,6 +70,7 @@ from app.db.models.common import (
     CompositeAssembly,
     CompositeBindingSource,
     CompositeSchemeKind,
+    SubmissionRecordType,
 )
 from app.db.models.composite_scheme import (
     CompositeScheme,
@@ -80,6 +81,7 @@ from app.db.models.level_of_theory import LevelOfTheory
 from app.schemas.upload_warning import UploadWarning
 from app.services.composite_input_resolution import register_pending_composite
 from app.services.composite_scheme_resolution import term_positions_for
+from app.services.deposit_warnings import note_warning_subject
 
 #: An assembled composite is not at a user-built scheme. Defined with the wire
 #: rule that raises it first (``tckdb_schemas.fragments.calculation``).
@@ -319,20 +321,21 @@ def collect_named_composite_deposit_warnings(
         .order_by(Calculation.id)
     ).all()
     warnings: list[UploadWarning] = []
-    for _calc_id, calc_type, method in rows:
-        warnings.append(
-            UploadWarning(
-                field="level_of_theory",
-                code=_DEPOSITED_AS_WARNING_CODE[calc_type],
-                message=(
-                    f"This {calc_type.value} calculation is at the level of theory {method!r}, a named "
-                    "composite method: one program run that produces a final energy from several "
-                    f"internal steps. A {calc_type.value} calculation is not what ran. It was stored as "
-                    "sent; send it as type 'composite' with a composite_result block (assembly "
-                    "'program_run' and the energies the program printed) and, if the run's own "
-                    "optimisation or frequency job is also deposited, send those separately at their "
-                    "own levels. This will be refused once producers can send that shape."
-                ),
-            )
+    for calc_id, calc_type, method in rows:
+        warning = UploadWarning(
+            field="level_of_theory",
+            code=_DEPOSITED_AS_WARNING_CODE[calc_type],
+            message=(
+                f"This {calc_type.value} calculation is at the level of theory {method!r}, a named "
+                "composite method: one program run that produces a final energy from several "
+                f"internal steps. A {calc_type.value} calculation is not what ran. It was stored as "
+                "sent; send it as type 'composite' with a composite_result block (assembly "
+                "'program_run' and the energies the program printed) and, if the run's own "
+                "optimisation or frequency job is also deposited, send those separately at their "
+                "own levels. This will be refused once producers can send that shape."
+            ),
         )
+        # Each calculation is its own subject: two single points at one named method say the same words.
+        note_warning_subject(session, warning, SubmissionRecordType.calculation, calc_id)
+        warnings.append(warning)
     return warnings

@@ -27,6 +27,7 @@ from app.services.calculation_resolution import (
 )
 from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
+from app.services.deposit_warnings import note_anchor, note_calculation_keys
 from app.services.local_key_resolution import resolve_calculation_key
 from app.services.record_review import (
     RecordRef,
@@ -142,6 +143,8 @@ def persist_transport_upload(
         RecordRef(SubmissionRecordType.calculation, c.id)
         for c in calculations_by_key.values()
     )
+    note_anchor(session, "", SubmissionRecordType.transport, transport.id)
+    note_calculation_keys(session, {key: calc.id for key, calc in calculations_by_key.items()})
     apply_review_policy(
         session, targets=targets, policy=review_policy, created_by=created_by
     )

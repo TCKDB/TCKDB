@@ -394,6 +394,9 @@ class ScientificNetworkRecord(BaseModel):
 class ScientificNetworkDetailResponse(ScientificResponse):
     """Response envelope for ``GET /scientific/networks/{handle}``."""
 
+    #: The deposit-time warnings of each record this response names, with its public ref (see
+    #: ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    record_warnings: list[RecordWarnings] = Field(default_factory=list)
     request: RequestEcho
     review_summary: ReviewStatusSummary
     record: ScientificNetworkRecord

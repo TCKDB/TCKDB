@@ -21,7 +21,7 @@ from app.db.models.reaction import ReactionEntry
 from app.db.models.species import ConformerObservation
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.upload_job import UploadJob
-from app.services.deposit_warnings import REGISTER_ENTRY
+from app.services.deposit_warnings import REGISTER_ENTRY, content_hash
 from app.services.record_review import ensure_record_review, set_record_review_status
 from tests.api import test_api_artifact_charge_multiplicity_hook as hook
 from tests.api.artifact_urls import artifacts_url
@@ -157,6 +157,7 @@ def _one_warning_row(db_session, calc: Calculation, submission_id: int) -> Depos
         register_entry=12,
         field="species_entry.charge",
         message="x",
+        content_hash=content_hash("charge_mismatch", "species_entry.charge", "x", None),
         check_version=1,
     )
     db_session.add(row)
@@ -208,6 +209,7 @@ def test_warning_rows_refuse_update_delete_and_truncate_even_under_an_approved_r
         register_entry=12,
         field="species_entry.multiplicity",
         message="later",
+        content_hash=content_hash("multiplicity_mismatch", "species_entry.multiplicity", "later", None),
         check_version=1,
     )
     db_session.add(later)

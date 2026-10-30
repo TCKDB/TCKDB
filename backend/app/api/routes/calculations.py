@@ -848,12 +848,13 @@ def upload_calculation_artifacts(
     if software_warning is not None:
         warnings.append(software_warning)
 
-    # Stored beside the calculation under the submission it joined. No marker row: this is not a re-check of the
-    # deposit, only what the new evidence earned. With no submission to join there is nothing to store them under.
-    if deposit_submission is not None and warnings:
+    # Stored beside the calculation, under the submission it joined when it joined one; with no live submission to join
+    # the rows name the calculation alone, so a warning is never dropped. No marker row: this is not a re-check of the
+    # deposit, only what the new evidence earned.
+    if warnings:
         store_deposit_warnings(
             session,
-            deposit_submission.id,
+            deposit_submission.id if deposit_submission is not None else None,
             warnings,
             targets=[RecordRef(SubmissionRecordType.calculation, calc_pk)],
             mark_checked=False,

@@ -104,6 +104,11 @@ from app.services.conformer_resolution import (
     resolve_conformer_group,
     settle_conformer_basin,
 )
+from app.services.deposit_warnings import (
+    attribute_warnings,
+    note_anchor,
+    note_calculation_keys,
+)
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -768,49 +773,50 @@ def persist_computed_species_upload(
                 # rows; output logs reconcile the single-point energy
                 # against the tool's reported value (fill/mismatch), the
                 # same as the standalone artifacts route.
-                for art_in in calc_in.artifacts:
-                    try_extract_parameters_from_input_upload(
-                        session, calc_row, art_in, warnings=upload_warnings
-                    )
-                    sp_warning = try_reconcile_sp_energy_from_output_upload(
-                        session, calc_row, art_in
-                    )
-                    if sp_warning is not None:
-                        upload_warnings.append(sp_warning)
-                    # Output logs also state the charge and spin
-                    # multiplicity the run actually used; a contradiction
-                    # with the declared identity is flagged for review.
-                    upload_warnings.extend(
-                        try_reconcile_charge_multiplicity_from_output_upload(
-                            calc_row, art_in
+                with attribute_warnings(session, upload_warnings, record=(SubmissionRecordType.calculation, calc_row.id)):
+                    for art_in in calc_in.artifacts:
+                        try_extract_parameters_from_input_upload(
+                            session, calc_row, art_in, warnings=upload_warnings
                         )
+                        sp_warning = try_reconcile_sp_energy_from_output_upload(
+                            session, calc_row, art_in
+                        )
+                        if sp_warning is not None:
+                            upload_warnings.append(sp_warning)
+                        # Output logs also state the charge and spin
+                        # multiplicity the run actually used; a contradiction
+                        # with the declared identity is flagged for review.
+                        upload_warnings.extend(
+                            try_reconcile_charge_multiplicity_from_output_upload(
+                                calc_row, art_in
+                            )
+                        )
+                        # Input geometries for this calc were attached in an
+                        # earlier pass, so the Hessian can bind to them here.
+                        hessian_warning = try_extract_hessian_from_artifact_upload(
+                            session,
+                            calc_row,
+                            art_in,
+                            field=f"calculations['{calc_in.key}'].artifacts",
+                        )
+                        if hessian_warning is not None:
+                            upload_warnings.append(hessian_warning)
+                        # Fill-when-absent-or-degenerate: an opt calc's own
+                        # input deck / log yields its true starting geometry
+                        # when none is on file yet, or the one on file only
+                        # duplicates the output.
+                        try_extract_input_geometry_from_artifact_upload(
+                            session, calc_row, art_in
+                        )
+                    # Output logs also carry the program's version banner; a
+                    # version the declared release lacked re-points the
+                    # calculation (#305 (c)). Once per calculation, so every log
+                    # is compared with the declared release.
+                    software_warning = try_reconcile_software_from_output_uploads(
+                        session, calc_row, calc_in.artifacts
                     )
-                    # Input geometries for this calc were attached in an
-                    # earlier pass, so the Hessian can bind to them here.
-                    hessian_warning = try_extract_hessian_from_artifact_upload(
-                        session,
-                        calc_row,
-                        art_in,
-                        field=f"calculations['{calc_in.key}'].artifacts",
-                    )
-                    if hessian_warning is not None:
-                        upload_warnings.append(hessian_warning)
-                    # Fill-when-absent-or-degenerate: an opt calc's own
-                    # input deck / log yields its true starting geometry
-                    # when none is on file yet, or the one on file only
-                    # duplicates the output.
-                    try_extract_input_geometry_from_artifact_upload(
-                        session, calc_row, art_in
-                    )
-                # Output logs also carry the program's version banner; a
-                # version the declared release lacked re-points the
-                # calculation (#305 (c)). Once per calculation, so every log
-                # is compared with the declared release.
-                software_warning = try_reconcile_software_from_output_uploads(
-                    session, calc_row, calc_in.artifacts
-                )
-                if software_warning is not None:
-                    upload_warnings.append(software_warning)
+                    if software_warning is not None:
+                        upload_warnings.append(software_warning)
 
         # An assembled composite's inputs are written, and its total checked,
         # now that every calculation exists, every ``depends_on`` edge is wired
@@ -956,6 +962,20 @@ def persist_computed_species_upload(
         RecordRef(SubmissionRecordType.applied_energy_correction, aec_id)
         for aec_id in (*thermo_aec_ids, *top_level_aec_ids)
     )
+    note_calculation_keys(session, {key: calc.id for key, calc in calc_keys_to_id.items()})
+    for outcome in conformer_outcomes:
+        note_anchor(
+            session,
+            f"conformers[{outcome.conformer_in_bundle.key!r}]",
+            SubmissionRecordType.conformer_observation,
+            outcome.observation.id,
+        )
+    if thermo_row is not None:
+        note_anchor(session, "thermo", SubmissionRecordType.thermo, thermo_row.id)
+    if statmech_row is not None:
+        note_anchor(session, "statmech", SubmissionRecordType.statmech, statmech_row.id)
+    if transport_row is not None:
+        note_anchor(session, "transport", SubmissionRecordType.transport, transport_row.id)
     apply_review_policy(
         session,
         targets=current_conformer_group_targets(session, review_targets),
