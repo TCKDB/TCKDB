@@ -2095,6 +2095,7 @@ Table deposit_warning {
   message text
   context jsonb
   content_hash text
+  written_by_user_id bigint [ref: > app_user.id]
   check_version int [not null]
   created_at timestamp [not null, default: 'now']
 

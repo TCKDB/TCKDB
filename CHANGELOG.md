@@ -59,8 +59,13 @@ dataset must never require a code release.
   a producer puts in `context` sits under `context.depositor_supplied`. A test sweeps the producers and fails when a code has no sentence. Upload responses are unchanged.
 - **Deposit-level warnings.** `deposit_warnings` sits beside `record_warnings` in the same envelopes: a list of `{submission_ref, items}` for the warnings no one record could take (an
   energy-correction scheme shared by a bundle, an unattributable warning), once per submission a named record belongs to, in stored order. Nothing is copied onto a record. `submission_ref` follows
-  the existing auth-only rule (omitted for an anonymous reader). A router dependency now resolves the optional caller on those reads, so a present-but-invalid credential answers 401 there, as it
-  already did on the calculation read.
+  the existing auth-only rule (omitted for an anonymous reader). **Contract change:** a router dependency now resolves the optional caller on those reads, so a credential that is present and
+  invalid (a revoked key, an expired session cookie) answers 401 there, as it already did on the calculation read; it used to read as anonymous. A client holding a stale
+  session cookie should drop it on the first 401: `GET /auth/me` now answers 401 *and clears* a stale `tckdb_session` cookie, as logout does. Those reads are also sent `Cache-Control: private` and
+  `Vary: Cookie, X-API-Key`, because the answer depends on the caller.
+- **Who sees the stored text.** Each warning row records who wrote it (`written_by_user_id`: the submission's depositor for a deposit's rows, the uploader for an artifact's). `depositor_message` /
+  `depositor_field` go to that user and to curators and admins only, so a curator's artifact warning is not shown to the depositor as theirs, and an artifact warning with no submission is the
+  uploader's. Under the curated profile `deposit_warnings` is built from the records the response lists, so a withheld record's submission contributes nothing.
 - Known limits: #835 (most codes are not in the register) and #836 (the atomic-electronic warnings are not emitted on every path).
 
 ## A minimum's imaginary modes are judged against tau (2026-10-29)

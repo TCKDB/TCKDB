@@ -77703,6 +77703,7 @@
     },
     "/api/v1/auth/me": {
       "get": {
+        "description": "The signed-in user. A session cookie that no longer resolves is answered 401 *and cleared*, as logout clears it.\n\nThe scientific detail reads answer 401 for a credential that is present and invalid, so a client that keeps a\nrevoked or expired cookie would otherwise be refused on every read and never learn to drop it. This probe is where\na client learns: the 401 carries the same cookie deletion ``POST /auth/logout`` sends. Only the session cookie is\ncleared (and only when no API key was sent, since a key takes precedence), never anything the caller did not own.",
         "operationId": "me_api_v1_auth_me_get",
         "parameters": [
           {

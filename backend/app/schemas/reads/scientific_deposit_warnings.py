@@ -8,7 +8,8 @@ search responses carry neither):
   warnings that are about that record.
 * ``deposit_warnings`` -- the warnings that are about the *deposit* and could not be put on any one record (a
   shared energy-correction scheme in a bundle of many records, or a warning the deposit could not attribute),
-  once per submission that a named record belongs to. Nothing is duplicated: these rows stay on the submission.
+  once per submission that a named record belongs to (under the curated profile, only the records the response
+  lists). Nothing is duplicated: these rows stay on the submission.
 
 ``status`` (on a ``record_warnings`` entry) answers the question a bare empty list cannot:
 
@@ -29,8 +30,8 @@ and its structured ``context``, never taken from the text stored at deposit. The
 path with every depositor key replaced (``species[*].thermo``; positional ``[0]`` kept). The stored text can quote
 the depositor (a transition-state label, a local calculation key, a species key), and a depositor's words must
 not be presented as TCKDB's on any client. That raw text is ``depositor_message`` and ``depositor_field``, and it
-is present only for the deposit's owner and for curators and admins (the access rule ``GET /jobs/{id}`` uses); for
-everyone else the keys are absent. ``context`` holds values the check states; anything the depositor typed that
+is present only for the user who wrote that warning row (the depositor for a deposit's rows, the uploader for an
+artifact's) and for curators and admins (the access rule ``GET /jobs/{id}`` uses); for everyone else the keys are absent. ``context`` holds values the check states; anything the depositor typed that
 a producer puts in it sits under ``context.depositor_supplied`` and is depositor-typed text: a client that
 renders it must say so.
 

@@ -332,6 +332,11 @@ network solve and a conformer observation, and on the per-parent kinetics (`/rea
   (an artifact uploaded afterwards can add one), so a `not_recorded` record can still list items. `register_entry`
   is the register's entry number, and is `null` for the many codes the register does not list. `context` holds the
   values the check states.
+* Under `?profile=curated`, a record the guard withholds contributes nothing here: `deposit_warnings` is built from the records
+  the response actually lists.
+* Because the answer depends on who asked, these reads are sent `Cache-Control: private` and `Vary: Cookie, X-API-Key`.
+* A credential that is present and invalid is answered 401 on these reads (see `GET /auth/me`, which also clears a stale
+  `tckdb_session` cookie), not read as anonymous.
 * `submission_ref` follows the rule for that field everywhere on the scientific reads: it is served only to a caller
   who authenticates, and the key is omitted for an anonymous reader. Items keep their stored order.
 
@@ -339,8 +344,9 @@ network solve and a conformer observation, and on the per-parent kinetics (`/rea
 `context`; the public `field` is the payload path with every depositor key replaced (`species[*].thermo`; positional
 `[0]` kept). The text stored at deposit can quote the depositor (a transition-state label such as `TS0`, a local
 calculation key), and a depositor's words are never presented as TCKDB's, on this API or on any client. That stored
-text is `depositor_message` and `depositor_field`: present only for the deposit's owner and for curators and admins
-(the access rule `GET /jobs/{id}` uses), and absent for everyone else, including another signed-in user. Anything
+text is `depositor_message` and `depositor_field`: present only for the user who wrote that warning row (the depositor for a
+deposit's rows; whoever uploaded the artifact for an artifact's rows, so a curator's artifact warning is the curator's, not
+the depositor's) and for curators and admins, and absent for everyone else, including another signed-in user. Anything
 depositor-typed that a producer puts in `context` sits under `context.depositor_supplied`: it is depositor-typed text,
 and a client that shows it should say so. The upload response is unchanged and still carries the producers' own text.
 

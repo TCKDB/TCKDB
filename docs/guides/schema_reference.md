@@ -1684,6 +1684,7 @@ the gap.
 | `message` | TEXT | yes | — | — | — | not documented |
 | `context` | JSONB | yes | — | — | — | not documented |
 | `content_hash` | TEXT | yes | — | — | — | not documented |
+| `written_by_user_id` | BIGINT | yes | — | app_user.id | — | not documented |
 | `check_version` | SMALLINT | no | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 
