@@ -52,7 +52,15 @@ dataset must never require a code release.
   provenance-correction route and the ThermoML file route.
 - **Register.** The `upload_warning` channel now reads "returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on that
   record's detail reads and on the per-parent kinetics and thermo reads". The register still has 49 entries.
-- A stored `field` or `message` can contain a depositor-typed label (a transition-state label, a local calculation key). A client must not render them raw.
+- **Whose words.** The depositor's own text (a transition-state label, a local calculation key, a species key) is never presented as TCKDB's. A warning's public `message` is rendered
+  at read time from its code and structured `context` (a fixed sentence per code, with the producers' numbers where they state them), never from the stored text; the public `field` replaces
+  depositor keys with `[*]` and keeps positions. The stored `message` and `field` are unchanged (the rows are append-only, the record of what was said at deposit) and are shown as
+  `depositor_message` / `depositor_field` only to the deposit's owner and to curators and admins (the `GET /jobs/{id}` rule); they are absent for everyone else. A depositor-typed value
+  a producer puts in `context` sits under `context.depositor_supplied`. A test sweeps the producers and fails when a code has no sentence. Upload responses are unchanged.
+- **Deposit-level warnings.** `deposit_warnings` sits beside `record_warnings` in the same envelopes: a list of `{submission_ref, items}` for the warnings no one record could take (an
+  energy-correction scheme shared by a bundle, an unattributable warning), once per submission a named record belongs to, in stored order. Nothing is copied onto a record. `submission_ref` follows
+  the existing auth-only rule (omitted for an anonymous reader). A router dependency now resolves the optional caller on those reads, so a present-but-invalid credential answers 401 there, as it
+  already did on the calculation read.
 - Known limits: #835 (most codes are not in the register) and #836 (the atomic-electronic warnings are not emitted on every path).
 
 ## A minimum's imaginary modes are judged against tau (2026-10-29)

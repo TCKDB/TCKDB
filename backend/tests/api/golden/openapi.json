@@ -17027,7 +17027,7 @@
       },
       "DepositWarningItem": {
         "additionalProperties": false,
-        "description": "One warning, as the depositor was told it.",
+        "description": "One warning, in TCKDB's words.",
         "properties": {
           "check_version": {
             "title": "Check Version",
@@ -17048,6 +17048,28 @@
               }
             ],
             "title": "Context"
+          },
+          "depositor_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depositor Field"
+          },
+          "depositor_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depositor Message"
           },
           "field": {
             "title": "Field",
@@ -47828,6 +47850,13 @@
       "ScientificCalculationDetailResponse": {
         "description": "Response envelope for /api/v1/scientific/calculations/{handle}.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificCalculationRecord"
           },
@@ -48752,6 +48781,13 @@
       "ScientificConformerObservationDetailResponse": {
         "description": "Response envelope for\n``GET /scientific/conformer-observations/{handle}``.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificConformerObservationRecord"
           },
@@ -49993,6 +50029,13 @@
       "ScientificNetworkDetailResponse": {
         "description": "Response envelope for ``GET /scientific/networks/{handle}``.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificNetworkRecord"
           },
@@ -50527,6 +50570,13 @@
       "ScientificNetworkSolveDetailResponse": {
         "description": "Response envelope for\n``GET /scientific/network-solves/{handle}``.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificNetworkSolveRecord"
           },
@@ -51018,6 +51068,13 @@
       "ScientificReactionKineticsResponse": {
         "description": "Response envelope for /api/v1/scientific/reaction-entries/{id}/kinetics.\n\nPhase B: ``reaction_entry_ref`` mirrors ``reaction_entry_id`` as the\npublic stable handle for the response's path-parameter resource.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "next_cursor": {
             "anyOf": [
               {
@@ -52096,6 +52153,13 @@
       "ScientificSpeciesThermoResponse": {
         "description": "Response envelope for /api/v1/scientific/species-entries/{id}/thermo.\n\nPhase B: ``species_entry_ref`` mirrors ``species_entry_id`` as the\npublic stable handle for the response's path-parameter resource.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "next_cursor": {
             "anyOf": [
               {
@@ -52177,6 +52241,13 @@
       "ScientificStatmechDetailResponse": {
         "description": "Response envelope for ``GET /scientific/statmech/{handle}``.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificStatmechRecord"
           },
@@ -52549,6 +52620,13 @@
       "ScientificTransitionStateDetailResponse": {
         "description": "Response envelope for ``GET /scientific/transition-states/{handle}``.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificTransitionStateRecord"
           },
@@ -52591,6 +52669,13 @@
       "ScientificTransitionStateEntryDetailResponse": {
         "description": "Response envelope for\n``GET /scientific/transition-state-entries/{handle}``.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificTransitionStateEntryRecord"
           },
@@ -53031,6 +53116,13 @@
       "ScientificTransportDetailResponse": {
         "description": "Response envelope for ``GET /scientific/transport/{handle}``.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificTransportRecord"
           },
@@ -61914,6 +62006,35 @@
         "title": "SubmissionSupersedeRequest",
         "type": "object",
         "x-tckdb-example-requires": "two submissions of the caller's own: the one whose public ref is in the path, and a newer one created declaring that it supersedes it, whose public ref (public_ref on a submission read) replaces this one"
+      },
+      "SubmissionWarnings": {
+        "additionalProperties": false,
+        "description": "The warnings of one submission that no one record could take.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DepositWarningItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "SubmissionWarnings",
+        "type": "object"
       },
       "SubmitReviewStatus": {
         "description": "Curation/review state surfaced to clients in the submit response.\n\nDistinct from :class:`SubmissionStatus`: that enum is the moderation\nlifecycle column on the row, while this is the human-readable trust\nstate for response payloads. ``unreviewed`` is the only value submit/v0\never returns — full lifecycle exposure is a later milestone.",
@@ -93962,6 +94083,38 @@
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
           }
         ],
         "responses": {
@@ -100376,6 +100529,38 @@
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
           }
         ],
         "responses": {
@@ -101664,6 +101849,38 @@
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
           }
         ],
         "responses": {
@@ -102673,6 +102890,38 @@
               ],
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
             }
           }
         ],
@@ -105489,6 +105738,38 @@
               ],
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
             }
           }
         ],
@@ -108556,6 +108837,38 @@
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
           }
         ],
         "responses": {
@@ -109304,6 +109617,38 @@
               ],
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
             }
           }
         ],
@@ -110797,6 +111142,38 @@
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
           }
         ],
         "responses": {
@@ -111378,6 +111755,38 @@
               ],
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
             }
           }
         ],

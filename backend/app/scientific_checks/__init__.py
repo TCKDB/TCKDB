@@ -197,8 +197,9 @@ class CodeChannel(str, Enum):
     #: alongside a *successful* upload. The warn tier's surface; it has
     #: been machine-readable since the class was written. The deposit also
     #: stores each warning beside the record it concerns (``deposit_warning``),
-    #: so the same code reaches a later reader in ``record_warnings`` on that
-    #: record's detail reads and on the per-parent kinetics and thermo reads.
+    #: so the same code reaches a later reader, in TCKDB's own wording, in
+    #: ``record_warnings`` (or ``deposit_warnings``) on that record's detail reads and
+    #: on the per-parent kinetics and thermo reads.
     upload_warning = "upload_warning"
 
     #: A read-time label — a ``HardFailReason`` from the trust evaluator.
