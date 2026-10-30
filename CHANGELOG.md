@@ -29,11 +29,11 @@ dataset must never require a code release.
   the stored record saw none of them. Each warning is now stored beside the record it concerns, in the same transaction as the deposit, and shown on the record's reads.
 - **Storage.** One row per (submission, record, content hash), where the hash covers the code, payload position, message and context: only truly identical
   warnings dedupe, so two single points at one named method each keep theirs. Each row carries the code's register entry (`NULL` for the many codes the register does not
-  list), the payload position, the message, the optional `context` (JSON-safe: no NaN or Infinity) and a `check_version`. One marker row (`code IS NULL`) per checked record
+  list), the payload position, the message, the optional `context` (JSON-safe: a NaN or Infinity is null, in the stored row, on the read and in the upload response alike) and a `check_version`. One marker row (`code IS NULL`) per checked record
   says "this record was checked", so "nothing fired" and "never checked" differ.
 - **Placement.** The workflows say which row they built from which payload object, and a warning lands on that exact record: a `kinetics[0]` path on that kinetics
   row, `species['h'].thermo` on that thermo row, a bundle-local calculation key on that calculation, a bundle-root provenance gap on every kinetics row the
-  workflow wrote it to, a producer that iterates rows on the row it is about. There is no "primary record" fallback. A warning whose subject is a shared identity row
+  workflow wrote it to, a producer that iterates rows on the row it is about, and a `composite_delta` correction warning on the thermo of the species it was applied to (its field carries the full `species['k'].applied_energy_corrections[i]` path). There is no "primary record" fallback. A warning whose subject is a shared identity row
   (species entry, reaction, literature, a ref fragment) is never put on that row: it goes to this deposit's single result record for that species or reaction,
   or, with none, to the submission. Any other warning that cannot be placed is stored on the submission, logged, and that deposit writes no marker rows, so its records read
   `not_recorded` rather than a false "recorded, nothing fired".
