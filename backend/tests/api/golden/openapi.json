@@ -49996,6 +49996,13 @@
           "record": {
             "$ref": "#/components/schemas/ScientificNetworkRecord"
           },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
+          },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_network__RequestEcho"
           },

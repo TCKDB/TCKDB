@@ -36,7 +36,6 @@ from tests.api.test_api_bundle_upload_warnings import (
     _kinetics_with_literature_bundle,
     _thermo_bundle,
 )
-from tests.api.test_api_composite_program_run import _CBS_QB3, _sp
 from tests.api.test_api_provenance_warnings import _statmech_payload
 from tests.api.test_api_ts_contract_621 import _bundle
 from tests.workers.test_upload_worker_warnings import CASES, _computed_reaction, _pdep
@@ -266,7 +265,7 @@ def test_a_computed_species_calculation_key_lands_on_that_freq_calculation(clien
     session = client._db_session
     codes = {w["code"] for w in body["warnings"]}
     assert "minimum_imaginary_modes_below_tau" in codes
-    (row,) = [r for r in _stored(session, body["submission_id"], "minimum_imaginary_modes_below_tau")]
+    (row,) = _stored(session, body["submission_id"], "minimum_imaginary_modes_below_tau")
     assert row.record_type is RT.calculation
     freq_calc = session.get(Calculation, row.record_id)
     assert freq_calc.type.value == "freq"

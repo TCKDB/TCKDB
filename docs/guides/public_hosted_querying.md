@@ -317,10 +317,12 @@ search responses do not carry it. There is no `include=` token for it.
 
 * `status: "recorded"` means the deposit's warnings were stored with this record. `items` is then exactly what fired,
   and is empty when nothing did.
-* `status: "not_recorded"` means the record was deposited before TCKDB stored warnings. That is not the same as none:
-  nothing can be said either way.
+* `status: "not_recorded"` means the record was deposited before TCKDB stored warnings, or its deposit could not
+  place every warning on a record (and so marked none of its records checked). That is not the same as none:
+  nothing can be said either way. `status` describes the deposit-time check and nothing else.
 * `items` lists every stored warning, from every submission that deposited or later added evidence to the record
-  (an artifact uploaded afterwards can add one). `register_entry` is the register's entry number, and is `null` for the
+  (an artifact uploaded afterwards can add one), so a `not_recorded` record can still list items: the artifact's
+  warning is real, and the deposit's own are unknown. `register_entry` is the register's entry number, and is `null` for the
   many codes the register does not list. `context` holds the values that triggered the warning when the check stated them.
 
 A warning never changes a value, orders a list, or gates a selection, and the curated profile shows them as it shows any

@@ -8,7 +8,7 @@ Deposit-time warnings are shown with the record when it is read.
 - Every `UploadWarning` dict in an upload result's `warnings` carries a `context` key (`null` when the check stated no values).
 - Detail reads of a calculation, a transition-state entry (and its concept), a statmech, a transport record, a network solve and a conformer observation, and the
   per-parent kinetics and thermo reads, carry `record_warnings`: `[{"record_ref": ..., "status": "recorded" | "not_recorded", "items": [...]}]`. `not_recorded` means the
-  record was deposited before warnings were stored, which is not the same as no warnings. The client returns response bodies as they come, so nothing else changes.
+  record was deposited before warnings were stored, or its deposit could not place every warning on a record; neither is the same as no warnings. The network detail read carries it too. The client returns response bodies as they come, so nothing else changes.
 
 ## 0.179.0 - 2026-10-29
 

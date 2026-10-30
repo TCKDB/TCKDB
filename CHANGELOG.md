@@ -27,21 +27,32 @@ dataset must never require a code release.
 - **Client: `tckdb-client` 0.180.0, `tckdb-schemas` 0.143.0.** Migration `f7a2c9e4b183`: a new table, `deposit_warning` (no deployed table is touched, no backfill).
 - Until now a deposit's `warn`-tier findings reached the depositor once, in the upload response, and survived only inside the upload job's result. A later reader of
   the stored record saw none of them. Each warning is now stored beside the record it concerns, in the same transaction as the deposit, and shown on the record's reads.
-- **Storage.** One row per (submission, record, code, field), with the code's register entry (`NULL` for the many codes the register does not list), the payload
-  position, the message, the optional `context`, and a `check_version`. One marker row (`code IS NULL`) per checked record says "this record was checked", so
-  "nothing fired" and "never checked" differ. A warning whose subject is a shared identity row (species entry, reaction, literature, a ref fragment) is never put on that row: it goes
-  to the result record this deposit created, or, with none, to the submission alone. Each submission writes its own rows. The table refuses UPDATE, DELETE and TRUNCATE
-  always (as `record_reproducibility_assessment` does), under an approved record too; INSERT stays open so a later artifact upload can add a warning.
-- **Read.** `record_warnings` sits in the envelope of every detail read (calculation, transition-state entry and concept, statmech, transport, network solve, conformer
+- **Storage.** One row per (submission, record, content hash), where the hash covers the code, payload position, message and context: only truly identical
+  warnings dedupe, so two single points at one named method each keep theirs. Each row carries the code's register entry (`NULL` for the many codes the register does not
+  list), the payload position, the message, the optional `context` (JSON-safe: no NaN or Infinity) and a `check_version`. One marker row (`code IS NULL`) per checked record
+  says "this record was checked", so "nothing fired" and "never checked" differ.
+- **Placement.** The workflows say which row they built from which payload object, and a warning lands on that exact record: a `kinetics[0]` path on that kinetics
+  row, `species['h'].thermo` on that thermo row, a bundle-local calculation key on that calculation, a bundle-root provenance gap on every kinetics row the
+  workflow wrote it to, a producer that iterates rows on the row it is about. There is no "primary record" fallback. A warning whose subject is a shared identity row
+  (species entry, reaction, literature, a ref fragment) is never put on that row: it goes to this deposit's single result record for that species or reaction,
+  or, with none, to the submission. Any other warning that cannot be placed is stored on the submission, logged, and that deposit writes no marker rows, so its records read
+  `not_recorded` rather than a false "recorded, nothing fired".
+- **Isolation.** The rows describe the deposit and get no vote on it: they are written inside a SAVEPOINT, and a failure rolls it back, is logged and leaves no rows and no
+  markers. Each submission writes its own rows. The table refuses UPDATE, DELETE and TRUNCATE always (as `record_reproducibility_assessment` does), under an approved record
+  too; INSERT stays open so a later artifact upload can add a warning.
+- **Read.** `record_warnings` sits in the envelope of every detail read (calculation, transition-state entry and concept, statmech, transport, network, network solve, conformer
   observation) and of the per-parent kinetics and thermo reads, by default, a list with one entry per record the response names, each carrying its public ref. List and search responses do
-  not carry it. `status` is `recorded` (items are exactly what fired, possibly none) or `not_recorded` (deposited before this change). Warnings never change a value,
-  order a list or gate selection, and the curated profile shows them like any other evidence.
+  not carry it. `status` is `recorded` (items are exactly what fired, possibly none) or `not_recorded` (deposited before this change, or its deposit could not place every warning).
+  `status` describes the deposit-time check only: `items` can still list a warning a later artifact upload added. Warnings never change a value,
+  order a list or gate selection, and the curated profile shows them like any other evidence; a hidden ref inside a warning's `context` blanks that context and keeps the warning.
 - **Upload responses** are unchanged except that each warning has an optional `context` (`charge_mismatch`, `multiplicity_mismatch`, `sp_energy_payload_log_mismatch`
   and `sp_energy_filled_from_log` fill it today).
-- **Paths covered.** Every upload route, the upload job worker (the same rows as the direct route, pinned by a test), `/bundles/submit` thermo and kinetics, and
-  `POST /calculations/{ref}/artifacts` (stored under the submission the calculation's deposit belongs to). Not covered: the admin provenance-correction route and
-  the ThermoML file route.
-- **Register.** The `upload_warning` channel now reads "returned alongside the accepted upload, and stored with the record it concerns". The register still has 49 entries.
+- **Paths covered.** Every upload route, the upload job worker (the same rows on the same records as the direct route, pinned by a test), `/bundles/submit` thermo and kinetics, and
+  `POST /calculations/{ref}/artifacts` (stored under the submission the calculation's deposit belongs to, or, when it has no live submission, on the calculation alone). Not covered: the admin
+  provenance-correction route and the ThermoML file route.
+- **Register.** The `upload_warning` channel now reads "returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on that
+  record's detail reads and on the per-parent kinetics and thermo reads". The register still has 49 entries.
+- A stored `field` or `message` can contain a depositor-typed label (a transition-state label, a local calculation key). A client must not render them raw.
 - Known limits: #835 (most codes are not in the register) and #836 (the atomic-electronic warnings are not emitted on every path).
 
 ## A minimum's imaginary modes are judged against tau (2026-10-29)

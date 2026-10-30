@@ -10,8 +10,13 @@ selection.
 
 * ``recorded`` -- the deposit's warnings were stored with this record; ``items`` is exactly what fired
   (empty when nothing did).
-* ``not_recorded`` -- the record was deposited before warnings were stored, so nothing can be said either
-  way. This is not "none".
+* ``not_recorded`` -- the record was deposited before warnings were stored, or its deposit could not place every
+  warning on a record (that deposit then marks none of its records checked). Nothing can be said either way. This is
+  not "none".
+
+``status`` describes the deposit-time check and nothing else. ``items`` is every warning stored for the record,
+including any a later artifact upload added, so a ``not_recorded`` record can still list items: the artifact's
+warning is real, and the deposit's own are unknown.
 """
 
 from __future__ import annotations

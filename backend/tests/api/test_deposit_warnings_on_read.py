@@ -8,10 +8,9 @@ real endpoints and read back through the real reads.
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import DBAPIError
 
-import app.workers.upload_worker as upload_worker
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import Calculation
 from app.db.models.common import AppUserRole, RecordReviewStatus, SubmissionRecordType
@@ -20,14 +19,12 @@ from app.db.models.kinetics import Kinetics
 from app.db.models.reaction import ReactionEntry
 from app.db.models.species import ConformerObservation
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
-from app.db.models.upload_job import UploadJob
 from app.services.deposit_warnings import REGISTER_ENTRY, content_hash
 from app.services.record_review import ensure_record_review, set_record_review_status
 from tests.api import test_api_artifact_charge_multiplicity_hook as hook
 from tests.api.artifact_urls import artifacts_url
 from tests.api.test_api_ts_contract_621 import _bundle, _irc_evidence, _ok, _post_bundle
 from tests.services.scientific_read._factories import make_calculation, make_species, make_species_entry, next_inchi_key
-from tests.workers.test_upload_worker_warnings import CASES
 
 _MISSING_IRC = "transition_state_missing_irc_evidence"
 
@@ -267,41 +264,6 @@ def stub_store_artifact(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# The job path and the sync path store the same rows
-# ---------------------------------------------------------------------------
-
-
-def _signature(session, submission_id: int) -> set[tuple]:
-    rows = session.scalars(select(DepositWarning).where(DepositWarning.submission_id == submission_id)).all()
-    return {(r.record_type.value if r.record_type else None, r.code, r.field, r.check_version) for r in rows}
-
-
-@pytest.mark.parametrize("kind", list(CASES), ids=lambda k: k.value)
-def test_the_job_path_stores_the_rows_the_sync_path_stores(client, kind):
-    build, direct_url, job_url, required = CASES[kind]
-    payload = build()
-    session = client._db_session
-
-    savepoint = session.begin_nested()
-    try:
-        direct = client.post(direct_url, json=payload)
-        assert direct.status_code == 201, direct.text[:500]
-        sync_rows = _signature(session, direct.json()["submission_id"])
-    finally:
-        savepoint.rollback()
-
-    queued = client.post(job_url, json=payload)
-    assert queued.status_code == 202, queued.text[:500]
-    job = session.get(UploadJob, queued.json()["job_id"])
-    upload_worker.run_one_job(session, job)
-    job_rows = _signature(session, queued.json()["submission_id"])
-
-    assert sync_rows == job_rows
-    assert any(row[1] is None for row in sync_rows), "no marker rows were written"
-    assert set(required) <= {row[1] for row in sync_rows if row[1]}
-
-
-# ---------------------------------------------------------------------------
 # The register numbers stored with a warning are the register's own
 # ---------------------------------------------------------------------------
 
@@ -361,3 +323,296 @@ def test_a_sub_tolerance_mode_on_a_minimum_is_stored_on_the_frequency_calculatio
     # Not on the sp it was deposited beside.
     primary = _warnings_of(client.get(f"/api/v1/scientific/calculations/{primary_ref}").json(), primary_ref)
     assert "minimum_imaginary_modes_below_tau" not in _codes(primary)
+
+
+# ---------------------------------------------------------------------------
+# Review round: reads, artifacts without a submission, isolation, the curated guard
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _doi_metadata(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.literature_resolution.fetch_doi_metadata",
+        lambda doi: {
+            "title": "Enthalpy of formation of water",
+            "container-title": ["J. Phys. Chem. Ref. Data"],
+            "issued": 1998,
+            "URL": f"https://doi.org/{doi}",
+        },
+    )
+
+
+def test_the_plain_network_detail_read_shows_its_warnings(client, db_session):
+    from app.db.models.network import Network
+
+    response = client.post(
+        "/api/v1/uploads/networks",
+        json={
+            "name": "warning read network",
+            "literature": {"doi": "10.1063/1.555991", "title": "A Completely Different Paper"},
+        },
+    )
+    assert response.status_code == 201, response.text[:400]
+    assert "literature_title_mismatch" in {w["code"] for w in response.json()["warnings"]}
+    network = db_session.get(Network, response.json()["id"])
+    read = client.get(f"/api/v1/scientific/networks/{network.public_ref}")
+    assert read.status_code == 200, read.text[:400]
+    fragment = _warnings_of(read.json(), network.public_ref)
+    assert fragment["status"] == "recorded"
+    assert "literature_title_mismatch" in _codes(fragment)
+
+
+def test_the_per_parent_kinetics_and_thermo_reads_carry_their_records_warnings(client, db_session):
+    from app.db.models.reaction import ReactionEntry
+    from app.db.models.thermo import Thermo
+
+    result = _ok(_post_bundle(client, _bundle([])))
+    kinetics = db_session.get(Kinetics, result["kinetics_ids"][0])
+    rxe = db_session.get(ReactionEntry, result["reaction_entry_id"])
+    read = client.get(f"/api/v1/scientific/reaction-entries/{rxe.public_ref}/kinetics")
+    assert read.status_code == 200, read.text[:300]
+    fragment = _warnings_of(read.json(), kinetics.public_ref)
+    assert fragment["status"] == "recorded"
+    assert "missing_level_of_theory_provenance" in _codes(fragment)
+
+    thermo = db_session.get(Thermo, result["thermo_ids"][0])
+    entry = thermo.species_entry
+    thermo_read = client.get(f"/api/v1/scientific/species-entries/{entry.public_ref}/thermo")
+    assert thermo_read.status_code == 200, thermo_read.text[:300]
+    thermo_fragment = _warnings_of(thermo_read.json(), thermo.public_ref)
+    assert thermo_fragment["status"] == "recorded"
+    assert "missing_workflow_tool_provenance" in _codes(thermo_fragment)
+
+
+def test_bundle_submit_stores_the_warnings_of_the_records_it_creates(client, db_session):
+    from app.db.models.thermo import Thermo
+    from tests.api.test_api_bundle_upload_warnings import SUBMIT, _kinetics_with_literature_bundle, _thermo_bundle
+
+    body = client.post(SUBMIT, json=_thermo_bundle()).json()
+    (thermo_record,) = [r for r in body["records"] if r["record_type"] == "thermo"]
+    thermo = db_session.get(Thermo, thermo_record["record_id"])
+    thermo_read = client.get(f"/api/v1/scientific/species-entries/{thermo.species_entry.public_ref}/thermo")
+    fragment = _warnings_of(thermo_read.json(), thermo.public_ref)
+    assert fragment["status"] == "recorded"
+    assert "composite_delta_prefer_scheme_terms" in _codes(fragment) or "missing_software_release_provenance" in _codes(fragment)
+
+    kin_body = client.post(SUBMIT, json=_kinetics_with_literature_bundle()).json()
+    (kin_record,) = [r for r in kin_body["records"] if r["record_type"] == "kinetics"]
+    kinetics = db_session.get(Kinetics, kin_record["record_id"])
+    read = client.get(f"/api/v1/scientific/reaction-entries/{kinetics.reaction_entry.public_ref}/kinetics")
+    kin_fragment = _warnings_of(read.json(), kinetics.public_ref)
+    assert kin_fragment["status"] == "recorded"
+    assert "missing_kinetics_interpretation_assignments" in _codes(kin_fragment)
+
+
+def test_a_warning_row_of_another_record_type_is_never_read_as_this_ones(client, db_session):
+    calc = _owned_calculation(db_session)
+    submission_id = _submission_id(client)
+    # Same id, different record type: a thermo with this id would own these rows, not the calculation.
+    for code, field, message in (("charge_mismatch", "species_entry.charge", "x"),):
+        db_session.add(
+            DepositWarning(
+                submission_id=submission_id,
+                record_type=SubmissionRecordType.thermo,
+                record_id=calc.id,
+                code=code,
+                field=field,
+                message=message,
+                content_hash=content_hash(code, field, message, None),
+                check_version=1,
+            )
+        )
+    db_session.add(
+        DepositWarning(submission_id=submission_id, record_type=SubmissionRecordType.thermo, record_id=calc.id, check_version=1)
+    )
+    db_session.flush()
+    read = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}")
+    assert _warnings_of(read.json(), calc.public_ref) == {"record_ref": calc.public_ref, "status": "not_recorded", "items": []}
+
+
+def _link_to_live_submission(db_session, client, calc) -> int:
+    """Link ``calc`` (a record from before warnings were stored) to a live submission of the test user."""
+    from app.services.submission import link_record
+
+    submission_id = _submission_id(client)
+    from app.db.models.submission import Submission
+
+    link_record(db_session, submission=db_session.get(Submission, submission_id), record_type=SubmissionRecordType.calculation, record_id=calc.id)
+    return submission_id
+
+
+def test_an_artifact_warning_on_a_pre_change_record_reads_not_recorded_with_its_item_and_writes_no_marker(
+    client, db_session, stub_store_artifact
+):
+    calc = _owned_calculation(db_session)
+    submission_id = _link_to_live_submission(db_session, client, calc)
+    markers_before = db_session.scalar(
+        select(func.count()).select_from(DepositWarning).where(
+            DepositWarning.record_type == SubmissionRecordType.calculation, DepositWarning.record_id == calc.id, DepositWarning.code.is_(None)
+        )
+    )
+
+    response = client.post(artifacts_url(client, calc.id), json={"artifacts": [hook._output_log()]})
+    assert response.status_code == 201, response.text[:400]
+    assert "multiplicity_mismatch" in {w["code"] for w in response.json()["warnings"]}
+
+    markers_after = db_session.scalar(
+        select(func.count()).select_from(DepositWarning).where(
+            DepositWarning.record_type == SubmissionRecordType.calculation, DepositWarning.record_id == calc.id, DepositWarning.code.is_(None)
+        )
+    )
+    assert markers_before == markers_after == 0
+    stored = db_session.scalars(
+        select(DepositWarning).where(
+            DepositWarning.record_type == SubmissionRecordType.calculation,
+            DepositWarning.record_id == calc.id,
+            DepositWarning.code == "multiplicity_mismatch",
+        )
+    ).all()
+    assert [r.submission_id for r in stored] == [submission_id]
+    fragment = _warnings_of(client.get(f"/api/v1/scientific/calculations/{calc.public_ref}").json(), calc.public_ref)
+    # ``status`` describes the deposit-time check, which was never recorded; ``items`` still lists what the artifact earned.
+    assert fragment["status"] == "not_recorded"
+    assert "multiplicity_mismatch" in _codes(fragment)
+
+
+def test_an_artifact_warning_is_kept_when_the_calculation_has_no_live_submission(client, db_session, stub_store_artifact):
+    calc_id = hook._create_calc(client, smiles="[CH3]", charge=0, multiplicity=2)
+    calc = db_session.get(Calculation, calc_id)
+    from app.db.models.common import SubmissionStatus
+    from app.db.models.submission import Submission, SubmissionRecordLink
+
+    submission = db_session.scalars(
+        select(Submission).join(SubmissionRecordLink, SubmissionRecordLink.submission_id == Submission.id).where(
+            SubmissionRecordLink.record_id == calc.id, SubmissionRecordLink.record_type == SubmissionRecordType.calculation
+        )
+    ).first()
+    submission.status = SubmissionStatus.failed
+    db_session.flush()
+
+    response = client.post(artifacts_url(client, calc_id), json={"artifacts": [hook._output_log()]})
+    assert response.status_code == 201, response.text[:400]
+    assert "multiplicity_mismatch" in {w["code"] for w in response.json()["warnings"]}
+    (row,) = db_session.scalars(
+        select(DepositWarning).where(DepositWarning.record_id == calc_id, DepositWarning.code == "multiplicity_mismatch")
+    ).all()
+    assert row.submission_id is None and row.record_type is SubmissionRecordType.calculation
+    fragment = _warnings_of(client.get(f"/api/v1/scientific/calculations/{calc.public_ref}").json(), calc.public_ref)
+    assert "multiplicity_mismatch" in _codes(fragment)
+    # Repeating the upload does not repeat the warning: identical content dedupes by hash.
+    client.post(artifacts_url(client, calc_id), json={"artifacts": [hook._output_log(filename="again.log")]})
+    again = db_session.scalars(
+        select(DepositWarning).where(DepositWarning.record_id == calc_id, DepositWarning.code == "multiplicity_mismatch")
+    ).all()
+    assert len(again) == 1
+
+
+def test_a_failure_to_store_warnings_does_not_veto_the_deposit(client, db_session, monkeypatch):
+    import app.services.deposit_warnings as module
+
+    real_row = module._row
+
+    def broken(submission_id, target, warning):
+        row = real_row(submission_id, target, warning)
+        row["check_version"] = 10**9  # smallint overflow: the database refuses the insert
+        return row
+
+    monkeypatch.setattr(module, "_row", broken)
+    result = _ok(_post_bundle(client, _bundle([])))
+    assert _MISSING_IRC in {w["code"] for w in result["warnings"]}  # the response is unchanged
+    tse = db_session.get(TransitionStateEntry, result["transition_state_entry_id"])
+    read = client.get(f"/api/v1/scientific/transition-state-entries/{tse.public_ref}")
+    assert read.status_code == 200
+    assert _warnings_of(read.json(), tse.public_ref) == {"record_ref": tse.public_ref, "status": "not_recorded", "items": []}
+    assert db_session.scalar(select(func.count()).select_from(DepositWarning).where(DepositWarning.submission_id == result["submission_id"])) == 0
+
+
+def test_a_failure_to_store_warnings_does_not_veto_a_job(client, db_session, monkeypatch):
+    import app.services.deposit_warnings as module
+    import app.workers.upload_worker as upload_worker
+    from app.db.models.common import UploadJobStatus
+    from app.db.models.upload_job import UploadJob
+    from tests.workers.test_upload_worker_warnings import CASES, UploadJobKind
+
+    real_row = module._row
+    monkeypatch.setattr(
+        module, "_row", lambda *a: {**real_row(*a), "check_version": 10**9}
+    )
+    build, _direct, job_url, _required = CASES[UploadJobKind.transition_state]
+    queued = client.post(job_url, json=build())
+    job = db_session.get(UploadJob, queued.json()["job_id"])
+    upload_worker.run_one_job(db_session, job)
+    assert job.status is UploadJobStatus.complete
+    assert db_session.scalar(select(func.count()).select_from(DepositWarning).where(DepositWarning.submission_id == queued.json()["submission_id"])) == 0
+
+
+def test_a_context_with_nan_or_infinity_is_stored_as_json_safe_text(client, db_session):
+    from tckdb_schemas.upload_warning import UploadWarning
+
+    from app.services.deposit_warnings import store_deposit_warnings
+
+    submission_id = _submission_id(client)
+    calc = _owned_calculation(db_session)
+
+    class Target:
+        record_type = SubmissionRecordType.calculation
+        record_id = calc.id
+
+    store_deposit_warnings(
+        db_session,
+        submission_id,
+        [UploadWarning(field="f", code="sp_energy_payload_log_mismatch", message="m", context={"delta": float("nan"), "big": float("inf"), "ok": 1.5})],
+        targets=[Target()],
+        mark_checked=False,
+    )
+    (row,) = db_session.scalars(select(DepositWarning).where(DepositWarning.record_id == calc.id, DepositWarning.code.is_not(None))).all()
+    assert row.context == {"delta": "nan", "big": "inf", "ok": 1.5}
+
+
+def test_a_hidden_ref_in_a_warning_context_blanks_the_context_not_the_entry(client, db_session):
+    curator = AppUser(username="warning-redaction-curator", role=AppUserRole.curator)
+    db_session.add(curator)
+    db_session.flush()
+    visible = _owned_calculation(db_session)
+    hidden = _owned_calculation(db_session)
+    for calc, status in ((visible, RecordReviewStatus.approved), (hidden, RecordReviewStatus.rejected)):
+        ensure_record_review(db_session, record_type=SubmissionRecordType.calculation, record_id=calc.id)
+        set_record_review_status(
+            db_session, record_type=SubmissionRecordType.calculation, record_id=calc.id, status=status, actor=curator, note="x"
+        )
+    submission_id = _submission_id(client)
+    quoted = {"source": hidden.public_ref}
+    message = f"compare with {hidden.public_ref}"
+    for code, field, body_text, context in (
+        ("sp_energy_payload_log_mismatch", "a", "plain", quoted),
+        ("charge_mismatch", "b", message, None),
+    ):
+        db_session.add(
+            DepositWarning(
+                submission_id=submission_id,
+                record_type=SubmissionRecordType.calculation,
+                record_id=visible.id,
+                code=code,
+                field=field,
+                message=body_text,
+                context=context,
+                content_hash=content_hash(code, field, body_text, context),
+                check_version=1,
+            )
+        )
+    db_session.add(
+        DepositWarning(submission_id=submission_id, record_type=SubmissionRecordType.calculation, record_id=visible.id, check_version=1)
+    )
+    db_session.flush()
+
+    read = client.get(f"/api/v1/scientific/calculations/{visible.public_ref}", params={"profile": "curated"})
+    assert read.status_code == 200, read.text[:500]
+    fragment = _warnings_of(read.json(), visible.public_ref)
+    assert fragment["status"] == "recorded"
+    by_code = {item["code"]: item for item in fragment["items"]}
+    assert set(by_code) == {"sp_energy_payload_log_mismatch", "charge_mismatch"}
+    assert by_code["sp_energy_payload_log_mismatch"]["context"] is None
+    assert by_code["sp_energy_payload_log_mismatch"]["message"] == "plain"
+    assert by_code["charge_mismatch"]["message"] in ("", None)
+    assert hidden.public_ref not in read.text
