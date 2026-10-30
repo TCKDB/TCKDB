@@ -361,3 +361,64 @@ def test_only_truly_identical_warnings_dedupe(client):
     store_deposit_warnings(session, submission_id, warnings, targets=[Target()], mark_checked=False)
     rows = [r for r in _stored(session, submission_id) if r.message in ("one", "two")]
     assert sorted(r.message for r in rows) == ["one", "two"]
+
+
+# ---------------------------------------------------------------------------
+# a warning that cannot be placed
+# ---------------------------------------------------------------------------
+
+
+def _deposit_with_two_calculations(client):
+    from app.services.record_review import RecordRef
+
+    body = client.post("/api/v1/uploads/computed-reaction", json=_bundle([])).json()
+    session = client._db_session
+    calc_ids = sorted(body["calculation_keys"].values())[:2]
+    return session, body["submission_id"], [RecordRef(RT.calculation, c) for c in calc_ids]
+
+
+def test_a_warning_that_cannot_be_placed_goes_to_the_submission_and_no_record_is_marked_checked(client):
+    from app.services.deposit_warnings import store_deposit_warnings
+    from app.services.record_review import RecordRef
+
+    session, _old, _ = _deposit_with_two_calculations(client)
+    from app.db.models.app_user import AppUser
+    from app.db.models.common import SubmissionKind
+    from app.services.submission import create_submission
+
+    user = session.scalars(select(AppUser).where(AppUser.username == "testuser")).one()
+    submission = create_submission(session, created_by=user.id, submission_kind=SubmissionKind.thermo)
+    calc = session.scalars(select(Calculation)).first()
+    from app.services.deposit_warnings import note_deposit_targets
+
+    note_deposit_targets(session, submission.id, [RecordRef(RT.calculation, calc.id)])
+    store_deposit_warnings(
+        session,
+        submission.id,
+        [UploadWarning(field="nowhere.at.all", code="converged_opt_no_usable_energy", message="about some record or other")],
+    )
+    rows = list(session.scalars(select(DepositWarning).where(DepositWarning.submission_id == submission.id)))
+    assert [(r.code, r.record_type) for r in rows] == [("converged_opt_no_usable_energy", None)]
+    assert not _markers(session, submission.id)
+
+
+def test_an_identity_subject_warning_with_no_single_result_record_marks_the_records_checked(client):
+    from app.db.models.app_user import AppUser
+    from app.db.models.common import SubmissionKind
+    from app.services.deposit_warnings import note_deposit_targets, store_deposit_warnings
+    from app.services.submission import create_submission
+
+    session, _old, targets = _deposit_with_two_calculations(client)
+    user = session.scalars(select(AppUser).where(AppUser.username == "testuser")).one()
+    submission = create_submission(session, created_by=user.id, submission_kind=SubmissionKind.thermo)
+    note_deposit_targets(session, submission.id, targets)
+    store_deposit_warnings(
+        session,
+        submission.id,
+        [UploadWarning(field="species_entry.x", code="species_entry_stereo_unresolved", message="a shared identity row")],
+    )
+    rows = list(session.scalars(select(DepositWarning).where(DepositWarning.submission_id == submission.id)))
+    assert [(r.code, r.record_type) for r in rows if r.code] == [("species_entry_stereo_unresolved", None)]
+    assert {(r.record_type, r.record_id) for r in _markers(session, submission.id) if r.record_type} == {
+        (RT.calculation, t.record_id) for t in targets
+    }

@@ -304,7 +304,7 @@ def _place(
         best = max(len(a[0]) for a in usable)
         records = {(a[1], a[2]) for a in usable if len(a[0]) == best}
         if len(records) == 1 or any(a[4] for a in usable if len(a[0]) == best):
-            return [_Target(*r) for r in sorted(records, key=lambda r: (r[0].value, r[1]))]
+            return [_Target(*r) for r in sorted(records, key=repr)]
     if identity:
         scoped = [a for a in anchors if a[3] is not None and _under(warning.field, a[3])]
         scope = max((a[3] for a in scoped), key=len) if scoped else None
@@ -441,7 +441,7 @@ def store_deposit_warnings(
                 "deposit warnings for submission %s could not be placed on a record (%s); they are stored on the "
                 "submission and none of its records is marked checked",
                 submission_id,
-                ", ".join(sorted({f"{w.code}@{w.field}" for w in unplaced})),
+                ", ".join(sorted({f"{w.code} at {w.field}" for w in unplaced})),
             )
         for warning, placement in zip(warnings, placements, strict=True):
             for target in placement or [None]:
