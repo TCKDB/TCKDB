@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_optional_current_user
+from app.api.routes.scientific._actor import publish_read_actor
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
@@ -214,6 +215,7 @@ def scientific_calculations_search_post(
 @router.get(
     "/{calculation_ref_or_id}",
     response_model=ScientificCalculationDetailResponse,
+    dependencies=[Depends(publish_read_actor)],
 )
 def scientific_calculation_detail(
     calculation_ref_or_id: str = Path(..., min_length=1, max_length=64),

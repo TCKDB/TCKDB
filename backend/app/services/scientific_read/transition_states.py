@@ -91,7 +91,7 @@ from app.schemas.reads.scientific_transition_state import (
     TransitionStateValidationDescriptor,
     TransitionStateValidationEvidenceSummary,
 )
-from app.services.deposit_warnings import deposit_record_warnings
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     evidence_visible_statuses,
@@ -474,7 +474,7 @@ def get_transition_state(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([ts_badge]),
         record=record,
-        record_warnings=deposit_record_warnings(
+        **deposit_warning_envelope(
             session, SubmissionRecordType.transition_state_entry, {e.id: e.public_ref for e in entries}
         ),
     )
@@ -556,7 +556,7 @@ def get_transition_state_entry(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([tse_badge]),
         record=record,
-        record_warnings=deposit_record_warnings(
+        **deposit_warning_envelope(
             session, SubmissionRecordType.transition_state_entry, {tse.id: tse.public_ref}
         ),
     )

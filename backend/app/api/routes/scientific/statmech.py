@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.api.routes.scientific._actor import publish_read_actor
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
@@ -197,7 +198,7 @@ def scientific_statmech_search_post(
 @router.get(
     "/{statmech_ref_or_id}",
     response_model=ScientificStatmechDetailResponse,
-    dependencies=[Depends(refuse_check_inputs)],
+    dependencies=[Depends(refuse_check_inputs), Depends(publish_read_actor)],
 )
 def scientific_statmech_detail(
     statmech_ref_or_id: str = Path(..., min_length=1, max_length=64),

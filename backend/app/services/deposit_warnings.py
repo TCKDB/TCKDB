@@ -68,6 +68,7 @@ from tckdb_schemas.upload_warning import UploadWarning
 
 from app.db.models.common import SubmissionRecordType as RT
 from app.db.models.deposit_warning import DepositWarning
+from app.db.models.submission import Submission, SubmissionRecordLink
 
 logger = logging.getLogger(__name__)
 
@@ -482,9 +483,33 @@ def store_deposit_warnings(
 # ---------------------------------------------------------------------------
 
 
-def deposit_warnings_for(
-    session: Session, record_type: RT, record_ids: Iterable[int]
-) -> dict[int, dict[str, Any]]:
+def _item(row: DepositWarning, owner_id: int | None) -> Any:
+    """One stored warning as a public item: TCKDB's words, with the depositor's kept privately for the owner."""
+    from app.schemas.reads.scientific_deposit_warnings import DepositWarningItem
+    from app.services.deposit_warning_messages import normalise_field, render_message
+
+    item = DepositWarningItem(
+        code=row.code,
+        message=render_message(row.code, row.context),
+        field=normalise_field(row.field),
+        register_entry=row.register_entry,
+        context=row.context,
+        check_version=row.check_version,
+    )
+    item._raw_message = row.message
+    item._raw_field = row.field
+    item._owner_id = owner_id
+    return item
+
+
+def _owners(session: Session, submission_ids: Iterable[int | None]) -> dict[int, int | None]:
+    ids = {i for i in submission_ids if i is not None}
+    if not ids:
+        return {}
+    return dict(session.execute(select(Submission.id, Submission.created_by).where(Submission.id.in_(ids))).all())
+
+
+def deposit_warnings_for(session: Session, record_type: RT, record_ids: Iterable[int]) -> dict[int, dict[str, Any]]:
     """``{record_id: {"status", "items"}}`` for ``record_ids`` (every id is present in the result).
 
     ``status`` describes the deposit-time check: ``recorded`` when a submission left a marker for the record,
@@ -501,27 +526,67 @@ def deposit_warnings_for(
         .where(DepositWarning.record_type == record_type, DepositWarning.record_id.in_(ids))
         .order_by(DepositWarning.id)
     ).all()
+    owners = _owners(session, (r.submission_id for r in rows))
     for row in rows:
         entry = out[row.record_id]
         if row.code is None:
             entry["status"] = "recorded"
             continue
-        entry["items"].append(
-            {
-                "code": row.code,
-                "message": row.message,
-                "field": row.field,
-                "register_entry": row.register_entry,
-                "context": row.context,
-                "check_version": row.check_version,
-            }
-        )
+        entry["items"].append(_item(row, owners.get(row.submission_id)))
     return out
 
 
-def deposit_record_warnings(session: Session, record_type: RT, id_to_ref: dict[int, str]) -> list[Any]:
-    """The read envelope's ``record_warnings``: one ``RecordWarnings`` per record the response names, in the given order."""
+def submission_warnings_for(session: Session, record_type: RT, record_ids: Iterable[int]) -> list[Any]:
+    """The warnings of the submissions the named records belong to that no record could take, once per submission.
+
+    They stay on the submission (nothing is copied onto a record). A submission appears when it has any, in
+    submission order; its items keep their stored order.
+    """
+    from app.schemas.reads.scientific_deposit_warnings import SubmissionWarnings
+
+    ids = sorted(set(record_ids))
+    if not ids:
+        return []
+    submission_ids = sorted(
+        set(
+            session.scalars(
+                select(SubmissionRecordLink.submission_id).where(
+                    SubmissionRecordLink.record_type == record_type, SubmissionRecordLink.record_id.in_(ids)
+                )
+            )
+        )
+    )
+    if not submission_ids:
+        return []
+    rows = session.scalars(
+        select(DepositWarning)
+        .where(
+            DepositWarning.submission_id.in_(submission_ids),
+            DepositWarning.record_type.is_(None),
+            DepositWarning.code.is_not(None),
+        )
+        .order_by(DepositWarning.id)
+    ).all()
+    if not rows:
+        return []
+    owners = _owners(session, submission_ids)
+    refs = dict(session.execute(select(Submission.id, Submission.public_ref).where(Submission.id.in_(submission_ids))).all())
+    grouped: dict[int, list[Any]] = {}
+    for row in rows:
+        grouped.setdefault(row.submission_id, []).append(_item(row, owners.get(row.submission_id)))
+    return [
+        SubmissionWarnings(submission_ref=refs.get(submission_id), items=items)
+        for submission_id, items in sorted(grouped.items())
+    ]
+
+
+def deposit_warning_envelope(session: Session, record_type: RT, id_to_ref: dict[int, str]) -> dict[str, Any]:
+    """The read envelope's two warning blocks: ``record_warnings`` (one entry per named record, in the given order) and
+    ``deposit_warnings`` (what the named records' submissions could not place on a record)."""
     from app.schemas.reads.scientific_deposit_warnings import RecordWarnings
 
     stored = deposit_warnings_for(session, record_type, id_to_ref)
-    return [RecordWarnings(record_ref=ref, **stored[rid]) for rid, ref in id_to_ref.items()]
+    return {
+        "record_warnings": [RecordWarnings(record_ref=ref, **stored[rid]) for rid, ref in id_to_ref.items()],
+        "deposit_warnings": submission_warnings_for(session, record_type, id_to_ref),
+    }

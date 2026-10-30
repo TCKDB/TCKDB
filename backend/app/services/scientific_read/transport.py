@@ -51,7 +51,7 @@ from app.schemas.reads.scientific_transport import (
     TransportSourceCalculationSummary,
     TransportSpeciesContext,
 )
-from app.services.deposit_warnings import deposit_record_warnings
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read.common import (
     fetch_review_badges,
     ids_withheld_as_evidence,
@@ -191,7 +191,7 @@ def get_transport(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([badge]),
         record=record,
-        record_warnings=deposit_record_warnings(
+        **deposit_warning_envelope(
             session, SubmissionRecordType.transport, {tr.id: tr.public_ref}
         ),
     )

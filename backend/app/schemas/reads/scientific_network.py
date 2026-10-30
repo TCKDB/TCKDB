@@ -58,7 +58,7 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
-from app.schemas.reads.scientific_deposit_warnings import RecordWarnings
+from app.schemas.reads.scientific_deposit_warnings import RecordWarnings, SubmissionWarnings
 from app.schemas.reads.scientific_network_composition import (
     NetworkStateComposition,
 )
@@ -397,6 +397,9 @@ class ScientificNetworkDetailResponse(ScientificResponse):
     #: The deposit-time warnings of each record this response names, with its public ref (see
     #: ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
     record_warnings: list[RecordWarnings] = Field(default_factory=list)
+    #: Warnings about the deposit that no one record could take, once per submission a named record belongs to
+    #: (see ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    deposit_warnings: list[SubmissionWarnings] = Field(default_factory=list)
     request: RequestEcho
     review_summary: ReviewStatusSummary
     record: ScientificNetworkRecord
@@ -662,6 +665,9 @@ class ScientificNetworkSolveDetailResponse(ScientificResponse):
     #: The deposit-time warnings of each record this response names, with its public ref (see
     #: ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
     record_warnings: list[RecordWarnings] = Field(default_factory=list)
+    #: Warnings about the deposit that no one record could take, once per submission a named record belongs to
+    #: (see ``scientific_deposit_warnings``). Present by default; list and search responses do not carry it.
+    deposit_warnings: list[SubmissionWarnings] = Field(default_factory=list)
     request: RequestEcho
     review_summary: ReviewStatusSummary
     record: ScientificNetworkSolveRecord

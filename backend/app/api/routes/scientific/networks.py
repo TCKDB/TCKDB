@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.api.routes.scientific._actor import publish_read_actor
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
@@ -199,6 +200,7 @@ def scientific_networks_search_post(
 @router.get(
     "/{network_ref_or_id}",
     response_model=ScientificNetworkDetailResponse,
+    dependencies=[Depends(publish_read_actor)],
 )
 def scientific_network_detail(
     network_ref_or_id: str = Path(..., min_length=1, max_length=64),
@@ -425,6 +427,7 @@ def scientific_network_solves_search_post(
 @solve_router.get(
     "/{network_solve_ref_or_id}",
     response_model=ScientificNetworkSolveDetailResponse,
+    dependencies=[Depends(publish_read_actor)],
 )
 def scientific_network_solve_detail(
     network_solve_ref_or_id: str = Path(..., min_length=1, max_length=64),

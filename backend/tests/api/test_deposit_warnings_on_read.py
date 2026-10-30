@@ -606,15 +606,26 @@ def test_a_hidden_ref_in_a_warning_context_blanks_the_context_not_the_entry(clie
     )
     db_session.flush()
 
-    read = client.get(f"/api/v1/scientific/calculations/{visible.public_ref}", params={"profile": "curated"})
+    from app.services.auth import create_api_key
+
+    owner = db_session.scalars(select(AppUser).where(AppUser.username == "testuser")).one()
+    _, key = create_api_key(db_session, owner)
+    read = client.get(
+        f"/api/v1/scientific/calculations/{visible.public_ref}",
+        params={"profile": "curated"},
+        headers={"X-API-Key": key},
+    )
     assert read.status_code == 200, read.text[:500]
     fragment = _warnings_of(read.json(), visible.public_ref)
     assert fragment["status"] == "recorded"
     by_code = {item["code"]: item for item in fragment["items"]}
     assert set(by_code) == {"sp_energy_payload_log_mismatch", "charge_mismatch"}
+    # The context that quoted a hidden record is blanked; the warning, in TCKDB's words, stays.
     assert by_code["sp_energy_payload_log_mismatch"]["context"] is None
-    assert by_code["sp_energy_payload_log_mismatch"]["message"] == "plain"
-    assert by_code["charge_mismatch"]["message"] in ("", None)
+    assert by_code["sp_energy_payload_log_mismatch"]["message"].startswith("The single-point energy deposited")
+    # The owner's copy of the stored text is blanked where it named the hidden record, kept where it did not.
+    assert by_code["sp_energy_payload_log_mismatch"]["depositor_message"] == "plain"
+    assert "depositor_message" not in by_code["charge_mismatch"]
     assert hidden.public_ref not in read.text
 
 

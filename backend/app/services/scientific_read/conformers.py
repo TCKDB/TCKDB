@@ -83,7 +83,7 @@ from app.schemas.reads.scientific_conformer import (
     ScientificConformerObservationDetailResponse,
     ScientificConformerObservationRecord,
 )
-from app.services.deposit_warnings import deposit_record_warnings
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     fetch_review_badges,
@@ -469,7 +469,7 @@ def get_conformer_observation(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([obs_badge]),
         record=record,
-        record_warnings=deposit_record_warnings(
+        **deposit_warning_envelope(
             session, SubmissionRecordType.conformer_observation, {obs.id: obs.public_ref}
         ),
     )

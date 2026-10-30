@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.api.routes.scientific._actor import publish_read_actor
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
     omit_trust_unless_requested,
@@ -40,6 +41,7 @@ router = APIRouter(prefix="/species-entries")
 @router.get(
     "/{species_entry_id}/thermo",
     response_model=ScientificSpeciesThermoResponse,
+    dependencies=[Depends(publish_read_actor)],
 )
 def species_thermo(
     http_request: Request,

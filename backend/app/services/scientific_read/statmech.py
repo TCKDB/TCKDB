@@ -79,7 +79,7 @@ from app.schemas.reads.scientific_statmech import (
 )
 from app.services.calculation_levels import RoleCalcInfo, derive_levels, withhold_levels_from_calculations
 from app.services.composite_verification import verify_composite_calculations
-from app.services.deposit_warnings import deposit_record_warnings
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read.common import (
     evidence_withheld_predicate,
     fetch_review_badges,
@@ -300,7 +300,7 @@ def get_statmech(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([badge]),
         record=record,
-        record_warnings=deposit_record_warnings(
+        **deposit_warning_envelope(
             session, SubmissionRecordType.statmech, {sm.id: sm.public_ref}
         ),
     )
