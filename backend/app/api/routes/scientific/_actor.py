@@ -12,14 +12,19 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
-from fastapi import Depends
+from fastapi import Depends, Request
 
+from app.api.credential_vary import STATE_KEY
 from app.api.deps import get_optional_current_user
 from app.db.models.app_user import AppUser
 from app.services.scientific_read.warning_views import ReadActor, reset_read_actor, set_read_actor
 
 
-async def publish_read_actor(actor: AppUser | None = Depends(get_optional_current_user)) -> AsyncIterator[None]:
+async def publish_read_actor(
+    request: Request, actor: AppUser | None = Depends(get_optional_current_user)
+) -> AsyncIterator[None]:
+    # The answer now depends on who asked: keep a shared cache from serving one caller's answer to another.
+    setattr(request.state, STATE_KEY, True)
     token = set_read_actor(ReadActor(actor.id, actor.role) if actor is not None else None)
     try:
         yield

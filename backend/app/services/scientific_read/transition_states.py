@@ -475,7 +475,8 @@ def get_transition_state(
         review_summary=review_summary([ts_badge]),
         record=record,
         **deposit_warning_envelope(
-            session, SubmissionRecordType.transition_state_entry, {e.id: e.public_ref for e in entries}
+            # Only the entries the page lists: a withheld entry's warnings (and its submission's) are not ours to show.
+            session, SubmissionRecordType.transition_state_entry, {e.id: e.public_ref for e in counted_entries}
         ),
     )
 

@@ -69,7 +69,7 @@ class DepositWarningItem(BaseModel):
     #: What the reading boundary needs to decide who may see the stored text. Never serialized.
     _raw_message: str = PrivateAttr(default="")
     _raw_field: str = PrivateAttr(default="")
-    _owner_id: int | None = PrivateAttr(default=None)
+    _writer_id: int | None = PrivateAttr(default=None)
 
     @model_serializer(mode="wrap")
     def _omit_absent_depositor_text(self, handler):

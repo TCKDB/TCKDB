@@ -83,6 +83,13 @@ class DepositWarning(Base):
     context: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
     #: SHA-256 of code, field, message and canonical context: only truly identical warnings dedupe.
     content_hash: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    #: Who wrote this row: the submission's depositor for a deposit's rows, the uploader for an artifact's. The stored
+    #: text of a warning (the depositor's own words) is shown to this user and to curators and admins only.
+    written_by_user_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("app_user.id", name="fk_deposit_warning_written_by", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+    )
     #: The version of the warning set that judged the deposit.
     check_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, server_default=func.now())

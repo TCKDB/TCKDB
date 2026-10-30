@@ -47,12 +47,12 @@ def current_read_actor() -> ReadActor | None:
     return _READ_ACTOR.get()
 
 
-def _may_see_depositor_text(actor: ReadActor | None, owner_id: int | None) -> bool:
+def _may_see_depositor_text(actor: ReadActor | None, writer_id: int | None) -> bool:
     if actor is None:
         return False
     if actor.role in _CURATION_ROLES:
         return True
-    return owner_id is not None and owner_id == actor.user_id
+    return writer_id is not None and writer_id == actor.user_id
 
 
 def reveal_warning_views(payload: Any) -> None:
@@ -68,7 +68,7 @@ def reveal_warning_views(payload: Any) -> None:
             block.submission_ref = None
         items.extend(block.items)
     for item in items:
-        if _may_see_depositor_text(actor, item._owner_id):
+        if _may_see_depositor_text(actor, item._writer_id):
             item.depositor_message = item._raw_message
             item.depositor_field = item._raw_field
         else:

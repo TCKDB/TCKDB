@@ -858,6 +858,7 @@ def upload_calculation_artifacts(
             warnings,
             targets=[RecordRef(SubmissionRecordType.calculation, calc_pk)],
             mark_checked=False,
+            written_by=current_user.id,
         )
 
     result = ArtifactsUploadResult(

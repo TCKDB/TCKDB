@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.bundle_limits import BundleBodyLimitMiddleware
 from app.api.config import Settings, settings
+from app.api.credential_vary import CredentialVaryMiddleware
 from app.api.errors import register_exception_handlers
 from app.api.export_limits import NetworkExportBodyLimitMiddleware
 from app.api.logging_config import configure_logging
@@ -146,6 +147,7 @@ def create_app() -> FastAPI:
     # ``NetworkExportBodyLimitMiddleware`` (the selected-export body cap) is added next, so it is
     # innermost after the bundle cap and applies in the same order: rate limiting and CORS wrap it,
     # and its 413 is refused before the manifest is parsed.
+    app.add_middleware(CredentialVaryMiddleware)  # innermost: marks a caller-dependent answer private on its way out
     app.add_middleware(BundleBodyLimitMiddleware)
     app.add_middleware(NetworkExportBodyLimitMiddleware)  # the selected-export body cap, before parsing
     if settings.cors_allow_origins:

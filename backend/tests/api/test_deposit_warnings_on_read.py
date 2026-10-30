@@ -593,6 +593,7 @@ def test_a_hidden_ref_in_a_warning_context_blanks_the_context_not_the_entry(clie
                 submission_id=submission_id,
                 record_type=SubmissionRecordType.calculation,
                 record_id=visible.id,
+                written_by_user_id=db_session.scalars(select(AppUser).where(AppUser.username == "testuser")).one().id,
                 code=code,
                 field=field,
                 message=body_text,

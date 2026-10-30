@@ -367,9 +367,12 @@ def content_hash(code: str, field: str, message: str, context: dict[str, Any] | 
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _row(submission_id: int | None, target: _Target | None, warning: UploadWarning | None) -> dict[str, Any]:
+def _row(
+    submission_id: int | None, target: _Target | None, warning: UploadWarning | None, written_by: int | None = None
+) -> dict[str, Any]:
     base: dict[str, Any] = {
         "submission_id": submission_id,
+        "written_by_user_id": written_by,
         "record_type": target.record_type if target else None,
         "record_id": target.record_id if target else None,
         "check_version": CHECK_VERSION,
@@ -406,6 +409,7 @@ def store_deposit_warnings(
     *,
     targets: Iterable[Any] | None = None,
     mark_checked: bool = True,
+    written_by: int | None = None,
 ) -> None:
     """Write ``warnings`` (and one marker per checked record) for ``submission_id``; never raises.
 
@@ -436,6 +440,9 @@ def store_deposit_warnings(
     # failure to report, never ours to swallow.
     session.flush()
     try:
+        writer = written_by
+        if writer is None and submission_id is not None:
+            writer = session.scalar(select(Submission.created_by).where(Submission.id == submission_id))
         if targets is not None and len(target_list) == 1:
             placements: list[list[_Target]] = [[target_list[0]] for _ in warnings]
         else:
@@ -451,10 +458,10 @@ def store_deposit_warnings(
             return
         rows: list[dict[str, Any]] = []
         if mark_checked and not unplaced:
-            rows.append(_row(submission_id, None, None))
+            rows.append(_row(submission_id, None, None, writer))
             for t in target_list:
                 if t.record_type in ANCHOR_TYPES:
-                    rows.append(_row(submission_id, t, None))
+                    rows.append(_row(submission_id, t, None, writer))
         elif unplaced:
             logger.warning(
                 "deposit warnings for submission %s could not be placed on a record (%s); they are stored on the "
@@ -464,7 +471,7 @@ def store_deposit_warnings(
             )
         for warning, placement in zip(warnings, placements, strict=True):
             for target in placement or [None]:
-                rows.append(_row(submission_id, target, warning))
+                rows.append(_row(submission_id, target, warning, writer))
         if not rows:
             return
         with session.begin_nested():
@@ -483,7 +490,7 @@ def store_deposit_warnings(
 # ---------------------------------------------------------------------------
 
 
-def _item(row: DepositWarning, owner_id: int | None) -> Any:
+def _item(row: DepositWarning) -> Any:
     """One stored warning as a public item: TCKDB's words, with the depositor's kept privately for the owner."""
     from app.schemas.reads.scientific_deposit_warnings import DepositWarningItem
     from app.services.deposit_warning_messages import normalise_field, render_message
@@ -498,15 +505,8 @@ def _item(row: DepositWarning, owner_id: int | None) -> Any:
     )
     item._raw_message = row.message
     item._raw_field = row.field
-    item._owner_id = owner_id
+    item._writer_id = row.written_by_user_id
     return item
-
-
-def _owners(session: Session, submission_ids: Iterable[int | None]) -> dict[int, int | None]:
-    ids = {i for i in submission_ids if i is not None}
-    if not ids:
-        return {}
-    return dict(session.execute(select(Submission.id, Submission.created_by).where(Submission.id.in_(ids))).all())
 
 
 def deposit_warnings_for(session: Session, record_type: RT, record_ids: Iterable[int]) -> dict[int, dict[str, Any]]:
@@ -526,13 +526,12 @@ def deposit_warnings_for(session: Session, record_type: RT, record_ids: Iterable
         .where(DepositWarning.record_type == record_type, DepositWarning.record_id.in_(ids))
         .order_by(DepositWarning.id)
     ).all()
-    owners = _owners(session, (r.submission_id for r in rows))
     for row in rows:
         entry = out[row.record_id]
         if row.code is None:
             entry["status"] = "recorded"
             continue
-        entry["items"].append(_item(row, owners.get(row.submission_id)))
+        entry["items"].append(_item(row))
     return out
 
 
@@ -569,11 +568,10 @@ def submission_warnings_for(session: Session, record_type: RT, record_ids: Itera
     ).all()
     if not rows:
         return []
-    owners = _owners(session, submission_ids)
     refs = dict(session.execute(select(Submission.id, Submission.public_ref).where(Submission.id.in_(submission_ids))).all())
     grouped: dict[int, list[Any]] = {}
     for row in rows:
-        grouped.setdefault(row.submission_id, []).append(_item(row, owners.get(row.submission_id)))
+        grouped.setdefault(row.submission_id, []).append(_item(row))
     return [
         SubmissionWarnings(submission_ref=refs.get(submission_id), items=items)
         for submission_id, items in sorted(grouped.items())
