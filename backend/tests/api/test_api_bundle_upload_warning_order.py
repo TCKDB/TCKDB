@@ -52,7 +52,7 @@ def test_the_direct_thermo_route_orders_its_warnings_reconciliation_provenance_r
         ("named_composite_deposited_as_sp", "level_of_theory"),
         ("missing_literature_provenance", "scheme.source_literature"),
         ("missing_energy_correction_scheme_software", "scheme.software"),
-        ("composite_delta_prefer_scheme_terms", "application_role"),
+        ("composite_delta_prefer_scheme_terms", "applied_energy_corrections[0].application_role"),
     ]
 
 
