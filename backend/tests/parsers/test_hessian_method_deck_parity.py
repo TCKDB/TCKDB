@@ -70,3 +70,58 @@ def test_gaussian_parser_rows_agree_with_the_validation_reading(deck) -> None:
 @pytest.mark.parametrize("deck", _ORCA_DECKS)
 def test_orca_parser_rows_agree_with_the_validation_reading(deck) -> None:
     assert _stored_method(parse_orca_log(text=deck)["parameters"]) == detect_hessian_method("orca", deck)
+
+
+_KEY = "freq.hessian_method"
+
+
+def _hessian_rows(rows):
+    return [r for r in rows if r.get("canonical_key") == _KEY]
+
+
+@pytest.mark.parametrize(
+    ("deck", "raw_key", "canonical"),
+    [
+        ("# B3LYP/6-31G(d) Freq=Numerical\n\nt\n", "Numerical", "finite_difference_gradient"),
+        ("# B3LYP/6-31G(d) Freq=(NoRaman,Numer)\n\nt\n", "Numer", "finite_difference_gradient"),
+        ("# B3LYP/6-31G(d) Freq=(EnOnly,Numer)\n\nt\n", "EnOnly", "finite_difference_energy"),
+        ("# B3LYP/6-31G(d) Freq=(Numer,EnOnly)\n\nt\n", "EnOnly", "finite_difference_energy"),
+        ("# B3LYP/6-31G(d) Freq(Numer)\n\nt\n", "Numer", "finite_difference_gradient"),
+        ("# B3LYP/6-31G(d) Frequency = Numer\n\nt\n", "Numer", "finite_difference_gradient"),
+    ],
+)
+def test_gaussian_rows_keep_the_decks_own_text_and_one_carries_the_canonical_value(deck, raw_key, canonical) -> None:
+    parsed = _parse_gaussian_text(deck)
+    (row,) = _hessian_rows(parsed["parameters"])
+    assert (row["raw_key"], row["canonical_value"]) == (raw_key, canonical)
+    # No row's raw text contradicts a canonical value: the losing option keeps its text, not a canonical one.
+    for other in parsed["parameters"]:
+        if other.get("section") == "freq" and other is not row:
+            assert other.get("canonical_key") != _KEY
+
+
+def test_the_freq_section_snapshot_is_as_written() -> None:
+    parsed = _parse_gaussian_text("# B3LYP/6-31G(d) Freq=(NoRaman,EnOnly,Numer)\n\nt\n")
+    assert parsed["parameters_json"]["sections"]["freq"] == {
+        "NoRaman": "true",
+        "EnOnly": "true",
+        "Numer": "true",
+    }
+
+
+@pytest.mark.parametrize(
+    ("deck", "raw_key", "canonical"),
+    [
+        ("! B3LYP NumFreq AnFreq\n", "NumFreq", "finite_difference_gradient"),
+        ("! B3LYP AnFreq NumFreq\n", "NumFreq", "finite_difference_gradient"),
+        ("! B3LYP numfreq NumGrad\n", "numfreq NumGrad", "finite_difference_energy"),
+        ("! B3LYP AnFreq NumFreq NumGrad\n", "NumFreq NumGrad", "finite_difference_energy"),
+        ("! B3LYP AnFreq\n", "AnFreq", "analytic"),
+    ],
+)
+def test_orca_emits_one_hessian_row_whose_raw_text_matches_its_canonical_value(deck, raw_key, canonical) -> None:
+    rows = parse_orca_log(text=deck)["parameters"]
+    (row,) = _hessian_rows(rows)
+    assert (row["raw_key"], row["canonical_value"]) == (raw_key, canonical)
+    # No other freq-section row carries a contradicting value.
+    assert [r for r in rows if r.get("section") == "freq"] == [row]

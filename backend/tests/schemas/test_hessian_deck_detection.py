@@ -81,12 +81,26 @@ def test_orca_keywords(text, expected) -> None:
 def test_the_gaussian_reader_returns_the_raw_option_too() -> None:
     from tckdb_schemas.hessian_method_detection import gaussian_freq_hessian_option
 
+    # exactly as the deck writes it
     assert gaussian_freq_hessian_option("# freq=(EnOnly,Numer)\n\nt\n") == (
-        "enonly",
+        "EnOnly",
         HessianMethod.finite_difference_energy,
     )
-    assert gaussian_freq_hessian_option("# freq(Numer)\n\nt\n") == ("numer", _FD)
+    assert gaussian_freq_hessian_option("# freq(Numer)\n\nt\n") == ("Numer", _FD)
+    assert gaussian_freq_hessian_option("# Freq=Numerical\n\nt\n") == ("Numerical", _FD)
     assert gaussian_freq_hessian_option("# freq\n\nt\n") is None
+
+
+def test_the_orca_reader_returns_the_winning_directive_as_written() -> None:
+    from tckdb_schemas.hessian_method_detection import orca_freq_hessian
+
+    assert orca_freq_hessian(["B3LYP", "NumFreq", "AnFreq"]) == ("NumFreq", _FD)
+    assert orca_freq_hessian(["numfreq", "NumGrad"]) == (
+        "numfreq NumGrad",
+        HessianMethod.finite_difference_energy,
+    )
+    assert orca_freq_hessian(["AnFreq"]) == ("AnFreq", HessianMethod.analytic)
+    assert orca_freq_hessian(["Opt"]) is None
 
 
 def test_another_program_states_nothing() -> None:

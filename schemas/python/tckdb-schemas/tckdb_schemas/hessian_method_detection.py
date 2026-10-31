@@ -51,7 +51,6 @@ __all__ = [
     "gaussian_freq_hessian_option",
     "hessian_method_class",
     "orca_freq_hessian",
-    "orca_hessian_method_for",
 ]
 
 #: Gaussian ``Freq`` options that name the second-derivative method. Only
@@ -322,7 +321,7 @@ _FREQ_KEYWORD_TOKEN = re.compile(r"^([A-Za-z]+)(=\(.*\)|=[^()]*|\(.*\))?$")
 def gaussian_freq_hessian_option(text: str) -> tuple[str, HessianMethod] | None:
     """The ``Freq`` option a Gaussian route uses to state the Hessian method.
 
-    Returns ``(raw option, method)`` or ``None``. Reads every spelling Gaussian
+    Returns ``(option exactly as written, method)`` or ``None``. Reads every spelling Gaussian
     accepts for the keyword and its options (``Freq=Numer``, ``Freq=(Numer,..)``,
     ``Freq(Numer)``, ``Freq (Numer)``, ``Freq = Numer``, ``Frequency=Numer``), and
     only the keywords ``Freq`` / ``Frequency`` themselves: ``FreqChk`` or an
@@ -340,7 +339,7 @@ def gaussian_freq_hessian_option(text: str) -> tuple[str, HessianMethod] | None:
     route = re.sub(r"\s*=\s*", "=", route)
     route = re.sub(r"(?<=[\w)])\s+\(", "(", route)
 
-    options: list[str] = []
+    options: list[tuple[str, str]] = []  # (as written, lower-cased)
     for token in _tokenize_route(route):
         match = _FREQ_KEYWORD_TOKEN.match(token.strip())
         if match is None or match.group(1).lower() not in ("freq", "frequency"):
@@ -352,49 +351,44 @@ def gaussian_freq_hessian_option(text: str) -> tuple[str, HessianMethod] | None:
         if rest.startswith("(") and rest.endswith(")"):
             rest = rest[1:-1]
         for part in re.split(r"[,\s]+", rest):
-            option = part.split("=", 1)[0].strip().lower()
-            if option:
-                options.append(option)
-    if "enonly" in options:
-        return "enonly", GAUSSIAN_FREQ_HESSIAN_OPTIONS["enonly"]
-    for option in options:
-        if option in GAUSSIAN_FREQ_HESSIAN_OPTIONS:
-            return option, GAUSSIAN_FREQ_HESSIAN_OPTIONS[option]
+            written = part.split("=", 1)[0].strip()
+            if written:
+                options.append((written, written.lower()))
+    for written, lowered in options:
+        if lowered == "enonly":
+            return written, GAUSSIAN_FREQ_HESSIAN_OPTIONS["enonly"]
+    for written, lowered in options:
+        if lowered in GAUSSIAN_FREQ_HESSIAN_OPTIONS:
+            return written, GAUSSIAN_FREQ_HESSIAN_OPTIONS[lowered]
     return None
 
 
 def orca_freq_hessian(keywords: Iterable[str]) -> tuple[str, HessianMethod] | None:
-    """The Hessian method the ORCA keywords state, as ``(raw keyword, method)``.
+    """The Hessian method the ORCA keywords state, as ``(directive as written, method)``.
 
     ``NumFreq`` wins over ``AnFreq`` when both are present (numerical, the
     conservative tolerance). ``NumFreq`` differentiates gradients; with
     ``NumGrad`` those gradients are numerical too, so the Hessian is built from
     energies (ORCA 5.0.4 manual, 8.3.2 and 9.24.5 "Numerical Gradients":
-    ``! NumGrad`` requests numerical instead of analytic gradients).
+    ``! NumGrad`` requests numerical instead of analytic gradients). The
+    directive text is exactly what the deck says: ``NumFreq``, ``NumFreq NumGrad``
+    (each as written) or ``AnFreq``.
     """
-    lowered = {k.lower() for k in keywords}
-    if "numfreq" in lowered:
-        method = (
-            HessianMethod.finite_difference_energy
-            if "numgrad" in lowered
-            else HessianMethod.finite_difference_gradient
-        )
-        return "numfreq", method
-    if "anfreq" in lowered:
-        return "anfreq", HessianMethod.analytic
+    written = list(keywords)
+
+    def first(name: str) -> str | None:
+        return next((k for k in written if k.lower() == name), None)
+
+    numfreq = first("numfreq")
+    if numfreq is not None:
+        numgrad = first("numgrad")
+        if numgrad is not None:
+            return f"{numfreq} {numgrad}", HessianMethod.finite_difference_energy
+        return numfreq, HessianMethod.finite_difference_gradient
+    anfreq = first("anfreq")
+    if anfreq is not None:
+        return anfreq, HessianMethod.analytic
     return None
-
-
-def orca_hessian_method_for(keyword: str, all_keywords: Iterable[str]) -> HessianMethod | None:
-    """The method an ORCA frequency keyword's stored row carries, given every keyword.
-
-    Every frequency-method row of one deck carries the deck's overall method, so
-    the stored rows never disagree with each other.
-    """
-    if keyword.lower() not in ORCA_FREQ_HESSIAN_KEYWORDS:
-        return None
-    overall = orca_freq_hessian(all_keywords)
-    return overall[1] if overall is not None else None
 
 
 def _gaussian_method(text: str) -> HessianMethod | None:

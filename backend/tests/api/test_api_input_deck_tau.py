@@ -273,3 +273,15 @@ def test_the_deck_alone_with_numgrad_is_judged_at_the_energy_tau(client, db_sess
     assert resp.status_code == 201, resp.text[:600]
     freq, _ = _stored(db_session)
     assert (freq.imaginary_mode_tau_cm1, freq.imaginary_mode_tau_basis) == (80.0, "finite_difference_energy")
+
+
+def test_numfreq_with_anfreq_is_judged_stored_and_recorded_as_one_numerical_method(client, db_session):
+    deck = "! B3LYP def2-SVP NumFreq AnFreq\n* xyz 0 1\nC 0 0 0\n*\n"
+    resp = client.post("/api/v1/uploads/computed-species", json=_payload("ORCA", 0.14, deck))
+    assert resp.status_code == 201, resp.text[:600]
+    freq, rows = _stored(db_session)
+    assert (freq.imaginary_mode_tau_cm1, freq.imaginary_mode_tau_basis) == (50.0, "finite_difference_gradient")
+    # One stored row for the method, and it agrees with the judged tau.
+    assert [r for r in rows if r[0] == "freq.hessian_method"] == [("freq.hessian_method", "finite_difference_gradient")]
+    again = resolve_tau_from_parameters(rows)
+    assert (again.tau_cm1, again.basis.value) == (50.0, "finite_difference_gradient")

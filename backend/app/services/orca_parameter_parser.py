@@ -21,7 +21,7 @@ from tckdb_schemas.hessian_method_detection import (  # noqa: F401  (re-exported
     _extract_log_echo_input,
     _looks_like_orca_input_line,
     _strip_coordinate_block,
-    orca_hessian_method_for,
+    orca_freq_hessian,
     orca_keyword_lines,
 )
 
@@ -256,6 +256,13 @@ def _parse_keyword_lines(input_lines: list[str]) -> list[dict]:
 
     keyword_lines = orca_keyword_lines(input_lines)
     all_keywords = [kw for keywords_str in keyword_lines for kw in keywords_str.split()]
+    # One ``freq.hessian_method`` row per deck, at the place of the winning
+    # directive. Its raw text is that directive as written (``NumFreq`` or
+    # ``NumFreq NumGrad``) and its canonical value the overall method, so a row's
+    # raw text never contradicts its canonical value. The reader is shared with
+    # upload validation.
+    freq_hessian = orca_freq_hessian(all_keywords)
+    freq_row_written = False
     for keywords_str in keyword_lines:
         for kw in keywords_str.split():
             section = _classify_keyword(kw)
@@ -265,11 +272,21 @@ def _parse_keyword_lines(input_lines: list[str]) -> list[dict]:
 
             ck, cv = _lookup_canonical(section, kw)
             if section == "freq":
-                # Same rule upload validation applies (NumFreq with NumGrad is
-                # a Hessian from energies): one owner in tckdb-schemas.
-                shared = orca_hessian_method_for(kw, all_keywords)
-                if shared is not None:
-                    cv = shared.value
+                if freq_hessian is None or freq_row_written:
+                    continue
+                directive, method = freq_hessian
+                if kw.lower() != directive.split()[0].lower():
+                    continue
+                freq_row_written = True
+                params.append({
+                    "raw_key": directive,
+                    "canonical_key": ck,
+                    "raw_value": "true",
+                    "canonical_value": method.value,
+                    "section": "freq",
+                    "value_type": "enum",
+                })
+                continue
             # When a normalised canonical_value comes back, the keyword
             # encodes a discrete choice (``tightscf`` → ``tight``);
             # value_type=enum lines this up with the vocab's

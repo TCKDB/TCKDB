@@ -406,11 +406,24 @@ def _parse_route_tokens(route: str) -> list[dict]:
 
     # The Hessian method is read once, by the reader shared with upload
     # validation (every spelling of ``Freq``, ``EnOnly`` over ``Numer``), so the
-    # stored row is the one validation judged. The generic branches above emit
-    # their own per-option rows for it; those are replaced here.
-    params = [p for p in params if p.get("canonical_key") != "freq.hessian_method"]
+    # stored row is the one validation judged. Rows stay exactly as the deck
+    # wrote them (``raw_key`` keeps its case, the freq section keeps every
+    # option); only the winning option's row keeps the canonical key and value,
+    # so no row's raw text contradicts its canonical value.
     shared = gaussian_freq_hessian_option(original_route)
-    if shared is not None:
+    winner_seen = False
+    for p in params:
+        if p.get("canonical_key") != "freq.hessian_method":
+            continue
+        if shared is not None and not winner_seen and str(p["raw_key"]).lower() == shared[0].lower():
+            p["canonical_value"] = shared[1].value
+            winner_seen = True
+        else:
+            p["canonical_key"] = None
+            p["canonical_value"] = None
+    if shared is not None and not winner_seen:
+        # A spelling the generic branches above do not emit a row for
+        # (``Freq(Numer)``, ``Freq (Numer)``, ``Freq = Numer``, ``Frequency=..``).
         option, method = shared
         params.append(
             {
