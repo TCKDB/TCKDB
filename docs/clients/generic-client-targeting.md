@@ -472,9 +472,15 @@ mode is compared with `tau`, the noise floor of the protocol that produced it.
   doors that remain.
 - **Where `tau` comes from:** the parameters you deposit on the frequency
   calculation (`freq.hessian_method`, `grid.quality`, `opt.convergence`):
-  15, 30, 50 or 80 cm-1 by protocol, and 50 cm-1 when the protocol is not
-  recorded. An analytic Hessian on a tight grid has the smallest `tau`, so
-  depositing the protocol makes the check stricter, not looser.
+  15, 30, 50 or 80 cm-1 by protocol. When you do not record the Hessian
+  method, TCKDB assumes the producing program's documented default for the
+  level of theory (Gaussian or ORCA with DFT, HF or MP2 is analytic, 30 cm-1)
+  and stores that it was assumed (`assumed_analytic_default` and its
+  siblings). Only a program or method family the table does not list falls
+  back to 50 cm-1 (`protocol_not_recorded`). A recorded method always wins.
+  An analytic Hessian on a tight grid has the smallest `tau`, so depositing
+  the protocol makes the check stricter, not looser; recording a numerical
+  Hessian (`Freq=Numer`, `NumFreq`) raises it to 50 or 80.
 - **What to send:** the frequency list (`freq_result.modes`), or
   `imag_freq_cm1` when exactly one mode is imaginary. A count with no
   magnitudes cannot be judged and is refused, because a mode nobody measured

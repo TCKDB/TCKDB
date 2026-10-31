@@ -17,10 +17,10 @@ exactly the same resolution the upload path uses today:
    an upload payload.
 2. If that resolves to the conservative ``protocol_not_recorded`` row
    (the common case -- see the module docstring of
-   ``app/services/hessian_method_inference.py`` for the 0-of-132
+   ``tckdb_schemas.hessian_method_assumption`` for the 0-of-132
    measurement that motivated this), try the ADR 0012 2026-09-04
    amendment's assumption table
-   (:func:`app.services.hessian_method_inference.infer_hessian_method`)
+   (:func:`tckdb_schemas.hessian_method_assumption.infer_hessian_method`)
    against this calculation's software and level-of-theory method. Used
    only when it returns something; ``None`` leaves the row at
    ``protocol_not_recorded``, exactly as the upload path would.

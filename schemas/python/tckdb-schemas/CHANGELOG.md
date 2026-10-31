@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.144.0 - 2026-10-31
+
+An unrecorded `freq.hessian_method` now resolves `tau` through the producing program's assumed default when the deposit is judged, not only when it is stored. No field is added or removed.
+
+- `tau` is resolved from, in order: the Hessian method you record (`freq.hessian_method`, with `grid.quality` and `opt.convergence`); else the assumed default of the calculation's own software and level-of-theory method; else 50 cm-1 with `protocol_not_recorded`.
+- The assumed defaults are the 2026-09-04 table, unchanged: Gaussian and ORCA with HF, DFT or (Gaussian) MP2, CIS, CASSCF resolve to the analytic default, 30 cm-1 (`assumed_analytic_default`); correlated methods without an analytic Hessian resolve to the finite-difference rows, 50 or 80 cm-1. Any other program, or a method family the table does not list, keeps 50 cm-1.
+- A recorded method always wins over an assumption.
+- Effect on a minimum: a Gaussian DFT minimum with a -40 cm-1 mode and no recorded Hessian method was accepted with `minimum_imaginary_modes_below_tau` at 50 cm-1. It is now refused as `n_imag_contradicts_minimum`, because 40 is at or above 30. Record `freq.hessian_method` (for example `Freq=Numer`) to be judged at the method you ran, or declare the entry as what it is.
+- Effect on a transition state: the extra-imaginary-mode flag is judged at the same tau that is stored with the record. A flag is never a refusal. A -40 cm-1 extra mode on a Gaussian DFT saddle is now flagged (it was judged at 50 and stored at 30, so the record disagreed with its own flag).
+- The stored `imaginary_mode_tau_cm1` and basis are exactly the tau and basis the deposit was judged at.
+- New module `tckdb_schemas.hessian_method_assumption` owns the table (`infer_hessian_method`, `resolve_tau_with_assumption`). The backend imports it.
+
 ## 0.143.0 - 2026-10-29
 
 `UploadWarning` gains an optional `context`. No other field is added or removed.

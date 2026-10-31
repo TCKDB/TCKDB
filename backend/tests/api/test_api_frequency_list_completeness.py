@@ -485,7 +485,7 @@ class TestTheTransitionStateADR0012WasWrittenAbout:
         assert _completeness_warnings(body) == []
         # The ADR 0012 judgement is unchanged and still present.
         assert any(
-            w["code"] == "transition_state_extra_imaginary_modes_below_tau"
+            w["code"] == "transition_state_extra_imaginary_mode_above_tau"
             for w in body["warnings"]
         ), body["warnings"]
 

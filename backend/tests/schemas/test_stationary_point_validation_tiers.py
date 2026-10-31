@@ -1193,7 +1193,12 @@ class TestTransitionStateSeams:
         )
         findings = request.stationary_point_findings()
         assert _tiers(findings) == {ValidationTier.warn}
-        assert _codes(findings) == {W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU}
+        # No Hessian method is recorded, so tau is Gaussian DFT's assumed
+        # analytic default (30 cm-1, owner decision 2026-10-31): -42 is real
+        # curvature and the record is flagged, -13 stays below tau. The
+        # unrecorded-and-unknown-program case (tau 50, below tau) is held in
+        # ``test_assumed_tau_resolution.py``.
+        assert _codes(findings) == {W_TS_EXTRA_IMAGINARY_MODE_ABOVE_TAU}
 
     @pytest.mark.parametrize("build", _TS_BUILDERS)
     def test_one_imaginary_mode_is_accepted(self, build) -> None:

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.181.0 - 2026-10-31
+
+An unrecorded Hessian method is assumed from the program's default when a deposit is judged.
+
+- Requires `tckdb-schemas>=0.144.0`. No client code changed; the pin moves so a client validating locally judges `tau` the way the server does.
+- A Gaussian or ORCA minimum with an imaginary mode of 30 cm-1 or more and no recorded `freq.hessian_method` is refused as `n_imag_contradicts_minimum` (it was accepted below 50). See the `tckdb-schemas` 0.144.0 entry.
+
 ## 0.180.0 - 2026-10-29
 
 Deposit-time warnings are shown with the record when it is read.

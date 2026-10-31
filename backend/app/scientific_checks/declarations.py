@@ -126,7 +126,7 @@ _TAU_VALUES: tuple[tuple[str, str], ...] = (
         f"{TAU_FINITE_DIFFERENCE_ENERGY_CM1:.0f}",
     ),
     (
-        "Hessian method not recorded",
+        "Hessian method not recorded and program or method family not in the assumed-default table",
         f"{TAU_PROTOCOL_NOT_RECORDED_CM1:.0f}",
     ),
 )
@@ -139,18 +139,28 @@ _TAU_THRESHOLD = ProvenanceThreshold(
     values=_TAU_VALUES,
     fallback=(
         f"When ``freq.hessian_method`` is absent — which is the common case, "
-        f"because most outputs do not say — tau is "
-        f"{TAU_PROTOCOL_NOT_RECORDED_CM1:.0f} cm-1 and the record stores "
-        f"``protocol_not_recorded`` as the basis. The fallback is deliberately "
-        f"the *conservative* row rather than the analytic one: assuming the "
-        f"better case would flag genuine quadrature noise as a real "
-        f"higher-order saddle. For a transition state tau never decides between "
-        f"blocking and warning — every blocking rule there is a contract about "
-        f"what the record says, not about magnitude — so missing provenance "
-        f"changes how loudly a record is flagged and never whether it is "
-        f"accepted. For a declared minimum tau is the line between the warning "
-        f"and the refusal, so missing provenance leaves that line at "
-        f"{TAU_PROTOCOL_NOT_RECORDED_CM1:.0f} cm-1, the same conservative row."
+        f"because most outputs do not say — validation resolves tau from the "
+        f"producing program's documented default for the level of theory's "
+        f"method family (ADR 0012's 2026-09-04 amendment, applied at "
+        f"validation since 2026-10-31; the table is "
+        f"``tckdb_schemas.hessian_method_assumption``). Gaussian and ORCA "
+        f"DFT, HF and MP2 resolve to the analytic default "
+        f"({TAU_ANALYTIC_DEFAULT_CM1:.0f} cm-1), correlated methods without an "
+        f"analytic Hessian to a finite-difference row, and the record stores "
+        f"the matching ``assumed_*`` basis so an assumption is never "
+        f"confusable with a recorded statement. A recorded method always wins. "
+        f"Only where the software or the method family is not in that table, "
+        f"or the payload names no software, is tau "
+        f"{TAU_PROTOCOL_NOT_RECORDED_CM1:.0f} cm-1 with ``protocol_not_recorded`` "
+        f"as the basis; that fallback is deliberately the *conservative* row, "
+        f"because assuming the better case would flag genuine quadrature noise "
+        f"as a real higher-order saddle. For a transition state tau never "
+        f"decides between blocking and warning — every blocking rule there is "
+        f"a contract about what the record says, not about magnitude — so "
+        f"the resolution changes how loudly a record is flagged and never "
+        f"whether it is accepted. For a declared minimum tau is the line "
+        f"between the warning and the refusal, and it is the same tau that is "
+        f"stored with the record."
     ),
     rationale=(
         "The Hessian noise floor is flat in omega-squared, not in omega, so "

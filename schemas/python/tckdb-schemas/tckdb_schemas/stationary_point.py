@@ -192,7 +192,7 @@ class TauBasis(str, Enum):
     Gaussian record ever written. When the method is not recorded,
     TCKDB now assumes the producing program's documented default for the
     level-of-theory's method family (see
-    ``app/services/hessian_method_inference.py`` on the backend), records
+    ``tckdb_schemas.hessian_method_assumption``), records
     that it was *assumed*, and gives the assumed method the same τ as its
     recorded counterpart. An assumption must never be confusable with a
     recorded statement — hence the separate member rather than reusing

@@ -22,6 +22,16 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## An unrecorded Hessian method is assumed from the program default when a deposit is judged (2026-10-31)
+
+- **Client: `tckdb-client` 0.181.0, `tckdb-schemas` 0.144.0.** No migration, no schema change, no new environment variable. No stored row is rewritten.
+- **What changed.** `tau` (ADR 0012) now resolves, in order, from a recorded `freq.hessian_method`, then the producing program's assumed default for the payload's own software and level-of-theory method (the 2026-09-04 table: Gaussian and ORCA, stored with an `assumed_*` basis), then 50 cm-1 `protocol_not_recorded`. This happens when the deposit is judged, so persistence stores exactly the tau and basis the deposit was judged at. The post-validation swap and the #834 re-resolution in `persist_calculation_result` are removed.
+- **Behaviour change, minima.** A Gaussian DFT minimum with a -40 cm-1 mode and no recorded method was accepted (judged at 50). It is now refused as `n_imag_contradicts_minimum` (assumed tau 30). A mode below the assumed tau is still accepted, stored at the assumed tau.
+- **Behaviour change, transition states.** The extra-imaginary-mode flag was judged at 50 and stored at 30; it is now judged at the stored tau, so a -40 cm-1 extra mode on a Gaussian DFT saddle is flagged. Warn tier only: nothing about transition-state blocking changed.
+- **One owner for the table.** `tckdb_schemas.hessian_method_assumption`; `app/services/hessian_method_inference.py` re-exports it.
+- **Stored records.** `backend/scripts/ops/list_tau_redecided.py` lists (read-only, public refs only) stored minima that would now be refused and transition-state rows whose flag would flip, and counts the rest. Nothing is relabelled.
+- Docs: ADR 0012 amendment 2026-10-31, the scientific check register (the tau fallback printed under entries 15, 17 and the reaction-coordinate softness check), the depositor guide.
+
 ## Deposit-time warnings are shown with the record when it is read (2026-10-29)
 
 - **Client: `tckdb-client` 0.180.0, `tckdb-schemas` 0.143.0.** Migration `f7a2c9e4b183`: a new table, `deposit_warning` (no deployed table is touched, no backfill).
