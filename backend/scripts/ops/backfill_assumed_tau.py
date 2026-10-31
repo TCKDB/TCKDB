@@ -72,11 +72,10 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
+from tckdb_schemas.hessian_method_assumption import resolve_tau_with_assumption  # noqa: E402
 from tckdb_schemas.stationary_point import (  # noqa: E402
     TAU_PARAMETER_KEYS,
-    TauBasis,
     TauResolution,
-    resolve_tau_from_parameters,
 )
 
 from app.db.models.calculation import (  # noqa: E402
@@ -84,7 +83,6 @@ from app.db.models.calculation import (  # noqa: E402
     CalculationFreqResult,
     CalculationParameter,
 )
-from app.services.hessian_method_inference import infer_hessian_method  # noqa: E402
 
 #: Matches the test-harness's own database-naming convention: the fixture
 #: default is ``tckdb_test``, ``DB_TEST_NAME`` overrides the whole name,
@@ -115,18 +113,13 @@ def _resolve_row_tau(session: Session, calc: Calculation) -> TauResolution:
     ).all():
         recorded[key] = value
 
-    tau = resolve_tau_from_parameters(recorded.items())
-    if tau.basis is not TauBasis.protocol_not_recorded:
-        return tau
-
     software_name = (
         calc.software_release.software.name
         if calc.software_release is not None
         else None
     )
     lot_method = calc.lot.method if calc.lot is not None else None
-    assumed = infer_hessian_method(software_name, lot_method)
-    return assumed if assumed is not None else tau
+    return resolve_tau_with_assumption(recorded.items(), software_name, lot_method)
 
 
 def _scope(session: Session, *, limit: int | None) -> list[CalculationFreqResult]:

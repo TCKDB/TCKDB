@@ -474,10 +474,16 @@ mode is compared with `tau`, the noise floor of the protocol that produced it.
   calculation (`freq.hessian_method`, `grid.quality`, `opt.convergence`):
   15, 30, 50 or 80 cm-1 by protocol. When you do not record the Hessian
   method, TCKDB assumes the producing program's documented default for the
-  level of theory (Gaussian or ORCA with DFT, HF or MP2 is analytic, 30 cm-1)
-  and stores that it was assumed (`assumed_analytic_default` and its
-  siblings). Only a program or method family the table does not list falls
-  back to 50 cm-1 (`protocol_not_recorded`). A recorded method always wins.
+  level of theory and stores that it was assumed (`assumed_analytic_default`
+  and its siblings). Gaussian HF, DFT, MP2, CIS and CASSCF and ORCA HF and DFT
+  are analytic (30 cm-1). Gaussian MP3, MP4, QCISD, CCSD, CISD and CID and
+  ORCA MP2, coupled cluster and DLPNO are finite-difference from gradients
+  (50 cm-1). Gaussian CCSD(T) and QCISD(T) are finite-difference from
+  energies (80 cm-1), looser than the 50 cm-1 fallback. Any other program or
+  method family falls back to 50 cm-1 (`protocol_not_recorded`). A recorded
+  method always wins, and a `freq.hessian_method` value TCKDB cannot read
+  (for example `numer`) keeps 50 cm-1 instead of being replaced by an
+  assumption.
   An analytic Hessian on a tight grid has the smallest `tau`, so depositing
   the protocol makes the check stricter, not looser; recording a numerical
   Hessian (`Freq=Numer`, `NumFreq`) raises it to 50 or 80.

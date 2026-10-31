@@ -59,7 +59,8 @@ see :func:`tckdb_schemas.software.normalize_software_name`):
   a user gets `Freq=Numer` only by asking for it.
 * **Finite-difference-from-gradients**
   (`TauBasis.assumed_finite_difference_gradient`): MP3, MP4 (any
-  variant — SDQ, SDTQ, DQ), QCISD, CCSD. None of these have an analytic
+  variant — SDQ, SDTQ, DQ), QCISD, CCSD, CISD, CID (exactly CIS is analytic;
+  CISD/CID have numerical frequencies only). None of these have an analytic
   Hessian implementation in Gaussian; the default frequency job
   numerically differentiates the analytic gradient, which these methods
   do have.
@@ -160,7 +161,12 @@ _HF_METHODS = frozenset({"hf", "rhf", "uhf", "rohf"})
 
 #: Configuration-interaction-singles and its common spellings. Checked
 #: before nothing else collides with "cis".
-_CIS_PREFIXES = ("cis",)
+_CIS_METHODS = frozenset({"cis", "ucis", "rcis", "rocis"})
+
+#: CISD and CID: Gaussian has no analytic second derivatives for these (the
+#: Freq documentation lists numerical frequencies only), unlike CIS. Matched
+#: before anything that could mistake them for a CIS prefix.
+_CISD_PREFIXES = ("cisd", "ucisd", "rcisd", "cid", "ucid", "rcid")
 
 #: Complete active-space SCF. Deliberately excludes CASPT2 and NEVPT2,
 #: which are post-CASSCF correlation treatments this module has not been
@@ -232,6 +238,7 @@ class MethodFamily:
     MP3 = "mp3"
     MP4 = "mp4"
     CIS = "cis"
+    CISD = "cisd"
     CASSCF = "casscf"
     QCISD = "qcisd"
     QCISD_T = "qcisd(t)"
@@ -271,8 +278,10 @@ def classify_method_family(method: str | None) -> str | None:
 
     if token in _HF_METHODS:
         return MethodFamily.HF
-    if _startswith_any(token, _CIS_PREFIXES):
+    if token in _CIS_METHODS:
         return MethodFamily.CIS
+    if _startswith_any(token, _CISD_PREFIXES):
+        return MethodFamily.CISD
     if _startswith_any(token, _CASSCF_PREFIXES):
         return MethodFamily.CASSCF
     if _startswith_any(token, _CCSD_T_PREFIXES):
@@ -309,7 +318,7 @@ _GAUSSIAN_ANALYTIC = frozenset({
 #: gradient (no analytic Hessian, but an analytic gradient exists).
 _GAUSSIAN_FINITE_DIFFERENCE_GRADIENT = frozenset({
     MethodFamily.MP3, MethodFamily.MP4, MethodFamily.QCISD,
-    MethodFamily.CCSD,
+    MethodFamily.CCSD, MethodFamily.CISD,
 })
 #: Gaussian families with neither an analytic Hessian nor an analytic
 #: gradient documented -- the default frequency job differentiates the
@@ -327,6 +336,23 @@ _ORCA_FINITE_DIFFERENCE_GRADIENT = frozenset({
     MethodFamily.MP2, MethodFamily.CCSD, MethodFamily.CCSD_T,
     MethodFamily.DLPNO_OTHER,
 })
+
+#: Human label for each method family, used in the reason text.
+_FAMILY_LABEL: dict[str, str] = {
+    MethodFamily.HF: "HF",
+    MethodFamily.DFT: "DFT",
+    MethodFamily.MP2: "MP2",
+    MethodFamily.MP3: "MP3",
+    MethodFamily.MP4: "MP4",
+    MethodFamily.CIS: "CIS",
+    MethodFamily.CISD: "CISD/CID",
+    MethodFamily.CASSCF: "CASSCF",
+    MethodFamily.QCISD: "QCISD",
+    MethodFamily.QCISD_T: "QCISD(T)",
+    MethodFamily.CCSD: "CCSD",
+    MethodFamily.CCSD_T: "CCSD(T)",
+    MethodFamily.DLPNO_OTHER: "DLPNO",
+}
 
 #: Display spelling for each table row's program, used in the reason text.
 _DISPLAY_NAME: dict[str, str] = {"gaussian": "Gaussian", "orca": "ORCA"}
@@ -419,8 +445,8 @@ def infer_hessian_method(
                     f"tau = {tau_cm1:.0f} cm-1: 'freq.hessian_method' is "
                     f"not recorded, so this is an assumption, not a "
                     f"recorded statement. {_DISPLAY_NAME[software_token]}'s "
-                    f"documented default second-derivative method for the "
-                    f"{family} method family is assumed ({basis.value}) "
+                    f"documented default second-derivative method for "
+                    f"{_FAMILY_LABEL[family]} calculations is assumed ({basis.value}) "
                     f"and given the same tau as the equivalent recorded "
                     f"basis. A later upload that states the Hessian "
                     f"method explicitly supersedes this assumption."
@@ -439,6 +465,8 @@ def resolve_tau_with_assumption(
     The single resolution every validation adapter and the persistence step
     share, so what a deposit is judged at is what is stored.
 
+    0. A ``freq.hessian_method`` that is present but unrecognised keeps
+       ``protocol_not_recorded`` and skips the assumption.
     1. A recorded ``freq.hessian_method`` (and the grid / convergence
        parameters that refine it) resolves through
        :func:`~tckdb_schemas.stationary_point.resolve_tau_from_parameters`,
@@ -454,8 +482,14 @@ def resolve_tau_with_assumption(
         stored; normalised here to the registry's canonical spelling.
     :param lot_method: The calculation's level-of-theory method.
     """
-    resolved = resolve_tau_from_parameters(parameters)
+    pairs = list(parameters)
+    resolved = resolve_tau_from_parameters(pairs)
     if resolved.basis is not TauBasis.protocol_not_recorded:
+        return resolved
+    # A present ``freq.hessian_method`` means the depositor stated something,
+    # even if TCKDB cannot read it (``numerical``, ``numer``). Never replace a
+    # statement with an assumption: keep the conservative row.
+    if any(key == "freq.hessian_method" and value and value.strip() for key, value in pairs):
         return resolved
     if not software_name:
         return resolved

@@ -5,7 +5,7 @@
 An unrecorded Hessian method is assumed from the program's default when a deposit is judged.
 
 - Requires `tckdb-schemas>=0.144.0`. No client code changed; the pin moves so a client validating locally judges `tau` the way the server does.
-- A Gaussian or ORCA minimum with an imaginary mode of 30 cm-1 or more and no recorded `freq.hessian_method` is refused as `n_imag_contradicts_minimum` (it was accepted below 50). See the `tckdb-schemas` 0.144.0 entry.
+- A Gaussian minimum (HF, DFT, MP2, CIS, CASSCF) or ORCA minimum (HF, DFT) with an imaginary mode of 30 cm-1 or more and no recorded `freq.hessian_method` is refused as `n_imag_contradicts_minimum` (it was accepted below 50). Gaussian CCSD(T) and QCISD(T) are judged at 80, so a minimum between 50 and 80 cm-1 that was refused is now accepted with a warning. See the `tckdb-schemas` 0.144.0 entry.
 
 ## 0.180.0 - 2026-10-29
 

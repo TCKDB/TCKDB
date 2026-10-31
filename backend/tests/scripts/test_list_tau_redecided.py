@@ -11,8 +11,9 @@ import pathlib
 import sys
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
-from app.db.models.calculation import CalculationFreqResult
 from app.db.models.common import CalculationType, ImaginaryModeDisposition
 from tests.services.scientific_read._factories import (
     attach_freq_result,
@@ -157,7 +158,20 @@ def test_lists_what_the_new_tau_would_re_decide_and_writes_nothing(
     assert "tau_differs_decision_unchanged (count only): 1" in out
     assert "Read-only" in out
 
-    # Nothing written.
-    stored = db_session.get(CalculationFreqResult, rows["min_refused"].id)
-    assert stored.imaginary_mode_tau_cm1 == 50.0
-    assert stored.imaginary_mode_tau_basis == "protocol_not_recorded"
+    # Nothing written, read back with raw SQL rather than through the ORM identity map.
+    stored = db_session.execute(
+        text(
+            "SELECT imaginary_mode_tau_cm1, imaginary_mode_tau_basis, imaginary_mode_structural_flag "
+            "FROM calc_freq_result WHERE calculation_id = :cid"
+        ),
+        {"cid": rows["min_refused"].id},
+    ).one()
+    assert tuple(stored) == (50.0, "protocol_not_recorded", False)
+    counts = db_session.execute(
+        text("SELECT count(*) FROM calc_freq_result WHERE imaginary_mode_tau_cm1 IS NOT NULL")
+    ).scalar_one()
+    assert counts == 5
+
+    # The transaction the script ran in refuses a write outright.
+    with pytest.raises(DBAPIError):
+        db_session.execute(text("UPDATE calc_freq_result SET imaginary_mode_tau_cm1 = 1"))

@@ -90,6 +90,36 @@ def test_every_adapter_resolves_the_same_tau(software, method, basis, tau) -> No
         assert resolved.tau_cm1 == tau
 
 
+def _species_bundle_calc(software: str, method: str, parameters=None):
+    from tckdb_schemas.workflows.computed_species_upload import CalculationInBundle
+
+    return CalculationInBundle(
+        key="f",
+        type="freq",
+        software_release={"name": software, "version": "16"},
+        level_of_theory={"method": method, "basis": "6-31G(d)"},
+        freq_result={"n_imag": 1, "imag_freq_cm1": -40.0},
+        parameters=parameters,
+    )
+
+
+@pytest.mark.parametrize(
+    ("software", "method", "codes"),
+    [
+        ("Gaussian", "B3LYP", {"n_imag_contradicts_minimum"}),
+        ("Gaussian", "CCSD(T)", {"minimum_imaginary_modes_below_tau"}),
+        ("Molpro", "B3LYP", {"minimum_imaginary_modes_below_tau"}),
+    ],
+)
+def test_the_computed_species_adapter_resolves_the_same_tau(software, method, codes) -> None:
+    from tckdb_schemas.stationary_point import StationaryPointKind
+
+    findings = _species_bundle_calc(software, method).species_entry_frequency_findings(
+        StationaryPointKind.minimum, location="calc"
+    )
+    assert {f.code for f in findings} == codes
+
+
 def test_a_recorded_method_beats_the_assumption() -> None:
     resolved = _payload("Gaussian", "B3LYP", _FD).tau_resolution()
     assert resolved.basis is TauBasis.finite_difference_gradient
@@ -120,4 +150,37 @@ def test_the_reason_never_echoes_depositor_text() -> None:
     assert resolved is not None
     assert "wb97xd" not in resolved.reason.lower()
     assert "Gaussian" in resolved.reason
-    assert "dft method family" in resolved.reason
+    assert "DFT calculations" in resolved.reason
+
+
+@pytest.mark.parametrize(
+    ("method", "basis"),
+    [
+        ("CIS", TauBasis.assumed_analytic_default),
+        ("UCIS", TauBasis.assumed_analytic_default),
+        ("CISD", TauBasis.assumed_finite_difference_gradient),
+        ("CID", TauBasis.assumed_finite_difference_gradient),
+        ("CIS(D)", TauBasis.protocol_not_recorded),
+    ],
+)
+def test_cis_is_matched_exactly_and_cisd_is_numerical(method, basis) -> None:
+    assert resolve_tau_with_assumption([], "Gaussian", method).basis is basis
+
+
+@pytest.mark.parametrize("value", ["numerical", "numer", "Freq=Numer"])
+def test_an_unrecognised_recorded_method_is_never_replaced_by_an_assumption(value) -> None:
+    resolved = resolve_tau_with_assumption(
+        [("freq.hessian_method", value)], "Gaussian", "B3LYP"
+    )
+    assert resolved.basis is TauBasis.protocol_not_recorded
+    assert resolved.tau_cm1 == 50.0
+    # An absent or blank value is not a statement.
+    blank = resolve_tau_with_assumption([("freq.hessian_method", " ")], "Gaussian", "B3LYP")
+    assert blank.basis is TauBasis.assumed_analytic_default
+
+
+def test_the_reason_uses_human_family_labels() -> None:
+    assert "DFT calculations" in infer_hessian_method("Gaussian", "B3LYP").reason
+    assert "CCSD(T) calculations" in infer_hessian_method("Gaussian", "CCSD(T)").reason
+    assert "dlpno_other" not in infer_hessian_method("ORCA", "DLPNO-MP2").reason
+    assert "method family" not in infer_hessian_method("ORCA", "DLPNO-MP2").reason

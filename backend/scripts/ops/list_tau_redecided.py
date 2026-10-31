@@ -54,7 +54,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from sqlalchemy import select  # noqa: E402
+from sqlalchemy import select, text  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 from tckdb_schemas.hessian_method_assumption import resolve_tau_with_assumption  # noqa: E402
 from tckdb_schemas.stationary_point import (  # noqa: E402
@@ -214,6 +214,9 @@ def main() -> int:
     from app.api.deps import SessionLocal
 
     with SessionLocal() as session:
+        # Belt and braces: the transaction refuses any write, so a future edit
+        # to this script cannot relabel a stored row by accident.
+        session.execute(text("SET LOCAL transaction_read_only = on"))
         listed, tally, examined = classify(session)
         print(render(listed, tally, examined))
     return 0

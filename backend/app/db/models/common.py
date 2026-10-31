@@ -80,8 +80,10 @@ class HessianMethod(str, Enum):
     #
     # Recorded only when the output says so explicitly (Gaussian
     # ``Freq=Numer``, ORCA ``NumFreq`` / ``AnFreq``). Absence means "not
-    # recorded", which resolves to the conservative tolerance -- it is
-    # never assumed to be analytic.
+    # recorded", which resolves to the producing program's assumed default
+    # for the level of theory (tckdb_schemas.hessian_method_assumption,
+    # stored with an ``assumed_*`` basis), or to the conservative tolerance
+    # where that is unknown. A recorded value always wins over an assumption.
     #
     # Not a database column: it is the canonical *value* of the
     # ``freq.hessian_method`` parameter row, and lives here so the
