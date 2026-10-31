@@ -22,6 +22,16 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A warning's message is TCKDB's sentence for its code, not the depositor's words (2026-10-31)
+
+- **Client: `tckdb-client` 0.182.0, `tckdb-schemas` 0.145.0.** No migration, no schema change, no new environment variable. No stored row is rewritten.
+- **What changed.** A deposit-time warning's `message` used to be written by each producer and quoted what the depositor typed: a transition-state label, a local payload key (`species['h']`), a conformer label, a file name, a software or level-of-theory name, a title. The upload response and the job result (`GET /jobs/{id}`) therefore said those words in TCKDB's voice. Every producer now builds its warning with `UploadWarning.from_code(field=..., code=..., context=...)`, and the `message` is `render_message(code, context)`: the same call a public read makes. The upload response, the job result, the stored row and the read carry one sentence.
+- **Where the values went.** The sentence uses only numbers, counts, TCKDB tokens (enum values, a program name parsed from an uploaded log, an element symbol) and the like, all from `context`. A label that helps you find the problem sits under `context.depositor_supplied` (for example `{"transition_state_label": "TS0"}`), which is depositor-typed text and is marked as such. `field` is unchanged: it is the path into your own request.
+- **Match on `code`, never on `message`.** The wording is TCKDB's and can change; the code and `context` are the contract.
+- **Wording.** Messages are shorter and no longer repeat the depositor's text. Where the old message carried a remedy that needs none of the depositor's words, the sentence keeps it.
+- **One owner for the sentences.** `tckdb_schemas.deposit_warning_messages` (moved from the backend; `app/services/deposit_warning_messages.py` re-exports it) because `tckdb_schemas` emits warnings itself. A sweep test deposits every upload kind with sentinel keys and labels and fails if any appears in a message or in an unmarked context value.
+- **Stored rows** deposited earlier keep the text they were deposited with, as before; a public read already rendered them from the code.
+
 ## An unrecorded Hessian method is assumed from the program default when a deposit is judged (2026-10-31)
 
 - **Client: `tckdb-client` 0.181.0, `tckdb-schemas` 0.144.0.** No migration, no schema change, no new environment variable. No stored row is rewritten.

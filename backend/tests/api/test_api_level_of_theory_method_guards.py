@@ -94,6 +94,8 @@ def test_a_correction_table_name_warns_and_is_stored_as_sent(client, db_session,
     assert len(matching) == 1, resp.json()["warnings"]
     assert matching[0]["field"] == "calculation.level_of_theory.method"
     assert "energy correction scheme" in matching[0]["message"]
+    assert matching[0]["context"]["depositor_supplied"]["method"] == method
+    assert method not in matching[0]["message"]
 
     stored = db_session.scalars(select(LevelOfTheory).where(LevelOfTheory.method == method)).all()
     assert len(stored) == 1  # kept as sent

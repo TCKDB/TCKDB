@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.182.0 - 2026-10-31
+
+A warning's `message` is TCKDB's sentence for its `code`.
+
+- Requires `tckdb-schemas>=0.145.0`. No client code changed; the pin moves so `UploadWarning` validated locally is the one the server builds.
+- The `message` of each dict in an upload result's `warnings` no longer quotes text you typed (a label, a local key, a file name). A label that helps you find the problem is under `context.depositor_supplied`. `field` is unchanged. Match on `code`, never on `message`.
+
 ## 0.181.0 - 2026-10-31
 
 An unrecorded Hessian method is assumed from the program's default when a deposit is judged.

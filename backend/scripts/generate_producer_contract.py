@@ -1321,6 +1321,17 @@ incomparable with others. 1 atm is `1.01325` bar, not `1.0`; many
 statistical-mechanics codes (ARC and RMG among them) compute entropy at
 1 atm. Never write `1.0` because it looks standard.
 
+**Warnings.** An accepted deposit answers `201` with a `warnings` list. Each
+entry has a `code`, a `field` (the path into your own request, which may name
+your local keys), a `context` (the values the check saw; `null` when it states
+none) and a `message`. The `message` is TCKDB's sentence for the `code`, built
+from the code and the context; it never quotes text you typed. **Match on
+`code`, never on `message`**: the wording can change. A label that helps you
+find the problem (a transition-state label, a local key, a file name) is under
+`context.depositor_supplied`, which is text you typed and is marked as such.
+The upload response, the job result and every later read of the record give the
+same sentence.
+
 **Transition-state evidence and statmech.** A saddle point may carry up to
 three validation records, at most one per `kind`, every one optional:
 

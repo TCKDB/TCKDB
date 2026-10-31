@@ -204,7 +204,8 @@ class TestATruncatedListSaysSo:
         )
         warnings = _completeness_warnings(body)
         assert [w["code"] for w in warnings] == [W_FREQ_LIST_INCOMPLETE]
-        assert "1 mode(s)" in warnings[0]["message"]
+        assert warnings[0]["context"] == {"n_modes": 1, "n_atoms": 3, "minimum_modes": 3}
+        assert "1 mode," in warnings[0]["message"]
         assert "at least 3" in warnings[0]["message"]
 
     def test_the_attack_this_branch_closes_is_reported(self, client):
@@ -504,7 +505,8 @@ class TestTheTransitionStateADR0012WasWrittenAbout:
         body = resp.json()
         warnings = _completeness_warnings(body)
         assert [w["code"] for w in warnings] == [W_FREQ_LIST_INCOMPLETE]
-        assert "3 mode(s)" in warnings[0]["message"]
+        assert warnings[0]["context"] == {"n_modes": 3, "n_atoms": 6, "minimum_modes": 12}
+        assert "3 modes," in warnings[0]["message"]
         assert "at least 12" in warnings[0]["message"]
 
 

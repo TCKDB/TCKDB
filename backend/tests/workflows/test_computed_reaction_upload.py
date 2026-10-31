@@ -3949,6 +3949,8 @@ def test_unanchorable_calculation_is_stored_and_reported(db_conn) -> None:
         )
         assert reported[0].field == "species['ch3'].calculations['ch3-coarse']"
         assert "conformer_key" in reported[0].message
+        assert reported[0].context["depositor_supplied"] == {"calculation_key": "ch3-coarse"}
+        assert "ch3-coarse" not in reported[0].message
 
 
 def _two_conformer_payload_with_coarse(geometry_key: str) -> dict:

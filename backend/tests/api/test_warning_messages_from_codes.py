@@ -266,6 +266,10 @@ def test_no_warning_carries_a_depositor_string_and_each_is_the_sentence_for_its_
         # In the context a depositor string is allowed in one place only: the marked key.
         unmarked = {k: v for k, v in (warning["context"] or {}).items() if k != "depositor_supplied"}
         assert not any(s in json.dumps(unmarked) for s in sentinels), (kind, warning["code"], unmarked)
+    # A value the depositor typed that cannot be a sentinel (a term symbol) must not reach a rendered key either: the
+    # element and ground term are TCKDB's own (the NIST table), whatever term was declared.
+    (ground,) = [w for _k, w, _s in swept if w["code"] == "term_symbol_contradicts_ground_term"]
+    assert ground["context"] == {"element": "O", "ground_term": "3P", "ground_j": 2.0}
     # Something really carried a sentinel in its field, or the sweep would pass over a payload it never renamed.
     assert any(s in w["field"] for _k, w, ss in swept for s in ss), "no field reached carries a local key"
 

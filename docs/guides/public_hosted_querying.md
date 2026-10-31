@@ -348,7 +348,10 @@ text is `depositor_message` and `depositor_field`: present only for the user who
 deposit's rows; whoever uploaded the artifact for an artifact's rows, so a curator's artifact warning is the curator's, not
 the depositor's) and for curators and admins, and absent for everyone else, including another signed-in user. Anything
 depositor-typed that a producer puts in `context` sits under `context.depositor_supplied`: it is depositor-typed text,
-and a client that shows it should say so. The upload response is unchanged and still carries the producers' own text.
+and a client that shows it should say so. Since 2026-10-31 the upload response and the job result carry the same sentence:
+a producer builds `message` from the code and the context (`UploadWarning.from_code`), never from text the depositor
+typed, so for a deposit made since then `depositor_message` equals `message`. Rows deposited earlier keep the text they
+were deposited with. Clients match on `code`, never on `message`.
 
 A warning never changes a value, orders a list, or gates a selection, and the curated profile shows them as it shows any
 other evidence (a hidden record's ref inside a warning's `context` blanks that context and keeps the warning). They are a

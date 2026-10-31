@@ -204,6 +204,7 @@ def test_just_outside_the_tolerance_is_not_compared_not_refused(client, db_sessi
     )
     (warning,) = [w for w in resp.json()["warnings"] if w["code"] == _NOT_COMPARED]
     assert "stated_precision_unknown" in warning["message"] and "energy_precision_kj_mol" in warning["message"]
+    assert "stated_precision_unknown" in warning["context"]["reasons"]
 
 
 def _entrance_kj() -> float:
@@ -551,7 +552,10 @@ def test_a_sum_that_cannot_be_formed_is_stored_as_not_compared_and_warned(
     row = _row_for(db_session, nonsense)
     assert (row.source_sum_comparison, row.source_sum_not_compared_reason) == ("not_compared", reason)
     (warning,) = [w for w in resp.json()["warnings"] if w["code"] == _NOT_COMPARED]
-    assert "'exit'" in warning["message"] and reason in warning["message"]
+    assert reason in warning["message"] and reason in warning["context"]["reasons"]
+    # The state's local key is the depositor's: under the marked key, never in the sentence.
+    assert any("'exit'" in item for item in warning["context"]["depositor_supplied"]["not_compared"])
+    assert "exit" not in warning["message"]
     # The other three states, correctly summed on an absolute zero, still agree.
     others = [r for r in db_session.scalars(select(NetworkSolveStateEnergy)).all() if r is not row]
     assert {r.source_sum_comparison for r in others} == {"agrees"}
@@ -590,7 +594,9 @@ def test_a_single_source_on_a_two_species_state_warns_and_is_not_compared(client
     assert resp.status_code == 201, resp.text
     (warning,) = [w for w in resp.json()["warnings"] if w["code"] == _PARTIAL]
     assert warning["field"] == "solve.state_energies[0]"
-    assert "'O2'" in warning["message"]
+    assert warning["context"]["depositor_supplied"]["uncited_species_keys"] == ["O2"]
+    assert "O2" not in warning["message"]
+    assert warning["context"]["participants"] == 2 and warning["context"]["cited_participants"] == 1
     row = _row_for(db_session, 7.0)
     assert row.source_calculation_id is not None
     assert (row.source_sum_comparison, row.source_sum_not_compared_reason) == ("not_compared", "sources_incomplete")

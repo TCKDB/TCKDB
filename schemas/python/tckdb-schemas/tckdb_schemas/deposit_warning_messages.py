@@ -97,7 +97,10 @@ RENDERED: dict[str, str] = {
     ),
     "reaction_atom_map_absent": (
         "The reaction has a transition state but was deposited without an atom map saying which atom of the "
-        "reactants is which atom of the saddle point and of the products."
+        "reactants is which atom of the saddle point and of the products, so the bonds that break and form cannot be "
+        "read back and the reaction cannot be exported in atom-mapped form. TCKDB will not infer one: several "
+        "chemically distinct maps are usually consistent with the same reactants and products, and choosing one by "
+        "algorithm would manufacture provenance."
     ),
     "reaction_atom_map_participants_incomplete": (
         "The atom map does not cover every declared participant molecule."
@@ -178,7 +181,8 @@ RENDERED: dict[str, str] = {
         "is not allowed for the primary calculation's type."
     ),
     "calculation_conformer_anchor_unresolved": (
-        "The calculation named neither a conformer nor a geometry, so it is tied to no conformer basin."
+        "The calculation named neither a conformer_key nor a geometry_key, so it is tied to no conformer basin and "
+        "basin-scoped reads will not count it. Set conformer_key to one of the conformer keys of this species to anchor it."
     ),
     "scf_stability_source_conformer_unverified": (
         "Whether the stability verdict's source calculation and its carrying calculation are on the same conformer "
@@ -240,8 +244,8 @@ RENDERED: dict[str, str] = {
         "The declared energy level of theory was stored, but no source calculations were linked to the record."
     ),
     "composite_delta_prefer_scheme_terms": (
-        "The correction was applied with the role of a composite delta. Such deltas are expected to become terms "
-        "of a composite scheme. It was stored as sent."
+        "The correction was applied with the role of a composite delta. Such deltas are expected to become "
+        "composite-scheme terms, which can name every calculation a delta is built from. It was stored as sent."
     ),
     "missing_energy_correction_scheme_software": (
         "An energy correction scheme was deposited without the software release that produced it."
@@ -251,7 +255,8 @@ RENDERED: dict[str, str] = {
         "literature citation to tell them apart."
     ),
     "level_of_theory_method_names_correction_table": (
-        "The method of a level of theory ends in a correction-table label. It was stored as sent."
+        "The method of a level of theory ends in a correction-table label. It was stored as sent. Send the method "
+        "alone and name the table on the energy correction scheme instead."
     ),
     "software_release_version_is_composite": (
         "A software version carried the program name with it and was split into a name and a version."
@@ -260,11 +265,26 @@ RENDERED: dict[str, str] = {
         "The software name and the program named in the software version disagree. Both were left as sent."
     ),
     # -- provenance gaps ----------------------------------------------------------------------------------------
-    "missing_literature_provenance": "No literature provenance was supplied.",
-    "missing_software_release_provenance": "No software release was supplied.",
-    "missing_workflow_tool_provenance": "No workflow tool release was supplied.",
-    "missing_level_of_theory_provenance": "No level-of-theory provenance was supplied.",
-    "missing_frequency_scale_factor_provenance": "No frequency scale factor provenance was supplied.",
+    "missing_literature_provenance": (
+        "No literature provenance was supplied. A record that is not computed, and a new energy correction scheme, "
+        "should carry a literature reference so the source of the data can be audited."
+    ),
+    "missing_software_release_provenance": (
+        "No software release was supplied. A computed record should identify which electronic-structure or "
+        "post-processing software produced it."
+    ),
+    "missing_workflow_tool_provenance": (
+        "No workflow tool release was supplied. A computed record should identify the orchestration tool that "
+        "produced it."
+    ),
+    "missing_level_of_theory_provenance": (
+        "No level-of-theory provenance was supplied. Computed kinetics should declare the electronic-energy level of "
+        "theory so source single-point calculations can be anchored to it."
+    ),
+    "missing_frequency_scale_factor_provenance": (
+        "No frequency scale factor provenance was supplied. Computed statmech should record the scaling applied to "
+        "harmonic frequencies; use value=1.0 for explicitly unscaled results."
+    ),
     "literature_title_mismatch": (
         "The title supplied for the cited literature differs from the one fetched for its identifier. The fetched "
         "title was stored."
@@ -573,7 +593,9 @@ def _linear_count_for_bent(context: Mapping[str, Any]) -> str | None:
     return (
         f"The frequency list carries {n_modes} modes, which is 3N-5 for this {n_atoms}-atom geometry (the count of a "
         f"linear molecule), but the geometry is not linear: a non-linear molecule of {n_atoms} atoms has "
-        f"3N-6 = {expected} vibrations. The record was accepted and flagged."
+        f"3N-6 = {expected} vibrations, so one mode here is either spurious or a rigid-body translation or rotation "
+        "left in the list. The record was accepted and flagged. Deposit every mode the job printed, or the geometry "
+        "the job actually ran on."
     )
 
 
@@ -584,8 +606,10 @@ def _bent_count_for_linear(context: Mapping[str, Any]) -> str | None:
     return (
         f"The frequency list carries {n_modes} modes, which is 3N-6 for this {n_atoms}-atom geometry (the count of a "
         f"bent molecule), but the geometry is linear: a linear molecule of {n_atoms} atoms has 3N-5 = {expected} "
-        "vibrations, so one mode is missing, typically a degenerate bending pair reported once. The record was "
-        "accepted and flagged."
+        "vibrations, so one mode is missing. The usual cause is a degenerate bending pair reported once: a parser or "
+        "script that de-duplicates equal frequencies drops one component and lands exactly here. The record was "
+        "accepted and flagged. Deposit every mode the job printed, including both components of each degenerate "
+        "pair."
     )
 
 
@@ -721,7 +745,7 @@ def _state_sources_partial(context: Mapping[str, Any]) -> str | None:
 
 
 _ATOM_MAP_REMEDY = {
-    "atom_map_field": " If you followed the intrinsic reaction coordinate you already have it: supply it as 'atom_map' (ADR 0011).",
+    "atom_map_field": " If you followed the intrinsic reaction coordinate, you already have this: supply it as 'atom_map' (ADR 0011).",
     "pdep_bundle": (
         " The pressure-dependent network bundle cannot yet carry a map, so to record one for this micro reaction "
         "deposit it through the computed-reaction upload, which accepts 'atom_map' (ADR 0011)."

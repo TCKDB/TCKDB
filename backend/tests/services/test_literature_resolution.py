@@ -144,8 +144,10 @@ def test_mismatched_title_keeps_doi_title_and_warns(monkeypatch) -> None:
     # And the depositor is told both values disagreed.
     title_warnings = [w for w in warnings if w.code == W_LITERATURE_TITLE_MISMATCH]
     assert len(title_warnings) == 1
-    assert "A Completely Different Paper" in title_warnings[0].message
-    assert "Canonical Title" in title_warnings[0].message
+    # The depositor's title is theirs, under the marked key; the sentence is TCKDB's.
+    assert title_warnings[0].context["depositor_supplied"] == {"supplied_title": "A Completely Different Paper"}
+    assert title_warnings[0].context["fetched_title"] == "Canonical Title"
+    assert "Completely Different" not in title_warnings[0].message
 
 
 def test_agreeing_title_carries_no_warning(monkeypatch) -> None:

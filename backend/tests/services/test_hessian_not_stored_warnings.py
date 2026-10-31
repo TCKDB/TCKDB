@@ -57,7 +57,8 @@ def test_a_composition_or_isotope_refusal_warns(db_conn, monkeypatch, xyz, isoto
 
         assert warning is not None
         assert warning.code == "hessian_not_stored_geometry_mismatch"
-        assert "freq.log" in warning.message
+        assert warning.context["depositor_supplied"] == {"artifact_filename": "freq.log"}
+        assert "freq.log" not in warning.message
         assert _hessian_rows(session) == 0
         session.flush()  # the transaction is still usable
 
@@ -109,7 +110,8 @@ def test_a_log_with_a_force_constant_block_but_no_matrix_warns(db_conn) -> None:
         )
         warning = _hook(session, calc, art)
         assert warning is not None and warning.code == "hessian_not_stored_unparseable"
-        assert "cut.log" in warning.message
+        assert warning.context["depositor_supplied"] == {"artifact_filename": "cut.log"}
+        assert "cut.log" not in warning.message
         assert _hessian_rows(session) == 0
 
 

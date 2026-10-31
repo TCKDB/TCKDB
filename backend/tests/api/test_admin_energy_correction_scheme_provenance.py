@@ -488,8 +488,9 @@ def test_attach_literature_title_mismatch_is_recorded_and_flagged(
     title_warnings = [w for w in warnings if w["code"] == "literature_title_mismatch"]
     assert len(title_warnings) == 1
     assert title_warnings[0]["field"] == "source_literature.title"
-    assert "A Totally Different Paper" in title_warnings[0]["message"]
-    assert "Canonical Title From Crossref" in title_warnings[0]["message"]
+    assert title_warnings[0]["context"]["depositor_supplied"] == {"supplied_title": "A Totally Different Paper"}
+    assert title_warnings[0]["context"]["fetched_title"] == "Canonical Title From Crossref"
+    assert "Totally Different" not in title_warnings[0]["message"]
 
 
 def test_clean_input_carries_no_warnings(

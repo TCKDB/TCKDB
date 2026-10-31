@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.145.0 - 2026-10-31
+
+A warning's `message` is TCKDB's sentence for its `code`, never text the depositor typed. No field is added or removed.
+
+- `UploadWarning.from_code(field=, code=, context=)` is the one way to build a warning; its `message` is `render_message(code, context)`.
+- New module `tckdb_schemas.deposit_warning_messages` (`RENDERED`, `render_message`, `normalise_field`), moved from the backend. The sentence for a code is fixed, or built from `context` values (numbers, counts, TCKDB tokens).
+- A label that helps you find the problem is under `context["depositor_supplied"]`, a dict of named strings you typed. Nothing in the sentence is read from it. `field` is unchanged.
+- `StationaryPointFinding` gains `context` (numbers the finding was decided on), used for the warning built from a warn-tier finding. Blocking findings and their messages are unchanged.
+- Match on `code`, never on `message`.
+
 ## 0.144.0 - 2026-10-31
 
 An unrecorded `freq.hessian_method` now resolves `tau` through the producing program's assumed default when the deposit is judged, not only when it is stored. No field is added or removed.
