@@ -250,3 +250,29 @@ def test_a_retried_attempt_reports_each_warning_once(client, kind: UploadJobKind
     first, second = attempts
     assert set(required) <= {w["code"] for w in first}
     assert second == first
+
+
+def test_a_stale_recorded_warning_is_re_rendered_when_the_job_result_is_assembled(client) -> None:
+    """A warning recorded on a job before this wording (#838) carries a message that quoted the depositor.
+
+    The recorded text is data: the job result says the sentence for the code and context, whatever was stored.
+    """
+    build, _direct_url, job_url, _required = CASES[UploadJobKind.thermo]
+    job = _enqueue(client, job_url, build())
+    stale_context = {"declared": 0, "logged": -1, "software": "gaussian"}
+    job.request_warnings = [
+        {
+            "field": "ZZQ['stale-key'].charge",
+            "code": "charge_mismatch",
+            "message": "ZZQ stale quoted 'stale-key'",
+            "context": stale_context,
+        }
+    ]
+    client._db_session.flush()
+    upload_worker.run_one_job(client._db_session, job)
+
+    result = client.get(f"/api/v1/jobs/{job.id}").json()["result"]
+    (rebuilt,) = [w for w in result["warnings"] if w["code"] == "charge_mismatch"]
+    assert rebuilt["message"] == render_message("charge_mismatch", stale_context)
+    assert "ZZQ" not in rebuilt["message"] and "stale" not in rebuilt["message"]
+    assert rebuilt["field"] == "ZZQ['stale-key'].charge"

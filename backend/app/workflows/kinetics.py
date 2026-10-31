@@ -936,7 +936,11 @@ def persist_kinetics_upload(
                 UploadWarning.from_code(
                     field="reaction.reaction_family",
                     code="reaction_family_not_applied",
-                    context={"depositor_supplied": {"reaction_family": submitted_family}},
+                    context=(
+                        {"reaction_family": canonical}
+                        if canonical
+                        else {"depositor_supplied": {"reaction_family": submitted_family}}
+                    ),
                 )
             )
         elif existing_family != submitted_family:

@@ -9,6 +9,7 @@ it after the fact, so this finds, in a source file:
   ``construct``, ``parse_obj``, ``parse_raw``, ``from_orm``;
 * ``model_copy(update=...)`` that sets ``message``, ``code`` or ``context`` (or spreads an unknown dict), or passes an
   update it cannot read to something named like a warning (re-rooting ``field`` is the one legitimate use);
+* in a file that handles warnings, ``x.__class__(...)`` and ``type(x)(...)``, and ``getattr(module, "UploadWarning")``;
 * assigning to a ``.message`` attribute, ``setattr(x, "message", ...)`` and ``object.__setattr__(x, "message", ...)``.
 
 It reads source text and is itself tested on snippets, so a mutation of a producer cannot slip past it by a spelling
@@ -54,9 +55,23 @@ def _aliases(tree: ast.AST) -> set[str]:
     return names
 
 
+def _is_type_of(call: ast.Call) -> bool:
+    """``type(x)`` or ``x.__class__``-style: a call whose result is the class of some other object."""
+    return isinstance(call.func, ast.Name) and call.func.id == "type" and len(call.args) == 1
+
+
 def _is_class(node: ast.AST, names: set[str]) -> bool:
-    return (isinstance(node, ast.Name) and node.id in names) or (
-        isinstance(node, ast.Attribute) and node.attr == _NAME
+    return (
+        (isinstance(node, ast.Name) and node.id in names)
+        or (isinstance(node, ast.Attribute) and node.attr == _NAME)
+        or (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and len(node.args) >= 2
+            and isinstance(node.args[1], ast.Constant)
+            and node.args[1].value == _NAME
+        )
     )
 
 
@@ -80,6 +95,10 @@ def _copies_a_warning_into_something_else(call: ast.Call) -> bool:
 def violations(source: str, filename: str = "<source>") -> list[str]:
     tree = ast.parse(source)
     names = _aliases(tree)
+    handles = any(
+        (isinstance(n, ast.Name) and n.id in names) or (isinstance(n, ast.Attribute) and n.attr == _NAME)
+        for n in ast.walk(tree)
+    )
     found: list[str] = []
 
     def add(node: ast.AST, what: str) -> None:
@@ -90,6 +109,10 @@ def violations(source: str, filename: str = "<source>") -> list[str]:
             func = node.func
             if _is_class(func, names):
                 add(node, "builds an UploadWarning directly; use UploadWarning.from_code")
+            elif handles and isinstance(func, ast.Attribute) and func.attr == "__class__":
+                add(node, "calls an instance's __class__; use UploadWarning.from_code")
+            elif handles and isinstance(func, ast.Call) and _is_type_of(func):
+                add(node, "calls type(x)(...); use UploadWarning.from_code")
             elif isinstance(func, ast.Attribute) and _is_class(func.value, names) and func.attr in _BUILDERS:
                 add(node, f"builds an UploadWarning with {func.attr}; use UploadWarning.from_code")
             elif isinstance(func, ast.Attribute) and func.attr == "model_copy":

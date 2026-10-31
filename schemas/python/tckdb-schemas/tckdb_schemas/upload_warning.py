@@ -1,28 +1,17 @@
 """Generic upload warning returned alongside successful uploads."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from tckdb_schemas.deposit_warning_messages import clean_depositor_supplied, render_message
 
 
-def _is_marked_shape(supplied: Any) -> bool:
-    """Whether ``depositor_supplied`` is a dict of strings, lists of strings and lists of records of strings."""
-    if not isinstance(supplied, dict):
-        return False
-    for item in supplied.values():
-        if isinstance(item, str):
-            continue
-        if isinstance(item, list) and all(isinstance(i, str) for i in item):
-            continue
-        if isinstance(item, list) and all(
-            isinstance(i, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in i.items()) for i in item
-        ):
-            continue
-        return False
-    return True
+#: A hook the test suite sets to hold every instance, whichever way it was made, to the rule that its message is the
+#: sentence for its code and context. It is ``None`` in production on purpose: a client parses a server's warnings into
+#: this class, possibly from another version of the package, and must read whatever message that server sent.
+_INSTANCE_CHECK: Callable[["UploadWarning"], None] | None = None
 
 
 class UploadWarning(BaseModel):
@@ -52,20 +41,22 @@ class UploadWarning(BaseModel):
     message: str
     context: dict[str, Any] | None = None
 
+    @model_validator(mode="after")
+    def _held_to_the_rule_in_tests(self) -> "UploadWarning":
+        if _INSTANCE_CHECK is not None:
+            _INSTANCE_CHECK(self)
+        return self
+
     @classmethod
     def from_code(cls, *, field: str, code: str, context: Mapping[str, Any] | None = None) -> "UploadWarning":
         """The warning for ``code``, with TCKDB's sentence as its message.
 
         This is the one way a producer builds a warning. The sentence is
         :func:`tckdb_schemas.deposit_warning_messages.render_message` of the code and context, the same call a read
-        makes on the stored row.
+        makes on the stored row. A ``depositor_supplied`` entry of a wrong shape is logged and dropped: a warning
+        never fails an upload.
         """
         stored = clean_depositor_supplied(context)
-        supplied = (stored or {}).get("depositor_supplied")
-        if supplied is not None and not _is_marked_shape(supplied):
-            raise TypeError(
-                "context['depositor_supplied'] holds strings, lists of strings and lists of records of strings only"
-            )
         return cls(field=field, code=code, message=render_message(code, stored), context=stored)
 
     @classmethod

@@ -27,6 +27,7 @@ producer's ``message`` is not exactly ``render_message(code, context)``.
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Mapping
 from typing import Any
@@ -489,13 +490,21 @@ def _count(n: int, one: str, many: str) -> str:
 # tau: why the tolerance is what it is
 # ---------------------------------------------------------------------------
 
-_ASSUMED = (
-    "'freq.hessian_method' is not recorded, so this is an assumption, not a recorded statement: the producing "
-    "program's documented default second-derivative method ({basis}) is assumed and given the same tau as the "
-    "equivalent recorded basis. A later upload that states the Hessian method explicitly supersedes this assumption"
+_ASSUMED_TAIL = (
+    "it is given the same tau as the equivalent recorded basis. A later upload that states the Hessian method "
+    "explicitly supersedes this assumption"
 )
+_NOT_RECORDED = "'freq.hessian_method' is not recorded, so this is an assumption, not a recorded statement"
 
-#: What each ``tau_basis`` token means. TCKDB's own wording for the reason the tolerance was chosen.
+#: The Hessian method each table row assumes, by ``tau_basis`` token.
+_ASSUMED_METHOD = {
+    "assumed_analytic_default": "analytic second derivatives",
+    "assumed_finite_difference_gradient": "numerical frequencies from analytic gradients",
+    "assumed_finite_difference_energy": "numerical frequencies from energies",
+}
+
+#: What each ``tau_basis`` token means for a recorded or unrecorded method. TCKDB's own wording for why the
+#: tolerance was chosen; the assumed bases are built by :func:`_assumed_reason` from the table's tokens.
 _TAU_WHY: dict[str, str] = {
     "protocol_not_recorded": (
         "no Hessian method is recorded for this calculation, so it is not known whether the second derivatives were "
@@ -509,10 +518,98 @@ _TAU_WHY: dict[str, str] = {
         "the Hessian was built by finite differences of energies, which inherits SCF noise divided by the square of "
         "the displacement step"
     ),
-    "assumed_analytic_default": _ASSUMED.format(basis="assumed_analytic_default"),
-    "assumed_finite_difference_gradient": _ASSUMED.format(basis="assumed_finite_difference_gradient"),
-    "assumed_finite_difference_energy": _ASSUMED.format(basis="assumed_finite_difference_energy"),
+    "assumed_analytic_default": "",
+    "assumed_finite_difference_gradient": "",
+    "assumed_finite_difference_energy": "",
 }
+
+#: The program and method family of an assumption: the table's own tokens (``hessian_method_assumption``), so closed.
+ASSUMED_SOFTWARE = {"gaussian": "Gaussian", "orca": "ORCA"}
+ASSUMED_FAMILY = {
+    "hf": "HF",
+    "dft": "DFT",
+    "mp2": "MP2",
+    "mp3": "MP3",
+    "mp4": "MP4",
+    "cis": "CIS",
+    "cisd": "CISD/CID",
+    "casscf": "CASSCF",
+    "qcisd": "QCISD",
+    "qcisd(t)": "QCISD(T)",
+    "ccsd": "CCSD",
+    "ccsd(t)": "CCSD(T)",
+    "dlpno_other": "DLPNO",
+}
+ASSUMPTION_RULES = (
+    "program_default",
+    "orca_meta_gga_analytic_from_5",
+    "orca_numerical_documented_vv10",
+    "orca_numerical_documented_double_hybrid",
+    "orca_pre5_meta_gga_no_analytic",
+)
+
+
+def _assumed_reason(context: Mapping[str, Any], basis: str) -> str:
+    method = _ASSUMED_METHOD[basis]
+    rule = context.get("tau_assumption_rule")
+    software_token, family_token = context.get("tau_software"), context.get("tau_method_family")
+    software = ASSUMED_SOFTWARE.get(software_token) if isinstance(software_token, str) else None
+    family = ASSUMED_FAMILY.get(family_token) if isinstance(family_token, str) else None
+    if rule in ("orca_numerical_documented_vv10", "orca_numerical_documented_double_hybrid"):
+        what = "VV10 (non-local)" if rule.endswith("vv10") else "double-hybrid"
+        return (
+            f"{_NOT_RECORDED}: ORCA's manuals document numerical frequencies from analytic gradients for {what} "
+            f"functionals, so {method} are assumed ({basis}); {_ASSUMED_TAIL}"
+        )
+    if rule == "orca_pre5_meta_gga_no_analytic":
+        return (
+            f"{_NOT_RECORDED}: ORCA releases before version 5 have no analytic Hessian for meta-GGA functionals, so "
+            f"{method} are assumed ({basis}); {_ASSUMED_TAIL}"
+        )
+    default = (
+        f"{software}'s documented default second-derivative method for {family} calculations"
+        if software and family
+        else "the producing program's documented default second-derivative method"
+    )
+    meta = " ORCA 5 and later has analytic Hessians for meta-GGA functionals." if rule == "orca_meta_gga_analytic_from_5" else ""
+    return f"{_NOT_RECORDED}: {default} ({method}) is assumed ({basis}); {_ASSUMED_TAIL}.{meta}"
+
+
+def _grid_phrase(value: Any, noun: str) -> str:
+    if value == "not_recorded":
+        return f"{noun} not recorded"
+    if value == "not_tight":
+        return f"{noun} not tight"
+    return f"{noun} {value}" if isinstance(value, str) and value in _TIGHT_VALUES else f"{noun} not recorded"
+
+
+def _tau_reason(context: Mapping[str, Any], basis: str) -> str:
+    """TCKDB's words for why ``basis`` set tau, with the closed tokens the context states for it."""
+    if basis.startswith("assumed_"):
+        return _assumed_reason(context, basis)
+    grid, opt = context.get("tau_grid"), context.get("tau_opt")
+    if basis == "analytic_tight" and grid in _TIGHT_VALUES and opt in _TIGHT_VALUES:
+        return f"analytic second derivatives on integration grid {grid} with optimisation convergence {opt}"
+    if basis == "analytic_default" and isinstance(grid, str) and isinstance(opt, str):
+        missing = [
+            _grid_phrase(v, noun)
+            for v, noun in ((grid, "grid.quality"), (opt, "opt.convergence"))
+            if v in ("not_recorded", "not_tight")
+        ]
+        if missing:
+            return (
+                "analytic second derivatives, but not on a tight grid with a tight optimisation "
+                f"({'; '.join(missing)})"
+            )
+    return _TAU_WHY[basis]
+
+
+#: The grid and optimisation values a context may state (``_TIGHT_*`` in ``stationary_point``; a test pins them).
+_TIGHT_GRID = frozenset(
+    {"ultrafine", "superfine", "ultrafinegrid", "defgrid3", "grid5", "grid6", "grid7", "99590", "-99590", "199974"}
+)
+_TIGHT_OPT = frozenset({"tight", "very_tight", "verytight"})
+_TIGHT_VALUES = _TIGHT_GRID | _TIGHT_OPT
 
 _REMEDIATION = (
     "Remediation, in order: re-run the frequency job on a tighter integration grid (most modes between -10 and "
@@ -536,7 +633,7 @@ def _tau_basis(context: Mapping[str, Any]) -> str | None:
 def _tau_why(context: Mapping[str, Any]) -> str | None:
     """``Why tau = 30 cm-1: ...`` for the stored tau and its basis, or ``None`` when the row cannot say."""
     tau, basis = _tau(context), _tau_basis(context)
-    return None if tau is None or basis is None else f"Why tau = {tau}: {_TAU_WHY[basis]}."
+    return None if tau is None or basis is None else f"Why tau = {tau}: {_tau_reason(context, basis)}."
 
 
 def _protocol(context: Mapping[str, Any], *, plural: bool) -> str:
@@ -561,6 +658,11 @@ _VDW_TAIL = (
 )
 
 #: Where a deduction came from (``Deduction.source``), by category, and what each says about the declared value.
+#: Methods whose deduction says the state is excited (``_EXCITED_STATE_METHODS`` in ``ess_species_deduction`` takes this).
+EXCITED_STATE_METHODS = frozenset(
+    {"eom-ccsd", "eom-ccsd(t)", "eom-mp2", "cis", "cis(d)", "sf-tddft"}
+)
+
 _EVIDENCE = frozenset(
     {
         "frequency_analysis",
@@ -576,10 +678,12 @@ def _deduction(context: Mapping[str, Any], declared_what: str) -> str | None:
     deduced, evidence = _token(context.get("deduced")), _token(context.get("evidence"), _EVIDENCE)
     if deduced is None or evidence is None:
         return None
+    method = _token(context.get("evidence_method"), EXCITED_STATE_METHODS)
+    named = f" ({method})" if method else ""
     by = {
         "frequency_analysis": "the frequency analysis",
         "excited_state_job_type": "the excited-state (TD-DFT) job type of the calculation",
-        "excited_state_method": "the excited-state method of the calculation",
+        "excited_state_method": f"the excited-state method of the calculation{named}",
         "method_default": (
             "the calculation's single-reference method, which targets the ground state by default (a heuristic, "
             "not a measurement)"
@@ -989,6 +1093,18 @@ def _term_symbol_contradicts_ground_term(context: Mapping[str, Any]) -> str | No
     )
 
 
+def _family_not_applied(context: Mapping[str, Any]) -> str | None:
+    from tckdb_schemas.reaction_family import CANONICAL_REACTION_FAMILIES
+
+    family = context.get("reaction_family")
+    if not isinstance(family, str) or family not in CANONICAL_REACTION_FAMILIES:
+        return None
+    return (
+        f"The reaction family {family} named in the deposit was not applied: this rate is anchored to an existing "
+        "reaction entry, whose family is set on the shared reaction identity and is not modified by a kinetics upload."
+    )
+
+
 def _levels_text(context: Mapping[str, Any]) -> str | None:
     levels = context.get("ground_levels")
     if not isinstance(levels, list) or not levels:
@@ -1085,10 +1201,14 @@ def _composite_log_mismatch(context: Mapping[str, Any]) -> str | None:
         deposited, logged = _hartree6(row.get("deposited_hartree")), _hartree6(row.get("log_hartree"))
         if quantity is None or deposited is None or logged is None:
             return None
+        delta = row["deposited_hartree"] - row["log_hartree"]
         if quantity == "electronic_energy_hartree":
-            parts.append(f"{quantity} {deposited} against the log-implied {logged} (the log's 0 K energy minus its ZPE)")
+            parts.append(
+                f"{quantity} {deposited} against the log-implied {logged} (the log's 0 K energy minus its ZPE; "
+                f"delta {delta:+.2e})"
+            )
         else:
-            parts.append(f"{quantity} {deposited} against the log's {logged}")
+            parts.append(f"{quantity} {deposited} against the log's {logged} (delta {delta:+.2e})")
     return (
         f"The deposited composite energy disagrees with the output log's {method} summary block: {'; '.join(parts)}. "
         "The deposited values are kept unchanged and flagged for reviewer attention; nothing is filled from the log."
@@ -1106,6 +1226,7 @@ def _composite_total_unverifiable(context: Mapping[str, Any]) -> str | None:
     )
 
 
+_RECORD_KINDS = frozenset({"statmech", "thermo"})
 _COMPOSITE_REFUSED_LATER = "This will be refused once producers can send that shape."
 
 
@@ -1133,10 +1254,24 @@ def _composite_role(context: Mapping[str, Any]) -> str | None:
     kind = _token(context.get("calculation_type"))
     if kind is None:
         return None
+    record = _token(context.get("record_kind"), _RECORD_KINDS)
+    where = f"For this {record} record, a" if record else "A"
     return (
-        f"A calculation of type '{kind}' is linked with the role 'composite'. The role names a composite energy, "
-        "which is recorded by a calculation of type 'composite'. The link was stored as sent; it will be refused "
-        "once producers can send that shape."
+        f"{where} calculation of type '{kind}' is linked with the role 'composite'. The role names a composite "
+        "energy, which is recorded by a calculation of type 'composite'. The link was stored as sent; it will be "
+        "refused once producers can send that shape."
+    )
+
+
+def _composite_frequency_level(context: Mapping[str, Any]) -> str | None:
+    record = _token(context.get("record_kind"), _RECORD_KINDS)
+    if record is None:
+        return None
+    return (
+        f"For this {record} record, the frequency calculation linked to a composite is at a different level of "
+        "theory than its recipe prescribes, and the composite method scales its zero-point energy for the recipe's "
+        "level. Link the frequency calculation at the recipe's own level, or expect the record's frequencies and "
+        "its energy to describe different levels."
     )
 
 
@@ -1477,9 +1612,13 @@ def _charge(context: Mapping[str, Any]) -> str | None:
 
 def _hessian_disagrees(context: Mapping[str, Any]) -> str | None:
     stored, deck = context.get("stored_method"), context.get("deck_method")
+    basis = context.get("stored_basis")
     if stored in _HESSIAN_METHODS and deck in _HESSIAN_METHODS:
+        why = ""
+        if isinstance(basis, str) and basis in _TAU_WHY:
+            why = f" ({basis}: {_tau_reason({}, basis)})" if not basis.startswith("assumed_") else f" ({basis})"
         return (
-            f"The tolerance stored with this frequency calculation rests on the Hessian method {stored}, but an "
+            f"The tolerance stored with this frequency calculation rests on the Hessian method {stored}{why}, but an "
             f"input deck attached after the deposit states {deck}. The stored tolerance was not changed."
         )
     return None
@@ -1566,6 +1705,8 @@ _WITH_CONTEXT: dict[str, Any] = {
     "missing_tunneling_application_evidence": _tunneling,
     "missing_energy_correction_scheme_software": _scheme_software,
     "level_of_theory_method_names_correction_table": _method_table,
+    "reaction_family_not_applied": _family_not_applied,
+    "composite_frequency_level_differs_from_recipe": _composite_frequency_level,
     "software_release_version_is_composite": _version_is_composite,
     "species_entry_stereo_not_represented": _stereo_not_represented,
     "species_entry_stereo_unresolved": _stereo_unresolved,
@@ -1600,130 +1741,219 @@ def render_message(code: str, context: Mapping[str, Any] | None) -> str:
 # what a context may hold
 # ---------------------------------------------------------------------------
 
-#: The context keys that may hold a string outside ``depositor_supplied``: TCKDB tokens, parsed program keys, public
-#: refs, fetched metadata. Every other string in a context belongs under ``depositor_supplied``. A producer that
-#: moves a label to an unmarked key is caught by :func:`context_problems`, which the test session applies to every
-#: warning any producer builds.
-UNMARKED_STRING_KEYS = frozenset(
+_LOG = logging.getLogger(__name__)
+
+_ELEMENTS = frozenset(
+    "H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb "
+    "Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au Hg "
+    "Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr Rf Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og".split()
+)
+_PUBLIC_REF = re.compile(r"[a-z]{2,6}_[a-z2-7]{26}")
+_DESCRIPTOR_PATTERN = re.compile(r"(Ra|Sa|[RSrsEZez?-])(,(Ra|Sa|[RSrsEZez?-]))*")
+_DEDUCED = re.compile(r"minimum|transition_state|saddle_order_\d+|ground|excited|\d[A-Za-z][A-Za-z0-9/+\-_*]{0,10}")
+_GROUND_TERM = re.compile(r"[1-9][SPDFGH]")
+_VERSION = re.compile(r"\d[0-9A-Za-z.+\-]{0,19}")
+_LOWER_TOKEN = re.compile(r"[a-z0-9][a-z0-9_\-]{1,60}")
+
+#: Where a string outside ``depositor_supplied`` is allowed to hold free text from outside TCKDB's vocabulary, by
+#: (code, key): the title Crossref or the ISBN service returned for the cited identifier.
+_FETCHED_TEXT = frozenset({("literature_title_mismatch", "fetched_title")})
+
+
+def _enum_values(module: str, name: str) -> frozenset[str]:
+    import importlib
+
+    return frozenset(m.value for m in getattr(importlib.import_module(module), name))
+
+
+def _closed_values(key: str, code: str) -> Any:
+    """The closed set (or compiled pattern) of values ``key`` may hold in ``code``'s context; ``None`` = not allowed."""
+    enums = "tckdb_schemas.enums"
+    static: dict[str, Any] = {
+        "action": frozenset(_VERSION_ACTIONS),
+        "application_role": frozenset({"composite_delta"}),
+        "confidence": frozenset({"definitive", "derived", "heuristic"}),
+        "deck_method": _HESSIAN_METHODS,
+        "stored_method": _HESSIAN_METHODS,
+        "deduced": _DEDUCED,
+        "deposit_path": frozenset(_ATOM_MAP_REMEDY),
+        "descriptor": _DESCRIPTOR_PATTERN,
+        "element": _ELEMENTS,
+        "energy_kind": _ENERGY_KINDS,
+        "evidence": _EVIDENCE,
+        "evidence_method": EXCITED_STATE_METHODS,
+        "ground_term": _GROUND_TERM,
+        "observed_software": frozenset({"gaussian", "orca", "molpro", "psi4"}),
+        "software": frozenset({"gaussian", "orca", "molpro", "psi4"}),
+        "quantity": _COMPOSITE_QUANTITIES,
+        "record_kind": _RECORD_KINDS,
+        "resolution": frozenset({"partial", "unresolved"}),
+        "side": _SIDES,
+        "subject": frozenset({"state_energy", "channel_barrier"}),
+        "tau_assumption_rule": frozenset(ASSUMPTION_RULES),
+        "tau_grid": _TIGHT_GRID | {"not_tight", "not_recorded"},
+        "tau_opt": _TIGHT_OPT | {"not_tight", "not_recorded"},
+        "tau_method_family": frozenset(ASSUMED_FAMILY),
+        "tau_software": frozenset(ASSUMED_SOFTWARE),
+        "tau_basis": frozenset(_TAU_WHY),
+        "stored_basis": frozenset(_TAU_WHY),
+        "twin_ref": _PUBLIC_REF,
+        "sibling_ref": _PUBLIC_REF,
+        "release_ref": _PUBLIC_REF,
+        "version": _VERSION,
+        "log_method": _LOWER_TOKEN,
+        "refusal_code": _LOWER_TOKEN,
+        "tunneling_model": frozenset({"wigner", "eckart", "sct", "other"}),
+    }
+    if key in static:
+        return static[key]
+    if key in ("calculation_type", "expected_parent_type", "primary_type"):
+        return _enum_values(enums, "CalculationType")
+    if key == "correction_convention":
+        return _enum_values(enums, "EnergyCorrectionConvention")
+    if key == "dependency_role":
+        return _enum_values(enums, "CalculationDependencyRole")
+    if key == "disposition":
+        return _enum_values(enums, "ImaginaryModeDisposition")
+    if key == "scheme_kind":
+        return _enum_values(enums, "EnergyCorrectionSchemeKind")
+    if key == "reaction_family":
+        from tckdb_schemas.reaction_family import CANONICAL_REACTION_FAMILIES
+
+        return frozenset(CANONICAL_REACTION_FAMILIES)
+    if key == "method_stem":
+        from tckdb_schemas.fragments.refs import _CORRECTION_TABLE_STEMS
+
+        return re.compile(_CORRECTION_TABLE_STEMS)
+    if key == "reason":
+        by_code: dict[str, frozenset[str]] = {
+            "composite_total_unverifiable": frozenset(COMPOSITE_TOTAL_UNVERIFIABLE_REASONS),
+            "energy_level_stored_without_source_calculations": frozenset({"none", "ambiguous"}),
+        }
+        if code.startswith("hessian_not_stored_"):
+            return _HESSIAN_REASONS
+        return by_code.get(code)
+    if key == "reasons":
+        if code == "species_entry_stereo_not_represented":
+            return frozenset(STEREO_NOT_REPRESENTED_REASONS)
+        if code in ("transition_state_energy_ordering_not_compared", "network_state_energy_sum_not_compared"):
+            return NOT_COMPARED_REASONS
+        return None
+    return None
+
+
+#: The reason tokens of ``hessian_not_stored_*`` (``reason`` in the context).
+_HESSIAN_REASONS = frozenset(
     {
-        "application_role",
-        "calculation_type",
-        "confidence",
-        "correction_convention",
-        "deck_method",
-        "deduced",
-        "dependency_role",
-        "deposit_path",
-        "descriptor",
-        "disposition",
-        "element",
-        "energy_kind",
-        "evidence",
-        "expected_parent_type",
-        "fetched_title",
-        "ground_term",
-        "log_method",
-        "method_stem",
-        "observed_software",
-        "primary_type",
-        "quantity",
-        "action",
-        "reason",
-        "reasons",
-        "record_kind",
-        "refusal_code",
-        "release_ref",
-        "resolution",
-        "scheme_kind",
-        "sibling_ref",
-        "side",
-        "software",
-        "stored_basis",
-        "stored_method",
-        "subject",
-        "tau_basis",
-        "tunneling_model",
-        "twin_ref",
-        "version",
+        "not_frequency_calculation",
+        "read_failed",
+        "store_failed",
+        "sent_as_hessian",
+        "log_block_unreadable",
+        "input_geometry_count",
+        "geometry_not_found",
+        "atom_count",
+        "frame",
+        "species_contradiction",
     }
 )
 
-_PUBLIC_REF = re.compile(r"[a-z]{2,6}_[a-z0-9]{8,40}")
-_ELEMENT = re.compile(r"[A-Z][a-z]?")
-#: Keys whose string must also look like what they are, so a label moved there is not waved through by its name.
-_KEY_SHAPES: dict[str, re.Pattern[str]] = {
-    "sibling_ref": _PUBLIC_REF,
-    "twin_ref": _PUBLIC_REF,
-    "release_ref": _PUBLIC_REF,
-    "element": _ELEMENT,
-}
+
+def _key_problem(code: str, key: str, value: str, closed: Mapping[str, Any]) -> str | None:
+    if (code, key) in _FETCHED_TEXT:
+        return None
+    allowed = closed[key] if key in closed else _closed_values(key, code)
+    if allowed is None:
+        return f"{key} holds a string outside depositor_supplied"
+    if isinstance(allowed, re.Pattern):
+        ok = allowed.fullmatch(value) is not None
+    else:
+        ok = value in allowed
+    return None if ok else f"{key} holds a value outside its closed set"
+
+
+def _walk_unmarked(code: str, value: Any, key: str | None, path: str, problems: list[str], closed: Mapping[str, Any]) -> None:
+    if isinstance(value, str):
+        problem = f"{path} holds a string outside depositor_supplied" if key is None else _key_problem(code, key, value, closed)
+        if problem:
+            problems.append(f"{path}: {problem}")
+    elif isinstance(value, Mapping):
+        for name, item in value.items():
+            _walk_unmarked(code, item, name if isinstance(name, str) else None, f"{path}.{name}", problems, closed)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            _walk_unmarked(code, item, key, f"{path}[]", problems, closed)
+
 
 _DEPOSITOR_KEY = "depositor_supplied"
 
 
-def _depositor_supplied_problems(value: Any) -> list[str]:
-    if not isinstance(value, dict) or not value:
-        return ["depositor_supplied is not a non-empty dict"]
-    problems = []
-    for name, item in value.items():
-        if not isinstance(name, str):
-            problems.append(f"depositor_supplied key {name!r} is not a string")
-        elif isinstance(item, str):
-            pass
-        elif isinstance(item, list) and item and all(isinstance(i, str) for i in item):
-            pass
-        elif isinstance(item, list) and item and all(
-            isinstance(i, dict) and i and all(isinstance(k, str) and isinstance(v, str) for k, v in i.items())
-            for i in item
-        ):
-            pass
-        else:
-            problems.append(
-                f"depositor_supplied[{name!r}] is not a string, a non-empty list of strings or a non-empty list of "
-                "records of strings"
-            )
-    return problems
+def _entry_is_marked_shape(item: Any) -> bool:
+    if isinstance(item, str):
+        return True
+    if isinstance(item, list) and all(isinstance(i, str) for i in item):
+        return True
+    return isinstance(item, list) and all(
+        isinstance(i, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in i.items()) for i in item
+    )
 
 
-def _walk_unmarked(value: Any, key: str | None, path: str, problems: list[str]) -> None:
-    if isinstance(value, str):
-        if key not in UNMARKED_STRING_KEYS:
-            problems.append(f"{path} holds a string outside depositor_supplied")
-        elif key in _KEY_SHAPES and not _KEY_SHAPES[key].fullmatch(value):
-            problems.append(f"{path} does not look like a {key}")
-    elif isinstance(value, Mapping):
-        for name, item in value.items():
-            _walk_unmarked(item, name if isinstance(name, str) else None, f"{path}.{name}", problems)
-    elif isinstance(value, (list, tuple)):
-        for item in value:
-            _walk_unmarked(item, key, f"{path}[]", problems)
+def depositor_supplied_problems(context: Mapping[str, Any] | None) -> list[str]:
+    """What is wrong with the ``depositor_supplied`` a producer passed: a wrong shape, as raw input (``None`` and empty
+    entries are fine; they are dropped)."""
+    supplied = (context or {}).get(_DEPOSITOR_KEY)
+    if supplied is None:
+        return []
+    if not isinstance(supplied, dict):
+        return ["depositor_supplied is not a dict"]
+    return [
+        f"depositor_supplied[{name!r}] is not a string, a list of strings or a list of records of strings"
+        for name, item in supplied.items()
+        if item is not None and not (isinstance(name, str) and _entry_is_marked_shape(item))
+    ]
 
 
-def context_problems(code: str, context: Mapping[str, Any] | None) -> list[str]:
-    """What is wrong with a warning's context: an unknown code, a string outside the marked key, a malformed marked key.
+def context_problems(code: str, context: Mapping[str, Any] | None, *, closed: Mapping[str, Any] | None = None) -> list[str]:
+    """What is wrong with a warning's context.
 
-    ``depositor_supplied`` is the one place depositor-typed text may go: a dict of named strings, lists of strings
-    and lists of records of strings. Every other string must sit under a key in :data:`UNMARKED_STRING_KEYS`.
+    ``depositor_supplied`` is the one place depositor-typed text may go. Every other string must be a value of the
+    closed set (or match the pattern) its key names: an enum token, a table's program, a public ref, a parsed program
+    key, a version number. A label moved to an unmarked key, or a key that is not in the table, is reported.
+
+    :param closed: Extra closed sets by key, from a caller that knows more than this package does (the backend's
+        refusal-code catalogue, the log parser's method keys); they replace this module's set for that key.
     """
+    closed = closed or {}
     problems: list[str] = []
     if code not in RENDERED:
         problems.append(f"{code} has no sentence in RENDERED")
     for name, value in (context or {}).items():
         if name == _DEPOSITOR_KEY:
-            problems.extend(_depositor_supplied_problems(value))
+            problems.extend(depositor_supplied_problems(context))
         else:
-            _walk_unmarked(value, name, name, problems)
+            _walk_unmarked(code, value, name, name, problems, closed)
     return problems
 
 
 def clean_depositor_supplied(context: Mapping[str, Any] | None) -> dict[str, Any] | None:
-    """The context with the entries of ``depositor_supplied`` that hold nothing dropped, and the key itself if empty."""
+    """The context with ``depositor_supplied`` cleaned: entries that hold nothing dropped, an entry of a wrong shape
+    dropped and logged, and the key itself dropped if nothing is left. A warning must never fail an upload."""
     if not context:
         return None
     cleaned = dict(context)
     supplied = cleaned.get(_DEPOSITOR_KEY)
-    if isinstance(supplied, dict):
-        kept = {k: v for k, v in supplied.items() if v is not None and v != [] and v != ""}
+    if supplied is not None:
+        kept: dict[str, Any] = {}
+        if isinstance(supplied, dict):
+            for name, item in supplied.items():
+                if item is None or item == [] or item == "":
+                    continue
+                if isinstance(name, str) and _entry_is_marked_shape(item):
+                    kept[name] = item
+                else:
+                    _LOG.error("a warning's depositor_supplied entry %r has a wrong shape and was dropped", name)
+        else:
+            _LOG.error("a warning's depositor_supplied is not a dict and was dropped")
         if kept:
             cleaned[_DEPOSITOR_KEY] = kept
         else:
@@ -1780,7 +2010,7 @@ __all__ = [
     "NOT_COMPARED_REASONS",
     "RENDERED",
     "STEREO_NOT_REPRESENTED_REASONS",
-    "UNMARKED_STRING_KEYS",
+    "depositor_supplied_problems",
     "clean_depositor_supplied",
     "context_problems",
     "normalise_field",

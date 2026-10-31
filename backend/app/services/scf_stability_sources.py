@@ -108,9 +108,9 @@ def link_scf_stability_sources(
     for owner_key, stability in pairs:
         source_key = stability.source_calculation_key
         assert source_key is not None
-        field = f"calculations['{owner_key}'].scf_stability.source_calculation_key"
+        field = f"calculations[{owner_key!r}].scf_stability.source_calculation_key"
         owner = resolve_calculation_key(
-            owner_key, calculations_by_key, field=f"calculations['{owner_key}'].key"
+            owner_key, calculations_by_key, field=f"calculations[{owner_key!r}].key"
         )
         source = resolve_calculation_key(source_key, calculations_by_key, field=field)
         assert_calculation_owned_by(

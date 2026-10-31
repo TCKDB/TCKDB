@@ -16,7 +16,7 @@
       "1": "8f50ad61bbfb6631245961af6e404508af9d7efe7d1c0e2d1d25a70152d7f7fb"
     },
     "computed_transition_state": {
-      "2": "c502f2a8565230fce727df4cdf5e8506b519564834565f32bc99fefe5b091f8d"
+      "2": "354eb26e37a463776df939160faf783b92d6dadec9b388d58cd057cd5df61c20"
     },
     "computed_transport": {
       "1": "9df1633baaa551e4a2e9571bc1a459155dbb46c38007a0413b346e2e4670ced6"
@@ -222,6 +222,11 @@
       "name": "computed_transition_state",
       "version": 2,
       "reason": "message/context only; StationaryPointFinding gains a context field and warn findings state their numbers in it; no check or grading change (#838)"
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "message/context only; TauResolution gains assumed_software, assumed_family and assumption_rule (the table's own tokens, carried for the warning sentence); tau value and basis are unchanged; paths quoted with !r in finding locations; no check or grading change (#838)"
     }
   ]
 }

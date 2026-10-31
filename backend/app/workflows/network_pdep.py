@@ -393,7 +393,7 @@ def _persist_calculation(
         effective_geometry_id = resolve_geometry_key(
             calc_in.geometry_key,
             geometry_key_map,
-            field=f"calculations['{calc_in.key}'].geometry_key",
+            field=f"calculations[{calc_in.key!r}].geometry_key",
         )
 
     # The inline literature fragment is forwarded unresolved; the shared
@@ -631,7 +631,7 @@ def persist_network_pdep_upload(
                 ),
                 observation_id_by_geometry_key=observation_id_by_geometry_key,
                 warnings=warning_sink,
-                field=f"species['{sp.key}'].calculations['{calc_in.key}']",
+                field=f"species[{sp.key!r}].calculations[{calc_in.key!r}]",
             )
 
     # ------------------------------------------------------------------
@@ -866,7 +866,7 @@ def persist_network_pdep_upload(
                     evidence_in.source_calculation_key,
                     calculation_key_to_id,
                     field=(
-                        f"transition_states['{ts_in.key}']."
+                        f"transition_states[{ts_in.key!r}]."
                         f"validation_evidence[{index}].source_calculation_key"
                     ),
                 )

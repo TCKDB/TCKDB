@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from tckdb_schemas.deposit_warning_messages import EXCITED_STATE_METHODS
 from tckdb_schemas.stationary_point import (
     TS_IMAGINARY_FREQUENCY_MIN_CM1,
     W_N_IMAG_CONTRADICTS_MINIMUM,
@@ -311,6 +312,7 @@ def check_freq_parser_fidelity(
             UploadWarning.from_code(
                 field=f"calculations[{index}].freq_result.modes",
                 code=W_FREQ_PARSED_NO_MODES,
+                context={"depositor_supplied": {"parameters_parser": f"{calc.parameters_parser.name} {calc.parameters_parser.version}"}},
             )
         )
     return warnings
@@ -377,6 +379,12 @@ def _evidence_category(source: str) -> str:
     return "multiplicity"
 
 
+def _evidence_method(source: str) -> dict[str, str]:
+    """The exact excited-state method a deduction names, when it is one of the methods the deduction table knows."""
+    method = source.removeprefix("method.") if source.startswith("method.") else None
+    return {"evidence_method": method} if method in EXCITED_STATE_METHODS else {}
+
+
 def _reconcile_deduction(
     deduction: Deduction,
     payload: SpeciesEntryIdentityPayload,
@@ -405,6 +413,7 @@ def _reconcile_deduction(
         context={
             "deduced": str(deduction.value),
             "evidence": _evidence_category(deduction.source),
+            **_evidence_method(deduction.source),
             "confidence": deduction.confidence,
             "depositor_supplied": {attr_name: str(payload_value)},
         },

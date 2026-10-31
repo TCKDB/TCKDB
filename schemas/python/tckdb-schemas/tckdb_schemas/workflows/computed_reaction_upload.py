@@ -804,18 +804,18 @@ class BundleSpeciesIn(SchemaBase):
 
         locations: list[str] = []
         for conformer in self.conformers:
-            locations.append(f"conformers['{conformer.key}'].geometry")
+            locations.append(f"conformers[{conformer.key!r}].geometry")
         for conformer in self.conformers:
             locations.extend(
                 self._calculation_structure_locations(
                     conformer.calculation,
-                    path=f"conformers['{conformer.key}'].calculation",
+                    path=f"conformers[{conformer.key!r}].calculation",
                 )
             )
         for calc in self.calculations:
             locations.extend(
                 self._calculation_structure_locations(
-                    calc, path=f"calculations['{calc.key}']"
+                    calc, path=f"calculations[{calc.key!r}]"
                 )
             )
         return locations
@@ -886,7 +886,7 @@ class BundleSpeciesIn(SchemaBase):
                     f"Species '{self.key}' calculation '{calc.key}' "
                     f"conformer_key must reference one of that species's "
                     f"own conformers.",
-                    field=f"calculations['{calc.key}'].conformer_key",
+                    field=f"calculations[{calc.key!r}].conformer_key",
                     key=calc.conformer_key,
                     declared=conformer_keys,
                 )
@@ -904,7 +904,7 @@ class BundleSpeciesIn(SchemaBase):
                     W_GEOMETRY_KEY_UNRESOLVED,
                     f"Species '{self.key}' calculation '{calc.key}' geometry_key "
                     f"must reference one of that species's conformer geometries.",
-                    field=f"calculations['{calc.key}'].geometry_key",
+                    field=f"calculations[{calc.key!r}].geometry_key",
                     key=calc.geometry_key,
                     declared=conformer_geometry_keys,
                 )
@@ -941,7 +941,7 @@ class BundleSpeciesIn(SchemaBase):
         findings: list[StationaryPointFinding] = []
         for conformer in self.conformers:
             location = (
-                f"species['{self.key}'].conformers['{conformer.key}']"
+                f"species[{self.key!r}].conformers[{conformer.key!r}]"
                 f".calculation"
             )
             findings.extend(
@@ -957,7 +957,7 @@ class BundleSpeciesIn(SchemaBase):
                 )
             )
         for calc in self.calculations:
-            location = f"species['{self.key}'].calculations['{calc.key}']"
+            location = f"species[{self.key!r}].calculations[{calc.key!r}]"
             findings.extend(
                 species_entry_frequency_findings(calc, kind, location=location)
             )
@@ -1112,7 +1112,7 @@ class BundleTransitionStateIn(SchemaBase):
         """Judge this transition state against its own frequency evidence."""
         findings: list[StationaryPointFinding] = []
         for calc in (self.calculation, *self.calculations):
-            location = f"transition_state.calculations['{calc.key}']"
+            location = f"transition_state.calculations[{calc.key!r}]"
             findings.extend(
                 transition_state_frequency_findings(calc, location=location)
             )
@@ -2053,7 +2053,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                         f"unknown parent_calculation_key="
                         f"'{dep.parent_calculation_key}'.",
                         field=(
-                            f"calculations['{calc.key}'].depends_on."
+                            f"calculations[{calc.key!r}].depends_on."
                             f"parent_calculation_key"
                         ),
                         key=dep.parent_calculation_key,
@@ -2164,7 +2164,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                         f"calculation_key references undefined "
                         f"calculation_key '{sc.calculation_key}'.",
                         field=(
-                            f"species['{sp.key}'].thermo.source_calculations"
+                            f"species[{sp.key!r}].thermo.source_calculations"
                             f"[{i}].calculation_key"
                         ),
                         key=sc.calculation_key,
@@ -2189,7 +2189,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                         f"'{target.conformer_key}' does not reference one of that "
                         f"species's own conformers.",
                         field=(
-                            f"species['{sp.key}'].thermo.thermodynamic_target"
+                            f"species[{sp.key!r}].thermo.thermodynamic_target"
                             f".conformer_key"
                         ),
                         key=target.conformer_key,
@@ -2204,7 +2204,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                             f"[{i}].calculation_key references undefined "
                             f"calculation_key '{ref.calculation_key}'.",
                             field=(
-                                f"species['{sp.key}'].thermo.protocol."
+                                f"species[{sp.key!r}].thermo.protocol."
                                 f"supporting_calculations[{i}].calculation_key"
                             ),
                             key=ref.calculation_key,
@@ -2228,7 +2228,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                         f"calculation_key references undefined "
                         f"calculation_key '{msc.calculation_key}'.",
                         field=(
-                            f"species['{sp.key}'].statmech.source_calculations"
+                            f"species[{sp.key!r}].statmech.source_calculations"
                             f"[{i}].calculation_key"
                         ),
                         key=msc.calculation_key,
@@ -2246,7 +2246,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                         f"source_scan_calculation_key '{key}' references "
                         f"undefined calculation_key.",
                         field=(
-                            f"species['{sp.key}'].statmech.torsions[{i}]."
+                            f"species[{sp.key!r}].statmech.torsions[{i}]."
                             f"source_scan_calculation_key"
                         ),
                         key=key,
@@ -2295,7 +2295,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                 continue
             for i, tsc in enumerate(sp.transport.source_calculations):
                 field_path = (
-                    f"species['{sp.key}'].transport.source_calculations"
+                    f"species[{sp.key!r}].transport.source_calculations"
                     f"[{i}].calculation_key"
                 )
                 if tsc.calculation_key not in all_calc_keys:
@@ -2339,7 +2339,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                 continue
             src_key = stability.source_calculation_key
             field_path = (
-                f"calculations['{calc.key}'].scf_stability.source_calculation_key"
+                f"calculations[{calc.key!r}].scf_stability.source_calculation_key"
             )
             if src_key == calc.key:
                 raise ValueError(
@@ -2419,7 +2419,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                         f"source_calculation_key references undefined "
                         f"calculation_key '{ac.source_calculation_key}'.",
                         field=(
-                            f"species['{sp.key}'].applied_energy_corrections"
+                            f"species[{sp.key!r}].applied_energy_corrections"
                             f"[{i}].source_calculation_key"
                         ),
                         key=ac.source_calculation_key,

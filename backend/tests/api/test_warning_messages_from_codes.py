@@ -71,6 +71,9 @@ def test_no_producer_builds_or_edits_an_upload_warning_by_hand():
         ("def f(w):\n    return w.model_copy(update={**extra, 'field': 'f'})", "model_copy"),
         ("def f(w: UploadWarning, m):\n    return w.model_copy(update=m)", "model_copy"),
         ("def f(w: UploadWarning):\n    w.message = 'x'", ".message"),
+        ("def f(w: UploadWarning):\n    return w.__class__(field='f', code='c', message='m')", "__class__"),
+        ("def f(w: UploadWarning):\n    return type(w)(field='f', code='c', message='m')", "type(x)"),
+        ("import tckdb_schemas.upload_warning as uw\ndef f():\n    return getattr(uw, 'UploadWarning')(field='f', code='c', message='m')", "directly"),
         ("def f(w: UploadWarning):\n    setattr(w, 'message', 'x')", "after the fact"),
         ("def f(w: UploadWarning):\n    object.__setattr__(w, 'message', 'x')", "after the fact"),
     ],
@@ -106,12 +109,12 @@ def test_from_code_is_the_sentence_for_the_code_and_the_context():
 # ---------------------------------------------------------------------------
 
 
-def _sentinelise(payload: dict, prefix: str) -> tuple[dict, set[str]]:
+def _sentinelise(payload: dict, prefix: str, template: str = "ZZQ{prefix}{n}-{old}") -> tuple[dict, set[str]]:
     """Every local key and label in ``payload`` renamed to a string that cannot occur by chance."""
     names: dict[str, str] = {}
 
     def fresh(old: str) -> str:
-        return names.setdefault(old, f"ZZQ{prefix}{len(names)}-{old.replace('-', '')}")
+        return names.setdefault(old, template.format(prefix=prefix, n=len(names), old=old.replace("-", "")))
 
     def walk(node):
         if isinstance(node, dict):
@@ -463,7 +466,11 @@ def test_the_log_implied_electronic_energy_is_said_to_be_log_implied():
         },
     )
     assert "e0_hartree -1.000000 Ha against the log's -1.500000 Ha" in text
-    assert "electronic_energy_hartree -2.000000 Ha against the log-implied -2.500000 Ha (the log's 0 K energy minus its ZPE)" in text
+    assert (
+        "electronic_energy_hartree -2.000000 Ha against the log-implied -2.500000 Ha (the log's 0 K energy minus its "
+        "ZPE; delta +5.00e-01)"
+    ) in text
+    assert "e0_hartree -1.000000 Ha against the log's -1.500000 Ha (delta +5.00e-01)" in text
 
 
 def test_a_hess_file_that_held_no_matrix_does_not_say_a_hessian_was_found():
@@ -687,7 +694,7 @@ def test_a_key_with_an_embedded_quote_reaches_no_public_field():
 # ---------------------------------------------------------------------------
 
 
-def test_from_code_drops_entries_that_hold_nothing_and_refuses_a_wrong_shape():
+def test_from_code_drops_entries_that_hold_nothing():
     warning = UploadWarning.from_code(
         field="f",
         code="composite_total_unverifiable",
@@ -700,9 +707,31 @@ def test_from_code_drops_entries_that_hold_nothing_and_refuses_a_wrong_shape():
         context={"reason": "no_total_deposited", "depositor_supplied": {"term_key": None}},
     )
     assert none_left.context == {"reason": "no_total_deposited"}
-    for bad in ({"n": 3}, {"n": [1, 2]}, {"n": {"a": "b"}}, {"n": [["a"]]}):
-        with pytest.raises(TypeError):
-            UploadWarning.from_code(field="f", code="charge_mismatch", context={"depositor_supplied": bad})
+
+
+_BAD_SHAPES = ({"n": 3}, {"n": [1, 2]}, {"n": {"a": "b"}}, {"n": [["a"]]})
+
+
+@pytest.mark.parametrize("bad", _BAD_SHAPES)
+def test_production_logs_and_drops_a_malformed_entry_and_never_fails_the_upload(bad, caplog):
+    from tests import warning_context_observer
+
+    with caplog.at_level("ERROR"):
+        warning = warning_context_observer.production_from_code(
+            field="f", code="charge_mismatch", context={"declared": 0, "depositor_supplied": {**bad, "ok": "kept"}}
+        )
+    assert warning.context == {"declared": 0, "depositor_supplied": {"ok": "kept"}}
+    assert warning.message == render_message("charge_mismatch", warning.context)
+    assert "wrong shape" in caplog.text
+
+
+@pytest.mark.parametrize("bad", _BAD_SHAPES)
+def test_the_test_observer_fails_loudly_on_a_malformed_entry(bad):
+    from tests import warning_context_observer
+
+    with pytest.raises(AssertionError, match="depositor_supplied"):
+        UploadWarning.from_code(field="f", code="charge_mismatch", context={"depositor_supplied": bad})
+    assert warning_context_observer.drain(), "the violation was recorded for the fixture"
 
 
 def test_the_context_rule_catches_a_label_moved_out_of_the_marked_key():
@@ -716,6 +745,310 @@ def test_the_context_rule_catches_a_label_moved_out_of_the_marked_key():
     assert context_problems("no_such_code", None)
 
 
+#: Values an allowlisted key must refuse although the key is allowed: a label under a generic name.
+_REFUSED = [
+    ("scf_stability_source_level_mismatch", {"subject": "ZZQ-owner-key", "reason": "ZZQ-source-key"}),
+    ("transition_state_energy_ordering_mixed_levels", {"energy_kind": "ZZQ-ts-label", "n_levels": 2}),
+    ("network_energy_zpe_source_absent", {"subject": "ts_elim", "correction_convention": "ZZQ"}),
+    ("software_release_identity_corrected_from_artifact", {"observed_software": "ZZQ-sw"}),
+    ("software_release_version_filled_from_artifact", {"version": "ZZQ-version"}),
+    ("electronic_state_contradicts_method", {"deduced": "ch3-opt", "evidence": "method.cbs", "confidence": "x"}),
+    ("composite_energy_log_mismatch", {"log_method": "ZZQ Label", "disagreements": []}),
+    ("composite_energy_log_mismatch", {"log_method": "g4", "disagreements": [{"quantity": "ZZQ-q"}]}),
+    ("hessian_not_stored_failed", {"reason": "ZZQ-file.log"}),
+    ("composite_total_unverifiable", {"reason": "ZZQ-term"}),
+    ("species_entry_stereo_unresolved", {"resolution": "ZZQ", "descriptor": "ZZQ-label"}),
+    ("dependency_edge_not_inferred", {"dependency_role": "ZZQ", "primary_type": "opt", "expected_parent_type": "opt"}),
+    ("reaction_family_not_applied", {"reaction_family": "ZZQ family"}),
+    ("transition_state_extra_imaginary_modes_below_tau", {"tau_basis": "ZZQ", "extra_imaginary_modes": [{"disposition": "ZZQ"}]}),
+    ("level_of_theory_method_names_correction_table", {"method_stem": "ZZQ-method"}),
+    ("reaction_atom_map_absent", {"deposit_path": "ZZQ"}),
+    ("missing_energy_correction_scheme_software", {"scheme_kind": "ZZQ"}),
+]
+
+
+@pytest.mark.parametrize(("code", "context"), _REFUSED, ids=[f"{c}-{i}" for i, (c, _x) in enumerate(_REFUSED)])
+def test_an_allowlisted_key_holds_only_its_closed_values(code, context):
+    from tckdb_schemas.deposit_warning_messages import context_problems
+
+    assert context_problems(code, context), (code, context)
+
+
+def test_every_value_a_producer_states_passes_its_key_s_closed_set():
+    from tckdb_schemas.deposit_warning_messages import context_problems
+
+    fine = [
+        ("scf_stability_source_level_mismatch", {"depositor_supplied": {"calculation_key": "k"}}),
+        ("transition_state_energy_ordering_mixed_levels", {"energy_kind": "e0", "n_levels": 2}),
+        ("network_energy_zpe_source_absent", {"subject": "channel_barrier", "correction_convention": "electronic_plus_zpe"}),
+        ("software_release_identity_corrected_from_artifact", {"observed_software": "orca"}),
+        ("software_release_version_filled_from_artifact", {"version": "6.0.0", "release_ref": "rel_aaaaaaaaaaaaaaaaaaaaaaaaaa"}),
+        ("electronic_state_contradicts_method", {"deduced": "excited", "evidence": "excited_state_method", "evidence_method": "cis(d)", "confidence": "definitive"}),
+        ("term_symbol_mismatch", {"deduced": "2A1", "evidence": "multiplicity", "confidence": "derived"}),
+        ("n_imag_contradicts_minimum", {"deduced": "saddle_order_2", "evidence": "frequency_analysis", "confidence": "definitive"}),
+        ("composite_energy_log_mismatch", {"log_method": "cbs-qb3", "disagreements": [{"quantity": "e0_hartree", "deposited_hartree": 1.0, "log_hartree": 2.0}]}),
+        ("hessian_not_stored_geometry_mismatch", {"reason": "species_contradiction", "refusal_code": "species_geometry_composition_mismatch"}),
+        ("species_entry_stereo_unresolved", {"resolution": "partial", "descriptor": "E,?", "unknown_elements": 1}),
+        ("reaction_family_not_applied", {"reaction_family": "H_Abstraction"}),
+        ("minimum_imaginary_modes_below_tau", {"tau_cm1": 30.0, "tau_basis": "assumed_analytic_default", "tau_assumption_rule": "program_default", "tau_software": "gaussian", "tau_method_family": "dft", "n_imag": 1, "imaginary_modes_cm1": [20.0]}),
+        ("transition_state_extra_imaginary_modes_below_tau", {"tau_cm1": 30.0, "tau_basis": "analytic_default", "tau_grid": "not_recorded", "tau_opt": "tight", "extra_imaginary_modes": [{"mode_index": 2, "magnitude_cm1": 20.0, "disposition": "torsion"}]}),
+        ("level_of_theory_method_names_correction_table", {"method_stem": "cbs-qb3", "depositor_supplied": {"method": "x"}}),
+        ("literature_title_mismatch", {"fetched_title": "Any Title Crossref Returned", "depositor_supplied": {"supplied_title": "x"}}),
+    ]
+    for code, context in fine:
+        assert context_problems(code, context) == [], (code, context_problems(code, context))
+
+
 def test_software_is_a_token_in_a_sentence():
     text = render_message("charge_mismatch", {"declared": 0, "logged": -1, "software": "Gaussian 16 ZZQ label"})
     assert "ZZQ" not in text
+
+
+# ---------------------------------------------------------------------------
+# details that are not depositor text, kept
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("rule", "software", "family", "needles"),
+    [
+        ("program_default", "gaussian", "dft", ["Gaussian's documented default second-derivative method for DFT calculations (analytic second derivatives) is assumed (assumed_analytic_default)"]),
+        ("orca_meta_gga_analytic_from_5", "orca", "dft", ["ORCA's documented default", "ORCA 5 and later has analytic Hessians for meta-GGA functionals"]),
+        ("orca_numerical_documented_vv10", "orca", "dft", ["ORCA's manuals document numerical frequencies from analytic gradients for VV10 (non-local) functionals"]),
+        ("orca_numerical_documented_double_hybrid", "orca", "dft", ["for double-hybrid functionals"]),
+        ("orca_pre5_meta_gga_no_analytic", "orca", "dft", ["ORCA releases before version 5 have no analytic Hessian for meta-GGA functionals"]),
+    ],
+)
+def test_an_assumed_tau_says_which_program_family_and_rule_assumed_it(rule, software, family, needles):
+    basis = "assumed_analytic_default" if rule in ("program_default", "orca_meta_gga_analytic_from_5") else "assumed_finite_difference_gradient"
+    text = render_message(
+        "transition_state_imaginary_frequency_too_small",
+        {
+            "tau_cm1": 30.0,
+            "tau_basis": basis,
+            "tau_assumption_rule": rule,
+            "tau_software": software,
+            "tau_method_family": family,
+            "reaction_coordinate_cm1": 20.0,
+            "ts_minimum_cm1": 50.0,
+        },
+    )
+    for needle in needles:
+        assert needle in text, (rule, needle, text)
+    if rule.startswith("orca_numerical") or rule.startswith("orca_pre5"):
+        assert "documented default" not in text, "numerical is the documented route there, not a default"
+
+
+def test_the_assumed_rows_and_rules_come_from_the_assumption_table():
+    from tckdb_schemas.deposit_warning_messages import ASSUMED_FAMILY, ASSUMED_SOFTWARE, ASSUMPTION_RULES
+    from tckdb_schemas.hessian_method_assumption import _DISPLAY_NAME, _FAMILY_LABEL, resolve_tau_with_assumption
+
+    assert ASSUMED_SOFTWARE == _DISPLAY_NAME and ASSUMED_FAMILY == _FAMILY_LABEL
+    from tckdb_schemas.hessian_method_assumption import infer_hessian_method  # noqa: F401  (name check)
+
+    seen = set()
+    for software, version, method in [
+        ("Gaussian", "16", "B3LYP"),
+        ("ORCA", "5.0.4", "tpss"),
+        ("ORCA", "4.2", "tpss"),
+        ("ORCA", "6.0.0", "wb97x-v"),
+        ("ORCA", "6.0.0", "b2plyp"),
+    ]:
+        resolution = resolve_tau_with_assumption([], software, method, version)
+        assert resolution.assumption_rule in ASSUMPTION_RULES, (software, method, resolution)
+        seen.add(resolution.assumption_rule)
+    assert seen == set(ASSUMPTION_RULES)
+
+
+def test_analytic_tau_states_the_grid_and_optimisation_it_rests_on():
+    tight = render_message(
+        "transition_state_imaginary_frequency_too_small",
+        {"tau_cm1": 15.0, "tau_basis": "analytic_tight", "tau_grid": "ultrafine", "tau_opt": "very_tight",
+         "reaction_coordinate_cm1": 5.0, "ts_minimum_cm1": 50.0},
+    )
+    assert "analytic second derivatives on integration grid ultrafine with optimisation convergence very_tight" in tight
+    loose = render_message(
+        "transition_state_imaginary_frequency_too_small",
+        {"tau_cm1": 30.0, "tau_basis": "analytic_default", "tau_grid": "not_tight", "tau_opt": "not_recorded",
+         "reaction_coordinate_cm1": 5.0, "ts_minimum_cm1": 50.0},
+    )
+    assert "(grid.quality not tight; opt.convergence not recorded)" in loose
+
+
+def test_the_grid_values_in_a_sentence_are_the_ones_tau_calls_tight():
+    from tckdb_schemas.deposit_warning_messages import _TIGHT_GRID, _TIGHT_OPT
+    from tckdb_schemas.stationary_point import _TIGHT_GRID_VALUES, _TIGHT_OPT_VALUES
+
+    assert _TIGHT_GRID == _TIGHT_GRID_VALUES and _TIGHT_OPT == _TIGHT_OPT_VALUES
+
+
+def test_a_late_deck_warning_says_why_the_stored_tolerance_is_what_it_is():
+    text = render_message(
+        "hessian_method_disagrees_with_stored_tau_basis",
+        {"stored_basis": "finite_difference_gradient", "stored_method": "finite_difference_gradient", "deck_method": "analytic"},
+    )
+    assert "(finite_difference_gradient: the Hessian was built by finite differences of analytic gradients)" in text
+    assumed = render_message(
+        "hessian_method_disagrees_with_stored_tau_basis",
+        {"stored_basis": "assumed_analytic_default", "stored_method": "analytic", "deck_method": "finite_difference_gradient"},
+    )
+    assert "(assumed_analytic_default)" in assumed
+
+
+def test_a_deduction_names_the_excited_state_method_but_never_a_point_group():
+    named = render_message(
+        "electronic_state_contradicts_method",
+        {"deduced": "excited", "evidence": "excited_state_method", "evidence_method": "eom-ccsd", "confidence": "definitive"},
+    )
+    assert "excited-state method of the calculation (eom-ccsd)" in named
+    from tckdb_schemas.deposit_warning_messages import EXCITED_STATE_METHODS
+
+    from app.services.ess_species_deduction import _EXCITED_STATE_METHODS
+
+    assert _EXCITED_STATE_METHODS == EXCITED_STATE_METHODS
+    from app.services.upload_reconciliation import _evidence_method
+
+    assert _evidence_method("method.cis") == {"evidence_method": "cis"}
+    assert _evidence_method("method.default") == {}
+    assert _evidence_method("multiplicity+point_group(C2v)") == {}
+
+
+def test_a_family_that_was_not_applied_is_named_only_when_it_is_canonical():
+    text = render_message("reaction_family_not_applied", {"reaction_family": "H_Abstraction"})
+    assert text.startswith("The reaction family H_Abstraction named in the deposit was not applied")
+    assert text.endswith("is not modified by a kinetics upload.")
+    assert "H_Abstraction" not in render_message("reaction_family_not_applied", {"depositor_supplied": {"reaction_family": "H_Abstraction"}})
+    assert render_message("reaction_family_not_applied", {"reaction_family": "My own family"}) == RENDERED["reaction_family_not_applied"]
+
+
+@pytest.mark.parametrize("code", ["composite_role_on_non_composite_calculation", "composite_frequency_level_differs_from_recipe"])
+def test_the_composite_link_warnings_say_which_record_they_are_about(code):
+    context = {"record_kind": "statmech", "calculation_type": "sp"}
+    assert "For this statmech record" in render_message(code, context)
+    assert "For this thermo record" in render_message(code, {**context, "record_kind": "thermo"})
+
+
+# ---------------------------------------------------------------------------
+# a stored message is not trusted; any made instance is held to the rule
+# ---------------------------------------------------------------------------
+
+
+def test_from_stored_rebuilds_the_sentence_and_ignores_a_stale_one():
+    stale = {
+        "field": "calculations['ZZQ-k'].charge",
+        "code": "charge_mismatch",
+        "message": "Declared charge for ZZQ-k disagrees (an older wording that quoted a key)",
+        "context": {"declared": 0, "logged": -1, "software": "gaussian"},
+    }
+    warning = UploadWarning.from_stored(stale)
+    assert warning.message == render_message("charge_mismatch", stale["context"])
+    assert "ZZQ" not in warning.message
+    assert warning.field == stale["field"] and warning.context == stale["context"]
+
+
+def test_the_job_result_rebuilds_a_stale_recorded_warning(client):
+    import app.workers.upload_worker as upload_worker
+
+    stale = {"field": "f", "code": "charge_mismatch", "message": "ZZQ stale", "context": {"declared": 0, "logged": 1}}
+    rebuilt = [UploadWarning.from_stored(w) for w in [stale]]
+    assert rebuilt[0].message == render_message("charge_mismatch", stale["context"])
+    assert "from_stored" in open(upload_worker.__file__).read()
+
+
+def test_every_instance_made_by_a_producer_is_checked_not_only_from_code():
+    from tests import warning_context_observer as observer
+
+    # A test-built instance (a stored row, a stale message) is exempt: the frame that made it is a test.
+    UploadWarning(field="f", code="charge_mismatch", message="anything a stored row said")
+    assert observer.drain() == []
+    # A producer-made one is not: from_stored with the stored message kept would be caught here.
+    from tckdb_schemas import upload_warning
+
+    code = compile(
+        "from tckdb_schemas.upload_warning import UploadWarning\n"
+        "w = UploadWarning(field='f', code='charge_mismatch', message='ZZQ built by hand')",
+        "/x/backend/app/services/fake_producer.py",
+        "exec",
+    )
+    with pytest.raises(Exception, match="render_message"):
+        exec(code, {})
+    assert observer.drain()
+    assert upload_warning._INSTANCE_CHECK is not None
+
+
+# ---------------------------------------------------------------------------
+# the public path: nothing raw-quoted, nothing that survives the quote
+# ---------------------------------------------------------------------------
+
+
+def test_no_path_a_warning_can_carry_is_built_with_a_raw_quoted_key():
+    import ast as _ast
+
+    def raw(node):
+        values = node.values
+        return any(
+            isinstance(v, _ast.FormattedValue)
+            and v.conversion != ord("r")
+            and i > 0
+            and isinstance(values[i - 1], _ast.Constant)
+            and isinstance(values[i - 1].value, str)
+            and values[i - 1].value.endswith(("[\'", '["'))
+            for i, v in enumerate(values)
+        )
+
+    found = []
+    for path in _sources():
+        tree = _ast.parse(path.read_text())
+        parents = {c: p for p in _ast.walk(tree) for c in _ast.iter_child_nodes(p)}
+        for node in _ast.walk(tree):
+            if isinstance(node, _ast.JoinedStr) and raw(node):
+                anc, in_raise = node, False
+                while anc in parents:
+                    anc = parents[anc]
+                    if isinstance(anc, _ast.Raise):
+                        in_raise = True
+                        break
+                if not in_raise:
+                    found.append(f"{path}:{node.lineno}")
+    assert found == [], "quote a key with !r so a key containing a quote cannot end the path early:\n" + "\n".join(found)
+
+
+def test_the_guard_for_raw_quoted_paths_flags_one():
+    import ast as _ast
+
+    source = "def f(key):\n    return f\"calculations['{key}'].x\""
+    node = next(n for n in _ast.walk(_ast.parse(source)) if isinstance(n, _ast.JoinedStr))
+    assert any(
+        isinstance(v, _ast.FormattedValue) and v.conversion != ord("r") and node.values[i - 1].value.endswith("['")
+        for i, v in enumerate(node.values)
+        if i > 0 and isinstance(node.values[i - 1], _ast.Constant)
+    )
+
+
+def test_a_key_that_tries_to_end_the_path_is_redacted_on_a_real_producer_path(client):
+    from tckdb_schemas.deposit_warning_messages import normalise_field
+
+    payload, _names = _sentinelise(_computed_reaction(), "s", template="x']SECRET['y{n}")
+    response = client.post("/api/v1/uploads/computed-reaction", json=payload)
+    assert response.status_code == 201, response.text[:400]
+    warnings = response.json()["warnings"]
+    assert any("SECRET" in w["field"] for w in warnings), "no warning path carried the key"
+    for w in warnings:
+        assert "SECRET" not in normalise_field(w["field"]), w["field"]
+
+
+def test_the_tau_context_carries_the_program_family_and_rule_of_an_assumption():
+    from tckdb_schemas.hessian_method_assumption import resolve_tau_with_assumption
+    from tckdb_schemas.stationary_point import _tau_context, resolve_tau
+
+    assumed = _tau_context(resolve_tau_with_assumption([], "Gaussian", "B3LYP", "16"))
+    assert assumed["tau_basis"] == "assumed_analytic_default"
+    assert (assumed["tau_software"], assumed["tau_method_family"], assumed["tau_assumption_rule"]) == (
+        "gaussian",
+        "dft",
+        "program_default",
+    )
+    tight = _tau_context(resolve_tau("analytic", "ultrafine", "very_tight"))
+    assert (tight["tau_basis"], tight["tau_grid"], tight["tau_opt"]) == ("analytic_tight", "ultrafine", "very_tight")
+    loose = _tau_context(resolve_tau("analytic", "coarse-ZZQ", None))
+    assert (loose["tau_grid"], loose["tau_opt"]) == ("not_tight", "not_recorded")

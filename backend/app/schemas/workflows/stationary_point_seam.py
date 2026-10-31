@@ -46,7 +46,7 @@ def inline_calculation_findings(
         freq_result = item.calculation.freq_result
         if freq_result is None:
             continue
-        location = f"calculations['{item.key}'].freq_result"
+        location = f"calculations[{item.key!r}].freq_result"
         findings.extend(
             item.calculation.species_entry_frequency_findings(
                 kind, location=location

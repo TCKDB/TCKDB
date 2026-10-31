@@ -545,8 +545,8 @@ def computed_species_linearity_warnings(request: object) -> list[UploadWarning]:
                 calculation_linearity_warnings(
                     calc,
                     location=(
-                        f"conformers['{conformer.key}'].calculations"
-                        f"['{calc.key}'].freq_result.modes"
+                        f"conformers[{conformer.key!r}].calculations"
+                        f"[{calc.key!r}].freq_result.modes"
                     ),
                     fallback_xyz_text=conformer.geometry.xyz_text,
                 )
@@ -575,8 +575,8 @@ def computed_reaction_linearity_warnings(request: object) -> list[UploadWarning]
                 calculation_in_linearity_warnings(
                     conformer.calculation,
                     location=(
-                        f"species['{species.key}'].conformers"
-                        f"['{conformer.key}'].calculation"
+                        f"species[{species.key!r}].conformers"
+                        f"[{conformer.key!r}].calculation"
                         f".freq_frequencies_cm1"
                     ),
                     xyz_text=conformer.geometry.xyz_text,
@@ -587,8 +587,8 @@ def computed_reaction_linearity_warnings(request: object) -> list[UploadWarning]
                 calculation_in_linearity_warnings(
                     calc,
                     location=(
-                        f"species['{species.key}'].calculations"
-                        f"['{calc.key}'].freq_frequencies_cm1"
+                        f"species[{species.key!r}].calculations"
+                        f"[{calc.key!r}].freq_frequencies_cm1"
                     ),
                     xyz_text=xyz_by_geometry_key.get(calc.geometry_key or ""),
                 )
@@ -601,7 +601,7 @@ def computed_reaction_linearity_warnings(request: object) -> list[UploadWarning]
                 calculation_in_linearity_warnings(
                     calc,
                     location=(
-                        f"transition_state.calculations['{calc.key}']"
+                        f"transition_state.calculations[{calc.key!r}]"
                         f".freq_frequencies_cm1"
                     ),
                     xyz_text=transition_state.geometry.xyz_text,
@@ -651,7 +651,7 @@ def inline_calculation_linearity_warnings(
         warnings.extend(
             calculation_linearity_warnings(
                 item.calculation,
-                location=f"calculations['{item.key}'].freq_result.modes",
+                location=f"calculations[{item.key!r}].freq_result.modes",
             )
         )
     return warnings
@@ -671,9 +671,9 @@ def network_pdep_linearity_warnings(request: object) -> list[UploadWarning]:
                 calculation_in_linearity_warnings(
                     conformer.calculation,
                     location=(
-                        f"species['{species.key}'].conformers"
-                        f"['{conformer.key}'].calculation"
-                        f"['{conformer.calculation.key}'].freq_frequencies_cm1"
+                        f"species[{species.key!r}].conformers"
+                        f"[{conformer.key!r}].calculation"
+                        f"[{conformer.calculation.key!r}].freq_frequencies_cm1"
                     ),
                     xyz_text=conformer.geometry.xyz_text,
                 )
@@ -683,8 +683,8 @@ def network_pdep_linearity_warnings(request: object) -> list[UploadWarning]:
                 calculation_in_linearity_warnings(
                     calc,
                     location=(
-                        f"species['{species.key}'].calculations"
-                        f"['{calc.key}'].freq_frequencies_cm1"
+                        f"species[{species.key!r}].calculations"
+                        f"[{calc.key!r}].freq_frequencies_cm1"
                     ),
                     xyz_text=xyz_by_geometry_key.get(calc.geometry_key or ""),
                 )
@@ -695,8 +695,8 @@ def network_pdep_linearity_warnings(request: object) -> list[UploadWarning]:
                 calculation_in_linearity_warnings(
                     calc,
                     location=(
-                        f"transition_states['{transition_state.key}']"
-                        f".calculations['{calc.key}'].freq_frequencies_cm1"
+                        f"transition_states[{transition_state.key!r}]"
+                        f".calculations[{calc.key!r}].freq_frequencies_cm1"
                     ),
                     xyz_text=transition_state.geometry.xyz_text,
                 )

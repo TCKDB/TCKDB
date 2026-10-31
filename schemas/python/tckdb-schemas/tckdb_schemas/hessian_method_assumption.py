@@ -552,6 +552,7 @@ def infer_hessian_method(
         return None
 
     version_rule = ""
+    rule = "program_default"
     if (
         software_token == "gaussian"
         and family == MethodFamily.DFT
@@ -564,17 +565,18 @@ def infer_hessian_method(
     if software_token == "orca" and family == MethodFamily.DFT:
         functional = _orca_functional_class(_normalize(method) or "")
         if functional in ("vv10", "double_hybrid"):
-            return _orca_numerical_documented(functional)
+            return _orca_numerical_documented(functional, family)
         if functional == "meta_gga":
             major = _orca_major_version(software_version)
             if major is None:
                 return None
             if major < _ORCA_ANALYTIC_META_GGA_FROM:
-                return _orca_pre5_meta_gga()
+                return _orca_pre5_meta_gga(family)
             version_rule = (
                 " ORCA 5 and later has analytic Hessians for meta-GGA "
                 "functionals."
             )
+            rule = "orca_meta_gga_analytic_from_5"
 
     for families, basis in rows:
         if family in families:
@@ -596,11 +598,14 @@ def infer_hessian_method(
                     f"basis.{version_rule} A later upload that states the "
                     f"Hessian method explicitly supersedes this assumption."
                 ),
+                assumed_software=software_token,
+                assumed_family=family,
+                assumption_rule=rule,
             )
     return None
 
 
-def _orca_numerical_documented(functional: str) -> TauResolution:
+def _orca_numerical_documented(functional: str, family: str) -> TauResolution:
     label = "VV10 (non-local)" if functional == "vv10" else "double-hybrid"
     basis = TauBasis.assumed_finite_difference_gradient
     tau_cm1 = _ASSUMED_TAU_BY_BASIS[basis]
@@ -615,10 +620,13 @@ def _orca_numerical_documented(functional: str) -> TauResolution:
             f"are assumed ({basis.value}). A later upload that states the "
             f"Hessian method explicitly supersedes this assumption."
         ),
+        assumed_software="orca",
+        assumed_family=family,
+        assumption_rule=f"orca_numerical_documented_{functional}",
     )
 
 
-def _orca_pre5_meta_gga() -> TauResolution:
+def _orca_pre5_meta_gga(family: str) -> TauResolution:
     basis = TauBasis.assumed_finite_difference_gradient
     tau_cm1 = _ASSUMED_TAU_BY_BASIS[basis]
     return TauResolution(
@@ -633,6 +641,9 @@ def _orca_pre5_meta_gga() -> TauResolution:
             f"states the Hessian method explicitly supersedes this "
             f"assumption."
         ),
+        assumed_software="orca",
+        assumed_family=family,
+        assumption_rule="orca_pre5_meta_gga_no_analytic",
     )
 
 

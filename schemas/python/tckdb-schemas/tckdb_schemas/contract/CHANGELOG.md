@@ -12,6 +12,8 @@ A warning's `message` is TCKDB's sentence for its `code`, never text the deposit
 - Every remedy and consequence the old messages carried that needs no depositor text is kept in the sentence; tau's reason is rendered from the `tau_basis` token. `context.depositor_supplied` holds strings, lists of strings and lists of records of strings only; an entry that holds nothing is dropped.
 - `UploadWarning.from_stored(data)` rebuilds a recorded warning's message from its code and context. `deposit_warning_messages.context_problems` states what a context may hold (every string outside `depositor_supplied` sits under a listed key).
 - `normalise_field` replaces every bracket that is not a plain integer position, quoted or not, robust to embedded quotes.
+- `context_problems(code, context)` holds every string outside `depositor_supplied` to a closed set per key; a context's `depositor_supplied` of a wrong shape is logged and dropped by `from_code`.
+- `TauResolution` gains `assumed_software`, `assumed_family` and `assumption_rule` (the assumption table's own tokens); tau and its basis are unchanged.
 - `StationaryPointFinding.context` is added; the `tau_basis` token and mode counts ride in it. `extra_imaginary_mode_count` is the count in all three transition-state tau codes.
 
 ## 0.144.0 - 2026-10-31

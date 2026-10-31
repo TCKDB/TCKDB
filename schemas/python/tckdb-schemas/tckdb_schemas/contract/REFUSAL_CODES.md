@@ -1548,7 +1548,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py`.
 - The body's `context` names the things involved.
-- Message: "calculations['{calc.key}'].conformer_key='{calc.conformer_key}': a transition state has no conformers, so a calculation of it cannot state a conformer_key. Remove it."
+- Message: "calculations[{calc.key}].conformer_key='{calc.conformer_key}': a transition state has no conformers, so a calculation of it cannot state a conformer_key. Remove it."
 - Note: A calculation of a transition state states a conformer_key.
 
 <a id="c-transition-state-calculation-species-geometry"></a>
@@ -1557,7 +1557,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py`.
 - The body's `context` names the things involved.
-- Message: "calculations['{calc.key}'].geometry_key='{calc.geometry_key}' names a species conformer's geometry. A transition-state calculation ran on the saddle point, not on a species minimum."
+- Message: "calculations[{calc.key}].geometry_key='{calc.geometry_key}' names a species conformer's geometry. A transition-state calculation ran on the saddle point, not on a species minimum."
 - Note: A calculation of a transition state has a geometry_key naming a species conformer's geometry.
 
 <a id="c-transition-state-charge-mismatch"></a>

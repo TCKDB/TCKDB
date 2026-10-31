@@ -237,6 +237,11 @@ class TauResolution:
         recorded, or ``None`` when it was not recorded.
     :param grid_quality: ``grid.quality`` as recorded, or ``None``.
     :param opt_convergence: ``opt.convergence`` as recorded, or ``None``.
+    :param assumed_software: For an ``assumed_*`` basis, the table's program (``gaussian`` or ``orca``).
+    :param assumed_family: For an ``assumed_*`` basis, the method family the recogniser assigned.
+    :param assumption_rule: For an ``assumed_*`` basis, which rule chose it: ``program_default``,
+        ``orca_meta_gga_analytic_from_5``, ``orca_numerical_documented_vv10``,
+        ``orca_numerical_documented_double_hybrid`` or ``orca_pre5_meta_gga_no_analytic``.
     """
 
     tau_cm1: float
@@ -245,11 +250,33 @@ class TauResolution:
     hessian_method: HessianMethod | None = None
     grid_quality: str | None = None
     opt_convergence: str | None = None
+    assumed_software: str | None = None
+    assumed_family: str | None = None
+    assumption_rule: str | None = None
+
+
+def _grid_or_opt_token(value: str | None, tight: frozenset[str]) -> str:
+    """A recorded ``grid.quality`` / ``opt.convergence`` as a closed token: the tight value itself, or not tight."""
+    if value is None:
+        return "not_recorded"
+    return value if value in tight else "not_tight"
 
 
 def _tau_context(tau: TauResolution) -> dict[str, Any]:
-    """The threshold a finding was decided against, as plain values for a warning's context."""
-    return {"tau_cm1": tau.tau_cm1, "tau_basis": tau.basis.value}
+    """The threshold a finding was decided against, as plain values for a warning's context.
+
+    Every string is a closed token: the basis, the table's program and method family for an assumption, and the grid
+    and optimisation values only when they are among the tight ones this module knows.
+    """
+    context: dict[str, Any] = {"tau_cm1": tau.tau_cm1, "tau_basis": tau.basis.value}
+    if tau.assumption_rule is not None:
+        context["tau_assumption_rule"] = tau.assumption_rule
+        context["tau_software"] = tau.assumed_software
+        context["tau_method_family"] = tau.assumed_family
+    if tau.basis in (TauBasis.analytic_tight, TauBasis.analytic_default):
+        context["tau_grid"] = _grid_or_opt_token(tau.grid_quality, _TIGHT_GRID_VALUES)
+        context["tau_opt"] = _grid_or_opt_token(tau.opt_convergence, _TIGHT_OPT_VALUES)
+    return context
 
 
 def _normalise(value: str | None) -> str | None:
