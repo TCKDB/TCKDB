@@ -1,6 +1,6 @@
 import re
 from datetime import date
-from typing import Self
+from typing import Any, Self
 
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
@@ -219,7 +219,7 @@ class SoftwareReleaseRef(SchemaBase):
     # invisible to ``extra="forbid"`` since it is a private attribute
     # rather than a field. Read back through ``version_warning()``.
     _version_warning_code: str | None = PrivateAttr(default=None)
-    _version_warning_message: str | None = PrivateAttr(default=None)
+    _version_warning_context: dict[str, Any] | None = PrivateAttr(default=None)
 
     @field_validator("name")
     @classmethod
@@ -288,16 +288,13 @@ class SoftwareReleaseRef(SchemaBase):
             != self.name.lower()
         ):
             self._version_warning_code = W_SOFTWARE_RELEASE_NAME_LOOKS_WRONG
-            self._version_warning_message = (
-                f"software_release.name={self.name!r} does not match the "
-                f"leading token ({leading_token!r}) of "
-                f"software_release.version={self.version!r}. This looks "
-                "like a stale or default name that rode along with a "
-                "version observed from a different program -- the version "
-                "is the more likely observed fact here. Left both fields "
-                "exactly as declared; verify which of name/version is "
-                "correct before trusting this record's software identity."
-            )
+            self._version_warning_context = {
+                "depositor_supplied": {
+                    "name": self.name,
+                    "version": self.version,
+                    "leading_token": leading_token,
+                }
+            }
             return self
 
         candidate = remainder.strip()
@@ -310,33 +307,34 @@ class SoftwareReleaseRef(SchemaBase):
             split_revision = match.group("revision").strip()
             if self.revision is not None:
                 self._version_warning_code = W_SOFTWARE_RELEASE_VERSION_IS_COMPOSITE
-                self._version_warning_message = (
-                    f"software_release.version={self.version!r} looks like "
-                    "a parsed software banner embedding its own revision "
-                    f"label ({split_revision!r}), but "
-                    f"software_release.revision={self.revision!r} was "
-                    "already supplied. Left both fields exactly as "
-                    "declared rather than choosing between them."
-                )
+                self._version_warning_context = {
+                    "action": "revision_already_supplied",
+                    "depositor_supplied": {
+                        "version": self.version,
+                        "revision": self.revision,
+                        "embedded_revision": split_revision,
+                    },
+                }
                 return self
             self.version = split_version
             self.revision = split_revision
             self._version_warning_code = W_SOFTWARE_RELEASE_VERSION_IS_COMPOSITE
-            self._version_warning_message = (
-                f"software_release.version was declared as {original!r}, a "
-                f"parsed software banner. Normalised to "
-                f"version={split_version!r}, revision={split_revision!r} "
-                f"(the leading {self.name!r} package name was stripped and "
-                "the trailing revision label was split out)."
-            )
+            self._version_warning_context = {
+                "action": "split_banner_with_revision",
+                "depositor_supplied": {
+                    "declared_version": original,
+                    "name": self.name,
+                    "version": split_version,
+                    "revision": split_revision,
+                },
+            }
         else:
             self.version = candidate
             self._version_warning_code = W_SOFTWARE_RELEASE_VERSION_IS_COMPOSITE
-            self._version_warning_message = (
-                f"software_release.version was declared as {original!r}, "
-                f"embedding the software's own name ({self.name!r}). "
-                f"Normalised to version={candidate!r}."
-            )
+            self._version_warning_context = {
+                "action": "split_banner_name_only",
+                "depositor_supplied": {"declared_version": original, "name": self.name, "version": candidate},
+            }
 
         # ``notes`` is a free-text field on a *deduped* provenance row
         # (``software_release`` dedupes on (software_id, version,
@@ -372,10 +370,10 @@ class SoftwareReleaseRef(SchemaBase):
         """
         if self._version_warning_code is None:
             return None
-        return UploadWarning(
+        return UploadWarning.from_code(
             field=f"{field_prefix}version",
             code=self._version_warning_code,
-            message=self._version_warning_message or "",
+            context=self._version_warning_context,
         )
 
 
@@ -533,7 +531,7 @@ class OrdinaryLevelOfTheoryRef(SchemaBase):
     # Bookkeeping, as on ``SoftwareReleaseRef``: not wire fields, read back
     # through ``method_warning()``.
     _method_warning_code: str | None = PrivateAttr(default=None)
-    _method_warning_message: str | None = PrivateAttr(default=None)
+    _method_warning_context: dict[str, Any] | None = PrivateAttr(default=None)
 
     @field_validator("method")
     @classmethod
@@ -593,14 +591,8 @@ class OrdinaryLevelOfTheoryRef(SchemaBase):
         stem = None if self.method is None else correction_table_method_stem(self.method)
         if stem is not None:
             self._method_warning_code = W_LEVEL_OF_THEORY_METHOD_NAMES_CORRECTION_TABLE
-            self._method_warning_message = (
-                f"level_of_theory.method={self.method!r} is the method {stem!r} "
-                "followed by a label that selects an energy-correction table (a "
-                "correction-set name or a year), not a method. The calculation ran "
-                f"{stem!r}. Stored as sent, as a separate level of theory from "
-                f"{stem!r}. Send method={stem!r} and name the table on the energy "
-                "correction scheme instead."
-            )
+            # The stem comes from a closed list of method names, so it is TCKDB's; the method as typed is not.
+            self._method_warning_context = {"method_stem": stem, "depositor_supplied": {"method": self.method}}
         return self
 
     def method_warning(self, field_prefix: str = "") -> UploadWarning | None:
@@ -611,10 +603,10 @@ class OrdinaryLevelOfTheoryRef(SchemaBase):
         """
         if self._method_warning_code is None:
             return None
-        return UploadWarning(
+        return UploadWarning.from_code(
             field=f"{field_prefix}method",
             code=self._method_warning_code,
-            message=self._method_warning_message or "",
+            context=self._method_warning_context,
         )
 
 

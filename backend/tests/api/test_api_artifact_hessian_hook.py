@@ -442,7 +442,8 @@ class TestHessianNotStoredWarnings:
         assert _stored(db_session, calc_id) is None
         assert _not_stored_codes(body["warnings"]) == ["hessian_not_stored_geometry_mismatch"]
         (warning,) = [w for w in body["warnings"] if w["code"].startswith("hessian_not_stored")]
-        assert "freq.log" in warning["message"]
+        assert warning["context"]["depositor_supplied"] == {"artifact_filename": "freq.log"}
+        assert "freq.log" not in warning["message"]
         assert len(body["artifacts"]) == 1
 
     def test_wrong_frame_warns(self, client, db_session, stub_store_artifact):
@@ -502,7 +503,11 @@ class TestHessianNotStoredWarnings:
         assert _stored(db_session, calc_id) is None
         assert _not_stored_codes(body["warnings"]) == ["hessian_not_stored_not_frequency_calculation"]
         (warning,) = [w for w in body["warnings"] if w["code"].startswith("hessian_not_stored")]
-        assert "opt.hess" in warning["message"] and "'opt'" in warning["message"]
+        assert warning["context"]["depositor_supplied"] == {"artifact_filename": "opt.hess"}
+        assert "opt.hess" not in warning["message"]
+        assert warning["context"]["reason"] == "not_frequency_calculation"
+        assert warning["context"]["calculation_type"] == "opt"
+        assert "'opt' calculation" in warning["message"]
         assert len(body["artifacts"]) == 1
 
     def test_a_matrix_bearing_log_sent_to_an_opt_calculation_stays_silent(

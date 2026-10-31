@@ -22,6 +22,7 @@ contain, so two empty lists cannot pass.
 from __future__ import annotations
 
 import pytest
+from tckdb_schemas.deposit_warning_messages import render_message
 
 import app.workers.upload_worker as upload_worker
 from app.db.models.common import UploadJobKind
@@ -222,6 +223,11 @@ def test_the_job_result_carries_the_warnings_the_direct_route_returns(client, ki
     result = read.json()["result"]
     assert "result_unavailable" not in result, "the warnings could not be stored in the job result"
     assert result["warnings"] == expected
+    # And the sentence is TCKDB's for the code, the same one the direct route, the stored row and the public read
+    # carry (#838): never text the depositor typed.
+    assert result["warnings"], "nothing to compare"
+    for warning in result["warnings"]:
+        assert warning["message"] == render_message(warning["code"], warning["context"]), warning["code"]
 
 
 @pytest.mark.parametrize("kind", list(CASES), ids=lambda k: k.value)

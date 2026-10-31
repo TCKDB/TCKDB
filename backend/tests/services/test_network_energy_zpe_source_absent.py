@@ -57,7 +57,8 @@ def test_a_composed_state_energy_on_a_bare_energy_with_no_freq_warns(convention,
     (warning,) = _warn([_state(convention, _participant("ethyl", _calc(bare, species=1)))])
     assert warning.code == CODE
     assert warning.field == "solve.state_energies[0]"
-    assert "'ethyl'" in warning.message and convention.value in warning.message
+    assert convention.value in warning.message and "ethyl" not in warning.message
+    assert warning.context["depositor_supplied"]["species_keys"] == ["ethyl"]
 
 
 def test_the_three_composed_conventions_are_exactly_those_with_a_vibrational_term() -> None:
@@ -96,14 +97,15 @@ def test_one_warning_per_energy_names_every_participant_missing_a_source() -> No
         _participant("c", _calc(CalculationType.sp, species=3)),
     )
     (warning,) = _warn([state], species=[3])
-    assert "'a'" in warning.message and "'b'" in warning.message and "'c'" not in warning.message
+    assert warning.context["depositor_supplied"]["species_keys"] == ["a", "b"]
 
 
 def test_a_composed_barrier_on_a_bare_energy_warns_unless_the_ts_has_a_freq() -> None:
     barrier = (2, "ts_elim", C.electronic_plus_zpe, _calc(CalculationType.sp, ts=7))
     (warning,) = _warn(barriers=[barrier])
     assert warning.code == CODE and warning.field == "solve.channel_barriers[2]"
-    assert "ts_elim" in warning.message
+    assert warning.context["depositor_supplied"] == {"transition_state_key": "ts_elim"}
+    assert "ts_elim" not in warning.message
     assert _warn(barriers=[barrier], ts=[7]) == []
     assert _warn(barriers=[(0, "t", C.electronic_only, _calc(CalculationType.sp, ts=7))]) == []
     assert _warn(barriers=[(0, "t", C.electronic_plus_zpe, None)]) == []

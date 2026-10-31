@@ -253,7 +253,10 @@ def test_an_opt_or_sp_at_a_named_method_level_each_warn_once_by_type(db_conn) ->
         warnings = collect_named_composite_deposit_warnings(session, [opt.id, sp.id, freq.id, plain.id])
         assert [w.code for w in warnings] == ["named_composite_deposited_as_opt", "named_composite_deposited_as_sp"]
         assert all(w.field == "level_of_theory" for w in warnings)
-        assert "'G4'" in warnings[0].message and "'CBS-QB3'" in warnings[1].message
+        assert warnings[0].context["depositor_supplied"] == {"level_of_theory_method": "G4"}
+        assert warnings[1].context["depositor_supplied"] == {"level_of_theory_method": "CBS-QB3"}
+        assert warnings[0].context["calculation_type"] == "opt" and warnings[1].context["calculation_type"] == "sp"
+        assert not any("G4" in w.message or "CBS-QB3" in w.message for w in warnings)
         session.rollback()
 
 

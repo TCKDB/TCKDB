@@ -933,15 +933,10 @@ def persist_kinetics_upload(
         submitted_family = canonical or request.reaction.reaction_family
         if existing_family is None:
             warning_sink.append(
-                UploadWarning(
+                UploadWarning.from_code(
                     field="reaction.reaction_family",
                     code="reaction_family_not_applied",
-                    message=(
-                        f"reaction_family '{submitted_family}' was not applied: this "
-                        "rate is anchored to an existing reaction entry, whose "
-                        "family is set on the shared reaction identity and is not "
-                        "modified by a kinetics upload."
-                    ),
+                    context={"depositor_supplied": {"reaction_family": submitted_family}},
                 )
             )
         elif existing_family != submitted_family:
@@ -1150,17 +1145,10 @@ def persist_kinetics_upload(
                 raise
             links = []
             warning_sink.append(
-                UploadWarning(
+                UploadWarning.from_code(
                     field="energy_level_of_theory",
                     code="energy_level_stored_without_source_calculations",
-                    message=(
-                        "The declared energy level of theory was stored, but no source calculations were linked: "
-                        + (
-                            "no single calculation at that level exists for a participant on this instance."
-                            if error.reason == "none"
-                            else "more than one calculation at that level exists for a participant, so none was chosen."
-                        )
-                    ),
+                    context={"reason": "none" if error.reason == "none" else "ambiguous"},
                 )
             )
         for calc_id, role in links:

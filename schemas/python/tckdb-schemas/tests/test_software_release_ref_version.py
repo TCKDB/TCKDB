@@ -101,8 +101,9 @@ def test_mismatched_name_warns_with_its_own_code() -> None:
     assert warning is not None
     assert warning.code == W_SOFTWARE_RELEASE_NAME_LOOKS_WRONG
     assert warning.code != W_SOFTWARE_RELEASE_VERSION_IS_COMPOSITE
-    assert "gaussian" in warning.message
-    assert "ORCA 6.0.0" in warning.message
+    assert warning.context["depositor_supplied"]["name"] == "gaussian"
+    assert warning.context["depositor_supplied"]["version"] == "ORCA 6.0.0"
+    assert "gaussian" not in warning.message and "ORCA" not in warning.message
 
 
 # ---------------------------------------------------------------------------

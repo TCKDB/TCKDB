@@ -305,7 +305,11 @@ def test_a_scaled_e0_with_no_factor_is_recorded_not_refused_and_warns(db_session
     assert stored[("ts", "e0")] == ("agrees", None)
     (warning,) = [w for w in warnings if w.code == _NOT_COMPARED]
     assert "zpe_scale_factor" in warning.message
-    assert "'reactant:1' e0 (zpe_scaling_unstated)" in warning.message
+    assert warning.context["reasons"] == ["zpe_scaling_unstated"]
+    assert warning.context["depositor_supplied"]["not_compared"] == [
+        {"participant": "reactant:1", "energy_kind": "e0", "reason": "zpe_scaling_unstated"}
+    ]
+    assert "reactant:1" not in warning.message
 
 
 def test_the_e0_refusal_names_a_non_zero_record_and_energy_index(db_session) -> None:
@@ -370,7 +374,10 @@ def test_a_null_stored_energy_is_not_compared(db_session) -> None:
     assert _stored(db_session)[("reactant:1", "electronic")] == ("agrees", None)
     (warning,) = [w for w in warnings if w.code == _NOT_COMPARED]
     assert warning.field == "validation_evidence[0].energies"
-    assert "'ts' electronic (stored_energy_not_stated)" in warning.message
+    assert warning.context["reasons"] == ["stored_energy_not_stated"]
+    assert warning.context["depositor_supplied"]["not_compared"] == [
+        {"participant": "ts", "energy_kind": "electronic", "reason": "stored_energy_not_stated"}
+    ]
 
 
 def test_an_e0_whose_freq_stores_no_zpe_is_not_compared(db_session) -> None:

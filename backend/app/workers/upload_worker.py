@@ -205,7 +205,7 @@ def _request_warnings(job: UploadJob, derive, request) -> list[UploadWarning]:
     """
     if job.request_warnings is None:
         return derive(request)
-    return [UploadWarning.model_validate(w) for w in job.request_warnings]
+    return [UploadWarning.from_stored(w) for w in job.request_warnings]
 
 
 def _run_computed_reaction(session: Session, job: UploadJob, review_policy: ReviewPolicy) -> dict:
@@ -608,7 +608,7 @@ def run_one_job(session: Session, job: UploadJob) -> None:
             session,
             submission.id,
             [
-                UploadWarning.model_validate(w)
+                UploadWarning.from_stored(w)
                 for w in (result.get("warnings", []) if isinstance(result, dict) else [])
             ],
         )

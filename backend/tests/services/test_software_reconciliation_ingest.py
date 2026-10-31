@@ -295,8 +295,9 @@ def test_name_mismatch_with_confirming_artifact_corrects_software_identity(
             w for w in warnings if w.code == W_SOFTWARE_IDENTITY_CORRECTED_FROM_ARTIFACT
         ]
         assert len(matching) == 1, warnings
-        assert "gaussian" in matching[0].message.lower()
-        assert "orca" in matching[0].message.lower()
+        assert matching[0].context["depositor_supplied"] == {"declared_software": "Gaussian"}
+        assert matching[0].context["observed_software"] == "orca"
+        assert "gaussian" not in matching[0].message.lower() and "orca" in matching[0].message.lower()
 
 
 def test_name_mismatch_without_artifact_leaves_declaration_untouched(

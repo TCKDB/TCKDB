@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.145.0 - 2026-10-31
+
+A warning's `message` is TCKDB's sentence for its `code`, never text the depositor typed. No field is added or removed.
+
+- `UploadWarning.from_code(field=, code=, context=)` is the one way to build a warning; its `message` is `render_message(code, context)`.
+- New module `tckdb_schemas.deposit_warning_messages` (`RENDERED`, `render_message`, `normalise_field`), moved from the backend. The sentence for a code is fixed, or built from `context` values (numbers, counts, TCKDB tokens).
+- A label that helps you find the problem is under `context["depositor_supplied"]`, a dict of named strings you typed. Nothing in the sentence is read from it. `field` is unchanged.
+- `StationaryPointFinding` gains `context` (numbers the finding was decided on), used for the warning built from a warn-tier finding. Blocking findings and their messages are unchanged.
+- Match on `code`, never on `message`.
+- Every remedy and consequence the old messages carried that needs no depositor text is kept in the sentence; tau's reason is rendered from the `tau_basis` token. `context.depositor_supplied` holds strings, lists of strings and lists of records of strings only; an entry that holds nothing is dropped.
+- `UploadWarning.from_stored(data)` rebuilds a recorded warning's message from its code and context. `deposit_warning_messages.context_problems` states what a context may hold (every string outside `depositor_supplied` sits under a listed key).
+- `normalise_field` replaces every bracket that is not a plain integer position, quoted or not, robust to embedded quotes.
+- `StationaryPointFinding.context` is added; the `tau_basis` token and mode counts ride in it. `extra_imaginary_mode_count` is the count in all three transition-state tau codes.
+
 ## 0.144.0 - 2026-10-31
 
 An unrecorded `freq.hessian_method` now resolves `tau` through the producing program's assumed default when the deposit is judged, not only when it is stored. No field is added or removed.

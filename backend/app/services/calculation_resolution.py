@@ -677,17 +677,13 @@ def software_reconciliation_warning(
     if "name" not in result.mismatches:
         return None
     declared_name, observed_name = result.mismatches["name"]
-    return UploadWarning(
+    return UploadWarning.from_code(
         field="software_release",
         code=W_SOFTWARE_IDENTITY_CORRECTED_FROM_ARTIFACT,
-        message=(
-            f"The declared software name ({declared_name!r}) disagreed with "
-            f"the program identified in the uploaded artifact "
-            f"({observed_name!r}). The artifact is the observed fact, so "
-            f"this calculation's software_release now points at "
-            f"{observed_name!r}. The originally declared value is preserved "
-            "on declared_software_banner."
-        ),
+        context={
+            "observed_software": observed_name,
+            "depositor_supplied": {"declared_software": declared_name},
+        },
     )
 
 
@@ -947,31 +943,6 @@ def _load_calc_ids_with_artifacts(
     return {row[0] for row in rows}
 
 
-def _converged_opt_energy_warning_message(
-    *, has_energy: bool, has_artifact: bool
-) -> str:
-    if not has_energy:
-        missing = (
-            "reports no final_energy_hartree of its own, and no artifact "
-            "backs one either"
-            if not has_artifact
-            else "reports no final_energy_hartree of its own"
-        )
-    else:
-        missing = "reports a final_energy_hartree but no artifact backs it"
-    return (
-        "This optimisation is recorded as converged, which is itself a "
-        "claim about the energy -- an optimiser declares convergence when "
-        "the energy change between steps falls below a threshold. No "
-        "single-point calculation was found for the same owner (any level "
-        "of theory would satisfy this; none was required at the "
-        f"optimisation's own level), and this optimisation {missing}. "
-        "Deposit a single-point calculation for this species or "
-        "transition state, or supply this optimisation's own "
-        "final_energy_hartree together with an artifact backing it."
-    )
-
-
 def collect_converged_opt_energy_warnings(
     session: Session,
     calculation_ids: Iterable[int],
@@ -1054,12 +1025,10 @@ def collect_converged_opt_energy_warnings(
         has_artifact = r.id in artifact_calc_ids
         if has_energy and has_artifact:
             continue  # (b): evidenced own energy stands in for an sp.
-        warning = UploadWarning(
+        warning = UploadWarning.from_code(
             field="opt_result",
             code=W_CONVERGED_OPT_NO_USABLE_ENERGY,
-            message=_converged_opt_energy_warning_message(
-                has_energy=has_energy, has_artifact=has_artifact
-            ),
+            context={"has_energy": has_energy, "has_artifact": has_artifact},
         )
         note_warning_subject(session, warning, SubmissionRecordType.calculation, r.id)
         warnings.append(warning)
@@ -2482,16 +2451,15 @@ def persist_additional_calculations(
                 )
             elif warnings is not None:
                 expected = _DEPENDENCY_ROLE_TO_PARENT_TYPE[dep_role]
-                edge_warning = UploadWarning(
+                edge_warning = UploadWarning.from_code(
                     field=f"additional_calculations[{position}]",
                     code=W_DEPENDENCY_EDGE_NOT_INFERRED,
-                    message=(
-                        f"{upload_label} was stored but not linked to the "
-                        f"primary calculation: role '{dep_role.value}' "
-                        f"needs a parent of type '{expected.value}' and "
-                        f"the primary calculation is type "
-                        f"'{primary_calc.type.value}'."
-                    ),
+                    context={
+                        "dependency_role": dep_role.value,
+                        "expected_parent_type": expected.value,
+                        "primary_type": primary_calc.type.value,
+                        "calculation_type": calc_upload.type.value,
+                    },
                 )
                 note_warning_subject(session, edge_warning, SubmissionRecordType.calculation, child_calc.id)
                 warnings.append(edge_warning)

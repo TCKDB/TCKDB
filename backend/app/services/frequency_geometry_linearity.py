@@ -328,33 +328,16 @@ def _bent_count_for_linear_geometry(
     looking past.
     """
 
-    return UploadWarning(
+    return UploadWarning.from_code(
         field=location,
         code=W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY,
-        message=(
-            f"{location}: the frequency list carries {n_modes} modes, "
-            f"which is 3N-6 for this {n_atoms}-atom geometry -- the "
-            f"vibrational count of a *bent* molecule "
-            f"({W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY}). This "
-            f"geometry is linear: its atoms spread across their long axis "
-            f"by only {ratio:.2g} of their spread along it, against a "
-            f"threshold of {COLLINEAR_MAX_TRANSVERSE_RATIO:g} for calling "
-            f"a geometry linear (exactly collinear is 0). A linear "
-            f"{n_atoms}-atom molecule has 3N-5 = {linear_count} "
-            f"vibrations, so one mode is missing from this list. The "
-            f"usual cause is a degenerate bending pair reported once: a "
-            f"linear molecule's bends are doubly degenerate -- CO2's four "
-            f"vibrations are two stretches and one bend counted twice -- "
-            f"so a parser or script that de-duplicates equal frequencies "
-            f"drops one component and lands exactly here. A genuinely "
-            f"partial or frozen-atom Hessian would also produce a short "
-            f"list, honestly. The record is accepted and flagged, not "
-            f"refused: the boundary between linear and bent is a "
-            f"tolerance rather than a definition, and near-linear "
-            f"geometries are deliberately left unreported. Deposit every "
-            f"mode the job printed, including both components of each "
-            f"degenerate pair."
-        ),
+        context={
+            "n_modes": n_modes,
+            "n_atoms": n_atoms,
+            "linear_count": linear_count,
+            "transverse_ratio": ratio,
+            "collinear_max_transverse_ratio": COLLINEAR_MAX_TRANSVERSE_RATIO,
+        },
     )
 
 
@@ -427,29 +410,16 @@ def evaluate_frequency_list_linearity(
         return []
 
     return [
-        UploadWarning(
+        UploadWarning.from_code(
             field=location,
             code=W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY,
-            message=(
-                f"{location}: the frequency list carries {n_modes} modes, "
-                f"which is 3N-5 for this {n_atoms}-atom geometry -- the "
-                f"vibrational count of a *linear* molecule "
-                f"({W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY}). This "
-                f"geometry is not linear: its atoms spread across their long "
-                f"axis by {ratio:.2g} of their spread along it, against a "
-                f"threshold of {BENT_MIN_TRANSVERSE_RATIO:g} for calling a "
-                f"geometry bent (exactly collinear is 0). A non-linear "
-                f"{n_atoms}-atom molecule has 3N-6 = {bent_count} "
-                f"vibrations, so one mode here is either spurious or is a "
-                f"rigid-body translation/rotation left in the list -- the "
-                f"usual cause being a frequency job, or a script reading "
-                f"one, that treated the molecule as linear. The record is "
-                f"accepted and flagged, not refused: the boundary between "
-                f"linear and bent is a tolerance rather than a definition, "
-                f"and near-linear geometries are deliberately left "
-                f"unreported. Deposit every mode the job printed, or the "
-                f"geometry the job actually ran on."
-            ),
+            context={
+                "n_modes": n_modes,
+                "n_atoms": n_atoms,
+                "bent_count": bent_count,
+                "transverse_ratio": ratio,
+                "bent_min_transverse_ratio": BENT_MIN_TRANSVERSE_RATIO,
+            },
         )
     ]
 

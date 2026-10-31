@@ -234,8 +234,11 @@ def test_an_anonymous_read_carries_neither_a_label_nor_a_local_key(client, db_se
     response = client.post("/api/v1/uploads/computed-reaction", json=payload)
     assert response.status_code == 201, response.text[:300]
     body = response.json()
-    # The depositor's own response still says it, as before.
-    assert any("TS0" in w["message"] for w in body["warnings"])
+    # The depositor's own response carries the same TCKDB sentence; the label is under the marked key (#838).
+    assert not any("TS0" in w["message"] for w in body["warnings"])
+    assert any(
+        "TS0" in json.dumps((w["context"] or {}).get("depositor_supplied")) for w in body["warnings"]
+    )
     tse = db_session.get(TransitionStateEntry, body["transition_state_entry_id"])
     read = client.get(f"{BASE}/transition-state-entries/{tse.public_ref}").json()
     irc = [i for i in _items(read) if i["code"] == "transition_state_missing_irc_evidence"]
@@ -260,7 +263,9 @@ def test_every_anonymous_read_of_every_fixture_is_free_of_depositor_labels_and_k
     for read in _read_everything(client, db_session, response.json()):
         for item in _items(read):
             seen += 1
-            for text in (item["message"], item["field"], json.dumps(item["context"])):
+            # In the context a depositor string is allowed under one key only: the marked one.
+            unmarked = {k: v for k, v in (item["context"] or {}).items() if k != "depositor_supplied"}
+            for text in (item["message"], item["field"], json.dumps(unmarked)):
                 assert not any(t in text for t in tokens), (item["code"], text)
             assert "depositor_message" not in item and "depositor_field" not in item
     assert seen > 5, "the fixture earns too few warnings for this to prove anything"
@@ -283,7 +288,10 @@ def test_the_deposit_owner_and_curators_get_the_depositor_text_and_nobody_else_d
     for key in (owner_key, curator_key):
         read = _ts_read(client, db_session, body, {"X-API-Key": key})
         (irc,) = [i for i in _items(read) if i["code"] == "transition_state_missing_irc_evidence"]
-        assert "TS0" in irc["depositor_message"]
+        # Rows deposited since #838 store TCKDB's sentence, so the owner's copy is the public one, and the label is
+        # under the marked key in the context.
+        assert irc["depositor_message"] == irc["message"]
+        assert irc["context"]["depositor_supplied"] == {"transition_state_label": "TS0"}
         assert irc["depositor_field"] == "transition_state.validation_evidence"
         # The public words are still TCKDB's.
         assert "TS0" not in irc["message"]
@@ -398,7 +406,7 @@ def _swept_codes() -> set[str]:
                 continue
             func = node.func
             name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else ""
-            if name not in ("UploadWarning", "StationaryPointFinding"):
+            if name not in ("UploadWarning", "from_code", "StationaryPointFinding"):
                 continue
             for kw in node.keywords:
                 if kw.arg != "code":

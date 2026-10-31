@@ -130,70 +130,45 @@ _COMPUTATIONAL_ORIGINS = frozenset({ScientificOriginKind.computed})
 
 
 def _literature_warning(field: str = "literature") -> UploadWarning:
-    return UploadWarning(
+    return UploadWarning.from_code(
         field=field,
         code=W_MISSING_LITERATURE_PROVENANCE,
-        message=(
-            "No literature provenance was supplied. Non-computed records "
-            "(experimental or estimated) should carry a literature "
-            "reference so the source of the data can be audited."
-        ),
     )
 
 
 def _software_release_warning(
     field: str = "software_release",
 ) -> UploadWarning:
-    return UploadWarning(
+    return UploadWarning.from_code(
         field=field,
         code=W_MISSING_SOFTWARE_RELEASE_PROVENANCE,
-        message=(
-            "No software release provenance was supplied. Computed "
-            "records should identify which electronic-structure or "
-            "post-processing software produced them."
-        ),
     )
 
 
 def _workflow_tool_release_warning(
     field: str = "workflow_tool_release",
 ) -> UploadWarning:
-    return UploadWarning(
+    return UploadWarning.from_code(
         field=field,
         code=W_MISSING_WORKFLOW_TOOL_PROVENANCE,
-        message=(
-            "No workflow-tool release provenance was supplied. Computed "
-            "records should identify the orchestration tool (e.g. ARC) "
-            "that produced them."
-        ),
     )
 
 
 def _level_of_theory_warning(
     field: str = "energy_level_of_theory",
 ) -> UploadWarning:
-    return UploadWarning(
+    return UploadWarning.from_code(
         field=field,
         code=W_MISSING_LEVEL_OF_THEORY_PROVENANCE,
-        message=(
-            "No energy level-of-theory provenance was supplied. Computed "
-            "kinetics should declare the electronic-energy level of "
-            "theory so source SP calculations can be anchored to it."
-        ),
     )
 
 
 def _freq_scale_factor_warning(
     field: str = "freq_scale_factor",
 ) -> UploadWarning:
-    return UploadWarning(
+    return UploadWarning.from_code(
         field=field,
         code=W_MISSING_FREQUENCY_SCALE_FACTOR_PROVENANCE,
-        message=(
-            "No frequency scale factor provenance was supplied. Computed "
-            "statmech should record the scaling applied to harmonic "
-            "frequencies; use value=1.0 for explicitly unscaled results."
-        ),
     )
 
 
@@ -352,27 +327,16 @@ def collect_statmech_content_warnings(
         return []
     if not source_calculation_roles:
         return [
-            UploadWarning(
+            UploadWarning.from_code(
                 field=f"{field}.source_calculations",
                 code=W_MISSING_STATMECH_SOURCE_CALCULATIONS,
-                message=(
-                    "No source calculations were linked to this computed statmech "
-                    "record, so the partition-function interpretation cannot be "
-                    "traced back to the calculations it was derived from."
-                ),
             )
         ]
     if is_polyatomic and "freq" not in source_calculation_roles:
         return [
-            UploadWarning(
+            UploadWarning.from_code(
                 field=f"{field}.source_calculations",
                 code=W_MISSING_STATMECH_FREQUENCY_SOURCE,
-                message=(
-                    "This computed statmech describes a species with rotational "
-                    "structure, so its partition function uses vibrational modes, "
-                    "but no source calculation with role='freq' was linked. The "
-                    "frequencies behind this record are untraceable."
-                ),
             )
         ]
     return []
@@ -492,14 +456,9 @@ def collect_kinetics_content_warnings_for(
         and not interpretation_assignments
     ):
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field="interpretation_assignments",
                 code=W_MISSING_KINETICS_INTERPRETATIONS,
-                message=(
-                    "No statmech interpretation assignments were supplied, so this "
-                    "computed rate does not record which partition functions in "
-                    "this database it was built from."
-                ),
             )
         )
     # An interpretation set that names reactants and products but no
@@ -529,16 +488,9 @@ def collect_kinetics_content_warnings_for(
         and network_kinetics_ref is None
     ):
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field="interpretation_assignments",
                 code=W_MISSING_TS_INTERPRETATION,
-                message=(
-                    "The interpretation set names reactant and product partition "
-                    "functions but no transition state, so the rate's activated "
-                    "complex is unaccounted for. Expected for a rate fitted from a "
-                    "master-equation solve; otherwise supply the "
-                    "role='transition_state' assignment."
-                ),
             )
         )
     # The case #155 exists for. A caller that *has* a tunneling_application
@@ -552,14 +504,10 @@ def collect_kinetics_content_warnings_for(
         and tunneling_application is None
     ):
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field="tunneling_application",
                 code=W_MISSING_TUNNELING_APPLICATION,
-                message=(
-                    f"tunneling_model='{tunneling_model.value}' is declared "
-                    "with no typed tunneling_application evidence, so the correction "
-                    "is recorded as a reported attribute and cannot be replayed."
-                ),
+                context={"tunneling_model": tunneling_model.value},
             )
         )
     return warnings
@@ -595,21 +543,9 @@ def collect_network_solve_kind_warnings(solve) -> list[UploadWarning]:
     if solve is None or solve.kind is not NetworkSolveKind.reported:
         return warnings
     warnings.append(
-        UploadWarning(
+        UploadWarning.from_code(
             field="solve.kind",
             code=W_REPORTED_NETWORK_SOLVE,
-            message=(
-                "These k(T,P) were transcribed from a publication, not "
-                "derived here. The master-equation inputs behind them -- state "
-                "energies, channel barriers and the collisional "
-                "energy-transfer model -- are not in this database, so the "
-                "rates cannot be re-derived, the fit cannot be checked, and "
-                "the network cannot be re-solved outside the reported "
-                "temperature and pressure range. The values are as "
-                "trustworthy as the cited source; what is missing is the "
-                "derivation. A computed solve is preferred where the "
-                "underlying master-equation run is available."
-            ),
         )
     )
     return warnings
@@ -641,20 +577,10 @@ def collect_network_energy_transfer_warnings(solve) -> list[UploadWarning]:
         item.scope == NetworkEnergyTransferScope.network_wide
         for item in solve.energy_transfer
     ):
-        wells = "every collisionally stabilised well"
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field="solve.energy_transfer",
                 code=W_NETWORK_WIDE_ENERGY_TRANSFER,
-                message=(
-                    "Collisional energy transfer was declared once for the "
-                    f"whole network and applied to {wells} and to the bath "
-                    "gas as a whole. <DeltaE>down is a property of a (well, "
-                    "collider) pair, so this record does not resolve how it "
-                    "varies between wells; that variation was not determined "
-                    "by the run. Per-well declarations are preferred where "
-                    "the calculation supplies them."
-                ),
             )
         )
     return warnings
@@ -791,19 +717,10 @@ def collect_composite_delta_warnings(
     if getattr(role, "value", role) != composite_delta:
         return []
     return [
-        UploadWarning(
+        UploadWarning.from_code(
             field=field,
             code=W_COMPOSITE_DELTA_PREFER_SCHEME_TERMS,
-            message=(
-                "This correction has application_role=composite_delta. "
-                "Focal-point deltas (core-valence, higher-order triples, "
-                "relativistic, DBOC) will become composite-scheme terms, "
-                "which can name every calculation a delta is built from "
-                "and sit on the energy itself instead of on the species "
-                "entry. It was stored as sent; prefer describing the "
-                "recipe as a composite scheme once that shape is available "
-                "to you."
-            ),
+            context={"application_role": composite_delta},
         )
     ]
 
@@ -811,15 +728,9 @@ def collect_composite_delta_warnings(
 def _energy_correction_scheme_literature_warning(
     field: str = "scheme.source_literature",
 ) -> UploadWarning:
-    return UploadWarning(
+    return UploadWarning.from_code(
         field=field,
         code=W_MISSING_LITERATURE_PROVENANCE,
-        message=(
-            "No literature provenance was supplied for this new energy "
-            "correction scheme. A citation is strongly advised, though "
-            "not required, so the source of these correction parameters "
-            "can be audited."
-        ),
     )
 
 
@@ -827,20 +738,10 @@ def _energy_correction_scheme_software_warning(
     kind: EnergyCorrectionSchemeKind,
     field: str = "scheme.software",
 ) -> UploadWarning:
-    return UploadWarning(
+    return UploadWarning.from_code(
         field=field,
         code=W_MISSING_ENERGY_CORRECTION_SCHEME_SOFTWARE,
-        message=(
-            f"No software release was supplied for this {kind.value} "
-            "scheme. Atom-energy and bond-additivity corrections are the "
-            "output of a program's own build-level numerics, so a scheme "
-            "with no program recorded at all cannot be distinguished from "
-            "a different program's values at the same level of theory. "
-            "(A program with no build stated -- e.g. just 'Gaussian', no "
-            "version -- is a complete, honest deposit and does not "
-            "trigger this warning; only a fully absent software release "
-            "does.)"
-        ),
+        context={"scheme_kind": kind.value},
     )
 
 
@@ -848,15 +749,9 @@ def _energy_correction_scheme_ambiguous_warning(
     sibling_ref: str,
     field: str = "scheme",
 ) -> UploadWarning:
-    return UploadWarning(
+    return UploadWarning.from_code(
         field=field,
         code=W_AMBIGUOUS_ENERGY_CORRECTION_SCHEME_WITHOUT_LITERATURE,
-        message=(
-            f"This scheme and {sibling_ref} share a kind, level of "
-            "theory, and recorded software, and neither carries a "
-            "citation, so the archive cannot say whether they are the "
-            "same correction deposited twice or two genuinely different "
-            "sets of numbers."
-        ),
+        context={"sibling_ref": sibling_ref},
     )
 
