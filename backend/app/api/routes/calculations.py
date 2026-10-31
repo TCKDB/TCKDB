@@ -97,6 +97,7 @@ from app.services.calculation_parameter_extraction import (
 from app.services.charge_multiplicity_extraction import (
     try_reconcile_charge_multiplicity_from_output_upload,
 )
+from app.services.deposit_warnings import store_deposit_warnings
 from app.services.hessian_extraction import (
     try_extract_hessian_from_artifact_upload,
 )
@@ -104,6 +105,7 @@ from app.services.input_geometry_extraction import (
     try_extract_input_geometry_from_artifact_upload,
 )
 from app.services.public_refs import PREFIXES
+from app.services.record_review import RecordRef
 from app.services.scientific_read.handles import (
     canonical_level_of_theory_id,
     handle_type_mismatch_error,
@@ -799,7 +801,7 @@ def upload_calculation_artifacts(
     # Evidence added after the fact still joins the deposit's submission, so
     # it has the same submission trail as artifacts uploaded with the
     # calculation (ingestion_submission_model.md, "Artifact links").
-    link_artifacts_to_deposit_submission(
+    deposit_submission = link_artifacts_to_deposit_submission(
         session,
         calculation_id=calc_pk,
         artifacts=rows,
@@ -845,6 +847,19 @@ def upload_calculation_artifacts(
     )
     if software_warning is not None:
         warnings.append(software_warning)
+
+    # Stored beside the calculation, under the submission it joined when it joined one; with no live submission to join
+    # the rows name the calculation alone, so a warning is never dropped. No marker row: this is not a re-check of the
+    # deposit, only what the new evidence earned.
+    if warnings:
+        store_deposit_warnings(
+            session,
+            deposit_submission.id if deposit_submission is not None else None,
+            warnings,
+            targets=[RecordRef(SubmissionRecordType.calculation, calc_pk)],
+            mark_checked=False,
+            written_by=current_user.id,
+        )
 
     result = ArtifactsUploadResult(
         calculation_id=calc_pk,

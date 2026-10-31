@@ -66,6 +66,7 @@ from app.services.conformer_selection_locator import (
     selection_kind_token,
     unknown_conformer_selection,
 )
+from app.services.deposit_warnings import note_anchor
 from app.services.kinetics_bath_gas import persist_kinetics_bath_gas
 from app.services.kinetics_declaration_resolution import W_KINETICS_DETERMINATION_MISMATCH
 from app.services.kinetics_resolution import persist_kinetics, resolve_kinetics_upload
@@ -1170,6 +1171,7 @@ def persist_kinetics_upload(
             )
         session.flush()
 
+    note_anchor(session, "", SubmissionRecordType.kinetics, kinetics.id)
     apply_review_policy(
         session,
         targets=[

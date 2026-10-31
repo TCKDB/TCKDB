@@ -63,6 +63,7 @@ from app.schemas.workflows.contribution_bundle import (
 )
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.services.contribution_bundle_dry_run import dry_run_contribution_bundle
+from app.services.deposit_warnings import store_deposit_warnings
 from app.services.literature_metadata import failure_scope
 from app.services.literature_resolution import prefetch_literature_metadata
 from app.services.record_review import ReviewPolicy
@@ -254,6 +255,7 @@ def _import_thermo_bundle(
                 warnings, local_ref=local_ref, record_type=DryRunRecordType.thermo
             )
         )
+        store_deposit_warnings(session, review_policy.submission_id, warnings)
         records.append(
             ContributionBundleSubmittedRecord(
                 record_type=SubmittedRecordType.thermo,
@@ -310,6 +312,7 @@ def _import_kinetics_bundle(
                 warnings, local_ref=local_ref, record_type=DryRunRecordType.kinetics
             )
         )
+        store_deposit_warnings(session, review_policy.submission_id, warnings)
         records.append(
             ContributionBundleSubmittedRecord(
                 record_type=SubmittedRecordType.kinetics,

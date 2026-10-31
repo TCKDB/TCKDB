@@ -781,6 +781,7 @@ def create_applied_energy_correction(
     source_conformer_observation_id: int | None = None,
     source_calculation_id: int | None = None,
     created_by: int | None = None,
+    field: str | None = None,
     warnings_out: list[UploadWarning] | None = None,
 ) -> AppliedEnergyCorrection:
     """Resolve provenance refs and create an applied energy correction.
@@ -799,6 +800,8 @@ def create_applied_energy_correction(
     :param source_conformer_observation_id: Resolved source conformer id.
     :param source_calculation_id: Resolved source calculation id.
     :param created_by: Optional application user id.
+    :param field: The payload path of this correction in the deposit (``species['k'].applied_energy_corrections[0]``).
+        It prefixes the warning about how the correction was applied, so the warning names the species it is about.
     :param warnings_out: Optional sink for the scheme's non-blocking
         provenance warnings (see :func:`resolve_or_create_scheme`).
         ``None`` (the default) is a no-op, matching every existing caller.
@@ -841,7 +844,12 @@ def create_applied_energy_correction(
     session.flush()
 
     if warnings_out is not None:
-        warnings_out.extend(collect_composite_delta_warnings(payload.application_role))
+        warnings_out.extend(
+            collect_composite_delta_warnings(
+                payload.application_role,
+                field=f"{field}.application_role" if field else "application_role",
+            )
+        )
 
     for comp in payload.components:
         session.add(

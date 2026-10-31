@@ -38,7 +38,7 @@ from tckdb_schemas.local_key_codes import (
 
 from app.api.error_contract import CodedValueError
 from app.db.models.calculation import Calculation
-from app.db.models.common import CalculationType, StatmechCalculationRole
+from app.db.models.common import CalculationType, StatmechCalculationRole, SubmissionRecordType
 from app.db.models.energy_correction import FrequencyScaleFactor
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.statmech import (
@@ -68,6 +68,7 @@ from app.services.calculation_resolution import (
     resolve_level_of_theory_ref,
     resolve_workflow_tool_release_ref,
 )
+from app.services.deposit_warnings import note_warning_subject
 from app.services.energy_correction_resolution import resolve_or_create_freq_scale_factor_ref
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import resolve_calculation_key
@@ -859,24 +860,24 @@ def collect_frequency_scale_factor_software_mismatch_warnings(
     comparisons = evaluate_frequency_scale_factor_software(session, ids)
 
     warnings: list[UploadWarning] = []
-    for comparison in comparisons.values():
+    for statmech_id, comparison in comparisons.items():
         if comparison.state is not FSFSoftwareComparisonState.mismatch:
             continue
-        warnings.append(
-            UploadWarning(
-                field="frequency_scale_factor",
-                code=W_STATMECH_FSF_SOFTWARE_MISMATCH,
-                message=(
-                    "This statmech record's frequency scale factor was "
-                    f"derived for {comparison.fsf_software}, but its "
-                    f"'freq'-role source calculation ran in "
-                    f"{comparison.freq_software}. A harmonic scale factor "
-                    "is specific to the code it was fit against, so "
-                    "applying it across a different code is a deliberate "
-                    "choice, not an error -- confirm this is intentional "
-                    "and documented, or attach a scale factor derived for "
-                    f"{comparison.freq_software} instead."
-                ),
-            )
+        warning = UploadWarning(
+            field="frequency_scale_factor",
+            code=W_STATMECH_FSF_SOFTWARE_MISMATCH,
+            message=(
+                "This statmech record's frequency scale factor was "
+                f"derived for {comparison.fsf_software}, but its "
+                f"'freq'-role source calculation ran in "
+                f"{comparison.freq_software}. A harmonic scale factor "
+                "is specific to the code it was fit against, so "
+                "applying it across a different code is a deliberate "
+                "choice, not an error -- confirm this is intentional "
+                "and documented, or attach a scale factor derived for "
+                f"{comparison.freq_software} instead."
+            ),
         )
+        note_warning_subject(session, warning, SubmissionRecordType.statmech, statmech_id)
+        warnings.append(warning)
     return warnings

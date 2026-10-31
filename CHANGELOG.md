@@ -22,6 +22,52 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Deposit-time warnings are shown with the record when it is read (2026-10-29)
+
+- **Client: `tckdb-client` 0.180.0, `tckdb-schemas` 0.143.0.** Migration `f7a2c9e4b183`: a new table, `deposit_warning` (no deployed table is touched, no backfill).
+- Until now a deposit's `warn`-tier findings reached the depositor once, in the upload response, and survived only inside the upload job's result. A later reader of
+  the stored record saw none of them. Each warning is now stored beside the record it concerns, in the same transaction as the deposit, and shown on the record's reads.
+- **Storage.** One row per (submission, record, content hash), where the hash covers the code, payload position, message and context: only truly identical
+  warnings dedupe, so two single points at one named method each keep theirs. Each row carries the code's register entry (`NULL` for the many codes the register does not
+  list), the payload position, the message, the optional `context` (JSON-safe: a NaN or Infinity is null, in the stored row, on the read and in the upload response alike) and a `check_version`. One marker row (`code IS NULL`) per checked record
+  says "this record was checked", so "nothing fired" and "never checked" differ.
+- **Placement.** The workflows say which row they built from which payload object, and a warning lands on that exact record: a `kinetics[0]` path on that kinetics
+  row, `species['h'].thermo` on that thermo row, a bundle-local calculation key on that calculation, a bundle-root provenance gap on every kinetics row the
+  workflow wrote it to, a producer that iterates rows on the row it is about, and a `composite_delta` correction warning on the thermo of the species it was applied to (its field carries the full `species['k'].applied_energy_corrections[i]` path). There is no "primary record" fallback. A warning whose subject is a shared identity row
+  (species entry, reaction, literature, a ref fragment) is never put on that row: it goes to this deposit's single result record for that species or reaction,
+  or, with none, to the submission. Any other warning that cannot be placed is stored on the submission, logged, and that deposit writes no marker rows, so its records read
+  `not_recorded` rather than a false "recorded, nothing fired".
+- **Isolation.** The rows describe the deposit and get no vote on it: they are written inside a SAVEPOINT, and a failure rolls it back, is logged and leaves no rows and no
+  markers. Each submission writes its own rows. The table refuses UPDATE, DELETE and TRUNCATE always (as `record_reproducibility_assessment` does), under an approved record
+  too; INSERT stays open so a later artifact upload can add a warning.
+- **Read.** `record_warnings` sits in the envelope of every detail read (calculation, transition-state entry and concept, statmech, transport, network, network solve, conformer
+  observation) and of the per-parent kinetics and thermo reads, by default, a list with one entry per record the response names, each carrying its public ref. List and search responses do
+  not carry it. `status` is `recorded` (items are exactly what fired, possibly none) or `not_recorded` (deposited before this change, or its deposit could not place every warning).
+  `status` describes the deposit-time check only: `items` can still list a warning a later artifact upload added. Warnings never change a value,
+  order a list or gate selection, and the curated profile shows them like any other evidence; a hidden ref inside a warning's `context` blanks that context and keeps the warning.
+- **Upload responses** are unchanged except that each warning has an optional `context` (`charge_mismatch`, `multiplicity_mismatch`, `sp_energy_payload_log_mismatch`
+  and `sp_energy_filled_from_log` fill it today).
+- **Paths covered.** Every upload route, the upload job worker (the same rows on the same records as the direct route, pinned by a test), `/bundles/submit` thermo and kinetics, and
+  `POST /calculations/{ref}/artifacts` (stored under the submission the calculation's deposit belongs to, or, when it has no live submission, on the calculation alone). Not covered: the admin
+  provenance-correction route and the ThermoML file route.
+- **Register.** The `upload_warning` channel now reads "returned alongside the accepted upload, and stored with the record it concerns, which shows it under `record_warnings` on that
+  record's detail reads and on the per-parent kinetics and thermo reads". The register still has 49 entries.
+- **Whose words.** The depositor's own text (a transition-state label, a local calculation key, a species key) is never presented as TCKDB's. A warning's public `message` is rendered
+  at read time from its code and structured `context` (a fixed sentence per code, with the producers' numbers where they state them), never from the stored text; the public `field` replaces
+  depositor keys with `[*]` and keeps positions. The stored `message` and `field` are unchanged (the rows are append-only, the record of what was said at deposit) and are shown as
+  `depositor_message` / `depositor_field` only to the deposit's owner and to curators and admins (the `GET /jobs/{id}` rule); they are absent for everyone else. A depositor-typed value
+  a producer puts in `context` sits under `context.depositor_supplied`. A test sweeps the producers and fails when a code has no sentence. Upload responses are unchanged.
+- **Deposit-level warnings.** `deposit_warnings` sits beside `record_warnings` in the same envelopes: a list of `{submission_ref, items}` for the warnings no one record could take (an
+  energy-correction scheme shared by a bundle, an unattributable warning), once per submission a named record belongs to, in stored order. Nothing is copied onto a record. `submission_ref` follows
+  the existing auth-only rule (omitted for an anonymous reader). **Contract change:** a router dependency now resolves the optional caller on those reads, so a credential that is present and
+  invalid (a revoked key, an expired session cookie) answers 401 there, as it already did on the calculation read; it used to read as anonymous. A client holding a stale
+  session cookie should drop it on the first 401: `GET /auth/me` now answers 401 *and clears* a stale `tckdb_session` cookie, as logout does. Those reads are also sent `Cache-Control: private` and
+  `Vary: Cookie, X-API-Key`, because the answer depends on the caller.
+- **Who sees the stored text.** Each warning row records who wrote it (`written_by_user_id`: the submission's depositor for a deposit's rows, the uploader for an artifact's). `depositor_message` /
+  `depositor_field` go to that user and to curators and admins only, so a curator's artifact warning is not shown to the depositor as theirs, and an artifact warning with no submission is the
+  uploader's. Under the curated profile `deposit_warnings` is built from the records the response lists, so a withheld record's submission contributes nothing.
+- Known limits: #835 (most codes are not in the register) and #836 (the atomic-electronic warnings are not emitted on every path).
+
 ## A minimum's imaginary modes are judged against tau (2026-10-29)
 
 - **Client: `tckdb-client` unchanged (its validation does not mirror this rule), `tckdb-schemas` 0.142.0.** No migration: the frequency result already carries `imaginary_mode_tau_cm1`, its basis and `imaginary_mode_structural_flag`.

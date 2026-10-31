@@ -2084,6 +2084,36 @@ Table dataset_release {
   Note: 'A citable dataset release.'
 }
 
+Table deposit_warning {
+  id bigint [pk, not null]
+  submission_id bigint [ref: > submission.id]
+  record_type SubmissionRecordType
+  record_id bigint
+  code text
+  register_entry int
+  field text
+  message text
+  context jsonb
+  content_hash text
+  written_by_user_id bigint [ref: > app_user.id]
+  check_version int [not null]
+  created_at timestamp [not null, default: 'now']
+
+  indexes {
+    (record_type, record_id) [name: 'ix_deposit_warning_record']
+    (submission_id, record_type, record_id, content_hash) [unique, name: 'uq_deposit_warning_identity']
+  }
+
+  checks {
+    `context IS NULL OR jsonb_typeof(context) = 'object'` [name: 'ck_deposit_warning_context_is_object']
+    `(code IS NULL AND register_entry IS NULL AND field IS NULL AND message IS NULL AND context IS NULL AND content_hash IS NULL) OR (code IS NOT NULL AND field IS NOT NULL AND message IS NOT NULL AND content_hash IS NOT NULL AND content_hash ~ '^[0-9a-f]{64}$')` [name: 'ck_deposit_warning_marker_or_complete']
+    `(record_type IS NULL) = (record_id IS NULL)` [name: 'ck_deposit_warning_record_both_or_neither']
+    `submission_id IS NOT NULL OR (record_type IS NOT NULL AND code IS NOT NULL)` [name: 'ck_deposit_warning_submission_or_record_warning']
+  }
+
+  Note: 'One deposit-time warning (or one "checked" marker) for one record of one submission.'
+}
+
 Table energy_correction_scheme {
   id bigint [pk, not null]
   kind EnergyCorrectionSchemeKind [not null]

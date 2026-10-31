@@ -1666,6 +1666,35 @@ the gap.
 - `ck_dataset_release_title_nonblank`: `length(btrim(title)) > 0`
 - `ck_dataset_release_withdrawn_has_reason`: `(status <> 'withdrawn') OR (withdrawn_at IS NOT NULL AND length(btrim(coalesce(withdrawn_reason, ''))) > 0)`
 
+### `deposit_warning`
+
+**Role:** role not stated on the model
+
+**Purpose:** One deposit-time warning (or one "checked" marker) for one record of one submission.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `submission_id` | BIGINT | yes | — | submission.id | — | not documented |
+| `record_type` | SubmissionRecordType (enum) | yes | — | — | `species`, `species_entry`, `conformer_group`, `conformer_observation`, `reaction`, `reaction_entry`, `transition_state`, `transition_state_entry`, `calculation`, `statmech`, `thermo`, `kinetics`, `transport`, `network`, `network_solve`, `applied_energy_correction`, `artifact`, `molecular_property_observation` | not documented |
+| `record_id` | BIGINT | yes | — | — | — | not documented |
+| `code` | TEXT | yes | — | — | — | not documented |
+| `register_entry` | SMALLINT | yes | — | — | — | not documented |
+| `field` | TEXT | yes | — | — | — | not documented |
+| `message` | TEXT | yes | — | — | — | not documented |
+| `context` | JSONB | yes | — | — | — | not documented |
+| `content_hash` | TEXT | yes | — | — | — | not documented |
+| `written_by_user_id` | BIGINT | yes | — | app_user.id | — | not documented |
+| `check_version` | SMALLINT | no | — | — | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_deposit_warning_context_is_object`: `context IS NULL OR jsonb_typeof(context) = 'object'`
+- `ck_deposit_warning_marker_or_complete`: `(code IS NULL AND register_entry IS NULL AND field IS NULL AND message IS NULL AND context IS NULL AND content_hash IS NULL) OR (code IS NOT NULL AND field IS NOT NULL AND message IS NOT NULL AND content_hash IS NOT NULL AND content_hash ~ '^[0-9a-f]{64}$')`
+- `ck_deposit_warning_record_both_or_neither`: `(record_type IS NULL) = (record_id IS NULL)`
+- `ck_deposit_warning_submission_or_record_warning`: `submission_id IS NOT NULL OR (record_type IS NOT NULL AND code IS NOT NULL)`
+
 ### `energy_correction_scheme`
 
 **Role:** role not stated on the model

@@ -47,6 +47,7 @@ from app.services.calculation_resolution import (
 )
 from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
+from app.services.deposit_warnings import note_anchor, note_calculation_keys
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -550,6 +551,7 @@ def persist_thermo_upload(
                 target_species_entry_id=species_entry.id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                field=f"applied_energy_corrections[{correction_index}]",
                 warnings_out=warnings_out,
             )
         )
@@ -580,6 +582,8 @@ def persist_thermo_upload(
         RecordRef(SubmissionRecordType.applied_energy_correction, aec.id)
         for aec in applied_corrections
     )
+    note_anchor(session, "", SubmissionRecordType.thermo, thermo.id)
+    note_calculation_keys(session, {key: calc.id for key, calc in calculations_by_key.items()})
     apply_review_policy(
         session, targets=targets, policy=review_policy, created_by=created_by
     )

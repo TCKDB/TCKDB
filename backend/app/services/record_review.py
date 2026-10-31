@@ -53,6 +53,7 @@ from app.db.models.record_review import RecordReview, RecordReviewEvent
 from app.db.models.scientific_record_supersession import ScientificRecordSupersession
 from app.db.models.submission import SubmissionRecordLink
 from app.services.accepted_science import lock_scientific_records
+from app.services.deposit_warnings import note_deposit_targets
 from app.services.record_refs import resolve_record_public_refs
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
@@ -841,6 +842,9 @@ def apply_review_policy(
     if policy is None:
         return []
     targets = list(targets)
+    if policy.submission_id is not None:
+        # The deposit's warnings are stored against these records by the route or worker that finishes the request.
+        note_deposit_targets(session, policy.submission_id, targets)
     reviews = bulk_ensure_record_reviews(
         session,
         targets=targets,

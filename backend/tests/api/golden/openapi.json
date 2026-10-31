@@ -17025,6 +17025,81 @@
         "title": "DepositRights",
         "type": "object"
       },
+      "DepositWarningItem": {
+        "additionalProperties": false,
+        "description": "One warning, in TCKDB's words.",
+        "properties": {
+          "check_version": {
+            "title": "Check Version",
+            "type": "integer"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "depositor_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depositor Field"
+          },
+          "depositor_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Depositor Message"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "register_entry": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Register Entry"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "field",
+          "check_version"
+        ],
+        "title": "DepositWarningItem",
+        "type": "object"
+      },
       "DerivedSinglePointEnergy": {
         "description": "A same-level-of-theory single-point-equivalent, read off an ``opt``.\n\nA geometry optimisation computes the electronic energy at its final\ngeometry; running a separate ``sp`` calculation at the *same* level of\ntheory would reproduce that number, not a different one (the house\nrule behind ``docs/decisions`` on SP-vs-opt energy). When the opt's\nowner — a conformer observation for a species-owned calculation, a\ntransition-state entry for a TS-owned one, whichever owner the\ncalculation actually has — has no independent ``sp`` calculation at\nthe ``opt``'s own ``level_of_theory_id``, this block offers the opt's\nown ``final_energy_hartree`` as the value a caller would otherwise\nhave gone looking for under ``calculation_type=sp``.\n\nThis is a **read-time derivation, never a fabricated record**: no\n``calculation`` row is created, and it is computed fresh on every\nresponse rather than stored. ``calculation_count``,\n``evidence_coverage.sp``, and ``has_sp`` are all read from real\n``sp`` calculation rows only and never see this value — see\n:mod:`app.services.scientific_read.conformers` (species) and\n:mod:`app.services.scientific_read.transition_states` (transition\nstates).\n\nOnly ever attached to an ``opt`` calculation's :class:`CalculationEnergyBlock`\n(never to an ``sp`` one — a real ``sp`` result is never replaced by a\nderivation), and only when the *same* owner (conformer observation or\ntransition-state entry) has no ``sp`` calculation at the *same*\n``level_of_theory_id``. An ``sp`` at a **different** level of theory,\nor on a **different** owner of the same kind, is a different number\nand does not suppress this block.",
         "properties": {
@@ -43251,6 +43326,38 @@
         "title": "RecordReviewStatus",
         "type": "string"
       },
+      "RecordWarnings": {
+        "additionalProperties": false,
+        "description": "The warnings stored for one record.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DepositWarningItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "record_ref": {
+            "title": "Record Ref",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "recorded",
+              "not_recorded"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_ref",
+          "status",
+          "items"
+        ],
+        "title": "RecordWarnings",
+        "type": "object"
+      },
       "RegisterRequest": {
         "properties": {
           "email": {
@@ -47743,8 +47850,22 @@
       "ScientificCalculationDetailResponse": {
         "description": "Response envelope for /api/v1/scientific/calculations/{handle}.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificCalculationRecord"
+          },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_calculation__RequestEcho"
@@ -48660,8 +48781,22 @@
       "ScientificConformerObservationDetailResponse": {
         "description": "Response envelope for\n``GET /scientific/conformer-observations/{handle}``.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificConformerObservationRecord"
+          },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_conformer__RequestEcho"
@@ -49894,8 +50029,22 @@
       "ScientificNetworkDetailResponse": {
         "description": "Response envelope for ``GET /scientific/networks/{handle}``.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificNetworkRecord"
+          },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_network__RequestEcho"
@@ -50421,8 +50570,22 @@
       "ScientificNetworkSolveDetailResponse": {
         "description": "Response envelope for\n``GET /scientific/network-solves/{handle}``.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificNetworkSolveRecord"
+          },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_network__RequestEcho"
@@ -50905,6 +51068,13 @@
       "ScientificReactionKineticsResponse": {
         "description": "Response envelope for /api/v1/scientific/reaction-entries/{id}/kinetics.\n\nPhase B: ``reaction_entry_ref`` mirrors ``reaction_entry_id`` as the\npublic stable handle for the response's path-parameter resource.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "next_cursor": {
             "anyOf": [
               {
@@ -50927,6 +51097,13 @@
           "reaction_entry_ref": {
             "title": "Reaction Entry Ref",
             "type": "string"
+          },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
           },
           "records": {
             "items": {
@@ -51976,6 +52153,13 @@
       "ScientificSpeciesThermoResponse": {
         "description": "Response envelope for /api/v1/scientific/species-entries/{id}/thermo.\n\nPhase B: ``species_entry_ref`` mirrors ``species_entry_id`` as the\npublic stable handle for the response's path-parameter resource.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "next_cursor": {
             "anyOf": [
               {
@@ -51989,6 +52173,13 @@
           },
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
+          },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
           },
           "records": {
             "items": {
@@ -52050,8 +52241,22 @@
       "ScientificStatmechDetailResponse": {
         "description": "Response envelope for ``GET /scientific/statmech/{handle}``.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificStatmechRecord"
+          },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_statmech__RequestEcho"
@@ -52415,8 +52620,22 @@
       "ScientificTransitionStateDetailResponse": {
         "description": "Response envelope for ``GET /scientific/transition-states/{handle}``.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificTransitionStateRecord"
+          },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_transition_state__RequestEcho"
@@ -52450,8 +52669,22 @@
       "ScientificTransitionStateEntryDetailResponse": {
         "description": "Response envelope for\n``GET /scientific/transition-state-entries/{handle}``.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificTransitionStateEntryRecord"
+          },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_transition_state__RequestEcho"
@@ -52883,8 +53116,22 @@
       "ScientificTransportDetailResponse": {
         "description": "Response envelope for ``GET /scientific/transport/{handle}``.",
         "properties": {
+          "deposit_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionWarnings"
+            },
+            "title": "Deposit Warnings",
+            "type": "array"
+          },
           "record": {
             "$ref": "#/components/schemas/ScientificTransportRecord"
+          },
+          "record_warnings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordWarnings"
+            },
+            "title": "Record Warnings",
+            "type": "array"
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_transport__RequestEcho"
@@ -61759,6 +62006,35 @@
         "title": "SubmissionSupersedeRequest",
         "type": "object",
         "x-tckdb-example-requires": "two submissions of the caller's own: the one whose public ref is in the path, and a newer one created declaring that it supersedes it, whose public ref (public_ref on a submission read) replaces this one"
+      },
+      "SubmissionWarnings": {
+        "additionalProperties": false,
+        "description": "The warnings of one submission that no one record could take.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DepositWarningItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "SubmissionWarnings",
+        "type": "object"
       },
       "SubmitReviewStatus": {
         "description": "Curation/review state surfaced to clients in the submit response.\n\nDistinct from :class:`SubmissionStatus`: that enum is the moderation\nlifecycle column on the row, while this is the human-readable trust\nstate for response payloads. ``unreviewed`` is the only value submit/v0\never returns — full lifecycle exposure is a later milestone.",
@@ -71461,11 +71737,23 @@
         "type": "string"
       },
       "UploadWarning": {
-        "description": "A non-blocking warning produced during upload reconciliation.\n\n:param field: Dot-path to the field that triggered the warning\n    (e.g. ``\"species_entry_kind\"`` or ``\"reactants[0].species_entry_kind\"``).\n:param code: Machine-readable warning code for programmatic handling.\n:param message: Human-readable explanation, already formatted.",
+        "description": "A non-blocking warning produced during upload reconciliation.\n\n:param field: Dot-path to the field that triggered the warning\n    (e.g. ``\"species_entry_kind\"`` or ``\"reactants[0].species_entry_kind\"``).\n:param code: Machine-readable warning code for programmatic handling.\n:param message: Human-readable explanation, already formatted.\n:param context: The values that triggered the warning, as the check saw them\n    (for example the declared and the logged charge). Optional: a producer\n    that states none leaves it ``None``. It is stored with the warning and\n    shown with the record it concerns; it never carries a database id.",
         "properties": {
           "code": {
             "title": "Code",
             "type": "string"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
           },
           "field": {
             "title": "Field",
@@ -77415,6 +77703,7 @@
     },
     "/api/v1/auth/me": {
       "get": {
+        "description": "The signed-in user. A session cookie that no longer resolves is answered 401 *and cleared*, as logout clears it.\n\nThe scientific detail reads answer 401 for a credential that is present and invalid, so a client that keeps a\nrevoked or expired cookie would otherwise be refused on every read and never learn to drop it. This probe is where\na client learns: the 401 carries the same cookie deletion ``POST /auth/logout`` sends. Only the session cookie is\ncleared (and only when no API key was sent, since a key takes precedence), never anything the caller did not own.",
         "operationId": "me_api_v1_auth_me_get",
         "parameters": [
           {
@@ -93795,6 +94084,38 @@
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
           }
         ],
         "responses": {
@@ -100209,6 +100530,38 @@
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
           }
         ],
         "responses": {
@@ -101497,6 +101850,38 @@
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
           }
         ],
         "responses": {
@@ -102506,6 +102891,38 @@
               ],
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
             }
           }
         ],
@@ -105322,6 +105739,38 @@
               ],
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
             }
           }
         ],
@@ -108389,6 +108838,38 @@
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
           }
         ],
         "responses": {
@@ -109137,6 +109618,38 @@
               ],
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
             }
           }
         ],
@@ -110630,6 +111143,38 @@
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
           }
         ],
         "responses": {
@@ -111211,6 +111756,38 @@
               ],
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
             }
           }
         ],

@@ -23,6 +23,7 @@ from app.schemas.workflows.transition_state_upload import (
 from app.services.calculation_resolution import collect_converged_opt_energy_warnings
 from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
+from app.services.deposit_warnings import note_anchor
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -233,6 +234,7 @@ def persist_transition_state_upload(
             source_conformer_observation_id=None,
             source_calculation_id=None,
             created_by=created_by,
+            field=f"applied_energy_corrections[{index}]",
             warnings_out=warnings,
         )
 
@@ -309,6 +311,10 @@ def persist_transition_state_upload(
     targets.extend(
         RecordRef(SubmissionRecordType.calculation, c.id) for c in additional_calcs
     )
+    note_anchor(session, "", SubmissionRecordType.transition_state_entry, ts_entry.id)
+    note_anchor(session, "primary_opt", SubmissionRecordType.calculation, primary_calc.id)
+    for position, child in enumerate(additional_calcs):
+        note_anchor(session, f"additional_calculations[{position}]", SubmissionRecordType.calculation, child.id)
     apply_review_policy(
         session, targets=targets, policy=review_policy, created_by=created_by
     )

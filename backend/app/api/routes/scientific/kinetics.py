@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.api.routes.scientific._actor import publish_read_actor
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
     KINETICS_RECORD_SECTIONS,
@@ -41,6 +42,7 @@ router = APIRouter(prefix="/reaction-entries")
 @router.get(
     "/{reaction_entry_id}/kinetics",
     response_model=ScientificReactionKineticsResponse,
+    dependencies=[Depends(publish_read_actor)],
 )
 def reaction_kinetics(
     http_request: Request,

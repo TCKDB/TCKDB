@@ -115,6 +115,7 @@ from app.schemas.reads.scientific_conformer import (
     ConformerObservationGroupSummary,
     ConformerObservationSiblingSummary,
 )
+from app.schemas.reads.scientific_deposit_warnings import DepositWarningItem, RecordWarnings
 from app.schemas.reads.scientific_frequency_scale_factor import FrequencyScaleFactorUsageSummary
 from app.schemas.reads.scientific_geometry import (
     GeometryIdentity,
@@ -309,6 +310,8 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         # An entry record nested in another record's ``entries`` goes whole when the entry is hidden. The subject of a
         # response (``record``, ``records[*]``) is never deleted as a pointer, so this is inert there.
         ScientificTransitionStateEntryRecord,
+        # The deposit warnings of a record the response names beside the subject: gone with the record when it is hidden.
+        RecordWarnings,
         TransitionStateSaddlePointEvidence,
         TransitionStateValidationEvidenceSummary,
         TransitionStateComparedEnergySummary,
@@ -357,6 +360,8 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
 POINTER_FIELDS: frozenset[tuple[type[BaseModel], str]] = frozenset(
     {
         (KineticsProvenance, "irc"),
+        # The values a warning quotes: a hidden ref inside blanks them, and the warning itself stays.
+        (DepositWarningItem, "context"),
     }
 )
 

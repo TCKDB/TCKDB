@@ -8,6 +8,8 @@ Follows the same key-resolution pattern as the network PDep workflow.
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy.orm import Session
 from tckdb_schemas.upload_warning import UploadWarning
 
@@ -100,6 +102,12 @@ from app.services.conformer_resolution import (
     primary_structure,
     resolve_conformer_group,
     settle_conformer_basin,
+)
+from app.services.deposit_warnings import (
+    note_anchor,
+    note_calculation_keys,
+    note_preferred_scope_anchor,
+    note_warning_subject,
 )
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
@@ -201,7 +209,18 @@ def _calculation_rows(session: Session, calculation_key_to_id: dict[str, int]) -
     return {key: session.get(Calculation, calc_id) for key, calc_id in calculation_key_to_id.items()}  # type: ignore[misc]
 
 
-def _persist_calculation(
+def _persist_calculation(session: Session, calc_in: ComputedReactionCalculationIn, **kwargs: Any) -> Calculation:
+    """:func:`_persist_calculation_unattributed`, plus: every warning it appended is about the calculation it built."""
+    sink = kwargs.get("sp_energy_warnings")
+    before = len(sink) if sink is not None else 0
+    calculation = _persist_calculation_unattributed(session, calc_in, **kwargs)
+    if sink is not None:
+        for warning in sink[before:]:
+            note_warning_subject(session, warning, SubmissionRecordType.calculation, calculation.id)
+    return calculation
+
+
+def _persist_calculation_unattributed(
     session: Session,
     calc_in: ComputedReactionCalculationIn,
     *,
@@ -723,6 +742,13 @@ def persist_computed_reaction_upload(
             settle_conformer_basin(session, observation, fingerprint, smiles=sp.species_entry.smiles)
             observation_id_by_geometry_key[conf.geometry.key] = observation.id
             conformers_by_key[conf.key] = observation.id
+            note_anchor(
+                session,
+                f"species[{sp.key!r}].conformers[{conf.key!r}]",
+                SubmissionRecordType.conformer_observation,
+                observation.id,
+                scope=f"species[{sp.key!r}]",
+            )
             review_targets.append(
                 RecordRef(SubmissionRecordType.conformer_group, conformer_group.id)
             )
@@ -909,6 +935,8 @@ def persist_computed_reaction_upload(
         )
         session.add(ts_entry)
         session.flush()
+        note_anchor(session, "transition_state", SubmissionRecordType.transition_state_entry, ts_entry.id)
+        note_anchor(session, "atom_map", SubmissionRecordType.transition_state_entry, ts_entry.id)
         review_targets.append(
             RecordRef(SubmissionRecordType.transition_state, ts.id)
         )
@@ -994,6 +1022,9 @@ def persist_computed_reaction_upload(
             )
             if ts_statmech_row is not None:
                 ts_statmech_id = ts_statmech_row.id
+                note_anchor(
+                    session, "transition_state.statmech", SubmissionRecordType.statmech, ts_statmech_row.id
+                )
                 ts_statmech_ref = ts_statmech_row.public_ref
                 review_targets.append(
                     RecordRef(SubmissionRecordType.statmech, ts_statmech_row.id)
@@ -1264,6 +1295,7 @@ def persist_computed_reaction_upload(
                 source_conformer_observation_id=source_conf_id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                field=f"species[{sp.key!r}].applied_energy_corrections[{i}]",
                 warnings_out=sp_energy_warnings,
             )
             applied_correction_ids.append(applied.id)
@@ -1328,6 +1360,7 @@ def persist_computed_reaction_upload(
                 source_conformer_observation_id=source_conf_id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                field=f"transition_state.applied_energy_corrections[{i}]",
                 warnings_out=sp_energy_warnings,
             )
             applied_correction_ids.append(applied.id)
@@ -1522,6 +1555,13 @@ def persist_computed_reaction_upload(
             session.add(thermo)
             session.flush()
             thermo_ids.append(thermo.id)
+            note_anchor(
+                session,
+                f"species[{sp.key!r}].thermo",
+                SubmissionRecordType.thermo,
+                thermo.id,
+                scope=f"species[{sp.key!r}]",
+            )
             thermo_by_species_key[sp.key] = thermo
 
             # Every source-calculation link was already resolved, role/
@@ -1691,6 +1731,13 @@ def persist_computed_reaction_upload(
             session.add(statmech)
             session.flush()
             statmech_ids.append(statmech.id)
+            note_anchor(
+                session,
+                f"species[{sp.key!r}].statmech",
+                SubmissionRecordType.statmech,
+                statmech.id,
+                scope=f"species[{sp.key!r}]",
+            )
 
             for level in s.electronic_levels:
                 session.add(
@@ -1823,6 +1870,13 @@ def persist_computed_reaction_upload(
             field_prefix=f"species['{sp.key}'].transport",
         )
         transport_ids.append(transport_row.id)
+        note_anchor(
+            session,
+            f"species[{sp.key!r}].transport",
+            SubmissionRecordType.transport,
+            transport_row.id,
+            scope=f"species[{sp.key!r}]",
+        )
         transport_refs.append(transport_row.public_ref)
 
     # ------------------------------------------------------------------
@@ -2087,6 +2141,10 @@ def persist_computed_reaction_upload(
         session.add(kinetics)
         session.flush()
         kinetics_ids.append(kinetics.id)
+        note_anchor(session, f"kinetics[{kin_index}]", SubmissionRecordType.kinetics, kinetics.id)
+        # Bundle-root provenance the workflow wrote onto every kinetics row: a gap in it is a gap in each.
+        for root_field in ("workflow_tool_release", "analysis_software_release", "literature"):
+            note_anchor(session, root_field, SubmissionRecordType.kinetics, kinetics.id, fan_out=True)
 
         persist_kinetics_bath_gas(
             session,
@@ -2199,6 +2257,12 @@ def persist_computed_reaction_upload(
         RecordRef(SubmissionRecordType.applied_energy_correction, aid)
         for aid in applied_correction_ids
     )
+    note_calculation_keys(session, calculation_key_to_id)
+    for sp in request.species:
+        if sp.applied_energy_corrections:
+            note_preferred_scope_anchor(
+                session, f"species[{sp.key!r}].applied_energy_corrections", f"species[{sp.key!r}]"
+            )
     apply_review_policy(
         session,
         targets=current_conformer_group_targets(session, review_targets),

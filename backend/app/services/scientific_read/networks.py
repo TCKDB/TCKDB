@@ -96,6 +96,7 @@ from app.schemas.reads.scientific_network import (
     ScientificNetworkSolveDetailResponse,
     ScientificNetworkSolveRecord,
 )
+from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read.common import (
     fetch_review_badges,
     linked_evidence_predicate,
@@ -171,6 +172,7 @@ def get_network(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([badge]),
         record=record,
+        **deposit_warning_envelope(session, SubmissionRecordType.network, {n.id: n.public_ref}),
     )
 
 
@@ -1163,6 +1165,9 @@ def get_network_solve(
         request=RequestEcho(include=sorted(includes)),
         review_summary=review_summary([badge]),
         record=record,
+        **deposit_warning_envelope(
+            session, SubmissionRecordType.network_solve, {s.id: s.public_ref}
+        ),
     )
 
 

@@ -11,7 +11,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -23,6 +24,7 @@ from app.db.models.api_key import ApiKey
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
 from app.services.auth import (
+    API_KEY_HEADER,
     DUMMY_PASSWORD_HASH,
     SESSION_COOKIE_NAME,
     create_api_key,
@@ -334,7 +336,26 @@ def logout(
 
 
 @router.get("/me", response_model=MeResponse)
-def me(current_user: AppUser = Depends(get_current_user)) -> MeResponse:
+def me(
+    x_api_key: Optional[str] = Header(None, alias=API_KEY_HEADER),
+    tckdb_session: Optional[str] = Cookie(None, alias=SESSION_COOKIE_NAME),
+    session: Session = Depends(get_db),
+) -> MeResponse | JSONResponse:
+    """The signed-in user. A session cookie that no longer resolves is answered 401 *and cleared*, as logout clears it.
+
+    The scientific detail reads answer 401 for a credential that is present and invalid, so a client that keeps a
+    revoked or expired cookie would otherwise be refused on every read and never learn to drop it. This probe is where
+    a client learns: the 401 carries the same cookie deletion ``POST /auth/logout`` sends. Only the session cookie is
+    cleared (and only when no API key was sent, since a key takes precedence), never anything the caller did not own.
+    """
+    try:
+        current_user = get_current_user(x_api_key, tckdb_session, session)
+    except HTTPException as exc:
+        if exc.status_code == 401 and tckdb_session and not x_api_key:
+            stale = JSONResponse({"detail": exc.detail}, status_code=401)
+            _clear_session_cookie(stale)
+            return stale
+        raise
     return MeResponse(
         id=current_user.id,
         username=current_user.username,

@@ -289,6 +289,71 @@ dropped, and duplicates are deduplicated server-side.
 `internal_ids`**. Unknown tokens — or tokens known but illegal for
 that endpoint — return 422.
 
+## Deposit-time warnings (`record_warnings`, `deposit_warnings`)
+
+When a deposit is accepted, the depositor is told which expectations it tripped (the `warn` tier of the
+[scientific check register](scientific_check_register.md)): a transition state with no IRC evidence, a declared
+multiplicity that disagrees with the log, an atom map that is missing. TCKDB stores each of those on the record it is
+about, and shows them to anyone who reads the record.
+
+Where: the envelope of a detail read carries two blocks, present by default, on the reads of a calculation, a
+transition-state entry (the concept read names each of its entries), a statmech, a transport record, a network, a
+network solve and a conformer observation, and on the per-parent kinetics (`/reaction-entries/{ref}/kinetics`) and thermo
+(`/species-entries/{ref}/thermo`) reads. List and search responses carry neither. There is no `include=` token.
+
+* `record_warnings`: a list with one entry per record the response names, each naming the record by its public ref.
+* `deposit_warnings`: the warnings about the *deposit* that no one record could take (an energy-correction scheme
+  shared by a bundle of many records, or a warning the deposit could not attribute), once per submission that a named
+  record belongs to. Nothing is copied onto a record; these rows stay on the submission. A deposit that could not place
+  a warning marks none of its records checked, so its records read `not_recorded` and the warning shows here.
+
+```json
+"record_warnings": [
+  {
+    "record_ref": "tse_...",
+    "status": "recorded",
+    "items": [
+      {"code": "transition_state_missing_irc_evidence", "message": "...", "field": "transition_state.validation_evidence",
+       "register_entry": 19, "context": null, "check_version": 1}
+    ]
+  }
+],
+"deposit_warnings": [
+  {"submission_ref": "sub_...", "items": [{"code": "missing_energy_correction_scheme_software", "message": "...", "field": "scheme.software", "register_entry": null, "context": null, "check_version": 1}]}
+]
+```
+
+* `status: "recorded"` means the deposit's warnings were stored with this record. `items` is then exactly what fired,
+  and is empty when nothing did.
+* `status: "not_recorded"` means the record was deposited before TCKDB stored warnings, or its deposit could not
+  place every warning on a record. That is not the same as none: nothing can be said either way. `status` describes the
+  deposit-time check and nothing else.
+* `items` lists every stored warning, from every submission that deposited or later added evidence to the record
+  (an artifact uploaded afterwards can add one), so a `not_recorded` record can still list items. `register_entry`
+  is the register's entry number, and is `null` for the many codes the register does not list. `context` holds the
+  values the check states.
+* Under `?profile=curated`, a record the guard withholds contributes nothing here: `deposit_warnings` is built from the records
+  the response actually lists.
+* Because the answer depends on who asked, these reads are sent `Cache-Control: private` and `Vary: Cookie, X-API-Key`.
+* A credential that is present and invalid is answered 401 on these reads (see `GET /auth/me`, which also clears a stale
+  `tckdb_session` cookie), not read as anonymous.
+* `submission_ref` follows the rule for that field everywhere on the scientific reads: it is served only to a caller
+  who authenticates, and the key is omitted for an anonymous reader. Items keep their stored order.
+
+**Whose words.** A warning's public `message` is TCKDB's wording, rendered at read time from its code and its structured
+`context`; the public `field` is the payload path with every depositor key replaced (`species[*].thermo`; positional
+`[0]` kept). The text stored at deposit can quote the depositor (a transition-state label such as `TS0`, a local
+calculation key), and a depositor's words are never presented as TCKDB's, on this API or on any client. That stored
+text is `depositor_message` and `depositor_field`: present only for the user who wrote that warning row (the depositor for a
+deposit's rows; whoever uploaded the artifact for an artifact's rows, so a curator's artifact warning is the curator's, not
+the depositor's) and for curators and admins, and absent for everyone else, including another signed-in user. Anything
+depositor-typed that a producer puts in `context` sits under `context.depositor_supplied`: it is depositor-typed text,
+and a client that shows it should say so. The upload response is unchanged and still carries the producers' own text.
+
+A warning never changes a value, orders a list, or gates a selection, and the curated profile shows them as it shows any
+other evidence (a hidden record's ref inside a warning's `context` blanks that context and keeps the warning). They are a
+statement about the deposit, not a verdict on the science.
+
 ## Internal IDs
 
 Internal integer IDs (`species_id`, `species_entry_id`, `geom_id`, etc.)

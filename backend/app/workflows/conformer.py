@@ -26,6 +26,7 @@ from app.services.conformer_resolution import (
     resolve_conformer_group,
     settle_conformer_basin,
 )
+from app.services.deposit_warnings import note_anchor
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
     create_applied_energy_correction,
@@ -307,6 +308,7 @@ def persist_conformer_upload(
                 source_conformer_observation_id=source_conf_id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                field=f"applied_energy_corrections[{index}]",
                 warnings_out=provenance_warnings,
             )
         )
@@ -362,6 +364,13 @@ def persist_conformer_upload(
         RecordRef(SubmissionRecordType.applied_energy_correction, aec.id)
         for aec in applied_corrections
     )
+    note_anchor(session, "", SubmissionRecordType.conformer_observation, observation.id)
+    note_anchor(session, "calculation", SubmissionRecordType.calculation, calculation.id)
+    note_anchor(session, "calculations[0]", SubmissionRecordType.calculation, calculation.id)
+    for position, child in enumerate(additional_calcs):
+        note_anchor(session, f"additional_calculations[{position}]", SubmissionRecordType.calculation, child.id)
+        # ``calculations[i]`` counts the primary first, then the additional ones.
+        note_anchor(session, f"calculations[{position + 1}]", SubmissionRecordType.calculation, child.id)
     apply_review_policy(
         session,
         targets=current_conformer_group_targets(session, review_targets),

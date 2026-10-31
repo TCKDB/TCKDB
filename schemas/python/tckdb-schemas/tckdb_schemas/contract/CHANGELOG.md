@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.143.0 - 2026-10-29
+
+`UploadWarning` gains an optional `context`. No other field is added or removed.
+
+- `UploadWarning.context` (`dict | None`, default `null`) holds the values that triggered the warning as the check saw them, for example the declared and
+  the logged charge for `charge_mismatch`. A check that states none leaves it `null`. It never carries a database id.
+- The upload response is otherwise unchanged. A client that reads `field`, `code` and `message` keeps working; every warning now also carries a `context` key.
+- The server stores each warning beside the record it concerns and shows it on that record's reads (`record_warnings`); see the backend changelog.
+
 ## 0.142.0 - 2026-10-29
 
 A species entry declared a minimum is judged by the size of its imaginary modes against the protocol's tolerance, instead of being refused for any imaginary mode. One warning code joins the contract. No field is added or removed.
