@@ -40,6 +40,11 @@ def test_gaussian_route_directives(text, expected) -> None:
         ("! B3LYP def2-SVP Opt Freq\n", None),
         ("! B3LYP def2-SVP Opt # NumFreq later\n", None),
         ("! B3LYP\n! def2-SVP NumFreq\n", _FD),
+        # NumFreq on numerical gradients is a Hessian from energies
+        ("! B3LYP def2-SVP NumFreq NumGrad\n", HessianMethod.finite_difference_energy),
+        ("! B3LYP def2-SVP NumGrad\n! Opt NumFreq\n", HessianMethod.finite_difference_energy),
+        ("! B3LYP def2-SVP Opt NumGrad\n", None),
+        ("! B3LYP def2-SVP AnFreq NumGrad\n", HessianMethod.analytic),
     ],
 )
 def test_orca_keywords(text, expected) -> None:

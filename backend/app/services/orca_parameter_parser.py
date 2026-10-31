@@ -21,6 +21,7 @@ from tckdb_schemas.hessian_method_detection import (  # noqa: F401  (re-exported
     _extract_log_echo_input,
     _looks_like_orca_input_line,
     _strip_coordinate_block,
+    orca_hessian_method_for,
     orca_keyword_lines,
 )
 
@@ -253,7 +254,9 @@ def _parse_keyword_lines(input_lines: list[str]) -> list[dict]:
     """
     params: list[dict] = []
 
-    for keywords_str in orca_keyword_lines(input_lines):
+    keyword_lines = orca_keyword_lines(input_lines)
+    all_keywords = [kw for keywords_str in keyword_lines for kw in keywords_str.split()]
+    for keywords_str in keyword_lines:
         for kw in keywords_str.split():
             section = _classify_keyword(kw)
             if section is None:
@@ -261,6 +264,12 @@ def _parse_keyword_lines(input_lines: list[str]) -> list[dict]:
                 continue
 
             ck, cv = _lookup_canonical(section, kw)
+            if section == "freq":
+                # Same rule upload validation applies (NumFreq with NumGrad is
+                # a Hessian from energies): one owner in tckdb-schemas.
+                shared = orca_hessian_method_for(kw, all_keywords)
+                if shared is not None:
+                    cv = shared.value
             # When a normalised canonical_value comes back, the keyword
             # encodes a discrete choice (``tightscf`` → ``tight``);
             # value_type=enum lines this up with the vocab's

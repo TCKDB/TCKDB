@@ -106,9 +106,14 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # a stereo isomerisation has one species on both sides, so "the sides differ" can no longer be read off the
     # species; the entry-level rule is the definitional one (a reaction that changes no participant is not a
     # reaction) and the only blocking claim about a reaction's entries. One entry, joining its conservation group.
-    assert 10 <= len(REGISTER) <= 49, (
+    #
+    # Raised 49 -> 50 (2026-10-31): 50, for the Hessian-method/deck contradiction refusal (#839). It is a
+    # contract between two statements in one deposit (a recorded ``freq.hessian_method`` and the input deck
+    # that ran), definitional rather than an expectation about a result, and no existing entry's claim covers
+    # it: the tolerance entries judge a mode against a tau, this one decides which method tau is read from.
+    assert 10 <= len(REGISTER) <= 50, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~49 the inclusion test ('could this check be wrong "
+        "the system; above ~50 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 

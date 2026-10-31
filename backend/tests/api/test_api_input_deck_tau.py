@@ -234,3 +234,42 @@ def test_computed_reaction_without_a_deck_is_refused_at_the_assumed_tau(client):
     resp = client.post("/api/v1/uploads/computed-reaction", json=_reaction_bundle_with_deck(None, "b"))
     assert resp.status_code == 422, resp.text[:600]
     assert resp.json()["code"] == "n_imag_contradicts_minimum"
+
+
+_ORCA_NUMFREQ_NUMGRAD = "! B3LYP def2-SVP NumFreq NumGrad\n* xyz 0 1\nC 0 0 0\n*\n"
+
+
+def test_numfreq_with_numgrad_is_a_hessian_from_energies_and_agrees_with_a_recorded_energy_method(
+    client, db_session
+):
+    resp = client.post(
+        "/api/v1/uploads/computed-species",
+        json=_payload("ORCA", 0.11, _ORCA_NUMFREQ_NUMGRAD, parameters=_recorded("finite_difference_energy")),
+    )
+    assert resp.status_code == 201, resp.text[:600]
+    freq, rows = _stored(db_session)
+    assert freq.imaginary_mode_tau_cm1 == 80.0
+    assert freq.imaginary_mode_tau_basis == "finite_difference_energy"
+    # The workflow's own row from the same deck says the same.
+    assert ("freq.hessian_method", "finite_difference_energy") in rows
+
+
+def test_numfreq_with_numgrad_against_a_recorded_gradient_method_is_refused(client):
+    resp = client.post(
+        "/api/v1/uploads/computed-species",
+        json=_payload("ORCA", 0.12, _ORCA_NUMFREQ_NUMGRAD, parameters=_recorded("finite_difference_gradient")),
+    )
+    assert resp.status_code == 422, resp.text[:600]
+    body = resp.json()
+    assert body["code"] == "hessian_method_contradicts_input_deck"
+    assert body["context"]["recorded"] == "finite_difference_gradient"
+    assert body["context"]["input_deck"] == "finite_difference_energy"
+
+
+def test_the_deck_alone_with_numgrad_is_judged_at_the_energy_tau(client, db_session):
+    resp = client.post(
+        "/api/v1/uploads/computed-species", json=_payload("ORCA", 0.13, _ORCA_NUMFREQ_NUMGRAD)
+    )
+    assert resp.status_code == 201, resp.text[:600]
+    freq, _ = _stored(db_session)
+    assert (freq.imaginary_mode_tau_cm1, freq.imaginary_mode_tau_basis) == (80.0, "finite_difference_energy")

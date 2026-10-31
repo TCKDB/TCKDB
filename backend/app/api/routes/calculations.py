@@ -86,7 +86,6 @@ from app.schemas.entities.calculation import (
     CalculationWavefunctionDiagnosticRead,
 )
 from app.schemas.fragments.artifact import ArtifactIn
-from app.services.hessian_method_deck_check import try_hessian_method_disagreement_from_input_upload
 from app.schemas.upload_warning import UploadWarning
 from app.services.artifact_persistence import (
     link_artifacts_to_deposit_submission,
@@ -102,6 +101,7 @@ from app.services.deposit_warnings import store_deposit_warnings
 from app.services.hessian_extraction import (
     try_extract_hessian_from_artifact_upload,
 )
+from app.services.hessian_method_deck_check import try_hessian_method_disagreement_from_input_upload
 from app.services.input_geometry_extraction import (
     try_extract_input_geometry_from_artifact_upload,
 )

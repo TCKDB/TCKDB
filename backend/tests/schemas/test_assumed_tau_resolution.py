@@ -277,3 +277,29 @@ def test_a_plausible_orca_major_version_is_read(version) -> None:
 def test_meta_hybrids_never_get_the_analytic_assumption_on_old_or_unknown_orca(method) -> None:
     assert _orca(method, "4.2.1").basis is not TauBasis.assumed_analytic_default
     assert _orca(method, None).basis is not TauBasis.assumed_analytic_default
+
+
+# ---------------------------------------------------------------------------
+# Gaussian double hybrids: not settled by the Gaussian documentation we can read,
+# so nothing is assumed (ARC's table agrees for the names below).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "method",
+    ["DSD-BLYP", "DSDPBEP86", "revDSD-PBEP86-D4", "PWPB95", "PBE-QIDH", "PBE0-DH", "B2GPPLYP", "wB97X-2", "B2PLYP", "B2PLYP-D3", "mPW2PLYP"],
+)
+def test_gaussian_double_hybrids_get_no_assumption(method) -> None:
+    resolved = resolve_tau_with_assumption([], "Gaussian", method)
+    assert resolved.basis is TauBasis.protocol_not_recorded
+    assert resolved.tau_cm1 == 50.0
+
+
+@pytest.mark.parametrize("method", ["B3LYP", "PBE0", "wB97XD", "M06-2X", "HF", "MP2"])
+def test_plain_gaussian_methods_keep_the_analytic_assumption(method) -> None:
+    assert resolve_tau_with_assumption([], "Gaussian", method).basis is TauBasis.assumed_analytic_default
+
+
+def test_a_recorded_method_still_wins_on_a_gaussian_double_hybrid() -> None:
+    resolved = resolve_tau_with_assumption([("freq.hessian_method", "analytic")], "Gaussian", "B2PLYP")
+    assert resolved.basis is TauBasis.analytic_default

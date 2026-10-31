@@ -651,8 +651,10 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/hessian_method_detection.py`.
 - The body's `context` names the things involved.
-- Message: 'the recorded freq.hessian_method says the Hessian was {recorded_class} but the input deck attached to the same calculation says {deck_class}. Both are statements about how the second derivatives were built and they cannot both be right; correct the recorded value or the deck.'
-- Note: A calculation's recorded freq.hessian_method says analytic where its attached input deck says numerical, or the reverse. context.recorded and context.input_deck are 'analytic' or 'numerical'; context.calculation_key names the bundle calculation.
+- Message: 'the recorded freq.hessian_method says the Hessian method was {recorded_token} but the input deck attached to the same calculation says {deck_token}. Both are statements about how the second derivatives were built and they cannot both be right; correct the recorded value or the deck.'
+- Note: A calculation's recorded freq.hessian_method disagrees with the method its attached input deck states (analytic, finite_difference_gradient or finite_difference_energy: any two different parsed methods, since their tolerances differ). context.recorded and context.input_deck are those HessianMethod tokens, or 'analytic' / 'numerical' when the recorded value is a loose spelling; context.calculation_key names the bundle calculation.
+- Scientific check (block): A calculation that records how its frequency job built the Hessian (``freq.hessian_method``) and also attaches the input deck that ran it states the same method in both.
+- If your chemistry is legitimate: Correct whichever of the two is wrong, or omit the recorded ``freq.hessian_method`` and let the deck speak. A deposit that sends only a deck, as ARC does, is never refused by this check; the deck is read before the deposit is judged.
 
 <a id="c-idempotency-conflict"></a>
 

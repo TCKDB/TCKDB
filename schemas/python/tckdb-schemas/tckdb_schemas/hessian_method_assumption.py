@@ -373,6 +373,14 @@ _ORCA_FINITE_DIFFERENCE_GRADIENT = frozenset({
 #   analytic (RI-)MP2 Hessians are no longer available. ORCA MP2 stays in the
 #   finite-difference-from-gradients row.
 #
+# * Gaussian double hybrids: the Gaussian 16 sources available through the group
+#   knowledge base (Foresman & Frisch, "Exploring Chemistry with Electronic
+#   Structure Methods"; no Gaussian 16 keyword pages) name analytic frequencies
+#   for HF, DFT, MP2, CIS and CASSCF and say nothing that settles double
+#   hybrids, so Gaussian double hybrids (the prefix list below) get no
+#   assumption. ARC treats B2PLYP and mPW2PLYP as analytic; that needs a
+#   documentation citation before the table can say so.
+#
 # Name lists are explicit and conservative; a name in no list is a plain
 # GGA/hybrid only if the family classifier already calls it DFT. Overlaps take
 # the more conservative row: VV10 and double hybrid before meta-GGA.
@@ -384,8 +392,9 @@ _ORCA_VV10_PREFIXES = (
 )
 _ORCA_VV10_SUFFIXES = ("-nl", "-scnl")
 
-#: Double-hybrid functionals (also matches dispersion-suffixed spellings).
-_ORCA_DOUBLE_HYBRID_PREFIXES = (
+#: Double-hybrid functionals (also matches dispersion-suffixed spellings). Shared by
+#: the ORCA row (assumed numerical) and the Gaussian row (no assumption).
+_DOUBLE_HYBRID_PREFIXES = (
     "b2plyp", "b2gp-plyp", "b2gpplyp", "b2k-plyp", "b2t-plyp", "mpw2plyp",
     "dsd-", "revdsd", "pwpb95", "pbe0-dh", "pbe0-2", "pbe-qidh",
     "wb2plyp", "wb2gpplyp", "ub2plyp", "wb97x-2", "wb97m(2)", "wb97m-2",
@@ -428,7 +437,7 @@ def _orca_functional_class(token: str) -> str:
     """``"vv10"``, ``"double_hybrid"``, ``"meta_gga"`` or ``"plain"`` for a DFT token."""
     if token.startswith(_ORCA_VV10_PREFIXES) or token.endswith(_ORCA_VV10_SUFFIXES):
         return "vv10"
-    if token.startswith(_ORCA_DOUBLE_HYBRID_PREFIXES):
+    if token.startswith(_DOUBLE_HYBRID_PREFIXES):
         return "double_hybrid"
     if token.startswith(_ORCA_META_GGA_PREFIXES):
         return "meta_gga"
@@ -537,6 +546,15 @@ def infer_hessian_method(
         return None
 
     version_rule = ""
+    if (
+        software_token == "gaussian"
+        and family == MethodFamily.DFT
+        and (_normalize(method) or "").startswith(_DOUBLE_HYBRID_PREFIXES)
+    ):
+        # Gaussian's documentation of analytic second derivatives names HF, DFT,
+        # MP2, CIS and CASSCF; it does not settle double hybrids (B2PLYP and
+        # mPW2PLYP included, in the sources read 2026-10-31), so nothing is assumed.
+        return None
     if software_token == "orca" and family == MethodFamily.DFT:
         functional = _orca_functional_class(_normalize(method) or "")
         if functional in ("vv10", "double_hybrid"):

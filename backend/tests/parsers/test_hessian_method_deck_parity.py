@@ -31,6 +31,9 @@ _ORCA_DECKS = [
     "! B3LYP def2-SVP Opt # NumFreq later\n",
     "! B3LYP\n! def2-SVP NumFreq\n",
     "! B3LYP NumFreq AnFreq\n",
+    "! B3LYP def2-SVP NumFreq NumGrad\n",
+    "! B3LYP def2-SVP NumGrad\n! Opt NumFreq\n",
+    "! B3LYP def2-SVP Opt NumGrad\n",
 ]
 
 

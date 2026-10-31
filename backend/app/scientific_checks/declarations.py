@@ -41,6 +41,10 @@ from tckdb_schemas.frequency_completeness import (
     W_FREQ_LIST_EXCEEDS_GEOMETRY,
     evaluate_frequency_list_completeness,
 )
+from tckdb_schemas.hessian_method_detection import (
+    W_HESSIAN_METHOD_CONTRADICTS_INPUT_DECK,
+    check_recorded_method_agrees_with_deck,
+)
 from tckdb_schemas.stationary_point import (
     TAU_ANALYTIC_DEFAULT_CM1,
     TAU_ANALYTIC_TIGHT_CM1,
@@ -146,11 +150,14 @@ _TAU_THRESHOLD = ProvenanceThreshold(
         f"``tckdb_schemas.hessian_method_assumption``). Before assuming "
         f"anything, validation reads the frequency directive of an inline "
         f"input deck attached to the calculation (Gaussian ``Freq=Numer`` / "
-        f"``EnOnly``, ORCA ``NumFreq`` / ``AnFreq``): a method the deposit "
-        f"states beats an assumed one, and a recorded value that contradicts "
-        f"the deck is refused (``hessian_method_contradicts_input_deck``). "
-        f"A deck that carries no such directive says nothing. Failing that, "
-        f"Gaussian HF, DFT, "
+        f"``EnOnly``, ORCA ``NumFreq`` / ``AnFreq``, where ``NumFreq`` with ``NumGrad`` "
+        f"is a Hessian from energies): a method the deposit "
+        f"states beats an assumed one (a recorded value that contradicts the "
+        f"deck is its own refusal, ``hessian_method_contradicts_input_deck``, "
+        f"declared separately). A deck that carries no such directive says "
+        f"nothing. Failing that, "
+        f"Gaussian HF, DFT "
+        f"(double-hybrid functionals excepted: nothing is assumed for them), "
         f"MP2, CIS and CASSCF, and ORCA HF and DFT, resolve to the analytic "
         f"default ({TAU_ANALYTIC_DEFAULT_CM1:.0f} cm-1). ORCA releases before "
         f"version 5 have no analytic Hessian for meta-GGA functionals and are "
@@ -714,6 +721,61 @@ CHECK_FREQ_LIST_WITHIN_GEOMETRY_DEGREES_OF_FREEDOM = ScientificCheck(
         "has already determined does not belong to the geometry beside it. "
         "The repair is to attach the calculation to the geometry it ran on, "
         "or to deposit that geometry."
+    ),
+)
+
+CHECK_RECORDED_HESSIAN_METHOD_AGREES_WITH_THE_INPUT_DECK = ScientificCheck(
+    group="Stationary points",
+    sort_key=14,
+    code=W_HESSIAN_METHOD_CONTRADICTS_INPUT_DECK,
+    asserts=(
+        "A calculation that records how its frequency job built the Hessian "
+        "(``freq.hessian_method``) and also attaches the input deck that ran "
+        "it states the same method in both."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    tier_rationale=(
+        "A contract between two statements in one deposit, not an expectation "
+        "about a result, which is the narrow thing ADR 0008 reserves the "
+        "blocking tier for. Tau, the line between a noise-level imaginary mode "
+        "and a real one, is read from the Hessian method, and two statements of "
+        "it that differ give two different taus (50 against 80 for the two "
+        "numerical methods, 30 or less for analytic). Judging a mode against "
+        "either would be a guess, and the record would carry both statements "
+        "forever with nothing saying which was meant. The check makes no claim "
+        "about chemistry and refuses no calculation: it refuses a deposit that "
+        "cannot say what it did. Only a method the input deck states with an "
+        "explicit directive counts (Gaussian ``Freq=Numer`` or ``EnOnly``, ORCA "
+        "``NumFreq`` or ``AnFreq``); a deck with no such directive says nothing "
+        "and contradicts nothing, and a recorded value TCKDB cannot read is not "
+        "compared."
+    ),
+    adr="0012",
+    enforced_by=(
+        PythonCheck(
+            check_recorded_method_agrees_with_deck,
+            note=(
+                "Runs on the bundle calculation payloads that carry an inline "
+                "``input`` artifact (computed-species, computed-reaction and "
+                "network bundles). The standalone calculation, conformer and "
+                "transition-state payloads have no ``artifacts`` field, and a "
+                "deck uploaded later through the artifact route is not seen at "
+                "validation; that case earns the warning "
+                "``hessian_method_disagrees_with_stored_tau_basis`` on the "
+                "calculation instead, and the stored tolerance is never "
+                "relabelled. The message and ``context`` carry only TCKDB's "
+                "method tokens (``analytic``, ``finite_difference_gradient``, "
+                "``finite_difference_energy``), never the recorded string or "
+                "deck text."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "Correct whichever of the two is wrong, or omit the recorded "
+        "``freq.hessian_method`` and let the deck speak. A deposit that sends "
+        "only a deck, as ARC does, is never refused by this check; the deck is "
+        "read before the deposit is judged."
     ),
 )
 

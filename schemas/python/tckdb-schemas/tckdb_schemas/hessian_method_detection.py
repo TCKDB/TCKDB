@@ -49,6 +49,7 @@ __all__ = [
     "detect_hessian_method",
     "extract_gaussian_route_text",
     "hessian_method_class",
+    "orca_hessian_method_for",
 ]
 
 #: Gaussian ``Freq`` options that name the second-derivative method. Only
@@ -350,13 +351,31 @@ def _gaussian_method(text: str) -> HessianMethod | None:
     return found
 
 
+def orca_hessian_method_for(keyword: str, all_keywords: Iterable[str]) -> HessianMethod | None:
+    """The method an ORCA frequency keyword states, given every keyword in the deck.
+
+    ``NumFreq`` differentiates gradients. With ``NumGrad`` on the deck those
+    gradients are themselves numerical, so the Hessian is built from energies
+    (ORCA 5.0.4 manual, 8.3.2 and 9.24.5 "Numerical Gradients": ``! NumGrad``
+    requests numerical instead of analytic gradients). ``NumFreq`` alone stays
+    finite differences of analytic gradients. ``AnFreq`` is analytic.
+    """
+    method = ORCA_FREQ_HESSIAN_KEYWORDS.get(keyword.lower())
+    if (
+        method is HessianMethod.finite_difference_gradient
+        and "numgrad" in {k.lower() for k in all_keywords}
+    ):
+        return HessianMethod.finite_difference_energy
+    return method
+
+
 def _orca_method(text: str) -> HessianMethod | None:
+    keywords = [kw for line in orca_keyword_lines(_extract_input_block(text)) for kw in line.split()]
     found: HessianMethod | None = None
-    for keywords in orca_keyword_lines(_extract_input_block(text)):
-        for keyword in keywords.split():
-            method = ORCA_FREQ_HESSIAN_KEYWORDS.get(keyword.lower())
-            if method is not None:
-                found = method
+    for keyword in keywords:
+        method = orca_hessian_method_for(keyword, keywords)
+        if method is not None:
+            found = method
     return found
 
 
