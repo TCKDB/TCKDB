@@ -50,10 +50,11 @@ from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 from tckdb_schemas.sp_energy_components import SP_ENERGY_COMPONENTS_DESCRIPTION, check_sp_energy_components
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
+    TauResolution,
     evaluate_species_entry_frequency,
     evaluate_transition_state_frequency,
-    resolve_tau_from_parameters,
 )
+from tckdb_schemas.hessian_method_assumption import resolve_tau_with_assumption
 
 
 class CalculationIn(SchemaBase):
@@ -284,6 +285,24 @@ def freq_result_of(calc_in: "CalculationIn") -> FreqResultPayload | None:
     )
 
 
+def tau_resolution_of(calc_in: "CalculationIn") -> TauResolution:
+    """ADR 0012's tau for a bundle-local calculation.
+
+    The bundle twin of :meth:`CalculationWithResultsPayload.tau_resolution`:
+    recorded ``freq.hessian_method`` first, then the producing program's
+    assumed default from this calculation's own software and level-of-theory
+    method, then ``protocol_not_recorded``.
+    """
+    return resolve_tau_with_assumption(
+        (
+            (observation.canonical_key, observation.canonical_value)
+            for observation in (calc_in.parameters or ())
+        ),
+        calc_in.software_release.name if calc_in.software_release is not None else None,
+        calc_in.level_of_theory.method,
+    )
+
+
 def transition_state_frequency_findings(
     calc_in: "CalculationIn", *, location: str
 ) -> list[StationaryPointFinding]:
@@ -307,10 +326,7 @@ def transition_state_frequency_findings(
         reaction_coordinate_mode_index=(
             freq_result.reaction_coordinate_mode_index
         ),
-        tau=resolve_tau_from_parameters(
-            (observation.canonical_key, observation.canonical_value)
-            for observation in (calc_in.parameters or ())
-        ),
+        tau=tau_resolution_of(calc_in),
     )
 
 
@@ -333,10 +349,7 @@ def species_entry_frequency_findings(
         location=location,
         imaginary_modes=freq_result.imaginary_modes(),
         reaction_coordinate_mode_index=freq_result.reaction_coordinate_mode_index,
-        tau=resolve_tau_from_parameters(
-            (observation.canonical_key, observation.canonical_value)
-            for observation in (calc_in.parameters or ())
-        ),
+        tau=tau_resolution_of(calc_in),
     )
 
 

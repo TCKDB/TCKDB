@@ -86,8 +86,8 @@ from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     evaluate_species_entry_frequency,
     raise_for_blocking_findings,
-    resolve_tau_from_parameters,
 )
+from tckdb_schemas.hessian_method_assumption import resolve_tau_with_assumption
 from tckdb_schemas.structure_declarations import (
     StructureDeterminationDeclaration,
     assert_structure_pin_keys_declared,
@@ -359,9 +359,13 @@ class CalculationInBundle(SchemaBase):
             reaction_coordinate_mode_index=(
                 self.freq_result.reaction_coordinate_mode_index
             ),
-            tau=resolve_tau_from_parameters(
-                (observation.canonical_key, observation.canonical_value)
-                for observation in (self.parameters or ())
+            tau=resolve_tau_with_assumption(
+                (
+                    (observation.canonical_key, observation.canonical_value)
+                    for observation in (self.parameters or ())
+                ),
+                self.software_release.name if self.software_release is not None else None,
+                self.level_of_theory.method,
             ),
         )
 

@@ -101,8 +101,10 @@ def test_a_soft_mode_on_a_minimum_is_accepted_warned_and_its_tau_stored(client, 
     assert stored.imag_freq_cm1 == -15.0
     # Judged and not flagged -- false, not NULL.
     assert stored.imaginary_mode_structural_flag is False
-    assert stored.imaginary_mode_tau_cm1 == 50.0
-    assert stored.imaginary_mode_tau_basis == "protocol_not_recorded"
+    # No Hessian method recorded: Gaussian DFT resolves to its assumed
+    # analytic default at validation (owner decision 2026-10-31).
+    assert stored.imaginary_mode_tau_cm1 == 30.0
+    assert stored.imaginary_mode_tau_basis == "assumed_analytic_default"
 
 
 def test_a_stiff_mode_on_a_minimum_is_still_refused(client):
@@ -140,18 +142,17 @@ def test_a_tight_protocol_still_accepts_a_mode_below_its_own_tau(client, db_sess
 
 
 def test_the_stored_tau_is_the_one_that_decided_acceptance(client, db_session):
-    """-40 cm-1 is below the 50 cm-1 the deposit was judged at.
+    """Validation and storage share one tau resolution.
 
-    The upload path may assume the producing program's default Hessian method
-    when none is recorded, and for Gaussian DFT that assumption carries a
-    smaller tau (30). Storing that would leave a record that contradicts its
-    own acceptance, so the stored tau is the deciding one.
+    -20 cm-1 is below the assumed 30 that judged the deposit, and the stored
+    tau is that same 30. An unknown program judged and stored at 50 is
+    covered in ``test_api_assumed_tau_refuses_minimum``.
     """
-    resp = client.post("/api/v1/uploads/conformers", json=_payload(imag_freq_cm1=-40.0))
+    resp = client.post("/api/v1/uploads/conformers", json=_payload(imag_freq_cm1=-20.0))
     assert resp.status_code == 201, resp.text
     stored = _stored_freq(db_session)
-    assert stored.imaginary_mode_tau_cm1 == 50.0
-    assert stored.imaginary_mode_tau_basis == "protocol_not_recorded"
+    assert stored.imaginary_mode_tau_cm1 == 30.0
+    assert stored.imaginary_mode_tau_basis == "assumed_analytic_default"
     assert abs(stored.imag_freq_cm1) < stored.imaginary_mode_tau_cm1
 
 

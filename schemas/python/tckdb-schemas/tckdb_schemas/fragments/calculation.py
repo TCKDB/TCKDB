@@ -31,6 +31,7 @@ from tckdb_schemas.fragments.refs import (
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
+from tckdb_schemas.hessian_method_assumption import resolve_tau_with_assumption
 from tckdb_schemas.literature import LiteratureUploadRequest
 from tckdb_schemas.sp_energy_components import SP_ENERGY_COMPONENTS_DESCRIPTION, check_sp_energy_components
 from tckdb_schemas.stationary_point import (
@@ -39,7 +40,6 @@ from tckdb_schemas.stationary_point import (
     TauResolution,
     evaluate_species_entry_frequency,
     evaluate_transition_state_frequency,
-    resolve_tau_from_parameters,
 )
 from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 
@@ -1565,17 +1565,24 @@ class CalculationWithResultsPayload(CalculationPayload):
         )
 
     def tau_resolution(self) -> TauResolution:
-        """ADR 0012's τ for this calculation, from its own parameters.
+        """ADR 0012's τ for this calculation: recorded, else assumed, else conservative.
 
-        Reads the ``canonical_key``/``canonical_value`` pairs the
-        producer deposited. A payload that carries no parameters — the
-        common case for a hand-written upload — resolves to the
-        conservative "protocol not recorded" row, and says so in the
-        stored reason rather than silently picking a number.
+        A recorded ``freq.hessian_method`` (from the ``canonical_key`` /
+        ``canonical_value`` pairs the producer deposited) always wins. Failing
+        that, the payload's own software and level-of-theory method select the
+        producing program's assumed default (ADR 0012, 2026-09-04 amendment,
+        applied at validation since 2026-10-31), stored with an ``assumed_*``
+        basis. A program or method family the table does not know — or no
+        software at all — resolves to ``protocol_not_recorded``, and says so
+        rather than picking a number.
         """
-        return resolve_tau_from_parameters(
-            (observation.canonical_key, observation.canonical_value)
-            for observation in (self.parameters or ())
+        return resolve_tau_with_assumption(
+            (
+                (observation.canonical_key, observation.canonical_value)
+                for observation in (self.parameters or ())
+            ),
+            self.software_release.name if self.software_release is not None else None,
+            self.level_of_theory.method,
         )
 
     @model_validator(mode="after")
