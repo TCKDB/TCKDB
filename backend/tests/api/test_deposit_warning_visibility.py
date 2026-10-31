@@ -154,6 +154,33 @@ def test_a_submission_linked_to_another_record_type_with_the_same_id_is_not_ours
 
 
 # ---------------------------------------------------------------------------
+# a real deposit by a second user is written by that user
+# ---------------------------------------------------------------------------
+
+
+def test_a_real_deposit_by_a_second_user_is_written_by_that_user_and_shown_to_them_alone(client, db_session, login_as):
+    bob, bob_key = _user(db_session, "dw-real-bob")
+    other, other_key = _user(db_session, "dw-real-other")
+    login_as(bob.id)
+    response = client.post("/api/v1/uploads/conformers", json=hook._conformer_payload(smiles="C", charge=0, multiplicity=1))
+    assert response.status_code == 201, response.text[:300]
+    body = response.json()
+    assert body["warnings"], "the deposit must earn a warning for this to prove anything"
+
+    rows = db_session.scalars(select(DepositWarning).where(DepositWarning.submission_id == body["submission_id"])).all()
+    assert rows and {r.written_by_user_id for r in rows} == {bob.id}, "markers and warnings are written by the depositor"
+    assert db_session.get(Submission, body["submission_id"]).created_by == bob.id
+
+    calc_ref = body["primary_calculation"]["calculation_ref"]
+    calc = db_session.scalars(select(Calculation).where(Calculation.public_ref == calc_ref)).one()
+    # The reader is checked per request, so read as each user with their own key (the harness ignores the header for
+    # deposits, not for these optional-credential reads).
+    assert _depositor_messages(_read_calc(client, calc, bob_key))
+    assert _depositor_messages(_read_calc(client, calc, other_key)) == set()
+    assert _depositor_messages(_read_calc(client, calc)) == set()
+
+
+# ---------------------------------------------------------------------------
 # a withheld record contributes nothing under the curated profile
 # ---------------------------------------------------------------------------
 

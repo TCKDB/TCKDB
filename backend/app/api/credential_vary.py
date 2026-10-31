@@ -35,6 +35,8 @@ class CredentialVaryMiddleware:
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start" and scope.get("state", {}).get(STATE_KEY):
                 headers = MutableHeaders(scope=message)
+                # This REPLACES ``Cache-Control``; it does not merge with it. A route that sets its own value and also
+                # publishes the reader would be overwritten with ``private``. No such route exists today.
                 headers["Cache-Control"] = "private"
                 present = {part.strip().lower() for part in headers.get("vary", "").split(",") if part.strip()}
                 wanted = [h for h in VARY_HEADERS if h.lower() not in present]
