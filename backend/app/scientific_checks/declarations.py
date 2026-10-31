@@ -154,7 +154,7 @@ _TAU_THRESHOLD = ProvenanceThreshold(
         f"is a Hessian from energies): a method the deposit "
         f"states beats an assumed one (a recorded value that contradicts the "
         f"deck is its own refusal, ``hessian_method_contradicts_input_deck``, "
-        f"declared separately). A deck that carries no such directive says "
+        f"declared in register entry 50). A deck that carries no such directive says "
         f"nothing. Failing that, "
         f"Gaussian HF, DFT "
         f"(double-hybrid functionals excepted: nothing is assumed for them), "
@@ -725,8 +725,12 @@ CHECK_FREQ_LIST_WITHIN_GEOMETRY_DEGREES_OF_FREEDOM = ScientificCheck(
 )
 
 CHECK_RECORDED_HESSIAN_METHOD_AGREES_WITH_THE_INPUT_DECK = ScientificCheck(
-    group="Stationary points",
-    sort_key=14,
+    # Own group, deliberately: the register numbers by reading order, entry numbers are
+    # identifiers (stored on ``deposit_warning.register_entry`` and cited from docs), and a
+    # new entry must take the next free number rather than shift existing ones. A group that
+    # sorts after every other unlisted group gets #50; "Stationary points" is its subject.
+    group="Vibrational frequency provenance",
+    sort_key=1,
     code=W_HESSIAN_METHOD_CONTRADICTS_INPUT_DECK,
     asserts=(
         "A calculation that records how its frequency job built the Hessian "

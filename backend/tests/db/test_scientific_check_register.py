@@ -752,3 +752,62 @@ def test_design_positions_are_prose_not_placeholders() -> None:
                     f"{check.asserts!r} names a design position too vague to "
                     "be checkable by a reader: " + site.where
                 )
+
+
+#: Register numbers as of origin/main before #839. Numbers are identifiers: they are stored on
+#: ``deposit_warning.register_entry`` (append-only, deployed with #837) and cited from docs, so a
+#: new entry takes the next free number and never shifts one. Entries #15 to #18 are the
+#: stationary-point entries every other document cites.
+_PINNED_NUMBERS: dict[str, int] = {
+    "n_imag_contradicts_minimum": 16,
+    "minimum_imaginary_modes_below_tau": 17,
+    "transition_state_extra_imaginary_modes_below_tau": 17,
+    "transition_state_extra_imaginary_mode_above_tau": 17,
+    "transition_state_extra_imaginary_modes_not_assessable": 17,
+    "transition_state_imaginary_frequency_too_small": 18,
+    "reaction_atom_map_absent": 32,
+    "reaction_atom_map_participants_incomplete": 33,
+    "reaction_atom_map_atoms_incomplete": 33,
+    "reported_network_solve": 37,
+    "network_wide_energy_transfer_scope": 38,
+}
+
+
+def test_existing_entries_keep_their_numbers() -> None:
+    """Adding an entry must not renumber the ones already published."""
+    from app.services.deposit_warnings import REGISTER_ENTRY
+
+    doc = (BACKEND_ROOT.parent / "docs" / "guides" / "scientific_check_register.md").read_text()
+    number_of: dict[str, int] = {}
+    for block in re.split(r"\n(?=### \d+\. )", doc)[1:]:
+        number = int(re.match(r"### (\d+)\.", block).group(1))
+        channel = re.search(r"reaches a client via\*\* \| (.*?) \|", block).group(1)
+        code_line = re.search(r"\*\*Code\*\* \| (.*?) \|", block).group(1)
+        for code in re.findall(r"`([a-z_0-9]+)`", code_line):
+            # A code can be declared twice (a refusal and a warning); the stored
+            # number is the warning entry's.
+            if "UploadWarning" in channel or code not in number_of:
+                number_of[code] = number
+    assert len(_PINNED_NUMBERS) >= 10, "the pin lost its content"
+    for code, expected in _PINNED_NUMBERS.items():
+        assert number_of[code] == expected, f"{code}: entry {number_of[code]}, was {expected} on main"
+        if code in REGISTER_ENTRY:
+            assert REGISTER_ENTRY[code] == expected, code
+    assert number_of["hessian_method_contradicts_input_deck"] == 50
+    # Entries 14 to 19 by their opening words, as on main.
+    headings = {
+        int(m.group(1)): m.group(2)
+        for m in re.finditer(r"^### (\d+)\. (.*)$", doc, flags=re.MULTILINE)
+    }
+    for number, opening in {
+        14: "A transition state has at least one imaginary vibrational mode",
+        15: "A species entry declared a minimum has no imaginary vibrational mode",
+        16: "A van der Waals complex is formally a minimum",
+        17: "A transition state's imaginary modes other than the reaction coordinate",
+        18: "A transition state's reaction coordinate should exceed roughly 100",
+        19: "A deposited saddle point should carry passing intrinsic-reaction-coordinate",
+    }.items():
+        assert headings[number].startswith(opening), number
+    # Every code stored with a register number still points at the entry that declares it.
+    for code, stored in REGISTER_ENTRY.items():
+        assert number_of[code] == stored, code

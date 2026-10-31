@@ -110,7 +110,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - **[10]** Every geometry linked to a calculation is made of the atoms of the subject that calculation is filed under -- the species entry's own formula, or, for a transition state, the sum of its reaction's reactants.
 - **[13]** An optimisation's output geometry still describes the species it was declared for — the optimiser handed back the molecule it was given.
 - **[17]** A transition state's imaginary modes other than the reaction coordinate, and every imaginary mode on a species entry declared a minimum, are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
-- **[38]** A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
+- **[37]** A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
 
 ## Entries
 
@@ -410,7 +410,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   | finite-difference Hessian from energies | 80 |
   | Hessian method not recorded and program or method family not in the assumed-default table | 50 |
 
-  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — validation resolves tau from the producing program's documented default for the level of theory's method family (ADR 0012's 2026-09-04 amendment, applied at validation since 2026-10-31; the table is `tckdb_schemas.hessian_method_assumption`). Before assuming anything, validation reads the frequency directive of an inline input deck attached to the calculation (Gaussian `Freq=Numer` / `EnOnly`, ORCA `NumFreq` / `AnFreq`, where `NumFreq` with `NumGrad` is a Hessian from energies): a method the deposit states beats an assumed one (a recorded value that contradicts the deck is its own refusal, `hessian_method_contradicts_input_deck`, declared separately). A deck that carries no such directive says nothing. Failing that, Gaussian HF, DFT (double-hybrid functionals excepted: nothing is assumed for them), MP2, CIS and CASSCF, and ORCA HF and DFT, resolve to the analytic default (30 cm-1). ORCA releases before version 5 have no analytic Hessian for meta-GGA functionals and are assumed numerical (50 cm-1); ORCA double-hybrid and VV10 (non-local) functionals are assumed numerical on any version, because the manuals document numerical frequencies for them; an ORCA meta-GGA with an unknown version gets no assumption. Gaussian MP3, MP4, QCISD, CCSD, CISD and CID, and ORCA MP2, coupled-cluster and DLPNO methods, resolve to finite differences of gradients (50 cm-1). Gaussian CCSD(T) and QCISD(T) resolve to finite differences of energies (80 cm-1), which is looser than the conservative row: a minimum at 50 to 80 cm-1 that was refused without a recorded method is now accepted with a warning, and a transition-state extra mode in that band is no longer flagged. The record stores the matching `assumed_*` basis so an assumption is never confusable with a recorded statement. A recorded method always wins, and a `freq.hessian_method` that is present but not recognised is kept at the conservative row rather than replaced by an assumption. Only where the software or the method family is not in that table, or the payload names no software, is tau 50 cm-1 with `protocol_not_recorded` as the basis; that fallback is deliberately the *conservative* row, because assuming the better case would flag genuine quadrature noise as a real higher-order saddle. For a transition state tau never decides between blocking and warning — every blocking rule there is a contract about what the record says, not about magnitude — so the resolution changes how loudly a record is flagged and never whether it is accepted. For a declared minimum tau is the line between the warning and the refusal, and it is the same tau that is stored with the record.
+  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — validation resolves tau from the producing program's documented default for the level of theory's method family (ADR 0012's 2026-09-04 amendment, applied at validation since 2026-10-31; the table is `tckdb_schemas.hessian_method_assumption`). Before assuming anything, validation reads the frequency directive of an inline input deck attached to the calculation (Gaussian `Freq=Numer` / `EnOnly`, ORCA `NumFreq` / `AnFreq`, where `NumFreq` with `NumGrad` is a Hessian from energies): a method the deposit states beats an assumed one (a recorded value that contradicts the deck is its own refusal, `hessian_method_contradicts_input_deck`, declared in register entry 50). A deck that carries no such directive says nothing. Failing that, Gaussian HF, DFT (double-hybrid functionals excepted: nothing is assumed for them), MP2, CIS and CASSCF, and ORCA HF and DFT, resolve to the analytic default (30 cm-1). ORCA releases before version 5 have no analytic Hessian for meta-GGA functionals and are assumed numerical (50 cm-1); ORCA double-hybrid and VV10 (non-local) functionals are assumed numerical on any version, because the manuals document numerical frequencies for them; an ORCA meta-GGA with an unknown version gets no assumption. Gaussian MP3, MP4, QCISD, CCSD, CISD and CID, and ORCA MP2, coupled-cluster and DLPNO methods, resolve to finite differences of gradients (50 cm-1). Gaussian CCSD(T) and QCISD(T) resolve to finite differences of energies (80 cm-1), which is looser than the conservative row: a minimum at 50 to 80 cm-1 that was refused without a recorded method is now accepted with a warning, and a transition-state extra mode in that band is no longer flagged. The record stores the matching `assumed_*` basis so an assumption is never confusable with a recorded statement. A recorded method always wins, and a `freq.hessian_method` that is present but not recognised is kept at the conservative row rather than replaced by an assumption. Only where the software or the method family is not in that table, or the payload names no software, is tau 50 cm-1 with `protocol_not_recorded` as the basis; that fallback is deliberately the *conservative* row, because assuming the better case would flag genuine quadrature noise as a real higher-order saddle. For a transition state tau never decides between blocking and warning — every blocking rule there is a contract about what the record says, not about magnitude — so the resolution changes how loudly a record is flagged and never whether it is accepted. For a declared minimum tau is the line between the warning and the refusal, and it is the same tau that is stored with the record.
 
 **Escape hatch.** Declare `species_entry_kind='vdw_complex'`, which records the same mode with a warning instead, or deposit the structure through a transition-state payload if the single imaginary mode is real. A mode below tau needs no escape: it is accepted with a warning.
 
@@ -463,7 +463,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   | finite-difference Hessian from energies | 80 |
   | Hessian method not recorded and program or method family not in the assumed-default table | 50 |
 
-  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — validation resolves tau from the producing program's documented default for the level of theory's method family (ADR 0012's 2026-09-04 amendment, applied at validation since 2026-10-31; the table is `tckdb_schemas.hessian_method_assumption`). Before assuming anything, validation reads the frequency directive of an inline input deck attached to the calculation (Gaussian `Freq=Numer` / `EnOnly`, ORCA `NumFreq` / `AnFreq`, where `NumFreq` with `NumGrad` is a Hessian from energies): a method the deposit states beats an assumed one (a recorded value that contradicts the deck is its own refusal, `hessian_method_contradicts_input_deck`, declared separately). A deck that carries no such directive says nothing. Failing that, Gaussian HF, DFT (double-hybrid functionals excepted: nothing is assumed for them), MP2, CIS and CASSCF, and ORCA HF and DFT, resolve to the analytic default (30 cm-1). ORCA releases before version 5 have no analytic Hessian for meta-GGA functionals and are assumed numerical (50 cm-1); ORCA double-hybrid and VV10 (non-local) functionals are assumed numerical on any version, because the manuals document numerical frequencies for them; an ORCA meta-GGA with an unknown version gets no assumption. Gaussian MP3, MP4, QCISD, CCSD, CISD and CID, and ORCA MP2, coupled-cluster and DLPNO methods, resolve to finite differences of gradients (50 cm-1). Gaussian CCSD(T) and QCISD(T) resolve to finite differences of energies (80 cm-1), which is looser than the conservative row: a minimum at 50 to 80 cm-1 that was refused without a recorded method is now accepted with a warning, and a transition-state extra mode in that band is no longer flagged. The record stores the matching `assumed_*` basis so an assumption is never confusable with a recorded statement. A recorded method always wins, and a `freq.hessian_method` that is present but not recognised is kept at the conservative row rather than replaced by an assumption. Only where the software or the method family is not in that table, or the payload names no software, is tau 50 cm-1 with `protocol_not_recorded` as the basis; that fallback is deliberately the *conservative* row, because assuming the better case would flag genuine quadrature noise as a real higher-order saddle. For a transition state tau never decides between blocking and warning — every blocking rule there is a contract about what the record says, not about magnitude — so the resolution changes how loudly a record is flagged and never whether it is accepted. For a declared minimum tau is the line between the warning and the refusal, and it is the same tau that is stored with the record.
+  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — validation resolves tau from the producing program's documented default for the level of theory's method family (ADR 0012's 2026-09-04 amendment, applied at validation since 2026-10-31; the table is `tckdb_schemas.hessian_method_assumption`). Before assuming anything, validation reads the frequency directive of an inline input deck attached to the calculation (Gaussian `Freq=Numer` / `EnOnly`, ORCA `NumFreq` / `AnFreq`, where `NumFreq` with `NumGrad` is a Hessian from energies): a method the deposit states beats an assumed one (a recorded value that contradicts the deck is its own refusal, `hessian_method_contradicts_input_deck`, declared in register entry 50). A deck that carries no such directive says nothing. Failing that, Gaussian HF, DFT (double-hybrid functionals excepted: nothing is assumed for them), MP2, CIS and CASSCF, and ORCA HF and DFT, resolve to the analytic default (30 cm-1). ORCA releases before version 5 have no analytic Hessian for meta-GGA functionals and are assumed numerical (50 cm-1); ORCA double-hybrid and VV10 (non-local) functionals are assumed numerical on any version, because the manuals document numerical frequencies for them; an ORCA meta-GGA with an unknown version gets no assumption. Gaussian MP3, MP4, QCISD, CCSD, CISD and CID, and ORCA MP2, coupled-cluster and DLPNO methods, resolve to finite differences of gradients (50 cm-1). Gaussian CCSD(T) and QCISD(T) resolve to finite differences of energies (80 cm-1), which is looser than the conservative row: a minimum at 50 to 80 cm-1 that was refused without a recorded method is now accepted with a warning, and a transition-state extra mode in that band is no longer flagged. The record stores the matching `assumed_*` basis so an assumption is never confusable with a recorded statement. A recorded method always wins, and a `freq.hessian_method` that is present but not recognised is kept at the conservative row rather than replaced by an assumption. Only where the software or the method family is not in that table, or the payload names no software, is tau 50 cm-1 with `protocol_not_recorded` as the basis; that fallback is deliberately the *conservative* row, because assuming the better case would flag genuine quadrature noise as a real higher-order saddle. For a transition state tau never decides between blocking and warning — every blocking rule there is a contract about what the record says, not about magnitude — so the resolution changes how loudly a record is flagged and never whether it is accepted. For a declared minimum tau is the line between the warning and the refusal, and it is the same tau that is stored with the record.
 
 **Escape hatch.** None is needed — the check never refuses. Its cost runs the other way: a genuine higher-order saddle, a torsional maximum and a valley-ridge inflection are all accepted, and only the structural flag separates them from a clean first-order saddle for a consumer who reads it.
 
@@ -500,7 +500,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   | finite-difference Hessian from energies | 80 |
   | Hessian method not recorded and program or method family not in the assumed-default table | 50 |
 
-  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — validation resolves tau from the producing program's documented default for the level of theory's method family (ADR 0012's 2026-09-04 amendment, applied at validation since 2026-10-31; the table is `tckdb_schemas.hessian_method_assumption`). Before assuming anything, validation reads the frequency directive of an inline input deck attached to the calculation (Gaussian `Freq=Numer` / `EnOnly`, ORCA `NumFreq` / `AnFreq`, where `NumFreq` with `NumGrad` is a Hessian from energies): a method the deposit states beats an assumed one (a recorded value that contradicts the deck is its own refusal, `hessian_method_contradicts_input_deck`, declared separately). A deck that carries no such directive says nothing. Failing that, Gaussian HF, DFT (double-hybrid functionals excepted: nothing is assumed for them), MP2, CIS and CASSCF, and ORCA HF and DFT, resolve to the analytic default (30 cm-1). ORCA releases before version 5 have no analytic Hessian for meta-GGA functionals and are assumed numerical (50 cm-1); ORCA double-hybrid and VV10 (non-local) functionals are assumed numerical on any version, because the manuals document numerical frequencies for them; an ORCA meta-GGA with an unknown version gets no assumption. Gaussian MP3, MP4, QCISD, CCSD, CISD and CID, and ORCA MP2, coupled-cluster and DLPNO methods, resolve to finite differences of gradients (50 cm-1). Gaussian CCSD(T) and QCISD(T) resolve to finite differences of energies (80 cm-1), which is looser than the conservative row: a minimum at 50 to 80 cm-1 that was refused without a recorded method is now accepted with a warning, and a transition-state extra mode in that band is no longer flagged. The record stores the matching `assumed_*` basis so an assumption is never confusable with a recorded statement. A recorded method always wins, and a `freq.hessian_method` that is present but not recognised is kept at the conservative row rather than replaced by an assumption. Only where the software or the method family is not in that table, or the payload names no software, is tau 50 cm-1 with `protocol_not_recorded` as the basis; that fallback is deliberately the *conservative* row, because assuming the better case would flag genuine quadrature noise as a real higher-order saddle. For a transition state tau never decides between blocking and warning — every blocking rule there is a contract about what the record says, not about magnitude — so the resolution changes how loudly a record is flagged and never whether it is accepted. For a declared minimum tau is the line between the warning and the refusal, and it is the same tau that is stored with the record.
+  *When the provenance is missing.* When `freq.hessian_method` is absent — which is the common case, because most outputs do not say — validation resolves tau from the producing program's documented default for the level of theory's method family (ADR 0012's 2026-09-04 amendment, applied at validation since 2026-10-31; the table is `tckdb_schemas.hessian_method_assumption`). Before assuming anything, validation reads the frequency directive of an inline input deck attached to the calculation (Gaussian `Freq=Numer` / `EnOnly`, ORCA `NumFreq` / `AnFreq`, where `NumFreq` with `NumGrad` is a Hessian from energies): a method the deposit states beats an assumed one (a recorded value that contradicts the deck is its own refusal, `hessian_method_contradicts_input_deck`, declared in register entry 50). A deck that carries no such directive says nothing. Failing that, Gaussian HF, DFT (double-hybrid functionals excepted: nothing is assumed for them), MP2, CIS and CASSCF, and ORCA HF and DFT, resolve to the analytic default (30 cm-1). ORCA releases before version 5 have no analytic Hessian for meta-GGA functionals and are assumed numerical (50 cm-1); ORCA double-hybrid and VV10 (non-local) functionals are assumed numerical on any version, because the manuals document numerical frequencies for them; an ORCA meta-GGA with an unknown version gets no assumption. Gaussian MP3, MP4, QCISD, CCSD, CISD and CID, and ORCA MP2, coupled-cluster and DLPNO methods, resolve to finite differences of gradients (50 cm-1). Gaussian CCSD(T) and QCISD(T) resolve to finite differences of energies (80 cm-1), which is looser than the conservative row: a minimum at 50 to 80 cm-1 that was refused without a recorded method is now accepted with a warning, and a transition-state extra mode in that band is no longer flagged. The record stores the matching `assumed_*` basis so an assumption is never confusable with a recorded statement. A recorded method always wins, and a `freq.hessian_method` that is present but not recognised is kept at the conservative row rather than replaced by an assumption. Only where the software or the method family is not in that table, or the payload names no software, is tau 50 cm-1 with `protocol_not_recorded` as the basis; that fallback is deliberately the *conservative* row, because assuming the better case would flag genuine quadrature noise as a real higher-order saddle. For a transition state tau never decides between blocking and warning — every blocking rule there is a contract about what the record says, not about magnitude — so the resolution changes how loudly a record is flagged and never whether it is accepted. For a declared minimum tau is the line between the warning and the refusal, and it is the same tau that is stored with the record.
 
 **Escape hatch.** None is needed — the check never refuses. A referee should read the threshold as a tunable reporting line, not a claim about physics.
 
@@ -669,27 +669,9 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Cite the calculation that carries the energy: the `sp`, `opt` or `composite` for an electronic energy, the `freq` (or a `composite`) for an E0, and put the `freq` in the `well_freq` / `barrier_freq` role.
 
-### 27. A calculation that records how its frequency job built the Hessian (`freq.hessian_method`) and also attaches the input deck that ran it states the same method in both.
-
-| Field | Value |
-| --- | --- |
-| **Tier** | `block` |
-| **Code** | `hessian_method_contradicts_input_deck` |
-| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
-| **Governing ADR** | 0012 |
-
-**Why this tier.** A contract between two statements in one deposit, not an expectation about a result, which is the narrow thing ADR 0008 reserves the blocking tier for. Tau, the line between a noise-level imaginary mode and a real one, is read from the Hessian method, and two statements of it that differ give two different taus (50 against 80 for the two numerical methods, 30 or less for analytic). Judging a mode against either would be a guess, and the record would carry both statements forever with nothing saying which was meant. The check makes no claim about chemistry and refuses no calculation: it refuses a deposit that cannot say what it did. Only a method the input deck states with an explicit directive counts (Gaussian `Freq=Numer` or `EnOnly`, ORCA `NumFreq` or `AnFreq`); a deck with no such directive says nothing and contradicts nothing, and a recorded value TCKDB cannot read is not compared.
-
-**Enforced at.**
-
-- `check_recorded_method_agrees_with_deck` — `schemas/python/tckdb-schemas/tckdb_schemas/hessian_method_detection.py::check_recorded_method_agrees_with_deck`
-  *Runs on the bundle calculation payloads that carry an inline `input` artifact (computed-species, computed-reaction and network bundles). The standalone calculation, conformer and transition-state payloads have no `artifacts` field, and a deck uploaded later through the artifact route is not seen at validation; that case earns the warning `hessian_method_disagrees_with_stored_tau_basis` on the calculation instead, and the stored tolerance is never relabelled. The message and `context` carry only TCKDB's method tokens (`analytic`, `finite_difference_gradient`, `finite_difference_energy`), never the recorded string or deck text.*
-
-**Escape hatch.** Correct whichever of the two is wrong, or omit the recorded `freq.hessian_method` and let the deck speak. A deposit that sends only a deck, as ARC does, is never refused by this check; the deck is read before the deposit is judged.
-
 ## Atom mapping across a reaction
 
-### 28. An atom does not change element on the way across a reaction: carbon does not map onto nitrogen.
+### 27. An atom does not change element on the way across a reaction: carbon does not map onto nitrogen.
 
 | Field | Value |
 | --- | --- |
@@ -710,7 +692,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Case is not load-bearing, and no longer needs a special provision to stop it becoming so. The comparison used to be case-insensitive on both sides, because the two ends quote two different geometries and nothing guaranteed they spelled an element the same way — carbon becoming nitrogen is a contradiction, while `Cl` becoming `CL` is one program shouting where another did not, and refusing the second would have refused correct chemistry. `b4e7c1d20f83` canonicalised the symbol on the way into `geometry_atom.element` and `c5a1f8e3d074` made that a CHECK, so one element now has one spelling in every state the database can be in and both the constraint and the service compare the stored values directly. Isotope mass number is deliberately *not* carried across the same way, because a NULL disables a MATCH SIMPLE foreign key; isotope consistency is checked in the service layer instead.
 
-### 29. One saddle-point atom is claimed by exactly one atom of each leg, and one participant atom maps to exactly one saddle-point atom.
+### 28. One saddle-point atom is claimed by exactly one atom of each leg, and one participant atom maps to exactly one saddle-point atom.
 
 | Field | Value |
 | --- | --- |
@@ -734,7 +716,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Per leg, not globally: the reactant and product legs each claim the whole saddle point, which is the point of storing two maps both pointing at it. A `side` column exists on the pair row purely so this can be a unique constraint, because SQL cannot dereference the participant to find its role.
 
-### 30. Every atom index in a map is counted against a named geometry that the participant actually owns, and names an atom that geometry actually has.
+### 29. Every atom index in a map is counted against a named geometry that the participant actually owns, and names an atom that geometry actually has.
 
 | Field | Value |
 | --- | --- |
@@ -758,7 +740,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None, and the cost is stated in ADR 0011: the map is welded to the geometries it names, so depositing a second conformer or re-optimising at another level of theory does not carry it across. Canonical-order-relative indexing would be portable, and was rejected because its failure mode is a map that looks fine and refers to a different atom order than the depositor intended. Portability can be added later as a derived view; correctness cannot be retrofitted onto records nobody can verify.
 
-### 31. When a map covers every declared participant of an atom-balanced reaction, both legs claim the same saddle-point atoms and no saddle-point atom is left unclaimed.
+### 30. When a map covers every declared participant of an atom-balanced reaction, both legs claim the same saddle-point atoms and no saddle-point atom is left unclaimed.
 
 | Field | Value |
 | --- | --- |
@@ -776,7 +758,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Leave the map incomplete, or deposit an unbalanced reaction — either drops the rule to the warning tier by design rather than by accident.
 
-### 32. Where a deposit carries both an atom map and an IRC participant mapping for the same saddle point, they agree about which saddle-point atoms each participant is made of.
+### 31. Where a deposit carries both an atom map and an IRC participant mapping for the same saddle point, they agree about which saddle-point atoms each participant is made of.
 
 | Field | Value |
 | --- | --- |
@@ -794,7 +776,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Omit one surface, or correct whichever is wrong — the mappings are optional on every path and a partial atom map is always accepted. Three absences are deliberately *not* disagreements: an atom map that omits a participant or leaves atoms unmapped is compared only over what it does claim, a transition state with no passing IRC mapping is not compared at all, and a barrierless channel has neither surface. Two participants on one side that are the same species entry are interchangeable, so a disagreement a permutation within that group would resolve is treated as arbitrary labelling rather than contradiction. A participant with no atoms is not an absence: both surfaces can say it has none -- an empty atom list -- so a reaction releasing a free electron carries a complete partition on both and is compared like any other, with the electron contributing no atoms to either side of the comparison.
 
-### 33. A reaction that has a transition state should say which atom of the reactants is which atom of the saddle point and of the products.
+### 32. A reaction that has a transition state should say which atom of the reactants is which atom of the saddle point and of the products.
 
 | Field | Value |
 | --- | --- |
@@ -812,7 +794,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None is needed — the warning *is* the accommodation. TCKDB deliberately will not infer a map: several chemically distinct maps are usually consistent with the same reactants and products, so choosing one by algorithm would manufacture provenance.
 
-### 34. A supplied atom map should cover every declared participant molecule, every atom of each mapped participant, and every atom of the saddle point.
+### 33. A supplied atom map should cover every declared participant molecule, every atom of each mapped participant, and every atom of the saddle point.
 
 | Field | Value |
 | --- | --- |
@@ -830,7 +812,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None.
 
-### 35. An atom map records whether a human asserted it or an algorithm produced it, an inferred map names the algorithm, and neither attribution can be relabelled afterwards.
+### 34. An atom map records whether a human asserted it or an algorithm produced it, an inferred map names the algorithm, and neither attribution can be relabelled afterwards.
 
 | Field | Value |
 | --- | --- |
@@ -854,7 +836,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Rate coefficients
 
-### 36. An Arrhenius pre-exponential factor carries units of the dimensionality its reaction order requires — per-second for unimolecular, concentration^-1 time^-1 for bimolecular, concentration^-2 time^-1 for termolecular.
+### 35. An Arrhenius pre-exponential factor carries units of the dimensionality its reaction order requires — per-second for unimolecular, concentration^-1 time^-1 for bimolecular, concentration^-2 time^-1 for termolecular.
 
 | Field | Value |
 | --- | --- |
@@ -874,7 +856,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Statistical mechanics
 
-### 37. A partition function belongs to exactly one subject — a species entry or a transition-state entry, never both and never neither.
+### 36. A partition function belongs to exactly one subject — a species entry or a transition-state entry, never both and never neither.
 
 | Field | Value |
 | --- | --- |
@@ -895,7 +877,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Pressure-dependent networks
 
-### 38. A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
+### 37. A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
 
 | Field | Value |
 | --- | --- |
@@ -918,7 +900,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Recorded divergence.** Existence, not coverage — and the trigger must not be read as the whole contract. The database guarantees a computed solve carries nonzero evidence of each applicable class; the three coverage rules (one energy per state, one energy-transfer model per (well, collider) pair or a network-wide declaration, one barrier per saddle-point path) remain properties of the single wired upload path. A computed solve with four energies out of five passes the database and fails the validator. ADR 0010's amendment states this deliberately: a computed solve with *zero* energies is a contradiction and may block, while an incomplete one is a true record to be graded by the trust and reproducibility layers. Separately, `kind` cannot surface in CHEMKIN export, which has no provenance field; a tripwire test guards the moment network kinetics first reach mechanism output.
 
-### 39. A collisional energy-transfer model records whether its ⟨ΔE⟩down was determined per (well, collider) pair or declared once for the whole network.
+### 38. A collisional energy-transfer model records whether its ⟨ΔE⟩down was determined per (well, collider) pair or declared once for the whole network.
 
 | Field | Value |
 | --- | --- |
@@ -939,7 +921,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Custody of the evidence
 
-### 40. The bytes TCKDB serves for a stored artifact are the bytes it stored, and a record whose evidence is known not to be is labelled as such at read time rather than graded as if it were intact.
+### 39. The bytes TCKDB serves for a stored artifact are the bytes it stored, and a record whose evidence is known not to be is labelled as such at read time rather than graded as if it were intact.
 
 | Field | Value |
 | --- | --- |
@@ -967,7 +949,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Reproducibility
 
-### 41. Whether a record's preserved evidence is sufficient to understand, audit or repeat it is assessed separately from how far its evidence is trusted and from whether a curator approved it, and the three may disagree.
+### 40. Whether a record's preserved evidence is sufficient to understand, audit or repeat it is assessed separately from how far its evidence is trusted and from whether a curator approved it, and the three may disagree.
 
 | Field | Value |
 | --- | --- |
@@ -988,7 +970,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Advisory consistency
 
-### 42. Compare every supplied NASA Cp/entropy fit with exact points, s298 and explicitly named neighbours.
+### 41. Compare every supplied NASA Cp/entropy fit with exact points, s298 and explicitly named neighbours.
 
 | Field | Value |
 | --- | --- |
@@ -1008,7 +990,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
-### 43. Compare explicitly supplied opposite elementary rates with equilibrium from explicitly mapped NASA thermo.
+### 42. Compare explicitly supplied opposite elementary rates with equilibrium from explicitly mapped NASA thermo.
 
 | Field | Value |
 | --- | --- |
@@ -1028,7 +1010,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
-### 44. Compare every stored Gibbs value of one thermo record with H(T) - T*S(T) taken from each of that record's own representations, H and S always from the same one.
+### 43. Compare every stored Gibbs value of one thermo record with H(T) - T*S(T) taken from each of that record's own representations, H and S always from the same one.
 
 | Field | Value |
 | --- | --- |
@@ -1048,7 +1030,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
-### 45. Compare a thermo record's supplied enthalpies (h298, exact points, NASA-7, NASA-9) at shared temperatures, compare each enthalpy change with the exact interval-local Cp integral of a fit, and report each fit's own boundary jumps -- residuals only.
+### 44. Compare a thermo record's supplied enthalpies (h298, exact points, NASA-7, NASA-9) at shared temperatures, compare each enthalpy change with the exact interval-local Cp integral of a fit, and report each fit's own boundary jumps -- residuals only.
 
 | Field | Value |
 | --- | --- |
@@ -1068,7 +1050,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
-### 46. Compare a kinetics record's stated reaction energy (its tunneling row, forward, separated-species zero) with the Hess sum of explicitly mapped formation enthalpies at the matching temperature.
+### 45. Compare a kinetics record's stated reaction energy (its tunneling row, forward, separated-species zero) with the Hess sum of explicitly mapped formation enthalpies at the matching temperature.
 
 | Field | Value |
 | --- | --- |
@@ -1088,7 +1070,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
-### 47. Find, on a protium species entry, calculation geometries that declare a non-standard nuclide of any element -- a D or T element symbol deposited before 2026-10-03, or a stored mass number -- and record each as a finding.
+### 46. Find, on a protium species entry, calculation geometries that declare a non-standard nuclide of any element -- a D or T element symbol deposited before 2026-10-03, or a stored mass number -- and record each as a finding.
 
 | Field | Value |
 | --- | --- |
@@ -1108,7 +1090,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
-### 48. Report a conformer group whose converged optimised structures are linked end to end but are not all within the matching tolerance of each other (a wide basin), with the largest torsion difference between two of them.
+### 47. Report a conformer group whose converged optimised structures are linked end to end but are not all within the matching tolerance of each other (a wide basin), with the largest torsion difference between two of them.
 
 | Field | Value |
 | --- | --- |
@@ -1130,7 +1112,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## External reference comparison
 
-### 49. A computed thermo record's heat capacity, evaluated at each temperature an independent external observation reports, is compared against that observation and the residual is recorded -- never judged against a threshold and never fed back into the record's trust or review state.
+### 48. A computed thermo record's heat capacity, evaluated at each temperature an independent external observation reports, is compared against that observation and the residual is recorded -- never judged against a threshold and never fed back into the record's trust or review state.
 
 | Field | Value |
 | --- | --- |
@@ -1152,7 +1134,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Scan coordinates
 
-### 50. A scan point's stored coordinate_value is the internal coordinate at that point's own sampled geometry, in that coordinate's own unit (ADR 0020) -- never a displacement, and never compared against start_value as an anchor.
+### 49. A scan point's stored coordinate_value is the internal coordinate at that point's own sampled geometry, in that coordinate's own unit (ADR 0020) -- never a displacement, and never compared against start_value as an anchor.
 
 | Field | Value |
 | --- | --- |
@@ -1182,6 +1164,26 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 **Escape hatch.** None needed -- the check never refuses, at any tier. Its cost runs the other way: today it reports every one of the 46 deposited scan series as non-conforming, which ADR 0020 records as the correct, intended finding rather than a defect to quiet.
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
+
+## Vibrational frequency provenance
+
+### 50. A calculation that records how its frequency job built the Hessian (`freq.hessian_method`) and also attaches the input deck that ran it states the same method in both.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `hessian_method_contradicts_input_deck` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0012 |
+
+**Why this tier.** A contract between two statements in one deposit, not an expectation about a result, which is the narrow thing ADR 0008 reserves the blocking tier for. Tau, the line between a noise-level imaginary mode and a real one, is read from the Hessian method, and two statements of it that differ give two different taus (50 against 80 for the two numerical methods, 30 or less for analytic). Judging a mode against either would be a guess, and the record would carry both statements forever with nothing saying which was meant. The check makes no claim about chemistry and refuses no calculation: it refuses a deposit that cannot say what it did. Only a method the input deck states with an explicit directive counts (Gaussian `Freq=Numer` or `EnOnly`, ORCA `NumFreq` or `AnFreq`); a deck with no such directive says nothing and contradicts nothing, and a recorded value TCKDB cannot read is not compared.
+
+**Enforced at.**
+
+- `check_recorded_method_agrees_with_deck` — `schemas/python/tckdb-schemas/tckdb_schemas/hessian_method_detection.py::check_recorded_method_agrees_with_deck`
+  *Runs on the bundle calculation payloads that carry an inline `input` artifact (computed-species, computed-reaction and network bundles). The standalone calculation, conformer and transition-state payloads have no `artifacts` field, and a deck uploaded later through the artifact route is not seen at validation; that case earns the warning `hessian_method_disagrees_with_stored_tau_basis` on the calculation instead, and the stored tolerance is never relabelled. The message and `context` carry only TCKDB's method tokens (`analytic`, `finite_difference_gradient`, `finite_difference_energy`), never the recorded string or deck text.*
+
+**Escape hatch.** Correct whichever of the two is wrong, or omit the recorded `freq.hessian_method` and let the deck speak. A deposit that sends only a deck, as ARC does, is never refused by this check; the deck is read before the deposit is judged.
 
 ---
 

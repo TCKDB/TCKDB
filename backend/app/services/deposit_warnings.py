@@ -117,11 +117,11 @@ REGISTER_ENTRY: dict[str, int] = {
     "transition_state_energy_ordering_not_compared": 25,
     "network_state_energy_sum_not_compared": 25,
     "network_energy_zpe_source_absent": 25,
-    "reaction_atom_map_absent": 33,
-    "reaction_atom_map_participants_incomplete": 34,
-    "reaction_atom_map_atoms_incomplete": 34,
-    "reported_network_solve": 38,
-    "network_wide_energy_transfer_scope": 39,
+    "reaction_atom_map_absent": 32,
+    "reaction_atom_map_participants_incomplete": 33,
+    "reaction_atom_map_atoms_incomplete": 33,
+    "reported_network_solve": 37,
+    "network_wide_energy_transfer_scope": 38,
 }
 
 #: Codes whose subject is a shared, deduplicated identity row (a species, a reaction, a literature entry, a ref
