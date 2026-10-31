@@ -62,6 +62,10 @@ RENDERED: dict[str, str] = {
         "The reaction coordinate of the transition state is softer than the usual lower bound for one, which can "
         "mean an under-converged geometry or a coarse integration grid."
     ),
+    "hessian_method_disagrees_with_stored_tau_basis": (
+        "An input deck attached after the deposit states a Hessian method of a different kind from the one the "
+        "tolerance stored with this frequency calculation rests on. The stored tolerance was not changed."
+    ),
     "freq_list_incomplete_for_geometry": (
         "The frequency list carries fewer modes than the geometry it is attached to has vibrations."
     ),
@@ -306,6 +310,13 @@ def _with_context(code: str, context: Mapping[str, Any]) -> str | None:
             return (
                 f"The declared charge ({declared}) disagrees with the charge stated by the uploaded "
                 f"{_program(context)}output log ({logged}). The declared value was kept."
+            )
+    if code == "hessian_method_disagrees_with_stored_tau_basis":
+        stored, deck = context.get("stored_method_kind"), context.get("deck_method_kind")
+        if stored in ("analytic", "numerical") and deck in ("analytic", "numerical"):
+            return (
+                f"The tolerance stored with this frequency calculation rests on a {stored} Hessian, but an input "
+                f"deck attached after the deposit states a {deck} one. The stored tolerance was not changed."
             )
     if code == "multiplicity_mismatch":
         declared, logged = context.get("declared"), context.get("logged")

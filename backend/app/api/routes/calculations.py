@@ -86,6 +86,7 @@ from app.schemas.entities.calculation import (
     CalculationWavefunctionDiagnosticRead,
 )
 from app.schemas.fragments.artifact import ArtifactIn
+from app.services.hessian_method_deck_check import try_hessian_method_disagreement_from_input_upload
 from app.schemas.upload_warning import UploadWarning
 from app.services.artifact_persistence import (
     link_artifacts_to_deposit_submission,
@@ -822,6 +823,11 @@ def upload_calculation_artifacts(
         )
         if sp_warning is not None:
             warnings.append(sp_warning)
+        # A deck attached after the deposit was judged may state a Hessian
+        # method the stored tolerance does not rest on: flag, never relabel.
+        deck_warning = try_hessian_method_disagreement_from_input_upload(calculation, art_in)
+        if deck_warning is not None:
+            warnings.append(deck_warning)
         # Output logs also state the charge and spin multiplicity the run
         # actually used; contradicting the declared identity is flagged.
         warnings.extend(
