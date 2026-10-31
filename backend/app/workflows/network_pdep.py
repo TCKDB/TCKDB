@@ -878,7 +878,7 @@ def persist_network_pdep_upload(
             ],
             calculation_ids_by_key=calculation_key_to_id,
             subject_label=ts_in.key,
-            field_path=f"transition_states[{ts_in.key}].validation_evidence",
+            field_path=f"transition_states[{ts_in.key!r}].validation_evidence",
             reaction_entry_id=reaction_entry.id,
             transition_state_geometry_id=ts_geometry.id,
             created_by=created_by,
@@ -904,7 +904,7 @@ def persist_network_pdep_upload(
             # no such field, and a machine-readable pointer naming one would
             # send a client that highlights ``field`` to somewhere that does
             # not exist. ``deposit_path`` carries where the map can go.
-            field_path=f"transition_states[{ts_in.key}]",
+            field_path=f"transition_states[{ts_in.key!r}]",
             deposit_path=_PDEP_ABSENCE_DEPOSIT_PATH,
             created_by=created_by,
             warnings=warning_sink,

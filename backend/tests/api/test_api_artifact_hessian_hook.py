@@ -505,7 +505,9 @@ class TestHessianNotStoredWarnings:
         (warning,) = [w for w in body["warnings"] if w["code"].startswith("hessian_not_stored")]
         assert warning["context"]["depositor_supplied"] == {"artifact_filename": "opt.hess"}
         assert "opt.hess" not in warning["message"]
-        assert "'opt' calculation" in warning["context"]["detail"]
+        assert warning["context"]["reason"] == "not_frequency_calculation"
+        assert warning["context"]["calculation_type"] == "opt"
+        assert "'opt' calculation" in warning["message"]
         assert len(body["artifacts"]) == 1
 
     def test_a_matrix_bearing_log_sent_to_an_opt_calculation_stays_silent(

@@ -1008,7 +1008,7 @@ def evaluate_transition_state_frequency(
                 tau=resolved_tau,
                 context={
                     "reaction_coordinate_mode_index": reaction_coordinate_mode_index,
-                    "extra_imaginary_modes": n_imag - 1,
+                    "extra_imaginary_mode_count": n_imag - 1,
                     **_tau_context(resolved_tau),
                 },
                 message=(
@@ -1078,7 +1078,11 @@ def evaluate_transition_state_frequency(
                 location=location,
                 structural_flag=True,
                 tau=resolved_tau,
-                context={"extra_imaginary_modes": [_mode_context(m) for m in above_tau], **_tau_context(resolved_tau)},
+                context={
+                    "extra_imaginary_mode_count": len(above_tau),
+                    "extra_imaginary_modes": [_mode_context(m) for m in above_tau],
+                    **_tau_context(resolved_tau),
+                },
                 message=(
                     f"{location}: "
                     f"{', '.join(_describe(m) for m in above_tau)} "
@@ -1103,7 +1107,11 @@ def evaluate_transition_state_frequency(
                 code=W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU,
                 location=location,
                 tau=resolved_tau,
-                context={"extra_imaginary_modes": [_mode_context(m) for m in extras], **_tau_context(resolved_tau)},
+                context={
+                    "extra_imaginary_mode_count": len(extras),
+                    "extra_imaginary_modes": [_mode_context(m) for m in extras],
+                    **_tau_context(resolved_tau),
+                },
                 message=(
                     f"{location}: "
                     f"{', '.join(_describe(m) for m in extras)} "

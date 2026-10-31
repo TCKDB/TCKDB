@@ -8,6 +8,7 @@ intentionally use ``would_*`` action wording and never report actuals.
 from __future__ import annotations
 
 from enum import Enum
+from typing import Any
 
 from pydantic import Field
 
@@ -95,6 +96,9 @@ class ContributionBundleDryRunMessage(SchemaBase):
     :param field: Optional pointer at a bundle field (e.g. ``records``).
     :param local_ref: Optional bundle-local upload reference.
     :param record_type: Optional record type the message relates to.
+    :param context: Optional values the message states (the ``context`` of an ``UploadWarning`` carried into a bundle
+        message): numbers, TCKDB tokens, and under ``depositor_supplied`` the depositor-typed text that helps find the
+        problem. ``None`` when the message states none.
     """
 
     level: DryRunMessageLevel
@@ -104,6 +108,7 @@ class ContributionBundleDryRunMessage(SchemaBase):
     field: str | None = None
     local_ref: str | None = None
     record_type: DryRunRecordType | None = None
+    context: dict[str, Any] | None = None
 
 
 class ContributionBundleDryRunSummary(SchemaBase):

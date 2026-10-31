@@ -144,6 +144,9 @@ def collect_atomic_electronic_warnings(
                     "multiplicity": multiplicity,
                     "electronic_partition_function": ground.electronic_partition_function(),
                     "free_energy_error_kj_mol": -ground.spin_only_free_energy_error_kj_mol(),
+                    "ground_levels": [
+                        {"j": two_j / 2, "degeneracy": two_j + 1, "energy_cm1": energy} for two_j, energy in ground.levels
+                    ],
                 },
             )
         )
@@ -184,6 +187,7 @@ def _degeneracy_warnings(*, element, ground, levels, field):
                 "ground_term": ground.term_symbol,
                 "lowest_degeneracy": lowest.degeneracy,
                 "allowed_degeneracies": list(allowed),
+                "level_degeneracies": list(ground.level_degeneracies),
             },
         )
     ]

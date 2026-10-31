@@ -554,7 +554,7 @@ def test_a_sum_that_cannot_be_formed_is_stored_as_not_compared_and_warned(
     (warning,) = [w for w in resp.json()["warnings"] if w["code"] == _NOT_COMPARED]
     assert reason in warning["message"] and reason in warning["context"]["reasons"]
     # The state's local key is the depositor's: under the marked key, never in the sentence.
-    assert any("'exit'" in item for item in warning["context"]["depositor_supplied"]["not_compared"])
+    assert {"state_key": "exit", "reason": reason} in warning["context"]["depositor_supplied"]["not_compared"]
     assert "exit" not in warning["message"]
     # The other three states, correctly summed on an absolute zero, still agree.
     others = [r for r in db_session.scalars(select(NetworkSolveStateEnergy)).all() if r is not row]

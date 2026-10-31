@@ -308,7 +308,7 @@ class SoftwareReleaseRef(SchemaBase):
             if self.revision is not None:
                 self._version_warning_code = W_SOFTWARE_RELEASE_VERSION_IS_COMPOSITE
                 self._version_warning_context = {
-                    "normalised": False,
+                    "action": "revision_already_supplied",
                     "depositor_supplied": {
                         "version": self.version,
                         "revision": self.revision,
@@ -320,7 +320,7 @@ class SoftwareReleaseRef(SchemaBase):
             self.revision = split_revision
             self._version_warning_code = W_SOFTWARE_RELEASE_VERSION_IS_COMPOSITE
             self._version_warning_context = {
-                "normalised": True,
+                "action": "split_banner_with_revision",
                 "depositor_supplied": {
                     "declared_version": original,
                     "name": self.name,
@@ -332,7 +332,7 @@ class SoftwareReleaseRef(SchemaBase):
             self.version = candidate
             self._version_warning_code = W_SOFTWARE_RELEASE_VERSION_IS_COMPOSITE
             self._version_warning_context = {
-                "normalised": True,
+                "action": "split_banner_name_only",
                 "depositor_supplied": {"declared_version": original, "name": self.name, "version": candidate},
             }
 
@@ -591,7 +591,8 @@ class OrdinaryLevelOfTheoryRef(SchemaBase):
         stem = None if self.method is None else correction_table_method_stem(self.method)
         if stem is not None:
             self._method_warning_code = W_LEVEL_OF_THEORY_METHOD_NAMES_CORRECTION_TABLE
-            self._method_warning_context = {"depositor_supplied": {"method": self.method, "method_stem": stem}}
+            # The stem comes from a closed list of method names, so it is TCKDB's; the method as typed is not.
+            self._method_warning_context = {"method_stem": stem, "depositor_supplied": {"method": self.method}}
         return self
 
     def method_warning(self, field_prefix: str = "") -> UploadWarning | None:

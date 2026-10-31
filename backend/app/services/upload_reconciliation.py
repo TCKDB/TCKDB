@@ -364,6 +364,19 @@ def _check_n_imag(
 # ---------------------------------------------------------------------------
 
 
+def _evidence_category(source: str) -> str:
+    """The kind of evidence a deduction rests on, as a TCKDB token (the raw source can name a method or a symmetry)."""
+    if source.startswith("freq.n_imag"):
+        return "frequency_analysis"
+    if source == "job_type.td":
+        return "excited_state_job_type"
+    if source == "method.default":
+        return "method_default"
+    if source.startswith("method."):
+        return "excited_state_method"
+    return "multiplicity"
+
+
 def _reconcile_deduction(
     deduction: Deduction,
     payload: SpeciesEntryIdentityPayload,
@@ -391,7 +404,7 @@ def _reconcile_deduction(
         code=code,
         context={
             "deduced": str(deduction.value),
-            "evidence": deduction.source,
+            "evidence": _evidence_category(deduction.source),
             "confidence": deduction.confidence,
             "depositor_supplied": {attr_name: str(payload_value)},
         },

@@ -989,7 +989,7 @@ def collect_state_energy_source_warnings(
     is left out of the not-compared warning so one problem is not reported twice.
     """
     warnings: list[UploadWarning] = []
-    skipped: list[str] = []
+    skipped: list[dict[str, str]] = []
     reasons: set[str] = set()
     for energy, comparison in zip(energies, comparisons, strict=True):
         cited = [p for p in energy.participants if p.calculation is not None]
@@ -1007,7 +1007,7 @@ def collect_state_energy_source_warnings(
                 )
             )
         elif comparison.status == COMPARISON_NOT_COMPARED and comparison.reason != NOT_COMPARED_NO_SOURCE_STATED:
-            skipped.append(f"'{energy.state_key}' ({comparison.reason})")
+            skipped.append({"state_key": energy.state_key, "reason": comparison.reason or ""})
             if comparison.reason:
                 reasons.add(comparison.reason)
     if skipped:

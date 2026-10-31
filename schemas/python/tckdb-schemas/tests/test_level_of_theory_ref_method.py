@@ -136,8 +136,8 @@ def test_a_correction_table_name_warns_and_is_not_rewritten():
     assert warning.code == W_LEVEL_OF_THEORY_METHOD_NAMES_CORRECTION_TABLE
     assert warning.field == "calculation.level_of_theory.method"
     # The method is the depositor's string: under the marked key, and the stem is named there, not in the sentence.
-    assert warning.context["depositor_supplied"] == {"method": "CBS-QB3-Paraskevas", "method_stem": "cbs-qb3"}
-    assert "Paraskevas" not in warning.message and "cbs-qb3" not in warning.message
+    assert warning.context == {"method_stem": "cbs-qb3", "depositor_supplied": {"method": "CBS-QB3-Paraskevas"}}
+    assert "Paraskevas" not in warning.message and "cbs-qb3" in warning.message
 
 
 def test_an_ordinary_method_has_no_warning():

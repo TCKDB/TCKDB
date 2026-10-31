@@ -336,6 +336,7 @@ def _bent_count_for_linear_geometry(
             "n_atoms": n_atoms,
             "linear_count": linear_count,
             "transverse_ratio": ratio,
+            "collinear_max_transverse_ratio": COLLINEAR_MAX_TRANSVERSE_RATIO,
         },
     )
 
@@ -417,6 +418,7 @@ def evaluate_frequency_list_linearity(
                 "n_atoms": n_atoms,
                 "bent_count": bent_count,
                 "transverse_ratio": ratio,
+                "bent_min_transverse_ratio": BENT_MIN_TRANSVERSE_RATIO,
             },
         )
     ]

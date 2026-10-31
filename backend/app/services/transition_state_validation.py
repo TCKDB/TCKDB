@@ -496,7 +496,7 @@ def _warn_energies_not_compared(
     if warnings is None:
         return
     skipped = [
-        f"'{energy.participant}' {energy.energy_kind} ({comparison.reason})"
+        {"participant": energy.participant, "energy_kind": energy.energy_kind, "reason": comparison.reason or ""}
         for energy, comparison in zip(record.energies or [], comparisons, strict=True)
         if comparison.status == COMPARISON_NOT_COMPARED
     ]

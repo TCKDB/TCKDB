@@ -5,7 +5,24 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from tckdb_schemas.deposit_warning_messages import render_message
+from tckdb_schemas.deposit_warning_messages import clean_depositor_supplied, render_message
+
+
+def _is_marked_shape(supplied: Any) -> bool:
+    """Whether ``depositor_supplied`` is a dict of strings, lists of strings and lists of records of strings."""
+    if not isinstance(supplied, dict):
+        return False
+    for item in supplied.values():
+        if isinstance(item, str):
+            continue
+        if isinstance(item, list) and all(isinstance(i, str) for i in item):
+            continue
+        if isinstance(item, list) and all(
+            isinstance(i, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in i.items()) for i in item
+        ):
+            continue
+        return False
+    return True
 
 
 class UploadWarning(BaseModel):
@@ -25,7 +42,9 @@ class UploadWarning(BaseModel):
         (for example the declared and the logged charge). Optional: a producer
         that states none leaves it ``None``. It is stored with the warning and
         shown with the record it concerns; it never carries a database id. Anything the depositor typed that helps
-        them find the problem is under ``depositor_supplied`` and is depositor-typed text.
+        them find the problem is under ``depositor_supplied``: a dict of named strings, lists of strings or lists of
+        records of strings (``{"transition_state_label": "TS0"}``), which is depositor-typed text. An entry that
+        holds nothing is dropped. No other key holds a string the depositor typed.
     """
 
     field: str
@@ -41,5 +60,19 @@ class UploadWarning(BaseModel):
         :func:`tckdb_schemas.deposit_warning_messages.render_message` of the code and context, the same call a read
         makes on the stored row.
         """
-        stored = dict(context) if context else None
+        stored = clean_depositor_supplied(context)
+        supplied = (stored or {}).get("depositor_supplied")
+        if supplied is not None and not _is_marked_shape(supplied):
+            raise TypeError(
+                "context['depositor_supplied'] holds strings, lists of strings and lists of records of strings only"
+            )
         return cls(field=field, code=code, message=render_message(code, stored), context=stored)
+
+    @classmethod
+    def from_stored(cls, data: Mapping[str, Any]) -> "UploadWarning":
+        """A warning read back from where it was kept (a job's recorded warnings or result), as a dict.
+
+        Its message is built again from its code and context, exactly as :meth:`from_code` builds it, and not read
+        from the stored text: what was kept is data, and the sentence is TCKDB's to say.
+        """
+        return cls.from_code(field=data["field"], code=data["code"], context=data.get("context"))
