@@ -2212,6 +2212,9 @@ def persist_computed_reaction_upload(
             sp_calcs_by_species_key = _index_species_sp_calcs(
                 request, calculation_key_to_id
             )
+            # H + H names the same species key twice: link a given
+            # (calculation, role) once, or the primary key collides.
+            already_linked: set[tuple[int, KineticsCalculationRole]] = set()
             for key, role in [
                 *[
                     (k, KineticsCalculationRole.reactant_energy)
@@ -2223,7 +2226,8 @@ def persist_computed_reaction_upload(
                 ],
             ]:
                 sp_calc_ids = sp_calcs_by_species_key.get(key, [])
-                if sp_calc_ids:
+                if sp_calc_ids and (sp_calc_ids[0], role) not in already_linked:
+                    already_linked.add((sp_calc_ids[0], role))
                     session.add(
                         KineticsSourceCalculation(
                             kinetics_id=kinetics.id,

@@ -6,7 +6,7 @@ the same way. Nothing is defined here; this module re-exports it for the
 backend's existing imports. Do not add a second copy of the table.
 """
 
-from tckdb_schemas.hessian_method_assumption import (  # noqa: F401
+from tckdb_schemas.hessian_method_assumption import (
     MethodFamily,
     classify_method_family,
     infer_hessian_method,
