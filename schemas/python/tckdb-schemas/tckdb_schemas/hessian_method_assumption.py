@@ -101,8 +101,14 @@ allowlist, not a classifier that tries to cover everything.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 
+from tckdb_schemas.enums import HessianMethod
+from tckdb_schemas.hessian_method_detection import (
+    check_recorded_method_agrees_with_deck,
+    deck_hessian_method,
+)
 from tckdb_schemas.software import normalize_software_name
 from tckdb_schemas.stationary_point import (
     TAU_ANALYTIC_DEFAULT_CM1,
@@ -118,6 +124,9 @@ __all__ = [
     "classify_method_family",
     "infer_hessian_method",
     "is_dft_functional",
+    "calculation_deck_method",
+    "check_calculation_deck_agrees",
+    "resolve_tau_for_calculation",
     "resolve_tau_with_assumption",
 ]
 
@@ -337,6 +346,78 @@ _ORCA_FINITE_DIFFERENCE_GRADIENT = frozenset({
     MethodFamily.DLPNO_OTHER,
 })
 
+# ---------------------------------------------------------------------------
+# ORCA: functional class and release gate
+#
+# Sources (ORCA manuals read through the group knowledge base, 2026-10-31):
+#
+# * meta-GGA: ORCA 5.0.4 manual, "ORCA 5.0 Foreword" (pp. 29-38): "Meta-GGA
+#   analytic Hessians are now available." So below 5 a meta-GGA frequency job
+#   cannot be analytic and is assumed numerical; 5 and later is analytic.
+# * VV10 / DFT-NL: ORCA 5.0.4 manual, 9.4.2.10 "DFT-NL", "Self-consistent
+#   computations with the DFT-NL dispersion correction" (pp. 519-520), and
+#   ORCA 6.1 manual, "Non-Local Dispersion Correction (VV10): DFT-NL" (pp.
+#   263-265): analytic gradients exist, but "any calculation that requires
+#   second derivatives of the NL functional is not yet possible", analytic
+#   Hessians included. The manuals do NOT confirm an analytic Hessian, so no
+#   assumption is made (``protocol_not_recorded``).
+# * double hybrids: ORCA 5.0.4 manual, 8.1.4.5 (pp. 155-156): double-hybrid DFT
+#   is "available for ... numerical polarizabilities and frequencies". No
+#   statement about analytic Hessians was found in the 5.0.4 or 6.1 manuals,
+#   so no assumption is made.
+# * MP2: ORCA 6.1 manual, "MP2 and RI-MP2 Second Derivatives" (p. 290): the
+#   analytic (RI-)MP2 Hessians are no longer available. ORCA MP2 stays in the
+#   finite-difference-from-gradients row.
+#
+# Name lists are explicit and conservative; a name in no list is a plain
+# GGA/hybrid only if the family classifier already calls it DFT. Overlaps take
+# the more conservative row: VV10 and double hybrid before meta-GGA.
+# ---------------------------------------------------------------------------
+
+#: VV10 / non-local correlation functionals (and the ``-NL`` / ``-SCNL`` suffixes).
+_ORCA_VV10_PREFIXES = (
+    "wb97x-v", "wb97xv", "wb97m-v", "wb97mv", "b97m-v", "b97mv", "vv10",
+)
+_ORCA_VV10_SUFFIXES = ("-nl", "-scnl")
+
+#: Double-hybrid functionals (also matches dispersion-suffixed spellings).
+_ORCA_DOUBLE_HYBRID_PREFIXES = (
+    "b2plyp", "b2gp-plyp", "b2gpplyp", "b2k-plyp", "b2t-plyp", "mpw2plyp",
+    "dsd-", "revdsd", "pwpb95", "pbe0-dh", "pbe0-2", "pbe-qidh",
+    "wb2plyp", "wb2gpplyp", "ub2plyp", "wb97x-2", "wb97m(2)", "wb97m-2",
+    "pr2scan50", "kpr2scan50", "pr2scan69", "wpr2scan50", "rsx-qidh",
+    "rsx-0dh",
+)
+
+#: Meta-GGA and meta-hybrid functionals (tau-dependent).
+_ORCA_META_GGA_PREFIXES = (
+    "m06", "m05", "m11", "mn12", "mn15", "tpss", "revtpss", "scan", "rscan",
+    "r2scan", "bmk", "pw6b95", "b97m", "wb97m",
+)
+
+_ORCA_ANALYTIC_META_GGA_FROM = 5
+
+_VERSION_MAJOR = re.compile(r"^\s*v?(\d+)")
+
+
+def _orca_major_version(version: str | None) -> int | None:
+    if version is None:
+        return None
+    m = _VERSION_MAJOR.match(version)
+    return int(m.group(1)) if m else None
+
+
+def _orca_functional_class(token: str) -> str:
+    """``"vv10"``, ``"double_hybrid"``, ``"meta_gga"`` or ``"plain"`` for a DFT token."""
+    if token.startswith(_ORCA_VV10_PREFIXES) or token.endswith(_ORCA_VV10_SUFFIXES):
+        return "vv10"
+    if token.startswith(_ORCA_DOUBLE_HYBRID_PREFIXES):
+        return "double_hybrid"
+    if token.startswith(_ORCA_META_GGA_PREFIXES):
+        return "meta_gga"
+    return "plain"
+
+
 #: Human label for each method family, used in the reason text.
 _FAMILY_LABEL: dict[str, str] = {
     MethodFamily.HF: "HF",
@@ -396,7 +477,9 @@ _SOFTWARE_TABLE: dict[str, tuple[tuple[frozenset[str], TauBasis], ...]] = {
 
 
 def infer_hessian_method(
-    software_name: str | None, method: str | None
+    software_name: str | None,
+    method: str | None,
+    software_version: str | None = None,
 ) -> TauResolution | None:
     """Assume a Hessian method's tau basis from software and LOT method.
 
@@ -413,6 +496,10 @@ def infer_hessian_method(
         documented default for); anything else returns ``None``.
     :param method: The calculation's level-of-theory method, free text
         as stored on ``level_of_theory.method``.
+    :param software_version: The release's version string. Used only for ORCA
+        meta-GGA functionals (analytic Hessians from ORCA 5); an unknown or
+        unparseable version keeps the plain GGA/hybrid assumption and gives
+        the version-dependent families no assumption.
     :returns: A :class:`TauResolution` carrying one of the three
         ``assumed_*`` bases and its counterpart's tau, with a
         producer-facing ``reason`` naming the software/method pair and
@@ -431,6 +518,22 @@ def infer_hessian_method(
     if family is None:
         return None
 
+    version_rule = ""
+    if software_token == "orca" and family == MethodFamily.DFT:
+        functional = _orca_functional_class(_normalize(method) or "")
+        if functional in ("vv10", "double_hybrid"):
+            return None
+        if functional == "meta_gga":
+            major = _orca_major_version(software_version)
+            if major is None:
+                return None
+            if major < _ORCA_ANALYTIC_META_GGA_FROM:
+                return _orca_pre5_meta_gga()
+            version_rule = (
+                " ORCA 5 and later has analytic Hessians for meta-GGA "
+                "functionals."
+            )
+
     for families, basis in rows:
         if family in families:
             tau_cm1 = _ASSUMED_TAU_BY_BASIS[basis]
@@ -448,50 +551,118 @@ def infer_hessian_method(
                     f"documented default second-derivative method for "
                     f"{_FAMILY_LABEL[family]} calculations is assumed ({basis.value}) "
                     f"and given the same tau as the equivalent recorded "
-                    f"basis. A later upload that states the Hessian "
-                    f"method explicitly supersedes this assumption."
+                    f"basis.{version_rule} A later upload that states the "
+                    f"Hessian method explicitly supersedes this assumption."
                 ),
             )
     return None
+
+
+def _orca_pre5_meta_gga() -> TauResolution:
+    basis = TauBasis.assumed_finite_difference_gradient
+    tau_cm1 = _ASSUMED_TAU_BY_BASIS[basis]
+    return TauResolution(
+        tau_cm1=tau_cm1,
+        basis=basis,
+        reason=(
+            f"tau = {tau_cm1:.0f} cm-1: 'freq.hessian_method' is not "
+            f"recorded, so this is an assumption, not a recorded statement. "
+            f"ORCA releases before version 5 have no analytic Hessian for "
+            f"meta-GGA functionals, so numerical frequencies from analytic "
+            f"gradients are assumed ({basis.value}). A later upload that "
+            f"states the Hessian method explicitly supersedes this "
+            f"assumption."
+        ),
+    )
 
 
 def resolve_tau_with_assumption(
     parameters: Iterable[tuple[str | None, str | None]],
     software_name: str | None,
     lot_method: str | None,
+    software_version: str | None = None,
+    deck_method: HessianMethod | None = None,
 ) -> TauResolution:
-    """Resolve tau for one calculation: recorded, else assumed, else conservative.
+    """Resolve tau for one calculation: recorded, deck, assumed, conservative.
 
     The single resolution every validation adapter and the persistence step
     share, so what a deposit is judged at is what is stored.
 
-    0. A ``freq.hessian_method`` that is present but unrecognised keeps
-       ``protocol_not_recorded`` and skips the assumption.
     1. A recorded ``freq.hessian_method`` (and the grid / convergence
        parameters that refine it) resolves through
        :func:`~tckdb_schemas.stationary_point.resolve_tau_from_parameters`,
        and always wins.
-    2. Otherwise the producing program's assumed default for the
-       level-of-theory's method family, with an ``assumed_*`` basis.
-    3. Otherwise ``protocol_not_recorded`` (50 cm-1): an unknown program or
-       method family, or software / level of theory that are not visible.
-       Never a guess.
+    2. A method the calculation's own inline input deck states
+       (:mod:`tckdb_schemas.hessian_method_detection`). A deposited deck is
+       evidence, not an assumption; where it and a recorded parameter
+       disagree the deposit is refused before this is called.
+    3. A present but unrecognised ``freq.hessian_method`` (``numer``) keeps
+       ``protocol_not_recorded`` and skips the assumption: the depositor
+       stated something, and an assumption never replaces a statement.
+    4. The producing program's assumed default for the level-of-theory's
+       method family (ORCA meta-GGA functionals gate on ``software_version``).
+    5. ``protocol_not_recorded`` (50 cm-1): an unknown program or method
+       family, or software / level of theory that are not visible. Never a
+       guess.
 
     :param parameters: ``(canonical_key, canonical_value)`` pairs.
     :param software_name: The calculation's software name as deposited or
         stored; normalised here to the registry's canonical spelling.
     :param lot_method: The calculation's level-of-theory method.
+    :param software_version: The software release's version string.
+    :param deck_method: The method the inline input deck states, if any.
     """
     pairs = list(parameters)
     resolved = resolve_tau_from_parameters(pairs)
     if resolved.basis is not TauBasis.protocol_not_recorded:
         return resolved
-    # A present ``freq.hessian_method`` means the depositor stated something,
-    # even if TCKDB cannot read it (``numerical``, ``numer``). Never replace a
-    # statement with an assumption: keep the conservative row.
+    if deck_method is not None:
+        # A recognised deck directive refines an unrecognised recorded value
+        # too: both are statements, and the deck is the more specific.
+        return resolve_tau_from_parameters([*pairs, ("freq.hessian_method", deck_method.value)])
     if any(key == "freq.hessian_method" and value and value.strip() for key, value in pairs):
         return resolved
     if not software_name:
         return resolved
-    assumed = infer_hessian_method(normalize_software_name(software_name), lot_method)
+    assumed = infer_hessian_method(
+        normalize_software_name(software_name), lot_method, software_version
+    )
     return assumed if assumed is not None else resolved
+
+
+def calculation_deck_method(calc) -> HessianMethod | None:
+    release = calc.software_release
+    return deck_hessian_method(
+        normalize_software_name(release.name) if release is not None else None,
+        getattr(calc, "artifacts", None) or (),
+    )
+
+
+def resolve_tau_for_calculation(calc) -> TauResolution:
+    """:func:`resolve_tau_with_assumption` for a bundle calculation payload.
+
+    Reads the payload's recorded ``parameters``, its software release and
+    level-of-theory method, and any inline ``input`` deck in ``artifacts``.
+    Duck-typed so the bundle ``CalculationIn`` and ``CalculationInBundle``
+    classes, which re-declare the same fields, share one function.
+    """
+    release = calc.software_release
+    return resolve_tau_with_assumption(
+        (
+            (observation.canonical_key, observation.canonical_value)
+            for observation in (calc.parameters or ())
+        ),
+        release.name if release is not None else None,
+        calc.level_of_theory.method,
+        release.version if release is not None else None,
+        calculation_deck_method(calc),
+    )
+
+
+def check_calculation_deck_agrees(calc) -> None:
+    """Refuse a bundle calculation whose recorded method contradicts its deck."""
+    check_recorded_method_agrees_with_deck(
+        ((o.canonical_key, o.canonical_value) for o in (calc.parameters or ())),
+        calculation_deck_method(calc),
+        calculation_key=getattr(calc, "key", None),
+    )

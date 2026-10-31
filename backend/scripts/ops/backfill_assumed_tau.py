@@ -119,7 +119,8 @@ def _resolve_row_tau(session: Session, calc: Calculation) -> TauResolution:
         else None
     )
     lot_method = calc.lot.method if calc.lot is not None else None
-    return resolve_tau_with_assumption(recorded.items(), software_name, lot_method)
+    version = calc.software_release.version if calc.software_release is not None else None
+    return resolve_tau_with_assumption(recorded.items(), software_name, lot_method, version)
 
 
 def _scope(session: Session, *, limit: int | None) -> list[CalculationFreqResult]:

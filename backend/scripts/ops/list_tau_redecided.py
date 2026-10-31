@@ -11,6 +11,13 @@ value was swapped afterwards. Rows deposited under the old behaviour were
 decided at the old tau. This lists them; it does not relabel or re-decide
 any of them.
 
+The tau is resolved from the stored ``calculation_parameter`` rows, and those
+include the rows the workflow parsed out of an attached input deck. Since
+upload validation reads an inline deck before judging (a method stated there
+beats an assumed one), this is the same evidence validation uses today, so a
+stored row is listed only when today's validation really would decide it
+differently. The ORCA release gate reads the stored software release's version.
+
 For every judged row (``imaginary_mode_tau_cm1 IS NOT NULL``) the tau is
 re-resolved exactly as upload validation would resolve it today, from that
 calculation's own stored ``calculation_parameter`` rows, software and
@@ -101,8 +108,9 @@ def _new_tau(session: Session, calc: Calculation):
         .order_by(CalculationParameter.id)
     ).all()
     software = calc.software_release.software.name if calc.software_release is not None else None
+    version = calc.software_release.version if calc.software_release is not None else None
     method = calc.lot.method if calc.lot is not None else None
-    return resolve_tau_with_assumption(recorded, software, method)
+    return resolve_tau_with_assumption(recorded, software, method, version)
 
 
 def classify(session: Session) -> tuple[list[Redecided], Counter[str], int]:

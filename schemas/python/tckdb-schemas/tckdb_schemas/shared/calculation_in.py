@@ -54,7 +54,11 @@ from tckdb_schemas.stationary_point import (
     evaluate_species_entry_frequency,
     evaluate_transition_state_frequency,
 )
-from tckdb_schemas.hessian_method_assumption import resolve_tau_with_assumption
+from tckdb_schemas.hessian_method_assumption import (
+    calculation_deck_method,
+    check_calculation_deck_agrees,
+    resolve_tau_for_calculation,
+)
 
 
 class CalculationIn(SchemaBase):
@@ -211,6 +215,12 @@ class CalculationIn(SchemaBase):
         return self
 
     @model_validator(mode="after")
+    def validate_recorded_hessian_method_matches_input_deck(self) -> Self:
+        """A recorded ``freq.hessian_method`` must not contradict the attached deck."""
+        check_calculation_deck_agrees(self)
+        return self
+
+    @model_validator(mode="after")
     def validate_sp_energy_components(self) -> Self:
         """Components sit on a single point and agree with its energy (ADR 0021)."""
         check_sp_energy_components(
@@ -289,18 +299,11 @@ def tau_resolution_of(calc_in: "CalculationIn") -> TauResolution:
     """ADR 0012's tau for a bundle-local calculation.
 
     The bundle twin of :meth:`CalculationWithResultsPayload.tau_resolution`:
-    recorded ``freq.hessian_method`` first, then the producing program's
-    assumed default from this calculation's own software and level-of-theory
-    method, then ``protocol_not_recorded``.
+    recorded ``freq.hessian_method`` first, then the method the calculation's
+    own inline input deck states, then the producing program's assumed default
+    from its software and level-of-theory method, then ``protocol_not_recorded``.
     """
-    return resolve_tau_with_assumption(
-        (
-            (observation.canonical_key, observation.canonical_value)
-            for observation in (calc_in.parameters or ())
-        ),
-        calc_in.software_release.name if calc_in.software_release is not None else None,
-        calc_in.level_of_theory.method,
-    )
+    return resolve_tau_for_calculation(calc_in)
 
 
 def transition_state_frequency_findings(
@@ -439,7 +442,7 @@ def calculation_in_to_with_results_payload(
             electronic_energy_hartree=calc_in.sp_electronic_energy_hartree,
         )
 
-    return CalculationWithResultsPayload(
+    payload = CalculationWithResultsPayload(
         type=calc_in.type,
         quality=calc_in.quality,
         software_release=calc_in.software_release,
@@ -470,6 +473,8 @@ def calculation_in_to_with_results_payload(
         parameters_parser=calc_in.parameters_parser,
         parameters_extracted_at=calc_in.parameters_extracted_at,
     )
+    payload._deck_hessian_method = calculation_deck_method(calc_in)
+    return payload
 
 
 class GeometryIn(SchemaBase):

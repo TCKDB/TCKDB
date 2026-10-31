@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
@@ -15,6 +15,7 @@ from tckdb_schemas.enums import (
     CompositeInputSlot,
     ConstraintKind,
     EnergyComponentKind,
+    HessianMethod,
     HessianSource,
     ImaginaryModeDisposition,
     IRCDirection,
@@ -1564,6 +1565,12 @@ class CalculationWithResultsPayload(CalculationPayload):
             location=location,
         )
 
+    #: The Hessian method this calculation's inline input deck states, set by
+    #: the bundle adapters that hold the deck (this payload has no artifacts).
+    #: Not a wire field: it carries the validation-time reading to persistence
+    #: so the stored tau is the tau the deposit was judged at.
+    _deck_hessian_method: HessianMethod | None = PrivateAttr(default=None)
+
     def tau_resolution(self) -> TauResolution:
         """ADR 0012's τ for this calculation: recorded, else assumed, else conservative.
 
@@ -1583,6 +1590,8 @@ class CalculationWithResultsPayload(CalculationPayload):
             ),
             self.software_release.name if self.software_release is not None else None,
             self.level_of_theory.method,
+            self.software_release.version if self.software_release is not None else None,
+            self._deck_hessian_method,
         )
 
     @model_validator(mode="after")
