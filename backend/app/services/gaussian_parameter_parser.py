@@ -18,6 +18,7 @@ from tckdb_schemas.hessian_method_detection import (  # noqa: F401  (re-exported
     _extract_route_line_from_raw_input,
     _tokenize_route,
     extract_gaussian_route_text,
+    gaussian_freq_hessian_option,
 )
 
 from app.parser_registry import PARSERS
@@ -222,6 +223,7 @@ def _parse_route_tokens(route: str) -> list[dict]:
       - IOp(o/k=v)     (IOp(2/9=2000))
     """
     params: list[dict] = []
+    original_route = route
 
     # Strip the # prefix
     route = route.strip()
@@ -401,6 +403,25 @@ def _parse_route_tokens(route: str) -> list[dict]:
                         "value_type": "bool",
                     }
                 )
+
+    # The Hessian method is read once, by the reader shared with upload
+    # validation (every spelling of ``Freq``, ``EnOnly`` over ``Numer``), so the
+    # stored row is the one validation judged. The generic branches above emit
+    # their own per-option rows for it; those are replaced here.
+    params = [p for p in params if p.get("canonical_key") != "freq.hessian_method"]
+    shared = gaussian_freq_hessian_option(original_route)
+    if shared is not None:
+        option, method = shared
+        params.append(
+            {
+                "raw_key": option,
+                "canonical_key": "freq.hessian_method",
+                "raw_value": "true",
+                "canonical_value": method.value,
+                "section": "freq",
+                "value_type": "bool",
+            }
+        )
 
     return params
 

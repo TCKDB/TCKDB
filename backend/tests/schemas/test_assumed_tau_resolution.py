@@ -303,3 +303,32 @@ def test_plain_gaussian_methods_keep_the_analytic_assumption(method) -> None:
 def test_a_recorded_method_still_wins_on_a_gaussian_double_hybrid() -> None:
     resolved = resolve_tau_with_assumption([("freq.hessian_method", "analytic")], "Gaussian", "B2PLYP")
     assert resolved.basis is TauBasis.analytic_default
+
+
+# ---------------------------------------------------------------------------
+# Names the family classifier must recognise as DFT so they reach their rows
+# ---------------------------------------------------------------------------
+
+_DOUBLE_HYBRIDS = [
+    "DSD-BLYP", "DSD-PBEP86", "DSDPBEP86", "revDSD-PBEP86-D4", "PWPB95", "mPW2PLYP",
+    "B2GP-PLYP", "B2GPPLYP", "pr2SCAN50", "B2PLYP", "B2PLYP-D3", "PBE-QIDH", "PBE0-DH", "wB97X-2",
+]
+
+
+@pytest.mark.parametrize("method", _DOUBLE_HYBRIDS)
+def test_orca_double_hybrids_reach_the_numerical_row_on_every_version(method) -> None:
+    for version in ("4.2.1", "5.0.4", "6.0.1", None):
+        resolved = _orca(method, version)
+        assert resolved.basis is TauBasis.assumed_finite_difference_gradient, (method, version)
+
+
+@pytest.mark.parametrize("method", _DOUBLE_HYBRIDS)
+def test_gaussian_double_hybrids_get_no_assumption_by_name(method) -> None:
+    assert resolve_tau_with_assumption([], "Gaussian", method).basis is TauBasis.protocol_not_recorded
+
+
+@pytest.mark.parametrize("method", ["mPW1B95", "BB1K", "mPWB1K", "mPW1KCIS"])
+def test_orca_meta_hybrids_follow_the_release_gate(method) -> None:
+    assert _orca(method, "4.2.1").basis is TauBasis.assumed_finite_difference_gradient
+    assert _orca(method, None).basis is TauBasis.protocol_not_recorded
+    assert _orca(method, "5.0.4").basis is TauBasis.assumed_analytic_default

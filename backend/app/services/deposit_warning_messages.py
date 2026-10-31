@@ -63,8 +63,8 @@ RENDERED: dict[str, str] = {
         "mean an under-converged geometry or a coarse integration grid."
     ),
     "hessian_method_disagrees_with_stored_tau_basis": (
-        "An input deck attached after the deposit states a Hessian method of a different kind from the one the "
-        "tolerance stored with this frequency calculation rests on. The stored tolerance was not changed."
+        "An input deck attached after the deposit states a different Hessian method from the one the tolerance "
+        "stored with this frequency calculation rests on. The stored tolerance was not changed."
     ),
     "freq_list_incomplete_for_geometry": (
         "The frequency list carries fewer modes than the geometry it is attached to has vibrations."
@@ -302,6 +302,10 @@ def _program(context: Mapping[str, Any]) -> str:
     return f"{software} " if isinstance(software, str) and software else ""
 
 
+#: TCKDB's own Hessian-method tokens (``HessianMethod``): the only strings a context may put in a sentence.
+_HESSIAN_METHODS = frozenset({"analytic", "finite_difference_gradient", "finite_difference_energy"})
+
+
 def _with_context(code: str, context: Mapping[str, Any]) -> str | None:
     """The sentence with the producer's numbers in it, or ``None`` when the stored context cannot supply them."""
     if code == "charge_mismatch":
@@ -312,11 +316,11 @@ def _with_context(code: str, context: Mapping[str, Any]) -> str | None:
                 f"{_program(context)}output log ({logged}). The declared value was kept."
             )
     if code == "hessian_method_disagrees_with_stored_tau_basis":
-        stored, deck = context.get("stored_method_kind"), context.get("deck_method_kind")
-        if stored in ("analytic", "numerical") and deck in ("analytic", "numerical"):
+        stored, deck = context.get("stored_method"), context.get("deck_method")
+        if stored in _HESSIAN_METHODS and deck in _HESSIAN_METHODS:
             return (
-                f"The tolerance stored with this frequency calculation rests on a {stored} Hessian, but an input "
-                f"deck attached after the deposit states a {deck} one. The stored tolerance was not changed."
+                f"The tolerance stored with this frequency calculation rests on the Hessian method {stored}, but an "
+                f"input deck attached after the deposit states {deck}. The stored tolerance was not changed."
             )
     if code == "multiplicity_mismatch":
         declared, logged = context.get("declared"), context.get("logged")

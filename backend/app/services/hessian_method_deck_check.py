@@ -4,7 +4,7 @@ A deck attached with the deposit is read before the deposit is judged. One
 attached afterwards through the artifact route is not, so a calculation can
 already carry a tau and basis that were decided without it. Stored rows are
 append-only, so nothing is relabelled: when the later deck states a method whose
-kind (analytic, or numerical from gradients or energies) differs from the kind the
+method (analytic, or finite differences of gradients or of energies) differs from the method the
 stored basis rests on, a warning is appended to the calculation.
 
 Only a disagreement warns. Agreement (including an ``assumed_*`` basis the deck
@@ -17,8 +17,7 @@ The message is built from the code and TCKDB's own values, never from deck text.
 
 from __future__ import annotations
 
-import logging
-
+from sqlalchemy.orm import Session
 from tckdb_schemas.enums import HessianMethod
 from tckdb_schemas.hessian_method_detection import deck_hessian_method
 from tckdb_schemas.software import normalize_software_name
@@ -27,8 +26,7 @@ from tckdb_schemas.upload_warning import UploadWarning
 from app.db.models.calculation import Calculation
 from app.db.models.common import ArtifactKind
 from app.schemas.fragments.artifact import ArtifactIn
-
-logger = logging.getLogger(__name__)
+from app.services.best_effort import isolated_best_effort
 
 W_HESSIAN_METHOD_DISAGREES_WITH_STORED_TAU_BASIS = "hessian_method_disagrees_with_stored_tau_basis"
 
@@ -44,45 +42,48 @@ _BASIS_METHOD: dict[str, HessianMethod] = {
 }
 
 
-def _kind(method: HessianMethod) -> str:
-    return "analytic" if method is HessianMethod.analytic else "numerical"
-
-
 def try_hessian_method_disagreement_from_input_upload(
-    calculation: Calculation, artifact_in: ArtifactIn
+    session: Session, calculation: Calculation, artifact_in: ArtifactIn
 ) -> UploadWarning | None:
     """The warning a later input deck earns against the stored tolerance basis, or ``None``.
 
-    Never raises: an artifact upload is canonical and is not aborted by this check.
+    Best-effort, like its sibling hooks: the lazy loads run inside a savepoint
+    (:func:`~app.services.best_effort.isolated_best_effort`), so a database error
+    here cannot leave the upload's transaction aborted. Never raises.
     """
     if artifact_in.kind != ArtifactKind.input:
         return None
-    try:
-        freq = calculation.freq_result
-        if freq is None or freq.imaginary_mode_tau_basis is None:
-            return None
-        stored = _BASIS_METHOD.get(freq.imaginary_mode_tau_basis)
-        if stored is None:
-            return None
-        release = calculation.software_release
-        declared = normalize_software_name(release.software.name) if release is not None else None
-        deck = deck_hessian_method(declared, [artifact_in])
-        if deck is None or deck is stored:
-            return None
-        return UploadWarning(
-            field="artifacts",
-            code=W_HESSIAN_METHOD_DISAGREES_WITH_STORED_TAU_BASIS,
-            message=(
-                f"The tolerance stored with this frequency calculation rests on a {_kind(stored)} Hessian "
-                f"({freq.imaginary_mode_tau_basis}), but the input deck attached afterwards states a "
-                f"{_kind(deck)} one. The stored tolerance was not changed."
-            ),
-            context={
-                "stored_basis": freq.imaginary_mode_tau_basis,
-                "stored_method_kind": _kind(stored),
-                "deck_method_kind": _kind(deck),
-            },
-        )
-    except Exception:
-        logger.warning("hessian method / stored tau basis check failed for artifact '%s'", artifact_in.filename)
+    return isolated_best_effort(
+        session,
+        lambda: _disagreement(calculation, artifact_in),
+        what=f"hessian method / stored tau basis check for '{artifact_in.filename}'",
+    )
+
+
+def _disagreement(calculation: Calculation, artifact_in: ArtifactIn) -> UploadWarning | None:
+    freq = calculation.freq_result
+    if freq is None or freq.imaginary_mode_tau_basis is None:
         return None
+    stored = _BASIS_METHOD.get(freq.imaginary_mode_tau_basis)
+    if stored is None:
+        return None
+    release = calculation.software_release
+    declared = normalize_software_name(release.software.name) if release is not None else None
+    deck = deck_hessian_method(declared, [artifact_in])
+    if deck is None or deck is stored:
+        return None
+    # TCKDB's own method tokens, so a gradient-versus-energy disagreement reads as one.
+    return UploadWarning(
+        field="artifacts",
+        code=W_HESSIAN_METHOD_DISAGREES_WITH_STORED_TAU_BASIS,
+        message=(
+            f"The tolerance stored with this frequency calculation rests on the Hessian method {stored.value} "
+            f"({freq.imaginary_mode_tau_basis}), but the input deck attached afterwards states {deck.value}. "
+            "The stored tolerance was not changed."
+        ),
+        context={
+            "stored_basis": freq.imaginary_mode_tau_basis,
+            "stored_method": stored.value,
+            "deck_method": deck.value,
+        },
+    )

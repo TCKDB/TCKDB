@@ -1183,7 +1183,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - `check_recorded_method_agrees_with_deck` — `schemas/python/tckdb-schemas/tckdb_schemas/hessian_method_detection.py::check_recorded_method_agrees_with_deck`
   *Runs on the bundle calculation payloads that carry an inline `input` artifact (computed-species, computed-reaction and network bundles). The standalone calculation, conformer and transition-state payloads have no `artifacts` field, and a deck uploaded later through the artifact route is not seen at validation; that case earns the warning `hessian_method_disagrees_with_stored_tau_basis` on the calculation instead, and the stored tolerance is never relabelled. The message and `context` carry only TCKDB's method tokens (`analytic`, `finite_difference_gradient`, `finite_difference_energy`), never the recorded string or deck text.*
 
-**Escape hatch.** Correct whichever of the two is wrong, or omit the recorded `freq.hessian_method` and let the deck speak. A deposit that sends only a deck, as ARC does, is never refused by this check; the deck is read before the deposit is judged.
+**Escape hatch.** Correct whichever of the two is wrong, or omit the recorded `freq.hessian_method` and let the deck speak. A deposit that sends only a deck is never refused by this check; the deck is read before the deposit is judged.
 
 ---
 

@@ -230,6 +230,13 @@ _DFT_PREFIXES = (
     "b97-d3", "b97-d", "b97",
     "scan", "r2scan", "b2plyp", "mpw1k", "mpwb1k", "bmk",
     "lc-wpbe", "hse06", "pw6b95",
+    # Double hybrids and meta-hybrids the ORCA / Gaussian tables treat
+    # separately. They must be recognised as DFT to reach those rows (a name the
+    # classifier did not know would silently get no assumption at all).
+    "dsd", "revdsd", "pwpb95", "mpw2plyp", "b2gp-plyp", "b2gpplyp", "b2k-plyp",
+    "b2t-plyp", "pbe-qidh", "wb2plyp", "wb2gpplyp", "ub2plyp", "pr2scan",
+    "kpr2scan", "wpr2scan", "rsx-qidh", "rsx-0dh", "mpw1b95", "bb1k", "mpw1kcis",
+    "rscan",
 )
 
 
@@ -396,10 +403,9 @@ _ORCA_VV10_SUFFIXES = ("-nl", "-scnl")
 #: the ORCA row (assumed numerical) and the Gaussian row (no assumption).
 _DOUBLE_HYBRID_PREFIXES = (
     "b2plyp", "b2gp-plyp", "b2gpplyp", "b2k-plyp", "b2t-plyp", "mpw2plyp",
-    "dsd-", "revdsd", "pwpb95", "pbe0-dh", "pbe0-2", "pbe-qidh",
+    "dsd", "revdsd", "pwpb95", "pbe0-dh", "pbe0-2", "pbe-qidh",
     "wb2plyp", "wb2gpplyp", "ub2plyp", "wb97x-2", "wb97m(2)", "wb97m-2",
-    "pr2scan50", "kpr2scan50", "pr2scan69", "wpr2scan50", "rsx-qidh",
-    "rsx-0dh",
+    "pr2scan", "kpr2scan", "wpr2scan", "rsx-qidh", "rsx-0dh",
 )
 
 #: Meta-GGA and meta-hybrid functionals (tau-dependent).

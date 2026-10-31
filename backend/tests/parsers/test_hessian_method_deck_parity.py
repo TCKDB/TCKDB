@@ -23,6 +23,20 @@ _GAUSSIAN_DECKS = [
     "# B3LYP/6-31G(d) Opt=(Tight) Freq=NoRaman\n\nt\n",
     "# B3LYP/6-31G(d) Opt=(Numer)\n\nt\n",
     "%mem=2GB\n#N wB97XD/def2TZVP Opt Freq=EnOnly IOp(2/9=2000)\n\nt\n",
+    "# B3LYP/6-31G(d) Freq=(EnOnly,Numer)\n\nt\n",
+    "# B3LYP/6-31G(d) Freq=(Numer,EnOnly)\n\nt\n",
+    "# B3LYP/6-31G(d) freq(numer)\n\nt\n",
+    "# B3LYP/6-31G(d) freq (numer)\n\nt\n",
+    "# B3LYP/6-31G(d) freq (numer,noraman)\n\nt\n",
+    "# B3LYP/6-31G(d) Frequency=Numer\n\nt\n",
+    "# B3LYP/6-31G(d) freq = numer\n\nt\n",
+    "# opt freq=(numer)\n\nt\n",
+    "# B3LYP/6-31G(d) freqchk=numer\n\nt\n",
+    "# B3LYP/6-31G(d) anharmonicfreq=numer\n\nt\n",
+    "# B3LYP/6-31G(d) opt=calcnumerfc freq\n\nt\n",
+    "# B3LYP/6-31G(d) freq scf=(numer)\n\nt\n",
+    "# B3LYP/6-31G(d) freq IOp(7/33=1)\n\nt\n",
+    "# B3LYP/6-31G(d) freq opt (numer)\n\nt\n",
 ]
 _ORCA_DECKS = [
     "! B3LYP def2-SVP NumFreq\n* xyz 0 1\nH 0 0 0\n*\n",
@@ -34,6 +48,11 @@ _ORCA_DECKS = [
     "! B3LYP def2-SVP NumFreq NumGrad\n",
     "! B3LYP def2-SVP NumGrad\n! Opt NumFreq\n",
     "! B3LYP def2-SVP Opt NumGrad\n",
+    "! B3LYP AnFreq NumFreq\n",
+    "! B3LYP AnFreq NumFreq NumGrad\n",
+    "! B3LYP Freq # note # NumFreq\n",
+    "! B3LYP Freq # NumFreq\n",
+    "! B3LYP Freq # a # AnFreq # b # NumFreq\n",
 ]
 
 

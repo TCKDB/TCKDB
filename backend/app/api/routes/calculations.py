@@ -825,7 +825,7 @@ def upload_calculation_artifacts(
             warnings.append(sp_warning)
         # A deck attached after the deposit was judged may state a Hessian
         # method the stored tolerance does not rest on: flag, never relabel.
-        deck_warning = try_hessian_method_disagreement_from_input_upload(calculation, art_in)
+        deck_warning = try_hessian_method_disagreement_from_input_upload(session, calculation, art_in)
         if deck_warning is not None:
             warnings.append(deck_warning)
         # Output logs also state the charge and spin multiplicity the run

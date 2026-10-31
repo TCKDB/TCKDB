@@ -48,7 +48,9 @@ __all__ = [
     "deck_hessian_method",
     "detect_hessian_method",
     "extract_gaussian_route_text",
+    "gaussian_freq_hessian_option",
     "hessian_method_class",
+    "orca_freq_hessian",
     "orca_hessian_method_for",
 ]
 
@@ -300,9 +302,10 @@ def orca_keyword_lines(input_lines: list[str]) -> list[str]:
         stripped = line.strip()
         if not stripped.startswith("!"):
             continue
-        keywords_str = stripped.lstrip("!").strip()
-        if "#" in keywords_str:
-            keywords_str = keywords_str[: keywords_str.index("#")].strip()
+        # A comment starts at ``#`` and ends at the next ``#`` (or the end of the
+        # line); what follows the closing ``#`` is keywords again.
+        segments = stripped.lstrip("!").split("#")
+        keywords_str = " ".join(part.strip() for part in segments[0::2]).strip()
         if keywords_str:
             out.append(keywords_str)
     return out
@@ -313,10 +316,19 @@ def orca_keyword_lines(input_lines: list[str]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def _gaussian_method(text: str) -> HessianMethod | None:
-    """The method a Gaussian route states, mirroring the parser's branches.
+_FREQ_KEYWORD_TOKEN = re.compile(r"^([A-Za-z]+)(=\(.*\)|=[^()]*|\(.*\))?$")
 
-    Later directives win, as they do when the stored rows are resolved.
+
+def gaussian_freq_hessian_option(text: str) -> tuple[str, HessianMethod] | None:
+    """The ``Freq`` option a Gaussian route uses to state the Hessian method.
+
+    Returns ``(raw option, method)`` or ``None``. Reads every spelling Gaussian
+    accepts for the keyword and its options (``Freq=Numer``, ``Freq=(Numer,..)``,
+    ``Freq(Numer)``, ``Freq (Numer)``, ``Freq = Numer``, ``Frequency=Numer``), and
+    only the keywords ``Freq`` / ``Frequency`` themselves: ``FreqChk`` or an
+    option of another keyword (``SCF=(Numer)``, ``Opt=CalcNumerFC``) is not read.
+    If ``EnOnly`` is present it wins (energies are the coarser input); otherwise
+    ``Numer`` / ``Numerical`` mean finite differences of gradients.
     """
     route = extract_gaussian_route_text(text) or ""
     route = route.strip()
@@ -324,59 +336,76 @@ def _gaussian_method(text: str) -> HessianMethod | None:
         m = re.match(r"#([PNTpnt])?\s*", route)
         route = route[m.end():] if m else route[1:]
     route = _IOP_RE.sub("", route).strip()
+    # ``keyword (options)`` and ``keyword = value`` are one token each.
+    route = re.sub(r"\s*=\s*", "=", route)
+    route = re.sub(r"(?<=[\w)])\s+\(", "(", route)
 
-    found: HessianMethod | None = None
+    options: list[str] = []
     for token in _tokenize_route(route):
-        token = token.strip()
-        if not token:
+        match = _FREQ_KEYWORD_TOKEN.match(token.strip())
+        if match is None or match.group(1).lower() not in ("freq", "frequency"):
             continue
-        if "/" in token and "=" not in token and "(" not in token:
-            continue
-        if "=(" in token:
-            key, rest = token.split("=(", 1)
-            if key.lower() != "freq":
-                continue
-            for sub in rest.rstrip(")").strip().split(","):
-                sub = sub.strip()
-                if not sub:
-                    continue
-                option = sub.split("=", 1)[0].strip() if "=" in sub else sub
-                method = GAUSSIAN_FREQ_HESSIAN_OPTIONS.get(option.lower())
-                if method is not None:
-                    found = method
-        elif token.lower().startswith("freq="):
-            method = GAUSSIAN_FREQ_HESSIAN_OPTIONS.get(token.split("=", 1)[1].strip().lower())
-            if method is not None:
-                found = method
-    return found
+        rest = match.group(2) or ""
+        if rest.startswith("="):
+            rest = rest[1:]
+        rest = rest.strip()
+        if rest.startswith("(") and rest.endswith(")"):
+            rest = rest[1:-1]
+        for part in re.split(r"[,\s]+", rest):
+            option = part.split("=", 1)[0].strip().lower()
+            if option:
+                options.append(option)
+    if "enonly" in options:
+        return "enonly", GAUSSIAN_FREQ_HESSIAN_OPTIONS["enonly"]
+    for option in options:
+        if option in GAUSSIAN_FREQ_HESSIAN_OPTIONS:
+            return option, GAUSSIAN_FREQ_HESSIAN_OPTIONS[option]
+    return None
+
+
+def orca_freq_hessian(keywords: Iterable[str]) -> tuple[str, HessianMethod] | None:
+    """The Hessian method the ORCA keywords state, as ``(raw keyword, method)``.
+
+    ``NumFreq`` wins over ``AnFreq`` when both are present (numerical, the
+    conservative tolerance). ``NumFreq`` differentiates gradients; with
+    ``NumGrad`` those gradients are numerical too, so the Hessian is built from
+    energies (ORCA 5.0.4 manual, 8.3.2 and 9.24.5 "Numerical Gradients":
+    ``! NumGrad`` requests numerical instead of analytic gradients).
+    """
+    lowered = {k.lower() for k in keywords}
+    if "numfreq" in lowered:
+        method = (
+            HessianMethod.finite_difference_energy
+            if "numgrad" in lowered
+            else HessianMethod.finite_difference_gradient
+        )
+        return "numfreq", method
+    if "anfreq" in lowered:
+        return "anfreq", HessianMethod.analytic
+    return None
 
 
 def orca_hessian_method_for(keyword: str, all_keywords: Iterable[str]) -> HessianMethod | None:
-    """The method an ORCA frequency keyword states, given every keyword in the deck.
+    """The method an ORCA frequency keyword's stored row carries, given every keyword.
 
-    ``NumFreq`` differentiates gradients. With ``NumGrad`` on the deck those
-    gradients are themselves numerical, so the Hessian is built from energies
-    (ORCA 5.0.4 manual, 8.3.2 and 9.24.5 "Numerical Gradients": ``! NumGrad``
-    requests numerical instead of analytic gradients). ``NumFreq`` alone stays
-    finite differences of analytic gradients. ``AnFreq`` is analytic.
+    Every frequency-method row of one deck carries the deck's overall method, so
+    the stored rows never disagree with each other.
     """
-    method = ORCA_FREQ_HESSIAN_KEYWORDS.get(keyword.lower())
-    if (
-        method is HessianMethod.finite_difference_gradient
-        and "numgrad" in {k.lower() for k in all_keywords}
-    ):
-        return HessianMethod.finite_difference_energy
-    return method
+    if keyword.lower() not in ORCA_FREQ_HESSIAN_KEYWORDS:
+        return None
+    overall = orca_freq_hessian(all_keywords)
+    return overall[1] if overall is not None else None
+
+
+def _gaussian_method(text: str) -> HessianMethod | None:
+    found = gaussian_freq_hessian_option(text)
+    return found[1] if found is not None else None
 
 
 def _orca_method(text: str) -> HessianMethod | None:
     keywords = [kw for line in orca_keyword_lines(_extract_input_block(text)) for kw in line.split()]
-    found: HessianMethod | None = None
-    for keyword in keywords:
-        method = orca_hessian_method_for(keyword, keywords)
-        if method is not None:
-            found = method
-    return found
+    found = orca_freq_hessian(keywords)
+    return found[1] if found is not None else None
 
 
 def detect_hessian_method(software: str | None, text: str) -> HessianMethod | None:

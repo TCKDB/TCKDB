@@ -46,14 +46,14 @@ def _freq_calc(client, db_session, **kwargs) -> Calculation:
     return db_session.get(Calculation, freq.calculation_id)
 
 
-def _upload_deck(client, calc: Calculation, text: str):
+def _upload_deck(client, calc: Calculation, text: str, filename: str = "late.gjf"):
     resp = client.post(
         artifacts_url(client, calc.id),
         json={
             "artifacts": [
                 {
                     "kind": "input",
-                    "filename": "late.gjf",
+                    "filename": filename,
                     "content_base64": base64.b64encode(text.encode()).decode(),
                 }
             ]
@@ -82,7 +82,7 @@ def test_a_numerical_deck_against_an_assumed_analytic_basis_warns_and_relabels_n
     assert (stored.imaginary_mode_tau_cm1, stored.imaginary_mode_tau_basis) == before
 
     (item,) = _read_codes(client, calc)
-    assert "analytic" in item["message"] and "numerical" in item["message"]
+    assert "analytic" in item["message"] and "finite_difference_gradient" in item["message"]
     assert "Freq=Numer" not in item["message"] and "B3LYP" not in item["message"]
 
 
@@ -122,3 +122,45 @@ def test_a_basis_that_rests_on_no_method_warns_nothing(client, db_session):
     assert calc.freq_result.imaginary_mode_tau_basis == "protocol_not_recorded"
     resp = _upload_deck(client, calc, _NUMER)
     assert _CODE not in {w["code"] for w in resp.json()["warnings"]}
+
+
+_ORCA_NUMFREQ_NUMGRAD = "! CCSD def2-SVP NumFreq NumGrad\n* xyz 0 2\nH 0 0 0\n*\n"
+
+
+def test_gradient_against_energy_names_both_methods(client, db_session):
+    """A stored finite-difference-from-gradients basis and a NumFreq+NumGrad deck."""
+    payload = _payload(imag_freq_cm1=-40.0, label="late-grad-energy", software={"name": "ORCA", "version": "6.0.1"})
+    payload["additional_calculations"][0]["level_of_theory"] = {"method": "CCSD", "basis": "def2-SVP"}
+    resp = client.post("/api/v1/uploads/conformers", json=payload)
+    assert resp.status_code == 201, resp.text
+    freq = db_session.scalars(
+        select(CalculationFreqResult).order_by(CalculationFreqResult.calculation_id.desc())
+    ).first()
+    calc = db_session.get(Calculation, freq.calculation_id)
+    assert freq.imaginary_mode_tau_basis == "assumed_finite_difference_gradient"
+
+    resp = _upload_deck(client, calc, _ORCA_NUMFREQ_NUMGRAD, "late.in")
+    (warning,) = [w for w in resp.json()["warnings"] if w["code"] == _CODE]
+    assert warning["context"] == {
+        "stored_basis": "assumed_finite_difference_gradient",
+        "stored_method": "finite_difference_gradient",
+        "deck_method": "finite_difference_energy",
+    }
+    (item,) = _read_codes(client, calc)
+    assert "finite_difference_gradient" in item["message"] and "finite_difference_energy" in item["message"]
+    assert " a analytic" not in item["message"]
+
+
+def test_a_failing_check_cannot_fail_the_artifact_upload(client, db_session, monkeypatch):
+    calc = _freq_calc(client, db_session, imag_freq_cm1=-20.0, label="late-boom")
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("simulated failure inside the check")
+
+    monkeypatch.setattr("app.services.hessian_method_deck_check._disagreement", boom)
+    resp = _upload_deck(client, calc, _NUMER)
+    body = resp.json()
+    assert len(body["artifacts"]) == 1
+    assert _CODE not in {w["code"] for w in body["warnings"]}
+    # The session is still usable for the rest of the request / test.
+    assert db_session.get(Calculation, calc.id) is not None

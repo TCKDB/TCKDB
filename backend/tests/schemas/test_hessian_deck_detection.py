@@ -26,6 +26,24 @@ _FD = HessianMethod.finite_difference_gradient
         ("# B3LYP/6-31G(d) Freq\n\nt\n", None),
         ("# B3LYP/6-31G(d) Opt=(Tight) Freq=NoRaman\n\nt\n", None),
         ("# B3LYP/6-31G(d) Opt=(Numer)\n\nt\n", None),
+        # EnOnly wins whenever present, whatever the order
+        ("# B3LYP/6-31G(d) Freq=(EnOnly,Numer)\n\nt\n", HessianMethod.finite_difference_energy),
+        ("# B3LYP/6-31G(d) Freq=(Numer,EnOnly)\n\nt\n", HessianMethod.finite_difference_energy),
+        # every valid spelling of the keyword and its options
+        ("# B3LYP/6-31G(d) freq(numer)\n\nt\n", _FD),
+        ("# B3LYP/6-31G(d) freq (numer)\n\nt\n", _FD),
+        ("# B3LYP/6-31G(d) freq (numer,noraman)\n\nt\n", _FD),
+        ("# B3LYP/6-31G(d) Frequency=Numer\n\nt\n", _FD),
+        ("# B3LYP/6-31G(d) freq = numer\n\nt\n", _FD),
+        ("# B3LYP/6-31G(d) freq=( numer , noraman )\n\nt\n", _FD),
+        ("# opt freq=(numer)\n\nt\n", _FD),
+        # keywords that only contain the letters freq, other keywords' options, IOps
+        ("# B3LYP/6-31G(d) freqchk=numer\n\nt\n", None),
+        ("# B3LYP/6-31G(d) anharmonicfreq=numer\n\nt\n", None),
+        ("# B3LYP/6-31G(d) opt=calcnumerfc freq\n\nt\n", None),
+        ("# B3LYP/6-31G(d) freq scf=(numer)\n\nt\n", None),
+        ("# B3LYP/6-31G(d) freq IOp(7/33=1)\n\nt\n", None),
+        ("# B3LYP/6-31G(d) freq opt (numer)\n\nt\n", None),
     ],
 )
 def test_gaussian_route_directives(text, expected) -> None:
@@ -45,10 +63,30 @@ def test_gaussian_route_directives(text, expected) -> None:
         ("! B3LYP def2-SVP NumGrad\n! Opt NumFreq\n", HessianMethod.finite_difference_energy),
         ("! B3LYP def2-SVP Opt NumGrad\n", None),
         ("! B3LYP def2-SVP AnFreq NumGrad\n", HessianMethod.analytic),
+        # NumFreq wins over AnFreq (the conservative tolerance), in either order
+        ("! B3LYP NumFreq AnFreq\n", _FD),
+        ("! B3LYP AnFreq NumFreq\n", _FD),
+        ("! B3LYP AnFreq NumFreq NumGrad\n", HessianMethod.finite_difference_energy),
+        # a comment runs from one # to the next
+        ("! B3LYP Freq # note # NumFreq\n", _FD),
+        ("! B3LYP Freq # NumFreq\n", None),
+        ("! B3LYP Freq # a # b # NumFreq\n", None),
+        ("! B3LYP Freq # a # AnFreq # b # NumFreq\n", _FD),
     ],
 )
 def test_orca_keywords(text, expected) -> None:
     assert detect_hessian_method("orca", text) is expected
+
+
+def test_the_gaussian_reader_returns_the_raw_option_too() -> None:
+    from tckdb_schemas.hessian_method_detection import gaussian_freq_hessian_option
+
+    assert gaussian_freq_hessian_option("# freq=(EnOnly,Numer)\n\nt\n") == (
+        "enonly",
+        HessianMethod.finite_difference_energy,
+    )
+    assert gaussian_freq_hessian_option("# freq(Numer)\n\nt\n") == ("numer", _FD)
+    assert gaussian_freq_hessian_option("# freq\n\nt\n") is None
 
 
 def test_another_program_states_nothing() -> None:

@@ -778,8 +778,8 @@ CHECK_RECORDED_HESSIAN_METHOD_AGREES_WITH_THE_INPUT_DECK = ScientificCheck(
     escape_hatch=(
         "Correct whichever of the two is wrong, or omit the recorded "
         "``freq.hessian_method`` and let the deck speak. A deposit that sends "
-        "only a deck, as ARC does, is never refused by this check; the deck is "
-        "read before the deposit is judged."
+        "only a deck is never refused by this check; the deck is read before "
+        "the deposit is judged."
     ),
 )
 
