@@ -1035,9 +1035,10 @@ def _degeneracy(context: Mapping[str, Any]) -> str | None:
     lowest, allowed, levels = _int(context.get("lowest_degeneracy")), context.get("allowed_degeneracies"), context.get("level_degeneracies")
     if element is None or term is None or lowest is None:
         return None
-    for seq in (allowed, levels):
-        if not isinstance(seq, list) or not seq or not all(_int(a) is not None for a in seq):
-            return None
+    if not isinstance(allowed, list) or not allowed or not all(_int(a) is not None for a in allowed):
+        return None
+    if not isinstance(levels, list) or not levels or not all(_int(a) is not None for a in levels):
+        return None
     return (
         f"The lowest electronic level of this {element} atom has degeneracy {lowest}, but the {term} ground term has "
         f"levels of degeneracy {', '.join(str(g) for g in levels)} in energy order, so the lowest level can only be "
