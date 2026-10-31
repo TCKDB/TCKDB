@@ -252,12 +252,16 @@ def _extra_deposits() -> list[tuple[str, str, dict, set[str]]]:
     ]
 
 
+def _drivers() -> list[tuple[str, str, dict, set[str]]]:
+    """``(name, url, payload, codes it must earn)`` for the nine worker payloads and the extra deposits."""
+    drivers = [(kind.value, url, build(), set(required)) for kind, (build, url, _j, required) in CASES.items()]
+    return drivers + _extra_deposits()
+
+
 def _deposit_everything(client) -> list[tuple[str, dict, set[str]]]:
     """``(kind, warning, sentinels)`` for every warning every upload kind earns."""
     warnings = []
-    drivers = [(kind.value, url, build(), set(required)) for kind, (build, url, _j, required) in CASES.items()]
-    drivers += _extra_deposits()
-    for kind, url, built, required in drivers:
+    for kind, url, built, required in _drivers():
         payload, sentinels = _sentinelise(built, kind)
         savepoint = client._db_session.begin_nested()
         try:
@@ -1052,3 +1056,90 @@ def test_the_tau_context_carries_the_program_family_and_rule_of_an_assumption():
     assert (tight["tau_basis"], tight["tau_grid"], tight["tau_opt"]) == ("analytic_tight", "ultrafine", "very_tight")
     loose = _tau_context(resolve_tau("analytic", "coarse-ZZQ", None))
     assert (loose["tau_grid"], loose["tau_opt"]) == ("not_tight", "not_recorded")
+
+
+# ---------------------------------------------------------------------------
+# a warning lands on the record it is about, whatever characters the key has
+# ---------------------------------------------------------------------------
+
+#: Key templates: plain, an embedded quote, a key that tries to close the bracket, a backslash.
+_KEY_TEMPLATES = {
+    "quote": "o'k{n}",
+    "bracket": "x']SECRET['y{n}",
+    "backslash": "b\\s{n}",
+}
+
+
+def _stored_placement(client, url: str, payload: dict) -> list[tuple]:
+    """What the stored deposit-warning rows say: code, record kind, whether a record holds it, normalised path."""
+    from sqlalchemy import select
+    from tckdb_schemas.deposit_warning_messages import normalise_field
+
+    from app.db.models.deposit_warning import DepositWarning
+
+    session = client._db_session
+    savepoint = session.begin_nested()
+    try:
+        response = client.post(url, json=payload)
+        assert response.status_code == 201, response.text[:400]
+        rows = session.scalars(select(DepositWarning)).all()
+        return sorted(
+            (
+                r.code or "",
+                r.record_type.value if r.record_type else "",
+                r.record_id is None,
+                normalise_field(r.field) if r.field else "",
+            )
+            for r in rows
+        )
+    finally:
+        savepoint.rollback()
+
+
+@pytest.mark.parametrize("template", sorted(_KEY_TEMPLATES))
+def test_a_key_with_a_quote_a_bracket_or_a_backslash_places_every_warning_on_the_same_record_as_a_plain_key(client, template):
+    compared = unplaced = 0
+    for name, url, built, _required in _drivers():
+        plain, _ = _sentinelise(json.loads(json.dumps(built)), "p", template="k{n}")
+        odd, _ = _sentinelise(json.loads(json.dumps(built)), "o", template=_KEY_TEMPLATES[template])
+        expected = _stored_placement(client, url, plain)
+        got = _stored_placement(client, url, odd)
+        assert got == expected, (name, template)
+        compared += len(expected)
+        unplaced += sum(1 for row in expected if row[0] and row[2])
+    # Something really was placed on a record, so equal lists are not two lists of nothing.
+    assert compared > 100 and compared - unplaced > 40, (compared, unplaced)
+
+
+@pytest.mark.parametrize(
+    ("key", "path_template"),
+    [
+        ("h-opt", "calculations[{key!r}].freq_result.modes"),
+        ("o'k", "calculations[{key!r}].freq_result.modes"),
+        ("x']SECRET['y", "species[{key!r}].calculations[{key!r}]"),
+        ("b\\s", "calculations[{key!r}].key"),
+        ("a\\'b\"c", "calculations[{key!r}].geometry_key"),
+    ],
+)
+def test_the_calculation_key_in_a_field_is_read_back_as_written(key, path_template):
+    from tckdb_schemas.deposit_warning_messages import field_keys
+
+    field = path_template.format(key=key)
+    assert field_keys(field, "calculations") == [key], field
+    # A hand-quoted path from before the change, and an unquoted one, still read.
+    assert field_keys("calculations['plain'].x", "calculations") == ["plain"]
+    assert field_keys("xcalculations['no'].x", "calculations") == []
+    assert field_keys("species['calculations'].x", "calculations") == []
+
+
+def test_no_service_reads_keys_back_out_of_a_field_path_with_a_regex():
+    import re as _re
+
+    offenders = []
+    for path in _sources():
+        text = path.read_text()
+        for match in _re.finditer(r"re\.(?:compile|search|match|findall|fullmatch|finditer)\(\s*r?[\"'](?P<p>[^\"']*)", text):
+            pattern = match.group("p")
+            if _re.search(r"\\\[\\?['\"]", pattern) and "calculations" in pattern:
+                offenders.append(f"{path}: {pattern}")
+    assert offenders == [], offenders

@@ -27,6 +27,7 @@ producer's ``message`` is not exactly ``render_message(code, context)``.
 
 from __future__ import annotations
 
+import ast
 import logging
 import re
 from collections.abc import Mapping
@@ -1966,24 +1967,29 @@ def clean_depositor_supplied(context: Mapping[str, Any] | None) -> dict[str, Any
 # ---------------------------------------------------------------------------
 
 
-def normalise_field(field: str) -> str:
-    """The payload path with every depositor key replaced by ``[*]``; plain integer indexes (TCKDB's ordinals) stay.
+def _segments(field: str) -> list[tuple[str, str]]:
+    """The payload path as ``("text", ...)``, ``("index", "[3]")`` and ``("key", "'h'")`` segments.
 
-    A key is whatever stands between ``[`` and its closing ``]`` that is not a plain integer: quoted
-    (``['h']``, ``["a b"]``, ``['o'k']`` with an embedded quote, a backslash escape) or unquoted
-    (``transition_states[ts1]``). A quoted key ends at the first closing quote that is followed by ``]``.
+    A key segment is whatever stands between ``[`` and its closing ``]`` that is not a plain integer, without the
+    brackets: quoted (``'h'``, ``"a b"``, ``"o'k"``, with backslash escapes) or unquoted (``ts1``). A quoted key ends at
+    the first closing quote that is followed by ``]``. This is the one tokeniser: the public path and the placement of
+    a warning on its record both read keys through it, never through a regex over the quoted text.
     """
-    out: list[str] = []
+    out: list[tuple[str, str]] = []
+    text: list[str] = []
     i, n = 0, len(field)
     while i < n:
         ch = field[i]
         if ch != "[":
-            out.append(ch)
+            text.append(ch)
             i += 1
             continue
         end = field.find("]", i + 1)
         if end != -1 and field[i + 1 : end].isdigit():
-            out.append(field[i : end + 1])
+            if text:
+                out.append(("text", "".join(text)))
+                text = []
+            out.append(("index", field[i : end + 1]))
             i = end + 1
             continue
         quote = field[i + 1 : i + 2]
@@ -2000,9 +2006,48 @@ def normalise_field(field: str) -> str:
                 j += 1
         else:
             close = end
-        out.append("[*]")
+        stop = n if close == -1 else close
+        if text:
+            out.append(("text", "".join(text)))
+            text = []
+        out.append(("key", field[i + 1 : stop]))
         i = n if close == -1 else close + 1
-    return "".join(out)
+    if text:
+        out.append(("text", "".join(text)))
+    return out
+
+
+def normalise_field(field: str) -> str:
+    """The payload path with every depositor key replaced by ``[*]``; plain integer indexes (TCKDB's ordinals) stay."""
+    return "".join("[*]" if kind == "key" else text for kind, text in _segments(field))
+
+
+def _decode_key(literal: str) -> str:
+    """The key a quoted segment stands for (``"o'k"`` -> ``o'k``); an unquoted or hand-quoted one as it is."""
+    if len(literal) >= 2 and literal[0] in ("'", '"') and literal[-1] == literal[0]:
+        try:
+            value = ast.literal_eval(literal)
+        except (ValueError, SyntaxError):
+            return literal[1:-1]
+        return value if isinstance(value, str) else literal[1:-1]
+    return literal
+
+
+def field_keys(field: str, name: str) -> list[str]:
+    """The local keys written as ``name[<key>]`` in a payload path, decoded (``calculations['h-opt']`` -> ``h-opt``).
+
+    Reads the path with the same tokeniser :func:`normalise_field` uses, so a key containing a quote, a backslash or
+    ``']`` is read back as the key that was written, whichever way it was quoted.
+    """
+    found: list[str] = []
+    previous = ""
+    for kind, text in _segments(field):
+        if kind == "key" and previous.endswith(name):
+            before = previous[: -len(name)]
+            if not before or not (before[-1].isalnum() or before[-1] == "_"):
+                found.append(_decode_key(text))
+        previous = text if kind == "text" else ""
+    return found
 
 
 __all__ = [
@@ -2011,6 +2056,7 @@ __all__ = [
     "RENDERED",
     "STEREO_NOT_REPRESENTED_REASONS",
     "depositor_supplied_problems",
+    "field_keys",
     "clean_depositor_supplied",
     "context_problems",
     "normalise_field",
