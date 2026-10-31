@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.181.0 - 2026-10-31
+
+An unrecorded Hessian method is assumed from the program's default when a deposit is judged.
+
+- Requires `tckdb-schemas>=0.144.0`. No client code changed; the pin moves so a client validating locally judges `tau` the way the server does.
+- `RejectionCode.HESSIAN_METHOD_CONTRADICTS_INPUT_DECK` (`hessian_method_contradicts_input_deck`, 422): the recorded `freq.hessian_method` and the attached input deck state different methods (analytic, `finite_difference_gradient` or `finite_difference_energy`).
+- ORCA `NumFreq` with `NumGrad` is read as `finite_difference_energy`; Gaussian double-hybrid functionals get no assumption.
+- Input decks attached inline are read before the deposit is judged, so a deck stating `NumFreq` or `Freq=Numer` is judged at its recorded tolerance. ORCA meta-GGA functionals before ORCA 5 are assumed numerical.
+- A Gaussian minimum (HF, DFT, MP2, CIS, CASSCF) or ORCA minimum (HF, DFT) with an imaginary mode of 30 cm-1 or more and no recorded `freq.hessian_method` is refused as `n_imag_contradicts_minimum` (it was accepted below 50). Gaussian CCSD(T) and QCISD(T) are judged at 80, so a minimum between 50 and 80 cm-1 that was refused is now accepted with a warning. See the `tckdb-schemas` 0.144.0 entry.
+
 ## 0.180.0 - 2026-10-29
 
 Deposit-time warnings are shown with the record when it is read.

@@ -15,6 +15,16 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from tckdb_schemas.hessian_method_detection import (  # noqa: F401  (re-exported: the deck readers live in tckdb-schemas)
+    ORCA_FREQ_HESSIAN_KEYWORDS,
+    _extract_input_block,
+    _extract_log_echo_input,
+    _looks_like_orca_input_line,
+    _strip_coordinate_block,
+    orca_freq_hessian,
+    orca_keyword_lines,
+)
+
 from app.parser_registry import PARSERS
 
 # ---------------------------------------------------------------------------
@@ -51,8 +61,11 @@ _CANONICAL_MAP: dict[tuple[str, str], tuple[str, str | None]] = {
     # ORCA says so explicitly in the keyword line, so it is recorded
     # rather than guessed; a run that says neither leaves the key absent
     # and gets the conservative tau.
-    ("freq", "numfreq"): ("freq.hessian_method", "finite_difference_gradient"),
-    ("freq", "anfreq"): ("freq.hessian_method", "analytic"),
+    # Shared with upload validation (``tckdb_schemas.hessian_method_detection``).
+    **{
+        ("freq", keyword): ("freq.hessian_method", method.value)
+        for keyword, method in ORCA_FREQ_HESSIAN_KEYWORDS.items()
+    },
     # Grid keywords (from ! line, section="grid")
     ("grid", "defgrid1"): ("grid.quality", "defgrid1"),
     ("grid", "defgrid2"): ("grid.quality", "defgrid2"),
@@ -95,7 +108,7 @@ _JOB_TYPES = frozenset({
 })
 
 #: Keywords that name the frequency job's second-derivative method.
-_FREQ_METHOD_KEYWORDS = frozenset({"numfreq", "anfreq"})
+_FREQ_METHOD_KEYWORDS = frozenset(ORCA_FREQ_HESSIAN_KEYWORDS)
 
 #: Known method keywords — belong in level_of_theory, not parameters.
 #: Matched as **prefixes**, so ``dlpno-ccsd(t)-f12`` is recognised
@@ -217,93 +230,14 @@ def _classify_keyword(kw: str) -> str | None:
 # Input block extraction
 # ---------------------------------------------------------------------------
 
-_INPUT_DELIM = re.compile(r"^={60,}$")
-_INPUT_LINE = re.compile(r"^\|\s*\d+>\s*(.*)$")
 
 
-def _extract_input_block(text: str) -> list[str]:
-    """Return the ORCA input lines, from a log echo or a raw ``.in`` file.
-
-    Two layouts are supported:
-
-    * **Log echo**: ORCA echoes the input between ``INPUT FILE`` and
-      ``****END OF INPUT****`` markers, with each line prefixed
-      ``|  N> ``.
-    * **Raw input**: a ``.in`` / ``.inp`` artifact uploaded directly,
-      with no log markers and no line prefixes. Detected by the
-      presence of ORCA-style ``!`` keyword or ``%`` block lines.
-
-    The coordinate block (``* xyz ... *``) is filtered out so atom
-    rows can never reach the keyword/block parsers.
-    """
-    lines = text.splitlines()
-
-    log_echo = _extract_log_echo_input(lines)
-    if log_echo:
-        return log_echo
-
-    if any(_looks_like_orca_input_line(line) for line in lines):
-        return lines
-
-    return []
 
 
-def _extract_log_echo_input(lines: list[str]) -> list[str]:
-    """Extract the ``|  N> content`` lines from a log file echo.
-
-    Returns ``[]`` when no ``INPUT FILE`` block is present.
-    """
-    in_input = False
-    input_lines: list[str] = []
-
-    for line in lines:
-        stripped = line.strip()
-
-        if "INPUT FILE" in stripped:
-            in_input = True
-            continue
-
-        if in_input and "****END OF INPUT****" in stripped:
-            break
-
-        if in_input:
-            m = _INPUT_LINE.match(stripped)
-            if m:
-                input_lines.append(m.group(1))
-
-    return input_lines
 
 
-def _looks_like_orca_input_line(line: str) -> bool:
-    """Best-effort signal that a raw line is ORCA input syntax."""
-    stripped = line.lstrip()
-    return stripped.startswith(("!", "%"))
 
 
-def _strip_coordinate_block(lines: list[str]) -> list[str]:
-    """Drop the ``* xyz ... *`` (or ``* int ... *``) coordinate block.
-
-    The opening line starts with ``*`` and contains ``xyz`` or ``int``;
-    the block ends at the next bare ``*`` line. Atom rows in between
-    must never be passed to the keyword/block parsers.
-    """
-    out: list[str] = []
-    in_coord = False
-    for line in lines:
-        stripped = line.strip()
-        if not in_coord:
-            if stripped.startswith("*") and (
-                "xyz" in stripped.lower() or "int" in stripped.lower()
-            ):
-                in_coord = True
-                continue
-            out.append(line)
-        else:
-            if stripped == "*":
-                in_coord = False
-                continue
-            # Atom row inside the coordinate block — drop.
-    return out
 
 
 # ---------------------------------------------------------------------------
@@ -320,18 +254,16 @@ def _parse_keyword_lines(input_lines: list[str]) -> list[dict]:
     """
     params: list[dict] = []
 
-    for line in _strip_coordinate_block(input_lines):
-        stripped = line.strip()
-        if not stripped.startswith("!"):
-            continue
-
-        # Strip the ! and optional leading space, then remove inline comments
-        keywords_str = stripped.lstrip("!").strip()
-        if "#" in keywords_str:
-            keywords_str = keywords_str[:keywords_str.index("#")].strip()
-        if not keywords_str:
-            continue
-
+    keyword_lines = orca_keyword_lines(input_lines)
+    all_keywords = [kw for keywords_str in keyword_lines for kw in keywords_str.split()]
+    # One ``freq.hessian_method`` row per deck, at the place of the winning
+    # directive. Its raw text is that directive as written (``NumFreq`` or
+    # ``NumFreq NumGrad``) and its canonical value the overall method, so a row's
+    # raw text never contradicts its canonical value. The reader is shared with
+    # upload validation.
+    freq_hessian = orca_freq_hessian(all_keywords)
+    freq_row_written = False
+    for keywords_str in keyword_lines:
         for kw in keywords_str.split():
             section = _classify_keyword(kw)
             if section is None:
@@ -339,6 +271,22 @@ def _parse_keyword_lines(input_lines: list[str]) -> list[dict]:
                 continue
 
             ck, cv = _lookup_canonical(section, kw)
+            if section == "freq":
+                if freq_hessian is None or freq_row_written:
+                    continue
+                directive, method = freq_hessian
+                if kw.lower() != directive.split()[0].lower():
+                    continue
+                freq_row_written = True
+                params.append({
+                    "raw_key": directive,
+                    "canonical_key": ck,
+                    "raw_value": "true",
+                    "canonical_value": method.value,
+                    "section": "freq",
+                    "value_type": "enum",
+                })
+                continue
             # When a normalised canonical_value comes back, the keyword
             # encodes a discrete choice (``tightscf`` → ``tight``);
             # value_type=enum lines this up with the vocab's

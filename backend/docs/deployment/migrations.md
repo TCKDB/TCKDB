@@ -483,7 +483,7 @@ that this is a real database. The script:
 - Resolves tau exactly as the upload path would: recorded
   `calculation_parameter` rows first, then -- only when that resolves to
   the conservative `protocol_not_recorded` row -- the assumption table in
-  `app/services/hessian_method_inference.py`, keyed on the calculation's
+  `tckdb_schemas.hessian_method_assumption` (re-exported by `app/services/hessian_method_inference.py`), keyed on the calculation's
   software and level-of-theory method.
 - Writes only `imaginary_mode_tau_cm1` and `imaginary_mode_tau_basis`.
   **`imaginary_mode_structural_flag` is never touched** -- it is judged

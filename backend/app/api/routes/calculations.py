@@ -101,6 +101,7 @@ from app.services.deposit_warnings import store_deposit_warnings
 from app.services.hessian_extraction import (
     try_extract_hessian_from_artifact_upload,
 )
+from app.services.hessian_method_deck_check import try_hessian_method_disagreement_from_input_upload
 from app.services.input_geometry_extraction import (
     try_extract_input_geometry_from_artifact_upload,
 )
@@ -822,6 +823,11 @@ def upload_calculation_artifacts(
         )
         if sp_warning is not None:
             warnings.append(sp_warning)
+        # A deck attached after the deposit was judged may state a Hessian
+        # method the stored tolerance does not rest on: flag, never relabel.
+        deck_warning = try_hessian_method_disagreement_from_input_upload(session, calculation, art_in)
+        if deck_warning is not None:
+            warnings.append(deck_warning)
         # Output logs also state the charge and spin multiplicity the run
         # actually used; contradicting the declared identity is flagged.
         warnings.extend(

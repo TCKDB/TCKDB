@@ -1272,3 +1272,51 @@ class TestNetworkStateEnergySum:
         assert context["field"] == "solve.state_energies[0].energy_kj_mol", context
         assert context["state_key"] == "entrance", context
         assert not any(key == "id" or key.endswith(("_id", "_ids")) for key in context), context
+
+
+class TestARecordedHessianMethodAgainstItsInputDeck:
+    def test_a_recorded_method_the_attached_deck_contradicts_is_refused_by_name(self, client):
+        """``hessian_method_contradicts_input_deck``: recorded analytic, deck says NumFreq.
+
+        The failure this guards: judged against whichever statement the
+        reader happened to pick, a mode at 40 cm-1 is noise at tau 50 and real
+        curvature at tau 30, and the record keeps both statements.
+        """
+        import base64
+
+        deck = "! B3LYP def2-SVP NumFreq\n* xyz 0 1\nC 0 0 0\n*\n"
+        payload = {
+            "species_entry": {"smiles": "C", "charge": 0, "multiplicity": 1},
+            "conformers": [
+                {
+                    "key": "c0",
+                    "geometry": {"xyz_text": _METHANE_XYZ},
+                    "primary_calculation": {
+                        "key": "opt0",
+                        "type": "opt",
+                        "software_release": {"name": "ORCA", "version": "6.0.1"},
+                        "level_of_theory": {"method": "B3LYP", "basis": "def2-SVP"},
+                        "opt_result": {"converged": True},
+                        "parameters": [
+                            {
+                                "raw_key": "freq",
+                                "raw_value": "analytic",
+                                "canonical_key": "freq.hessian_method",
+                                "canonical_value": "analytic",
+                            }
+                        ],
+                        "artifacts": [
+                            {
+                                "kind": "input",
+                                "filename": "job.in",
+                                "content_base64": base64.b64encode(deck.encode()).decode(),
+                            }
+                        ],
+                    },
+                }
+            ],
+        }
+        response = client.post("/api/v1/uploads/computed-species", json=payload)
+        body = _assert_code(response, "hessian_method_contradicts_input_deck")
+        assert body["context"]["recorded"] == "analytic"
+        assert body["context"]["input_deck"] == "finite_difference_gradient"

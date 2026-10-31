@@ -50,9 +50,14 @@ from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 from tckdb_schemas.sp_energy_components import SP_ENERGY_COMPONENTS_DESCRIPTION, check_sp_energy_components
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
+    TauResolution,
     evaluate_species_entry_frequency,
     evaluate_transition_state_frequency,
-    resolve_tau_from_parameters,
+)
+from tckdb_schemas.hessian_method_assumption import (
+    calculation_deck_method,
+    check_calculation_deck_agrees,
+    resolve_tau_for_calculation,
 )
 
 
@@ -210,6 +215,12 @@ class CalculationIn(SchemaBase):
         return self
 
     @model_validator(mode="after")
+    def validate_recorded_hessian_method_matches_input_deck(self) -> Self:
+        """A recorded ``freq.hessian_method`` must not contradict the attached deck."""
+        check_calculation_deck_agrees(self)
+        return self
+
+    @model_validator(mode="after")
     def validate_sp_energy_components(self) -> Self:
         """Components sit on a single point and agree with its energy (ADR 0021)."""
         check_sp_energy_components(
@@ -284,6 +295,17 @@ def freq_result_of(calc_in: "CalculationIn") -> FreqResultPayload | None:
     )
 
 
+def tau_resolution_of(calc_in: "CalculationIn") -> TauResolution:
+    """ADR 0012's tau for a bundle-local calculation.
+
+    The bundle twin of :meth:`CalculationWithResultsPayload.tau_resolution`:
+    recorded ``freq.hessian_method`` first, then the method the calculation's
+    own inline input deck states, then the producing program's assumed default
+    from its software and level-of-theory method, then ``protocol_not_recorded``.
+    """
+    return resolve_tau_for_calculation(calc_in)
+
+
 def transition_state_frequency_findings(
     calc_in: "CalculationIn", *, location: str
 ) -> list[StationaryPointFinding]:
@@ -307,10 +329,7 @@ def transition_state_frequency_findings(
         reaction_coordinate_mode_index=(
             freq_result.reaction_coordinate_mode_index
         ),
-        tau=resolve_tau_from_parameters(
-            (observation.canonical_key, observation.canonical_value)
-            for observation in (calc_in.parameters or ())
-        ),
+        tau=tau_resolution_of(calc_in),
     )
 
 
@@ -333,10 +352,7 @@ def species_entry_frequency_findings(
         location=location,
         imaginary_modes=freq_result.imaginary_modes(),
         reaction_coordinate_mode_index=freq_result.reaction_coordinate_mode_index,
-        tau=resolve_tau_from_parameters(
-            (observation.canonical_key, observation.canonical_value)
-            for observation in (calc_in.parameters or ())
-        ),
+        tau=tau_resolution_of(calc_in),
     )
 
 
@@ -426,7 +442,7 @@ def calculation_in_to_with_results_payload(
             electronic_energy_hartree=calc_in.sp_electronic_energy_hartree,
         )
 
-    return CalculationWithResultsPayload(
+    payload = CalculationWithResultsPayload(
         type=calc_in.type,
         quality=calc_in.quality,
         software_release=calc_in.software_release,
@@ -457,6 +473,8 @@ def calculation_in_to_with_results_payload(
         parameters_parser=calc_in.parameters_parser,
         parameters_extracted_at=calc_in.parameters_extracted_at,
     )
+    payload._deck_hessian_method = calculation_deck_method(calc_in)
+    return payload
 
 
 class GeometryIn(SchemaBase):

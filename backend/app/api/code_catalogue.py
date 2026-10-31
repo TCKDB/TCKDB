@@ -1605,6 +1605,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "re-pointing that gate at the new shape rather than "
                 "deleting it."
             )),
+    ApiCode("hessian_method_contradicts_input_deck", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/hessian_method_detection.py",
+            shape=Shape.relationship,
+            note=(
+                "A calculation's recorded freq.hessian_method disagrees with the method its attached "
+                "input deck states (analytic, finite_difference_gradient or finite_difference_energy: "
+                "any two different parsed methods, since their tolerances differ). context.recorded "
+                "and context.input_deck are those HessianMethod tokens, or 'analytic' / 'numerical' "
+                "when the recorded value is a loose spelling; context.calculation_key names the "
+                "bundle calculation."
+            )),
     ApiCode("hessian_not_found", 404, Surface.coded_exception,
             "backend/app/api/routes/calculations.py"),
     ApiCode("idempotency_conflict", 409, Surface.response_literal,

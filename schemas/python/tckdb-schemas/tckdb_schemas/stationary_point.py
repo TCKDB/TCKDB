@@ -192,7 +192,7 @@ class TauBasis(str, Enum):
     Gaussian record ever written. When the method is not recorded,
     TCKDB now assumes the producing program's documented default for the
     level-of-theory's method family (see
-    ``app/services/hessian_method_inference.py`` on the backend), records
+    ``tckdb_schemas.hessian_method_assumption``), records
     that it was *assumed*, and gives the assumed method the same τ as its
     recorded counterpart. An assumption must never be confusable with a
     recorded statement — hence the separate member rather than reusing
@@ -261,9 +261,11 @@ def resolve_tau(
     """Resolve ADR 0012's τ from recorded execution provenance.
 
     The table is ADR 0012's, and the fallback is the conservative row:
-    an unrecorded Hessian method is never assumed analytic, because
-    assuming the better case would flag genuine noise as a structural
-    finding.
+    this function never assumes a Hessian method: an absent one is
+    ``protocol_not_recorded``. The producing program's assumed default is
+    applied one level up, by
+    :func:`tckdb_schemas.hessian_method_assumption.resolve_tau_with_assumption`,
+    which every validation adapter calls.
 
     Note what is deliberately *not* consulted. ``opt.initial_hessian``
     (Gaussian ``CalcFC`` / ``CalcAll``) names where the optimiser got its

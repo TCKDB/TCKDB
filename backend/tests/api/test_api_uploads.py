@@ -396,7 +396,9 @@ class TestTransitionStateImaginaryModeTiers:
         )
         assert resp.status_code == 201, resp.text
         codes = {w["code"] for w in resp.json()["warnings"]}
-        assert "transition_state_extra_imaginary_modes_below_tau" in codes
+        # Gaussian DFT, no recorded Hessian method: assumed tau 30, so -42 is
+        # real curvature (flagged) rather than below tau.
+        assert "transition_state_extra_imaginary_mode_above_tau" in codes
         assert "transition_state_reaction_coordinate_not_designated" not in codes
 
     def test_a_tight_recorded_protocol_flags_the_same_record(self, client):

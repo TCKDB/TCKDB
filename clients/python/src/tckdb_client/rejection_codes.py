@@ -175,6 +175,7 @@ class RejectionCode(str, Enum):
     GEOMETRY_TOO_LARGE = "geometry_too_large"
     HANDLE_NOT_FOUND = "handle_not_found"
     HANDLE_TYPE_MISMATCH = "handle_type_mismatch"
+    HESSIAN_METHOD_CONTRADICTS_INPUT_DECK = "hessian_method_contradicts_input_deck"
     HESSIAN_NOT_FOUND = "hessian_not_found"
     IDEMPOTENCY_CONFLICT = "idempotency_conflict"
     INCLUDE_NOT_IMPLEMENTED_YET = "include_not_implemented_yet"
@@ -516,6 +517,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.GEOMETRY_KEY_UNRESOLVED,
         RejectionCode.GEOMETRY_TOO_LARGE,
         RejectionCode.HANDLE_TYPE_MISMATCH,
+        RejectionCode.HESSIAN_METHOD_CONTRADICTS_INPUT_DECK,
         RejectionCode.INCLUDE_NOT_IMPLEMENTED_YET,
         RejectionCode.INVALID_CURSOR,
         RejectionCode.INVALID_HANDLE,
@@ -865,6 +867,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.GEOMETRY_TOO_LARGE: frozenset({422}),
     RejectionCode.HANDLE_NOT_FOUND: frozenset({404}),
     RejectionCode.HANDLE_TYPE_MISMATCH: frozenset({422}),
+    RejectionCode.HESSIAN_METHOD_CONTRADICTS_INPUT_DECK: frozenset({422}),
     RejectionCode.HESSIAN_NOT_FOUND: frozenset({404}),
     RejectionCode.IDEMPOTENCY_CONFLICT: frozenset({409}),
     RejectionCode.INCLUDE_NOT_IMPLEMENTED_YET: frozenset({422}),

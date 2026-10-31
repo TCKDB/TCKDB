@@ -9,6 +9,18 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from tckdb_schemas.hessian_method_detection import (  # noqa: F401  (re-exported: the route readers live in tckdb-schemas)
+    _IOP_RE,
+    _ROUTE_DELIM,
+    GAUSSIAN_FREQ_HESSIAN_OPTIONS,
+    _extract_route_line_fallback,
+    _extract_route_line_from_log_echo,
+    _extract_route_line_from_raw_input,
+    _tokenize_route,
+    extract_gaussian_route_text,
+    gaussian_freq_hessian_option,
+)
+
 from app.parser_registry import PARSERS
 
 # ---------------------------------------------------------------------------
@@ -44,9 +56,12 @@ _CANONICAL_MAP: dict[tuple[str, str], tuple[str, str | None]] = {
     # the key absent, which resolves to the conservative tau rather than
     # being read as "analytic". Assuming the default would be a guess
     # dressed as provenance.
-    ("freq", "numer"): ("freq.hessian_method", "finite_difference_gradient"),
-    ("freq", "numerical"): ("freq.hessian_method", "finite_difference_gradient"),
-    ("freq", "enonly"): ("freq.hessian_method", "finite_difference_energy"),
+    # The option table is shared with upload validation
+    # (``tckdb_schemas.hessian_method_detection``): one owner.
+    **{
+        ("freq", option): ("freq.hessian_method", method.value)
+        for option, method in GAUSSIAN_FREQ_HESSIAN_OPTIONS.items()
+    },
     # integral section
     ("integral", "grid"): ("grid.quality", None),
     ("integral", "acc2e"): ("integral.accuracy", None),
@@ -79,32 +94,8 @@ def _lookup_canonical(
 # Route-line extraction
 # ---------------------------------------------------------------------------
 
-_ROUTE_DELIM = re.compile(r"^[\s-]{60,}$")
 
 
-def extract_gaussian_route_text(text: str) -> str | None:
-    """Return the Gaussian route section from a log echo or raw input file.
-
-    Tries the log-echo dash-delimited block first. If that yields nothing
-    (e.g. raw ``.gjf`` / ``.com`` input), falls back to scanning for the
-    first non-empty line whose stripped form starts with ``#``, then
-    collects continuation lines until the first blank line.
-
-    The two modes use different join strategies:
-
-    * Log echoes: Gaussian hard-wraps at column width; concatenating with
-      no separator preserves tokens like ``def2tzvp`` that were split mid-
-      identifier.
-    * Raw input: lines are human-edited, so wrapping is logical not
-      physical; joining with spaces preserves token boundaries.
-
-    Returns ``None`` if no route could be identified.
-    """
-
-    log_route = _extract_route_line_from_log_echo(text)
-    if log_route:
-        return log_route
-    return _extract_route_line_from_raw_input(text)
 
 
 def _extract_route_line(text: str) -> str:
@@ -119,87 +110,10 @@ def _extract_route_line(text: str) -> str:
     return route or ""
 
 
-def _extract_route_line_from_log_echo(text: str) -> str:
-    """Extract the route line from a Gaussian log echo.
-
-    The route line sits between two rows of dashes (``------``) in the
-    early part of the output.  It may span multiple physical lines, but
-    Gaussian wraps at column width with no internal spaces, so the
-    parts must be concatenated with no separator.
-    """
-
-    lines = text.splitlines()
-    in_route = False
-    route_parts: list[str] = []
-
-    for line in lines:
-        stripped = line.strip()
-        if _ROUTE_DELIM.match(stripped):
-            if in_route:
-                # second delimiter — we're done
-                break
-            in_route = True
-            continue
-        if in_route:
-            route_parts.append(stripped)
-
-    raw = "".join(route_parts)
-    if raw.startswith("#"):
-        return raw
-    # First dash block might be the warning/copyright block; try the
-    # next one.
-    return _extract_route_line_fallback(text)
 
 
-def _extract_route_line_fallback(text: str) -> str:
-    """Fallback: scan dash-delimited blocks for one starting with ``#``."""
-    lines = text.splitlines()
-    dash_positions = [
-        i for i, line in enumerate(lines) if _ROUTE_DELIM.match(line.strip())
-    ]
-    for i in range(len(dash_positions) - 1):
-        start = dash_positions[i] + 1
-        end = dash_positions[i + 1]
-        block = "".join(lines[j].strip() for j in range(start, end))
-        if block.startswith("#"):
-            return block
-    return ""
 
 
-def _extract_route_line_from_raw_input(text: str) -> str | None:
-    """Extract the route from a raw Gaussian input (``.gjf`` / ``.com``).
-
-    Rules:
-
-    1. Find the first non-empty line whose stripped form starts with ``#``.
-    2. Collect that line plus every subsequent non-empty line.
-    3. Stop at the first blank line — that terminates the route section
-       and starts the title block.
-    4. Join with single spaces. Raw input is human-authored and wrapping
-       is logical, so token boundaries land on the line breaks.
-
-    Returns ``None`` if no ``#`` line was found.
-    """
-
-    lines = text.splitlines()
-    in_route = False
-    route_parts: list[str] = []
-
-    for line in lines:
-        stripped = line.strip()
-        if not in_route:
-            if stripped.startswith("#"):
-                in_route = True
-                route_parts.append(stripped)
-            continue
-        # in_route
-        if stripped == "":
-            break
-        route_parts.append(stripped)
-
-    if not route_parts:
-        return None
-    return " ".join(route_parts)
 
 
 # ---------------------------------------------------------------------------
@@ -245,7 +159,6 @@ def _extract_link0(text: str) -> list[dict]:
 # Route-line tokenizer and parser
 # ---------------------------------------------------------------------------
 
-_IOP_RE = re.compile(r"IOp\(([^)]+)\)", re.IGNORECASE)
 
 
 def _emit_scf_convergence_failure_ignored(iop_value: str) -> list[dict]:
@@ -310,6 +223,7 @@ def _parse_route_tokens(route: str) -> list[dict]:
       - IOp(o/k=v)     (IOp(2/9=2000))
     """
     params: list[dict] = []
+    original_route = route
 
     # Strip the # prefix
     route = route.strip()
@@ -490,30 +404,41 @@ def _parse_route_tokens(route: str) -> list[dict]:
                     }
                 )
 
+    # The Hessian method is read once, by the reader shared with upload
+    # validation (every spelling of ``Freq``, ``EnOnly`` over ``Numer``), so the
+    # stored row is the one validation judged. Rows stay exactly as the deck
+    # wrote them (``raw_key`` keeps its case, the freq section keeps every
+    # option); only the winning option's row keeps the canonical key and value,
+    # so no row's raw text contradicts its canonical value.
+    shared = gaussian_freq_hessian_option(original_route)
+    winner_seen = False
+    for p in params:
+        if p.get("canonical_key") != "freq.hessian_method":
+            continue
+        if shared is not None and not winner_seen and str(p["raw_key"]).lower() == shared[0].lower():
+            p["canonical_value"] = shared[1].value
+            winner_seen = True
+        else:
+            p["canonical_key"] = None
+            p["canonical_value"] = None
+    if shared is not None and not winner_seen:
+        # A spelling the generic branches above do not emit a row for
+        # (``Freq(Numer)``, ``Freq (Numer)``, ``Freq = Numer``, ``Frequency=..``).
+        option, method = shared
+        params.append(
+            {
+                "raw_key": option,
+                "canonical_key": "freq.hessian_method",
+                "raw_value": "true",
+                "canonical_value": method.value,
+                "section": "freq",
+                "value_type": "bool",
+            }
+        )
+
     return params
 
 
-def _tokenize_route(route: str) -> list[str]:
-    """Split route line into tokens, respecting parenthesized groups."""
-    tokens: list[str] = []
-    current: list[str] = []
-    depth = 0
-    for char in route:
-        if char == "(":
-            depth += 1
-            current.append(char)
-        elif char == ")":
-            depth -= 1
-            current.append(char)
-        elif char == " " and depth == 0:
-            if current:
-                tokens.append("".join(current))
-                current = []
-        else:
-            current.append(char)
-    if current:
-        tokens.append("".join(current))
-    return tokens
 
 
 # ---------------------------------------------------------------------------

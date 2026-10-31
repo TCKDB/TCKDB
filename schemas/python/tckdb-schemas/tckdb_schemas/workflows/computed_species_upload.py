@@ -86,7 +86,10 @@ from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     evaluate_species_entry_frequency,
     raise_for_blocking_findings,
-    resolve_tau_from_parameters,
+)
+from tckdb_schemas.hessian_method_assumption import (
+    check_calculation_deck_agrees,
+    resolve_tau_for_calculation,
 )
 from tckdb_schemas.structure_declarations import (
     StructureDeterminationDeclaration,
@@ -359,10 +362,7 @@ class CalculationInBundle(SchemaBase):
             reaction_coordinate_mode_index=(
                 self.freq_result.reaction_coordinate_mode_index
             ),
-            tau=resolve_tau_from_parameters(
-                (observation.canonical_key, observation.canonical_value)
-                for observation in (self.parameters or ())
-            ),
+            tau=resolve_tau_for_calculation(self),
         )
 
     def frequency_completeness_findings(
@@ -389,6 +389,12 @@ class CalculationInBundle(SchemaBase):
             fallback_xyz_text=fallback_xyz_text,
             location=location,
         )
+
+    @model_validator(mode="after")
+    def validate_recorded_hessian_method_matches_input_deck(self) -> Self:
+        """A recorded ``freq.hessian_method`` must not contradict the attached deck."""
+        check_calculation_deck_agrees(self)
+        return self
 
     @model_validator(mode="after")
     def reject_database_id_fields(self) -> Self:

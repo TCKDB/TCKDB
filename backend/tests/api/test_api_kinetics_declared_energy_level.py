@@ -278,3 +278,20 @@ def test_only_a_missing_or_ambiguous_lookup_is_forgiven_on_bundle_import(client,
     monkeypatch.setattr(workflow, "_find_energy_calculation_for_species", refuse)
     with pytest.raises(CodedValueError):
         _import_warnings(db_session, _latest(db_session).id)
+
+
+def test_h_plus_h_without_a_declared_level_links_the_shared_single_point_once(client, db_session):
+    """The legacy fallback names the hydrogen key twice; the (calculation, role) link is added once.
+
+    Before the fix the second row collided on ``pk_kinetics_source_calculation`` at the next flush,
+    whether or not a level was declared, so main fails here too.
+    """
+    from app.db.models.kinetics import KineticsSourceCalculation
+
+    resp = client.post(_REACTION, json=_bundle_with_sp(_LOT_B))
+    assert resp.status_code == 201, resp.text[:800]
+    links = db_session.scalars(
+        select(KineticsSourceCalculation).where(KineticsSourceCalculation.kinetics_id == _latest(db_session).id)
+    ).all()
+    keys = [(link.calculation_id, link.role) for link in links]
+    assert keys and len(keys) == len(set(keys))

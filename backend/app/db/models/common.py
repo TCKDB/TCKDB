@@ -80,8 +80,10 @@ class HessianMethod(str, Enum):
     #
     # Recorded only when the output says so explicitly (Gaussian
     # ``Freq=Numer``, ORCA ``NumFreq`` / ``AnFreq``). Absence means "not
-    # recorded", which resolves to the conservative tolerance -- it is
-    # never assumed to be analytic.
+    # recorded", which resolves to the producing program's assumed default
+    # for the level of theory (tckdb_schemas.hessian_method_assumption,
+    # stored with an ``assumed_*`` basis), or to the conservative tolerance
+    # where that is unknown. A recorded value always wins over an assumption.
     #
     # Not a database column: it is the canonical *value* of the
     # ``freq.hessian_method`` parameter row, and lives here so the
@@ -118,7 +120,7 @@ IMAGINARY_MODE_TAU_BASIS_VALUES: tuple[str, ...] = (
     # ADR 0012's 2026-09-04 amendment: an unrecorded Hessian method may
     # be assumed from the producing program's documented default for the
     # level-of-theory's method family (see
-    # app/services/hessian_method_inference.py). Never confusable with a
+    # tckdb_schemas.hessian_method_assumption). Never confusable with a
     # recorded statement -- hence separate members rather than reusing
     # the three above -- and widened onto this CHECK constraint by the
     # revision following e2a7c9d4b615, not folded into it.
