@@ -184,3 +184,68 @@ def test_the_reason_uses_human_family_labels() -> None:
     assert "CCSD(T) calculations" in infer_hessian_method("Gaussian", "CCSD(T)").reason
     assert "dlpno_other" not in infer_hessian_method("ORCA", "DLPNO-MP2").reason
     assert "method family" not in infer_hessian_method("ORCA", "DLPNO-MP2").reason
+
+
+# ---------------------------------------------------------------------------
+# ORCA release gate (owner decision 2026-10-31)
+# Sources: see the table note in ``hessian_method_assumption.py``.
+# ---------------------------------------------------------------------------
+
+
+def _orca(method: str, version: str | None):
+    return resolve_tau_with_assumption([], "ORCA", method, version)
+
+
+@pytest.mark.parametrize(
+    ("method", "version", "basis", "tau"),
+    [
+        ("M06-2X", "4.2.1", TauBasis.assumed_finite_difference_gradient, 50.0),
+        ("M06-2X", "5.0.4", TauBasis.assumed_analytic_default, 30.0),
+        ("M06-2X", "6.0.1", TauBasis.assumed_analytic_default, 30.0),
+        ("TPSS", "4.2.1", TauBasis.assumed_finite_difference_gradient, 50.0),
+        ("r2SCAN", "4.2.1", TauBasis.assumed_finite_difference_gradient, 50.0),
+        ("B3LYP", "4.2.1", TauBasis.assumed_analytic_default, 30.0),
+        ("PBE0", "4.0.0", TauBasis.assumed_analytic_default, 30.0),
+        ("B3LYP", None, TauBasis.assumed_analytic_default, 30.0),
+        ("B3LYP", "not-a-version", TauBasis.assumed_analytic_default, 30.0),
+        # version-dependent family with no usable version: no assumption
+        ("M06-2X", None, TauBasis.protocol_not_recorded, 50.0),
+        ("M06-2X", "unparseable", TauBasis.protocol_not_recorded, 50.0),
+        # VV10 and double hybrids: the manuals do not confirm an analytic Hessian
+        ("wB97X-V", "5.0.4", TauBasis.protocol_not_recorded, 50.0),
+        ("wB97M-V", "6.0.1", TauBasis.protocol_not_recorded, 50.0),
+        ("B3LYP-NL", "5.0.4", TauBasis.protocol_not_recorded, 50.0),
+        ("B2PLYP", "5.0.4", TauBasis.protocol_not_recorded, 50.0),
+        ("B2PLYP-D3", "4.2.1", TauBasis.protocol_not_recorded, 50.0),
+        ("wB97X-2", "6.0.1", TauBasis.protocol_not_recorded, 50.0),
+        # a name in no list is a plain functional only if the classifier calls it DFT
+        ("mystery-functional", "4.2.1", TauBasis.protocol_not_recorded, 50.0),
+    ],
+)
+def test_the_orca_table_is_gated_by_release_and_functional_class(method, version, basis, tau) -> None:
+    resolved = _orca(method, version)
+    assert resolved.basis is basis
+    assert resolved.tau_cm1 == tau
+
+
+def test_gaussian_is_not_version_gated() -> None:
+    assert resolve_tau_with_assumption([], "Gaussian", "M06-2X", "09").basis is TauBasis.assumed_analytic_default
+
+
+def test_the_orca_version_rule_is_named_in_the_reason() -> None:
+    old = _orca("M06-2X", "4.2.1").reason
+    assert "before version 5" in old and "meta-GGA" in old
+    assert "M06-2X" not in old
+    assert "meta-GGA" in _orca("M06-2X", "5.0.4").reason
+
+
+def test_the_version_comes_from_the_payload_software_release() -> None:
+    old = CalculationWithResultsPayload(
+        type="freq",
+        software_release={"name": "ORCA", "version": "4.2.1"},
+        level_of_theory={"method": "M06-2X", "basis": "def2-SVP"},
+        freq_result={"n_imag": 0},
+    )
+    new = old.model_copy(update={"software_release": old.software_release.model_copy(update={"version": "5.0.4"})})
+    assert old.tau_resolution().basis is TauBasis.assumed_finite_difference_gradient
+    assert new.tau_resolution().basis is TauBasis.assumed_analytic_default

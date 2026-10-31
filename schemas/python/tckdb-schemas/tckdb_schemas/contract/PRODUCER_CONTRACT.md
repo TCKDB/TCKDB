@@ -229,6 +229,11 @@ An unrecorded `freq.hessian_method` now resolves `tau` through the producing pro
 - `tau` is resolved from, in order: the Hessian method you record (`freq.hessian_method`, with `grid.quality` and `opt.convergence`); else the assumed default of the calculation's own software and level-of-theory method; else 50 cm-1 with `protocol_not_recorded`.
 - The assumed defaults are the 2026-09-04 table: Gaussian HF, DFT, MP2, CIS, CASSCF and ORCA HF, DFT resolve to the analytic default, 30 cm-1 (`assumed_analytic_default`); Gaussian MP3, MP4, QCISD, CCSD, CISD, CID and ORCA MP2, coupled cluster, DLPNO resolve to finite differences of gradients, 50 cm-1; Gaussian CCSD(T) and QCISD(T) resolve to finite differences of energies, 80 cm-1. CIS is matched exactly: CISD and CID have numerical frequencies only. Any other program, or a method family the table does not list, keeps 50 cm-1.
 - A `freq.hessian_method` that is present but not recognised (for example `numer`) keeps 50 cm-1 / `protocol_not_recorded`; it is never replaced by an assumption.
+- Input decks are read before judging. A deck attached inline (`artifacts` of kind `input` on a bundle calculation: computed-species, computed-reaction, network) is parsed for Gaussian `Freq=Numer` / `EnOnly` and ORCA `NumFreq` / `AnFreq`, and the method it states beats an assumed one. Order: recorded `freq.hessian_method`, the deck, the assumed default, 50 / `protocol_not_recorded`. An ORCA DFT minimum run with `NumFreq` and a -40 cm-1 mode is accepted at 50 with the recorded `finite_difference_gradient` basis; with no deck it is refused at the assumed 30. A deck with no frequency directive says nothing.
+- New refusal `hessian_method_contradicts_input_deck` (422): the recorded `freq.hessian_method` says analytic where the deck says numerical, or the reverse. The message carries only TCKDB's words; `context` has `recorded`, `input_deck` and `calculation_key`.
+- Paths that cannot see a deck at validation keep their behaviour: the standalone calculation, conformer and transition-state payloads have no `artifacts` field, and a deck uploaded afterwards through the artifact route is read only by the workflow's parameter extraction.
+- ORCA release gate: before ORCA 5, meta-GGA functionals (M06 family, TPSS, SCAN and r2SCAN family, and similar) have no analytic Hessian and are assumed `assumed_finite_difference_gradient` (50); ORCA 5 and later, and plain GGA and hybrid functionals on any version, stay analytic (30). With no usable ORCA version a meta-GGA gets no assumption (50 / `protocol_not_recorded`). ORCA double-hybrid and VV10/non-local functionals (`-V`, `-NL`) get no assumption on any version, because the manuals do not confirm an analytic Hessian for them. Source notes are in `hessian_method_assumption.py`.
+- New modules `tckdb_schemas.hessian_method_detection` (the deck readers and keyword tables the backend parsers now import) and `tckdb_schemas.ess_software_detection` (moved from the backend).
 - This loosens one band: Gaussian CCSD(T) and QCISD(T) are judged at 80 cm-1, so a minimum between 50 and 80 cm-1 that was refused is now accepted with `minimum_imaginary_modes_below_tau`, and a transition-state extra mode in that band is no longer flagged.
 - A recorded method always wins over an assumption.
 - Effect on a minimum: a Gaussian DFT minimum with a -40 cm-1 mode and no recorded Hessian method was accepted with `minimum_imaginary_modes_below_tau` at 50 cm-1. It is now refused as `n_imag_contradicts_minimum`, because 40 is at or above 30. Record `freq.hessian_method` (for example `Freq=Numer`) to be judged at the method you ran, or declare the entry as what it is.
@@ -864,10 +869,11 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 
 ### Code group 1a217e
 
-1 code on 3 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest).
+2 codes on 3 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest).
 
 | Code | Status | Traced via |
 |---|---|---|
+| [`hessian_method_contradicts_input_deck`](REFUSAL_CODES.md#c-hessian-method-contradicts-input-deck) | 422 | payload validation; route handler |
 | [`statmech_torsion_scan_calculation_owner_mismatch`](REFUSAL_CODES.md#c-statmech-torsion-scan-calculation-owner-mismatch) | 422 | route handler |
 
 <a id="cg-2ac41f"></a>
@@ -1787,7 +1793,7 @@ Nested models (110; fields and rules in the [model reference](#model-reference))
 - [Code group 0898ca](#cg-0898ca): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
 - [Code group 1544cf](#cg-1544cf): 2 codes, returned on 4 surfaces
 - [Code group 2f985e](#cg-2f985e): 20 codes, returned on 4 surfaces
-- [Code group 1a217e](#cg-1a217e): [`statmech_torsion_scan_calculation_owner_mismatch`](REFUSAL_CODES.md#c-statmech-torsion-scan-calculation-owner-mismatch), returned on 3 surfaces
+- [Code group 1a217e](#cg-1a217e): 2 codes, returned on 3 surfaces
 - [Code group 2ac41f](#cg-2ac41f): [`transport_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-transport-source-calculation-owner-mismatch), returned on 3 surfaces
 - [Code group 4aa549](#cg-4aa549): 18 codes, returned on 3 surfaces
 - [Code group c8f060](#cg-c8f060): 13 codes, returned on 3 surfaces
@@ -1988,7 +1994,7 @@ Nested models (94; fields and rules in the [model reference](#model-reference)):
 - [Code group 0898ca](#cg-0898ca): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
 - [Code group 1544cf](#cg-1544cf): 2 codes, returned on 4 surfaces
 - [Code group 2f985e](#cg-2f985e): 20 codes, returned on 4 surfaces
-- [Code group 1a217e](#cg-1a217e): [`statmech_torsion_scan_calculation_owner_mismatch`](REFUSAL_CODES.md#c-statmech-torsion-scan-calculation-owner-mismatch), returned on 3 surfaces
+- [Code group 1a217e](#cg-1a217e): 2 codes, returned on 3 surfaces
 - [Code group 2ac41f](#cg-2ac41f): [`transport_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-transport-source-calculation-owner-mismatch), returned on 3 surfaces
 - [Code group 6aa675](#cg-6aa675): 5 codes, returned on 2 surfaces
 
@@ -2742,7 +2748,7 @@ Nested models (94; fields and rules in the [model reference](#model-reference)):
 - [Code group 31a411](#cg-31a411): 4 codes, returned on 7 surfaces
 - [Code group 64b917](#cg-64b917): 13 codes, returned on 5 surfaces
 - [Code group 0898ca](#cg-0898ca): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
-- [Code group 1a217e](#cg-1a217e): [`statmech_torsion_scan_calculation_owner_mismatch`](REFUSAL_CODES.md#c-statmech-torsion-scan-calculation-owner-mismatch), returned on 3 surfaces
+- [Code group 1a217e](#cg-1a217e): 2 codes, returned on 3 surfaces
 - [Code group c8f060](#cg-c8f060): 13 codes, returned on 3 surfaces
 - [Code group 02b23e](#cg-02b23e): 9 codes, returned on 2 surfaces
 
@@ -5067,6 +5073,7 @@ Unknown keys are refused.
   ``constraint_index`` must be unique across the union of both lists
   within one calculation.
 
+- **CalculationInBundle.validate_recorded_hessian_method_matches_input_deck** (model, after; can refuse via `check_recorded_method_agrees_with_deck`): A recorded ``freq.hessian_method`` must not contradict the attached deck.
 - **CalculationInBundle.reject_database_id_fields** (model, after; can refuse via `_walk_for_forbidden_fields`):
 
   DR-0029 Requirement 1: bundle must not carry DB FK ids.
@@ -5528,6 +5535,7 @@ Unknown keys are refused.
   Also the software rule (required unless an assembled composite) and the
   assembled-composite rules: its scheme is inline and its inputs fill every slot.
 
+- **ComputedReactionCalculationIn.validate_recorded_hessian_method_matches_input_deck** (model, after; can refuse via `check_recorded_method_agrees_with_deck`): A recorded ``freq.hessian_method`` must not contradict the attached deck.
 - **ComputedReactionCalculationIn.validate_sp_energy_components** (model, after; can refuse via `check_sp_energy_components`): Components sit on a single point and agree with its energy (ADR 0021).
 - **ComputedReactionCalculationIn.validate_result_matches_type** (model, after; can refuse):
 
@@ -7013,6 +7021,7 @@ Unknown keys are refused.
   Also the software rule (required unless an assembled composite) and the
   assembled-composite rules: its scheme is inline and its inputs fill every slot.
 
+- **NetworkCalculationIn.validate_recorded_hessian_method_matches_input_deck** (model, after; can refuse via `check_recorded_method_agrees_with_deck`): A recorded ``freq.hessian_method`` must not contradict the attached deck.
 - **NetworkCalculationIn.validate_sp_energy_components** (model, after; can refuse via `check_sp_energy_components`): Components sit on a single point and agree with its energy (ADR 0021).
 
 <a id="m-networkchannelin"></a>
@@ -9418,7 +9427,7 @@ Enums with more than 8 values, linked from the fields that take them.
 
 ## Refusal code reference
 
-The per-code reference (206 codes) is its own file, `REFUSAL_CODES.md`, beside this one in the installed package. Every code in a table above links to its entry there. Each entry gives the code's HTTP status, how it arrives, where it is defined, the sentence written beside it at its raise site, and the scientific check behind it; the file ends with the client-facing codes no producer route was traced to. Find it with `python -m tckdb_schemas.contract --codes` (prints the path) or `tckdb_schemas.contract.refusal_codes_path()`; read it with `refusal_codes_markdown()`.
+The per-code reference (207 codes) is its own file, `REFUSAL_CODES.md`, beside this one in the installed package. Every code in a table above links to its entry there. Each entry gives the code's HTTP status, how it arrives, where it is defined, the sentence written beside it at its raise site, and the scientific check behind it; the file ends with the client-facing codes no producer route was traced to. Find it with `python -m tckdb_schemas.contract --codes` (prints the path) or `tckdb_schemas.contract.refusal_codes_path()`; read it with `refusal_codes_markdown()`.
 
 ## Write routes that are not producer surfaces
 

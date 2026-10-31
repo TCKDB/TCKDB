@@ -645,6 +645,15 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Message: 'expected a {kind_label} {noun} (prefix {expected_prefix}) but got prefix {prefix}'
 - Note: Surface.coded_exception since #210, and the detail did not move a byte.
 
+<a id="c-hessian-method-contradicts-input-deck"></a>
+
+#### `hessian_method_contradicts_input_deck`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/hessian_method_detection.py`.
+- The body's `context` names the things involved.
+- Message: 'the recorded freq.hessian_method says the Hessian was {recorded_class} but the input deck attached to the same calculation says {deck_class}. Both are statements about how the second derivatives were built and they cannot both be right; correct the recorded value or the deck.'
+- Note: A calculation's recorded freq.hessian_method says analytic where its attached input deck says numerical, or the reverse. context.recorded and context.input_deck are 'analytic' or 'numerical'; context.calculation_key names the bundle calculation.
+
 <a id="c-idempotency-conflict"></a>
 
 #### `idempotency_conflict`

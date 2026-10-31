@@ -6,7 +6,7 @@ imaginary modes) and parameter extraction identify the program the same way.
 Nothing is defined here.
 """
 
-from tckdb_schemas.ess_software_detection import (  # noqa: F401
+from tckdb_schemas.ess_software_detection import (
     SoftwareName,
     detect_software_from_text,
 )

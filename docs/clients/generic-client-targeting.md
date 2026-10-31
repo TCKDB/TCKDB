@@ -473,10 +473,20 @@ mode is compared with `tau`, the noise floor of the protocol that produced it.
 - **Where `tau` comes from:** the parameters you deposit on the frequency
   calculation (`freq.hessian_method`, `grid.quality`, `opt.convergence`):
   15, 30, 50 or 80 cm-1 by protocol. When you do not record the Hessian
-  method, TCKDB assumes the producing program's documented default for the
-  level of theory and stores that it was assumed (`assumed_analytic_default`
-  and its siblings). Gaussian HF, DFT, MP2, CIS and CASSCF and ORCA HF and DFT
-  are analytic (30 cm-1). Gaussian MP3, MP4, QCISD, CCSD, CISD and CID and
+  method, TCKDB first reads an input deck attached inline to the same
+  calculation (`artifacts` with `kind: input`; Gaussian `Freq=Numer` or
+  `EnOnly`, ORCA `NumFreq` or `AnFreq`) and uses the method it states. A
+  recorded value that contradicts the deck is refused
+  (`hessian_method_contradicts_input_deck`); a deck with no frequency
+  directive says nothing. A deck that arrives later through the artifact
+  route, or a standalone calculation payload that has no `artifacts`, is not
+  seen at validation. Only then does TCKDB assume the producing program's
+  documented default for the level of theory and store that it was assumed
+  (`assumed_analytic_default` and its siblings). Gaussian HF, DFT, MP2, CIS
+  and CASSCF and ORCA HF and DFT are analytic (30 cm-1). ORCA meta-GGA
+  functionals are analytic from ORCA 5 and assumed numerical (50 cm-1) before
+  it; with no usable ORCA version they, and ORCA double-hybrid and VV10
+  functionals on any version, get no assumption (50 cm-1). Gaussian MP3, MP4, QCISD, CCSD, CISD and CID and
   ORCA MP2, coupled cluster and DLPNO are finite-difference from gradients
   (50 cm-1). Gaussian CCSD(T) and QCISD(T) are finite-difference from
   energies (80 cm-1), looser than the 50 cm-1 fallback. Any other program or

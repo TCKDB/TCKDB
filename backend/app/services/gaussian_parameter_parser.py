@@ -10,12 +10,12 @@ import re
 from pathlib import Path
 
 from tckdb_schemas.hessian_method_detection import (  # noqa: F401  (re-exported: the route readers live in tckdb-schemas)
+    _IOP_RE,
+    _ROUTE_DELIM,
     GAUSSIAN_FREQ_HESSIAN_OPTIONS,
     _extract_route_line_fallback,
     _extract_route_line_from_log_echo,
     _extract_route_line_from_raw_input,
-    _IOP_RE,
-    _ROUTE_DELIM,
     _tokenize_route,
     extract_gaussian_route_text,
 )
