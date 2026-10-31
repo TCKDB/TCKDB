@@ -209,15 +209,14 @@ def _assert_energy_sources_are_comparable(
     for energy_kind, levels in sorted(levels_by_kind.items()):
         if len(levels) > 1:
             warnings.append(
-                UploadWarning(
+                UploadWarning.from_code(
                     field=f"{field_path}[{record_index}].energies",
                     code=W_TS_ENERGY_ORDERING_MIXED_LEVELS,
-                    message=(
-                        f"Transition state '{subject_label}' energy_ordering "
-                        f"compares '{energy_kind}' energies taken at "
-                        f"{len(levels)} different levels of theory. An ordering "
-                        "is only meaningful between energies at one level."
-                    ),
+                    context={
+                        "energy_kind": energy_kind,
+                        "n_levels": len(levels),
+                        "depositor_supplied": {"transition_state_label": subject_label},
+                    },
                 )
             )
 
@@ -503,23 +502,14 @@ def _warn_energies_not_compared(
     ]
     if not skipped:
         return
-    scaling_hint = (
-        " An E0 that is not the stored electronic energy plus the stored (unscaled) zero-point "
-        "energy was not refused, because a scaled zero-point energy cannot be told from a wrong "
-        "number; if you scaled it, state zpe_scale_factor on that energy and it will be checked."
-        if any(c.reason == NOT_COMPARED_ZPE_SCALING_UNSTATED for c in comparisons)
-        else ""
-    )
     warnings.append(
-        UploadWarning(
+        UploadWarning.from_code(
             field=f"{field_path}[{record_index}].energies",
             code=W_TS_ENERGY_ORDERING_NOT_COMPARED,
-            message=(
-                f"Transition state '{subject_label}' energy_ordering states energies that could "
-                f"not be compared with the energies TCKDB stores for the calculations they cite: "
-                f"{'; '.join(skipped)}. They are stored as not compared, and the ordering rests on "
-                f"the stated numbers for them.{scaling_hint}"
-            ),
+            context={
+                "reasons": sorted({c.reason for c in comparisons if c.status == COMPARISON_NOT_COMPARED and c.reason}),
+                "depositor_supplied": {"transition_state_label": subject_label, "not_compared": skipped},
+            },
         )
     )
 
@@ -888,16 +878,10 @@ def persist_transition_state_validation_evidence(
         record.passed and record.kind == "irc" for record in evidence
     ):
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field=field_path,
                 code=W_MISSING_TS_IRC_EVIDENCE,
-                message=(
-                    f"Transition state '{subject_label}' was deposited without passed "
-                    "IRC validation evidence. The saddle point is stored, but nothing "
-                    "in this deposit shows it connects the declared reactants and "
-                    "products. Energy-ordering and imaginary-mode evidence say "
-                    "something else, and do not stand in for it."
-                ),
+                context={"depositor_supplied": {"transition_state_label": subject_label}},
             )
         )
     return rows

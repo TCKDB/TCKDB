@@ -264,6 +264,7 @@ def evaluate_frequency_list_completeness(
                 code=W_FREQ_LIST_INCOMPLETE,
                 location=location,
                 structural_flag=True,
+                context={"n_modes": n_modes, "n_atoms": n_atoms, "minimum_modes": floor},
                 message=(
                     f"{location}: the frequency list carries {n_modes} mode(s) "
                     f"but a harmonic analysis of this {n_atoms}-atom geometry "

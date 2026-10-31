@@ -133,37 +133,30 @@ def collect_atomic_electronic_warnings(
     if ground.is_s_term:
         return warnings
 
-    j_desc = ", ".join(f"J={two_j / 2:g} (g={two_j + 1}) at {e:g} cm^-1" for two_j, e in ground.levels)
     if electronic_levels is not None and len(electronic_levels) == 0 and statmech_computed:
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field=f"{statmech_field}.electronic_levels",
                 code=W_MISSING_ATOMIC_ELECTRONIC_LEVELS,
-                message=(
-                    f"{element} atom has a {ground.term_symbol} ground term with "
-                    f"fine structure ({j_desc}) but this statmech carries no "
-                    f"electronic_levels, so its electronic partition function is "
-                    f"only the spin degeneracy {multiplicity}. Its entropy is low and "
-                    f"its free energy too high by about "
-                    f"{-ground.spin_only_free_energy_error_kj_mol():.2f} kJ/mol at "
-                    f"298.15 K (q_el = {ground.electronic_partition_function():.2f} "
-                    f"against {multiplicity})."
-                ),
+                context={
+                    "element": element,
+                    "ground_term": ground.term_symbol,
+                    "multiplicity": multiplicity,
+                    "electronic_partition_function": ground.electronic_partition_function(),
+                    "free_energy_error_kj_mol": -ground.spin_only_free_energy_error_kj_mol(),
+                },
             )
         )
     if energy_is_computed and not has_soc_total:
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field=energy_field,
                 code=W_MISSING_ATOMIC_SPIN_ORBIT_CORRECTION,
-                message=(
-                    f"{element} atom has a {ground.term_symbol} ground term whose "
-                    f"spin-orbit splitting lowers the ground level, but no "
-                    f"soc_total energy correction was supplied, so its energy is "
-                    f"the spin-orbit-free value, which lies "
-                    f"{abs(ground.spin_orbit_shift_kj_mol):.2f} kJ/mol above the "
-                    f"ground level."
-                ),
+                context={
+                    "element": element,
+                    "ground_term": ground.term_symbol,
+                    "spin_orbit_shift_kj_mol": abs(ground.spin_orbit_shift_kj_mol),
+                },
             )
         )
     return warnings
@@ -183,17 +176,15 @@ def _degeneracy_warnings(*, element, ground, levels, field):
     if lowest.degeneracy in allowed:
         return []
     return [
-        UploadWarning(
+        UploadWarning.from_code(
             field=field,
             code=W_ATOMIC_ELECTRONIC_DEGENERACY_CONTRADICTS_TERM,
-            message=(
-                f"The lowest electronic level of this {element} atom has "
-                f"degeneracy {lowest.degeneracy}, but the {ground.term_symbol} "
-                f"ground term has levels of degeneracy "
-                f"{', '.join(str(g) for g in ground.level_degeneracies)} in "
-                f"energy order, so the lowest level can only be "
-                f"{', '.join(str(a) for a in allowed)}."
-            ),
+            context={
+                "element": element,
+                "ground_term": ground.term_symbol,
+                "lowest_degeneracy": lowest.degeneracy,
+                "allowed_degeneracies": list(allowed),
+            },
         )
     ]
 

@@ -164,12 +164,7 @@ from app.workflows.reaction import persist_reaction_upload
 #: rather than the single per-bundle one the computed-reaction path takes, and
 #: every client mirror — and is deliberately not folded into the change that
 #: made the gap visible.
-_PDEP_ABSENCE_REMEDY = (
-    "The pressure-dependent network bundle cannot yet carry a map, so this "
-    "gap cannot be closed on this deposit path: to record one for this micro "
-    "reaction, deposit it through the computed-reaction upload, which accepts "
-    "'atom_map' (ADR 0011)."
-)
+_PDEP_ABSENCE_DEPOSIT_PATH = "pdep_bundle"
 
 
 def _energy_geometry_ids(session: Session, calculation: Calculation) -> frozenset[int]:
@@ -895,7 +890,7 @@ def persist_network_pdep_upload(
         # a map is exactly as invisible on this path as on any other, and the
         # ADR requires it be loud enough that a depositor who *has* the
         # mapping notices they are being asked for it. The map itself cannot
-        # be deposited here yet — see ``_PDEP_ABSENCE_REMEDY`` — so the call
+        # be deposited here yet — see ``_PDEP_ABSENCE_DEPOSIT_PATH`` — so the call
         # passes ``None`` unconditionally and exists to report the gap.
         persist_reaction_atom_map(
             session,
@@ -908,9 +903,9 @@ def persist_network_pdep_upload(
             # Points at the saddle point, not at ``.atom_map``: this bundle has
             # no such field, and a machine-readable pointer naming one would
             # send a client that highlights ``field`` to somewhere that does
-            # not exist. ``absence_remedy`` carries where the map can go.
+            # not exist. ``deposit_path`` carries where the map can go.
             field_path=f"transition_states[{ts_in.key}]",
-            absence_remedy=_PDEP_ABSENCE_REMEDY,
+            deposit_path=_PDEP_ABSENCE_DEPOSIT_PATH,
             created_by=created_by,
             warnings=warning_sink,
         )

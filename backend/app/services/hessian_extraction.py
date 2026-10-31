@@ -124,10 +124,10 @@ def _not_stored(code: str, filename: str, reason: str, field: str = _FIELD) -> U
     ``calculations['<key>'].artifacts`` inside a bundle, where a bare
     ``artifacts`` would not say which calculation (#744).
     """
-    return UploadWarning(
+    return UploadWarning.from_code(
         field=field,
         code=code,
-        message=f"No Hessian was stored from artifact '{filename}': {reason} {_TAIL}",
+        context={"detail": reason, "depositor_supplied": {"artifact_filename": filename}},
     )
 
 

@@ -180,17 +180,10 @@ def anchor_species_calculation_to_observation(
         calculation.conformer_observation_id = observation_id
         return
 
-    unresolved = UploadWarning(
+    unresolved = UploadWarning.from_code(
         field=field,
         code=W_CALCULATION_ANCHOR_UNRESOLVED,
-        message=(
-            f"Calculation '{calc_in.key}' named neither a 'conformer_key' "
-            f"nor a 'geometry_key', so nothing said which conformer basin "
-            f"it is evidence for. It is stored, but it is anchored to no "
-            f"conformer observation and basin-scoped reads will not count "
-            f"it. Set 'conformer_key' to one of this species's conformer "
-            f"keys to anchor it."
-        ),
+        context={"depositor_supplied": {"calculation_key": calc_in.key}},
     )
     if object_session(calculation) is not None:
         note_warning_subject(object_session(calculation), unresolved, SubmissionRecordType.calculation, calculation.id)

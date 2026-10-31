@@ -97,6 +97,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.enums import (
@@ -244,6 +245,11 @@ class TauResolution:
     hessian_method: HessianMethod | None = None
     grid_quality: str | None = None
     opt_convergence: str | None = None
+
+
+def _tau_context(tau: TauResolution) -> dict[str, Any]:
+    """The threshold a finding was decided against, as plain values for a warning's context."""
+    return {"tau_cm1": tau.tau_cm1, "tau_basis": tau.basis.value}
 
 
 def _normalise(value: str | None) -> str | None:
@@ -579,6 +585,11 @@ class StationaryPointFinding:
     :param tau: The τ this finding was decided against, and why that τ.
         ``None`` on findings no threshold took part in. ADR 0012 requires
         it so a reader can re-decide the mode later.
+    :param context: The numbers the finding was decided on (counts, mode
+        magnitudes, τ), for the warning built from a warn-tier finding. A
+        warning's sentence is rendered from its code and this, never from
+        ``message``, which quotes ``location`` and so can quote the
+        depositor's own keys. ``None`` on blocking findings.
     """
 
     tier: ValidationTier
@@ -587,6 +598,7 @@ class StationaryPointFinding:
     message: str
     structural_flag: bool = False
     tau: TauResolution | None = field(default=None, compare=True)
+    context: dict[str, Any] | None = field(default=None, compare=False, hash=False)
 
 
 def expects_zero_imaginary_modes(kind: StationaryPointKind) -> bool:
@@ -706,6 +718,11 @@ def _minimum_finding(
             code=W_MINIMUM_IMAGINARY_MODES_BELOW_TAU,
             location=location,
             tau=tau,
+            context={
+                "n_imag": n_imag,
+                "imaginary_modes_cm1": [round(m, 1) for m in sorted(magnitudes, reverse=True)],
+                **_tau_context(tau),
+            },
             message=(
                 f"{location}: species_entry_kind is 'minimum' and the "
                 f"frequency analysis reports {n_imag} imaginary mode"
@@ -830,6 +847,7 @@ def _vdw_complex_findings(
             tier=ValidationTier.warn,
             code=code,
             location=location,
+            context={"n_imag": n_imag},
             message=(
                 f"{location}: species_entry_kind is 'vdw_complex' but the "
                 f"frequency analysis reports {count_phrase}. A van der Waals "
@@ -852,6 +870,10 @@ def _vdw_complex_findings(
                 tier=ValidationTier.warn,
                 code=W_N_IMAG_SUGGESTS_TS,
                 location=location,
+                context={
+                    "imaginary_frequency_cm1": round(abs(imag_freq_cm1), 1),
+                    "ts_minimum_cm1": TS_IMAGINARY_FREQUENCY_MIN_CM1,
+                },
                 message=(
                     f"{location}: the imaginary mode is "
                     f"{abs(imag_freq_cm1):.1f} cm-1, at or above "
@@ -879,6 +901,15 @@ def _describe(mode: ImaginaryMode) -> str:
         mode.disposition.value if mode.disposition is not None else "undeclared"
     )
     return f"{index} at {mode.frequency_cm1:.1f} cm-1 ({disposition})"
+
+
+def _mode_context(mode: ImaginaryMode) -> dict[str, Any]:
+    """One imaginary mode as plain values: its position in the list, its size and the disposition declared for it."""
+    return {
+        "mode_index": mode.mode_index,
+        "magnitude_cm1": round(mode.magnitude_cm1, 1),
+        "disposition": mode.disposition.value if mode.disposition is not None else None,
+    }
 
 
 def evaluate_transition_state_frequency(
@@ -975,6 +1006,11 @@ def evaluate_transition_state_frequency(
                 location=location,
                 structural_flag=True,
                 tau=resolved_tau,
+                context={
+                    "reaction_coordinate_mode_index": reaction_coordinate_mode_index,
+                    "extra_imaginary_modes": n_imag - 1,
+                    **_tau_context(resolved_tau),
+                },
                 message=(
                     f"{location}: mode "
                     f"{reaction_coordinate_mode_index} is designated the "
@@ -1042,6 +1078,7 @@ def evaluate_transition_state_frequency(
                 location=location,
                 structural_flag=True,
                 tau=resolved_tau,
+                context={"extra_imaginary_modes": [_mode_context(m) for m in above_tau], **_tau_context(resolved_tau)},
                 message=(
                     f"{location}: "
                     f"{', '.join(_describe(m) for m in above_tau)} "
@@ -1066,6 +1103,7 @@ def evaluate_transition_state_frequency(
                 code=W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU,
                 location=location,
                 tau=resolved_tau,
+                context={"extra_imaginary_modes": [_mode_context(m) for m in extras], **_tau_context(resolved_tau)},
                 message=(
                     f"{location}: "
                     f"{', '.join(_describe(m) for m in extras)} "
@@ -1129,6 +1167,11 @@ def _soft_reaction_coordinate_findings(
             code=W_TS_IMAG_FREQ_TOO_SMALL,
             location=location,
             tau=tau,
+            context={
+                "reaction_coordinate_cm1": round(magnitude_cm1, 1),
+                "ts_minimum_cm1": TS_IMAGINARY_FREQUENCY_MIN_CM1,
+                **_tau_context(tau),
+            },
             message=(
                 f"{location}: the transition state's reaction coordinate is "
                 f"{magnitude_cm1:.1f} cm-1, below "

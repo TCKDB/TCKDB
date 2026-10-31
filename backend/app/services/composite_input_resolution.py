@@ -484,14 +484,10 @@ def _check_geometries(
         if geometries:
             declared.append((name, geometries))
         else:
-            undeclared = UploadWarning(
+            undeclared = UploadWarning.from_code(
                 field=f"composite_result.inputs[{index}]",
                 code=W_COMPOSITE_INPUT_GEOMETRY_UNDECLARED,
-                message=(
-                    f"The input {name!r} declares no geometry, so TCKDB cannot check that every input "
-                    "of this composite was computed at one geometry. Declare the single point's input "
-                    "geometry (or the optimisation's final one) to make that checkable."
-                ),
+                context={"depositor_supplied": {"input": name}},
             )
             note_warning_subject(session, undeclared, SubmissionRecordType.calculation, composite.id)
             warnings.append(undeclared)
@@ -511,28 +507,10 @@ def _check_geometries(
     return warnings
 
 
-_REASON_TEXT = {
-    "input_energy_not_stated": "an input calculation has no stored energy",
-    "component_not_stated": "an input does not state the energy component the scheme reads",
-    "correlation_convention_undeterminable": (
-        "an input's correlation component cannot be tied to its energy (the reference energy, the "
-        "correlation or the energy is not stated, or they do not add up), so whether (T) is inside "
-        "it is not known"
-    ),
-    "extrapolation_degenerate": "the extrapolation is degenerate for these energies",
-    "no_total_deposited": "no electronic_energy_hartree was deposited to compare",
-}
-
-
 def _unverifiable_warning(check: TotalCheck) -> UploadWarning:
     reason = check.reason or ""
-    where = f" (term {check.term_key!r})" if check.term_key else ""
-    return UploadWarning(
+    return UploadWarning.from_code(
         field="composite_result.electronic_energy_hartree",
         code=W_COMPOSITE_TOTAL_UNVERIFIABLE,
-        message=(
-            f"The deposited total could not be checked against the inputs{where}: "
-            f"{_REASON_TEXT.get(reason, reason)}. It was stored as sent; TCKDB recomputes a total only "
-            "to check it and never stores one."
-        ),
+        context={"reason": reason, "depositor_supplied": {"term_key": check.term_key}},
     )

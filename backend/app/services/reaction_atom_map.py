@@ -12,7 +12,7 @@ deposited unmapped *and silent*, which is exactly the invisible absence
 ADR 0011 exists to remove. Until the PDep bundle grows an ``atom_map`` field
 the warning is all that path can honestly offer, so it says so rather than
 telling a depositor to fill in a field that does not exist: see
-``_PDEP_ABSENCE_REMEDY`` in :mod:`app.workflows.network_pdep`.
+the ``pdep_bundle`` deposit path in :mod:`app.workflows.network_pdep`.
 
 Validation a map can fail *on its own* is not here. A self-contradictory map is
 refused by
@@ -85,12 +85,10 @@ from app.scientific_checks import (
 #: Emitted when a reaction with a transition state is deposited without a map.
 W_MISSING_REACTION_ATOM_MAP = "reaction_atom_map_absent"
 
-#: Closing sentence of the absence warning on a path whose payload schema has
-#: an ``atom_map`` field to fill in.
-SUPPLY_THE_MAP_REMEDY = (
-    "If you followed the intrinsic reaction coordinate, you already have "
-    "this — supply it as 'atom_map' (ADR 0011)."
-)
+#: Which closing remedy the absence warning gives (``deposit_path`` in its context; the sentences are in
+#: :mod:`tckdb_schemas.deposit_warning_messages`): a path whose payload schema has an ``atom_map`` field to fill in,
+#: the pressure-dependent network bundle (which cannot carry a map yet), or the standalone transition-state upload.
+DEPOSIT_PATH_ATOM_MAP_FIELD = "atom_map_field"
 
 #: Raised when a deposit's atom map and its IRC participant mapping give two
 #: different answers about which saddle-point atoms a participant is made of.
@@ -134,7 +132,7 @@ def persist_reaction_atom_map(
     participants: Sequence[ResolvedAtomMapParticipant],
     geometry_id_by_key: Mapping[str, int],
     field_path: str = "atom_map",
-    absence_remedy: str = SUPPLY_THE_MAP_REMEDY,
+    deposit_path: str = DEPOSIT_PATH_ATOM_MAP_FIELD,
     subject_label: str = "transition state",
     created_by: int | None = None,
     warnings: list[UploadWarning] | None = None,
@@ -151,8 +149,9 @@ def persist_reaction_atom_map(
     :param participants: Every participant the reaction declares, resolved.
     :param geometry_id_by_key: Bundle-local geometry key → persisted geometry
         id, covering every geometry the map may name.
-    :param absence_remedy: Closing sentence of the absence warning, telling
-        this deposit path's user what to actually do. Overridden by a path
+    :param deposit_path: Which closing remedy the absence warning gives, telling
+        this deposit path's user what to actually do (``atom_map_field``,
+        ``pdep_bundle`` or ``standalone_transition_state``). Overridden by a path
         whose payload schema has nowhere to put a map, so the warning does not
         name a field that does not exist.
     :param subject_label: Producer-facing name of the saddle point, used by the
@@ -176,7 +175,7 @@ def persist_reaction_atom_map(
             warnings,
             field_path=field_path,
             transition_state_entry_id=transition_state_entry_id,
-            absence_remedy=absence_remedy,
+            deposit_path=deposit_path,
         )
         return None
 
@@ -661,28 +660,15 @@ def _warn_absent(
     *,
     field_path: str,
     transition_state_entry_id: int | None,
-    absence_remedy: str = SUPPLY_THE_MAP_REMEDY,
+    deposit_path: str = DEPOSIT_PATH_ATOM_MAP_FIELD,
 ) -> None:
     if warnings is None or transition_state_entry_id is None:
         return
     warnings.append(
-        UploadWarning(
+        UploadWarning.from_code(
             field=field_path,
             code=W_MISSING_REACTION_ATOM_MAP,
-            message=(
-                "This reaction was deposited without an atom map. The rate "
-                "constant and the saddle point are stored, but nothing in the "
-                "record says which atom of the reactants is which atom of the "
-                "transition state and of the products, so the bonds that break "
-                "and form cannot be read back, reaction-path degeneracy cannot "
-                "be derived, a kinetic isotope effect cannot be followed atom "
-                "by atom, and the reaction cannot be exported in the "
-                "atom-mapped form reaction machine learning consumes. TCKDB "
-                "will not infer one: several chemically distinct maps are "
-                "usually consistent with the same reactants and products, and "
-                "choosing one by algorithm would manufacture provenance. "
-                + absence_remedy
-            ),
+            context={"deposit_path": deposit_path},
         )
     )
 
@@ -712,27 +698,27 @@ def _warn_incomplete(
         return
 
     unmapped = [
-        f"{participant.side.value} {participant.participant_index} "
-        f"('{participant.species_key}')"
+        participant
         for participant in participants
         if (participant.side, participant.participant_index)
         not in mapped_atom_counts
     ]
     if unmapped:
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field=field_path,
                 code=W_ATOM_MAP_PARTICIPANTS_INCOMPLETE,
-                message=(
-                    "The atom map does not cover every participant of this "
-                    f"reaction: {', '.join(unmapped)} carry no mapping. The "
-                    "map is stored as given; the unmapped molecules' atoms "
-                    "cannot be followed across the reaction."
-                ),
+                context={
+                    "unmapped_participants": [
+                        {"side": p.side.value, "participant_index": p.participant_index} for p in unmapped
+                    ],
+                    "depositor_supplied": {"species_keys": [p.species_key for p in unmapped]},
+                },
             )
         )
 
-    gaps: list[str] = []
+    partial: list[dict[str, object]] = []
+    unclaimed_by_side: dict[str, list[int]] = {}
     for slot, mapped in sorted(
         mapped_atom_counts.items(), key=lambda item: (item[0][0].value, item[0][1])
     ):
@@ -743,8 +729,13 @@ def _warn_incomplete(
             continue
         total = atom_counts.get(geometry_id, mapped)
         if mapped < total:
-            gaps.append(
-                f"{slot[0].value} {slot[1]} maps {mapped} of its {total} atoms"
+            partial.append(
+                {
+                    "side": slot[0].value,
+                    "participant_index": slot[1],
+                    "mapped_atoms": mapped,
+                    "total_atoms": total,
+                }
             )
 
     ts_natoms = atom_counts.get(transition_state_geometry_id, 0)
@@ -756,21 +747,17 @@ def _warn_incomplete(
             continue
         unclaimed = sorted(full_ts - claimed)
         if unclaimed:
-            gaps.append(
-                f"the {side.value} leg leaves transition-state atom(s) "
-                f"{unclaimed} unclaimed"
-            )
+            unclaimed_by_side[side.value] = unclaimed
 
-    if gaps:
+    if partial or unclaimed_by_side:
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field=field_path,
                 code=W_ATOM_MAP_ATOMS_INCOMPLETE,
-                message=(
-                    "The atom map is partial: "
-                    + "; ".join(gaps)
-                    + ". A partial map says nothing about the atoms it omits."
-                ),
+                context={
+                    "partial_participants": partial,
+                    "unclaimed_transition_state_atoms": unclaimed_by_side,
+                },
             )
         )
 
@@ -915,7 +902,7 @@ CHECK_ATOM_MAP_INCOMPLETE = ScientificCheck(
 
 
 __all__ = [
-    "SUPPLY_THE_MAP_REMEDY",
+    "DEPOSIT_PATH_ATOM_MAP_FIELD",
     "W_ATOM_MAP_ATOMS_INCOMPLETE",
     "W_ATOM_MAP_CONTRADICTS_IRC_MAPPING",
     "W_ATOM_MAP_PARTICIPANTS_INCOMPLETE",
