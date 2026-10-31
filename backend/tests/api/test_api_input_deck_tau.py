@@ -143,12 +143,43 @@ def test_a_recorded_method_that_contradicts_the_deck_is_refused_both_ways(client
 
 
 def test_the_refusal_echoes_neither_the_recorded_string_nor_the_deck(client):
+    """A raw-but-readable recorded value (NumFreq) and plain deck text are not echoed in TCKDB's words."""
+    deck = "! B3LYP def2-SVP Opt AnFreq TightSCF\n* xyz 0 1\nC 0 0 0\n*\n"
     resp = client.post(
         "/api/v1/uploads/computed-species",
-        json=_payload("ORCA", 0.8, _ORCA_ANFREQ, parameters=_recorded("numerical")),
+        json=_payload("ORCA", 0.8, deck, parameters=_recorded("NumFreq")),
     )
-    assert resp.status_code == 422
-    assert "AnFreq" not in resp.text and "def2-SVP" not in resp.text
+    assert resp.status_code == 422, resp.text[:600]
+    assert resp.json()["code"] == "hessian_method_contradicts_input_deck"
+    body = resp.json()
+    # The validation envelope also echoes the request ("input"); TCKDB's own words are
+    # the message, the context and the code.
+    own_words = " ".join(
+        [str(body["code"]), str(body.get("context", ""))]
+        + [str(item.get("msg", "")) for item in body.get("detail", [])]
+    ).lower()
+    assert "analytic" in own_words and "numerical" in own_words
+    for fragment in ("numfreq", "anfreq", "def2-svp", "tightscf", "b3lyp"):
+        assert fragment not in own_words, fragment
+
+
+def test_two_different_numerical_methods_are_refused_in_tckdb_vocabulary(client):
+    resp = client.post(
+        "/api/v1/uploads/computed-species",
+        json=_payload(
+            "Gaussian",
+            0.85,
+            "%mem=1GB\n#P B3LYP/6-31G(d) Freq=EnOnly\n\ntitle\n\n0 1\nC 0 0 0\n\n",
+            "job.gjf",
+            parameters=_recorded("finite_difference_gradient"),
+        ),
+    )
+    assert resp.status_code == 422, resp.text[:600]
+    body = resp.json()
+    assert body["code"] == "hessian_method_contradicts_input_deck"
+    assert body["context"]["recorded"] == "finite_difference_gradient"
+    assert body["context"]["input_deck"] == "finite_difference_energy"
+    assert "numerical but" not in resp.text
 
 
 def test_a_recorded_method_that_agrees_with_the_deck_is_accepted(client):
@@ -157,3 +188,49 @@ def test_a_recorded_method_that_agrees_with_the_deck_is_accepted(client):
         json=_payload("ORCA", 0.9, _ORCA_NUMFREQ, parameters=_recorded("finite_difference_gradient")),
     )
     assert resp.status_code == 201, resp.text[:600]
+
+
+def _reaction_bundle_with_deck(deck: str | None, z_label: str):
+    from tests.api.test_api_bundle_provenance_warnings import _reaction_bundle
+
+    bundle = _reaction_bundle()
+    calc = {
+        "key": f"h-freq-{z_label}",
+        "type": "freq",
+        "geometry_key": "h-geom",
+        "software_release": {"name": "ORCA", "version": "6.0.1"},
+        "level_of_theory": {"method": "B3LYP", "basis": "def2-SVP"},
+        "freq_n_imag": 1,
+        "freq_imag_freq_cm1": -40.0,
+    }
+    if deck is not None:
+        calc["artifacts"] = [_deck(deck, "job.in")]
+    bundle["species"][0]["calculations"].append(calc)
+    return bundle
+
+
+def test_computed_reaction_stores_the_tau_the_deck_was_judged_at(client, db_session):
+    """The bundle adapter carries the deck reading to persistence."""
+    resp = client.post(
+        "/api/v1/uploads/computed-reaction", json=_reaction_bundle_with_deck(_ORCA_NUMFREQ, "a")
+    )
+    assert resp.status_code == 201, resp.text[:600]
+    freq = db_session.scalars(
+        select(CalculationFreqResult).where(CalculationFreqResult.n_imag == 1)
+    ).one()
+    rows = db_session.execute(
+        select(CalculationParameter.canonical_key, CalculationParameter.canonical_value).where(
+            CalculationParameter.calculation_id == freq.calculation_id
+        )
+    ).all()
+    assert freq.imaginary_mode_tau_cm1 == 50.0
+    assert freq.imaginary_mode_tau_basis == "finite_difference_gradient"
+    assert ("freq.hessian_method", "finite_difference_gradient") in rows
+    again = resolve_tau_from_parameters(rows)
+    assert (again.tau_cm1, again.basis.value) == (50.0, "finite_difference_gradient")
+
+
+def test_computed_reaction_without_a_deck_is_refused_at_the_assumed_tau(client):
+    resp = client.post("/api/v1/uploads/computed-reaction", json=_reaction_bundle_with_deck(None, "b"))
+    assert resp.status_code == 422, resp.text[:600]
+    assert resp.json()["code"] == "n_imag_contradicts_minimum"

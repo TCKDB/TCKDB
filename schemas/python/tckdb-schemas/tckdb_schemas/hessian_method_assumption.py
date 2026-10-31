@@ -397,6 +397,11 @@ _ORCA_DOUBLE_HYBRID_PREFIXES = (
 _ORCA_META_GGA_PREFIXES = (
     "m06", "m05", "m11", "mn12", "mn15", "tpss", "revtpss", "scan", "rscan",
     "r2scan", "bmk", "pw6b95", "b97m", "wb97m",
+    # Meta-hybrids the DFT classifier recognises or Gaussian-style inputs may
+    # name. ORCA's keyword lists (5.0.4, "Keyword Lines" and "Choice of
+    # Functional") do not offer the last four, but a meta functional must never
+    # get the analytic assumption on ORCA < 5 or an unknown version.
+    "mpwb1k", "mpw1b95", "bb1k", "mpw1kcis",
 )
 
 _ORCA_ANALYTIC_META_GGA_FROM = 5
@@ -404,11 +409,19 @@ _ORCA_ANALYTIC_META_GGA_FROM = 5
 _VERSION_MAJOR = re.compile(r"^\s*v?(\d+)")
 
 
+#: A leading integer outside this range is not an ORCA major version ("45",
+#: "2024.1" are a build number or a calendar version) and counts as unknown.
+_ORCA_MAJOR_RANGE = range(1, 21)
+
+
 def _orca_major_version(version: str | None) -> int | None:
     if version is None:
         return None
     m = _VERSION_MAJOR.match(version)
-    return int(m.group(1)) if m else None
+    if not m:
+        return None
+    major = int(m.group(1))
+    return major if major in _ORCA_MAJOR_RANGE else None
 
 
 def _orca_functional_class(token: str) -> str:

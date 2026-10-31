@@ -34,7 +34,7 @@ from typing import Protocol
 
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.enums import HessianMethod
-from tckdb_schemas.ess_software_detection import detect_software_from_text
+from tckdb_schemas.ess_software_detection import SoftwareName, detect_software_from_text
 
 #: Refusal code: the recorded ``freq.hessian_method`` and the attached input
 #: deck state different Hessian methods.
@@ -373,6 +373,10 @@ def detect_hessian_method(software: str | None, text: str) -> HessianMethod | No
     return None
 
 
+#: The programs with a wired parameter parser (what the workflow can read a deck for).
+_PARSED_PROGRAMS: dict[str, SoftwareName] = {"gaussian": "gaussian", "orca": "orca", "molpro": "molpro"}
+
+
 class _ArtifactLike(Protocol):
     kind: object
     content_base64: str
@@ -402,10 +406,10 @@ def deck_hessian_method(
         except (binascii.Error, ValueError):
             continue
         text = content.decode("utf-8", errors="replace")
-        program = detect_software_from_text(text)
-        if program is None and declared in ("gaussian", "orca", "molpro"):
-            program = declared
-        if program not in ("gaussian", "orca", "molpro"):
+        program: SoftwareName | None = detect_software_from_text(text)
+        if program is None and declared is not None:
+            program = _PARSED_PROGRAMS.get(declared)
+        if program not in _PARSED_PROGRAMS:
             continue
         result = detect_hessian_method(program, text)
     return result
@@ -471,16 +475,20 @@ def check_recorded_method_agrees_with_deck(
         exact = None
     if recorded_class == deck_class and (exact is None or exact is deck_method):
         return
+    # Both sides in TCKDB's vocabulary: the parsed method when the recorded value is
+    # exactly a HessianMethod token, otherwise its analytic / numerical kind.
+    recorded_token = exact.value if exact is not None else recorded_class
+    deck_token = deck_method.value
     context: dict[str, object] = {
-        "recorded": recorded_class,
-        "input_deck": deck_class,
+        "recorded": recorded_token,
+        "input_deck": deck_token,
     }
     if calculation_key is not None:
         context["calculation_key"] = calculation_key
     raise CodedValidationError(
         W_HESSIAN_METHOD_CONTRADICTS_INPUT_DECK,
-        f"the recorded freq.hessian_method says the Hessian was {recorded_class} but "
-        f"the input deck attached to the same calculation says {deck_class}. "
+        f"the recorded freq.hessian_method says the Hessian method was {recorded_token} but "
+        f"the input deck attached to the same calculation says {deck_token}. "
         "Both are statements about how the second derivatives were built and they "
         "cannot both be right; correct the recorded value or the deck.",
         context=context,

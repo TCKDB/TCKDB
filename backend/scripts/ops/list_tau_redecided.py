@@ -11,12 +11,14 @@ value was swapped afterwards. Rows deposited under the old behaviour were
 decided at the old tau. This lists them; it does not relabel or re-decide
 any of them.
 
-The tau is resolved from the stored ``calculation_parameter`` rows, and those
-include the rows the workflow parsed out of an attached input deck. Since
-upload validation reads an inline deck before judging (a method stated there
-beats an assumed one), this is the same evidence validation uses today, so a
-stored row is listed only when today's validation really would decide it
-differently. The ORCA release gate reads the stored software release's version.
+The tau is resolved from stored state, which is evidence of its own and not a
+replay of validation: the stored ``calculation_parameter`` rows (these include
+rows parsed from a deck, and from a deck attached *later* through the artifact
+route, which validation never saw) and the stored software release (banner
+reconciliation can re-point a version-less ORCA release after the freq result was
+stored). So it can list a record that a re-upload today would accept; read the
+list as "this stored judgement rests on different evidence than the stored
+evidence now implies", and decide per record.
 
 For every judged row (``imaginary_mode_tau_cm1 IS NOT NULL``) the tau is
 re-resolved exactly as upload validation would resolve it today, from that

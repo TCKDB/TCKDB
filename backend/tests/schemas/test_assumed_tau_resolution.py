@@ -258,3 +258,22 @@ def test_vv10_and_double_hybrid_reasons_cite_the_documented_numerical_outcome() 
         reason = _orca(method, "5.0.4").reason
         assert label in reason and "numerical" in reason
         assert method.lower() not in reason.lower()
+
+
+@pytest.mark.parametrize("version", ["45", "2024.1", "0.9", "100", "21.0"])
+def test_a_leading_integer_outside_the_orca_major_range_is_an_unknown_version(version) -> None:
+    # Not read as ">= 5": a meta-GGA gets no assumption, a plain hybrid keeps the analytic one.
+    assert _orca("M06-2X", version).basis is TauBasis.protocol_not_recorded
+    assert _orca("B3LYP", version).basis is TauBasis.assumed_analytic_default
+
+
+@pytest.mark.parametrize("version", ["5", "5.0.4", "6.1.0", "ORCA 6.0.1"])
+def test_a_plausible_orca_major_version_is_read(version) -> None:
+    expected = TauBasis.assumed_analytic_default if not version.startswith("ORCA") else TauBasis.protocol_not_recorded
+    assert _orca("M06-2X", version).basis is expected
+
+
+@pytest.mark.parametrize("method", ["mPWB1K", "mPW1B95", "BB1K", "mPW1KCIS", "TPSS0", "TPSSh", "PW6B95", "BMK"])
+def test_meta_hybrids_never_get_the_analytic_assumption_on_old_or_unknown_orca(method) -> None:
+    assert _orca(method, "4.2.1").basis is not TauBasis.assumed_analytic_default
+    assert _orca(method, None).basis is not TauBasis.assumed_analytic_default
