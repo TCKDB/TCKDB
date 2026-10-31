@@ -359,12 +359,16 @@ _ORCA_FINITE_DIFFERENCE_GRADIENT = frozenset({
 #   ORCA 6.1 manual, "Non-Local Dispersion Correction (VV10): DFT-NL" (pp.
 #   263-265): analytic gradients exist, but "any calculation that requires
 #   second derivatives of the NL functional is not yet possible", analytic
-#   Hessians included. The manuals do NOT confirm an analytic Hessian, so no
-#   assumption is made (``protocol_not_recorded``).
+#   Hessians included. The manuals confirm that frequencies for these
+#   functionals can only be numerical (from the analytic gradient), on every
+#   release from 5.0.4 to 6.1, so they are assumed
+#   ``assumed_finite_difference_gradient`` on any ORCA version, known or not.
 # * double hybrids: ORCA 5.0.4 manual, 8.1.4.5 (pp. 155-156): double-hybrid DFT
-#   is "available for ... numerical polarizabilities and frequencies". No
-#   statement about analytic Hessians was found in the 5.0.4 or 6.1 manuals,
-#   so no assumption is made.
+#   is "available for ... numerical polarizabilities and frequencies". The
+#   manual names numerical frequencies as what is available, so they are
+#   assumed ``assumed_finite_difference_gradient`` on any ORCA version. (No
+#   statement about an analytic double-hybrid Hessian was found in the 5.0.4
+#   or 6.1 manuals.)
 # * MP2: ORCA 6.1 manual, "MP2 and RI-MP2 Second Derivatives" (p. 290): the
 #   analytic (RI-)MP2 Hessians are no longer available. ORCA MP2 stays in the
 #   finite-difference-from-gradients row.
@@ -499,7 +503,8 @@ def infer_hessian_method(
     :param software_version: The release's version string. Used only for ORCA
         meta-GGA functionals (analytic Hessians from ORCA 5); an unknown or
         unparseable version keeps the plain GGA/hybrid assumption and gives
-        the version-dependent families no assumption.
+        meta-GGA functionals no assumption. VV10 and double-hybrid functionals
+        are assumed numerical whatever the version.
     :returns: A :class:`TauResolution` carrying one of the three
         ``assumed_*`` bases and its counterpart's tau, with a
         producer-facing ``reason`` naming the software/method pair and
@@ -522,7 +527,7 @@ def infer_hessian_method(
     if software_token == "orca" and family == MethodFamily.DFT:
         functional = _orca_functional_class(_normalize(method) or "")
         if functional in ("vv10", "double_hybrid"):
-            return None
+            return _orca_numerical_documented(functional)
         if functional == "meta_gga":
             major = _orca_major_version(software_version)
             if major is None:
@@ -556,6 +561,24 @@ def infer_hessian_method(
                 ),
             )
     return None
+
+
+def _orca_numerical_documented(functional: str) -> TauResolution:
+    label = "VV10 (non-local)" if functional == "vv10" else "double-hybrid"
+    basis = TauBasis.assumed_finite_difference_gradient
+    tau_cm1 = _ASSUMED_TAU_BY_BASIS[basis]
+    return TauResolution(
+        tau_cm1=tau_cm1,
+        basis=basis,
+        reason=(
+            f"tau = {tau_cm1:.0f} cm-1: 'freq.hessian_method' is not "
+            f"recorded, so this is an assumption, not a recorded statement. "
+            f"ORCA's manuals document numerical frequencies from analytic "
+            f"gradients for {label} functionals, so numerical frequencies "
+            f"are assumed ({basis.value}). A later upload that states the "
+            f"Hessian method explicitly supersedes this assumption."
+        ),
+    )
 
 
 def _orca_pre5_meta_gga() -> TauResolution:

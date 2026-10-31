@@ -485,8 +485,9 @@ mode is compared with `tau`, the noise floor of the protocol that produced it.
   (`assumed_analytic_default` and its siblings). Gaussian HF, DFT, MP2, CIS
   and CASSCF and ORCA HF and DFT are analytic (30 cm-1). ORCA meta-GGA
   functionals are analytic from ORCA 5 and assumed numerical (50 cm-1) before
-  it; with no usable ORCA version they, and ORCA double-hybrid and VV10
-  functionals on any version, get no assumption (50 cm-1). Gaussian MP3, MP4, QCISD, CCSD, CISD and CID and
+  it; with no usable ORCA version they get no assumption (50 cm-1). ORCA
+  double-hybrid and VV10 functionals are assumed numerical (50 cm-1) on any
+  version. Gaussian MP3, MP4, QCISD, CCSD, CISD and CID and
   ORCA MP2, coupled cluster and DLPNO are finite-difference from gradients
   (50 cm-1). Gaussian CCSD(T) and QCISD(T) are finite-difference from
   energies (80 cm-1), looser than the 50 cm-1 fallback. Any other program or

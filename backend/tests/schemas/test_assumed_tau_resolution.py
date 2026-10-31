@@ -211,13 +211,15 @@ def _orca(method: str, version: str | None):
         # version-dependent family with no usable version: no assumption
         ("M06-2X", None, TauBasis.protocol_not_recorded, 50.0),
         ("M06-2X", "unparseable", TauBasis.protocol_not_recorded, 50.0),
-        # VV10 and double hybrids: the manuals do not confirm an analytic Hessian
-        ("wB97X-V", "5.0.4", TauBasis.protocol_not_recorded, 50.0),
-        ("wB97M-V", "6.0.1", TauBasis.protocol_not_recorded, 50.0),
-        ("B3LYP-NL", "5.0.4", TauBasis.protocol_not_recorded, 50.0),
-        ("B2PLYP", "5.0.4", TauBasis.protocol_not_recorded, 50.0),
-        ("B2PLYP-D3", "4.2.1", TauBasis.protocol_not_recorded, 50.0),
-        ("wB97X-2", "6.0.1", TauBasis.protocol_not_recorded, 50.0),
+        # VV10 and double hybrids: the manuals document numerical frequencies
+        ("wB97X-V", "5.0.4", TauBasis.assumed_finite_difference_gradient, 50.0),
+        ("wB97M-V", "6.0.1", TauBasis.assumed_finite_difference_gradient, 50.0),
+        ("B3LYP-NL", "5.0.4", TauBasis.assumed_finite_difference_gradient, 50.0),
+        ("B2PLYP", "5.0.4", TauBasis.assumed_finite_difference_gradient, 50.0),
+        ("B2PLYP-D3", "4.2.1", TauBasis.assumed_finite_difference_gradient, 50.0),
+        ("wB97X-2", "6.0.1", TauBasis.assumed_finite_difference_gradient, 50.0),
+        ("wB97X-V", None, TauBasis.assumed_finite_difference_gradient, 50.0),
+        ("B2PLYP", "unparseable", TauBasis.assumed_finite_difference_gradient, 50.0),
         # a name in no list is a plain functional only if the classifier calls it DFT
         ("mystery-functional", "4.2.1", TauBasis.protocol_not_recorded, 50.0),
     ],
@@ -249,3 +251,10 @@ def test_the_version_comes_from_the_payload_software_release() -> None:
     new = old.model_copy(update={"software_release": old.software_release.model_copy(update={"version": "5.0.4"})})
     assert old.tau_resolution().basis is TauBasis.assumed_finite_difference_gradient
     assert new.tau_resolution().basis is TauBasis.assumed_analytic_default
+
+
+def test_vv10_and_double_hybrid_reasons_cite_the_documented_numerical_outcome() -> None:
+    for method, label in (("wB97X-V", "VV10"), ("B2PLYP", "double-hybrid")):
+        reason = _orca(method, "5.0.4").reason
+        assert label in reason and "numerical" in reason
+        assert method.lower() not in reason.lower()
