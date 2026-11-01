@@ -422,37 +422,26 @@ def _swept_codes() -> set[str]:
 
 
 def test_the_dynamic_code_list_is_exactly_what_the_code_tables_hold():
-    """The hand list above is not allowed to rot: each table a producer picks a code from is read for real."""
+    """The hand list above is not allowed to rot: it is checked against what the producer modules actually define.
+
+    Every ``W_*`` string constant of the modules that choose a code at run time, and every value of the code
+    tables, that the literal sweep did not reach must be listed; and nothing may be listed that no module defines.
+    """
+    from tckdb_schemas import stationary_point
     from tckdb_schemas.fragments import refs
-    from tckdb_schemas.stationary_point import (
-        W_N_IMAG_CONTRADICTS_MINIMUM,
-        W_N_IMAG_HIGHER_ORDER_SADDLE,
-        W_N_IMAG_SUGGESTS_TS,
-    )
 
     from app.services import hessian_extraction, upload_reconciliation
     from app.services.composite_result_resolution import _DEPOSITED_AS_WARNING_CODE
 
-    from_tables = {
-        value for name, value in vars(hessian_extraction).items() if name.startswith("W_HESSIAN_NOT_STORED_")
-    }
-    from_tables |= set(upload_reconciliation._DEDUCTION_WARNING_CODES.values())
-    from_tables |= set(_DEPOSITED_AS_WARNING_CODE.values())
-    from_tables |= {
-        refs.W_SOFTWARE_RELEASE_VERSION_IS_COMPOSITE,
-        refs.W_SOFTWARE_RELEASE_NAME_LOOKS_WRONG,
-        refs.W_LEVEL_OF_THEORY_METHOD_NAMES_CORRECTION_TABLE,
-    }
-    from_tables |= {W_N_IMAG_CONTRADICTS_MINIMUM, W_N_IMAG_HIGHER_ORDER_SADDLE, W_N_IMAG_SUGGESTS_TS}
-    assert from_tables == _DYNAMIC
+    defined: set[str] = set()
+    for module in (refs, stationary_point, hessian_extraction, upload_reconciliation):
+        defined |= {value for name, value in vars(module).items() if name.startswith("W_") and isinstance(value, str)}
+    defined |= set(upload_reconciliation._DEDUCTION_WARNING_CODES.values())
+    defined |= set(_DEPOSITED_AS_WARNING_CODE.values())
 
-
-def test_every_code_given_to_from_code_has_a_public_sentence():
-    """Static: a code a producer passes to ``UploadWarning.from_code`` (or a warn-tier finding) is a ``RENDERED`` key."""
-    swept = _swept_codes() | _DYNAMIC
-    # 81 = the 80 measured on main at fcbad235 plus scan_point_coordinate_disagrees_with_geometry (#835).
-    assert len(swept - _BLOCK_ONLY) >= 81, f"the sweep found only {len(swept - _BLOCK_ONLY)} codes"
-    assert (swept - _BLOCK_ONLY) - set(RENDERED) == set()
+    unreached = (defined - _swept_codes()) - _BLOCK_ONLY
+    assert unreached <= _DYNAMIC, f"a code chosen at run time is missing from _DYNAMIC: {sorted(unreached - _DYNAMIC)}"
+    assert _DYNAMIC <= defined, f"_DYNAMIC lists a code no producer module defines: {sorted(_DYNAMIC - defined)}"
 
 
 def test_the_rendering_table_covers_every_code_a_producer_can_emit():

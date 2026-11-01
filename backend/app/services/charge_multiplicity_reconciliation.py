@@ -326,9 +326,10 @@ CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
         W_ELECTRONIC_STATE_CONTRADICTS_METHOD,
     ),
     asserts=(
-        "The electronic state a depositor declares -- charge, spin "
-        "multiplicity, ground or excited, and term symbol -- agrees with what "
-        "the calculation's own electronic-structure output says it was run at."
+        "The charge and spin multiplicity a depositor declares agree with the "
+        "electronic-structure log of the calculation; the ground-or-excited "
+        "state and term symbol they declare agree with what the calculation's "
+        "declared method, job types, multiplicity and point group imply."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
@@ -344,13 +345,18 @@ CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
         "the clearest case in TCKDB of a check sitting one tier below where "
         "its own governing decision puts it. **The two deduction codes are "
         "warnings for a different reason.** Charge and multiplicity are "
-        "read from the log, so a disagreement is a contradiction between two "
-        "statements. Ground versus excited is deduced, not read: TD, EOM "
-        "and CIS jobs and methods deduce an excited state and a "
-        "single-reference method deduces the ground state, which is a "
-        "heuristic that a correctly declared excited state computed another "
-        "way would trip. A term symbol is compared with the one deduced "
-        "from the same evidence. A heuristic cannot block."
+        "read from the log, so a disagreement is a contradiction between a "
+        "declaration and a parsed statement. The other two compare one "
+        "declaration with another: no log is read; the method, job types and "
+        "multiplicity come from the payload itself and the point group from "
+        "its statmech block. A TD, EOM or CIS job or method deduces an "
+        "excited state definitively; the ground state is only a default for "
+        "a single-reference method (confidence heuristic), and a ground "
+        "state declared for a multireference or otherwise unusual "
+        "calculation is not necessarily wrong. A term symbol is compared "
+        "with the one derived from the multiplicity (and the point group "
+        "where there is one), a derivation and not a reading. A heuristic "
+        "default cannot block."
     ),
     adr="0008",
     enforced_by=(
@@ -367,13 +373,14 @@ CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
                 "The deduction path, for ``term_symbol_mismatch`` and "
                 "``electronic_state_contradicts_method``: the declared term "
                 "symbol and ground-or-excited state are compared with what "
-                "``deduce_all`` reads from the calculation's job types, method "
-                "and spin multiplicity. **Ground versus excited is a "
-                "heuristic deduction, not a parsed statement**: a TD, EOM or "
-                "CIS job or method deduces an excited state and a "
-                "single-reference one deduces the ground state, so a "
-                "legitimately excited state computed by another route reads as "
-                "a contradiction. The deduction carries its own confidence and "
+                "``deduce_all`` derives from the calculation's own declared "
+                "job types, method and spin multiplicity and, from the "
+                "statmech block, the point group; no log is read. **Only the "
+                "ground-state default is a heuristic**: a TD, EOM or CIS job "
+                "or method deduces an excited state definitively, while any "
+                "other single-reference method deduces the ground state by "
+                "default, so a legitimately excited state computed another "
+                "way reads as a contradiction. The deduction carries its own confidence and "
                 "the evidence it rests on in the warning's context, and a "
                 "stationary-point-kind deduction is not compared here at all "
                 "(Layer 1's n_imag warnings own it)."

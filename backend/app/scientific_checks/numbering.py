@@ -4,6 +4,8 @@ The register's numbers are stable identifiers other documents cite, so the order
 groups in :data:`READING_ORDER` first, in that order, then any other group alphabetically; within a group, the
 collection order. A new group must be appended to :data:`READING_ORDER` (after every group that already exists), or it
 may sort between two existing groups and renumber everything after it.
+That protects against new *groups* only. A new check added to an existing, earlier group still renumbers every
+entry after it; nothing here catches that, only the pin test does (it pins the opening words of every entry).
 ``tests/db/test_scientific_check_register.py::test_existing_entries_keep_their_numbers`` pins the published numbers.
 
 Shared by ``backend/scripts/generate_scientific_check_register.py`` (the register document) and

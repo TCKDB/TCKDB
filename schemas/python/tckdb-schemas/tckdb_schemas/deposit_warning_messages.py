@@ -844,6 +844,7 @@ _SCAN_PATTERNS = frozenset(
         "uniform_one_step_offset",
         "linear_ramp",
         "single_outlier",
+        "small_constant_offset",
         "no_pattern_detected",
         "insufficient_data",
     }
@@ -857,6 +858,10 @@ _SCAN_PATTERN_WORDS = {
     "uniform_one_step_offset": "every judged point is off by one grid step, as if each value were paired with its neighbour's geometry",
     "linear_ramp": "the difference grows steadily along the scan, as if the direction or the step size were stated wrongly",
     "single_outlier": "one point disagrees and the others agree, as if one geometry were attached to the wrong point",
+    "small_constant_offset": (
+        "every judged point is off by the same small amount, which is as likely to be rounding or a small "
+        "difference in how the coordinate was measured as an error, so no cause is named"
+    ),
     "no_pattern_detected": "the points disagree without any of the usual shapes",
     "insufficient_data": "too few points could be judged to name a shape",
 }
@@ -865,18 +870,19 @@ _SCAN_PATTERN_WORDS = {
 def _scan_disagrees(context: Mapping[str, Any]) -> str | None:
     kind = _token(context.get("coordinate_kind"), _SCAN_COORDINATE_KINDS)
     pattern = _token(context.get("pattern"), _SCAN_PATTERNS)
+    scan = _int(context.get("scan_number"))
     index = _int(context.get("coordinate_index"))
     bad = _int(context.get("n_points_disagreeing"))
     checked = _int(context.get("n_points_checked"))
     residual = _num(context.get("max_residual"))
     tolerance = _num(context.get("tolerance"))
-    if kind is None or pattern is None or index is None or bad is None or checked is None:
+    if kind is None or pattern is None or scan is None or index is None or bad is None or checked is None:
         return None
     if residual is None or tolerance is None:
         return None
     unit = "A" if kind == "bond" else "degrees"
     return (
-        f"The stored values of scan coordinate {index} ({kind}) disagree with that coordinate measured on the "
+        f"The stored values of scan coordinate {index} ({kind}) of scan {scan} in this deposit disagree with that coordinate measured on the "
         f"point's own geometry at {_count(bad, 'point', 'points')} of {checked} judged: the largest difference is "
         f"{residual:g} {unit} against a tolerance of {tolerance:g} {unit}; {_SCAN_PATTERN_WORDS[pattern]}. The scan "
         "was accepted as sent. A coordinate value is the internal coordinate itself at that point, in its own unit, "

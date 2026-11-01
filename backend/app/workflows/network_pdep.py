@@ -140,7 +140,6 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
-from app.services.scan_coordinate_conformance import collect_scan_coordinate_warnings
 from app.services.software_resolution import resolve_software_release_ref
 from app.services.species_resolution import resolve_species_entry
 from app.services.transition_state_validation import (
@@ -924,7 +923,6 @@ def persist_network_pdep_upload(
     # Every calculation of the upload is flushed: an opt or sp at a named
     # composite method's level is reported once, as on every other route.
     warning_sink.extend(collect_named_composite_deposit_warnings(session, calculation_key_to_id.values()))
-    warning_sink.extend(collect_scan_coordinate_warnings(session, calculation_key_to_id.values()))
 
     refuse_duplicate_state_compositions(request.states, species_key_to_entry)
 
