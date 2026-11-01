@@ -1067,6 +1067,8 @@ _KEY_TEMPLATES = {
     "quote": "o'k{n}",
     "bracket": "x']SECRET['y{n}",
     "backslash": "b\\s{n}",
+    # Both quote kinds and a closing sequence: repr writes it single-quoted with an escaped quote.
+    "both_quotes": "x']SECRET\"y{n}",
 }
 
 
@@ -1119,6 +1121,8 @@ def test_a_key_with_a_quote_a_bracket_or_a_backslash_places_every_warning_on_the
         ("x']SECRET['y", "species[{key!r}].calculations[{key!r}]"),
         ("b\\s", "calculations[{key!r}].key"),
         ("a\\'b\"c", "calculations[{key!r}].geometry_key"),
+        ("x']SECRET\"y", "calculations[{key!r}].key"),
+        ("x']SECRET\"y", "species[{key!r}].calculations[{key!r}].x"),
     ],
 )
 def test_the_calculation_key_in_a_field_is_read_back_as_written(key, path_template):
@@ -1133,13 +1137,39 @@ def test_the_calculation_key_in_a_field_is_read_back_as_written(key, path_templa
 
 
 def test_no_service_reads_keys_back_out_of_a_field_path_with_a_regex():
+    import ast as _ast
     import re as _re
 
+    reading = frozenset({"compile", "search", "match", "findall", "fullmatch", "finditer", "sub", "split"})
     offenders = []
     for path in _sources():
-        text = path.read_text()
-        for match in _re.finditer(r"re\.(?:compile|search|match|findall|fullmatch|finditer)\(\s*r?[\"'](?P<p>[^\"']*)", text):
-            pattern = match.group("p")
-            if _re.search(r"\\\[\\?['\"]", pattern) and "calculations" in pattern:
-                offenders.append(f"{path}: {pattern}")
-    assert offenders == [], offenders
+        for node in _ast.walk(_ast.parse(path.read_text())):
+            if not (isinstance(node, _ast.Call) and isinstance(node.func, _ast.Attribute) and node.func.attr in reading):
+                continue
+            first = node.args[0] if node.args else None
+            if isinstance(first, _ast.Constant) and isinstance(first.value, str):
+                pattern = first.value
+                # A pattern that names a path segment and a bracketed, quoted key: ``calculations\['(...)'\]``.
+                if "calculations" in pattern and _re.search(r"\\\[\\?['\"]", pattern):
+                    offenders.append(f"{path}:{node.lineno}: {pattern}")
+    assert offenders == [], "read keys through tckdb_schemas.deposit_warning_messages.field_keys:\n" + "\n".join(offenders)
+
+
+def test_the_regex_guard_sees_the_regex_it_replaced():
+    import ast as _ast
+    import re as _re
+
+    source = 're.findall(r"calculations\\[\'([^\']+)\'\\]", warning.field)'
+    call = _ast.parse(source).body[0].value
+    pattern = call.args[0].value
+    assert "calculations" in pattern and _re.search(r"\\\[\\?['\"]", pattern), pattern
+
+
+def test_a_hand_quoted_token_that_cannot_be_evaluated_is_read_as_written():
+    from tckdb_schemas.deposit_warning_messages import _decode_key, field_keys
+
+    # Starts and ends with a quote, but is an expression: literal_eval of the long chain raises MemoryError/RecursionError.
+    bomb = "'a'" + "-" * 200_000 + "'b'"
+    assert _decode_key(bomb) == bomb[1:-1]
+    assert field_keys(f"calculations[{bomb}].x", "calculations") == [bomb[1:-1]]
+    assert _decode_key("'not closed") == "'not closed"

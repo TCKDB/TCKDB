@@ -2027,7 +2027,7 @@ def _decode_key(literal: str) -> str:
     if len(literal) >= 2 and literal[0] in ("'", '"') and literal[-1] == literal[0]:
         try:
             value = ast.literal_eval(literal)
-        except (ValueError, SyntaxError):
+        except Exception:  # a hand-quoted token can be anything: ValueError, SyntaxError, MemoryError, RecursionError
             return literal[1:-1]
         return value if isinstance(value, str) else literal[1:-1]
     return literal
