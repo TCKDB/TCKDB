@@ -111,9 +111,18 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # contract between two statements in one deposit (a recorded ``freq.hessian_method`` and the input deck
     # that ran), definitional rather than an expectation about a result, and no existing entry's claim covers
     # it: the tolerance entries judge a mode against a tau, this one decides which method tau is read from.
-    assert 10 <= len(REGISTER) <= 50, (
+    #
+    # Raised 50 -> 51 (2026-11-01) for #835: species_stereo_contradiction (#822, DR-0038). With the species key the
+    # constitution, the entry is where a configuration is stated, read from three sources -- every linked geometry,
+    # the SMILES marks, a supplied label -- and a disagreement about one element is refused. Reading R/S, E/Z and an
+    # allene's axis from coordinates (torsion windows, alignment over automorphisms, an enumeration cap) is a
+    # position a referee could dispute, which an input-format conflict is not (#672). Entries 8 and 9 compare a
+    # geometry with its SMILES by element and isotope, never by configuration. Reviewed with the whole #835 sweep: of
+    # 58 unregistered warning codes and 13 recent refusals this is the only new entry; four warnings widened 12, 22
+    # and 25, and the stereo-label, channel-kind and bath-gas refusals stay in the code catalogue.
+    assert 10 <= len(REGISTER) <= 51, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~50 the inclusion test ('could this check be wrong "
+        "the system; above ~51 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 
@@ -770,6 +779,12 @@ _PINNED_NUMBERS: dict[str, int] = {
     "reaction_atom_map_atoms_incomplete": 33,
     "reported_network_solve": 37,
     "network_wide_energy_transfer_scope": 38,
+    # Registered by widening an existing entry (#835), so the number is the entry's own.
+    "term_symbol_mismatch": 12,
+    "electronic_state_contradicts_method": 12,
+    "freq_list_incomplete_for_geometry": 22,
+    "network_state_energy_sources_partial": 25,
+    "scan_point_coordinate_disagrees_with_geometry": 49,
 }
 
 
@@ -794,6 +809,8 @@ def test_existing_entries_keep_their_numbers() -> None:
         if code in REGISTER_ENTRY:
             assert REGISTER_ENTRY[code] == expected, code
     assert number_of["hessian_method_contradicts_input_deck"] == 50
+    # The entry added in #835 takes the next free number, in a group listed after every earlier one.
+    assert number_of["species_stereo_contradiction"] == 51
     # Entries 14 to 19 by their opening words, as on main.
     headings = {
         int(m.group(1)): m.group(2)
@@ -806,6 +823,11 @@ def test_existing_entries_keep_their_numbers() -> None:
         17: "A transition state's imaginary modes other than the reaction coordinate",
         18: "A transition state's reaction coordinate should exceed roughly 100",
         19: "A deposited saddle point should carry passing intrinsic-reaction-coordinate",
+        41: "Compare every supplied NASA Cp/entropy fit",
+        48: "A computed thermo record's heat capacity",
+        49: "A scan point's stored coordinate_value",
+        50: "A calculation that records how its frequency job built the Hessian",
+        51: "A species entry states one stereo configuration",
     }.items():
         assert headings[number].startswith(opening), number
     # Every code stored with a register number still points at the entry that declares it.

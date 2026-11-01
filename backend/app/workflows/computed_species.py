@@ -137,6 +137,7 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.scan_coordinate_conformance import collect_scan_coordinate_warnings
 from app.services.scf_stability_sources import link_scf_stability_sources
 from app.services.software_banner_extraction import (
     try_reconcile_software_from_output_uploads,
@@ -1006,6 +1007,7 @@ def persist_computed_species_upload(
     upload_warnings.extend(
         collect_named_composite_deposit_warnings(session, bundle_calc_ids)
     )
+    upload_warnings.extend(collect_scan_coordinate_warnings(session, bundle_calc_ids))
 
     return ComputedSpeciesUploadOutcome(
         species_entry_id=species_entry.id,

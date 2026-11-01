@@ -72,6 +72,7 @@ from app.services.network_energy_sources import (
     E_NETWORK_STATE_ENERGY_SUM_MISMATCH,
     W_NETWORK_ENERGY_SOURCE_TYPE_MISMATCH,
     W_NETWORK_ENERGY_ZPE_SOURCE_ABSENT,
+    W_NETWORK_STATE_ENERGY_SOURCES_PARTIAL,
     W_NETWORK_STATE_ENERGY_SUM_NOT_COMPARED,
     assert_network_energy_source_type,
     assert_network_source_role_type,
@@ -1094,6 +1095,7 @@ CHECK_TS_ENERGY_ORDERING_NOT_COMPARED = ScientificCheck(
         W_TS_ENERGY_ORDERING_NOT_COMPARED,
         W_NETWORK_STATE_ENERGY_SUM_NOT_COMPARED,
         W_NETWORK_ENERGY_ZPE_SOURCE_ABSENT,
+        W_NETWORK_STATE_ENERGY_SOURCES_PARTIAL,
     ),
     asserts=(
         "Every energy an energy-ordering record or a network state energy "
@@ -1130,8 +1132,10 @@ CHECK_TS_ENERGY_ORDERING_NOT_COMPARED = ScientificCheck(
                 "the needed kind, a state alone on its zero and "
                 "``stated_precision_unknown`` (beyond printed precision, inside "
                 "honest rounding of the stated kJ/mol). Sources on only some "
-                "participants warn separately, with "
-                "``network_state_energy_sources_partial``."
+                "participants warn with ``network_state_energy_sources_partial``: "
+                "the cited sources are one summand of several, so the stated "
+                "energy cannot be held against the sum of every participant's "
+                "stored energy, which is the same absence by another route."
             ),
         ),
         PythonCheck(

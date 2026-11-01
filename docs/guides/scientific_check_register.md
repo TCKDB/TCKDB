@@ -84,23 +84,23 @@ disagree, this one is right by construction.
 
 | Tier | Entries | Meaning |
 | --- | --- | --- |
-| `block` | 24 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
+| `block` | 25 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
 | `warn` | 12 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
 | `label` | 1 | Labels a stored record at read time without refusing anything — a `HardFailReason` in the trust evaluator. For facts TCKDB observes about a record after it was accepted, which no upload-time check could have refused because they did not exist yet. |
 | `review` | 8 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
 | `structural` | 5 | Not an ADR 0008 consequence tier. The position is enforced by the shape of the schema, so a record violating it cannot be represented. |
-| **total** | **50** | |
+| **total** | **51** | |
 
 ## Where a check's code reaches a client
 
 | Channel | Entries | What a consumer can do with it |
 | --- | --- | --- |
-| `error_envelope` | 25 | the `code` field of the 422 error body — a client can branch on it |
-| `upload_warning` | 12 | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
+| `error_envelope` | 26 | the `code` field of the 422 error body — a client can branch on it |
+| `upload_warning` | 13 | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
 | `trust_label` | 1 | a read-time trust label (`HardFailReason`), not any refusal |
 | `database_constraint` | 1 | PostgreSQL only, so the refusal is a 409 rather than a 422 — named, where the constraint declares a rejection code |
-| `none` | 11 | *nothing carries a code* |
-| **total** | **50** | |
+| `none` | 10 | *nothing carries a code* |
+| **total** | **51** | |
 
 ## Recorded divergences
 
@@ -296,7 +296,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 **Enforced at.**
 
 - `assert_calculation_geometry_composition` — `backend/app/services/calculation_geometry_composition.py::assert_calculation_geometry_composition`
-  *Called from every site that attaches a geometry to a calculation: the `calculation_input_geometry` and `calculation_output_geometry` inserts, on both the producer-explicit branch and the `geometry_key`/fallback branch, and the geometry-bearing children -- a Hessian's geometry (upload and best-effort artifact hook), scan points and every IRC point (#680). A guard test fails if a construction is unchecked or a site disappears. `calc_isotopes.assert_isotopes` extends the claim to isotopes (own code, by count). The best-effort artifact hook is the one site that does not refuse: it never fails an upload, so a refusal there is the warning `hessian_not_stored_geometry_mismatch` with the block code named only in its message text (#744).*
+  *Called from every site that attaches a geometry to a calculation: the `calculation_input_geometry` and `calculation_output_geometry` inserts, on both the producer-explicit branch and the `geometry_key`/fallback branch, and the geometry-bearing children -- a Hessian's geometry (upload and best-effort artifact hook), scan points and every IRC point (#680). A guard test fails if a construction is unchecked or a site disappears. `calc_isotopes.assert_isotopes` extends the claim to isotopes (own code, by count). The best-effort artifact hook is the one site that does not refuse: it never fails an upload, so a refusal there is the warning `hessian_not_stored_geometry_mismatch`, which carries the block code as `context.refusal_code` and in its sentence (#744, #840).*
 
 **Escape hatch.** Declare the structure's real composition: give the calculation the geometry it was run on, or file it under the subject that geometry belongs to. Absence does not block -- a `pseudo` owner, a transition state whose reaction records no reactants or a pseudo reactant, and an unparseable stored SMILES are all left unjudged. Only atom counts are compared, so a scan or IRC point at stretched or rearranged coordinates passes -- scan and IRC points are themselves checked, and a point of a different molecule is refused -- as do constitutional isomers and dissociated optimisations. Isotopologues pass this check; the isotope check (`calculation_geometry_isotope_mismatch`) judges them separately.
 
@@ -320,21 +320,23 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** A free electron short-circuits before the comparison, returning a pinned identity pair. Multiplicity is deliberately **not** validated against the SMILES at all: standard SMILES does not encode spin state, so RDKit's inferred radical count is only a hint and the uploaded multiplicity is authoritative — which is what lets singlet CH2 (whose SMILES `[CH2]` implies a triplet) and the singlet and triplet states of O2 be represented.
 
-### 12. The charge and spin multiplicity a depositor declares match the ones the electronic-structure log says the calculation was actually run at.
+### 12. The electronic state a depositor declares -- charge, spin multiplicity, ground or excited, and term symbol -- agrees with what the calculation's own electronic-structure output says it was run at.
 
 | Field | Value |
 | --- | --- |
 | **Tier** | `warn` |
-| **Code** | `charge_mismatch`, `multiplicity_mismatch` |
+| **Code** | `charge_mismatch`, `multiplicity_mismatch`, `term_symbol_mismatch`, `electronic_state_contradicts_method` |
 | **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
 | **Governing ADR** | 0008 |
 
-**Why this tier.** **Placed against the ADR's own reasoning, deliberately.** ADR 0008 names both findings as direct contradictions between a declaration and the parsed evidence, therefore definitional, therefore belonging at the blocking tier — and then defers the promotion, because promoting a warning to a blocker rejects payloads that are accepted today. These checks have never fired on real data, so their false-positive rate is unknown and promoting them first would be unsafe. The register records the gap rather than hiding it: this is the clearest case in TCKDB of a check sitting one tier below where its own governing decision puts it.
+**Why this tier.** **Placed against the ADR's own reasoning, deliberately.** ADR 0008 names both findings as direct contradictions between a declaration and the parsed evidence, therefore definitional, therefore belonging at the blocking tier — and then defers the promotion, because promoting a warning to a blocker rejects payloads that are accepted today. These checks have never fired on real data, so their false-positive rate is unknown and promoting them first would be unsafe. The register records the gap rather than hiding it: this is the clearest case in TCKDB of a check sitting one tier below where its own governing decision puts it. **The two deduction codes are warnings for a different reason.** Charge and multiplicity are read from the log, so a disagreement is a contradiction between two statements. Ground versus excited is deduced, not read: TD, EOM and CIS jobs and methods deduce an excited state and a single-reference method deduces the ground state, which is a heuristic that a correctly declared excited state computed another way would trip. A term symbol is compared with the one deduced from the same evidence. A heuristic cannot block.
 
 **Enforced at.**
 
 - `reconcile_charge_multiplicity` — `backend/app/services/charge_multiplicity_reconciliation.py::reconcile_charge_multiplicity`
   *Re-reads charge and multiplicity from the uploaded artifact using the wired Gaussian, ORCA, Psi4 and Molpro parsers.*
+- `_reconcile_deduction` — `backend/app/services/upload_reconciliation.py::_reconcile_deduction`
+  *The deduction path, for `term_symbol_mismatch` and `electronic_state_contradicts_method`: the declared term symbol and ground-or-excited state are compared with what `deduce_all` reads from the calculation's job types, method and spin multiplicity. **Ground versus excited is a heuristic deduction, not a parsed statement**: a TD, EOM or CIS job or method deduces an excited state and a single-reference one deduces the ground state, so a legitimately excited state computed by another route reads as a contradiction. The deduction carries its own confidence and the evidence it rests on in the warning's context, and a stationary-point-kind deduction is not compared here at all (Layer 1's n_imag warnings own it).*
 
 **Escape hatch.** Absence is not contradiction: if the producing program is not one of the wired parsers, the artifact is missing, the log is truncated, or the declarations inside a single log disagree with each other, the value is left unknown and **no** warning is emitted. Only a value genuinely read from the log may contradict a declaration — emitting a mismatch because parsing failed would fabricate a contradiction out of ignorance.
 
@@ -347,7 +349,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | **Code reaches a client via** | *nothing carries a code* |
 | **Governing ADR** | 0008, 0002 |
 
-**Why this tier.** An expectation, and correctly non-blocking. An optimisation that rearranged, dissociated or transferred a proton is science to record, not a payload to refuse, and connectivity perception from XYZ is unreliable for exactly the weak complexes, radicals, ions and stretched geometries where a genuine rearrangement would matter. The result is written as an evidence row that grades the record at read time; it never refuses an upload. Since #143 the tier is also the only one left to it: the *composition* half of what this row reports is owned by `calculation_geometry_composition_mismatch`, which blocks, so what this row can still say on its own is the RMSD suspicion — a correct-formula structure that moved further than expected, which is an expectation by construction.
+**Why this tier.** An expectation, and correctly non-blocking. An optimisation that rearranged, dissociated or transferred a proton is science to record, not a payload to refuse, and connectivity perception from XYZ is unreliable for exactly the weak complexes, radicals, ions and stretched geometries where a genuine rearrangement would matter. The result is written as an evidence row that grades the record at read time; it never refuses an upload. Since #143 the tier is also the only one left to it: the *composition* half of what this row reports is owned by `calculation_geometry_composition_mismatch`, which blocks, so what this row can still say on its own is the RMSD suspicion — a correct-formula structure that moved further than expected, which is an expectation by construction. **Evidence-only by decision, with no deposit warning.** Its read path is the trust rubric's geometry-validation check (`_check_geometry_validation_passed_or_warning` in `app/services/trust/rubrics.py`): a `fail` or `warning` row grades the record as a zero-weight warning, visible at read time. No upload warning is emitted because the only live verdict is the RMSD above 1.0 A, and that would fire routinely on flexible molecules optimised from rough starting structures, where a large move is the optimisation doing its job; a warning that fires on correct deposits teaches depositors to ignore warnings.
 
 **Enforced at.**
 
@@ -554,7 +556,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 **Enforced at.**
 
 - `evaluate_frequency_list_completeness` — `schemas/python/tckdb-schemas/tckdb_schemas/frequency_completeness.py::evaluate_frequency_list_completeness`
-  *Owns the arithmetic and knows no payload shapes; the geometry each frequency list is measured against is resolved by `evaluate_deposited_frequency_list` in the same module — the calculation's own first input geometry where the producer named one, and otherwise the enclosing conformer's or transition state's reference geometry, which is the fallback the persistence workflow itself applies for `freq`. Written once so the payload shapes that call it cannot drift into counting three different sets of atoms. **The same function also reports the floor**, `freq_list_incomplete_for_geometry`, at the warning tier and with a structural flag; that finding has no entry here because it is an expectation rather than a definition, for the reasons set out above. This entry is deliberately about one of the two codes the function emits.*
+  *Owns the arithmetic and knows no payload shapes; the geometry each frequency list is measured against is resolved by `evaluate_deposited_frequency_list` in the same module — the calculation's own first input geometry where the producer named one, and otherwise the enclosing conformer's or transition state's reference geometry, which is the fallback the persistence workflow itself applies for `freq`. Written once so the payload shapes that call it cannot drift into counting three different sets of atoms. **The same function also reports the floor**, `freq_list_incomplete_for_geometry`, at the warning tier and with a structural flag; that finding is not this entry because it is an expectation rather than a definition, for the reasons set out above. It is registered under entry 22, beside the linearity codes, which make the same kind of claim about the same list. This entry is deliberately about one of the two codes the function emits.*
 - `raise_for_blocking_findings` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::raise_for_blocking_findings`
   *Where the refusal actually happens, and named because the deciding module cannot do it. `tckdb_schemas.frequency_completeness` returns findings and never raises, so the code reaches the 422 envelope only through this shared raiser, which every published upload request model calls from a `model_validator` before any route body opens a submission. It reports whichever code its blocking findings agreed on — a payload carrying two different contradictions falls back to the generic code and names both in the message, because naming either one would tell the client the other is not there.*
 
@@ -565,7 +567,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | Field | Value |
 | --- | --- |
 | **Tier** | `warn` |
-| **Code** | `freq_list_linear_mode_count_for_bent_geometry`, `freq_list_bent_mode_count_for_linear_geometry` |
+| **Code** | `freq_list_linear_mode_count_for_bent_geometry`, `freq_list_bent_mode_count_for_linear_geometry`, `freq_list_incomplete_for_geometry` |
 | **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
 | **Governing ADR** | 0008 |
 
@@ -573,6 +575,8 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
+- `evaluate_frequency_list_completeness` — `schemas/python/tckdb-schemas/tckdb_schemas/frequency_completeness.py::evaluate_frequency_list_completeness`
+  *The floor, `freq_list_incomplete_for_geometry`: fewer modes than an atom count alone proves a harmonic analysis of the geometry produces (below `3N - 6`, with a structural flag for the unambiguous case). It is the same claim as the two linearity codes, the list's mode count against the geometry's shape, at the strength an atom count can prove. The ceiling (entry 21) is a different claim: `3N` is a definition, the floor is an expectation. Partial, frozen-atom and ONIOM Hessians remove modes honestly, which is why the floor warns and never refuses.*
 - `evaluate_frequency_list_linearity` — `backend/app/services/frequency_geometry_linearity.py::evaluate_frequency_list_linearity`
   *Owns the arithmetic and the verdict; the payload walks that resolve which geometry each frequency list is measured against live in the same module, one per upload shape, and restate the wire-side rule — the calculation's own first input geometry where the producer named one, otherwise the enclosing conformer's or transition state's reference geometry. The two checks must count the same atoms to be talking about the same record.*
 - The collinearity tolerance stays backend-side. `tckdb_schemas` is forbidden from importing `app` by an AST scan and a runtime `sys.modules` check, and it carries no numerics; moving a tolerance into it to share one constant would put a numerical judgement inside a package whose contract is that it holds none. So the wire package keeps the bound it can prove from an atom count and the backend adds the sharper one where the coordinates are.
@@ -630,7 +634,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | Field | Value |
 | --- | --- |
 | **Tier** | `warn` |
-| **Code** | `transition_state_energy_ordering_not_compared`, `network_state_energy_sum_not_compared`, `network_energy_zpe_source_absent` |
+| **Code** | `transition_state_energy_ordering_not_compared`, `network_state_energy_sum_not_compared`, `network_energy_zpe_source_absent`, `network_state_energy_sources_partial` |
 | **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
 | **Governing ADR** | 0008 |
 
@@ -641,7 +645,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - `persist_transition_state_validation_evidence` — `backend/app/services/transition_state_validation.py::persist_transition_state_validation_evidence`
   *The outcome of every comparison is stored on the compared energy (`stored_energy_comparison` / `not_compared_reason`), so a reader can tell an energy that agrees with the stored one from one that was never held against it.*
 - `collect_state_energy_source_warnings` — `backend/app/services/network_energy_sources.py::collect_state_energy_source_warnings`
-  *The network route: the outcome is stored on the state energy (`source_sum_comparison` / `source_sum_not_compared_reason`). Reasons include a convention with no stored per-source terms, a zero no other state shares, a source with no stored energy of the needed kind, a state alone on its zero and `stated_precision_unknown` (beyond printed precision, inside honest rounding of the stated kJ/mol). Sources on only some participants warn separately, with `network_state_energy_sources_partial`.*
+  *The network route: the outcome is stored on the state energy (`source_sum_comparison` / `source_sum_not_compared_reason`). Reasons include a convention with no stored per-source terms, a zero no other state shares, a source with no stored energy of the needed kind, a state alone on its zero and `stated_precision_unknown` (beyond printed precision, inside honest rounding of the stated kJ/mol). Sources on only some participants warn with `network_state_energy_sources_partial`: the cited sources are one summand of several, so the stated energy cannot be held against the sum of every participant's stored energy, which is the same absence by another route.*
 - `collect_zpe_source_absent_warnings` — `backend/app/services/network_energy_sources.py::collect_zpe_source_absent_warnings`
   *A state or barrier energy on a composed convention (`electronic_plus_zpe`, `atom_and_bond_corrected`, `thermal_enthalpy_298k`) that cites only an `sp` or `opt` when the upload carries no `freq` for that species or transition state: `network_energy_zpe_source_absent` (#669). An absence, so a warning; a `composite` and a single atom are not flagged.*
 
@@ -1139,14 +1143,16 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | Field | Value |
 | --- | --- |
 | **Tier** | `warn` |
-| **Code** | *(none — prose only)* |
-| **Code reaches a client via** | *nothing carries a code* |
+| **Code** | `scan_point_coordinate_disagrees_with_geometry` |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
 | **Governing ADR** | 0020, 0008 |
 
-**Why this tier.** ADR 0020 is explicit that a disagreement here cannot say which of two things is wrong: a mis-stated axis and a mis-attached geometry present identically to a comparison that only sees the stored number and the recomputed one. Refusing the deposit would discard correct energies over an ambiguity this check cannot resolve on its own, which is the ADR 0008 argument for warn rather than block. It cannot become a blocking definition for a second, independent reason: every scan series deposited so far fails it -- all 46 hold ADR 0019's superseded relative-sweep convention -- and ADR 0008 reserves block for a record no correct calculation could produce, not for a corpus TCKDB itself has not yet corrected. No code or channel is declared because the check is not wired into any upload or read path: it runs standalone, from backend/scripts/validation/scan_coordinate_conformance_report.py, as the diagnostic ADR 0020 asks for ahead of the corrective migration it explicitly defers to a separate PR.
+**Why this tier.** ADR 0020 is explicit that a disagreement here cannot say which of two things is wrong: a mis-stated axis and a mis-attached geometry present identically to a comparison that only sees the stored number and the recomputed one. Refusing the deposit would discard correct energies over an ambiguity this check cannot resolve on its own, which is the ADR 0008 argument for warn rather than block. It also cannot be a blocking definition for a second reason: ADR 0008 reserves block for a record no correct calculation could produce, and the producers that deposited the superseded relative-sweep convention (ADR 0019) did so in good faith. It was held back as a standalone report until the corrective migration (`a4f7c2e9d651`, #302) had converted the stored series; with that done, a new deposit in the old convention is exactly what the warning should say, so it is wired into the write path of every route that persists a scan, once per disagreeing coordinate series, and placed on the scan calculation's own record.
 
 **Enforced at.**
 
+- `collect_scan_coordinate_warnings` — `backend/app/services/scan_coordinate_conformance.py::collect_scan_coordinate_warnings`
+  *The write path: run once a request's calculations are flushed, over every calculation the request persisted, by every workflow that persists calculations (conformer, transition state, computed species, computed reaction, thermo, statmech, transport, network). One warning per coordinate series with at least one point judged `deviates`; its context carries the series' pattern (`classify_series`), the number of points that disagree, the largest residual and the tolerance.*
 - `evaluate_point_coordinate_conformance` — `backend/app/services/scan_coordinate_conformance.py::evaluate_point_coordinate_conformance`
   *Recomputes the coordinate from the point's own stored geometry only -- bond distance, bond angle, or the standard four-atom dihedral formula -- and never reads calc_scan_coordinate.start_value/end_value, which ADR 0020 fixes as grid metadata, not an anchor. improper is reported not_applicable rather than guessed at: ADR 0020 records that TCKDB has no field distinguishing an out-of-plane-angle convention from a proper-style torsion, so assuming either would be exactly the inference ADR 0011 refuses to make for atom maps, applied one level up. A near-collinear dihedral quartet (min(sin(theta_123), sin(theta_234)) < 0.05) is reported not_checkable rather than compared, mirroring what the producing tools themselves do. classify_series in the same module turns a series of per-point disagreements into the specific pattern the follow-up corrective migration needs: a constant residual across every point, a linear ramp against point index, a residual equal to one grid step, or a lone outlier.*
 
@@ -1161,9 +1167,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - `tolerance_ceiling_angstrom` = **0.1 Angstrom** — a constant fixed in code.
   Same role as tolerance_ceiling_degrees, for bond. 0.1 Angstrom is roughly 5-10 percent of a typical single bond length (about 1-1.5 Angstrom); a derived tolerance that wide could not tell a genuine bond-length error from deposit noise.
 
-**Escape hatch.** None needed -- the check never refuses, at any tier. Its cost runs the other way: today it reports every one of the 46 deposited scan series as non-conforming, which ADR 0020 records as the correct, intended finding rather than a defect to quiet.
-
-*(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
+**Escape hatch.** None needed -- the check never refuses, at any tier. Send each point's coordinate_value as the internal coordinate measured on that point's own geometry (not as an offset from the scan's start), or attach the geometry the value was measured on. An `improper` coordinate is never compared, and a near-collinear dihedral quartet or a deposit too coarse to judge is reported as not checkable rather than as a disagreement.
 
 ## Vibrational frequency provenance
 
@@ -1184,6 +1188,41 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   *Runs on the bundle calculation payloads that carry an inline `input` artifact (computed-species, computed-reaction and network bundles). The standalone calculation, conformer and transition-state payloads have no `artifacts` field, and a deck uploaded later through the artifact route is not seen at validation; that case earns the warning `hessian_method_disagrees_with_stored_tau_basis` on the calculation instead, and the stored tolerance is never relabelled. The message and `context` carry only TCKDB's method tokens (`analytic`, `finite_difference_gradient`, `finite_difference_energy`), never the recorded string or deck text.*
 
 **Escape hatch.** Correct whichever of the two is wrong, or omit the recorded `freq.hessian_method` and let the deck speak. A deposit that sends only a deck is never refused by this check; the deck is read before the deposit is judged.
+
+## Stereochemistry of a species entry
+
+### 51. A species entry states one stereo configuration: where its linked geometries, its SMILES marks and a supplied stereo label each state the same stereo element (R/S, E/Z or an allene's axis), they agree, compared up to the molecule's symmetry.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `species_stereo_contradiction` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | DR-0038, 0008 |
+
+**Why this tier.** Definitional, once the species key is the constitution. A species entry is where one configuration is stated, and it is read from up to three sources: every linked geometry, the marks in the SMILES, and a supplied label. Two of them stating different configurations for the same element is a record that cannot describe one molecule; resolving it in either direction would invent a provenance, so the deposit is refused. Each source is compared with the others up to the molecule's symmetry (an alignment over the constitution's automorphisms), so a relabelled but identical configuration is never a contradiction. **The position a referee could dispute is the reading of coordinates:** deciding R/S, E/Z and an allene's axis from a geometry needs torsion windows, an alignment over automorphisms and an enumeration cap, none of which an input-format conflict (#672: D is 2H) needs. The windows below are deliberately conservative -- a geometry that falls outside them is *not read*, which states nothing and so contradicts nothing -- and exceeding a cap costs expressiveness (`species_entry_stereo_not_represented`, symmetric elements stated as `?`) and switches the comparison to the conservative multiset form. Entries 8 and 9 compare a geometry with its SMILES by element and isotope, never by configuration, so they do not cover this. Two neighbouring codes are not entries of their own: `species_stereo_label_invalid` (a malformed label, and the chemical branch of it, a label no stereoisomer of the molecule has) is input-shape validation, and `species_entry_stereo_not_represented` is the warning that reports the automorphism cap's cost.
+
+**Enforced at.**
+
+- `resolve_stereo` — `backend/app/chemistry/stereo.py::resolve_stereo`
+  *Reads the entry's stereo from every geometry, then the SMILES marks, then a supplied label, and merges them in that order. Geometries of one entry are torsional conformers of one configuration, so they must agree with one another too; one that does not is a contradiction.*
+- `merge_sources` — `backend/app/chemistry/stereo.py::merge_sources`
+  *The comparison: the incoming source is aligned onto the current one over every automorphism and must agree wherever both state an element. A position that is ambiguous inside a symmetry class is refused rather than guessed.*
+- `_refuse_disagreement_past_the_cap` — `backend/app/chemistry/stereo.py::_refuse_disagreement_past_the_cap`
+  *Past the automorphism cap no alignment is available, so symmetry classes are compared as multisets before they are collapsed to `?`. A real disagreement (`R,R` marks against an `S,S` label) is still refused instead of being hidden by the cap.*
+
+**Thresholds.**
+
+- `allene_torsion_window` = **10 degree (lower bound; the upper bound is 170)** — a constant fixed in code.
+  An allene's end-to-end torsion between the CIP-higher substituents is read only inside [10, 170] degrees (ideal 90). A flattened axis outside it is not read, which states nothing. Widening it reads more geometries and makes a contradiction from a distorted one more likely.
+- `odd_cumulene_planar_tolerance` = **30 degree** — a constant fixed in code.
+  An odd cumulene (a butatriene and longer) is Z within this torsion of planar, E within it of anti-planar, and otherwise twisted and unread.
+- `automorphism_cap` = **100000 automorphisms examined** — a constant fixed in code.
+  Most automorphisms of the constitution examined before the symmetric elements are stated as `?`. Past it the sources are compared as multisets instead; the cost is `species_entry_stereo_not_represented`.
+- `enumeration_cap` = **8 potential stereo elements** — a constant fixed in code.
+  Above this many potential elements the stereoisomer enumeration is skipped: `-` is not deduced, a supplied label is not tested for realisability and `stereo_smiles` is left unset.
+
+**Escape hatch.** State `?` for the element, or omit the label: an unknown element contradicts nothing. If two geometries really are different stereoisomers, deposit the other isomer as its own species entry; one entry states one configuration.
 
 ---
 

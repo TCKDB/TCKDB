@@ -38,6 +38,7 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.scan_coordinate_conformance import collect_scan_coordinate_warnings
 from app.services.species_resolution import resolve_species_entry
 from app.services.statmech_resolution import (
     collect_frequency_scale_factor_software_mismatch_warnings,
@@ -390,6 +391,12 @@ def persist_conformer_upload(
     energy_warnings.extend(composite_input_warnings)
     energy_warnings.extend(
         collect_named_composite_deposit_warnings(
+            session,
+            [calculation.id, *(c.id for c in additional_calcs)],
+        )
+    )
+    energy_warnings.extend(
+        collect_scan_coordinate_warnings(
             session,
             [calculation.id, *(c.id for c in additional_calcs)],
         )

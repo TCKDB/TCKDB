@@ -470,7 +470,17 @@ CHECK_OPT_GEOMETRY_MATCHES_DECLARED_SPECIES = ScientificCheck(
         "is owned by ``calculation_geometry_composition_mismatch``, which "
         "blocks, so what this row can still say on its own is the RMSD "
         "suspicion — a correct-formula structure that moved further than "
-        "expected, which is an expectation by construction."
+        "expected, which is an expectation by construction. "
+        "**Evidence-only by decision, with no deposit warning.** Its read "
+        "path is the trust rubric's geometry-validation check "
+        "(``_check_geometry_validation_passed_or_warning`` in "
+        "``app/services/trust/rubrics.py``): a ``fail`` or ``warning`` row "
+        "grades the record as a zero-weight warning, visible at read time. "
+        "No upload warning is emitted because the only live verdict is the "
+        "RMSD above 1.0 A, and that would fire routinely on flexible "
+        "molecules optimised from rough starting structures, where a large "
+        "move is the optimisation doing its job; a warning that fires on "
+        "correct deposits teaches depositors to ignore warnings."
     ),
     adr="0008, 0002",
     emitted=False,

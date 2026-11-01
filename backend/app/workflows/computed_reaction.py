@@ -159,6 +159,7 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.scan_coordinate_conformance import collect_scan_coordinate_warnings
 from app.services.scf_stability_sources import link_scf_stability_sources
 from app.services.software_banner_extraction import (
     try_reconcile_software_from_output_uploads,
@@ -2288,6 +2289,9 @@ def persist_computed_reaction_upload(
         collect_named_composite_deposit_warnings(
             session, calculation_key_to_id.values()
         )
+    )
+    sp_energy_warnings.extend(
+        collect_scan_coordinate_warnings(session, calculation_key_to_id.values())
     )
     sp_energy_warnings.extend(
         collect_frequency_scale_factor_software_mismatch_warnings(

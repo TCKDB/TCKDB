@@ -129,6 +129,10 @@ from dataclasses import dataclass
 from enum import Enum
 
 import numpy as np
+from tckdb_schemas.frequency_completeness import (
+    W_FREQ_LIST_INCOMPLETE,
+    evaluate_frequency_list_completeness,
+)
 
 from app.chemistry.geometry import parse_xyz
 from app.schemas.fragments.geometry import GeometryPayload
@@ -710,6 +714,7 @@ CHECK_FREQ_LIST_MODE_COUNT_MATCHES_GEOMETRY_SHAPE = ScientificCheck(
     code=(
         W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY,
         W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY,
+        W_FREQ_LIST_INCOMPLETE,
     ),
     asserts=(
         "A frequency list's mode count should match the shape of the "
@@ -744,6 +749,20 @@ CHECK_FREQ_LIST_MODE_COUNT_MATCHES_GEOMETRY_SHAPE = ScientificCheck(
     ),
     adr="0008",
     enforced_by=(
+        PythonCheck(
+            evaluate_frequency_list_completeness,
+            note=(
+                "The floor, ``freq_list_incomplete_for_geometry``: fewer modes "
+                "than an atom count alone proves a harmonic analysis of the "
+                "geometry produces (below ``3N - 6``, with a structural flag "
+                "for the unambiguous case). It is the same claim as the two "
+                "linearity codes, the list's mode count against the geometry's "
+                "shape, at the strength an atom count can prove. The ceiling "
+                "(entry 21) is a different claim: ``3N`` is a definition, "
+                "the floor is an expectation. Partial, frozen-atom and ONIOM Hessians remove modes honestly, which "
+                "is why the floor warns and never refuses."
+            ),
+        ),
         PythonCheck(
             evaluate_frequency_list_linearity,
             note=(

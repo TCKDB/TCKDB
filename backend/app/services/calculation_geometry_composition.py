@@ -444,8 +444,8 @@ CHECK_CALCULATION_GEOMETRY_COMPOSITION = ScientificCheck(
                 "construction is unchecked or a site disappears. ``calc_isotopes.assert_isotopes`` "
                 "extends the claim to isotopes (own code, by count). The best-effort artifact hook "
                 "is the one site that does not refuse: it never fails an upload, so a refusal "
-                "there is the warning ``hessian_not_stored_geometry_mismatch`` with the block code "
-                "named only in its message text (#744)."
+                "there is the warning ``hessian_not_stored_geometry_mismatch``, which carries the block code "
+                "as ``context.refusal_code`` and in its sentence (#744, #840)."
             ),
         ),
     ),

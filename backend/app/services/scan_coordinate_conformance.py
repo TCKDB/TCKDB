@@ -9,24 +9,22 @@ recomputes the coordinate from the point's own stored Cartesian geometry and
 compares, **without ever reading ``start_value``/``end_value``**, which ADR
 0020 fixes as requested-grid metadata rather than an anchor to add back.
 
-**Nothing is written and nothing is refused.** This mirrors
-:mod:`app.services.scientific_read.imaginary_mode_projection`: a session is
-opened, geometry rows are read, and a verdict is returned. There is no table
-to persist it to, and under ADR 0008 the tier is ``warn`` regardless -- ADR
-0020 is explicit that a mis-stated axis and a mis-attached geometry present
-identically to this comparison, so a disagreement is evidence that
-*something* is wrong without saying which thing, and refusing a deposit over
-that ambiguity would discard correct energies. The check is not wired into
-any upload or read path; it is run standalone by
-``backend/scripts/validation/scan_coordinate_conformance_report.py`` as the
-diagnostic ADR 0020 asks for ahead of the corrective migration it defers to a
-separate, later change.
+**Nothing is refused.** A deposit whose scan values disagree with their own geometries is accepted as sent
+and earns :data:`W_SCAN_POINT_COORDINATE_DISAGREES_WITH_GEOMETRY` (one warning per disagreeing coordinate series,
+:func:`collect_scan_coordinate_warnings`), run once the request's calculations are flushed. Under ADR 0008 the
+tier is ``warn``: ADR 0020 is explicit that a mis-stated axis and a mis-attached geometry present identically to
+this comparison, so a disagreement is evidence that *something* is wrong without saying which thing, and refusing
+a deposit over that ambiguity would discard correct energies. The verdict is not stored: there is no table for it,
+and the report script (``backend/scripts/validation/scan_coordinate_conformance_report.py``) recomputes it from
+stored rows.
 
-**The deposited corpus is expected to fail this.** All 46 series deposited
-before ADR 0020 hold ADR 0019's superseded relative-sweep convention, and
-this check reports every one of them as non-conforming. That is the intended
-finding, not a bug to chase: it is exactly what the follow-up migration needs
-to know, one series at a time.
+**Payloads in the superseded convention still fail this, correctly.** The 46 series
+deposited before ADR 0020 held ADR 0019's superseded relative-sweep convention;
+the corrective migration (``a4f7c2e9d651``) converted the stored ones. A *new*
+deposit in that convention (the real ARC payloads under
+``tests/fixtures/arc_runs`` are kept in it, and 35 of their 36 series are
+reported as ``consistent_with_legacy_relative_axis``) is still accepted and
+now earns the warning. That is the check doing its job, not a defect to quiet.
 
 Recomputable coordinate kinds
 ------------------------------
@@ -102,8 +100,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import Calculation
-from app.db.models.common import CalculationType, CoordinateUnit, ScanCoordinateKind
+from app.db.models.common import (
+    CalculationType,
+    CoordinateUnit,
+    ScanCoordinateKind,
+    SubmissionRecordType,
+)
 from app.db.models.geometry import GeometryAtom
+from app.schemas.upload_warning import UploadWarning
 from app.scientific_checks import (
     CheckTier,
     CodeChannel,
@@ -111,6 +115,7 @@ from app.scientific_checks import (
     PythonCheck,
     ScientificCheck,
 )
+from app.services.deposit_warnings import note_warning_subject
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -1067,6 +1072,7 @@ __all__ = [
     "TOLERANCE_CEILING_DEGREES",
     "TOLERANCE_FLOOR_ANGSTROM",
     "TOLERANCE_FLOOR_DEGREES",
+    "W_SCAN_POINT_COORDINATE_DISAGREES_WITH_GEOMETRY",
     "CoordinateSeriesConformance",
     "PointCoordinateConformance",
     "PointStatus",
@@ -1077,10 +1083,56 @@ __all__ = [
     "bond_length_angstrom",
     "build_scan_coordinate_conformance_report",
     "classify_series",
+    "collect_scan_coordinate_warnings",
     "dihedral_deg",
     "evaluate_point_coordinate_conformance",
     "infer_precision_decimals",
 ]
+
+
+#: The warning a scan series earns when a stored coordinate value disagrees with its own point's geometry.
+W_SCAN_POINT_COORDINATE_DISAGREES_WITH_GEOMETRY = "scan_point_coordinate_disagrees_with_geometry"
+
+
+def collect_scan_coordinate_warnings(
+    session: Session,
+    calculation_ids: Iterable[int],
+) -> list[UploadWarning]:
+    """Warn once per scan coordinate series whose stored values disagree with the series' own geometries.
+
+    Runs once a request's calculations are flushed (the check reads the stored scan points and geometries), over every
+    calculation id the request persisted; other types are filtered out by
+    :func:`build_scan_coordinate_conformance_report`. **Never refuses**: ADR 0020 and ADR 0008 (see
+    :data:`CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY`). A series is reported when at least one point is judged
+    ``deviates``; points that are not applicable or not checkable are never reported.
+
+    :param session: Active SQLAlchemy session.
+    :param calculation_ids: Every calculation id the request persisted (or reused).
+    :returns: One warning per disagreeing coordinate series, in calculation-id then coordinate order.
+    """
+    warnings: list[UploadWarning] = []
+    for calculation_id in sorted(dict.fromkeys(calculation_ids)):
+        for series in build_scan_coordinate_conformance_report(session, calculation_id):
+            judged = [p for p in series.points if p.status in (PointStatus.conforms, PointStatus.deviates)]
+            deviating = [p for p in judged if p.status is PointStatus.deviates]
+            if not deviating:
+                continue
+            warning = UploadWarning.from_code(
+                field="scan_result",
+                code=W_SCAN_POINT_COORDINATE_DISAGREES_WITH_GEOMETRY,
+                context={
+                    "coordinate_index": series.coordinate_index,
+                    "coordinate_kind": series.kind.value,
+                    "pattern": series.classification.value,
+                    "n_points_disagreeing": len(deviating),
+                    "n_points_checked": len(judged),
+                    "max_residual": round(max(abs(p.residual) for p in deviating), 6),
+                    "tolerance": round(max(p.tolerance for p in deviating), 6),
+                },
+            )
+            note_warning_subject(session, warning, SubmissionRecordType.calculation, calculation_id)
+            warnings.append(warning)
+    return warnings
 
 
 # ---------------------------------------------------------------------------
@@ -1090,7 +1142,7 @@ __all__ = [
 CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY = ScientificCheck(
     group="Scan coordinates",
     sort_key=1,
-    code=None,
+    code=W_SCAN_POINT_COORDINATE_DISAGREES_WITH_GEOMETRY,
     asserts=(
         "A scan point's stored coordinate_value is the internal coordinate "
         "at that point's own sampled geometry, in that coordinate's own "
@@ -1098,7 +1150,7 @@ CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY = ScientificCheck(
         "against start_value as an anchor."
     ),
     tier=CheckTier.warn,
-    channel=CodeChannel.none,
+    channel=CodeChannel.upload_warning,
     tier_rationale=(
         "ADR 0020 is explicit that a disagreement here cannot say which of "
         "two things is wrong: a mis-stated axis and a mis-attached geometry "
@@ -1106,19 +1158,34 @@ CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY = ScientificCheck(
         "number and the recomputed one. Refusing the deposit would discard "
         "correct energies over an ambiguity this check cannot resolve on "
         "its own, which is the ADR 0008 argument for warn rather than "
-        "block. It cannot become a blocking definition for a second, "
-        "independent reason: every scan series deposited so far fails it "
-        "-- all 46 hold ADR 0019's superseded relative-sweep convention -- "
-        "and ADR 0008 reserves block for a record no correct calculation "
-        "could produce, not for a corpus TCKDB itself has not yet "
-        "corrected. No code or channel is declared because the check is "
-        "not wired into any upload or read path: it runs standalone, from "
-        "backend/scripts/validation/scan_coordinate_conformance_report.py, "
-        "as the diagnostic ADR 0020 asks for ahead of the corrective "
-        "migration it explicitly defers to a separate PR."
+        "block. It also cannot be a blocking definition for a second "
+        "reason: ADR 0008 reserves block for a record no correct "
+        "calculation could produce, and the producers that deposited the "
+        "superseded relative-sweep convention (ADR 0019) did so in good "
+        "faith. It was held back as a standalone report until the "
+        "corrective migration (``a4f7c2e9d651``, #302) had converted the "
+        "stored series; with that done, a new deposit in the old convention "
+        "is exactly what the warning should say, so it is wired into the "
+        "write path of every route that persists a scan, once per "
+        "disagreeing coordinate series, and placed on the scan "
+        "calculation's own record."
     ),
     adr="0020, 0008",
     enforced_by=(
+        PythonCheck(
+            collect_scan_coordinate_warnings,
+            note=(
+                "The write path: run once a request's calculations are "
+                "flushed, over every calculation the request persisted, by "
+                "every workflow that persists calculations (conformer, "
+                "transition state, computed species, computed reaction, "
+                "thermo, statmech, transport, network). One warning per "
+                "coordinate series with at least one point judged `deviates`; "
+                "its context carries the series' pattern "
+                "(`classify_series`), the number of points that disagree, the "
+                "largest residual and the tolerance."
+            ),
+        ),
         PythonCheck(
             evaluate_point_coordinate_conformance,
             note=(
@@ -1145,10 +1212,13 @@ CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY = ScientificCheck(
         ),
     ),
     escape_hatch=(
-        "None needed -- the check never refuses, at any tier. Its cost "
-        "runs the other way: today it reports every one of the 46 "
-        "deposited scan series as non-conforming, which ADR 0020 records "
-        "as the correct, intended finding rather than a defect to quiet."
+        "None needed -- the check never refuses, at any tier. Send each "
+        "point's coordinate_value as the internal coordinate measured on "
+        "that point's own geometry (not as an offset from the scan's start), "
+        "or attach the geometry the value was measured on. An `improper` "
+        "coordinate is never compared, and a near-collinear dihedral quartet "
+        "or a deposit too coarse to judge is reported as not checkable "
+        "rather than as a disagreement."
     ),
     thresholds=(
         ConstantThreshold(

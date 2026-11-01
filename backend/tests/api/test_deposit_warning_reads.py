@@ -421,9 +421,43 @@ def _swept_codes() -> set[str]:
     return codes
 
 
+def test_the_dynamic_code_list_is_exactly_what_the_code_tables_hold():
+    """The hand list above is not allowed to rot: each table a producer picks a code from is read for real."""
+    from tckdb_schemas.fragments import refs
+    from tckdb_schemas.stationary_point import (
+        W_N_IMAG_CONTRADICTS_MINIMUM,
+        W_N_IMAG_HIGHER_ORDER_SADDLE,
+        W_N_IMAG_SUGGESTS_TS,
+    )
+
+    from app.services import hessian_extraction, upload_reconciliation
+    from app.services.composite_result_resolution import _DEPOSITED_AS_WARNING_CODE
+
+    from_tables = {
+        value for name, value in vars(hessian_extraction).items() if name.startswith("W_HESSIAN_NOT_STORED_")
+    }
+    from_tables |= set(upload_reconciliation._DEDUCTION_WARNING_CODES.values())
+    from_tables |= set(_DEPOSITED_AS_WARNING_CODE.values())
+    from_tables |= {
+        refs.W_SOFTWARE_RELEASE_VERSION_IS_COMPOSITE,
+        refs.W_SOFTWARE_RELEASE_NAME_LOOKS_WRONG,
+        refs.W_LEVEL_OF_THEORY_METHOD_NAMES_CORRECTION_TABLE,
+    }
+    from_tables |= {W_N_IMAG_CONTRADICTS_MINIMUM, W_N_IMAG_HIGHER_ORDER_SADDLE, W_N_IMAG_SUGGESTS_TS}
+    assert from_tables == _DYNAMIC
+
+
+def test_every_code_given_to_from_code_has_a_public_sentence():
+    """Static: a code a producer passes to ``UploadWarning.from_code`` (or a warn-tier finding) is a ``RENDERED`` key."""
+    swept = _swept_codes() | _DYNAMIC
+    # 81 = the 80 measured on main at fcbad235 plus scan_point_coordinate_disagrees_with_geometry (#835).
+    assert len(swept - _BLOCK_ONLY) >= 81, f"the sweep found only {len(swept - _BLOCK_ONLY)} codes"
+    assert (swept - _BLOCK_ONLY) - set(RENDERED) == set()
+
+
 def test_the_rendering_table_covers_every_code_a_producer_can_emit():
     swept = (_swept_codes() | _DYNAMIC) - _BLOCK_ONLY
-    assert len(swept) >= 70, f"the sweep found only {len(swept)} codes: it is not looking at the producers"
+    assert len(swept) >= 81, f"the sweep found only {len(swept)} codes: it is not looking at the producers"
     assert swept - set(RENDERED) == set(), "a producer code has no public sentence"
     assert set(RENDERED) - swept == set(), "a sentence is for a code no producer emits"
     for code, sentence in RENDERED.items():

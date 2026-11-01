@@ -575,7 +575,9 @@ what a sentence needs, and these are already structured.
 
 A warning is not a refusal: an accepted upload returns `201` with a
 `warnings` list whose entries carry their own `code`. The register's
-`upload_warning` rows are those. Each warning may also carry a `context` (the
+`upload_warning` rows are those, but not every warning is in the register: every warning code, with its sentence and its
+register entry if it has one, is listed in `WARNING_CODES.md` beside `REFUSAL_CODES.md` in the installed package
+(`python -m tckdb_schemas.contract --warnings` prints its path). Each warning may also carry a `context` (the
 values that triggered it; `null` when the check states none). The same warnings
 are stored with the records the deposit created and shown to every later reader
 as `record_warnings` (and, for a warning no one record could take, `deposit_warnings`) on those records' detail reads

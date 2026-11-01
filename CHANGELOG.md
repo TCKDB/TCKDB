@@ -22,6 +22,14 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Register coverage for deposit warnings; scan values are checked against their geometries (2026-11-01)
+
+- **Client: `tckdb-client` unchanged (0.182.0), `tckdb-schemas` 0.146.0.** No migration, no schema change, no new environment variable. No stored row is rewritten.
+- **New warning `scan_point_coordinate_disagrees_with_geometry`.** A scan point's `coordinate_value` is the internal coordinate itself, measured on that point's own geometry (ADR 0020). When the stored values of a scan coordinate disagree with the coordinate measured on the points' geometries, the scan is accepted as sent and one warning per coordinate series is returned, placed on the scan calculation. The check is the one the ADR 0020 report script already ran; it now runs after the flush on every route that persists calculations (conformer, transition state, computed species, computed reaction, thermo, statmech, transport, network). The real ARC scan payloads under `tests/fixtures/arc_runs` still hold the superseded relative-sweep convention, are kept in it on purpose, and now earn this warning.
+- **Register.** One new entry (51: a species entry states one stereo configuration, `species_stereo_contradiction`); five warning codes are now under existing entries (12: `term_symbol_mismatch`, `electronic_state_contradicts_method`; 22: `freq_list_incomplete_for_geometry`; 25: `network_state_energy_sources_partial`; 49: the new scan warning). Entries 1-50 keep their numbers. Entry 13 is evidence-only by decision, with its read path named. Every other warning stays in the code catalogue.
+- **`WARNING_CODES.md`**, generated beside `REFUSAL_CODES.md` in `tckdb-schemas`: every warning code, with TCKDB's sentence and its register entry. `python -m tckdb_schemas.contract --warnings` prints its path.
+- Two unreachable warning-code fallbacks in the deduction path were removed (no behaviour change).
+
 ## Atomic electronic-state warnings on every route that accepts an atom (2026-11-01)
 
 An earlier note said the atomic-electronic warnings (`missing_atomic_electronic_levels`, `missing_atomic_spin_orbit_correction`, `atomic_electronic_degeneracy_contradicts_term`) came only from `/uploads/statmech`; they also come from the two bundle routes, and now from every other route that can carry a single atom (#836). No code, threshold or field is added or changed.

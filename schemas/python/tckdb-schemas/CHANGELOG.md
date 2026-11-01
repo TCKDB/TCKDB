@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.146.0 - 2026-11-01
+
+An accepted deposit can now earn one more warning, and the warning codes have a reference of their own. No field is added or removed.
+
+- New warning `scan_point_coordinate_disagrees_with_geometry`. A scan point's `coordinate_values[].coordinate_value` is the internal coordinate itself, measured on that point's own geometry, in the coordinate's own unit (a bond length in angstrom, an angle or dihedral in degrees), never an offset from `start_value`. When the stored values of a scan coordinate disagree with that coordinate measured on the points' geometries, the scan is accepted as sent and the response carries one warning per coordinate series. `context` has `coordinate_index`, `coordinate_kind`, `pattern` (`consistent_with_legacy_relative_axis`, `uniform_one_step_offset`, `linear_ramp`, `single_outlier`, `no_pattern_detected` or `insufficient_data`), `n_points_disagreeing`, `n_points_checked`, `max_residual` and `tolerance`. A scan whose values were measured from the scan's start (a relative sweep) is the usual cause; send the coordinate itself. It is placed on the scan calculation's record.
+- New file `tckdb_schemas/contract/WARNING_CODES.md`, shipped beside `REFUSAL_CODES.md`: every warning code an accepted deposit can return, with TCKDB's sentence and the scientific check register entry behind it, if any. Find it with `python -m tckdb_schemas.contract --warnings` or `tckdb_schemas.contract.warning_codes_path()`; read it with `warning_codes_markdown()`.
+- `species_stereo_contradiction`, `term_symbol_mismatch`, `electronic_state_contradicts_method`, `freq_list_incomplete_for_geometry` and `network_state_energy_sources_partial` are now covered by scientific check register entries (51, 12, 12, 22 and 25). Their behaviour is unchanged.
+
 ## 0.145.0 - 2026-10-31
 
 A warning's `message` is TCKDB's sentence for its `code`, never text the depositor typed. No field is added or removed.
