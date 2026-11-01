@@ -22,6 +22,16 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Atomic electronic-state warnings on every route that accepts an atom (2026-11-01)
+
+An earlier note said the atomic-electronic warnings (`missing_atomic_electronic_levels`, `missing_atomic_spin_orbit_correction`, `atomic_electronic_degeneracy_contradicts_term`) came only from `/uploads/statmech`; they also come from the two bundle routes, and now from every other route that can carry a single atom (#836). No code, threshold or field is added or changed.
+
+- **`POST /uploads/thermo`** (and its job, and the thermo records of `POST /bundles/submit`): the spin-orbit warning, judged on the record's own `applied_energy_corrections`. It is not judged when the thermo cites a calculation or statmech whose corrections the request cannot see: `existing_statmech_id`, a source calculation by `existing_calculation_id`, or a protocol supporting calculation by `calculation_ref`. A thermo with no enthalpy content (only `s298_j_mol_k`, or points with only `cp` or `s`) has no energy for a spin-orbit shift to be missing from, so it is not judged unless it lists corrections; enthalpy content is `h298_kj_mol`, `enthalpy_formation_0k_kj_mol`, a NASA polynomial, a Wilhoit `h0_kj_mol`, or a point with `h` or `g`. The computed-species and computed-reaction bundles apply the same rule to their `thermo` block. A thermo carries no levels, so none is said about them.
+- **`POST /uploads/conformers`** (and its job): levels, degeneracy and spin-orbit, judged on the request's statmech (its own `scientific_origin`, the one stored on the statmech row) and corrections. The levels warning is stored on the statmech row, the spin-orbit warning on the conformer.
+- **`POST /uploads/networks/pdep`** (and its job): levels and degeneracy for a species with a statmech block, on `species['<key>'].statmech.electronic_levels`. The route has no corrections field, so it cannot see whether spin-orbit energy was applied and does not say.
+- The direct routes and the jobs return the same warnings, and each is stored on its own record.
+- Closes the known limit in the entry below.
+
 ## A warning's message is TCKDB's sentence for its code, not the depositor's words (2026-10-31)
 
 - **Client: `tckdb-client` 0.182.0, `tckdb-schemas` 0.145.0.** No migration, no schema change, no new environment variable. No stored row is rewritten.

@@ -33,6 +33,11 @@ from app.schemas.workflows.reaction_upload import ReactionUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.schemas.workflows.transition_state_upload import TransitionStateUploadRequest
 from app.schemas.workflows.transport_upload import TransportUploadRequest
+from app.services.atomic_electronic_warnings import (
+    collect_conformer_atomic_warnings,
+    collect_pdep_atomic_warnings,
+    collect_thermo_atomic_warnings,
+)
 from app.services.frequency_geometry_linearity import (
     computed_reaction_linearity_warnings,
     inline_calculation_linearity_warnings,
@@ -80,6 +85,7 @@ def conformer_request_warnings(request: ConformerUploadRequest) -> list[UploadWa
         reference_xyz_text=request.geometry.xyz_text,
     )
     warnings.extend(collect_ref_warnings(request))
+    warnings.extend(collect_conformer_atomic_warnings(request))
     return warnings
 
 
@@ -124,6 +130,7 @@ def network_pdep_request_warnings(request: NetworkPDepUploadRequest) -> list[Upl
     warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
     warnings.extend(network_pdep_linearity_warnings(request))
     warnings.extend(collect_ref_warnings(request))
+    warnings.extend(collect_pdep_atomic_warnings(request))
     return warnings
 
 
@@ -133,6 +140,7 @@ def thermo_request_warnings(request: ThermoUploadRequest) -> list[UploadWarning]
     warnings.extend(inline_calculation_linearity_warnings(request.calculations))
     warnings.extend(collect_thermo_provenance_warnings(request))
     warnings.extend(collect_ref_warnings(request))
+    warnings.extend(collect_thermo_atomic_warnings(request))
     return warnings
 
 
