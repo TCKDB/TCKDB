@@ -276,3 +276,23 @@ def test_a_stale_recorded_warning_is_re_rendered_when_the_job_result_is_assemble
     assert rebuilt["message"] == render_message("charge_mismatch", stale_context)
     assert "ZZQ" not in rebuilt["message"] and "stale" not in rebuilt["message"]
     assert rebuilt["field"] == "ZZQ['stale-key'].charge"
+
+
+@pytest.mark.parametrize("route", ["thermo", "conformer", "pdep"])
+def test_the_job_result_carries_the_atomic_electronic_warnings_the_direct_route_returns(client, route: str) -> None:
+    """A single atom deposited as a job hears the same atomic warnings as the direct route (#836)."""
+    from tests.api.test_atomic_warnings_every_route import ATOMIC, ROUTES, _aec
+
+    build, direct_url, job_url = ROUTES[route]
+    payload = build("O", levels=[] if route != "thermo" else None, corrections=[_aec()] if route != "pdep" else [])
+    expected = _direct(client, direct_url, payload)
+    atomic = [w for w in expected if w["code"] in ATOMIC]
+    assert atomic, expected
+
+    job = _enqueue(client, job_url, payload)
+    upload_worker.run_one_job(client._db_session, job)
+
+    result = client.get(f"/api/v1/jobs/{job.id}").json()["result"]
+    assert "result_unavailable" not in result
+    assert [w for w in result["warnings"] if w["code"] in ATOMIC] == atomic
+    assert result["warnings"] == expected

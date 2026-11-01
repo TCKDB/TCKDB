@@ -58,6 +58,9 @@ __all__ = [
     "W_MISSING_ATOMIC_SPIN_ORBIT_CORRECTION",
     "collect_atomic_electronic_warnings",
     "collect_bundle_atomic_warnings",
+    "collect_conformer_atomic_warnings",
+    "collect_pdep_atomic_warnings",
+    "collect_thermo_atomic_warnings",
     "corrections_include_spin_orbit",
 ]
 
@@ -226,3 +229,96 @@ def collect_bundle_atomic_warnings(
         statmech_field=statmech_field,
         energy_field=energy_field,
     )
+
+
+def collect_thermo_atomic_warnings(request) -> list[UploadWarning]:
+    """Adapter for ``POST /uploads/thermo`` (also a bundle's thermo records and the thermo job).
+
+    A thermo request carries the species identity and its own applied
+    corrections; it carries no levels, so nothing is said about them. The
+    spin-orbit judgement is made only on corrections this request lists. A
+    thermo that cites a record the request cannot see into (``existing_statmech_id``
+    or a source calculation by ``existing_calculation_id``) may have its spin-orbit
+    energy recorded there, so the absence is not judged.
+    """
+    corrections = list(request.applied_energy_corrections)
+    has_soc = corrections_include_spin_orbit(corrections)
+    cites_unseen_record = request.existing_statmech_id is not None or any(
+        sc.existing_calculation_id is not None for sc in request.source_calculations
+    )
+    element = single_atom_element(smiles=request.species_entry.smiles)
+    if element is None:
+        return []
+    return collect_atomic_electronic_warnings(
+        element=element,
+        charge=request.species_entry.charge,
+        multiplicity=request.species_entry.multiplicity,
+        electronic_state_kind=request.species_entry.electronic_state_kind,
+        term_symbol=request.species_entry.term_symbol,
+        electronic_levels=None,
+        statmech_computed=False,
+        energy_is_computed=(bool(corrections) or request.scientific_origin == ScientificOriginKind.computed)
+        and not cites_unseen_record,
+        has_soc_total=has_soc,
+        energy_field="applied_energy_corrections",
+    )
+
+
+def collect_conformer_atomic_warnings(request) -> list[UploadWarning]:
+    """Adapter for ``POST /uploads/conformers`` (and the conformer job).
+
+    The request carries the geometry, the statmech (its levels; its origin is the
+    request's) and the applied corrections, so all three judgements are made on
+    what it holds.
+    """
+    element = single_atom_element(xyz_texts=[request.geometry.xyz_text], smiles=request.species_entry.smiles)
+    if element is None:
+        return []
+    corrections = list(request.applied_energy_corrections)
+    statmech = request.statmech
+    return collect_atomic_electronic_warnings(
+        element=element,
+        charge=request.species_entry.charge,
+        multiplicity=request.species_entry.multiplicity,
+        electronic_state_kind=request.species_entry.electronic_state_kind,
+        term_symbol=request.species_entry.term_symbol,
+        electronic_levels=(list(statmech.electronic_levels) if statmech is not None else None),
+        statmech_computed=statmech is not None and request.scientific_origin == ScientificOriginKind.computed,
+        energy_is_computed=bool(corrections),
+        has_soc_total=corrections_include_spin_orbit(corrections),
+        statmech_field="statmech",
+        energy_field="applied_energy_corrections",
+    )
+
+
+def collect_pdep_atomic_warnings(request) -> list[UploadWarning]:
+    """Adapter for ``POST /uploads/networks/pdep`` (and the network job).
+
+    A network species with a statmech block is judged on its levels. The route has
+    no corrections field, so it cannot see whether spin-orbit energy was applied:
+    that warning is not emitted here.
+    """
+    warnings: list[UploadWarning] = []
+    for sp in request.species:
+        if sp.statmech is None:
+            continue
+        element = single_atom_element(
+            xyz_texts=[c.geometry.xyz_text for c in sp.conformers], smiles=sp.species_entry.smiles
+        )
+        if element is None:
+            continue
+        warnings.extend(
+            collect_atomic_electronic_warnings(
+                element=element,
+                charge=sp.species_entry.charge,
+                multiplicity=sp.species_entry.multiplicity,
+                electronic_state_kind=sp.species_entry.electronic_state_kind,
+                term_symbol=sp.species_entry.term_symbol,
+                electronic_levels=list(sp.statmech.electronic_levels),
+                statmech_computed=sp.statmech.scientific_origin == ScientificOriginKind.computed,
+                energy_is_computed=None,
+                has_soc_total=False,
+                statmech_field=f"species[{sp.key!r}].statmech",
+            )
+        )
+    return warnings

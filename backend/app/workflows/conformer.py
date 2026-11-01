@@ -365,6 +365,8 @@ def persist_conformer_upload(
         for aec in applied_corrections
     )
     note_anchor(session, "", SubmissionRecordType.conformer_observation, observation.id)
+    if statmech_row is not None:
+        note_anchor(session, "statmech", SubmissionRecordType.statmech, statmech_row.id)
     note_anchor(session, "calculation", SubmissionRecordType.calculation, calculation.id)
     note_anchor(session, "calculations[0]", SubmissionRecordType.calculation, calculation.id)
     for position, child in enumerate(additional_calcs):

@@ -22,6 +22,16 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Atomic electronic-state warnings on every route that accepts an atom (2026-11-01)
+
+An earlier note said the atomic-electronic warnings (`missing_atomic_electronic_levels`, `missing_atomic_spin_orbit_correction`, `atomic_electronic_degeneracy_contradicts_term`) came only from `/uploads/statmech`; they also come from the two bundle routes, and now from every other route that can carry a single atom (#836). No code, threshold or field is added or changed.
+
+- **`POST /uploads/thermo`** (and its job, and the thermo records of `POST /bundles/submit`): the spin-orbit warning, judged on the record's own `applied_energy_corrections`. A thermo that cites a record the request cannot see into (`existing_statmech_id`, or a source calculation by `existing_calculation_id`) is not judged for spin-orbit, because the energy may be recorded there. A thermo carries no levels, so none is said about them.
+- **`POST /uploads/conformers`** (and its job): levels, degeneracy and spin-orbit, judged on the request's statmech and corrections. The levels warning is stored on the statmech row, the spin-orbit warning on the conformer.
+- **`POST /uploads/networks/pdep`** (and its job): levels and degeneracy for a species with a statmech block, on `species['<key>'].statmech.electronic_levels`. The route has no corrections field, so it cannot see whether spin-orbit energy was applied and does not say.
+- The direct routes and the jobs return the same warnings, and each is stored on its own record.
+- Closes the known limit in the entry below.
+
 ## A warning's message is TCKDB's sentence for its code, not the depositor's words (2026-10-31)
 
 - **Client: `tckdb-client` 0.182.0, `tckdb-schemas` 0.145.0.** No migration, no schema change, no new environment variable. No stored row is rewritten.
