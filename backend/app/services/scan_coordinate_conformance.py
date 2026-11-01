@@ -1053,7 +1053,8 @@ def _is_even_grid(values: Sequence[float], *, periodic: bool, step_size: float |
 
     **The rule.** Take the **distinct** values (a 2-D scan repeats each label; a periodic coordinate is taken mod 360,
     so ``0`` and ``360`` are one label), write them as integers in units of their last decimal, and take the greatest
-    common divisor of the gaps between them (including the wrap-around gap for a periodic coordinate). The series is
+    common divisor of the gaps between them (for a periodic coordinate, measured from the start of the arc, the value
+    after the largest circular gap, so the gap that closes the circle is left out). The series is
     a grid when that step is at least :data:`_GRID_MIN_STEP_UNITS` units: 0/10/20/30/40 and 0/5/10/15/20/30/60/90
     are grids; 60/83/121 (step 1) and 60.3/74.8/90.2 (step 1 unit of 0.1) are not. The coordinate's declared
     ``step_size`` is additional evidence only: values that all sit on its lattice, with at most half the slots between

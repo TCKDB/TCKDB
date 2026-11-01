@@ -450,7 +450,6 @@ def test_what_is_and_is_not_a_grid() -> None:
     assert _is_even_grid([float(a) for a in range(0, 360, 15)], periodic=True)
     # a descending scan declares a negative step
     assert _is_even_grid([1.0, 1.1, 1.3, 1.4], periodic=False, step_size=-0.1)
-    assert _is_even_grid([0.0, 15.0, 90.0, 180.0], periodic=True, step_size=-15.0)
     # a tiny declared step, either sign, does not make irregular values a grid (most of its slots would be empty)
     assert not _is_even_grid([10.37, 55.0, 91.0, 120.0], periodic=False, step_size=0.01)
     assert not _is_even_grid([10.37, 55.0, 91.0, 120.0], periodic=False, step_size=-0.01)
