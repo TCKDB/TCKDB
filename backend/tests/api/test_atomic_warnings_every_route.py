@@ -415,22 +415,56 @@ def test_an_entropy_only_species_bundle_thermo_is_not_judged_either(client):
     assert SOC not in codes({"scientific_origin": "computed", "s298_j_mol_k": 165.2})
 
 
-@pytest.mark.parametrize(
-    "thermo,carries",
-    [
-        ({"h298_kj_mol": 1.0}, True),
-        ({"enthalpy_formation_0k_kj_mol": 1.0}, True),
-        ({"s298_j_mol_k": 1.0}, False),
-        ({"points": [{"temperature_k": 300, "cp_j_mol_k": 20.8}]}, False),
-        ({"points": [{"temperature_k": 300, "s_j_mol_k": 160.0}]}, False),
-        ({"points": [{"temperature_k": 300, "h_kj_mol": 6.2}]}, True),
-        ({"points": [{"temperature_k": 300, "g_kj_mol": -9.0}]}, True),
-    ],
-)
-def test_what_counts_as_a_thermo_carrying_energy(thermo, carries):
+_WILHOIT = {"cp0_j_mol_k": 20.8, "cp_inf_j_mol_k": 30.0, "b_k": 500.0, "a0": 0.0, "a1": 0.0, "a2": 0.0, "a3": 0.0}
+
+#: (payload, carries enthalpy). ``enthalpy_formation_0k_kj_mol`` is the one entry the schema's own
+#: 298 K declaration rule does not count (it has its own reference), so it is pinned separately.
+ENTHALPY_CASES = [
+    ({"h298_kj_mol": 1.0}, True),
+    ({"s298_j_mol_k": 1.0}, False),
+    ({"nasa": {"t_low": 200.0}}, True),
+    ({"nasa9_intervals": [{"t_min_k": 200.0}]}, True),
+    ({"nasa9_intervals": []}, False),
+    ({"wilhoit": {**_WILHOIT, "h0_kj_mol": -5.0}}, True),
+    ({"wilhoit": dict(_WILHOIT)}, False),
+    ({"points": [{"temperature_k": 300, "cp_j_mol_k": 20.8}]}, False),
+    ({"points": [{"temperature_k": 300, "s_j_mol_k": 160.0}]}, False),
+    ({"points": [{"temperature_k": 300, "h_kj_mol": 6.2}]}, True),
+    ({"points": [{"temperature_k": 300, "g_kj_mol": -9.0}]}, True),
+    ({"points": [{"temperature_k": 300, "cp_j_mol_k": 20.8}, {"temperature_k": 400, "h_kj_mol": 9.0}]}, True),
+]
+
+
+def _namespace(value):
     from types import SimpleNamespace
 
+    if isinstance(value, dict):
+        return SimpleNamespace(**{k: _namespace(v) for k, v in value.items()})
+    if isinstance(value, list):
+        return [_namespace(v) for v in value]
+    return value
+
+
+@pytest.mark.parametrize("thermo,carries", ENTHALPY_CASES)
+def test_what_counts_as_a_thermo_carrying_energy(thermo, carries):
     from app.services.atomic_electronic_warnings import thermo_carries_enthalpy
 
-    shaped = SimpleNamespace(**{k: ([SimpleNamespace(**pt) for pt in v] if k == "points" else v) for k, v in thermo.items()})
-    assert thermo_carries_enthalpy(shaped) is carries
+    assert thermo_carries_enthalpy(_namespace(thermo)) is carries
+
+
+def test_a_0k_formation_enthalpy_is_energy():
+    from app.services.atomic_electronic_warnings import thermo_carries_enthalpy
+
+    assert thermo_carries_enthalpy(_namespace({"enthalpy_formation_0k_kj_mol": 246.8})) is True
+
+
+@pytest.mark.parametrize("thermo,carries", ENTHALPY_CASES)
+def test_the_energy_definition_agrees_with_the_schemas_enthalpy_declaration_rule(thermo, carries):
+    """``enthalpy_reference_error`` asks for a declaration exactly when the record has enthalpy content.
+
+    The two lists are kept by hand; this pins them together so one cannot grow without the other.
+    """
+    from tckdb_schemas.enthalpy_reference import W_ENTHALPY_DECLARATION_ABSENT, enthalpy_reference_error
+
+    refusal = enthalpy_reference_error(thermo)
+    assert (refusal is not None and refusal[0] == W_ENTHALPY_DECLARATION_ABSENT) is carries
