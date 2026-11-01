@@ -126,16 +126,16 @@ def bond_scan(xyz_text: str, a: int, b: int, *, offset: float, decimals: int | N
     return _scan_result(points, coordinate, decimals=decimals, offset=offset)
 
 
-def _hooh_xyz(phi_deg: float) -> str:
+def _hooh_xyz(phi_deg: float, decimals: int = 6) -> str:
     phi = math.radians(phi_deg)
     s, c = math.sin(math.radians(100.0)), math.cos(math.radians(100.0))
     h1 = (0.97 * c, 0.97 * s, 0.0)
     h2 = (1.45 - 0.97 * c, 0.97 * s * math.cos(phi), 0.97 * s * math.sin(phi))
     rows = [
-        ["H", *(f"{x:.6f}" for x in h1)],
-        ["O", "0.000000", "0.000000", "0.000000"],
-        ["O", "1.450000", "0.000000", "0.000000"],
-        ["H", *(f"{x:.6f}" for x in h2)],
+        ["H", *(f"{x:.{decimals}f}" for x in h1)],
+        ["O", *(f"{0.0:.{decimals}f}" for _ in range(3))],
+        ["O", f"{1.45:.{decimals}f}", f"{0.0:.{decimals}f}", f"{0.0:.{decimals}f}"],
+        ["H", *(f"{x:.{decimals}f}" for x in h2)],
     ]
     return _xyz(["4", "HOOH"], rows)
 
@@ -167,7 +167,7 @@ def dihedral_scan(*, offset: float, decimals: int | None) -> dict:
     return _scan_result(points, coordinate, decimals=decimals, offset=offset)
 
 
-def dihedral_grid_scan(*, error_deg: float, labels=(60.0, 75.0, 90.0, 105.0), step: float = 15.0) -> dict:
+def dihedral_grid_scan(*, error_deg: float, labels=(60.0, 75.0, 90.0, 105.0), step: float | None = 15.0) -> dict:
     """A HOOH scan labelled ``labels`` whose geometries are ``error_deg`` away from the labels."""
     points = []
     for label in labels:
@@ -180,29 +180,37 @@ def dihedral_grid_scan(*, error_deg: float, labels=(60.0, 75.0, 90.0, 105.0), st
         "atom2_index": 2,
         "atom3_index": 3,
         "atom4_index": 4,
-        "step_size": step,
         "start_value": labels[0],
         "end_value": labels[-1],
         "value_unit": "degree",
     }
+    if step is not None:
+        coordinate["step_size"] = step
     return _scan_result(points, coordinate, decimals=None, offset=0.0, stored_values=list(labels))
 
 
-def bond_grid_scan(*, error: float, labels=(1.0, 1.1, 1.2)) -> dict:
-    """An H2 scan labelled ``labels`` angstrom whose geometries are ``error`` angstrom longer than the labels."""
+def bond_grid_scan(*, error: float, labels=(1.0, 1.1, 1.2), step: float | None = 0.1) -> dict:
+    """An H2 scan labelled ``labels`` angstrom whose geometries are ``error`` angstrom longer than the labels.
+
+    The second atom is off the axis, so the coordinates are not round numbers (a round geometry would be read as a
+    coarse one by the float-based precision inference, which is what a real deposit looks like only when it is coarse).
+    """
     points = []
     for label in labels:
-        xyz = f"2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 {label + error:.6f}"
-        points.append((xyz, label + error))
+        x, y = 0.331742, 0.220917
+        z = math.sqrt((label + error) ** 2 - x**2 - y**2)
+        xyz = f"2\nH2\nH 0.0 0.0 0.0\nH {x:.6f} {y:.6f} {z:.6f}"
+        points.append((xyz, math.sqrt(x**2 + y**2 + float(f"{z:.6f}") ** 2)))
     coordinate = {
         "coordinate_kind": "bond",
         "atom1_index": 1,
         "atom2_index": 2,
-        "step_size": 0.1,
         "start_value": labels[0],
         "end_value": labels[-1],
         "value_unit": "angstrom",
     }
+    if step is not None:
+        coordinate["step_size"] = step
     return _scan_result(points, coordinate, decimals=None, offset=0.0, stored_values=list(labels))
 
 
@@ -375,6 +383,27 @@ def test_a_gapped_dihedral_grid_whose_geometries_are_off_is_a_disagreement(clien
     assert context["tolerance"] < 0.01, f"{name}: widened to {context['tolerance']}"
 
 
+@pytest.mark.parametrize(
+    ("labels", "step"),
+    [
+        ((0.0, 10.0, 20.0, 30.0, 40.0), 15.0),  # a declared step that does not fit
+        (tuple(float(a) for a in range(0, 360, 15)), 5.0),
+        (tuple(float(a) for a in range(0, 361, 10)), 360.0 / 37.0),
+        ((60.0, 75.0, 105.0, 120.0), None),  # no declared step at all
+        (tuple(float(a) for a in range(0, 361, 15)), None),
+        ((0.0, 5.0, 10.0, 15.0, 20.0, 30.0, 60.0, 90.0, 120.0, 150.0, 180.0), None),  # sparse adaptive
+        ((0.0, 15.0, 90.0, 180.0), 15.0),
+        ((0.0, 10.0, 25.0, 40.0), None),  # the common step (5) is not the smallest gap (10)
+    ],
+    ids=["step_15_on_tens", "step_5_on_15_circle", "step_360_37", "no_step_gapped", "no_step_0_to_360", "sparse", "0_15_90_180", "gcd_not_smallest_gap"],
+)
+def test_the_declared_step_never_hides_a_grid(client, labels, step) -> None:
+    scan = dihedral_grid_scan(error_deg=0.3, labels=labels, step=step)
+    (warning,) = _warnings(client.post(_CONFORMERS, json=_hooh_conformer(scan)))
+    assert warning["context"]["tolerance"] < 0.01
+    assert warning["context"]["max_residual"] == pytest.approx(0.3, abs=1e-3)
+
+
 def test_a_gapped_bond_grid_whose_geometries_are_off_is_a_disagreement(client) -> None:
     payload = h2_scan_conformer(0.0)
     payload["geometry"] = {"xyz_text": "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 1.1"}
@@ -388,7 +417,9 @@ def test_what_is_and_is_not_a_grid() -> None:
 
     for labels in _GAPPED_GRIDS.values():
         assert _is_even_grid(list(labels), periodic=True), labels
-    assert _is_even_grid([1.0, 1.1, 1.3, 1.4], periodic=False)
+    # a one-decimal step is one unit of the last decimal: only a declared step_size shows it is a grid
+    assert _is_even_grid([1.0, 1.1, 1.3, 1.4], periodic=False, step_size=0.1)
+    assert not _is_even_grid([1.0, 1.1, 1.3, 1.4], periodic=False)
     # a 2-D scan repeats each label; a whole row is missing
     assert _is_even_grid([60.0] * 3 + [75.0] * 3 + [105.0] * 3, periodic=True)
     # 0 and 360 are one label
@@ -401,6 +432,36 @@ def test_what_is_and_is_not_a_grid() -> None:
     assert not _is_even_grid([10.0, 10.01, 55.0, 91.0], periodic=False)
     # fewer than three values is never a grid
     assert not _is_even_grid([60.0, 75.0], periodic=True)
+    # the common step, not the smallest gap: 0/10/20/30/40 with a declared step that does not fit is still a grid
+    assert _is_even_grid([0.0, 10.0, 20.0, 30.0, 40.0], periodic=True, step_size=15.0)
+    assert _is_even_grid([0.0, 5.0, 10.0, 15.0, 20.0, 30.0, 60.0, 90.0, 120.0, 150.0, 180.0], periodic=True)
+    assert _is_even_grid([0.0, 15.0, 90.0, 180.0], periodic=True, step_size=15.0)
+    assert _is_even_grid([0.0, 10.0, 25.0, 40.0], periodic=True)
+    # 0 and 360 are one label, also when they differ by float noise
+    assert _is_even_grid([0.0, 7.0, 360.0], periodic=True)
+    assert _is_even_grid([359.9999999999, 7.0, 0.0], periodic=True)
+    assert not _is_even_grid([0.0, 7.0, 360.0], periodic=False)
+
+
+@pytest.mark.parametrize("decimals", [2, 3])
+def test_an_honest_scan_on_a_coarsely_written_geometry_is_silent(client, decimals) -> None:
+    """The values were measured on the exact geometry and the geometry was then written to few decimals: the
+    geometry's own precision (read from its numbers) bounds how well the two can agree, so this is not a disagreement."""
+    points = []
+    for phi in (60.37, 83.91, 121.53):  # not a grid
+        _, exact = _atoms(_hooh_xyz(phi, 9))
+        measured = dihedral_deg(*(_coords(exact, i) for i in (1, 2, 3, 4)))
+        points.append((_hooh_xyz(phi, decimals), measured))
+    coordinate = {
+        "coordinate_kind": "dihedral",
+        "atom1_index": 1,
+        "atom2_index": 2,
+        "atom3_index": 3,
+        "atom4_index": 4,
+        "value_unit": "degree",
+    }
+    scan = _scan_result(points, coordinate, decimals=None, offset=0.0)
+    assert _warnings(client.post(_CONFORMERS, json=_hooh_conformer(scan))) == []
 
 
 def test_a_dihedral_grid_that_agrees_is_silent(client) -> None:
