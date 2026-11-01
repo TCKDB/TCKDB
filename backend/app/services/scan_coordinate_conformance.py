@@ -101,6 +101,7 @@ whole series, the *shape* of the disagreement is diagnostic, and
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -117,7 +118,7 @@ from app.db.models.common import (
     ScanCoordinateKind,
     SubmissionRecordType,
 )
-from app.db.models.geometry import GeometryAtom
+from app.db.models.geometry import Geometry, GeometryAtom
 from app.schemas.upload_warning import UploadWarning
 from app.scientific_checks import (
     CheckTier,
@@ -992,29 +993,92 @@ class CoordinateSeriesConformance:
     n_not_checkable: int
 
 
-def _is_even_grid(values: Sequence[float], *, periodic: bool) -> bool:
-    """Whether the distinct stored coordinate values are an evenly spaced grid.
+#: A value is on the grid when it is this close (in the coordinate's unit) to ``base + k * step``.
+_GRID_TOLERANCE = 1e-6
 
-    A grid is a label the producer chose (60, 75, 90 ...), not a measurement, so its decimals say nothing about
-    rounding: ``60`` is not evidence the producer rounded to whole degrees. Values repeated across a 2-D scan are
-    the same label, so the distinct values are compared. Needs three stored values; one or two distinct values
-    (a coordinate held fixed) count as a grid. For a periodic coordinate the largest gap is taken to be the cut, so
-    a grid that crosses the branch cut is still a grid.
+
+def _is_even_grid(values: Sequence[float], *, periodic: bool, step_size: float | None = None) -> bool:
+    """Whether the stored coordinate values are labels on an evenly spaced grid, gaps allowed.
+
+    A grid is a label the producer chose (60, 75, 105, 120 ...), not a measurement, so its decimals say nothing about
+    rounding: ``60`` is not evidence the producer rounded to whole degrees. The test counts **distinct** values (a
+    2-D scan repeats each label), and every distinct value must equal ``base + k * step`` for an integer ``k``, to
+    within :data:`_GRID_TOLERANCE`. ``step`` is the coordinate's declared ``step_size`` when it has one, otherwise
+    the smallest gap between distinct values. A periodic coordinate is compared mod 360, from the start of the arc
+    (the value after the largest gap), so ``0`` and ``360`` are one label and an arc across the branch cut is still
+    an arc.
+
+    **Guard against a degenerate step.** With no declared step, the smallest gap of a few irregular values is tiny
+    and every value would sit on its lattice by luck. So at most half of the slots between the smallest and the
+    largest value (or around the circle, for a full periodic grid) may be missing. The price is that irregular
+    measurements are mistaken for a grid a little more often; that fails loud (the tight tolerance warns), which is
+    the safe direction.
+
+    Fewer than three stored values is never a grid here. That series is still judged tightly, because
+    :func:`infer_precision_decimals` falls back to 6 decimals for fewer than three values; both facts are relied on.
+    One or two distinct labels repeated over three or more values (a coordinate held fixed) count as a grid.
     """
     if len(values) < 3:
         return False
     if periodic:
         distinct = sorted({round(v % 360.0, 9) for v in values})
-        if len(distinct) <= 2:
-            return True
-        gaps = [b - a for a, b in pairwise(distinct)] + [distinct[0] + 360.0 - distinct[-1]]
-        gaps.pop(max(range(len(gaps)), key=gaps.__getitem__))
     else:
         distinct = sorted({round(v, 9) for v in values})
-        if len(distinct) <= 2:
-            return True
-        gaps = [b - a for a, b in pairwise(distinct)]
-    return all(abs(gap - gaps[0]) <= 1e-6 for gap in gaps)
+    if len(distinct) <= 2:
+        return True
+
+    if periodic:
+        gaps = [b - a for a, b in pairwise(distinct)] + [distinct[0] + 360.0 - distinct[-1]]
+        cut = max(range(len(gaps)), key=gaps.__getitem__)
+        start = distinct[(cut + 1) % len(distinct)]
+        offsets = sorted((v - start) % 360.0 for v in distinct)
+        smallest = min(g for i, g in enumerate(gaps) if i != cut)
+        full_circle = 360.0
+    else:
+        offsets = [v - distinct[0] for v in distinct]
+        smallest = min(b - a for a, b in pairwise(distinct))
+        full_circle = None
+
+    step = abs(step_size) if step_size is not None and step_size > 0 else smallest
+    if step <= 0:
+        return False
+    for offset in offsets:
+        k = round(offset / step)
+        if abs(offset - k * step) > _GRID_TOLERANCE:
+            return False
+    slots = round(offsets[-1] / step) + 1
+    if full_circle is not None:
+        around = full_circle / step
+        if abs(around - round(around)) * step <= _GRID_TOLERANCE:
+            slots = min(slots, round(around))
+    return 2 * len(distinct) >= slots
+
+
+_WRITTEN_DECIMALS = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)")
+
+
+def written_decimals(xyz_text: str | None) -> int | None:
+    """The most decimal places any Cartesian component is written with in ``xyz_text``, as written.
+
+    ``1.020000`` is six places although the float ``1.02`` needs two: the float cannot say how precisely the
+    producer wrote the coordinate, the text can. ``None`` when the text is absent or has a component this cannot
+    read (an exponent, a missing column), so the caller falls back to inferring from the floats.
+    """
+    if not xyz_text:
+        return None
+    lines = xyz_text.strip().splitlines()[2:]
+    decimals = 0
+    seen = 0
+    for line in lines:
+        columns = line.split()
+        if len(columns) < 4:
+            return None
+        for token in columns[1:4]:
+            if not _WRITTEN_DECIMALS.fullmatch(token):
+                return None
+            decimals = max(decimals, len(token.split(".", 1)[1]) if "." in token else 0)
+            seen += 1
+    return decimals if seen else None
 
 
 def build_scan_coordinate_conformance_report(
@@ -1050,7 +1114,18 @@ def build_scan_coordinate_conformance_report(
             )
             sample_components.extend([row.x, row.y, row.z])
 
-    precision_decimals = infer_precision_decimals(sample_components)
+    # Precision of the geometries: the digits as written in each xyz text when every geometry has one, otherwise
+    # inferred from the parsed floats (which cannot tell 1.020000 from 1.02).
+    written: list[int | None] = []
+    if geometry_ids:
+        written = [
+            written_decimals(text)
+            for text in session.scalars(select(Geometry.xyz_text).where(Geometry.id.in_(geometry_ids))).all()
+        ]
+    if written and all(d is not None for d in written):
+        precision_decimals = max(d for d in written if d is not None)
+    else:
+        precision_decimals = infer_precision_decimals(sample_components)
     stored_values_by_coordinate: dict[int, list[float]] = {}
     for point in points:  # ``points`` is in point_index order
         for value in point.coordinate_values:
@@ -1075,7 +1150,11 @@ def build_scan_coordinate_conformance_report(
         stored_values = stored_values_by_coordinate.get(coordinate.coordinate_index, [])
         stored_precision = (
             None
-            if _is_even_grid(stored_values, periodic=coordinate.coordinate_kind is not ScanCoordinateKind.bond)
+            if _is_even_grid(
+                stored_values,
+                periodic=coordinate.coordinate_kind is not ScanCoordinateKind.bond,
+                step_size=coordinate.step_size,
+            )
             else infer_precision_decimals(stored_values)
         )
 
@@ -1291,8 +1370,12 @@ CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY = ScientificCheck(
                 "pattern (`classify_series`), the number of points that "
                 "disagree, the largest residual and the tolerance. The "
                 "tolerance is widened to half a step of the decimals the "
-                "stored values were written at, so rounded values are not "
-                "a disagreement. The warning targets output written in the "
+                "stored values were written at, so rounded measurements are "
+                "not a disagreement, unless the stored values are an evenly "
+                "spaced grid (gaps allowed): grid values are labels, not "
+                "rounded measurements, and are judged at the tight "
+                "tolerance. The geometry's own precision is read from the "
+                "digits as written in its xyz text. The warning targets output written in the "
                 "superseded convention."
             ),
         ),

@@ -167,34 +167,31 @@ def dihedral_scan(*, offset: float, decimals: int | None) -> dict:
     return _scan_result(points, coordinate, decimals=decimals, offset=offset)
 
 
-def dihedral_grid_scan(*, error_deg: float) -> dict:
-    """A HOOH scan labelled 60/75/90/105 whose geometries are ``error_deg`` away from the labels."""
-    points, labels = [], []
-    for label in (60.0, 75.0, 90.0, 105.0):
+def dihedral_grid_scan(*, error_deg: float, labels=(60.0, 75.0, 90.0, 105.0), step: float = 15.0) -> dict:
+    """A HOOH scan labelled ``labels`` whose geometries are ``error_deg`` away from the labels."""
+    points = []
+    for label in labels:
         xyz = _hooh_xyz(label + error_deg)
         _, atoms = _atoms(xyz)
-        measured = dihedral_deg(*(_coords(atoms, i) for i in (1, 2, 3, 4)))
-        # whichever sign convention the geometry has, the label is the grid point the measurement is near
-        labels.append(math.copysign(label, measured))
-        points.append((xyz, measured))
+        points.append((xyz, dihedral_deg(*(_coords(atoms, i) for i in (1, 2, 3, 4)))))
     coordinate = {
         "coordinate_kind": "dihedral",
         "atom1_index": 1,
         "atom2_index": 2,
         "atom3_index": 3,
         "atom4_index": 4,
-        "step_size": 15.0,
+        "step_size": step,
         "start_value": labels[0],
         "end_value": labels[-1],
         "value_unit": "degree",
     }
-    return _scan_result(points, coordinate, decimals=None, offset=0.0, stored_values=labels)
+    return _scan_result(points, coordinate, decimals=None, offset=0.0, stored_values=list(labels))
 
 
-def bond_grid_scan(*, error: float) -> dict:
-    """An H2 scan labelled 1.0/1.1/1.2 A whose geometries are ``error`` angstrom longer than the labels."""
+def bond_grid_scan(*, error: float, labels=(1.0, 1.1, 1.2)) -> dict:
+    """An H2 scan labelled ``labels`` angstrom whose geometries are ``error`` angstrom longer than the labels."""
     points = []
-    for label in (1.0, 1.1, 1.2):
+    for label in labels:
         xyz = f"2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 {label + error:.6f}"
         points.append((xyz, label + error))
     coordinate = {
@@ -202,11 +199,11 @@ def bond_grid_scan(*, error: float) -> dict:
         "atom1_index": 1,
         "atom2_index": 2,
         "step_size": 0.1,
-        "start_value": 1.0,
-        "end_value": 1.2,
+        "start_value": labels[0],
+        "end_value": labels[-1],
         "value_unit": "angstrom",
     }
-    return _scan_result(points, coordinate, decimals=None, offset=0.0, stored_values=[1.0, 1.1, 1.2])
+    return _scan_result(points, coordinate, decimals=None, offset=0.0, stored_values=list(labels))
 
 
 def _hooh_conformer(scan: dict) -> dict:
@@ -353,6 +350,59 @@ def test_a_dihedral_grid_whose_geometries_are_off_is_a_disagreement(client) -> N
     assert context["tolerance"] < 0.01, "judged at the tight tolerance, not widened to half a degree"
 
 
+_FULL_CIRCLE = [float(a) for a in range(0, 360, 15) if a not in (90, 255)]
+_ARC_ACROSS_THE_CUT = (150.0, 165.0, -165.0, -150.0)
+_GAPPED_GRIDS = {
+    "a_point_missing": (60.0, 75.0, 105.0, 120.0),
+    "two_points_missing": (60.0, 75.0, 105.0),
+    "full_circle_missing_two": tuple(_FULL_CIRCLE),
+    "arc_across_the_cut_with_a_gap": _ARC_ACROSS_THE_CUT,
+    "zero_to_360_inclusive": tuple(float(a) for a in range(0, 361, 15)),
+    "zero_is_360": (0.0, 120.0, 240.0, 360.0),
+    "minus_180_to_180_inclusive": tuple(float(a) for a in range(-180, 181, 15)),
+}
+
+
+@pytest.mark.parametrize("name", list(_GAPPED_GRIDS))
+def test_a_gapped_dihedral_grid_whose_geometries_are_off_is_a_disagreement(client, name) -> None:
+    """A missing point does not turn the labels into a rounded measurement: 0.3 degrees off is still seen."""
+    labels = _GAPPED_GRIDS[name]
+    step = 120.0 if name == "zero_is_360" else 15.0
+    scan = dihedral_grid_scan(error_deg=0.3, labels=labels, step=step)
+    (warning,) = _warnings(client.post(_CONFORMERS, json=_hooh_conformer(scan)))
+    context = warning["context"]
+    assert context["max_residual"] == pytest.approx(0.3, abs=1e-3)
+    assert context["tolerance"] < 0.01, f"{name}: widened to {context['tolerance']}"
+
+
+def test_a_gapped_bond_grid_whose_geometries_are_off_is_a_disagreement(client) -> None:
+    payload = h2_scan_conformer(0.0)
+    payload["geometry"] = {"xyz_text": "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 1.1"}
+    payload["calculation"]["scan_result"] = bond_grid_scan(error=0.02, labels=(1.0, 1.1, 1.3, 1.4))
+    (warning,) = _warnings(client.post(_CONFORMERS, json=payload))
+    assert warning["context"]["tolerance"] < 0.005
+
+
+def test_what_is_and_is_not_a_grid() -> None:
+    from app.services.scan_coordinate_conformance import _is_even_grid
+
+    for labels in _GAPPED_GRIDS.values():
+        assert _is_even_grid(list(labels), periodic=True), labels
+    assert _is_even_grid([1.0, 1.1, 1.3, 1.4], periodic=False)
+    # a 2-D scan repeats each label; a whole row is missing
+    assert _is_even_grid([60.0] * 3 + [75.0] * 3 + [105.0] * 3, periodic=True)
+    # 0 and 360 are one label
+    assert _is_even_grid([0.0, 120.0, 360.0, 240.0], periodic=True)
+    # rounded measurements are not
+    assert not _is_even_grid([round(k * 360.0 / 7.0, 2) for k in range(7)], periodic=True)
+    assert not _is_even_grid([60.3, 74.8, 90.2], periodic=True)
+    assert not _is_even_grid([60.0, 83.0, 121.0], periodic=True)
+    # a tiny smallest gap does not make everything a grid (more than half the slots would be missing)
+    assert not _is_even_grid([10.0, 10.01, 55.0, 91.0], periodic=False)
+    # fewer than three values is never a grid
+    assert not _is_even_grid([60.0, 75.0], periodic=True)
+
+
 def test_a_dihedral_grid_that_agrees_is_silent(client) -> None:
     assert _warnings(client.post(_CONFORMERS, json=_hooh_conformer(dihedral_grid_scan(error_deg=0.0)))) == []
 
@@ -360,10 +410,10 @@ def test_a_dihedral_grid_that_agrees_is_silent(client) -> None:
 def test_a_bond_grid_whose_geometries_are_off_is_a_disagreement(client) -> None:
     payload = h2_scan_conformer(0.0)
     payload["geometry"] = {"xyz_text": "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 1.1"}
-    payload["calculation"]["scan_result"] = bond_grid_scan(error=0.0213)
+    payload["calculation"]["scan_result"] = bond_grid_scan(error=0.02)
     (warning,) = _warnings(client.post(_CONFORMERS, json=payload))
     context = warning["context"]
-    assert context["max_residual"] == pytest.approx(0.0213, abs=1e-5)
+    assert context["max_residual"] == pytest.approx(0.02, abs=1e-5)
     assert context["tolerance"] < 0.005, "judged at the tight tolerance, not widened to half a tenth of an angstrom"
 
 

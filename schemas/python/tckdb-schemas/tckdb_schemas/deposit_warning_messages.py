@@ -860,7 +860,7 @@ _SCAN_PATTERN_WORDS = {
     "single_outlier": "one point disagrees and the others agree, as if one geometry were attached to the wrong point",
     "small_constant_offset": (
         "every judged point is off by the same small amount (under 1 degree, or 0.1 A for a bond); values "
-        "measured from a scan start that lies close to zero look like this too, so no cause is named"
+        "measured from a scan start that lies close to zero or a full turn look like this too, so no cause is named"
     ),
     "no_pattern_detected": "the points disagree without any of the usual shapes",
     "insufficient_data": "too few points could be judged to name a shape",
