@@ -395,16 +395,7 @@ def infer_precision_decimals(
     if len(values) < _MIN_SAMPLE_SIZE_TO_TRUST:
         return fallback
 
-    needed = 0
-    for value in values:
-        for n in range(0, max_decimals + 1):
-            if abs(round(value, n) - value) < 1e-9:
-                needed = max(needed, n)
-                break
-        else:
-            needed = max(needed, max_decimals)
-
-    return needed
+    return _decimals_needed(values, max_decimals=max_decimals)
 
 
 # ---------------------------------------------------------------------------
@@ -1015,23 +1006,27 @@ def _decimals_needed(values: Sequence[float], *, max_decimals: int = 12) -> int:
 
 def _gcd_step_units(distinct: Sequence[float], *, periodic: bool) -> int:
     """The greatest common divisor of the gaps between the distinct values, as an integer number of units of their
-    last decimal. A periodic coordinate includes the wrap-around gap."""
+    last decimal. A periodic coordinate is judged from the start of its arc (the value after the largest circular
+    gap), like a non-periodic one, so a partial arc 0/7/14/21/28 has step 7 and not the divisor it shares with 360."""
     scale = 10 ** _decimals_needed(distinct)
     ints = sorted(round(v * scale) for v in distinct)
-    gaps = [b - a for a, b in pairwise(ints)]
     if periodic:
-        gaps.append(ints[0] + 360 * scale - ints[-1])
+        turn = 360 * scale
+        gaps = [b - a for a, b in pairwise(ints)] + [ints[0] + turn - ints[-1]]
+        start = ints[(max(range(len(gaps)), key=gaps.__getitem__) + 1) % len(ints)]
+        ints = sorted((x - start) % turn for x in ints)
     step = 0
-    for gap in gaps:
-        step = math.gcd(step, gap)
+    for a, b in pairwise(ints):
+        step = math.gcd(step, b - a)
     return step
 
 
 def _fits_declared_step(distinct: Sequence[float], *, periodic: bool, step_size: float | None) -> bool:
     """Whether the distinct values all sit on the coordinate's declared ``step_size`` lattice, with at most half of
     the slots between the smallest and the largest missing. Evidence only: it can add a grid, never remove one."""
-    if step_size is None or step_size <= 0:
+    if step_size is None or step_size == 0:
         return False
+    step_size = abs(step_size)  # a descending scan declares a negative step
     if periodic:
         gaps = [b - a for a, b in pairwise(distinct)] + [distinct[0] + 360.0 - distinct[-1]]
         cut = max(range(len(gaps)), key=gaps.__getitem__)
@@ -1369,7 +1364,9 @@ CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY = ScientificCheck(
                 "not a disagreement, unless the stored values are an evenly "
                 "spaced grid (gaps allowed): grid values are labels, not "
                 "rounded measurements, and are judged at the tight "
-                "tolerance. The warning targets output written in the "
+                "tolerance. Declare step_size for a grid whose step is finer "
+                "than 5 units of its last decimal; otherwise it is judged as "
+                "rounded values. The warning targets output written in the "
                 "superseded convention."
             ),
         ),

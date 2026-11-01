@@ -428,7 +428,7 @@ def test_what_is_and_is_not_a_grid() -> None:
     assert not _is_even_grid([round(k * 360.0 / 7.0, 2) for k in range(7)], periodic=True)
     assert not _is_even_grid([60.3, 74.8, 90.2], periodic=True)
     assert not _is_even_grid([60.0, 83.0, 121.0], periodic=True)
-    # a tiny smallest gap does not make everything a grid (more than half the slots would be missing)
+    # a common step of 0.01 is one unit of the last decimal, below the 5-unit rule: not a grid
     assert not _is_even_grid([10.0, 10.01, 55.0, 91.0], periodic=False)
     # fewer than three values is never a grid
     assert not _is_even_grid([60.0, 75.0], periodic=True)
@@ -441,6 +441,19 @@ def test_what_is_and_is_not_a_grid() -> None:
     assert _is_even_grid([0.0, 7.0, 360.0], periodic=True)
     assert _is_even_grid([359.9999999999, 7.0, 0.0], periodic=True)
     assert not _is_even_grid([0.0, 7.0, 360.0], periodic=False)
+    # 0 and 360 are one label: with them merged this is a fixed coordinate (two labels); without, a step of 3
+    assert _is_even_grid([0.0, 3.0, 360.0], periodic=True)
+    assert not _is_even_grid([0.0, 3.0, 360.0], periodic=False)
+    # a partial arc is judged from its own start, not by what its step shares with 360
+    assert _is_even_grid([0.0, 7.0, 14.0, 21.0, 28.0], periodic=True)
+    assert _is_even_grid([11.0, 22.0, 33.0, 44.0], periodic=True)
+    assert _is_even_grid([float(a) for a in range(0, 360, 15)], periodic=True)
+    # a descending scan declares a negative step
+    assert _is_even_grid([1.0, 1.1, 1.3, 1.4], periodic=False, step_size=-0.1)
+    assert _is_even_grid([0.0, 15.0, 90.0, 180.0], periodic=True, step_size=-15.0)
+    # a tiny declared step, either sign, does not make irregular values a grid (most of its slots would be empty)
+    assert not _is_even_grid([10.37, 55.0, 91.0, 120.0], periodic=False, step_size=0.01)
+    assert not _is_even_grid([10.37, 55.0, 91.0, 120.0], periodic=False, step_size=-0.01)
 
 
 @pytest.mark.parametrize("decimals", [2, 3])
@@ -462,6 +475,15 @@ def test_an_honest_scan_on_a_coarsely_written_geometry_is_silent(client, decimal
     }
     scan = _scan_result(points, coordinate, decimals=None, offset=0.0)
     assert _warnings(client.post(_CONFORMERS, json=_hooh_conformer(scan))) == []
+
+    from app.services.scan_coordinate_conformance import PointStatus, build_scan_coordinate_conformance_report
+
+    session = client._db_session
+    (calc,) = session.scalars(select(Calculation).where(Calculation.type == CalculationType.scan)).all()
+    (series,) = build_scan_coordinate_conformance_report(session, calc.id)
+    # 2 dp is past the ceiling (the check declines to judge it); 3 dp is judged, and agrees
+    expected = PointStatus.not_checkable if decimals == 2 else PointStatus.conforms
+    assert {p.status for p in series.points} == {expected}
 
 
 def test_a_dihedral_grid_that_agrees_is_silent(client) -> None:
