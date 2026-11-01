@@ -466,5 +466,9 @@ def test_the_energy_definition_agrees_with_the_schemas_enthalpy_declaration_rule
     """
     from tckdb_schemas.enthalpy_reference import W_ENTHALPY_DECLARATION_ABSENT, enthalpy_reference_error
 
+    from app.services.atomic_electronic_warnings import thermo_carries_enthalpy
+
     refusal = enthalpy_reference_error(thermo)
-    assert (refusal is not None and refusal[0] == W_ENTHALPY_DECLARATION_ABSENT) is carries
+    schema_says = refusal is not None and refusal[0] == W_ENTHALPY_DECLARATION_ABSENT
+    assert schema_says is carries
+    assert thermo_carries_enthalpy(_namespace(thermo)) is schema_says
