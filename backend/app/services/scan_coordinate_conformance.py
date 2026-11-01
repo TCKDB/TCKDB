@@ -25,14 +25,16 @@ whose own geometry proves the conversion, not every one. Output written in
 that convention and deposited now (the real payloads under
 ``tests/fixtures/arc_runs`` are kept in it, and 34 of their 36 series are
 reported as ``consistent_with_legacy_relative_axis``, one as ``small_constant_offset`` because its start value is
-0.023 degrees from a full turn, and one has no geometry) is still accepted and,
+0.023 degrees short of a full turn (a wrap coincidence), and one has no geometry) is still accepted and,
 where it has geometry, earns the warning. That is the check doing its job, not a defect to quiet.
 
 **Rounded values are not disagreement.** The tolerance is widened to half a
 step of the decimals the stored values were written at (see
-``stored_precision_decimals``), and a constant offset no larger than the
-tolerance ceiling is classified ``small_constant_offset``, never as a relative
-sweep: a relative sweep is off by the scan's start value, which is not that small.
+``stored_precision_decimals``) unless the stored values are an evenly spaced
+grid (a grid is a label, not a rounded measurement), and a constant offset no
+larger than the tolerance ceiling is classified ``small_constant_offset``: it
+names no cause, because a relative sweep whose start lies within the ceiling
+of zero (mod 360 for an angle) looks the same.
 
 Recomputable coordinate kinds
 ------------------------------
@@ -102,6 +104,7 @@ import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
+from itertools import pairwise
 
 import numpy as np
 from sqlalchemy import select
@@ -648,10 +651,9 @@ class SeriesClassification(str, Enum):
     #: reads ``start_value`` to get there.
     consistent_with_legacy_relative_axis = "consistent_with_legacy_relative_axis"
     #: Every checkable point is off by the same constant, no larger than the
-    #: module's tolerance ceiling (1 degree, 0.1 Angstrom). The relative-sweep
-    #: reading needs an offset of a scan's start value, which is not this
-    #: small; below the ceiling the constant cannot be told from rounding or
-    #: a small systematic difference, and no cause is named.
+    #: module's tolerance ceiling (1 degree, 0.1 Angstrom). A relative sweep
+    #: whose start lies within the ceiling of zero (mod 360 for an angle) lands
+    #: here, as does any other small systematic difference; no cause is named.
     small_constant_offset = "small_constant_offset"
     #: Residual grows roughly linearly with point index: a direction or
     #: step-size disagreement between the stored axis and the point order.
@@ -856,9 +858,8 @@ def classify_series(
                     implied_constant=constant,
                     detail=(
                         f"every checkable point's residual is the same small constant ({constant:.6g}, spread "
-                        f"{spread:.3g}), no larger than the {ceiling:g} ceiling. A relative sweep is off by the "
-                        "scan's start value, which is not this small; a constant this size is as likely to be "
-                        "rounding or a small systematic difference in how the coordinate was measured, and "
+                        f"{spread:.3g}), no larger than the {ceiling:g} ceiling. Values measured from a scan "
+                        "start that lies within the ceiling of zero (or of a full turn) look like this too, so "
                         "this check does not name a cause."
                     ),
                 )
@@ -991,6 +992,31 @@ class CoordinateSeriesConformance:
     n_not_checkable: int
 
 
+def _is_even_grid(values: Sequence[float], *, periodic: bool) -> bool:
+    """Whether the distinct stored coordinate values are an evenly spaced grid.
+
+    A grid is a label the producer chose (60, 75, 90 ...), not a measurement, so its decimals say nothing about
+    rounding: ``60`` is not evidence the producer rounded to whole degrees. Values repeated across a 2-D scan are
+    the same label, so the distinct values are compared. Needs three stored values; one or two distinct values
+    (a coordinate held fixed) count as a grid. For a periodic coordinate the largest gap is taken to be the cut, so
+    a grid that crosses the branch cut is still a grid.
+    """
+    if len(values) < 3:
+        return False
+    if periodic:
+        distinct = sorted({round(v % 360.0, 9) for v in values})
+        if len(distinct) <= 2:
+            return True
+        gaps = [b - a for a, b in pairwise(distinct)] + [distinct[0] + 360.0 - distinct[-1]]
+        gaps.pop(max(range(len(gaps)), key=gaps.__getitem__))
+    else:
+        distinct = sorted({round(v, 9) for v in values})
+        if len(distinct) <= 2:
+            return True
+        gaps = [b - a for a, b in pairwise(distinct)]
+    return all(abs(gap - gaps[0]) <= 1e-6 for gap in gaps)
+
+
 def build_scan_coordinate_conformance_report(
     session: Session, calculation_id: int
 ) -> tuple[CoordinateSeriesConformance, ...]:
@@ -1026,7 +1052,7 @@ def build_scan_coordinate_conformance_report(
 
     precision_decimals = infer_precision_decimals(sample_components)
     stored_values_by_coordinate: dict[int, list[float]] = {}
-    for point in points:
+    for point in points:  # ``points`` is in point_index order
         for value in point.coordinate_values:
             stored_values_by_coordinate.setdefault(value.coordinate_index, []).append(value.coordinate_value)
 
@@ -1044,7 +1070,14 @@ def build_scan_coordinate_conformance_report(
         )
 
         # Decimals the stored values were written at: a 2-decimal dihedral is exact to half a hundredth, no more.
-        stored_precision = infer_precision_decimals(stored_values_by_coordinate.get(coordinate.coordinate_index, []))
+        # Not when the values are an evenly spaced grid: those are labels, and 60/90/120 would otherwise read as
+        # "rounded to whole degrees" and hide a real half-degree disagreement.
+        stored_values = stored_values_by_coordinate.get(coordinate.coordinate_index, [])
+        stored_precision = (
+            None
+            if _is_even_grid(stored_values, periodic=coordinate.coordinate_kind is not ScanCoordinateKind.bond)
+            else infer_precision_decimals(stored_values)
+        )
 
         point_results: list[PointCoordinateConformance] = []
         n_not_applicable = 0
@@ -1171,16 +1204,18 @@ def collect_scan_coordinate_warnings(
     :param session: Active SQLAlchemy session.
     :param calculation_ids: Every calculation id the request persisted (or reused).
     :returns: One warning per disagreeing coordinate series, in the request's calculation order then coordinate
-        order. ``context.scan_number`` counts the request's scan calculations from 1 in that order, which is how a
+        order. ``context.scan_number`` counts all of the request's scan calculations (with or without a result) from 1 in that order, which is how a
         warning says which scan it is about without the payload path (each route has its own).
     """
     warnings: list[UploadWarning] = []
     scan_number = 0
     # In the order the request persisted them, so the number names the same scan on the direct route and in a job.
     for calculation_id in dict.fromkeys(calculation_ids):
+        calculation = session.get(Calculation, calculation_id)
+        if calculation is None or calculation.type is not CalculationType.scan:
+            continue
+        scan_number += 1  # every scan calculation counts, with or without a scan_result
         report = build_scan_coordinate_conformance_report(session, calculation_id)
-        if report:
-            scan_number += 1
         for series in report:
             judged = [p for p in series.points if p.status in (PointStatus.conforms, PointStatus.deviates)]
             deviating = [p for p in judged if p.status is PointStatus.deviates]

@@ -230,8 +230,9 @@ def test_adr_0020_conformance_over_the_real_arc_corpus(client) -> None:
     )
 
     # 34 of the 35 series that carry geometry are classified as the relative sweep. The 35th has a start_value of
-    # 359.977 degrees, so its constant offset is +0.0229 degrees: below the 1 degree ceiling under which a constant
-    # cannot be told from rounding or a small systematic difference (#835), so it is ``small_constant_offset``. It is
+    # 359.977 degrees (0.023 short of a full turn, a wrap coincidence), so its constant offset is +0.0229 degrees: below
+    # the 1 degree ceiling under which a constant is not named as a relative sweep (#835), so it is
+    # ``small_constant_offset``, which names no cause. It is
     # still reported as disagreeing (all 46 points deviate), and still earns the deposit warning.
     assert tally["consistent_with_legacy_relative_axis"] == 34, (
         "expected 34 of 36 real ARC scan series to classify as consistent_with_legacy_relative_axis; got "

@@ -426,7 +426,7 @@ If your chemistry is legitimate: Declare the structure's real composition: give 
 
 `app.services.charge_multiplicity_reconciliation:reconcile_charge_multiplicity`. warn; codes `charge_mismatch` (advisory check flag, not a refusal code), `multiplicity_mismatch` (advisory check flag, not a refusal code), `term_symbol_mismatch` (advisory check flag, not a refusal code), `electronic_state_contradicts_method` (advisory check flag, not a refusal code). Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ArtifactsUploadRequest`](#s-artifactsuploadrequest).
 
-The charge and spin multiplicity a depositor declares agree with the electronic-structure log of the calculation; the ground-or-excited state and term symbol they declare agree with what the calculation's declared method, job types, multiplicity and point group imply.
+The charge and spin multiplicity a depositor declares agree with the electronic-structure log of the calculation; the ground-or-excited state and term symbol they declare agree with what the calculation's declared method, multiplicity and statmech point group and linearity imply.
 
 If your chemistry is legitimate: Absence is not contradiction: if the producing program is not one of the wired parsers, the artifact is missing, the log is truncated, or the declarations inside a single log disagree with each other, the value is left unknown and **no** warning is emitted. Only a value genuinely read from the log may contradict a declaration — emitting a mismatch because parsing failed would fabricate a contradiction out of ignorance.
 

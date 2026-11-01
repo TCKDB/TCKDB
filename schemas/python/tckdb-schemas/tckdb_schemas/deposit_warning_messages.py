@@ -859,8 +859,8 @@ _SCAN_PATTERN_WORDS = {
     "linear_ramp": "the difference grows steadily along the scan, as if the direction or the step size were stated wrongly",
     "single_outlier": "one point disagrees and the others agree, as if one geometry were attached to the wrong point",
     "small_constant_offset": (
-        "every judged point is off by the same small amount, which is as likely to be rounding or a small "
-        "difference in how the coordinate was measured as an error, so no cause is named"
+        "every judged point is off by the same small amount (under 1 degree, or 0.1 A for a bond); values "
+        "measured from a scan start that lies close to zero look like this too, so no cause is named"
     ),
     "no_pattern_detected": "the points disagree without any of the usual shapes",
     "insufficient_data": "too few points could be judged to name a shape",
@@ -882,7 +882,7 @@ def _scan_disagrees(context: Mapping[str, Any]) -> str | None:
         return None
     unit = "A" if kind == "bond" else "degrees"
     return (
-        f"The stored values of scan coordinate {index} ({kind}) of scan {scan} in this deposit disagree with that coordinate measured on the "
+        f"The stored values of scan coordinate {index} ({kind}) of scan {scan} of this upload disagree with that coordinate measured on the "
         f"point's own geometry at {_count(bad, 'point', 'points')} of {checked} judged: the largest difference is "
         f"{residual:g} {unit} against a tolerance of {tolerance:g} {unit}; {_SCAN_PATTERN_WORDS[pattern]}. The scan "
         "was accepted as sent. A coordinate value is the internal coordinate itself at that point, in its own unit, "

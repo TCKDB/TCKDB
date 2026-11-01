@@ -64,8 +64,18 @@ def _coords(atoms: list[list[str]], index: int) -> np.ndarray:
     return np.array([float(x) for x in atoms[index - 1][1:4]])
 
 
-def _scan_result(points: list[tuple[str, float]], coordinate: dict, *, decimals: int | None, offset: float) -> dict:
-    """``points`` are ``(xyz_text, measured_value)``; the stored value is the measurement plus ``offset``."""
+def _scan_result(
+    points: list[tuple[str, float]],
+    coordinate: dict,
+    *,
+    decimals: int | None,
+    offset: float,
+    stored_values: list[float] | None = None,
+) -> dict:
+    """``points`` are ``(xyz_text, measured_value)``; the stored value is the measurement plus ``offset``.
+
+    ``stored_values`` replaces the measurements outright (a grid the producer labelled the points with).
+    """
 
     def stored(value: float) -> float:
         value += offset
@@ -81,7 +91,11 @@ def _scan_result(points: list[tuple[str, float]], coordinate: dict, *, decimals:
                 "electronic_energy_hartree": -1.0 - 1e-3 * i,
                 "geometry": {"xyz_text": xyz},
                 "coordinate_values": [
-                    {"coordinate_index": 1, "coordinate_value": stored(value), "value_unit": coordinate["value_unit"]}
+                    {
+                        "coordinate_index": 1,
+                        "coordinate_value": stored_values[i] if stored_values is not None else stored(value),
+                        "value_unit": coordinate["value_unit"],
+                    }
                 ],
             }
             for i, (xyz, value) in enumerate(points)
@@ -134,7 +148,7 @@ def dihedral_scan(*, offset: float, decimals: int | None) -> dict:
     """
     step = 10.0 ** -(decimals if decimals is not None else 2)
     points = []
-    for phi in (60.0 + 0.46 * step, 90.0 + 0.49 * step, 120.0 + 0.43 * step):
+    for phi in (60.0 + 0.46 * step, 83.0 + 0.49 * step, 121.0 + 0.43 * step):  # not an even grid
         xyz = _hooh_xyz(phi)
         _, atoms = _atoms(xyz)
         value = dihedral_deg(*(_coords(atoms, i) for i in (1, 2, 3, 4)))
@@ -151,6 +165,48 @@ def dihedral_scan(*, offset: float, decimals: int | None) -> dict:
         "value_unit": "degree",
     }
     return _scan_result(points, coordinate, decimals=decimals, offset=offset)
+
+
+def dihedral_grid_scan(*, error_deg: float) -> dict:
+    """A HOOH scan labelled 60/75/90/105 whose geometries are ``error_deg`` away from the labels."""
+    points, labels = [], []
+    for label in (60.0, 75.0, 90.0, 105.0):
+        xyz = _hooh_xyz(label + error_deg)
+        _, atoms = _atoms(xyz)
+        measured = dihedral_deg(*(_coords(atoms, i) for i in (1, 2, 3, 4)))
+        # whichever sign convention the geometry has, the label is the grid point the measurement is near
+        labels.append(math.copysign(label, measured))
+        points.append((xyz, measured))
+    coordinate = {
+        "coordinate_kind": "dihedral",
+        "atom1_index": 1,
+        "atom2_index": 2,
+        "atom3_index": 3,
+        "atom4_index": 4,
+        "step_size": 15.0,
+        "start_value": labels[0],
+        "end_value": labels[-1],
+        "value_unit": "degree",
+    }
+    return _scan_result(points, coordinate, decimals=None, offset=0.0, stored_values=labels)
+
+
+def bond_grid_scan(*, error: float) -> dict:
+    """An H2 scan labelled 1.0/1.1/1.2 A whose geometries are ``error`` angstrom longer than the labels."""
+    points = []
+    for label in (1.0, 1.1, 1.2):
+        xyz = f"2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 {label + error:.6f}"
+        points.append((xyz, label + error))
+    coordinate = {
+        "coordinate_kind": "bond",
+        "atom1_index": 1,
+        "atom2_index": 2,
+        "step_size": 0.1,
+        "start_value": 1.0,
+        "end_value": 1.2,
+        "value_unit": "angstrom",
+    }
+    return _scan_result(points, coordinate, decimals=None, offset=0.0, stored_values=[1.0, 1.1, 1.2])
 
 
 def _hooh_conformer(scan: dict) -> dict:
@@ -201,13 +257,31 @@ def test_a_legacy_arc_scan_fixture_earns_the_warning(client) -> None:
         assert row.record_id in scan_ids
 
 
-def test_a_qcschema_scan_fixture_earns_none(client, monkeypatch) -> None:
+_QCSCHEMA_CASES = sorted(p.name for p in (_FIXTURES / "qcschema_scan").iterdir() if p.is_dir())
+
+
+@pytest.mark.parametrize("case", _QCSCHEMA_CASES)
+def test_a_qcschema_scan_fixture_earns_none_and_is_judged_tightly(client, monkeypatch, case) -> None:
+    """The correct-convention corpus is silent, and silent because it agrees, not because its grid values widened the
+    tolerance (these grids are whole degrees: 60, 90, 120 ...)."""
+    from app.services.scan_coordinate_conformance import PointStatus, build_scan_coordinate_conformance_report
+
     monkeypatch.setattr("app.services.artifact_persistence.store_artifact", lambda content, sha256: f"s3://t/{sha256}")
-    payload = json.loads((_FIXTURES / "qcschema_scan" / "torsiondrive_v2" / "payload.json").read_text())
-    response = client.post("/api/v1/uploads/computed-species", json=payload, headers={"Idempotency-Key": "scan-warning-negative"})
+    payload = json.loads((_FIXTURES / "qcschema_scan" / case / "payload.json").read_text())
+    response = client.post("/api/v1/uploads/computed-species", json=payload, headers={"Idempotency-Key": f"scan-neg-{case}"})
     assert response.status_code == 201, response.text[:800]
     assert _warnings(response) == []
-    assert client._db_session.scalars(select(Calculation).where(Calculation.type == CalculationType.scan)).first()
+    session = client._db_session
+    scans = session.scalars(select(Calculation).where(Calculation.type == CalculationType.scan)).all()
+    assert scans
+    judged = 0
+    for calc in scans:
+        for series in build_scan_coordinate_conformance_report(session, calc.id):
+            for point in series.points:
+                if point.status in (PointStatus.conforms, PointStatus.deviates):
+                    judged += 1
+                    assert point.tolerance <= 2e-3, f"{case}: judged at {point.tolerance}, a widened window"
+    assert judged
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +301,7 @@ def test_a_scan_with_offset_values_warns_with_the_numbers_it_measured(client) ->
     assert context["max_residual"] == 0.5
     assert 0 < context["tolerance"] < 0.1
     assert warning["message"] == render_message(CODE, context)
-    assert "scan 1 in this deposit" in warning["message"]
+    assert "scan 1 of this upload" in warning["message"]
 
 
 def test_a_scan_whose_values_match_its_geometries_earns_none(client) -> None:
@@ -264,9 +338,33 @@ def test_a_small_constant_offset_is_not_called_a_relative_sweep(client) -> None:
     context = warning["context"]
     assert context["pattern"] == "small_constant_offset"
     assert context["n_points_disagreeing"] == 3
-    assert "rounding or a small difference" in warning["message"]
+    assert "start that lies close to zero" in warning["message"]
+    assert "rounding" not in warning["message"]
     assert "relative sweep" not in warning["message"]
     assert warning["message"] == render_message(CODE, context)
+
+
+def test_a_dihedral_grid_whose_geometries_are_off_is_a_disagreement(client) -> None:
+    """60/75/90/105 are labels, not whole-degree roundings: a 0.3 degree error against them is not hidden."""
+    (warning,) = _warnings(client.post(_CONFORMERS, json=_hooh_conformer(dihedral_grid_scan(error_deg=0.3))))
+    context = warning["context"]
+    assert context["n_points_disagreeing"] == 4
+    assert context["max_residual"] == pytest.approx(0.3, abs=1e-3)
+    assert context["tolerance"] < 0.01, "judged at the tight tolerance, not widened to half a degree"
+
+
+def test_a_dihedral_grid_that_agrees_is_silent(client) -> None:
+    assert _warnings(client.post(_CONFORMERS, json=_hooh_conformer(dihedral_grid_scan(error_deg=0.0)))) == []
+
+
+def test_a_bond_grid_whose_geometries_are_off_is_a_disagreement(client) -> None:
+    payload = h2_scan_conformer(0.0)
+    payload["geometry"] = {"xyz_text": "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 1.1"}
+    payload["calculation"]["scan_result"] = bond_grid_scan(error=0.0213)
+    (warning,) = _warnings(client.post(_CONFORMERS, json=payload))
+    context = warning["context"]
+    assert context["max_residual"] == pytest.approx(0.0213, abs=1e-5)
+    assert context["tolerance"] < 0.005, "judged at the tight tolerance, not widened to half a tenth of an angstrom"
 
 
 def test_a_large_constant_offset_is_still_the_relative_sweep(client) -> None:
@@ -413,3 +511,15 @@ def test_every_workflow_that_reports_named_composite_deposits_reports_scan_coord
     assert len(reporting) >= 8, sorted(reporting)
     # network_pdep reports composite deposits but its calculation schema forbids a scan_result (tested above).
     assert reporting - {"network_pdep.py"} <= scanning, sorted(reporting - scanning)
+
+
+def test_a_scan_without_a_result_still_counts_in_the_scan_number(client) -> None:
+    """The scan number is the depositor's own count of scan calculations, with or without a scan_result."""
+    from tests.api.test_api_uploads import _transition_state_payload
+
+    payload = _transition_state_payload(n_imag=1, imag_freq_cm1=-1500.0)
+    bare = {"type": "scan", "software_release": _SOFTWARE, "level_of_theory": _LOT}
+    mismatched = _scan_calc(bond_scan(payload["geometry"]["xyz_text"], 1, 2, offset=0.5))
+    payload["additional_calculations"].extend([bare, mismatched])
+    (warning,) = _warnings(client.post("/api/v1/uploads/transition-states", json=payload))
+    assert warning["context"]["scan_number"] == 2
