@@ -421,9 +421,32 @@ def _swept_codes() -> set[str]:
     return codes
 
 
+def test_the_dynamic_code_list_is_exactly_what_the_code_tables_hold():
+    """The hand list above is not allowed to rot: it is checked against what the producer modules actually define.
+
+    Every ``W_*`` string constant of the modules that choose a code at run time, and every value of the code
+    tables, that the literal sweep did not reach must be listed; and nothing may be listed that no module defines.
+    """
+    from tckdb_schemas import stationary_point
+    from tckdb_schemas.fragments import refs
+
+    from app.services import hessian_extraction, upload_reconciliation
+    from app.services.composite_result_resolution import _DEPOSITED_AS_WARNING_CODE
+
+    defined: set[str] = set()
+    for module in (refs, stationary_point, hessian_extraction, upload_reconciliation):
+        defined |= {value for name, value in vars(module).items() if name.startswith("W_") and isinstance(value, str)}
+    defined |= set(upload_reconciliation._DEDUCTION_WARNING_CODES.values())
+    defined |= set(_DEPOSITED_AS_WARNING_CODE.values())
+
+    unreached = (defined - _swept_codes()) - _BLOCK_ONLY
+    assert unreached <= _DYNAMIC, f"a code chosen at run time is missing from _DYNAMIC: {sorted(unreached - _DYNAMIC)}"
+    assert _DYNAMIC <= defined, f"_DYNAMIC lists a code no producer module defines: {sorted(_DYNAMIC - defined)}"
+
+
 def test_the_rendering_table_covers_every_code_a_producer_can_emit():
     swept = (_swept_codes() | _DYNAMIC) - _BLOCK_ONLY
-    assert len(swept) >= 70, f"the sweep found only {len(swept)} codes: it is not looking at the producers"
+    assert len(swept) >= 81, f"the sweep found only {len(swept)} codes: it is not looking at the producers"
     assert swept - set(RENDERED) == set(), "a producer code has no public sentence"
     assert set(RENDERED) - swept == set(), "a sentence is for a code no producer emits"
     for code, sentence in RENDERED.items():

@@ -41,6 +41,7 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.scan_coordinate_conformance import collect_scan_coordinate_warnings
 from app.services.species_resolution import (
     assert_geometry_composition_matches_identity,
     assert_geometry_isotopes_match_identity,
@@ -327,6 +328,12 @@ def persist_transition_state_upload(
         )
         warnings.extend(
             collect_named_composite_deposit_warnings(
+                session,
+                [primary_calc.id, *(c.id for c in additional_calcs)],
+            )
+        )
+        warnings.extend(
+            collect_scan_coordinate_warnings(
                 session,
                 [primary_calc.id, *(c.id for c in additional_calcs)],
             )

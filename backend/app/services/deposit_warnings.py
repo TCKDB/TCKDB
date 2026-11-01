@@ -102,6 +102,8 @@ ANCHOR_TYPES = frozenset(
 REGISTER_ENTRY: dict[str, int] = {
     "charge_mismatch": 12,
     "multiplicity_mismatch": 12,
+    "term_symbol_mismatch": 12,
+    "electronic_state_contradicts_method": 12,
     "n_imag_contradicts_minimum": 16,
     "n_imag_higher_order_saddle": 16,
     "n_imag_suggests_transition_state": 16,
@@ -113,15 +115,18 @@ REGISTER_ENTRY: dict[str, int] = {
     "transition_state_missing_irc_evidence": 19,
     "freq_list_linear_mode_count_for_bent_geometry": 22,
     "freq_list_bent_mode_count_for_linear_geometry": 22,
+    "freq_list_incomplete_for_geometry": 22,
     "transition_state_energy_ordering_mixed_levels": 23,
     "transition_state_energy_ordering_not_compared": 25,
     "network_state_energy_sum_not_compared": 25,
     "network_energy_zpe_source_absent": 25,
+    "network_state_energy_sources_partial": 25,
     "reaction_atom_map_absent": 32,
     "reaction_atom_map_participants_incomplete": 33,
     "reaction_atom_map_atoms_incomplete": 33,
     "reported_network_solve": 37,
     "network_wide_energy_transfer_scope": 38,
+    "scan_point_coordinate_disagrees_with_geometry": 49,
 }
 
 #: Codes whose subject is a shared, deduplicated identity row (a species, a reaction, a literature entry, a ref

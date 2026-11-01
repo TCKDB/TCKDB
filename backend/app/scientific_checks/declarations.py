@@ -71,6 +71,7 @@ from tckdb_schemas.stationary_point import (
 )
 
 from app.chemistry import species as chemistry_species
+from app.chemistry import stereo as chemistry_stereo
 from app.chemistry import units as chemistry_units
 from app.scientific_checks import (
     CheckTier,
@@ -681,9 +682,11 @@ CHECK_FREQ_LIST_WITHIN_GEOMETRY_DEGREES_OF_FREEDOM = ScientificCheck(
                 "cannot drift into counting three different sets of atoms. "
                 "**The same function also reports the floor**, "
                 "``freq_list_incomplete_for_geometry``, at the warning tier "
-                "and with a structural flag; that finding has no entry here "
+                "and with a structural flag; that finding is not this entry "
                 "because it is an expectation rather than a definition, for "
-                "the reasons set out above. This entry is deliberately about "
+                "the reasons set out above. It is registered under entry 22, "
+                "beside the linearity codes, which make the same kind of "
+                "claim about the same list. This entry is deliberately about "
                 "one of the two codes the function emits."
             ),
         ),
@@ -1434,6 +1437,7 @@ CHECK_REPRODUCIBILITY_IS_ITS_OWN_JUDGEMENT = ScientificCheck(
 DECLARING_MODULES: tuple[ModuleType, ...] = (
     calculation_geometry_composition,
     chemistry_species,
+    chemistry_stereo,
     chemistry_units,
     charge_multiplicity_reconciliation,
     external_comparison_checks,

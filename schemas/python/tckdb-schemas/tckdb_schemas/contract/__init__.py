@@ -30,6 +30,7 @@ __all__ = [
     "CHANGELOG_FILENAME",
     "CONTRACT_FILENAME",
     "REFUSAL_CODES_FILENAME",
+    "WARNING_CODES_FILENAME",
     "changelog_path",
     "changes_since",
     "json_schema",
@@ -39,6 +40,8 @@ __all__ = [
     "refusal_codes_path",
     "schema_names",
     "schema_path",
+    "warning_codes_markdown",
+    "warning_codes_path",
 ]
 
 #: The markdown contract's file name inside this package.
@@ -47,6 +50,8 @@ CONTRACT_FILENAME = "PRODUCER_CONTRACT.md"
 CHANGELOG_FILENAME = "CHANGELOG.md"
 #: The refusal code reference (one entry per code), shipped beside the contract.
 REFUSAL_CODES_FILENAME = "REFUSAL_CODES.md"
+#: The warning code reference (every warning an accepted deposit can return), shipped beside the contract.
+WARNING_CODES_FILENAME = "WARNING_CODES.md"
 _SCHEMA_DIR = "schemas"
 _SCHEMA_SUFFIX = ".schema.json"
 
@@ -76,6 +81,16 @@ def refusal_codes_path() -> Path:
 def refusal_codes_markdown() -> str:
     """The refusal code reference's markdown text."""
     return refusal_codes_path().read_text(encoding="utf-8")
+
+
+def warning_codes_path() -> Path:
+    """Filesystem path of ``WARNING_CODES.md``, the reference for every warning an accepted deposit can return."""
+    return _root() / WARNING_CODES_FILENAME
+
+
+def warning_codes_markdown() -> str:
+    """The warning code reference's markdown text."""
+    return warning_codes_path().read_text(encoding="utf-8")
 
 
 def schema_names() -> list[str]:

@@ -437,6 +437,13 @@ RENDERED: dict[str, str] = {
         "collider) pair, so this record does not resolve how it varies between wells; that variation was not "
         "determined by the run. Per-well declarations are preferred where the calculation supplies them."
     ),
+    # -- scans ---------------------------------------------------------------------------------------------------
+    "scan_point_coordinate_disagrees_with_geometry": (
+        "The coordinate values stored for a scan point do not match the coordinate measured on that point's own "
+        "geometry. The scan was accepted as sent. A coordinate value is the internal coordinate itself at that "
+        "point, in the coordinate's own unit, not a displacement from the scan's start. Either the values or the "
+        "geometries attached to the points are wrong, and this check cannot tell which."
+    ),
 }
 
 
@@ -828,6 +835,59 @@ def _freq_list_incomplete(context: Mapping[str, Any]) -> str | None:
         "Deposit every mode the frequency job printed, including the reaction coordinate and any mode removed from "
         "the partition function; if the job genuinely computed a partial Hessian, say so in the calculation's "
         "parameters so the short list is explicable."
+    )
+
+
+_SCAN_PATTERNS = frozenset(
+    {
+        "consistent_with_legacy_relative_axis",
+        "uniform_one_step_offset",
+        "linear_ramp",
+        "single_outlier",
+        "small_constant_offset",
+        "no_pattern_detected",
+        "insufficient_data",
+    }
+)
+_SCAN_COORDINATE_KINDS = frozenset({"bond", "angle", "dihedral"})
+_SCAN_PATTERN_WORDS = {
+    "consistent_with_legacy_relative_axis": (
+        "every judged point is off by the same constant, which is what values measured from the scan's start "
+        "(a relative sweep) rather than the coordinate itself look like"
+    ),
+    "uniform_one_step_offset": "every judged point is off by one grid step, as if each value were paired with its neighbour's geometry",
+    "linear_ramp": "the difference grows steadily along the scan, as if the direction or the step size were stated wrongly",
+    "single_outlier": "one point disagrees and the others agree, as if one geometry were attached to the wrong point",
+    "small_constant_offset": (
+        "every judged point is off by the same small amount (under 1 degree, or 0.1 A for a bond); values "
+        "measured from a scan start that lies close to zero or a full turn look like this too, so no cause is named"
+    ),
+    "no_pattern_detected": "the points disagree without any of the usual shapes",
+    "insufficient_data": "too few points could be judged to name a shape",
+}
+
+
+def _scan_disagrees(context: Mapping[str, Any]) -> str | None:
+    kind = _token(context.get("coordinate_kind"), _SCAN_COORDINATE_KINDS)
+    pattern = _token(context.get("pattern"), _SCAN_PATTERNS)
+    scan = _int(context.get("scan_number"))
+    index = _int(context.get("coordinate_index"))
+    bad = _int(context.get("n_points_disagreeing"))
+    checked = _int(context.get("n_points_checked"))
+    residual = _num(context.get("max_residual"))
+    tolerance = _num(context.get("tolerance"))
+    if kind is None or pattern is None or scan is None or index is None or bad is None or checked is None:
+        return None
+    if residual is None or tolerance is None:
+        return None
+    unit = "A" if kind == "bond" else "degrees"
+    return (
+        f"The stored values of scan coordinate {index} ({kind}) of scan {scan} of this upload disagree with that coordinate measured on the "
+        f"point's own geometry at {_count(bad, 'point', 'points')} of {checked} judged: the largest difference is "
+        f"{residual:g} {unit} against a tolerance of {tolerance:g} {unit}; {_SCAN_PATTERN_WORDS[pattern]}. The scan "
+        "was accepted as sent. A coordinate value is the internal coordinate itself at that point, in its own unit, "
+        "not a displacement from the scan's start. Either the values or the geometries attached to the points are "
+        "wrong, and this check cannot tell which."
     )
 
 
@@ -1711,6 +1771,7 @@ _WITH_CONTEXT: dict[str, Any] = {
     "software_release_version_is_composite": _version_is_composite,
     "species_entry_stereo_not_represented": _stereo_not_represented,
     "species_entry_stereo_unresolved": _stereo_unresolved,
+    "scan_point_coordinate_disagrees_with_geometry": _scan_disagrees,
     "hessian_not_stored_unparseable": _hessian_not_stored("hessian_not_stored_unparseable"),
     "hessian_not_stored_failed": _hessian_not_stored("hessian_not_stored_failed"),
     "hessian_not_stored_no_unique_input_geometry": _hessian_not_stored("hessian_not_stored_no_unique_input_geometry"),
@@ -1774,6 +1835,8 @@ def _closed_values(key: str, code: str) -> Any:
         "action": frozenset(_VERSION_ACTIONS),
         "application_role": frozenset({"composite_delta"}),
         "confidence": frozenset({"definitive", "derived", "heuristic"}),
+        "coordinate_kind": _SCAN_COORDINATE_KINDS,
+        "pattern": _SCAN_PATTERNS,
         "deck_method": _HESSIAN_METHODS,
         "stored_method": _HESSIAN_METHODS,
         "deduced": _DEDUCED,

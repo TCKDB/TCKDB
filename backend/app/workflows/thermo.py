@@ -60,6 +60,7 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.scan_coordinate_conformance import collect_scan_coordinate_warnings
 from app.services.species_resolution import resolve_species_entry
 from app.services.statmech_resolution import accepted_types_phrase
 from app.services.thermo_declaration_resolution import (
@@ -400,6 +401,11 @@ def persist_thermo_upload(
     if warnings_out is not None:
         warnings_out.extend(
             collect_named_composite_deposit_warnings(
+                session, [calc.id for calc in calculations_by_key.values()]
+            )
+        )
+        warnings_out.extend(
+            collect_scan_coordinate_warnings(
                 session, [calc.id for calc in calculations_by_key.values()]
             )
         )

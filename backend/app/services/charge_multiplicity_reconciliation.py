@@ -53,6 +53,11 @@ from app.scientific_checks import (
     ScientificCheck,
 )
 from app.services.ess_software_detection import SoftwareName, detect_software_from_text
+from app.services.upload_reconciliation import (
+    W_ELECTRONIC_STATE_CONTRADICTS_METHOD,
+    W_TERM_SYMBOL_MISMATCH,
+    _reconcile_deduction,
+)
 
 #: Emitted when the declared charge and the log's charge disagree.
 W_CHARGE_MISMATCH = "charge_mismatch"
@@ -314,11 +319,18 @@ def reconcile_charge_multiplicity(
 CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
     group="A structure against its own label",
     sort_key=5,  # Shifted from 4 by #143; see CHECK_SMILES_CHARGE_MATCHES_DECLARED.
-    code=(W_CHARGE_MISMATCH, W_MULTIPLICITY_MISMATCH),
+    code=(
+        W_CHARGE_MISMATCH,
+        W_MULTIPLICITY_MISMATCH,
+        W_TERM_SYMBOL_MISMATCH,
+        W_ELECTRONIC_STATE_CONTRADICTS_METHOD,
+    ),
     asserts=(
-        "The charge and spin multiplicity a depositor declares match the ones "
-        "the electronic-structure log says the calculation was actually run "
-        "at."
+        "The charge and spin multiplicity a depositor declares agree with the "
+        "electronic-structure log of the calculation; the ground-or-excited "
+        "state and term symbol they declare agree with what the calculation's "
+        "declared method, multiplicity and statmech point group and linearity "
+        "imply."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
@@ -332,7 +344,29 @@ CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
         "false-positive rate is unknown and promoting them first would be "
         "unsafe. The register records the gap rather than hiding it: this is "
         "the clearest case in TCKDB of a check sitting one tier below where "
-        "its own governing decision puts it."
+        "its own governing decision puts it. **The two deduction codes are "
+        "warnings for a different reason.** Charge and multiplicity are "
+        "read from the log, so a disagreement is a contradiction between a "
+        "declaration and a parsed statement. The other two compare one "
+        "declaration with another: no log is read; the method and "
+        "multiplicity come from the payload itself and the point group and "
+        "linearity from its statmech block. An EOM, CIS or spin-flip TDDFT "
+        "method (the ``EXCITED_STATE_METHODS`` list) deduces an excited "
+        "state definitively (that rule covers the ``EXCITED_STATE_METHODS`` "
+        "names only); on this path job types are calculation types "
+        "(opt, freq, sp ...) and say nothing, so plain TDDFT is not on the "
+        "list and reads as the ground default, which is only a default for "
+        "a single-reference method (confidence heuristic). Only the method "
+        "names casscf, caspt2, nevpt2, mrci, dlpno-nevpt2 and "
+        "dlpno-steom-ccsd, compared without regard to case (so CASSCF "
+        "counts), deduce nothing. Any other name (for example "
+        "MRCI+Davidson, or Molpro's RS2) is read as single-reference and "
+        "gets the ground default, so a ground state declared for such a "
+        "calculation can read as a contradiction. "
+        "A term symbol is compared "
+        "with the one derived from the multiplicity (and the point group and "
+        "linearity where there are any), a derivation and not a reading. A heuristic "
+        "default cannot block."
     ),
     adr="0008",
     enforced_by=(
@@ -341,6 +375,30 @@ CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
             note=(
                 "Re-reads charge and multiplicity from the uploaded artifact "
                 "using the wired Gaussian, ORCA, Psi4 and Molpro parsers."
+            ),
+        ),
+        PythonCheck(
+            _reconcile_deduction,
+            note=(
+                "The deduction path, for ``term_symbol_mismatch`` and "
+                "``electronic_state_contradicts_method``: the declared term "
+                "symbol and ground-or-excited state are compared with what "
+                "``deduce_all`` derives from the calculation's own declared "
+                "method and spin multiplicity and, from the "
+                "statmech block, the point group and linearity; no log is "
+                "read. **Only the ground-state default is a heuristic**: an "
+                "EOM, CIS or spin-flip TDDFT method (``EXCITED_STATE_METHODS``) "
+                "deduces an excited state definitively, while any other "
+                "method, plain TDDFT included, deduces the ground state by "
+                "default; only the method names casscf, caspt2, "
+                "nevpt2, mrci, dlpno-nevpt2 and dlpno-steom-ccsd, compared "
+                "without regard to case (so CASSCF counts), deduce nothing; "
+                "any other name (for example MRCI+Davidson, or Molpro's RS2) "
+                "is read as single-reference, so a legitimately excited state computed another "
+                "way reads as a contradiction. The deduction carries its own confidence and "
+                "the evidence it rests on in the warning's context, and a "
+                "stationary-point-kind deduction is not compared here at all "
+                "(Layer 1's n_imag warnings own it)."
             ),
         ),
     ),

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tckdb-schemas"
-version = "0.145.0"
+version = "0.146.0"
 description = "Pure Pydantic wire-contract schemas for TCKDB upload payloads."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -60,6 +60,7 @@ tckdb_schemas = [
     "contract/PRODUCER_CONTRACT.md",
     "contract/CHANGELOG.md",
     "contract/REFUSAL_CODES.md",
+    "contract/WARNING_CODES.md",
     "contract/schemas/*.schema.json",
 ]
 

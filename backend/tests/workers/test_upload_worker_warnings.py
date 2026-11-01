@@ -252,6 +252,22 @@ def test_a_retried_attempt_reports_each_warning_once(client, kind: UploadJobKind
     assert second == first
 
 
+def test_the_scan_coordinate_warning_is_the_same_on_the_direct_route_and_the_job(client) -> None:
+    """A scan whose stored values disagree with its geometries (#835) earns one warning, and the job reports it
+    exactly as the direct route does (the check runs after the flush, so the worker has to run it too)."""
+    from tests.api.test_api_scan_coordinate_warning import CODE, h2_scan_conformer
+
+    payload = h2_scan_conformer(0.5)
+    expected = _direct(client, "/api/v1/uploads/conformers", payload)
+    assert [w["code"] for w in expected].count(CODE) == 1, expected
+
+    job = _enqueue(client, "/api/v1/jobs/conformer", payload)
+    upload_worker.run_one_job(client._db_session, job)
+    result = client.get(f"/api/v1/jobs/{job.id}").json()["result"]
+    assert "result_unavailable" not in result
+    assert result["warnings"] == expected
+
+
 def test_a_stale_recorded_warning_is_re_rendered_when_the_job_result_is_assembled(client) -> None:
     """A warning recorded on a job before this wording (#838) carries a message that quoted the depositor.
 

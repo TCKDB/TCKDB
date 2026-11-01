@@ -241,16 +241,16 @@ def build_ess_result_from_upload(
 # Deduction → payload field mapping
 # ---------------------------------------------------------------------------
 
-# Maps Deduction.field → (payload attribute name, value accessor)
+# Maps Deduction.field → (payload attribute name, value accessor).
+# ``stationary_point_kind`` is deliberately absent: Layer 1's n_imag warnings own that fact (see the
+# skip in ``reconcile_species_entry_full``), so a deduction of it is never compared here.
 _DEDUCTION_FIELD_MAP: dict[str, tuple[str, str]] = {
-    "stationary_point_kind": ("species_entry_kind", "value"),
     "electronic_state_kind": ("electronic_state_kind", "value"),
     "term_symbol": ("term_symbol", None),
 }
 
 # Maps Deduction.field → warning code for contradictions
 _DEDUCTION_WARNING_CODES: dict[str, str] = {
-    "stationary_point_kind": W_N_IMAG_CONTRADICTS_MINIMUM,
     "electronic_state_kind": W_ELECTRONIC_STATE_CONTRADICTS_METHOD,
     "term_symbol": W_TERM_SYMBOL_MISMATCH,
 }
@@ -404,7 +404,7 @@ def _reconcile_deduction(
     if str(payload_value) == str(deduction.value):
         return None
 
-    code = _DEDUCTION_WARNING_CODES.get(deduction.field, "deduction_mismatch")
+    code = _DEDUCTION_WARNING_CODES[deduction.field]
     attr_name = _DEDUCTION_FIELD_MAP[deduction.field][0]
 
     return UploadWarning.from_code(

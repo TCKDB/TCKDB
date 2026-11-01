@@ -111,9 +111,18 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # contract between two statements in one deposit (a recorded ``freq.hessian_method`` and the input deck
     # that ran), definitional rather than an expectation about a result, and no existing entry's claim covers
     # it: the tolerance entries judge a mode against a tau, this one decides which method tau is read from.
-    assert 10 <= len(REGISTER) <= 50, (
+    #
+    # Raised 50 -> 51 (2026-11-01) for #835: species_stereo_contradiction (#822, DR-0038). With the species key the
+    # constitution, the entry is where a configuration is stated, read from three sources -- every linked geometry,
+    # the SMILES marks, a supplied label -- and a disagreement about one element is refused. Reading R/S, E/Z and an
+    # allene's axis from coordinates (torsion windows, alignment over automorphisms, an enumeration cap) is a
+    # position a referee could dispute, which an input-format conflict is not (#672). Entries 8 and 9 compare a
+    # geometry with its SMILES by element and isotope, never by configuration. Reviewed with the whole #835 sweep: of
+    # 58 unregistered warning codes and 13 recent refusals this is the only new entry; four warnings widened 12, 22
+    # and 25, and the stereo-label, channel-kind and bath-gas refusals stay in the code catalogue.
+    assert 10 <= len(REGISTER) <= 51, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~50 the inclusion test ('could this check be wrong "
+        "the system; above ~51 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 
@@ -770,6 +779,68 @@ _PINNED_NUMBERS: dict[str, int] = {
     "reaction_atom_map_atoms_incomplete": 33,
     "reported_network_solve": 37,
     "network_wide_energy_transfer_scope": 38,
+    # Registered by widening an existing entry (#835), so the number is the entry's own.
+    "term_symbol_mismatch": 12,
+    "electronic_state_contradicts_method": 12,
+    "freq_list_incomplete_for_geometry": 22,
+    "network_state_energy_sources_partial": 25,
+    "scan_point_coordinate_disagrees_with_geometry": 49,
+}
+
+
+#: The first words of every register entry, by number.
+_OPENINGS: dict[int, str] = {
+    1: "The reactant and product sides of a reaction conta",
+    2: "The summed formal charge of a reaction's reactants",
+    3: "A saddle point is made of exactly the atoms of the",
+    4: "A saddle point carries the same total charge as th",
+    5: "The saddle-point atoms an IRC mapping assigns to a",
+    6: "A reaction entry whose reactants and products are",
+    7: "A deposit's `molecule_kind` agrees with the kind a",
+    8: "A conformer geometry deposited under a species ent",
+    9: "The multiset of isotopic substitutions declared in",
+    10: "Every geometry linked to a calculation is made of",
+    11: "A species entry's declared charge equals the summe",
+    12: "The charge and spin multiplicity a depositor decla",
+    13: "An optimisation's output geometry still describes",
+    14: "A transition state has at least one imaginary vibr",
+    15: "A species entry declared a minimum has no imaginar",
+    16: "A van der Waals complex is formally a minimum, so",
+    17: "A transition state's imaginary modes other than th",
+    18: "A transition state's reaction coordinate should ex",
+    19: "A deposited saddle point should carry passing intr",
+    20: "A frequency result that deposits both a scalar ima",
+    21: "A frequency list carries no more modes than the ge",
+    22: "A frequency list's mode count should match the sha",
+    23: "The energies an energy-ordering record compares sh",
+    24: "A stated energy should be the energy TCKDB stores",
+    25: "Every energy an energy-ordering record or a networ",
+    26: "A calculation cited as the source of a stated ener",
+    27: "An atom does not change element on the way across",
+    28: "One saddle-point atom is claimed by exactly one at",
+    29: "Every atom index in a map is counted against a nam",
+    30: "When a map covers every declared participant of an",
+    31: "Where a deposit carries both an atom map and an IR",
+    32: "A reaction that has a transition state should say",
+    33: "A supplied atom map should cover every declared pa",
+    34: "An atom map records whether a human asserted it or",
+    35: "An Arrhenius pre-exponential factor carries units",
+    36: "A partition function belongs to exactly one subjec",
+    37: "A set of phenomenological k(T,P) declares whether",
+    38: "A collisional energy-transfer model records whethe",
+    39: "The bytes TCKDB serves for a stored artifact are t",
+    40: "Whether a record's preserved evidence is sufficien",
+    41: "Compare every supplied NASA Cp/entropy fit with ex",
+    42: "Compare explicitly supplied opposite elementary ra",
+    43: "Compare every stored Gibbs value of one thermo rec",
+    44: "Compare a thermo record's supplied enthalpies (h29",
+    45: "Compare a kinetics record's stated reaction energy",
+    46: "Find, on a protium species entry, calculation geom",
+    47: "Report a conformer group whose converged optimised",
+    48: "A computed thermo record's heat capacity, evaluate",
+    49: "A scan point's stored coordinate_value is the inte",
+    50: "A calculation that records how its frequency job b",
+    51: "A species entry states one stereo configuration: w",
 }
 
 
@@ -794,19 +865,16 @@ def test_existing_entries_keep_their_numbers() -> None:
         if code in REGISTER_ENTRY:
             assert REGISTER_ENTRY[code] == expected, code
     assert number_of["hessian_method_contradicts_input_deck"] == 50
-    # Entries 14 to 19 by their opening words, as on main.
+    # The entry added in #835 takes the next free number, in a group listed after every earlier one.
+    assert number_of["species_stereo_contradiction"] == 51
+    # Every entry by its opening words: a new check added to an earlier group shifts every later number (the
+    # generator only protects against new *groups*), and this is the test that notices.
     headings = {
         int(m.group(1)): m.group(2)
         for m in re.finditer(r"^### (\d+)\. (.*)$", doc, flags=re.MULTILINE)
     }
-    for number, opening in {
-        14: "A transition state has at least one imaginary vibrational mode",
-        15: "A species entry declared a minimum has no imaginary vibrational mode",
-        16: "A van der Waals complex is formally a minimum",
-        17: "A transition state's imaginary modes other than the reaction coordinate",
-        18: "A transition state's reaction coordinate should exceed roughly 100",
-        19: "A deposited saddle point should carry passing intrinsic-reaction-coordinate",
-    }.items():
+    assert set(headings) == set(_OPENINGS) == set(range(1, len(_OPENINGS) + 1))
+    for number, opening in _OPENINGS.items():
         assert headings[number].startswith(opening), number
     # Every code stored with a register number still points at the entry that declares it.
     for code, stored in REGISTER_ENTRY.items():
