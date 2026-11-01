@@ -62,6 +62,7 @@ __all__ = [
     "collect_pdep_atomic_warnings",
     "collect_thermo_atomic_warnings",
     "corrections_include_spin_orbit",
+    "thermo_carries_enthalpy",
 ]
 
 
@@ -80,6 +81,31 @@ def corrections_include_spin_orbit(corrections: Iterable[object]) -> bool:
             if ck is not None and AppliedCorrectionComponentKind(ck) == (AppliedCorrectionComponentKind.soc):
                 return True
     return False
+
+
+def thermo_carries_enthalpy(thermo: object) -> bool:
+    """True when a thermo payload states an energy-bearing value.
+
+    A spin-orbit shift moves an atom's enthalpy and free energy, not its entropy or heat
+    capacity, so a thermo that states only ``s298_j_mol_k`` or ``cp`` points has no energy
+    for the shift to be missing from. Enthalpy-bearing: ``h298_kj_mol``,
+    ``enthalpy_formation_0k_kj_mol``, a NASA-7 or NASA-9 polynomial (their integration
+    constants are the enthalpy), a Wilhoit block with ``h0_kj_mol``, or a tabulated point
+    with ``h_kj_mol`` or ``g_kj_mol``.
+    """
+    if getattr(thermo, "h298_kj_mol", None) is not None:
+        return True
+    if getattr(thermo, "enthalpy_formation_0k_kj_mol", None) is not None:
+        return True
+    if getattr(thermo, "nasa", None) is not None or getattr(thermo, "nasa9_intervals", None):
+        return True
+    wilhoit = getattr(thermo, "wilhoit", None)
+    if wilhoit is not None and getattr(wilhoit, "h0_kj_mol", None) is not None:
+        return True
+    return any(
+        getattr(pt, "h_kj_mol", None) is not None or getattr(pt, "g_kj_mol", None) is not None
+        for pt in (getattr(thermo, "points", None) or ())
+    )
 
 
 def collect_atomic_electronic_warnings(
@@ -215,7 +241,11 @@ def collect_bundle_atomic_warnings(
     element = single_atom_element(xyz_texts=list(xyz_texts), smiles=species_entry.smiles)
     if element is None:
         return []
-    thermo_computed = thermo is not None and thermo.scientific_origin == ScientificOriginKind.computed
+    thermo_computed = (
+        thermo is not None
+        and thermo.scientific_origin == ScientificOriginKind.computed
+        and thermo_carries_enthalpy(thermo)
+    )
     return collect_atomic_electronic_warnings(
         element=element,
         charge=species_entry.charge,
@@ -237,14 +267,21 @@ def collect_thermo_atomic_warnings(request) -> list[UploadWarning]:
     A thermo request carries the species identity and its own applied
     corrections; it carries no levels, so nothing is said about them. The
     spin-orbit judgement is made only on corrections this request lists. A
-    thermo that cites a record the request cannot see into (``existing_statmech_id``
-    or a source calculation by ``existing_calculation_id``) may have its spin-orbit
+    thermo that cites a record the request cannot see into (``existing_statmech_id``,
+    a source calculation by ``existing_calculation_id``, or a protocol supporting calculation by
+    ``calculation_ref``) may have its spin-orbit
     energy recorded there, so the absence is not judged.
     """
     corrections = list(request.applied_energy_corrections)
     has_soc = corrections_include_spin_orbit(corrections)
-    cites_unseen_record = request.existing_statmech_id is not None or any(
-        sc.existing_calculation_id is not None for sc in request.source_calculations
+    protocol = request.protocol
+    cites_unseen_record = (
+        request.existing_statmech_id is not None
+        or any(sc.existing_calculation_id is not None for sc in request.source_calculations)
+        or (
+            protocol is not None
+            and any(c.calculation_ref is not None for c in protocol.supporting_calculations)
+        )
     )
     element = single_atom_element(smiles=request.species_entry.smiles)
     if element is None:
@@ -257,7 +294,10 @@ def collect_thermo_atomic_warnings(request) -> list[UploadWarning]:
         term_symbol=request.species_entry.term_symbol,
         electronic_levels=None,
         statmech_computed=False,
-        energy_is_computed=(bool(corrections) or request.scientific_origin == ScientificOriginKind.computed)
+        energy_is_computed=(
+            bool(corrections)
+            or (request.scientific_origin == ScientificOriginKind.computed and thermo_carries_enthalpy(request))
+        )
         and not cites_unseen_record,
         has_soc_total=has_soc,
         energy_field="applied_energy_corrections",
@@ -267,8 +307,8 @@ def collect_thermo_atomic_warnings(request) -> list[UploadWarning]:
 def collect_conformer_atomic_warnings(request) -> list[UploadWarning]:
     """Adapter for ``POST /uploads/conformers`` (and the conformer job).
 
-    The request carries the geometry, the statmech (its levels; its origin is the
-    request's) and the applied corrections, so all three judgements are made on
+    The request carries the geometry, the statmech (its levels, and its own
+    ``scientific_origin``, which is what is stored on the statmech row) and the applied corrections, so all three judgements are made on
     what it holds.
     """
     element = single_atom_element(xyz_texts=[request.geometry.xyz_text], smiles=request.species_entry.smiles)
@@ -283,7 +323,7 @@ def collect_conformer_atomic_warnings(request) -> list[UploadWarning]:
         electronic_state_kind=request.species_entry.electronic_state_kind,
         term_symbol=request.species_entry.term_symbol,
         electronic_levels=(list(statmech.electronic_levels) if statmech is not None else None),
-        statmech_computed=statmech is not None and request.scientific_origin == ScientificOriginKind.computed,
+        statmech_computed=statmech is not None and statmech.scientific_origin == ScientificOriginKind.computed,
         energy_is_computed=bool(corrections),
         has_soc_total=corrections_include_spin_orbit(corrections),
         statmech_field="statmech",

@@ -103,13 +103,15 @@ def bundle_payload(atom="O", levels=None, corrections=(), origin="computed") -> 
     return bundle
 
 
-def conformer_payload(atom="O", levels=None, corrections=(), origin="computed") -> dict:
+def conformer_payload(atom="O", levels=None, corrections=(), origin="computed", statmech_origin=None) -> dict:
     payload = _hydrogen_conformer_payload()
     payload["species_entry"] = _entry(atom)
     payload["geometry"] = {"xyz_text": ATOMS[atom][2]}
     payload["scientific_origin"] = origin
     if levels is not None:
         payload["statmech"] = {"statmech_treatment": "rrho", "external_symmetry": 1, "electronic_levels": levels}
+        if statmech_origin is not None:
+            payload["statmech"]["scientific_origin"] = statmech_origin
     payload["applied_energy_corrections"] = list(corrections)
     return payload
 
@@ -330,3 +332,105 @@ def test_pdep_levels_warning_lands_on_the_species_statmech(client, db_session):
     (statmech_id,) = set(db_session.scalars(select(Statmech.id))) - before
     (row,) = _rows(db_session, resp.json()["submission_id"], LEVELS)
     assert (row.record_type, row.record_id) == (SubmissionRecordType.statmech, statmech_id)
+
+
+# ---------------------------------------------------------------------------
+# Review round 1
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "request_origin,statmech_origin,expect_levels",
+    [("computed", "experimental", False), ("experimental", "computed", True), ("computed", "computed", True)],
+)
+def test_the_conformer_levels_warning_follows_the_statmechs_own_origin(
+    client, request_origin, statmech_origin, expect_levels
+):
+    """The origin stored on the statmech row is the statmech payload's, not the request's."""
+    payload = conformer_payload("O", levels=[], origin=request_origin, statmech_origin=statmech_origin)
+    assert (LEVELS in _codes(_post(client, "/api/v1/uploads/conformers", payload))) is expect_levels
+
+
+def _cited_calculation(client) -> dict:
+    """An O calculation already deposited for the same species entry, to cite from a thermo."""
+    resp = _post(client, "/api/v1/uploads/conformers", conformer_payload("O"))
+    return resp.json()["primary_calculation"]
+
+
+def _thermo_citing(client, how: str) -> dict:
+    calc = _cited_calculation(client)
+    payload = thermo_payload("O", corrections=[_aec()])
+    if how == "existing_calculation_id":
+        payload["source_calculations"] = [{"existing_calculation_id": calc["calculation_id"], "role": "sp"}]
+    elif how == "calculation_ref":
+        payload["protocol"] = {"version": 1, "supporting_calculations": [{"calculation_ref": calc["calculation_ref"]}]}
+    return payload
+
+
+@pytest.mark.parametrize("how", ["existing_calculation_id", "calculation_ref"])
+def test_a_thermo_citing_a_deposited_calculation_is_not_judged_for_spin_orbit(client, how):
+    """Either way the thermo names a calculation whose corrections the request cannot see."""
+    assert SOC in _codes(_post(client, "/api/v1/uploads/thermo", _thermo_citing(client, "none")))
+    assert SOC not in _codes(_post(client, "/api/v1/uploads/thermo", _thermo_citing(client, how)))
+
+
+def _entropy_only(payload: dict) -> dict:
+    payload.pop("h298_kj_mol")
+    payload.pop("enthalpy_reference_kind")  # refused beside a record with no enthalpy
+    payload["s298_j_mol_k"] = 161.0
+    return payload
+
+
+def test_an_entropy_only_computed_thermo_has_no_energy_to_lack_spin_orbit_in(client):
+    url = "/api/v1/uploads/thermo"
+    assert SOC in _codes(_post(client, url, thermo_payload("O")))
+    assert SOC not in _codes(_post(client, url, _entropy_only(thermo_payload("O"))))
+    # Corrections present still count as computed energy.
+    assert SOC in _codes(_post(client, url, _entropy_only(thermo_payload("O", corrections=[_aec()]))))
+
+
+def test_an_entropy_only_bundle_thermo_record_is_not_judged_either(client):
+    def pairs(bundle):
+        resp = client.post(SUBMIT, json=bundle)
+        assert resp.status_code == 201, resp.text[:1500]
+        return {m["code"] for m in resp.json()["messages"] if m["level"] == "warning"}
+
+    assert SOC in pairs(bundle_payload("O"))
+    entropy_only = bundle_payload("O")
+    _entropy_only(entropy_only["records"]["thermo_uploads"][0])
+    assert SOC not in pairs(entropy_only)
+
+
+def test_an_entropy_only_species_bundle_thermo_is_not_judged_either(client):
+    from tests.api.test_api_monatomic_electronic import _cl_species_bundle
+
+    def codes(thermo):
+        bundle = _cl_species_bundle(
+            [{"level_index": 1, "energy_cm1": 0.0, "degeneracy": 4}, {"level_index": 2, "energy_cm1": 882.3515, "degeneracy": 2}]
+        )
+        bundle["thermo"] = thermo
+        return _codes(_post(client, "/api/v1/uploads/computed-species", bundle))
+
+    assert SOC in codes({"scientific_origin": "computed", "h298_kj_mol": 121.3, "enthalpy_reference_kind": "formation_298k"})
+    assert SOC not in codes({"scientific_origin": "computed", "s298_j_mol_k": 165.2})
+
+
+@pytest.mark.parametrize(
+    "thermo,carries",
+    [
+        ({"h298_kj_mol": 1.0}, True),
+        ({"enthalpy_formation_0k_kj_mol": 1.0}, True),
+        ({"s298_j_mol_k": 1.0}, False),
+        ({"points": [{"temperature_k": 300, "cp_j_mol_k": 20.8}]}, False),
+        ({"points": [{"temperature_k": 300, "s_j_mol_k": 160.0}]}, False),
+        ({"points": [{"temperature_k": 300, "h_kj_mol": 6.2}]}, True),
+        ({"points": [{"temperature_k": 300, "g_kj_mol": -9.0}]}, True),
+    ],
+)
+def test_what_counts_as_a_thermo_carrying_energy(thermo, carries):
+    from types import SimpleNamespace
+
+    from app.services.atomic_electronic_warnings import thermo_carries_enthalpy
+
+    shaped = SimpleNamespace(**{k: ([SimpleNamespace(**pt) for pt in v] if k == "points" else v) for k, v in thermo.items()})
+    assert thermo_carries_enthalpy(shaped) is carries
