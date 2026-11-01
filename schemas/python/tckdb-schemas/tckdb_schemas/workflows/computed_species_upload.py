@@ -1070,7 +1070,7 @@ class ComputedSpeciesUploadRequest(SchemaBase):
                             f"calculation '{calc.key}' depends_on undefined "
                             f"calculation_key '{dep.parent_calculation_key}'.",
                             field=(
-                                f"calculations['{calc.key}'].depends_on."
+                                f"calculations[{calc.key!r}].depends_on."
                                 f"parent_calculation_key"
                             ),
                             key=dep.parent_calculation_key,
@@ -1100,8 +1100,8 @@ class ComputedSpeciesUploadRequest(SchemaBase):
                 if calc.freq_result is None:
                     continue
                 location = (
-                    f"conformers['{conf.key}'].calculations"
-                    f"['{calc.key}'].freq_result"
+                    f"conformers[{conf.key!r}].calculations"
+                    f"[{calc.key!r}].freq_result"
                 )
                 findings.extend(
                     calc.species_entry_frequency_findings(
@@ -1255,7 +1255,7 @@ class ComputedSpeciesUploadRequest(SchemaBase):
                     continue
                 key = stability.source_calculation_key
                 field = (
-                    f"calculations['{calc.key}'].scf_stability."
+                    f"calculations[{calc.key!r}].scf_stability."
                     f"source_calculation_key"
                 )
                 if key == calc.key:

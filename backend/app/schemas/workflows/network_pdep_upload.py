@@ -289,7 +289,7 @@ class NetworkSpeciesIn(SchemaBase):
                     f"Species '{self.key}' calculation '{calc.key}' "
                     f"conformer_key must reference one of that species's "
                     f"own conformers.",
-                    field=f"calculations['{calc.key}'].conformer_key",
+                    field=f"calculations[{calc.key!r}].conformer_key",
                     key=calc.conformer_key,
                     declared=conformer_keys,
                 )
@@ -307,7 +307,7 @@ class NetworkSpeciesIn(SchemaBase):
                     W_GEOMETRY_KEY_UNRESOLVED,
                     f"Species '{self.key}' calculation '{calc.key}' geometry_key "
                     f"must reference one of that species's conformer geometries.",
-                    field=f"calculations['{calc.key}'].geometry_key",
+                    field=f"calculations[{calc.key!r}].geometry_key",
                     key=calc.geometry_key,
                     declared=conformer_geometry_keys,
                 )
@@ -345,8 +345,8 @@ class NetworkSpeciesIn(SchemaBase):
         findings: list[StationaryPointFinding] = []
         for conformer in self.conformers:
             location = (
-                f"species['{self.key}'].conformers['{conformer.key}']"
-                f".calculation['{conformer.calculation.key}']"
+                f"species[{self.key!r}].conformers[{conformer.key!r}]"
+                f".calculation[{conformer.calculation.key!r}]"
             )
             findings.extend(
                 species_entry_frequency_findings(
@@ -361,7 +361,7 @@ class NetworkSpeciesIn(SchemaBase):
                 )
             )
         for calc in self.calculations:
-            location = f"species['{self.key}'].calculations['{calc.key}']"
+            location = f"species[{self.key!r}].calculations[{calc.key!r}]"
             findings.extend(
                 species_entry_frequency_findings(calc, kind, location=location)
             )
@@ -449,7 +449,7 @@ class TransitionStateIn(SchemaBase):
         findings: list[StationaryPointFinding] = []
         for calc in (self.calculation, *self.calculations):
             location = (
-                f"transition_states['{self.key}'].calculations['{calc.key}']"
+                f"transition_states[{self.key!r}].calculations[{calc.key!r}]"
             )
             findings.extend(
                 transition_state_frequency_findings(calc, location=location)
@@ -1682,7 +1682,7 @@ class NetworkPDepUploadRequest(SchemaBase):
                 "imaginary_mode": CalculationType.freq,
             }
             for ev_index, evidence in enumerate(ts.validation_evidence):
-                base_field = f"transition_states['{ts.key}'].validation_evidence[{ev_index}]"
+                base_field = f"transition_states[{ts.key!r}].validation_evidence[{ev_index}]"
                 if evidence.kind == "energy_ordering":
                     # Each energy names its own source, and it must be a
                     # calculation of the thing the energy is of: the saddle
@@ -1781,7 +1781,7 @@ class NetworkPDepUploadRequest(SchemaBase):
                     W_GEOMETRY_KEY_UNRESOLVED,
                     f"Calculation '{calc.key}' in {context} references "
                     f"undefined geometry_key '{calc.geometry_key}'.",
-                    field=f"calculations['{calc.key}'].geometry_key",
+                    field=f"calculations[{calc.key!r}].geometry_key",
                     key=calc.geometry_key,
                     declared=geometry_keys,
                 )

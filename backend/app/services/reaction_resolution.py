@@ -1301,15 +1301,10 @@ def resolve_chem_reaction(
             from tckdb_schemas.upload_warning import UploadWarning
 
             warnings_out.append(
-                UploadWarning(
+                UploadWarning.from_code(
                     field="reaction.reversible",
                     code=W_REACTION_REVERSIBLE_TWIN,
-                    message=(
-                        f"This reaction is stored as {'reversible' if reversible else 'irreversible'}, and the same "
-                        f"participants are also stored as {'irreversible' if reversible else 'reversible'} "
-                        f"({twin.public_ref}). They are two reactions in TCKDB because reversibility is part of a "
-                        "reaction's identity; rates deposited against one are not found under the other."
-                    ),
+                    context={"reversible": bool(reversible), "twin_ref": twin.public_ref},
                 )
             )
     return chem_reaction

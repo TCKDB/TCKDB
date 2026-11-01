@@ -270,15 +270,9 @@ def reconcile_charge_multiplicity(
         compared = True
         if declared_charge != parsed.charge:
             warnings.append(
-                UploadWarning(
+                UploadWarning.from_code(
                     field=f"{field_prefix}.charge",
                     code=W_CHARGE_MISMATCH,
-                    message=(
-                        f"Declared charge {declared_charge:+d} disagrees with "
-                        f"the charge stated by the uploaded {parsed.software} "
-                        f"output log ({parsed.charge:+d}). The declared value "
-                        "is kept unchanged and flagged for reviewer attention."
-                    ),
                     context={"declared": declared_charge, "logged": parsed.charge, "software": parsed.software},
                 )
             )
@@ -287,16 +281,9 @@ def reconcile_charge_multiplicity(
         compared = True
         if declared_multiplicity != parsed.multiplicity:
             warnings.append(
-                UploadWarning(
+                UploadWarning.from_code(
                     field=f"{field_prefix}.multiplicity",
                     code=W_MULTIPLICITY_MISMATCH,
-                    message=(
-                        f"Declared spin multiplicity {declared_multiplicity} "
-                        f"disagrees with the multiplicity stated by the "
-                        f"uploaded {parsed.software} output log "
-                        f"({parsed.multiplicity}). The declared value is kept "
-                        "unchanged and flagged for reviewer attention."
-                    ),
                     context={
                         "declared": declared_multiplicity,
                         "logged": parsed.multiplicity,

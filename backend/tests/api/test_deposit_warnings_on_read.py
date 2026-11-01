@@ -638,10 +638,9 @@ def test_a_nan_context_reads_exactly_as_the_upload_response_showed_it(client, db
     from tests.api.test_api_uploads import _transition_state_payload
 
     real = uploads.transition_state_request_warnings
-    extra = UploadWarning(
+    extra = UploadWarning.from_code(
         field="validation_evidence",
         code="sp_energy_payload_log_mismatch",
-        message="nan context",
         context={"delta_hartree": float("nan"), "ok": 1.5, "nested": {"big": float("inf")}},
     )
     monkeypatch.setattr(uploads, "transition_state_request_warnings", lambda request: [*real(request), extra])

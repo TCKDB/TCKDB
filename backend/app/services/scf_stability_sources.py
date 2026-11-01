@@ -108,9 +108,9 @@ def link_scf_stability_sources(
     for owner_key, stability in pairs:
         source_key = stability.source_calculation_key
         assert source_key is not None
-        field = f"calculations['{owner_key}'].scf_stability.source_calculation_key"
+        field = f"calculations[{owner_key!r}].scf_stability.source_calculation_key"
         owner = resolve_calculation_key(
-            owner_key, calculations_by_key, field=f"calculations['{owner_key}'].key"
+            owner_key, calculations_by_key, field=f"calculations[{owner_key!r}].key"
         )
         source = resolve_calculation_key(source_key, calculations_by_key, field=field)
         assert_calculation_owned_by(
@@ -144,16 +144,10 @@ def link_scf_stability_sources(
             and owner.conformer_observation_id is None
             and owner.transition_state_entry_id is None
         ):
-            unverified = UploadWarning(
+            unverified = UploadWarning.from_code(
                 field=field,
                 code=W_SCF_STABILITY_SOURCE_CONFORMER_UNVERIFIED,
-                message=(
-                    f"Neither '{owner_key}' nor '{source_key}', the job named as having "
-                    f"measured its stability verdict, is tied to a conformer (no conformer_key, "
-                    f"and no geometry_key naming a conformer's geometry), so whether they are "
-                    f"on the same conformer cannot be checked. The link is stored as stated; "
-                    f"give both calculations a conformer_key to have it checked."
-                ),
+                context={"depositor_supplied": {"calculation_key": owner_key, "source_calculation_key": source_key}},
             )
             note_warning_subject(session, unverified, SubmissionRecordType.calculation, owner.id)
             warnings.append(unverified)
@@ -163,15 +157,10 @@ def link_scf_stability_sources(
             and owner.lot_id is not None
             and source.lot_id != owner.lot_id
         ):
-            mismatch = UploadWarning(
+            mismatch = UploadWarning.from_code(
                 field=field,
                 code=W_SCF_STABILITY_SOURCE_LEVEL_MISMATCH,
-                message=(
-                    f"'{source_key}', the job that measured the stability "
-                    f"verdict on '{owner_key}', ran at a different level "
-                    f"of theory. The verdict describes the measuring "
-                    f"job's wavefunction, not the carrying calculation's."
-                ),
+                context={"depositor_supplied": {"calculation_key": owner_key, "source_calculation_key": source_key}},
             )
             note_warning_subject(session, mismatch, SubmissionRecordType.calculation, owner.id)
             warnings.append(mismatch)

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from tckdb_schemas.deposit_warning_messages import EXCITED_STATE_METHODS
 from tckdb_schemas.stationary_point import (
     TS_IMAGINARY_FREQUENCY_MIN_CM1,
     W_N_IMAG_CONTRADICTS_MINIMUM,
@@ -308,17 +309,10 @@ def check_freq_parser_fidelity(
         if calc.freq_result.modes:
             continue
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field=f"calculations[{index}].freq_result.modes",
                 code=W_FREQ_PARSED_NO_MODES,
-                message=(
-                    "freq_result was emitted by an ESS parser "
-                    f"(parameters_parser={calc.parameters_parser!r}) "
-                    "but carries no per-mode frequencies. Per-mode rows "
-                    "are required for downstream statmech recomputation; "
-                    "re-run the parser or attach the mode list before "
-                    "promoting the record."
-                ),
+                context={"depositor_supplied": {"parameters_parser": f"{calc.parameters_parser.name} {calc.parameters_parser.version}"}},
             )
         )
     return warnings
@@ -337,7 +331,7 @@ def stationary_point_warnings(
     is a bug in the seam wiring, not something to annotate.
     """
     return [
-        UploadWarning(field=f.location, code=f.code, message=f.message)
+        UploadWarning.from_code(field=f.location, code=f.code, context=f.context)
         for f in warning_findings(findings)
     ]
 
@@ -372,6 +366,25 @@ def _check_n_imag(
 # ---------------------------------------------------------------------------
 
 
+def _evidence_category(source: str) -> str:
+    """The kind of evidence a deduction rests on, as a TCKDB token (the raw source can name a method or a symmetry)."""
+    if source.startswith("freq.n_imag"):
+        return "frequency_analysis"
+    if source == "job_type.td":
+        return "excited_state_job_type"
+    if source == "method.default":
+        return "method_default"
+    if source.startswith("method."):
+        return "excited_state_method"
+    return "multiplicity"
+
+
+def _evidence_method(source: str) -> dict[str, str]:
+    """The exact excited-state method a deduction names, when it is one of the methods the deduction table knows."""
+    method = source.removeprefix("method.") if source.startswith("method.") else None
+    return {"evidence_method": method} if method in EXCITED_STATE_METHODS else {}
+
+
 def _reconcile_deduction(
     deduction: Deduction,
     payload: SpeciesEntryIdentityPayload,
@@ -394,13 +407,16 @@ def _reconcile_deduction(
     code = _DEDUCTION_WARNING_CODES.get(deduction.field, "deduction_mismatch")
     attr_name = _DEDUCTION_FIELD_MAP[deduction.field][0]
 
-    return UploadWarning(
+    return UploadWarning.from_code(
         field=attr_name,
         code=code,
-        message=(
-            f"Provided {attr_name}='{payload_value}' but "
-            f"{deduction.source} indicates '{deduction.value}'."
-        ),
+        context={
+            "deduced": str(deduction.value),
+            "evidence": _evidence_category(deduction.source),
+            **_evidence_method(deduction.source),
+            "confidence": deduction.confidence,
+            "depositor_supplied": {attr_name: str(payload_value)},
+        },
     )
 
 
@@ -433,13 +449,10 @@ def term_symbol_warnings(payload: SpeciesEntryIdentityPayload) -> list[UploadWar
     stated = declared_term_multiplicity(term)
     if stated is not None and stated != payload.multiplicity:
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field="species_entry.term_symbol",
                 code=W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY,
-                message=(
-                    f"Term symbol '{term}' states spin multiplicity {stated}, but "
-                    f"this species entry declares multiplicity {payload.multiplicity}."
-                ),
+                context={"term_multiplicity": stated, "declared_multiplicity": payload.multiplicity},
             )
         )
         return warnings
@@ -458,14 +471,14 @@ def term_symbol_warnings(payload: SpeciesEntryIdentityPayload) -> list[UploadWar
             or (atomic.two_j is not None and atomic.two_j != ground.levels[0][0])
         ):
             warnings.append(
-                UploadWarning(
+                UploadWarning.from_code(
                     field="species_entry.term_symbol",
                     code=W_TERM_SYMBOL_CONTRADICTS_GROUND_TERM,
-                    message=(
-                        f"Term symbol '{term}' is not the NIST ground level of "
-                        f"neutral {element} ({ground.term_symbol}, ground "
-                        f"J={ground.levels[0][0] / 2:g}) for a ground-state entry."
-                    ),
+                    context={
+                        "element": element,
+                        "ground_term": ground.term_symbol,
+                        "ground_j": ground.levels[0][0] / 2,
+                    },
                 )
             )
     return warnings

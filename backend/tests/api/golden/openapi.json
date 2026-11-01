@@ -16150,12 +16150,24 @@
       },
       "ContributionBundleDryRunMessage": {
         "additionalProperties": false,
-        "description": "A non-item-scoped message about the bundle as a whole.\n\nItem-scoped problems are expressed as ``ContributionBundleDryRunItem``\nrows with ``action=error``; messages here describe bundle-wide info,\nwarnings, or errors that don't attach cleanly to one record.\n\n:param level: Severity (``info``/``warning``/``error``).\n:param code: Short stable machine code (e.g. ``unsupported_bundle_kind``).\n:param message: Human-readable explanation.\n:param field: Optional pointer at a bundle field (e.g. ``records``).\n:param local_ref: Optional bundle-local upload reference.\n:param record_type: Optional record type the message relates to.",
+        "description": "A non-item-scoped message about the bundle as a whole.\n\nItem-scoped problems are expressed as ``ContributionBundleDryRunItem``\nrows with ``action=error``; messages here describe bundle-wide info,\nwarnings, or errors that don't attach cleanly to one record.\n\n:param level: Severity (``info``/``warning``/``error``).\n:param code: Short stable machine code (e.g. ``unsupported_bundle_kind``).\n:param message: Human-readable explanation.\n:param field: Optional pointer at a bundle field (e.g. ``records``).\n:param local_ref: Optional bundle-local upload reference.\n:param record_type: Optional record type the message relates to.\n:param context: Optional values the message states (the ``context`` of an ``UploadWarning`` carried into a bundle\n    message): numbers, TCKDB tokens, and under ``depositor_supplied`` the depositor-typed text that helps find the\n    problem. ``None`` when the message states none.",
         "properties": {
           "code": {
             "minLength": 1,
             "title": "Code",
             "type": "string"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
           },
           "field": {
             "anyOf": [
@@ -16303,6 +16315,18 @@
             "minLength": 1,
             "title": "Code",
             "type": "string"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
           },
           "field": {
             "anyOf": [
@@ -71737,7 +71761,7 @@
         "type": "string"
       },
       "UploadWarning": {
-        "description": "A non-blocking warning produced during upload reconciliation.\n\n:param field: Dot-path to the field that triggered the warning\n    (e.g. ``\"species_entry_kind\"`` or ``\"reactants[0].species_entry_kind\"``).\n:param code: Machine-readable warning code for programmatic handling.\n:param message: Human-readable explanation, already formatted.\n:param context: The values that triggered the warning, as the check saw them\n    (for example the declared and the logged charge). Optional: a producer\n    that states none leaves it ``None``. It is stored with the warning and\n    shown with the record it concerns; it never carries a database id.",
+        "description": "A non-blocking warning produced during upload reconciliation.\n\nBuild one with :meth:`from_code`. The ``message`` is TCKDB's sentence for the ``code``, rendered from the code and\nthe structured ``context``, so the upload response, the job result, the stored row and the public read all say\nthe same thing. It never carries text the depositor typed (a transition-state label, a local payload key, a file\nname); a label that helps the depositor find the problem sits under ``context[\"depositor_supplied\"]``.\n\n:param field: Dot-path to the field that triggered the warning\n    (e.g. ``\"species_entry_kind\"`` or ``\"reactants[0].species_entry_kind\"``). It is the path into the\n    depositor's own request, so it may name a local key; a read replaces those keys.\n:param code: Machine-readable warning code for programmatic handling. Match on this, never on ``message``.\n:param message: TCKDB's sentence for ``code``, already formatted.\n:param context: The values that triggered the warning, as the check saw them\n    (for example the declared and the logged charge). Optional: a producer\n    that states none leaves it ``None``. It is stored with the warning and\n    shown with the record it concerns; it never carries a database id. Anything the depositor typed that helps\n    them find the problem is under ``depositor_supplied``: a dict of named strings, lists of strings or lists of\n    records of strings (``{\"transition_state_label\": \"TS0\"}``), which is depositor-typed text. An entry that\n    holds nothing is dropped. No other key holds a string the depositor typed.",
         "properties": {
           "code": {
             "title": "Code",

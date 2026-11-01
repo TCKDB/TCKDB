@@ -73,14 +73,9 @@ def _disagreement(calculation: Calculation, artifact_in: ArtifactIn) -> UploadWa
     if deck is None or deck is stored:
         return None
     # TCKDB's own method tokens, so a gradient-versus-energy disagreement reads as one.
-    return UploadWarning(
+    return UploadWarning.from_code(
         field="artifacts",
         code=W_HESSIAN_METHOD_DISAGREES_WITH_STORED_TAU_BASIS,
-        message=(
-            f"The tolerance stored with this frequency calculation rests on the Hessian method {stored.value} "
-            f"({freq.imaginary_mode_tau_basis}), but the input deck attached afterwards states {deck.value}. "
-            "The stored tolerance was not changed."
-        ),
         context={
             "stored_basis": freq.imaginary_mode_tau_basis,
             "stored_method": stored.value,

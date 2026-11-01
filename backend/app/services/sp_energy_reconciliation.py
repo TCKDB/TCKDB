@@ -178,17 +178,9 @@ def reconcile_sp_energy(
             log_energy_hartree=log_energy,
             # Keep the tool's value; flag the discrepancy for a reviewer.
             resolved_energy_hartree=payload_energy_hartree,
-            warning=UploadWarning(
+            warning=UploadWarning.from_code(
                 field=field,
                 code=W_SP_ENERGY_MISMATCH,
-                message=(
-                    "Recorded single-point energy "
-                    f"{payload_energy_hartree:.8f} Ha disagrees with the "
-                    f"value re-derived from the output log "
-                    f"{log_energy:.8f} Ha (delta {delta:+.2e} Ha). The "
-                    "recorded value is kept unchanged and flagged for "
-                    "reviewer attention."
-                ),
                 context={
                     "recorded_hartree": payload_energy_hartree,
                     "log_hartree": log_energy,
@@ -203,13 +195,9 @@ def reconcile_sp_energy(
             payload_energy_hartree=None,
             log_energy_hartree=log_energy,
             resolved_energy_hartree=log_energy,
-            warning=UploadWarning(
+            warning=UploadWarning.from_code(
                 field=field,
                 code=W_SP_ENERGY_FILLED_FROM_LOG,
-                message=(
-                    "No single-point energy was provided; filled "
-                    f"{log_energy:.8f} Ha re-derived from the output log."
-                ),
                 context={"log_hartree": log_energy},
             ),
         )

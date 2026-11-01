@@ -185,6 +185,7 @@ def _carry_forward_messages(
             field=msg.field,
             local_ref=msg.local_ref,
             record_type=msg.record_type,
+            context=msg.context,
         )
         for msg in dry_run.messages
         if msg.level is not DryRunMessageLevel.error
@@ -199,7 +200,7 @@ def _import_warning_messages(
 ) -> list[ContributionBundleSubmitMessage]:
     """Render one upload's warnings as bundle messages.
 
-    The warning's own ``field``, ``code`` and ``message`` are kept exactly as
+    The warning's own ``field``, ``code``, ``message`` and ``context`` are kept exactly as
     the direct upload route returns them (``field`` is relative to that one
     upload); ``local_ref`` says which upload of the bundle it belongs to.
     """
@@ -211,6 +212,7 @@ def _import_warning_messages(
             field=w.field,
             local_ref=local_ref,
             record_type=record_type,
+            context=w.context,
         )
         for w in warnings
     ]

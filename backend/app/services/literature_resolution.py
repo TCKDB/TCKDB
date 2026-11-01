@@ -114,15 +114,13 @@ def _resolve_literature_field_mismatches(
         != _normalize_title_for_comparison(fetched_title)
     ):
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field=f"{field_prefix}title",
                 code=W_LITERATURE_TITLE_MISMATCH,
-                message=(
-                    f"Supplied literature title {request.title!r} does not "
-                    "match the title fetched from the supplied DOI/ISBN "
-                    f"({fetched_title!r}). The fetched title was kept; "
-                    "verify the identifier is correct for this citation."
-                ),
+                context={
+                    "fetched_title": fetched_title,
+                    "depositor_supplied": {"supplied_title": request.title},
+                },
             )
         )
 
@@ -133,15 +131,10 @@ def _resolve_literature_field_mismatches(
         and request.year != fetched_year
     ):
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field=f"{field_prefix}year",
                 code=W_LITERATURE_YEAR_MISMATCH,
-                message=(
-                    f"Supplied literature year {request.year!r} does not "
-                    "match the year fetched from the supplied DOI/ISBN "
-                    f"({fetched_year!r}). The fetched year was kept; "
-                    "verify the identifier is correct for this citation."
-                ),
+                context={"supplied_year": request.year, "fetched_year": fetched_year},
             )
         )
 

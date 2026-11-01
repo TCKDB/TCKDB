@@ -64,12 +64,7 @@ from app.workflows.reaction import persist_reaction_upload
 #: send. The remedy therefore names every field the map needs, because
 #: 'atom_map' alone would send a depositor to write a map with nothing to count
 #: its indices into.
-_STANDALONE_TS_ABSENCE_REMEDY = (
-    "To record one for this micro reaction, supply 'atom_map' together with "
-    "'geometry_key' (naming the saddle-point geometry) and a 'key' and "
-    "'geometry' on each reaction participant it maps (ADR 0011); the "
-    "computed-reaction upload accepts the same map."
-)
+_STANDALONE_TS_ABSENCE_DEPOSIT_PATH = "standalone_transition_state"
 
 
 def persist_transition_state_upload(
@@ -285,7 +280,7 @@ def persist_transition_state_upload(
         ],
         geometry_id_by_key=geometry_id_by_key,
         field_path="atom_map",
-        absence_remedy=_STANDALONE_TS_ABSENCE_REMEDY,
+        deposit_path=_STANDALONE_TS_ABSENCE_DEPOSIT_PATH,
         subject_label=request.label or "transition state",
         created_by=created_by,
         warnings=warnings,

@@ -97,7 +97,7 @@ def _kinetics_with_literature_bundle() -> dict:
     return bundle
 
 
-def _direct_warnings(client, url: str, record: dict) -> list[tuple[str, str, str]]:
+def _direct_warnings(client, url: str, record: dict) -> list[tuple[str, str, str, str]]:
     """What the direct route answers for ``record``, with the write undone."""
     savepoint = client._db_session.begin_nested()
     try:
@@ -105,12 +105,12 @@ def _direct_warnings(client, url: str, record: dict) -> list[tuple[str, str, str
     finally:
         savepoint.rollback()
     assert resp.status_code == 201, resp.text[:600]
-    return [(w["code"], w["message"], w["field"]) for w in resp.json()["warnings"]]
+    return [(w["code"], w["message"], w["field"], json.dumps(w["context"], sort_keys=True)) for w in resp.json()["warnings"]]
 
 
-def _bundle_warnings(messages: list[dict], local_ref: str) -> list[tuple[str, str, str]]:
+def _bundle_warnings(messages: list[dict], local_ref: str) -> list[tuple[str, str, str, str]]:
     return [
-        (m["code"], m["message"], m["field"])
+        (m["code"], m["message"], m["field"], json.dumps(m["context"], sort_keys=True))
         for m in messages
         if m["level"] == "warning" and m.get("local_ref") == local_ref
     ]
@@ -140,13 +140,21 @@ def test_bundle_submit_reports_the_warnings_the_direct_route_reports(client, kin
     case = CASES[kind]
     bundle = case["bundle"]()
     expected = _direct_warnings(client, case["url"], case["record"](bundle))
-    assert {code for code, _m, _f in expected} >= set(case["required"]), expected
+    assert {code for code, _m, _f, _c in expected} >= set(case["required"]), expected
 
     resp = client.post(SUBMIT, json=bundle)
     assert resp.status_code == 201, resp.text[:600]
     body = resp.json()
 
     assert _bundle_warnings(body["messages"], case["local_ref"]) == expected
+    # The context rides with the message: the depositor-typed text that helps find the problem lives only there (#838).
+    carried = {code: json.loads(context) for code, _m, _f, context in expected}
+    if kind == "kinetics":
+        assert carried["literature_title_mismatch"]["depositor_supplied"] == {
+            "supplied_title": "A Completely Different Paper"
+        }
+        sent = {m["code"]: m["context"] for m in body["messages"] if m.get("local_ref") == case["local_ref"]}
+        assert sent["literature_title_mismatch"] == carried["literature_title_mismatch"]
     # The summary counts what the messages carry, and the closing note is last.
     assert body["summary"]["warnings"] == sum(1 for m in body["messages"] if m["level"] == "warning")
     assert body["messages"][-1]["code"] == "ingestion_succeeded"
@@ -161,7 +169,7 @@ def test_bundle_dry_run_reports_the_warnings_submit_reports_and_writes_nothing(
     case = CASES[kind]
     bundle = case["bundle"]()
     expected = _direct_warnings(client, case["url"], case["record"](bundle))
-    assert {code for code, _m, _f in expected} >= set(case["required"]), expected
+    assert {code for code, _m, _f, _c in expected} >= set(case["required"]), expected
 
     thermo_rows = select(func.count()).select_from(Thermo)
     before = db_session.scalar(thermo_rows)
@@ -176,7 +184,7 @@ def test_bundle_dry_run_reports_the_warnings_submit_reports_and_writes_nothing(
     # are not both appended.
     all_codes = [m["code"] for m in body["messages"] if m["level"] == "warning"]
     for code in case["required"]:
-        assert all_codes.count(code) == [c for c, _m, _f in expected].count(code), code
+        assert all_codes.count(code) == [c for c, _m, _f, _c in expected].count(code), code
     assert body["summary"]["warnings"] == sum(1 for m in body["messages"] if m["level"] == "warning")
     assert body["summary"]["errors"] == 0
     # Nothing was written by the rehearsal.

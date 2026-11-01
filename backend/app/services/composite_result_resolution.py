@@ -322,18 +322,13 @@ def collect_named_composite_deposit_warnings(
     ).all()
     warnings: list[UploadWarning] = []
     for calc_id, calc_type, method in rows:
-        warning = UploadWarning(
+        warning = UploadWarning.from_code(
             field="level_of_theory",
             code=_DEPOSITED_AS_WARNING_CODE[calc_type],
-            message=(
-                f"This {calc_type.value} calculation is at the level of theory {method!r}, a named "
-                "composite method: one program run that produces a final energy from several "
-                f"internal steps. A {calc_type.value} calculation is not what ran. It was stored as "
-                "sent; send it as type 'composite' with a composite_result block (assembly "
-                "'program_run' and the energies the program printed) and, if the run's own "
-                "optimisation or frequency job is also deposited, send those separately at their "
-                "own levels. This will be refused once producers can send that shape."
-            ),
+            context={
+                "calculation_type": calc_type.value,
+                "depositor_supplied": {"level_of_theory_method": str(method)},
+            },
         )
         # Each calculation is its own subject: two single points at one named method say the same words.
         note_warning_subject(session, warning, SubmissionRecordType.calculation, calc_id)

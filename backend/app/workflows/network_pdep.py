@@ -164,12 +164,7 @@ from app.workflows.reaction import persist_reaction_upload
 #: rather than the single per-bundle one the computed-reaction path takes, and
 #: every client mirror — and is deliberately not folded into the change that
 #: made the gap visible.
-_PDEP_ABSENCE_REMEDY = (
-    "The pressure-dependent network bundle cannot yet carry a map, so this "
-    "gap cannot be closed on this deposit path: to record one for this micro "
-    "reaction, deposit it through the computed-reaction upload, which accepts "
-    "'atom_map' (ADR 0011)."
-)
+_PDEP_ABSENCE_DEPOSIT_PATH = "pdep_bundle"
 
 
 def _energy_geometry_ids(session: Session, calculation: Calculation) -> frozenset[int]:
@@ -398,7 +393,7 @@ def _persist_calculation(
         effective_geometry_id = resolve_geometry_key(
             calc_in.geometry_key,
             geometry_key_map,
-            field=f"calculations['{calc_in.key}'].geometry_key",
+            field=f"calculations[{calc_in.key!r}].geometry_key",
         )
 
     # The inline literature fragment is forwarded unresolved; the shared
@@ -636,7 +631,7 @@ def persist_network_pdep_upload(
                 ),
                 observation_id_by_geometry_key=observation_id_by_geometry_key,
                 warnings=warning_sink,
-                field=f"species['{sp.key}'].calculations['{calc_in.key}']",
+                field=f"species[{sp.key!r}].calculations[{calc_in.key!r}]",
             )
 
     # ------------------------------------------------------------------
@@ -871,7 +866,7 @@ def persist_network_pdep_upload(
                     evidence_in.source_calculation_key,
                     calculation_key_to_id,
                     field=(
-                        f"transition_states['{ts_in.key}']."
+                        f"transition_states[{ts_in.key!r}]."
                         f"validation_evidence[{index}].source_calculation_key"
                     ),
                 )
@@ -883,7 +878,7 @@ def persist_network_pdep_upload(
             ],
             calculation_ids_by_key=calculation_key_to_id,
             subject_label=ts_in.key,
-            field_path=f"transition_states[{ts_in.key}].validation_evidence",
+            field_path=f"transition_states[{ts_in.key!r}].validation_evidence",
             reaction_entry_id=reaction_entry.id,
             transition_state_geometry_id=ts_geometry.id,
             created_by=created_by,
@@ -895,7 +890,7 @@ def persist_network_pdep_upload(
         # a map is exactly as invisible on this path as on any other, and the
         # ADR requires it be loud enough that a depositor who *has* the
         # mapping notices they are being asked for it. The map itself cannot
-        # be deposited here yet — see ``_PDEP_ABSENCE_REMEDY`` — so the call
+        # be deposited here yet — see ``_PDEP_ABSENCE_DEPOSIT_PATH`` — so the call
         # passes ``None`` unconditionally and exists to report the gap.
         persist_reaction_atom_map(
             session,
@@ -908,9 +903,9 @@ def persist_network_pdep_upload(
             # Points at the saddle point, not at ``.atom_map``: this bundle has
             # no such field, and a machine-readable pointer naming one would
             # send a client that highlights ``field`` to somewhere that does
-            # not exist. ``absence_remedy`` carries where the map can go.
-            field_path=f"transition_states[{ts_in.key}]",
-            absence_remedy=_PDEP_ABSENCE_REMEDY,
+            # not exist. ``deposit_path`` carries where the map can go.
+            field_path=f"transition_states[{ts_in.key!r}]",
+            deposit_path=_PDEP_ABSENCE_DEPOSIT_PATH,
             created_by=created_by,
             warnings=warning_sink,
         )

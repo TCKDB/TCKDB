@@ -873,15 +873,10 @@ def collect_composite_link_warnings(links: list[RoleLink], *, subject: str) -> l
     ]
     for calc in legacy:
         warnings.append(
-            UploadWarning(
+            UploadWarning.from_code(
                 field="source_calculations",
                 code=W_COMPOSITE_ROLE_ON_NON_COMPOSITE,
-                message=(
-                    f"{subject}: a calculation of type '{calc.type.value}' is linked with the role "
-                    "'composite'. The role names a composite energy, which is recorded by a "
-                    "calculation of type 'composite'. The link was stored as sent; it will be "
-                    "refused once producers can send that shape."
-                ),
+                context={"record_kind": subject, "calculation_type": calc.type.value},
             )
         )
     freqs = _by_role(links, "freq")
@@ -897,18 +892,17 @@ def collect_composite_link_warnings(links: list[RoleLink], *, subject: str) -> l
             differing = [f for f in freqs if f.lot_id is not None and f.lot_id != canonical]
             if differing:
                 warnings.append(
-                    UploadWarning(
+                    UploadWarning.from_code(
                         field="source_calculations",
                         code=W_COMPOSITE_FREQUENCY_LEVEL_DIFFERS,
-                        message=(
-                            f"{subject}: a linked 'freq' calculation is at "
-                            f"{_lot_label(differing[0].lot)}, but the composite method "
-                            f"{_lot_label(composite.lot)} runs its frequencies at "
-                            f"{_lot_label(session.get(LevelOfTheory, canonical))} and scales their "
-                            "zero-point energy for that level. Link the frequency calculation at the "
-                            "recipe's own level, or expect the record's frequencies and its energy to "
-                            "describe different levels."
-                        ),
+                        context={
+                            "record_kind": subject,
+                            "depositor_supplied": {
+                                "frequency_level": _lot_label(differing[0].lot),
+                                "composite_method": _lot_label(composite.lot),
+                                "recipe_frequency_level": _lot_label(session.get(LevelOfTheory, canonical)),
+                            },
+                        },
                     )
                 )
                 break

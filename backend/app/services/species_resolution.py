@@ -762,35 +762,6 @@ def resolve_species_entry_reference(
     return resolve_species_entry(session, payload, created_by=created_by)
 
 
-_NOT_REPRESENTED_TEXT = {
-    stereo.R_AXIAL_SMALL_RING: (
-        "a cyclic allene in a ring of eight or fewer atoms is not represented, whatever the geometry: both "
-        "mirror-image forms are stored in one entry"
-    ),
-    stereo.R_CUMULENE_TIED_END: (
-        "a cumulated chain has a pair of stereo-bearing arms at one end (for example two allenyl or two carbinol "
-        "groups), so its configuration depends on the senses of those arms, which is not represented: its "
-        "configurations are stored in one entry"
-    ),
-    stereo.R_ALLENE_DEPENDENT: (
-        "a stereocentre or double bond whose stereogenicity depends on the sense of an allene is not "
-        "represented: its configurations are stored in one entry"
-    ),
-    stereo.R_AXIAL_MARKS: (
-        "the only stereo information is a SMILES mark on an allene, and allene marks are not read: supply a "
-        "geometry or a stereo_label (Ra or Sa) to settle the axis"
-    ),
-    stereo.R_CUMULENE_MARKS: (
-        "the only stereo information is the / and \\ marks on a cumulene, and those marks are not read: supply a "
-        "geometry or a stereo_label (E or Z) to settle the cis/trans form"
-    ),
-    stereo.R_SYMMETRY: (
-        "this molecule is too symmetric for the stereo descriptor to tell its configurations apart: different "
-        "configurations of the stereo elements inside its symmetry classes are stored in one entry"
-    ),
-}
-
-
 def _not_represented_warning(resolved: stereo.ResolvedStereo, field: str) -> UploadWarning:
     """The warning for an entry that has a stereo element the vocabulary cannot state yet.
 
@@ -798,21 +769,14 @@ def _not_represented_warning(resolved: stereo.ResolvedStereo, field: str) -> Upl
     depositor must not read it as a request for more.
     """
 
-    reasons = "; ".join(_NOT_REPRESENTED_TEXT[r] for r in resolved.unrepresented)
-    unknown = (
-        f" {resolved.unknown_elements} other stereo element(s) are also unknown to the data (no geometry, mark or "
-        "stereo_label settled them)."
-        if resolved.unknown_elements
-        else ""
-    )
-    return UploadWarning(
+    return UploadWarning.from_code(
         field=field,
         code=stereo.W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED,
-        message=(
-            f"Part of this species entry's stereochemistry cannot be represented yet (descriptor "
-            f"{resolved.descriptor!r}): {reasons}. Real stereoisomers may therefore share this entry, and a "
-            f"later deposit of the other form can land in it.{unknown}"
-        ),
+        context={
+            "reasons": list(resolved.unrepresented),
+            "descriptor": resolved.descriptor,
+            "unknown_elements": resolved.unknown_elements,
+        },
     )
 
 
@@ -837,16 +801,12 @@ def stereo_unresolved_warning(
         return None
     if resolved.unrepresented:
         return _not_represented_warning(resolved, field)
-    return UploadWarning(
+    return UploadWarning.from_code(
         field=field,
         code=stereo.W_SPECIES_ENTRY_STEREO_UNRESOLVED,
-        message=(
-            f"The stereochemistry of this species entry is {resolved.resolution.value} "
-            f"(descriptor {resolved.descriptor!r}): at least one stereo element "
-            "(R/S centre, E/Z double bond, Ra/Sa allene axis or E/Z cumulene) is unknown, because no "
-            "geometry resolved it, the SMILES carries no readable mark for it and no stereo_label was "
-            "supplied. The entry was "
-            "stored as its own entry; a later deposit that specifies the configuration will "
-            "not merge into it."
-        ),
+        context={
+            "resolution": resolved.resolution.value,
+            "descriptor": resolved.descriptor,
+            "unknown_elements": resolved.unknown_elements,
+        },
     )

@@ -579,8 +579,12 @@ A warning is not a refusal: an accepted upload returns `201` with a
 values that triggered it; `null` when the check states none). The same warnings
 are stored with the records the deposit created and shown to every later reader
 as `record_warnings` (and, for a warning no one record could take, `deposit_warnings`) on those records' detail reads
-(see `docs/guides/public_hosted_querying.md`). A reader is told the same warning in TCKDB's own wording: the text you
-sent (a label, a local key) reaches only you and curators, as `depositor_message`.
+(see `docs/guides/public_hosted_querying.md`). A warning's `message` is TCKDB's sentence for its `code`, built from the
+code and the `context`; it never quotes text you typed (a label, a local key, a file name), and the upload response, the job
+result and every later read give the same sentence. **Match on `code`, never on `message`**: the wording can change, the
+code and `context` are the contract. A label that helps you find the problem is under `context.depositor_supplied`
+(for example `{"transition_state_label": "TS0"}`), which is depositor-typed text and should be shown as such. `field` is the
+path into your own request and may name your local keys.
 
 ---
 

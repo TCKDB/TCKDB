@@ -13,6 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from tckdb_schemas.deposit_warning_messages import EXCITED_STATE_METHODS
+
 from app.services.ess_result import ESSResult
 
 
@@ -68,11 +70,8 @@ def deduce_stationary_point_kind(result: ESSResult) -> Deduction | None:
     )
 
 
-_EXCITED_STATE_METHODS = frozenset({
-    "eom-ccsd", "eom-ccsd(t)", "eom-mp2",
-    "cis", "cis(d)",
-    "sf-tddft",
-})
+# One owner for the list, so the deposit warning that names the method says only methods this table knows.
+_EXCITED_STATE_METHODS = EXCITED_STATE_METHODS
 
 _AMBIGUOUS_METHODS = frozenset({
     "casscf", "caspt2", "nevpt2", "mrci",

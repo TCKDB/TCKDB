@@ -26,7 +26,7 @@ from app.api.rate_limit import reset_rate_limit_store
 from app.db.models.api_key import ApiKey
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
-from tests import ci_sharding, error_body_observer, error_code_observer, route_build_cache
+from tests import ci_sharding, error_body_observer, error_code_observer, route_build_cache, warning_context_observer
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -34,6 +34,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # session, in the controller and in every xdist worker alike.
 error_code_observer.install()
 error_body_observer.install()
+warning_context_observer.install()
 # Build the route table once per process rather than once per test; see
 # tests/route_build_cache.py for why that cannot change what a test observes.
 route_build_cache.install()
@@ -175,6 +176,15 @@ def pytest_runtest_teardown(item) -> None:
             "correct the status: it is the retry advice a client branches "
             "on, and the client's REJECTION_STATUSES is generated from it."
         )
+
+
+@pytest.fixture(autouse=True)
+def _no_warning_breaks_the_message_rule():
+    """Fail the test that built a warning whose message or context broke the rule, even if a producer swallowed it."""
+    warning_context_observer.drain()
+    yield
+    broken = warning_context_observer.drain()
+    assert not broken, "warnings that broke the message rule (#838): " + " | ".join(broken)
 
 
 @pytest.fixture(autouse=True)

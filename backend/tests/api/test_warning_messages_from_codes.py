@@ -1,0 +1,1175 @@
+"""A warning's message is TCKDB's sentence for its code, built from the code and the context (#838).
+
+The owner rule: no depositor free text presented as TCKDB's words, on any client. A deposit-time warning used to build
+its ``message`` from an f-string that quoted a transition-state label, a local payload key, a conformer label or a file
+name, so the upload response and the job result said the depositor's words in TCKDB's voice. Every producer now builds
+its warning with ``UploadWarning.from_code``, whose message is :func:`render_message` of the code and the context: the
+same call a public read makes on the stored row.
+
+How these tests pin it
+----------------------
+* **Static**: no source file builds ``UploadWarning(...)`` directly. The one constructor is ``from_code``.
+* **Sweep**: every upload kind is deposited with sentinel strings (``ZZQ...``) in every local key and label, and every
+  warning that comes back must (a) be exactly ``render_message(code, context)`` and (b) contain no sentinel in its
+  message. The positives (the warning was emitted, with its code) are asserted before the absences, and the number of
+  distinct codes reached has a floor, so the sweep cannot pass over an empty set.
+* **One sentence**: the upload response, the job result and the public read say the same thing for the same warning.
+* **Labels**: a label that helps the depositor find the problem is under ``context["depositor_supplied"]``, shown to
+  the writer in the response, and never read into the sentence.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+from tckdb_schemas.deposit_warning_messages import RENDERED, render_message
+from tckdb_schemas.fragments.refs import OrdinaryLevelOfTheoryRef, SoftwareReleaseRef
+from tckdb_schemas.upload_warning import UploadWarning
+
+from app.db.models.transition_state import TransitionStateEntry
+from app.services import hessian_extraction
+from tests import warning_construction_guard as construction_guard
+from tests.api.test_deposit_warning_reads import _computed_reaction, _items, _read_everything
+from tests.workers.test_upload_worker_warnings import CASES
+
+_ROOT = Path(__file__).resolve().parents[3]
+_SOURCES = (_ROOT / "backend" / "app", _ROOT / "schemas" / "python" / "tckdb-schemas" / "tckdb_schemas")
+
+SENTINEL_TS = "ZZQ-TS-LABEL-7"
+
+
+# ---------------------------------------------------------------------------
+# static: one constructor
+# ---------------------------------------------------------------------------
+
+
+def _sources() -> list[Path]:
+    return [p for root in _SOURCES for p in sorted(root.rglob("*.py")) if "/build/" not in str(p)]
+
+
+def test_no_producer_builds_or_edits_an_upload_warning_by_hand():
+    found = [v for path in _sources() for v in construction_guard.violations(path.read_text(), str(path))]
+    assert found == [], "\n".join(found)
+    from_code = sum(path.read_text().count("UploadWarning.from_code(") for path in _sources())
+    # The scan above found every producer, so a count of zero would mean it looked at the wrong tree.
+    assert from_code >= 60, from_code
+
+
+@pytest.mark.parametrize(
+    ("snippet", "needle"),
+    [
+        ("w = UploadWarning(field='f', code='c', message='m')", "directly"),
+        ("from tckdb_schemas.upload_warning import UploadWarning as _UW\nw = _UW(field='f', code='c', message='m')", "directly"),
+        ("import tckdb_schemas.upload_warning as uw\nw = uw.UploadWarning(field='f', code='c', message='m')", "directly"),
+        ("_UW = UploadWarning\nw = _UW(field='f', code='c', message='m')", "directly"),
+        ("w = UploadWarning.model_validate({'field': 'f', 'code': 'c', 'message': 'm'})", "model_validate"),
+        ("w = UploadWarning.model_construct(field='f', code='c', message='m')", "model_construct"),
+        ("from x import UploadWarning as UW\nw = UW.model_validate_json('{}')", "model_validate_json"),
+        ("def f(w: UploadWarning):\n    return w.model_copy(update={'message': 'x'})", "model_copy"),
+        ("def f(w):\n    return w.model_copy(update={**extra, 'field': 'f'})", "model_copy"),
+        ("def f(w: UploadWarning, m):\n    return w.model_copy(update=m)", "model_copy"),
+        ("def f(w: UploadWarning):\n    w.message = 'x'", ".message"),
+        ("def f(w: UploadWarning):\n    return w.__class__(field='f', code='c', message='m')", "__class__"),
+        ("def f(w: UploadWarning):\n    return type(w)(field='f', code='c', message='m')", "type(x)"),
+        ("import tckdb_schemas.upload_warning as uw\ndef f():\n    return getattr(uw, 'UploadWarning')(field='f', code='c', message='m')", "directly"),
+        ("def f(w: UploadWarning):\n    setattr(w, 'message', 'x')", "after the fact"),
+        ("def f(w: UploadWarning):\n    object.__setattr__(w, 'message', 'x')", "after the fact"),
+    ],
+)
+def test_the_construction_guard_flags_every_way_around_from_code(snippet, needle):
+    found = construction_guard.violations(snippet)
+    assert found and any(needle in v for v in found), (snippet, found)
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
+        "w = UploadWarning.from_code(field='f', code='c')",
+        "def f(w: UploadWarning):\n    return w.model_copy(update={'field': 'a.' + w.field})",
+        "def g(items: list[UploadWarning]):\n    return [i.field for i in items]",
+        "def f(a, i):\n    return a.model_copy(update={'participant_index': i})",
+    ],
+)
+def test_the_construction_guard_leaves_the_legitimate_uses_alone(snippet):
+    assert construction_guard.violations(snippet) == []
+
+
+def test_from_code_is_the_sentence_for_the_code_and_the_context():
+    context = {"declared": 0, "logged": -1, "software": "Gaussian"}
+    warning = UploadWarning.from_code(field="f", code="charge_mismatch", context=context)
+    assert warning.message == render_message("charge_mismatch", context)
+    assert warning.context == context
+    assert "(+0)" in warning.message and "(-1)" in warning.message
+
+
+# ---------------------------------------------------------------------------
+# sweep
+# ---------------------------------------------------------------------------
+
+
+def _sentinelise(payload: dict, prefix: str, template: str = "ZZQ{prefix}{n}-{old}") -> tuple[dict, set[str]]:
+    """Every local key and label in ``payload`` renamed to a string that cannot occur by chance."""
+    names: dict[str, str] = {}
+
+    def fresh(old: str) -> str:
+        return names.setdefault(old, template.format(prefix=prefix, n=len(names), old=old.replace("-", "")))
+
+    def walk(node):
+        if isinstance(node, dict):
+            for k, v in list(node.items()):
+                if (k == "key" or k.endswith("_key")) and isinstance(v, str):
+                    node[k] = fresh(v)
+                elif k.endswith("_keys") and isinstance(v, list):
+                    node[k] = [fresh(x) if isinstance(x, str) else x for x in v]
+                elif k == "label" and isinstance(v, str):
+                    node[k] = fresh(v)
+                else:
+                    walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+
+    walk(payload)
+    walk(payload)
+    if "transition_state" in payload and isinstance(payload["transition_state"], dict):
+        payload["transition_state"]["label"] = SENTINEL_TS
+        names["__ts__"] = SENTINEL_TS
+    return payload, set(names.values())
+
+
+def _extra_deposits() -> list[tuple[str, str, dict, set[str]]]:
+    """``(name, url, payload, codes it must earn)`` for warnings the nine worker payloads do not reach."""
+    from tests.api import test_api_frequency_linearity as linearity
+    from tests.api import test_api_frequency_list_completeness as completeness
+    from tests.api import test_api_uploads as uploads
+    from tests.api.test_api_monatomic_electronic import _levels
+
+    def conformer(freq_calc: dict, kind: str) -> dict:
+        payload = uploads._hydrogen_conformer_payload()
+        payload["species_entry"]["species_entry_kind"] = kind
+        payload["additional_calculations"] = [freq_calc]
+        return payload
+
+    def atom(term: str, levels: list | None) -> dict:
+        body = {
+            "species_entry": {"smiles": "[O]", "charge": 0, "multiplicity": 3, "term_symbol": term},
+            "scientific_origin": "computed",
+            "statmech_treatment": "rrho",
+            "external_symmetry": 1,
+        }
+        if levels is not None:
+            body["electronic_levels"] = levels
+        return body
+
+    ts_modes = [-1300.0, -20.0, -13.0, 800.0, 1400.0]
+    return [
+        (
+            "linear_count_for_bent",
+            "/api/v1/uploads/conformers",
+            linearity._conformer_payload(
+                smiles="O", xyz_text=linearity._WATER_XYZ, frequencies=linearity._WATER_PLUS_ONE, label="water"
+            ),
+            {"freq_list_linear_mode_count_for_bent_geometry"},
+        ),
+        (
+            "bent_count_for_linear",
+            "/api/v1/uploads/conformers",
+            linearity._conformer_payload(
+                smiles="O=C=O", xyz_text=linearity._CO2_XYZ, frequencies=linearity._CO2_DEDUPLICATED, label="co2"
+            ),
+            {"freq_list_bent_mode_count_for_linear_geometry"},
+        ),
+        (
+            "incomplete_list",
+            "/api/v1/uploads/conformers",
+            completeness._conformer_payload(
+                smiles="O", xyz_text=linearity._WATER_XYZ, frequencies=[1595.0], label="water-short"
+            ),
+            {"freq_list_incomplete_for_geometry"},
+        ),
+        (
+            "vdw_stiff_mode",
+            "/api/v1/uploads/conformers",
+            conformer(uploads._freq_calc(n_imag=1, imag_freq_cm1=-900.0), "vdw_complex"),
+            {"n_imag_contradicts_minimum", "n_imag_suggests_transition_state"},
+        ),
+        (
+            "vdw_two_modes",
+            "/api/v1/uploads/conformers",
+            conformer(uploads._freq_calc(n_imag=2, imag_freq_cm1=-30.0), "vdw_complex"),
+            {"n_imag_higher_order_saddle"},
+        ),
+        (
+            "minimum_soft_mode",
+            "/api/v1/uploads/conformers",
+            conformer(uploads._freq_calc(n_imag=1, imag_freq_cm1=-20.0), "minimum"),
+            {"minimum_imaginary_modes_below_tau"},
+        ),
+        (
+            "ts_extra_modes_below_tau",
+            "/api/v1/uploads/transition-states",
+            uploads._transition_state_payload(
+                n_imag=3,
+                imag_freq_cm1=-1300.0,
+                frequencies=ts_modes,
+                reaction_coordinate_mode_index=1,
+                dispositions=uploads._MOTIVATING_DISPOSITIONS,
+            ),
+            {"transition_state_extra_imaginary_modes_below_tau"},
+        ),
+        (
+            "ts_extra_mode_above_tau",
+            "/api/v1/uploads/transition-states",
+            uploads._transition_state_payload(
+                n_imag=2,
+                imag_freq_cm1=-1300.0,
+                frequencies=[-1300.0, -120.0, 800.0, 1400.0],
+                reaction_coordinate_mode_index=1,
+                dispositions={2: "torsion"},
+            ),
+            {"transition_state_extra_imaginary_mode_above_tau"},
+        ),
+        (
+            "atom_without_levels",
+            "/api/v1/uploads/statmech",
+            atom("3P", None),
+            {"missing_atomic_electronic_levels"},
+        ),
+        (
+            "atom_wrong_ground_term",
+            "/api/v1/uploads/statmech",
+            atom("3P0", _levels((0.0, 1))),
+            {"term_symbol_contradicts_ground_term"},
+        ),
+        (
+            "atom_wrong_level_order",
+            "/api/v1/uploads/statmech",
+            atom("3P", _levels((0.0, 1), (158.265, 3), (226.977, 5))),
+            {"atomic_electronic_degeneracy_contradicts_term"},
+        ),
+    ]
+
+
+def _drivers() -> list[tuple[str, str, dict, set[str]]]:
+    """``(name, url, payload, codes it must earn)`` for the nine worker payloads and the extra deposits."""
+    drivers = [(kind.value, url, build(), set(required)) for kind, (build, url, _j, required) in CASES.items()]
+    return drivers + _extra_deposits()
+
+
+def _deposit_everything(client) -> list[tuple[str, dict, set[str]]]:
+    """``(kind, warning, sentinels)`` for every warning every upload kind earns."""
+    warnings = []
+    for kind, url, built, required in _drivers():
+        payload, sentinels = _sentinelise(built, kind)
+        savepoint = client._db_session.begin_nested()
+        try:
+            response = client.post(url, json=payload)
+        finally:
+            savepoint.rollback()
+        assert response.status_code == 201, (kind, response.text[:400])
+        emitted = response.json()["warnings"]
+        # Positives first: the warnings this kind is known to earn really came back.
+        assert required <= {w["code"] for w in emitted}, (kind, [w["code"] for w in emitted])
+        warnings.extend((kind, w, sentinels) for w in emitted)
+    return warnings
+
+
+#: Distinct warning codes the sweep reaches, measured at 32 (70 warnings): the nine upload kinds and eleven further
+#: deposits, each with sentinel keys and labels. The ref-level and file-level producers are driven directly below.
+#: The floor sits just under the measured count.
+SWEEP_CODE_FLOOR = 31
+
+
+def test_no_warning_carries_a_depositor_string_and_each_is_the_sentence_for_its_code(client):
+    swept = _deposit_everything(client)
+    codes = {w["code"] for _kind, w, _s in swept}
+    assert len(swept) >= 65, len(swept)
+    assert len(codes) >= SWEEP_CODE_FLOOR, (len(codes), sorted(codes))
+
+    for kind, warning, sentinels in swept:
+        assert warning["message"] == render_message(warning["code"], warning["context"]), (kind, warning["code"])
+        assert warning["code"] in RENDERED, warning["code"]
+        # The sentence never has a sentinel; the field may (it is the depositor's own path).
+        assert not any(s in warning["message"] for s in sentinels), (kind, warning["code"], warning["message"])
+        # In the context a depositor string is allowed in one place only: the marked key.
+        unmarked = {k: v for k, v in (warning["context"] or {}).items() if k != "depositor_supplied"}
+        assert not any(s in json.dumps(unmarked) for s in sentinels), (kind, warning["code"], unmarked)
+    # A value the depositor typed that cannot be a sentinel (a term symbol) must not reach a rendered key either: the
+    # element and ground term are TCKDB's own (the NIST table), whatever term was declared.
+    (ground,) = [w for _k, w, _s in swept if w["code"] == "term_symbol_contradicts_ground_term"]
+    assert ground["context"] == {"element": "O", "ground_term": "3P", "ground_j": 2.0}
+    # Something really carried a sentinel in its field, or the sweep would pass over a payload it never renamed.
+    assert any(s in w["field"] for _k, w, ss in swept for s in ss), "no field reached carries a local key"
+
+
+def test_the_ref_level_and_file_level_producers_carry_no_depositor_string():
+    sentinel = "ZZQ-ref-sentinel"
+    method = "CBS-QB3-paraskevas"  # a method is a closed shape here: the string itself is what the depositor typed
+    produced = [
+        (SoftwareReleaseRef(name=sentinel, version=f"{sentinel} 09, Revision D.01").version_warning(f"c['{sentinel}']."), sentinel),
+        (SoftwareReleaseRef(name=sentinel, version="ORCA 6.0.0").version_warning(), sentinel),
+        (SoftwareReleaseRef(name=sentinel, version=f"{sentinel} 09 Revision D", revision="B.01").version_warning(), sentinel),
+        (OrdinaryLevelOfTheoryRef(method=method).method_warning(), method),
+        (
+            hessian_extraction._not_stored(
+                "hessian_not_stored_failed", f"{sentinel}.log", "store_failed", f"calculations['{sentinel}'].artifacts"
+            ),
+            sentinel,
+        ),
+    ]
+    # Positives first: every producer emitted, with the code it is known to carry.
+    assert all(w is not None for w, _ in produced), [i for i, (w, _) in enumerate(produced) if w is None]
+    assert {w.code for w, _ in produced} == {
+        "software_release_version_is_composite",
+        "software_release_name_looks_wrong",
+        "level_of_theory_method_names_correction_table",
+        "hessian_not_stored_failed",
+    }
+    for warning, typed in produced:
+        assert warning.message == render_message(warning.code, warning.context)
+        assert typed not in warning.message and sentinel not in warning.message
+        unmarked = {k: v for k, v in warning.context.items() if k != "depositor_supplied"}
+        assert typed not in json.dumps(unmarked)
+        # What helps the depositor is named, under the marked key.
+        assert typed in json.dumps(warning.context["depositor_supplied"])
+
+
+# ---------------------------------------------------------------------------
+# one sentence: response, read
+# ---------------------------------------------------------------------------
+
+
+def test_the_response_and_the_public_read_give_the_same_sentence(client, db_session):
+    payload, sentinels = _sentinelise(_computed_reaction(), "read")
+    response = client.post("/api/v1/uploads/computed-reaction", json=payload)
+    assert response.status_code == 201, response.text[:300]
+    body = response.json()
+    said = {(w["code"], json.dumps(w["context"], sort_keys=True)): w["message"] for w in body["warnings"]}
+    assert "transition_state_missing_irc_evidence" in {c for c, _ in said}
+
+    matched = 0
+    for read in _read_everything(client, db_session, body):
+        for item in _items(read):
+            key = (item["code"], json.dumps(item["context"], sort_keys=True))
+            if key in said:
+                matched += 1
+                assert item["message"] == said[key], item["code"]
+                assert not any(s in item["message"] for s in sentinels)
+    assert matched >= 5, "the reads and the response share too few warnings for this to prove anything"
+
+
+def test_a_helpful_label_is_in_depositor_supplied_and_not_in_the_sentence(client, db_session):
+    payload, sentinels = _sentinelise(_computed_reaction(), "lab")
+    response = client.post("/api/v1/uploads/computed-reaction", json=payload)
+    assert response.status_code == 201, response.text[:300]
+    body = response.json()
+
+    (irc,) = [w for w in body["warnings"] if w["code"] == "transition_state_missing_irc_evidence"]
+    # Shown to the writer, in the response, under the marked key ...
+    assert irc["context"]["depositor_supplied"] == {"transition_state_label": SENTINEL_TS}
+    # ... and never read into the sentence, which is the fixed one for the code.
+    assert SENTINEL_TS not in irc["message"]
+    assert irc["message"] == RENDERED["transition_state_missing_irc_evidence"]
+
+    tse = db_session.get(TransitionStateEntry, body["transition_state_entry_id"])
+    read = client.get(f"/api/v1/scientific/transition-state-entries/{tse.public_ref}").json()
+    (public,) = [i for i in _items(read) if i["code"] == "transition_state_missing_irc_evidence"]
+    assert public["message"] == irc["message"]
+    assert SENTINEL_TS not in public["message"] and SENTINEL_TS not in public["field"]
+
+
+@pytest.mark.parametrize("code", sorted(RENDERED))
+def test_every_fixed_sentence_is_free_of_a_placeholder_left_behind(code):
+    assert "{" not in RENDERED[code] and "}" not in RENDERED[code], code
+
+
+# ---------------------------------------------------------------------------
+# a sentence says what happened on its own branch
+# ---------------------------------------------------------------------------
+
+_TAU = {"tau_cm1": 30.0}
+
+
+@pytest.mark.parametrize(
+    ("basis", "phrase"),
+    [
+        ("analytic_default", "at the protocol that produced them"),
+        ("finite_difference_gradient", "at the protocol that produced them"),
+        ("assumed_analytic_default", "at the protocol assumed for them"),
+        ("assumed_finite_difference_energy", "at the protocol assumed for them"),
+        ("protocol_not_recorded", "at a protocol that is not recorded"),
+    ],
+)
+def test_the_tau_sentences_name_the_protocol_the_basis_allows(basis, phrase):
+    modes = [{"mode_index": 2, "magnitude_cm1": 20.0, "disposition": "torsion"}]
+    context = {**_TAU, "tau_basis": basis}
+    minimum = render_message(
+        "minimum_imaginary_modes_below_tau", {**context, "n_imag": 1, "imaginary_modes_cm1": [20.0]}
+    )
+    below = render_message(
+        "transition_state_extra_imaginary_modes_below_tau",
+        {**context, "extra_imaginary_mode_count": 1, "extra_imaginary_modes": modes},
+    )
+    assert phrase in minimum and phrase in below
+    other = {"at the protocol that produced them", "at the protocol assumed for them", "at a protocol that is not recorded"}
+    assert not any(o in minimum for o in other - {phrase})
+    # tau's reason rides with every one of them, as TCKDB's words for the basis.
+    assert "Why tau = 30 cm-1: " in minimum and "Remediation, in order:" in minimum
+
+
+def test_the_exact_tau_sentence_when_the_protocol_is_assumed():
+    text = render_message(
+        "transition_state_extra_imaginary_mode_above_tau",
+        {
+            **_TAU,
+            "tau_basis": "assumed_analytic_default",
+            "extra_imaginary_mode_count": 1,
+            "extra_imaginary_modes": [{"mode_index": 2, "magnitude_cm1": 42.0, "disposition": None}],
+        },
+    )
+    assert text.startswith(
+        "The transition state has an imaginary mode at or above tau = 30 cm-1 besides its reaction coordinate "
+        "(mode 2 at 42.0 cm-1 (undeclared)), so at the protocol assumed for it the negative curvature is real "
+        "rather than numerical noise."
+    )
+    assert "Why tau = 30 cm-1: 'freq.hessian_method' is not recorded, so this is an assumption" in text
+    assert "a consumer treating it as a plain first-order saddle would be wrong" in text
+
+
+def test_the_deduction_sentences_name_what_the_evidence_was():
+    td = render_message(
+        "electronic_state_contradicts_method",
+        {"deduced": "excited", "evidence": "excited_state_job_type", "confidence": "definitive"},
+    )
+    method = render_message(
+        "electronic_state_contradicts_method",
+        {"deduced": "excited", "evidence": "excited_state_method", "confidence": "definitive"},
+    )
+    assert td == (
+        "The declared electronic state disagrees with the value that the excited-state (TD-DFT) job type of the "
+        "calculation indicates (excited)."
+    )
+    assert method == (
+        "The declared electronic state disagrees with the value that the excited-state method of the calculation "
+        "indicates (excited)."
+    )
+    assert "job type" not in method and "method of the calculation" not in td
+
+
+def test_the_log_implied_electronic_energy_is_said_to_be_log_implied():
+    text = render_message(
+        "composite_energy_log_mismatch",
+        {
+            "log_method": "cbs-qb3",
+            "disagreements": [
+                {"quantity": "e0_hartree", "deposited_hartree": -1.0, "log_hartree": -1.5},
+                {"quantity": "electronic_energy_hartree", "deposited_hartree": -2.0, "log_hartree": -2.5},
+            ],
+        },
+    )
+    assert "e0_hartree -1.000000 Ha against the log's -1.500000 Ha" in text
+    assert (
+        "electronic_energy_hartree -2.000000 Ha against the log-implied -2.500000 Ha (the log's 0 K energy minus its "
+        "ZPE; delta +5.00e-01)"
+    ) in text
+    assert "e0_hartree -1.000000 Ha against the log's -1.500000 Ha (delta +5.00e-01)" in text
+
+
+def test_a_hess_file_that_held_no_matrix_does_not_say_a_hessian_was_found():
+    sent = render_message("hessian_not_stored_unparseable", {"reason": "sent_as_hessian"})
+    block = render_message("hessian_not_stored_unparseable", {"reason": "log_block_unreadable"})
+    assert sent == (
+        "An artifact sent as a Hessian contained no complete force-constant matrix that could be read, so no Hessian "
+        "was found to store. The artifact itself is stored; only the Hessian is not."
+    )
+    assert block == (
+        "A Hessian was found in an uploaded artifact but not stored: the log has a force-constant block but no "
+        "complete, trustworthy matrix could be read from it (it may be truncated). The artifact itself is stored; "
+        "only the Hessian is not."
+    )
+
+
+@pytest.mark.parametrize(
+    ("context", "expected"),
+    [
+        (
+            {"action": "split_banner_with_revision"},
+            "A software version was a parsed banner carrying the program name and a revision label. It was "
+            "normalised to a version and a revision (the leading package name was stripped and the trailing "
+            "revision label was split out).",
+        ),
+        (
+            {"action": "split_banner_name_only"},
+            "A software version carried the software's own name with it. It was normalised to the version alone "
+            "(the leading package name was stripped).",
+        ),
+        (
+            {"action": "revision_already_supplied"},
+            "A software version looks like a parsed software banner embedding its own revision label, but a "
+            "revision was also supplied. Both fields were left exactly as sent rather than choosing between them.",
+        ),
+    ],
+)
+def test_each_branch_of_the_composite_software_version_says_what_it_did(context, expected):
+    assert render_message("software_release_version_is_composite", context) == expected
+
+
+def test_the_three_software_version_branches_come_from_the_ref():
+    split = SoftwareReleaseRef(name="gaussian", version="gaussian 09, Revision D.01").version_warning()
+    name_only = SoftwareReleaseRef(name="orca", version="orca 6.0.0").version_warning()
+    kept = SoftwareReleaseRef(name="gaussian", version="gaussian 09, Revision D.01", revision="B.01").version_warning()
+    assert [w.context["action"] for w in (split, name_only, kept)] == [
+        "split_banner_with_revision",
+        "split_banner_name_only",
+        "revision_already_supplied",
+    ]
+
+
+# ---------------------------------------------------------------------------
+# what was said before, still said (remedies and consequences that need no depositor text)
+# ---------------------------------------------------------------------------
+
+_KEPT = {
+    "named_composite_deposited_as_sp": ({"calculation_type": "sp"}, ["type 'composite'", "program_run", "refused once producers"]),
+    "named_composite_deposited_as_opt": ({"calculation_type": "opt"}, ["type 'composite'", "program_run", "refused once producers"]),
+    "transition_state_extra_imaginary_modes_not_assessable": (
+        {**_TAU, "tau_basis": "protocol_not_recorded", "extra_imaginary_mode_count": 2},
+        ["no frequency list was deposited", "complete signed, unrounded frequency list"],
+    ),
+    "composite_input_geometry_undeclared": (None, ["Declare the single point's input geometry"]),
+    "composite_log_method_mismatch": (
+        {"log_method": "cbs-qb3"},
+        ["Attach the log of the run that produced this calculation, or correct the level of theory"],
+    ),
+    "scf_stability_source_conformer_unverified": (None, ["give both calculations a conformer_key"]),
+    "scf_stability_source_level_mismatch": (None, ["wavefunction, not the carrying calculation's"]),
+    "literature_title_mismatch": (None, ["verify the identifier is correct"]),
+    "literature_year_mismatch": ({"supplied_year": 1999, "fetched_year": 2024}, ["verify the identifier is correct"]),
+    "n_imag_contradicts_minimum": ({"n_imag": 1}, ["tighter integration grid"]),
+    "n_imag_higher_order_saddle": ({"n_imag": 2}, ["tighter integration grid"]),
+    "n_imag_suggests_transition_state": (
+        {"imaginary_frequency_cm1": 900.0, "ts_minimum_cm1": 50.0},
+        ["deposit it as a transition state"],
+    ),
+    "freq_parser_extracted_but_modes_missing": (None, ["re-run the parser or attach the mode list"]),
+    "missing_kinetics_transition_state_interpretation": (None, ["master-equation solve", "role `transition_state`"]),
+    "statmech_frequency_scale_factor_software_mismatch": (None, ["a deliberate choice, not an error", "confirm this is intentional"]),
+    "network_state_energy_sum_not_compared": (
+        {"reasons": ["stated_precision_unknown"]},
+        ["2625.499639", "energy_precision_kj_mol"],
+    ),
+    "transition_state_extra_imaginary_mode_above_tau": (
+        {
+            **_TAU,
+            "tau_basis": "analytic_default",
+            "extra_imaginary_mode_count": 1,
+            "extra_imaginary_modes": [{"mode_index": 2, "magnitude_cm1": 42.0, "disposition": "torsion"}],
+        },
+        ["torsional maximum", "first-order saddle would be wrong"],
+    ),
+    "transition_state_imaginary_frequency_too_small": (
+        {**_TAU, "tau_basis": "analytic_default", "reaction_coordinate_cm1": 20.0, "ts_minimum_cm1": 50.0},
+        ["flat and variational barriers"],
+    ),
+    "reported_network_solve": (None, ["cannot be re-derived", "cannot be re-solved outside the reported"]),
+    "network_wide_energy_transfer_scope": (None, ["(well, collider) pair"]),
+    "reaction_atom_map_absent": (
+        {"deposit_path": "atom_map_field"},
+        ["reaction-path degeneracy", "kinetic isotope effect", "will not infer"],
+    ),
+    "freq_list_bent_mode_count_for_linear_geometry": (
+        {"n_modes": 3, "n_atoms": 3, "linear_count": 4, "transverse_ratio": 0.0, "collinear_max_transverse_ratio": 1e-3},
+        ["threshold of 0.001 for calling a geometry linear", "de-duplicates"],
+    ),
+    "freq_list_linear_mode_count_for_bent_geometry": (
+        {"n_modes": 4, "n_atoms": 3, "bent_count": 3, "transverse_ratio": 0.2, "bent_min_transverse_ratio": 3e-2},
+        ["threshold of 0.03 for calling a geometry bent", "rigid-body translation/rotation"],
+    ),
+    "freq_list_incomplete_for_geometry": (
+        {"n_modes": 1, "n_atoms": 3, "minimum_modes": 3},
+        ["silent about the ones it omits", "partial Hessian"],
+    ),
+    "transition_state_missing_irc_evidence": (None, ["do not stand in for it"]),
+    "composite_frequency_level_differs_from_recipe": (None, ["Link the frequency calculation at the recipe's own level"]),
+    "missing_energy_correction_scheme_software": ({"scheme_kind": "atom_hf"}, ["does not trigger this warning"]),
+    "ambiguous_energy_correction_scheme_without_literature": (None, ["same correction deposited twice"]),
+    "software_release_name_looks_wrong": (None, ["stale or default name"]),
+    "level_of_theory_method_names_correction_table": ({"method_stem": "cbs-qb3"}, ["Send method=cbs-qb3", "energy correction scheme"]),
+    "network_energy_zpe_source_absent": (
+        {"correction_convention": "electronic_plus_zpe", "subject": "state_energy"},
+        ["zpe_calculation_key"],
+    ),
+    "composite_delta_prefer_scheme_terms": (None, ["composite-scheme terms"]),
+    "missing_frequency_scale_factor_provenance": (None, ["value=1.0"]),
+}
+
+
+@pytest.mark.parametrize("code", sorted(_KEPT))
+def test_the_remedies_and_consequences_the_old_message_carried_are_still_said(code):
+    context, phrases = _KEPT[code]
+    text = render_message(code, context)
+    for phrase in phrases:
+        assert phrase in text, (code, phrase, text)
+
+
+def test_every_tau_basis_has_a_reason():
+    from tckdb_schemas.deposit_warning_messages import _TAU_WHY
+    from tckdb_schemas.stationary_point import TauBasis
+
+    assert set(_TAU_WHY) == {b.value for b in TauBasis}
+
+
+# ---------------------------------------------------------------------------
+# hand copies pinned to what they copy
+# ---------------------------------------------------------------------------
+
+
+def test_the_not_compared_reason_tokens_are_the_services_constants():
+    from tckdb_schemas.deposit_warning_messages import NOT_COMPARED_REASONS
+
+    from app.services import network_energy_sources, transition_state_validation
+
+    found = {
+        value
+        for module in (network_energy_sources, transition_state_validation)
+        for name, value in vars(module).items()
+        if name.startswith("NOT_COMPARED_") and isinstance(value, str)
+    }
+    assert found and found == set(NOT_COMPARED_REASONS)
+
+
+def test_the_stereo_and_composite_reason_tokens_are_the_producers_constants():
+    from tckdb_schemas import composite_total
+    from tckdb_schemas.deposit_warning_messages import (
+        COMPOSITE_TOTAL_UNVERIFIABLE_REASONS,
+        STEREO_NOT_REPRESENTED_REASONS,
+    )
+
+    from app.chemistry import stereo
+
+    stereo_tokens = {v for k, v in vars(stereo).items() if k.startswith("R_") and isinstance(v, str)}
+    assert stereo_tokens >= set(STEREO_NOT_REPRESENTED_REASONS)
+    composite = {v for k, v in vars(composite_total).items() if k.startswith("REASON_") and isinstance(v, str)}
+    assert composite == set(COMPOSITE_TOTAL_UNVERIFIABLE_REASONS)
+
+
+# ---------------------------------------------------------------------------
+# the public path
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("field", "public"),
+    [
+        ("species['h'].thermo", "species[*].thermo"),
+        ("transition_states[ts_elim].validation_evidence", "transition_states[*].validation_evidence"),
+        ("transition_states['ts_elim']", "transition_states[*]"),
+        ("species['o'k'].thermo", "species[*].thermo"),
+        ('species["o\'k"].thermo', "species[*].thermo"),
+        ("species['a\\'b'].calculations['c d'].freq", "species[*].calculations[*].freq"),
+        ("species['x]y'].statmech", "species[*].statmech"),
+        ("species[ch3].conformers['c1'].calculation", "species[*].conformers[*].calculation"),
+        ("kinetics[0].reactants[12].x", "kinetics[0].reactants[12].x"),
+        ("species[*].thermo", "species[*].thermo"),
+    ],
+)
+def test_the_public_field_replaces_every_key_and_keeps_only_integer_positions(field, public):
+    from tckdb_schemas.deposit_warning_messages import normalise_field
+
+    out = normalise_field(field)
+    assert out == public, (field, out)
+
+
+def test_a_key_with_an_embedded_quote_reaches_no_public_field():
+    from tckdb_schemas.deposit_warning_messages import normalise_field
+
+    for key in ("o'k", 'a"b', "a'] b", "x]y", "ZZQ-q'z"):
+        for field in (f"species[{key!r}].thermo", f"species['{key}'].thermo", f"transition_states[{key}].x"):
+            if "]" in key and "'" + key + "'" in field and key == "a'] b":
+                continue  # a hand-quoted key that itself contains the closing quote and bracket is ambiguous
+            public = normalise_field(field)
+            assert "ZZQ" not in public and "o'k" not in public, (field, public)
+
+
+# ---------------------------------------------------------------------------
+# the shape of depositor_supplied
+# ---------------------------------------------------------------------------
+
+
+def test_from_code_drops_entries_that_hold_nothing():
+    warning = UploadWarning.from_code(
+        field="f",
+        code="composite_total_unverifiable",
+        context={"reason": "no_total_deposited", "depositor_supplied": {"term_key": None, "input": "x", "empty": []}},
+    )
+    assert warning.context["depositor_supplied"] == {"input": "x"}
+    none_left = UploadWarning.from_code(
+        field="f",
+        code="composite_total_unverifiable",
+        context={"reason": "no_total_deposited", "depositor_supplied": {"term_key": None}},
+    )
+    assert none_left.context == {"reason": "no_total_deposited"}
+
+
+_BAD_SHAPES = ({"n": 3}, {"n": [1, 2]}, {"n": {"a": "b"}}, {"n": [["a"]]})
+
+
+@pytest.mark.parametrize("bad", _BAD_SHAPES)
+def test_production_logs_and_drops_a_malformed_entry_and_never_fails_the_upload(bad, caplog):
+    from tests import warning_context_observer
+
+    with caplog.at_level("ERROR"):
+        warning = warning_context_observer.production_from_code(
+            field="f", code="charge_mismatch", context={"declared": 0, "depositor_supplied": {**bad, "ok": "kept"}}
+        )
+    assert warning.context == {"declared": 0, "depositor_supplied": {"ok": "kept"}}
+    assert warning.message == render_message("charge_mismatch", warning.context)
+    assert "wrong shape" in caplog.text
+
+
+@pytest.mark.parametrize("bad", _BAD_SHAPES)
+def test_the_test_observer_fails_loudly_on_a_malformed_entry(bad):
+    from tests import warning_context_observer
+
+    with pytest.raises(AssertionError, match="depositor_supplied"):
+        UploadWarning.from_code(field="f", code="charge_mismatch", context={"depositor_supplied": bad})
+    assert warning_context_observer.drain(), "the violation was recorded for the fixture"
+
+
+def test_the_context_rule_catches_a_label_moved_out_of_the_marked_key():
+    from tckdb_schemas.deposit_warning_messages import context_problems
+
+    assert context_problems("scf_stability_source_level_mismatch", {"depositor_supplied": {"calculation_key": "k"}}) == []
+    moved = context_problems("scf_stability_source_level_mismatch", {"calculation_key": "ZZQ-key"})
+    assert moved and "outside depositor_supplied" in moved[0]
+    assert context_problems("term_symbol_contradicts_ground_term", {"element": "3P0"})
+    assert context_problems("reaction_reversible_twin", {"twin_ref": "ZZQ-label"})
+    assert context_problems("no_such_code", None)
+
+
+#: Values an allowlisted key must refuse although the key is allowed: a label under a generic name.
+_REFUSED = [
+    ("scf_stability_source_level_mismatch", {"subject": "ZZQ-owner-key", "reason": "ZZQ-source-key"}),
+    ("transition_state_energy_ordering_mixed_levels", {"energy_kind": "ZZQ-ts-label", "n_levels": 2}),
+    ("network_energy_zpe_source_absent", {"subject": "ts_elim", "correction_convention": "ZZQ"}),
+    ("software_release_identity_corrected_from_artifact", {"observed_software": "ZZQ-sw"}),
+    ("software_release_version_filled_from_artifact", {"version": "ZZQ-version"}),
+    ("electronic_state_contradicts_method", {"deduced": "ch3-opt", "evidence": "method.cbs", "confidence": "x"}),
+    ("composite_energy_log_mismatch", {"log_method": "ZZQ Label", "disagreements": []}),
+    ("composite_energy_log_mismatch", {"log_method": "g4", "disagreements": [{"quantity": "ZZQ-q"}]}),
+    ("hessian_not_stored_failed", {"reason": "ZZQ-file.log"}),
+    ("composite_total_unverifiable", {"reason": "ZZQ-term"}),
+    ("species_entry_stereo_unresolved", {"resolution": "ZZQ", "descriptor": "ZZQ-label"}),
+    ("dependency_edge_not_inferred", {"dependency_role": "ZZQ", "primary_type": "opt", "expected_parent_type": "opt"}),
+    ("reaction_family_not_applied", {"reaction_family": "ZZQ family"}),
+    ("transition_state_extra_imaginary_modes_below_tau", {"tau_basis": "ZZQ", "extra_imaginary_modes": [{"disposition": "ZZQ"}]}),
+    ("level_of_theory_method_names_correction_table", {"method_stem": "ZZQ-method"}),
+    ("reaction_atom_map_absent", {"deposit_path": "ZZQ"}),
+    ("missing_energy_correction_scheme_software", {"scheme_kind": "ZZQ"}),
+]
+
+
+@pytest.mark.parametrize(("code", "context"), _REFUSED, ids=[f"{c}-{i}" for i, (c, _x) in enumerate(_REFUSED)])
+def test_an_allowlisted_key_holds_only_its_closed_values(code, context):
+    from tckdb_schemas.deposit_warning_messages import context_problems
+
+    assert context_problems(code, context), (code, context)
+
+
+def test_every_value_a_producer_states_passes_its_key_s_closed_set():
+    from tckdb_schemas.deposit_warning_messages import context_problems
+
+    fine = [
+        ("scf_stability_source_level_mismatch", {"depositor_supplied": {"calculation_key": "k"}}),
+        ("transition_state_energy_ordering_mixed_levels", {"energy_kind": "e0", "n_levels": 2}),
+        ("network_energy_zpe_source_absent", {"subject": "channel_barrier", "correction_convention": "electronic_plus_zpe"}),
+        ("software_release_identity_corrected_from_artifact", {"observed_software": "orca"}),
+        ("software_release_version_filled_from_artifact", {"version": "6.0.0", "release_ref": "rel_aaaaaaaaaaaaaaaaaaaaaaaaaa"}),
+        ("electronic_state_contradicts_method", {"deduced": "excited", "evidence": "excited_state_method", "evidence_method": "cis(d)", "confidence": "definitive"}),
+        ("term_symbol_mismatch", {"deduced": "2A1", "evidence": "multiplicity", "confidence": "derived"}),
+        ("n_imag_contradicts_minimum", {"deduced": "saddle_order_2", "evidence": "frequency_analysis", "confidence": "definitive"}),
+        ("composite_energy_log_mismatch", {"log_method": "cbs-qb3", "disagreements": [{"quantity": "e0_hartree", "deposited_hartree": 1.0, "log_hartree": 2.0}]}),
+        ("hessian_not_stored_geometry_mismatch", {"reason": "species_contradiction", "refusal_code": "species_geometry_composition_mismatch"}),
+        ("species_entry_stereo_unresolved", {"resolution": "partial", "descriptor": "E,?", "unknown_elements": 1}),
+        ("reaction_family_not_applied", {"reaction_family": "H_Abstraction"}),
+        ("minimum_imaginary_modes_below_tau", {"tau_cm1": 30.0, "tau_basis": "assumed_analytic_default", "tau_assumption_rule": "program_default", "tau_software": "gaussian", "tau_method_family": "dft", "n_imag": 1, "imaginary_modes_cm1": [20.0]}),
+        ("transition_state_extra_imaginary_modes_below_tau", {"tau_cm1": 30.0, "tau_basis": "analytic_default", "tau_grid": "not_recorded", "tau_opt": "tight", "extra_imaginary_modes": [{"mode_index": 2, "magnitude_cm1": 20.0, "disposition": "torsion"}]}),
+        ("level_of_theory_method_names_correction_table", {"method_stem": "cbs-qb3", "depositor_supplied": {"method": "x"}}),
+        ("literature_title_mismatch", {"fetched_title": "Any Title Crossref Returned", "depositor_supplied": {"supplied_title": "x"}}),
+    ]
+    for code, context in fine:
+        assert context_problems(code, context) == [], (code, context_problems(code, context))
+
+
+def test_software_is_a_token_in_a_sentence():
+    text = render_message("charge_mismatch", {"declared": 0, "logged": -1, "software": "Gaussian 16 ZZQ label"})
+    assert "ZZQ" not in text
+
+
+# ---------------------------------------------------------------------------
+# details that are not depositor text, kept
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("rule", "software", "family", "needles"),
+    [
+        ("program_default", "gaussian", "dft", ["Gaussian's documented default second-derivative method for DFT calculations (analytic second derivatives) is assumed (assumed_analytic_default)"]),
+        ("orca_meta_gga_analytic_from_5", "orca", "dft", ["ORCA's documented default", "ORCA 5 and later has analytic Hessians for meta-GGA functionals"]),
+        ("orca_numerical_documented_vv10", "orca", "dft", ["ORCA's manuals document numerical frequencies from analytic gradients for VV10 (non-local) functionals"]),
+        ("orca_numerical_documented_double_hybrid", "orca", "dft", ["for double-hybrid functionals"]),
+        ("orca_pre5_meta_gga_no_analytic", "orca", "dft", ["ORCA releases before version 5 have no analytic Hessian for meta-GGA functionals"]),
+    ],
+)
+def test_an_assumed_tau_says_which_program_family_and_rule_assumed_it(rule, software, family, needles):
+    basis = "assumed_analytic_default" if rule in ("program_default", "orca_meta_gga_analytic_from_5") else "assumed_finite_difference_gradient"
+    text = render_message(
+        "transition_state_imaginary_frequency_too_small",
+        {
+            "tau_cm1": 30.0,
+            "tau_basis": basis,
+            "tau_assumption_rule": rule,
+            "tau_software": software,
+            "tau_method_family": family,
+            "reaction_coordinate_cm1": 20.0,
+            "ts_minimum_cm1": 50.0,
+        },
+    )
+    for needle in needles:
+        assert needle in text, (rule, needle, text)
+    if rule.startswith("orca_numerical") or rule.startswith("orca_pre5"):
+        assert "documented default" not in text, "numerical is the documented route there, not a default"
+
+
+def test_the_assumed_rows_and_rules_come_from_the_assumption_table():
+    from tckdb_schemas.deposit_warning_messages import ASSUMED_FAMILY, ASSUMED_SOFTWARE, ASSUMPTION_RULES
+    from tckdb_schemas.hessian_method_assumption import _DISPLAY_NAME, _FAMILY_LABEL, resolve_tau_with_assumption
+
+    assert ASSUMED_SOFTWARE == _DISPLAY_NAME and ASSUMED_FAMILY == _FAMILY_LABEL
+    from tckdb_schemas.hessian_method_assumption import infer_hessian_method  # noqa: F401  (name check)
+
+    seen = set()
+    for software, version, method in [
+        ("Gaussian", "16", "B3LYP"),
+        ("ORCA", "5.0.4", "tpss"),
+        ("ORCA", "4.2", "tpss"),
+        ("ORCA", "6.0.0", "wb97x-v"),
+        ("ORCA", "6.0.0", "b2plyp"),
+    ]:
+        resolution = resolve_tau_with_assumption([], software, method, version)
+        assert resolution.assumption_rule in ASSUMPTION_RULES, (software, method, resolution)
+        seen.add(resolution.assumption_rule)
+    assert seen == set(ASSUMPTION_RULES)
+
+
+def test_analytic_tau_states_the_grid_and_optimisation_it_rests_on():
+    tight = render_message(
+        "transition_state_imaginary_frequency_too_small",
+        {"tau_cm1": 15.0, "tau_basis": "analytic_tight", "tau_grid": "ultrafine", "tau_opt": "very_tight",
+         "reaction_coordinate_cm1": 5.0, "ts_minimum_cm1": 50.0},
+    )
+    assert "analytic second derivatives on integration grid ultrafine with optimisation convergence very_tight" in tight
+    loose = render_message(
+        "transition_state_imaginary_frequency_too_small",
+        {"tau_cm1": 30.0, "tau_basis": "analytic_default", "tau_grid": "not_tight", "tau_opt": "not_recorded",
+         "reaction_coordinate_cm1": 5.0, "ts_minimum_cm1": 50.0},
+    )
+    assert "(grid.quality not tight; opt.convergence not recorded)" in loose
+
+
+def test_the_grid_values_in_a_sentence_are_the_ones_tau_calls_tight():
+    from tckdb_schemas.deposit_warning_messages import _TIGHT_GRID, _TIGHT_OPT
+    from tckdb_schemas.stationary_point import _TIGHT_GRID_VALUES, _TIGHT_OPT_VALUES
+
+    assert _TIGHT_GRID == _TIGHT_GRID_VALUES and _TIGHT_OPT == _TIGHT_OPT_VALUES
+
+
+def test_a_late_deck_warning_says_why_the_stored_tolerance_is_what_it_is():
+    text = render_message(
+        "hessian_method_disagrees_with_stored_tau_basis",
+        {"stored_basis": "finite_difference_gradient", "stored_method": "finite_difference_gradient", "deck_method": "analytic"},
+    )
+    assert "(finite_difference_gradient: the Hessian was built by finite differences of analytic gradients)" in text
+    assumed = render_message(
+        "hessian_method_disagrees_with_stored_tau_basis",
+        {"stored_basis": "assumed_analytic_default", "stored_method": "analytic", "deck_method": "finite_difference_gradient"},
+    )
+    assert "(assumed_analytic_default)" in assumed
+
+
+def test_a_deduction_names_the_excited_state_method_but_never_a_point_group():
+    named = render_message(
+        "electronic_state_contradicts_method",
+        {"deduced": "excited", "evidence": "excited_state_method", "evidence_method": "eom-ccsd", "confidence": "definitive"},
+    )
+    assert "excited-state method of the calculation (eom-ccsd)" in named
+    from tckdb_schemas.deposit_warning_messages import EXCITED_STATE_METHODS
+
+    from app.services.ess_species_deduction import _EXCITED_STATE_METHODS
+
+    assert _EXCITED_STATE_METHODS == EXCITED_STATE_METHODS
+    from app.services.upload_reconciliation import _evidence_method
+
+    assert _evidence_method("method.cis") == {"evidence_method": "cis"}
+    assert _evidence_method("method.default") == {}
+    assert _evidence_method("multiplicity+point_group(C2v)") == {}
+
+
+def test_a_family_that_was_not_applied_is_named_only_when_it_is_canonical():
+    text = render_message("reaction_family_not_applied", {"reaction_family": "H_Abstraction"})
+    assert text.startswith("The reaction family H_Abstraction named in the deposit was not applied")
+    assert text.endswith("is not modified by a kinetics upload.")
+    assert "H_Abstraction" not in render_message("reaction_family_not_applied", {"depositor_supplied": {"reaction_family": "H_Abstraction"}})
+    assert render_message("reaction_family_not_applied", {"reaction_family": "My own family"}) == RENDERED["reaction_family_not_applied"]
+
+
+@pytest.mark.parametrize("code", ["composite_role_on_non_composite_calculation", "composite_frequency_level_differs_from_recipe"])
+def test_the_composite_link_warnings_say_which_record_they_are_about(code):
+    context = {"record_kind": "statmech", "calculation_type": "sp"}
+    assert "For this statmech record" in render_message(code, context)
+    assert "For this thermo record" in render_message(code, {**context, "record_kind": "thermo"})
+
+
+# ---------------------------------------------------------------------------
+# a stored message is not trusted; any made instance is held to the rule
+# ---------------------------------------------------------------------------
+
+
+def test_from_stored_rebuilds_the_sentence_and_ignores_a_stale_one():
+    stale = {
+        "field": "calculations['ZZQ-k'].charge",
+        "code": "charge_mismatch",
+        "message": "Declared charge for ZZQ-k disagrees (an older wording that quoted a key)",
+        "context": {"declared": 0, "logged": -1, "software": "gaussian"},
+    }
+    warning = UploadWarning.from_stored(stale)
+    assert warning.message == render_message("charge_mismatch", stale["context"])
+    assert "ZZQ" not in warning.message
+    assert warning.field == stale["field"] and warning.context == stale["context"]
+
+
+def test_the_job_result_rebuilds_a_stale_recorded_warning(client):
+    import app.workers.upload_worker as upload_worker
+
+    stale = {"field": "f", "code": "charge_mismatch", "message": "ZZQ stale", "context": {"declared": 0, "logged": 1}}
+    rebuilt = [UploadWarning.from_stored(w) for w in [stale]]
+    assert rebuilt[0].message == render_message("charge_mismatch", stale["context"])
+    assert "from_stored" in open(upload_worker.__file__).read()
+
+
+def test_every_instance_made_by_a_producer_is_checked_not_only_from_code():
+    from tests import warning_context_observer as observer
+
+    # A test-built instance (a stored row, a stale message) is exempt: the frame that made it is a test.
+    UploadWarning(field="f", code="charge_mismatch", message="anything a stored row said")
+    assert observer.drain() == []
+    # A producer-made one is not: from_stored with the stored message kept would be caught here.
+    from tckdb_schemas import upload_warning
+
+    code = compile(
+        "from tckdb_schemas.upload_warning import UploadWarning\n"
+        "w = UploadWarning(field='f', code='charge_mismatch', message='ZZQ built by hand')",
+        "/x/backend/app/services/fake_producer.py",
+        "exec",
+    )
+    with pytest.raises(Exception, match="render_message"):
+        exec(code, {})
+    assert observer.drain()
+    assert upload_warning._INSTANCE_CHECK is not None
+
+
+# ---------------------------------------------------------------------------
+# the public path: nothing raw-quoted, nothing that survives the quote
+# ---------------------------------------------------------------------------
+
+
+def test_no_path_a_warning_can_carry_is_built_with_a_raw_quoted_key():
+    import ast as _ast
+
+    def raw(node):
+        values = node.values
+        return any(
+            isinstance(v, _ast.FormattedValue)
+            and v.conversion != ord("r")
+            and i > 0
+            and isinstance(values[i - 1], _ast.Constant)
+            and isinstance(values[i - 1].value, str)
+            and values[i - 1].value.endswith(("[\'", '["'))
+            for i, v in enumerate(values)
+        )
+
+    found = []
+    for path in _sources():
+        tree = _ast.parse(path.read_text())
+        parents = {c: p for p in _ast.walk(tree) for c in _ast.iter_child_nodes(p)}
+        for node in _ast.walk(tree):
+            if isinstance(node, _ast.JoinedStr) and raw(node):
+                anc, in_raise = node, False
+                while anc in parents:
+                    anc = parents[anc]
+                    if isinstance(anc, _ast.Raise):
+                        in_raise = True
+                        break
+                if not in_raise:
+                    found.append(f"{path}:{node.lineno}")
+    assert found == [], "quote a key with !r so a key containing a quote cannot end the path early:\n" + "\n".join(found)
+
+
+def test_the_guard_for_raw_quoted_paths_flags_one():
+    import ast as _ast
+
+    source = "def f(key):\n    return f\"calculations['{key}'].x\""
+    node = next(n for n in _ast.walk(_ast.parse(source)) if isinstance(n, _ast.JoinedStr))
+    assert any(
+        isinstance(v, _ast.FormattedValue) and v.conversion != ord("r") and node.values[i - 1].value.endswith("['")
+        for i, v in enumerate(node.values)
+        if i > 0 and isinstance(node.values[i - 1], _ast.Constant)
+    )
+
+
+def test_a_key_that_tries_to_end_the_path_is_redacted_on_a_real_producer_path(client):
+    from tckdb_schemas.deposit_warning_messages import normalise_field
+
+    payload, _names = _sentinelise(_computed_reaction(), "s", template="x']SECRET['y{n}")
+    response = client.post("/api/v1/uploads/computed-reaction", json=payload)
+    assert response.status_code == 201, response.text[:400]
+    warnings = response.json()["warnings"]
+    assert any("SECRET" in w["field"] for w in warnings), "no warning path carried the key"
+    for w in warnings:
+        assert "SECRET" not in normalise_field(w["field"]), w["field"]
+
+
+def test_the_tau_context_carries_the_program_family_and_rule_of_an_assumption():
+    from tckdb_schemas.hessian_method_assumption import resolve_tau_with_assumption
+    from tckdb_schemas.stationary_point import _tau_context, resolve_tau
+
+    assumed = _tau_context(resolve_tau_with_assumption([], "Gaussian", "B3LYP", "16"))
+    assert assumed["tau_basis"] == "assumed_analytic_default"
+    assert (assumed["tau_software"], assumed["tau_method_family"], assumed["tau_assumption_rule"]) == (
+        "gaussian",
+        "dft",
+        "program_default",
+    )
+    tight = _tau_context(resolve_tau("analytic", "ultrafine", "very_tight"))
+    assert (tight["tau_basis"], tight["tau_grid"], tight["tau_opt"]) == ("analytic_tight", "ultrafine", "very_tight")
+    loose = _tau_context(resolve_tau("analytic", "coarse-ZZQ", None))
+    assert (loose["tau_grid"], loose["tau_opt"]) == ("not_tight", "not_recorded")
+
+
+# ---------------------------------------------------------------------------
+# a warning lands on the record it is about, whatever characters the key has
+# ---------------------------------------------------------------------------
+
+#: Key templates: plain, an embedded quote, a key that tries to close the bracket, a backslash.
+_KEY_TEMPLATES = {
+    "quote": "o'k{n}",
+    "bracket": "x']SECRET['y{n}",
+    "backslash": "b\\s{n}",
+    # Both quote kinds and a closing sequence: repr writes it single-quoted with an escaped quote.
+    "both_quotes": "x']SECRET\"y{n}",
+}
+
+
+def _stored_placement(client, url: str, payload: dict) -> list[tuple]:
+    """What the stored deposit-warning rows say: code, record kind, whether a record holds it, normalised path."""
+    from sqlalchemy import select
+    from tckdb_schemas.deposit_warning_messages import normalise_field
+
+    from app.db.models.deposit_warning import DepositWarning
+
+    session = client._db_session
+    savepoint = session.begin_nested()
+    try:
+        response = client.post(url, json=payload)
+        assert response.status_code == 201, response.text[:400]
+        rows = session.scalars(select(DepositWarning)).all()
+        return sorted(
+            (
+                r.code or "",
+                r.record_type.value if r.record_type else "",
+                r.record_id is None,
+                normalise_field(r.field) if r.field else "",
+            )
+            for r in rows
+        )
+    finally:
+        savepoint.rollback()
+
+
+@pytest.mark.parametrize("template", sorted(_KEY_TEMPLATES))
+def test_a_key_with_a_quote_a_bracket_or_a_backslash_places_every_warning_on_the_same_record_as_a_plain_key(client, template):
+    compared = unplaced = 0
+    for name, url, built, _required in _drivers():
+        plain, _ = _sentinelise(json.loads(json.dumps(built)), "p", template="k{n}")
+        odd, _ = _sentinelise(json.loads(json.dumps(built)), "o", template=_KEY_TEMPLATES[template])
+        expected = _stored_placement(client, url, plain)
+        got = _stored_placement(client, url, odd)
+        assert got == expected, (name, template)
+        compared += len(expected)
+        unplaced += sum(1 for row in expected if row[0] and row[2])
+    # Something really was placed on a record, so equal lists are not two lists of nothing.
+    assert compared > 100 and compared - unplaced > 40, (compared, unplaced)
+
+
+@pytest.mark.parametrize(
+    ("key", "path_template"),
+    [
+        ("h-opt", "calculations[{key!r}].freq_result.modes"),
+        ("o'k", "calculations[{key!r}].freq_result.modes"),
+        ("x']SECRET['y", "species[{key!r}].calculations[{key!r}]"),
+        ("b\\s", "calculations[{key!r}].key"),
+        ("a\\'b\"c", "calculations[{key!r}].geometry_key"),
+        ("x']SECRET\"y", "calculations[{key!r}].key"),
+        ("x']SECRET\"y", "species[{key!r}].calculations[{key!r}].x"),
+    ],
+)
+def test_the_calculation_key_in_a_field_is_read_back_as_written(key, path_template):
+    from tckdb_schemas.deposit_warning_messages import field_keys
+
+    field = path_template.format(key=key)
+    assert field_keys(field, "calculations") == [key], field
+    # A hand-quoted path from before the change, and an unquoted one, still read.
+    assert field_keys("calculations['plain'].x", "calculations") == ["plain"]
+    assert field_keys("xcalculations['no'].x", "calculations") == []
+    assert field_keys("species['calculations'].x", "calculations") == []
+
+
+def test_no_service_reads_keys_back_out_of_a_field_path_with_a_regex():
+    import ast as _ast
+    import re as _re
+
+    reading = frozenset({"compile", "search", "match", "findall", "fullmatch", "finditer", "sub", "split"})
+    offenders = []
+    for path in _sources():
+        for node in _ast.walk(_ast.parse(path.read_text())):
+            if not (isinstance(node, _ast.Call) and isinstance(node.func, _ast.Attribute) and node.func.attr in reading):
+                continue
+            first = node.args[0] if node.args else None
+            if isinstance(first, _ast.Constant) and isinstance(first.value, str):
+                pattern = first.value
+                # A pattern that names a path segment and a bracketed, quoted key: ``calculations\['(...)'\]``.
+                if "calculations" in pattern and _re.search(r"\\\[\\?['\"]", pattern):
+                    offenders.append(f"{path}:{node.lineno}: {pattern}")
+    assert offenders == [], "read keys through tckdb_schemas.deposit_warning_messages.field_keys:\n" + "\n".join(offenders)
+
+
+def test_the_regex_guard_sees_the_regex_it_replaced():
+    import ast as _ast
+    import re as _re
+
+    source = 're.findall(r"calculations\\[\'([^\']+)\'\\]", warning.field)'
+    call = _ast.parse(source).body[0].value
+    pattern = call.args[0].value
+    assert "calculations" in pattern and _re.search(r"\\\[\\?['\"]", pattern), pattern
+
+
+def test_a_hand_quoted_token_that_cannot_be_evaluated_is_read_as_written():
+    from tckdb_schemas.deposit_warning_messages import _decode_key, field_keys
+
+    # Starts and ends with a quote, but is an expression: literal_eval of the long chain raises MemoryError/RecursionError.
+    bomb = "'a'" + "-" * 200_000 + "'b'"
+    assert _decode_key(bomb) == bomb[1:-1]
+    assert field_keys(f"calculations[{bomb}].x", "calculations") == [bomb[1:-1]]
+    assert _decode_key("'not closed") == "'not closed"

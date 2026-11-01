@@ -350,7 +350,7 @@ def _persist_calculation_unattributed(
     # to this calc's now-resolved input geometry.
     for artifact_in in calc_in.artifacts:
         hessian_warning = try_extract_hessian_from_artifact_upload(
-            session, calculation, artifact_in, field=f"calculations['{calc_in.key}'].artifacts"
+            session, calculation, artifact_in, field=f"calculations[{calc_in.key!r}].artifacts"
         )
         if hessian_warning is not None and sp_energy_warnings is not None:
             sp_energy_warnings.append(hessian_warning)
@@ -397,7 +397,7 @@ def _index_species_sp_calcs(
             resolve_calculation_key(
                 calc.key,
                 calculation_key_to_id,
-                field=f"species['{sp.key}'].calculations[].key",
+                field=f"species[{sp.key!r}].calculations[].key",
             )
             for calc in sp.calculations
             if calc.type == CalculationType.sp
@@ -782,7 +782,7 @@ def persist_computed_reaction_upload(
                 observation_id_by_conformer_key=conformers_by_key,
                 observation_id_by_geometry_key=observation_id_by_geometry_key,
                 warnings=sp_energy_warnings,
-                field=f"species['{sp.key}'].calculations['{calc_in.key}']",
+                field=f"species[{sp.key!r}].calculations[{calc_in.key!r}]",
             )
 
     session.flush()
@@ -797,7 +797,7 @@ def persist_computed_reaction_upload(
                     list(conf.structure_determinations),
                     owner=DeterminationOwner(
                         species_entry_id=resolve_species_key(
-                            sp.key, species_key_to_entry, field=f"species['{sp.key}']"
+                            sp.key, species_key_to_entry, field=f"species[{sp.key!r}]"
                         ).id,  # type: ignore[attr-defined]
                         conformer_observation_id=observation_id_by_conformer_key[sp.key][conf.key],
                     ),
@@ -1106,13 +1106,13 @@ def persist_computed_reaction_upload(
         if not calc_in.depends_on:
             return
         child_calc = _persisted_calc(
-            calc_in.key, field=f"calculations['{calc_in.key}'].key"
+            calc_in.key, field=f"calculations[{calc_in.key!r}].key"
         )
         for dep in calc_in.depends_on:
             parent_calc = _persisted_calc(
                 dep.parent_calculation_key,
                 field=(
-                    f"calculations['{calc_in.key}'].depends_on."
+                    f"calculations[{calc_in.key!r}].depends_on."
                     f"parent_calculation_key"
                 ),
             )
@@ -1251,7 +1251,7 @@ def persist_computed_reaction_upload(
                     ac.source_calculation_key,
                     calculation_key_to_id,
                     field=(
-                        f"species['{sp.key}'].applied_energy_corrections[{i}]."
+                        f"species[{sp.key!r}].applied_energy_corrections[{i}]."
                         f"source_calculation_key"
                     ),
                     declares=_BUNDLE_CALCULATION_KEY_REMEDY,
@@ -1271,7 +1271,7 @@ def persist_computed_reaction_upload(
                 ac.source_conformer_key,
                 observation_id_by_conformer_key.get(sp.key, {}),
                 field=(
-                    f"species['{sp.key}'].applied_energy_corrections[{i}]."
+                    f"species[{sp.key!r}].applied_energy_corrections[{i}]."
                     f"source_conformer_key"
                 ),
                 declares=(
@@ -1441,7 +1441,7 @@ def persist_computed_reaction_upload(
                     sc.calculation_key,
                     calculation_key_to_id,
                     field=(
-                        f"species['{sp.key}'].thermo.source_calculations"
+                        f"species[{sp.key!r}].thermo.source_calculations"
                         f"[{index}].calculation_key"
                     ),
                 )
@@ -1651,7 +1651,7 @@ def persist_computed_reaction_upload(
                     sc.calculation_key,
                     calculation_key_to_id,
                     field=(
-                        f"species['{sp.key}'].statmech.source_calculations"
+                        f"species[{sp.key!r}].statmech.source_calculations"
                         f"[{i}].calculation_key"
                     ),
                 )
@@ -1780,7 +1780,7 @@ def persist_computed_reaction_upload(
                         torsion_in.source_scan_calculation_key,
                         calculation_key_to_id,
                         field=(
-                            f"species['{sp.key}'].statmech.torsions[{ti}]."
+                            f"species[{sp.key!r}].statmech.torsions[{ti}]."
                             f"source_scan_calculation_key"
                         ),
                     )
@@ -1867,7 +1867,7 @@ def persist_computed_reaction_upload(
             default_workflow_tool_release=request.workflow_tool_release,
             created_by=created_by,
             warnings_out=sp_energy_warnings,
-            field_prefix=f"species['{sp.key}'].transport",
+            field_prefix=f"species[{sp.key!r}].transport",
         )
         transport_ids.append(transport_row.id)
         note_anchor(

@@ -304,7 +304,8 @@ class TestTheMessage:
             4, WATER_XYZ, location="calculations[0].freq_result.modes"
         )[0]
         assert warning.field == "calculations[0].freq_result.modes"
-        assert W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY in warning.message
+        assert warning.code == W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY
+        assert (warning.context["n_modes"], warning.context["n_atoms"], warning.context["bent_count"]) == (4, 3, 3)
         assert "4 modes" in warning.message
         assert "3N-6 = 3" in warning.message
         assert "accepted and flagged" in warning.message
@@ -553,7 +554,8 @@ class TestTheMirrorMessage:
     def test_it_names_the_code_the_counts_and_the_measure(self):
         warning = self._warning()
         assert warning.field == "calculations[0].freq_result.modes"
-        assert W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY in warning.message
+        assert warning.code == W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY
+        assert (warning.context["n_modes"], warning.context["n_atoms"], warning.context["linear_count"]) == (3, 3, 4)
         assert "3 modes" in warning.message
         assert "3N-5 = 4" in warning.message
         assert "accepted and flagged" in warning.message

@@ -55,7 +55,6 @@ import hashlib
 import json
 import logging
 import math
-import re
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -64,6 +63,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
+from tckdb_schemas.deposit_warning_messages import field_keys
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.db.models.common import SubmissionRecordType as RT
@@ -144,7 +144,6 @@ _IDENTITY_SUBJECT_PREFIXES = (
     "composite_delta_prefer_scheme_terms",
 )
 
-_CALC_KEY_IN_FIELD = re.compile(r"calculations\['([^']+)'\]")
 
 
 def is_identity_subject(warning: UploadWarning) -> bool:
@@ -313,7 +312,7 @@ def _place(
         if isinstance(item, str):
             return _scope_result(item, anchors=anchors, targets=targets)
         return [item]
-    for key in _CALC_KEY_IN_FIELD.findall(warning.field):
+    for key in field_keys(warning.field, "calculations"):
         calc_id = calc_keys.get(key)
         if calc_id is not None:
             return [_Target(RT.calculation, calc_id)]

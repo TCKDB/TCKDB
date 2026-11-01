@@ -670,7 +670,7 @@ def persist_computed_species_upload(
                     dep.parent_calculation_key,
                     calc_keys_to_id,
                     field=(
-                        f"calculations['{child_in.key}'].depends_on."
+                        f"calculations[{child_in.key!r}].depends_on."
                         f"parent_calculation_key"
                     ),
                 )
@@ -804,7 +804,7 @@ def persist_computed_species_upload(
                             session,
                             calc_row,
                             art_in,
-                            field=f"calculations['{calc_in.key}'].artifacts",
+                            field=f"calculations[{calc_in.key!r}].artifacts",
                         )
                         if hessian_warning is not None:
                             upload_warnings.append(hessian_warning)
