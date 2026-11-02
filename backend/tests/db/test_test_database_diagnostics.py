@@ -44,3 +44,43 @@ def test_a_statement_timeout_prints_the_plan_of_the_cancelled_statement(db_engin
     captured = capsys.readouterr().err
     assert TIMEOUT_PLAN_MARKER in captured
     assert "species" in captured and "Scan" in captured, captured
+
+
+def test_a_timeout_on_a_statement_explain_cannot_handle_prints_why_and_keeps_the_error(db_engine, capsys):
+    with db_engine.connect() as connection:
+        connection.execute(text("SET LOCAL statement_timeout = '200ms'"))
+        with pytest.raises(OperationalError) as caught:
+            connection.execute(text("DO $$ BEGIN PERFORM pg_sleep(1); END $$"))
+    assert getattr(caught.value.orig, "sqlstate", None) == "57014"  # the hook did not replace the error
+    assert f"{TIMEOUT_PLAN_MARKER} unavailable" in capsys.readouterr().err
+
+
+def _context(engine, statement, parameters):
+    from types import SimpleNamespace
+
+    class Cancelled(Exception):
+        sqlstate = "57014"
+
+    return SimpleNamespace(original_exception=Cancelled(), statement=statement, parameters=parameters, engine=engine)
+
+
+def test_a_literal_percent_with_empty_parameters_is_explained(db_engine, capsys):
+    from tests.conftest import _explain_statement_on_timeout
+
+    _explain_statement_on_timeout(_context(db_engine, "SELECT id %% 2 FROM species", {}))
+    err = capsys.readouterr().err
+    assert "unavailable" not in err and "Scan" in err, err
+
+
+@pytest.mark.parametrize(
+    ("statement", "parameters", "reason"),
+    [
+        ("INSERT INTO species (id) VALUES (%(id)s)", [{"id": 1}, {"id": 2}], "executemany"),
+        ("EXPLAIN SELECT 1", {}, "already an EXPLAIN"),
+    ],
+)
+def test_a_statement_that_cannot_be_explained_prints_the_reason(db_engine, capsys, statement, parameters, reason):
+    from tests.conftest import _explain_statement_on_timeout
+
+    _explain_statement_on_timeout(_context(db_engine, statement, parameters))
+    assert f"{TIMEOUT_PLAN_MARKER} unavailable ({reason})" in capsys.readouterr().err

@@ -1367,18 +1367,24 @@ def _explain_statement_on_timeout(context) -> None:
         if getattr(context.original_exception, "sqlstate", None) != "57014":
             return
         statement = context.statement
-        if not statement or statement.lstrip()[:7].upper() == "EXPLAIN":
+        if not statement:
+            return
+        if statement.lstrip()[:7].upper() == "EXPLAIN":
+            print(f"{TIMEOUT_PLAN_MARKER} unavailable (already an EXPLAIN)", file=sys.stderr)
             return
         parameters = context.parameters
         if isinstance(parameters, list):  # executemany: no single plan
+            print(f"{TIMEOUT_PLAN_MARKER} unavailable (executemany)", file=sys.stderr)
             return
-        probe_engine = create_engine(context.engine.url, poolclass=NullPool)
+        probe_engine = create_engine(context.engine.url, poolclass=NullPool, connect_args={"connect_timeout": 5})
         try:
             raw = probe_engine.raw_connection()
             try:
                 cursor = raw.cursor()
                 cursor.execute("SET statement_timeout = '5s'")
-                cursor.execute("EXPLAIN " + statement, parameters or None)
+                # Parameters pass through unchanged: an empty dict still makes the driver
+                # process placeholders, so a literal ``%%`` stays one ``%``.
+                cursor.execute("EXPLAIN " + statement, parameters)
                 plan = "\n".join(row[0] for row in cursor.fetchall())
                 raw.rollback()
             finally:
@@ -1392,7 +1398,10 @@ def _explain_statement_on_timeout(context) -> None:
         )
     except Exception as error:
         try:
-            print(f"{TIMEOUT_PLAN_MARKER} unavailable ({type(error).__name__})", file=sys.stderr)
+            print(
+                f"{TIMEOUT_PLAN_MARKER} unavailable ({type(error).__name__}, {getattr(error, 'sqlstate', None)})",
+                file=sys.stderr,
+            )
         except Exception:
             pass
 
