@@ -1384,6 +1384,7 @@ def parse_supplied_label(frame: StereoFrame, label: str) -> list[str]:
         )
     for position, (token, element) in enumerate(zip(tokens, frame.elements, strict=True), 1):
         if element.never_settled and token != UNKNOWN:
+            assert element.reason is not None  # a never-settled element always names its reason
             why = {
                 R_ALLENE_DEPENDENT: "depends on the sense of an allene, which is not represented",
                 R_CUMULENE_TIED_END: "is a cumulated chain with a pair of stereo-bearing arms at one end, which is not represented",
