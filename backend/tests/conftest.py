@@ -14,7 +14,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Connection, create_engine, text
+from sqlalchemy import Connection, create_engine, event, text
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
@@ -1300,6 +1300,8 @@ def _sweep_stale_test_databases(current_db_name: str) -> None:
 #: once ``auto_explain`` is known to load.
 _TEST_DB_DIAGNOSTIC_SETTINGS: tuple[tuple[str, str], ...] = (
     ("log_lock_waits", "on"),
+    # Postgres's default, pinned explicitly because ``log_lock_waits`` fires
+    # after ``deadlock_timeout``: the 1 s in the docs is this value.
     ("deadlock_timeout", "'1s'"),
     ("auto_explain.log_min_duration", "'3s'"),
     ("auto_explain.log_analyze", "off"),
@@ -1312,20 +1314,87 @@ def _apply_test_database_diagnostics(connection, db_name: str) -> None:
 
     Needs a role allowed to ``ALTER DATABASE ... SET`` these (superuser: CI's
     role and the local compose role). A role that cannot is skipped with one
-    line, never failed: the diagnostics are a convenience, not a gate.
+    warning, never failed: the diagnostics are a convenience, not a gate.
+    ``auto_explain`` logs only statements that finish, so it never records a
+    statement cancelled by ``statement_timeout``; that plan comes from
+    ``_explain_statement_on_timeout``.
     """
+    db_name = _validate_test_db_name(db_name)
     settings = list(_TEST_DB_DIAGNOSTIC_SETTINGS)
     try:
         connection.execute(text("LOAD 'auto_explain'"))
         settings.append(("session_preload_libraries", "'auto_explain'"))
     except Exception as error:
-        print(f"[test-db diagnostics] auto_explain unavailable ({type(error).__name__}); plans will not be logged")
+        warnings.warn(
+            f"test-db diagnostics: auto_explain unavailable ({type(error).__name__}); slow plans will not be logged",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         settings = [(k, v) for k, v in settings if not k.startswith("auto_explain.")]
     try:
         for name, value in settings:
             connection.execute(text(f'ALTER DATABASE "{db_name}" SET {name} = {value}'))
     except Exception as error:
-        print(f"[test-db diagnostics] skipped: role may not ALTER DATABASE SET ({type(error).__name__})")
+        warnings.warn(
+            f"test-db diagnostics skipped: role may not ALTER DATABASE SET ({type(error).__name__})",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+
+#: Marker line in front of a timed-out statement's plan, greppable in a CI log.
+TIMEOUT_PLAN_MARKER = "TCKDB-TIMEOUT-PLAN"
+
+
+def _explain_statement_on_timeout(context) -> None:
+    """``handle_error`` hook: on sqlstate 57014 print the plan of the cancelled statement.
+
+    ``auto_explain`` cannot do this (it logs only finished statements), so a
+    ``statement_timeout`` would otherwise leave no plan behind. The plan is
+    taken on a SEPARATE connection (the failed one is in an aborted
+    transaction) with plain ``EXPLAIN``, never ``ANALYZE``, so it cannot run
+    the slow statement again. That connection cannot see the test's
+    uncommitted rows, so the plan is the planner's estimate from table-level
+    statistics, not necessarily the plan the test's session got.
+
+    Test harness only. It never raises and never replaces the original error.
+    Output goes to ``sys.stderr`` so it lands in the failed test's captured
+    output (and live under ``-s``).
+    """
+    import sys
+
+    try:
+        if getattr(context.original_exception, "sqlstate", None) != "57014":
+            return
+        statement = context.statement
+        if not statement or statement.lstrip()[:7].upper() == "EXPLAIN":
+            return
+        parameters = context.parameters
+        if isinstance(parameters, list):  # executemany: no single plan
+            return
+        probe_engine = create_engine(context.engine.url, poolclass=NullPool)
+        try:
+            raw = probe_engine.raw_connection()
+            try:
+                cursor = raw.cursor()
+                cursor.execute("SET statement_timeout = '5s'")
+                cursor.execute("EXPLAIN " + statement, parameters or None)
+                plan = "\n".join(row[0] for row in cursor.fetchall())
+                raw.rollback()
+            finally:
+                raw.close()
+        finally:
+            probe_engine.dispose()
+        print(
+            f"{TIMEOUT_PLAN_MARKER} statement cancelled by statement_timeout; estimated plan "
+            f"(separate connection, plain EXPLAIN):\n{statement}\n{plan}\n{TIMEOUT_PLAN_MARKER} end",
+            file=sys.stderr,
+        )
+    except Exception as error:
+        try:
+            print(f"{TIMEOUT_PLAN_MARKER} unavailable ({type(error).__name__})", file=sys.stderr)
+        except Exception:
+            pass
 
 
 def _recreate_test_database(db_name: str) -> None:
@@ -1450,6 +1519,7 @@ def db_engine():
         # upload worker, the idempotency decorator, the health probes -- now
         # reaches *this* database instead of the ambient one.
         api_deps.bind_ambient_session_factory(engine)
+        event.listen(engine, "handle_error", _explain_statement_on_timeout)
         yield engine
     except BaseException:
         body_failed = True
