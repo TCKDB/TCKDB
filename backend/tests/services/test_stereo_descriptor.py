@@ -403,6 +403,13 @@ def test_cyclic_allenes_of_every_ring_size_carry_an_unknown_axis_without_data(si
     assert resolve(smiles, label="?").descriptor == "?"
 
 
+@pytest.mark.parametrize("size", [4, 5])
+def test_cyclic_allenes_of_four_and_five_are_never_settled(size: int) -> None:
+    smiles = "C1=C=C(C)" + "C" * (size - 3) + "1"
+    r = resolve(smiles)
+    assert r.descriptor == "?" and r.unrepresented == ("axial_small_ring",) and r.unknown_elements == 0, smiles
+
+
 @pytest.mark.parametrize("label", ["R", "E", "Sa,Ra", "e"])
 def test_a_wrong_letter_at_an_axial_position_is_refused(label: str) -> None:
     with pytest.raises(CodedValueError) as excinfo:

@@ -1,5 +1,5 @@
 15
-C1=C=C(O)CCC1 ring=6 GFN2-xTB xtb 6.3.3 --opt tight; allene torsion between the CIP-higher substituents=-105.1 deg; expected=Ra; derived by hand Newman projection (higher substituent on C1 and C3 by atomic number; positive = clockwise front to back = P = Sa, negative = M = Ra); witness: hand Newman only: InChI writes no stereo layer for a ring of this size
+C1=C=C(O)CCC1 ring=6 GFN2-xTB xtb 6.3.3 --opt tight; allene torsion between the CIP-higher substituents=-105.1 deg; expected=Ra; derived by hand Newman projection (higher substituent on C1 and C3 by atomic number; positive = clockwise front to back = P = Sa, negative = M = Ra); witness: hand Newman only: InChI writes no stereo layer for a ring of this size; enantiomer B: optimised from the mirrored start of enantiomer A, and equal to the mirror image of A to 6e-5 angstrom
 C   0.86584683  1.09404238  0.88529515
 C  -0.45154421  1.15685246  0.93732887
 C  -1.29810592  0.35637558  0.29761068

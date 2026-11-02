@@ -403,7 +403,13 @@ def test_an_allene_dependent_deposit_is_accepted_and_the_warning_says_it_is_not_
     assert "depends on the sense of an allene is not represented" in warnings[_NOT_REPRESENTED]
 
 
-def test_a_small_ring_allene_deposit_asks_for_a_geometry_or_label_like_any_allene(client: TestClient) -> None:
+def test_a_five_ring_allene_deposit_is_accepted_and_the_warning_says_it_is_not_represented(client: TestClient) -> None:
+    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("C1=C=C(C)CC1")))
+    assert "cyclic allene in a ring of five or fewer atoms is not represented" in warnings[_NOT_REPRESENTED]
+    assert _UNRESOLVED not in warnings
+
+
+def test_a_six_ring_allene_deposit_asks_for_a_geometry_or_label_like_any_allene(client: TestClient) -> None:
     warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("C1=C=C(C)CCC1")))
     assert _NOT_REPRESENTED not in warnings, "a geometry or a stereo_label would settle the axis"
     assert "Ra/Sa allene axis" in warnings[_UNRESOLVED]

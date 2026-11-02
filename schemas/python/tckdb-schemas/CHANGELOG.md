@@ -5,8 +5,8 @@
 A cyclic allene in a ring of 6, 7 or 8 atoms is now read from geometry like any other allene. No field is added or removed.
 
 - A cyclic allene in a ring of six, seven or eight atoms gets `Ra` or `Sa` from a deposited geometry, by the same rule as a ring of nine or more and as an open-chain allene: the torsion between the two CIP-higher substituents about the end-to-end axis must lie between 10 and 170 degrees. The window is unchanged. A near-planar axis (for example the racemisation transition state) is still not read and stays `?`, which `species_entry_stereo_unresolved` reports.
-- A `stereo_label` of `Ra` or `Sa` is accepted for these rings (it was `species_stereo_label_invalid`). A label that contradicts the geometry is `species_stereo_contradiction`, as for any allene.
-- `species_entry_stereo_not_represented` no longer covers a cyclic allene in a small ring, and the reason `axial_small_ring` is gone from `stereo_not_represented` and from the CHEMKIN `STEREO_NOT_REPRESENTED=` marker. The reasons that remain are `allene_dependent`, `cumulene_tied_end`, `axial_marks`, `cumulene_marks` and `symmetry`.
+- A `stereo_label` of `Ra` or `Sa` is accepted for rings of 6, 7 and 8 (it was `species_stereo_label_invalid`). A label that contradicts the geometry is `species_stereo_contradiction`, as for any allene.
+- `species_entry_stereo_not_represented` still covers a cyclic allene in a ring of **five or fewer** atoms (it was eight or fewer): the reason `axial_small_ring` and its sentence now say five. Rings of 4 and 5 stay `?` and refuse `Ra`/`Sa` labels because no geometry was checked for them.
 - Entries already stored with `?` for such a ring are not changed; deposit a geometry or a `stereo_label` to settle them.
 
 ## 0.146.0 - 2026-11-01

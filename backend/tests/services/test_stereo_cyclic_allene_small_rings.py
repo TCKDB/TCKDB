@@ -3,8 +3,15 @@
 These rings used to be stated ``?`` whatever the geometry, because force-field embeddings of them are
 near-planar and no QM geometry was available to check the reader against. Fixtures are now GFN2-xTB optimised
 minima (``tests/fixtures/cyclic_allene_xtb``; the header line of each file gives the method, the allene torsion,
-the expected label and how that label was derived). Each ring has both enantiomers, each optimised from its own
-start, and the reader is also run on the exact mirror image of each.
+the expected label and how that label was derived). Each ring has both enantiomers: ``_a`` is optimised from an
+ETKDG/MMFF start and ``_b`` from the mirror image of that start, so ``_b`` is the mirror image of ``_a`` to 6e-5
+angstrom (xtb is deterministic; a test pins it). The reader is also run on the exact mirror image of each.
+
+Hand Newman rule used for every expected label (a script written without ``app.chemistry.stereo``, and again by
+the reviewer in numpy without RDKit): bonds from the SMILES connectivity; on each allene end the CIP-higher
+substituent is the one of higher atomic number (decisive in every fixture: ring C over H, or O over ring C); look
+along the axis from the first end with that end in front; the allene is P (= ``Sa``) when the front substituent
+turns clockwise to the rear one by less than 180 degrees, otherwise M (= ``Ra``). Positive torsion is P.
 
 How each expected label is witnessed:
 
@@ -136,6 +143,14 @@ def test_the_two_enantiomers_of_a_ring_are_mirror_images_with_opposite_labels(na
     assert stereo.geometry_tokens(f, read_xyz(f"{name}_a")) == [label_a]
     assert stereo.geometry_tokens(f, read_xyz(f"{name}_b")) == [OTHER[label_a]]
     assert torsion_of(f"{name}_a", smiles) == pytest.approx(-torsion_of(f"{name}_b", smiles), abs=0.5)
+
+
+@pytest.mark.parametrize("name", list(CASES))
+def test_enantiomer_b_is_the_mirror_image_of_enantiomer_a(name) -> None:
+    def coordinates(text: str) -> np.ndarray:
+        return np.array([[float(v) for v in line.split()[1:4]] for line in text.split("\n")[2:] if line.strip()])
+
+    assert np.abs(coordinates(mirror_xyz(read_xyz(f"{name}_a"))) - coordinates(read_xyz(f"{name}_b"))).max() < 1e-3
 
 
 @pytest.mark.parametrize("name", ["r8", "r9"])

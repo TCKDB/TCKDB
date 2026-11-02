@@ -150,7 +150,7 @@ def test_twisted_ring_allenes_of_nine_or_more_are_read_and_mirror_cleanly(smiles
 
 
 @pytest.mark.parametrize("size", [6, 7, 8, 9])
-def test_a_cyclic_allene_of_any_ring_size_is_settleable_not_unrepresented(size: int) -> None:
+def test_a_cyclic_allene_of_six_or_more_is_settleable_not_unrepresented(size: int) -> None:
     """Rings of 6 to 8 were once stated ``?`` always (#832); they read like a ring of 9 now.
 
     The geometry cases (QM fixtures, near-planar axis) are in ``test_stereo_cyclic_allene_small_rings.py``.
@@ -162,6 +162,36 @@ def test_a_cyclic_allene_of_any_ring_size_is_settleable_not_unrepresented(size: 
     assert stereo.unrepresented_stereo_kinds(smiles) == ()
     assert resolve(smiles).unrepresented == ()
     assert resolve(smiles, label="Ra").descriptor == "Ra"
+
+
+@pytest.mark.parametrize("smiles", ["C1=C=CC1", "C1=C=CCC1", "C1=C=C(C)CC1"])
+def test_cyclic_allenes_of_four_and_five_stay_unrepresented_whatever_the_geometry(smiles: str) -> None:
+    """Outside the 6 to 8 decision of #832: no QM geometry was checked for these rings."""
+
+    (element,) = frame(smiles).elements
+    assert element.ring_size in (4, 5) and element.never_settled and element.reason == stereo.R_AXIAL_SMALL_RING
+    assert stereo.unrepresented_stereo_kinds(smiles) == (stereo.R_AXIAL_SMALL_RING,)
+    assert resolve(smiles).unrepresented == (stereo.R_AXIAL_SMALL_RING,)
+    embedded = 0
+    for seed in range(3):
+        m = Chem.AddHs(Chem.MolFromSmiles(smiles))
+        if AllChem.EmbedMolecule(m, randomSeed=seed, useRandomCoords=True) != 0:
+            continue
+        embedded += 1
+        # a strained embedding may not even be perceived as this molecule (None); it is never read as a token
+        assert tokens(smiles, m) in (None, ["?"])
+        assert tokens(smiles, fx.mirror(m)) in (None, ["?"])
+        r = resolve(smiles, geometries=[m])
+        assert r.descriptor == "?" and r.unrepresented == (stereo.R_AXIAL_SMALL_RING,)
+    assert embedded, "no embedding of this ring succeeded: the geometry half of the test checked nothing"
+    for label in ("Ra", "Sa"):
+        with pytest.raises(CodedValueError) as excinfo:
+            resolve(smiles, label=label)
+        assert excinfo.value.code == stereo.W_SPECIES_STEREO_LABEL_INVALID
+        assert "ring" in str(excinfo.value)
+    assert resolve(smiles, label="?").descriptor == "?"
+    w = _warning(smiles)
+    assert w.code == stereo.W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED and "ring" in w.message
 
 
 @pytest.mark.parametrize("torsion", [0.0, 5.0, 9.0, 171.0, 175.0, 180.0, -180.0, -3.0, -176.0])
