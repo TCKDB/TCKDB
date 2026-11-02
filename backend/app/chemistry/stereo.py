@@ -1266,7 +1266,7 @@ def _chain_slots(frame: StereoFrame) -> dict[tuple[int, ...], int]:
     return {e.chain: i for i, e in enumerate(frame.elements) if e.kind in _CHAIN_KINDS}
 
 
-def pseudo_centre_options(arm_tokens: tuple[str, str]) -> tuple[str, ...]:
+def pseudo_centre_options(arm_tokens: tuple[str, ...]) -> tuple[str, ...]:
     """The tokens an allene-dependent centre takes for two arm senses: ``-`` for equal, ``r``/``s`` for unequal.
 
     Equal senses make the arms identical (swapping them is a symmetry), so the centre is not stereogenic.
@@ -1280,7 +1280,7 @@ def pseudo_centre_options(arm_tokens: tuple[str, str]) -> tuple[str, ...]:
 
 
 def pseudo_geometry_token(
-    frame: StereoFrame, element: StereoElement, mol: Chem.Mol, mapping, arm_tokens: tuple[str, str]
+    frame: StereoFrame, element: StereoElement, mol: Chem.Mol, mapping, arm_tokens: tuple[str, ...]
 ) -> str:
     """``-``/``r``/``s`` of an allene-dependent centre read from coordinates, given its arms' ``Ra``/``Sa``.
 
