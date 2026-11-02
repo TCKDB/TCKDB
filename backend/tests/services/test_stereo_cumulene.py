@@ -165,25 +165,14 @@ def test_a_cyclic_allene_of_six_or_more_is_settleable_not_unrepresented(size: in
 
 
 @pytest.mark.parametrize("smiles", ["C1=C=CC1", "C1=C=CCC1", "C1=C=C(C)CC1"])
-def test_cyclic_allenes_of_four_and_five_stay_unrepresented_whatever_the_geometry(smiles: str) -> None:
+def test_cyclic_allenes_of_four_and_five_stay_unrepresented_and_refuse_labels(smiles: str) -> None:
     """Outside the 6 to 8 decision of #832: no QM geometry was checked for these rings."""
 
     (element,) = frame(smiles).elements
     assert element.ring_size in (4, 5) and element.never_settled and element.reason == stereo.R_AXIAL_SMALL_RING
     assert stereo.unrepresented_stereo_kinds(smiles) == (stereo.R_AXIAL_SMALL_RING,)
     assert resolve(smiles).unrepresented == (stereo.R_AXIAL_SMALL_RING,)
-    embedded = 0
-    for seed in range(3):
-        m = Chem.AddHs(Chem.MolFromSmiles(smiles))
-        if AllChem.EmbedMolecule(m, randomSeed=seed, useRandomCoords=True) != 0:
-            continue
-        embedded += 1
-        # a strained embedding may not even be perceived as this molecule (None); it is never read as a token
-        assert tokens(smiles, m) in (None, ["?"])
-        assert tokens(smiles, fx.mirror(m)) in (None, ["?"])
-        r = resolve(smiles, geometries=[m])
-        assert r.descriptor == "?" and r.unrepresented == (stereo.R_AXIAL_SMALL_RING,)
-    assert embedded, "no embedding of this ring succeeded: the geometry half of the test checked nothing"
+    # the geometry half (perceivable twisted 5-ring geometries) is in test_stereo_cyclic_allene_small_rings.py
     for label in ("Ra", "Sa"):
         with pytest.raises(CodedValueError) as excinfo:
             resolve(smiles, label=label)

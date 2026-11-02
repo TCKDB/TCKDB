@@ -241,6 +241,7 @@ A cyclic allene in a ring of 6, 7 or 8 atoms is now read from geometry like any 
 - A cyclic allene in a ring of six, seven or eight atoms gets `Ra` or `Sa` from a deposited geometry, by the same rule as a ring of nine or more and as an open-chain allene: the torsion between the two CIP-higher substituents about the end-to-end axis must lie between 10 and 170 degrees. The window is unchanged. A near-planar axis (for example the racemisation transition state) is still not read and stays `?`, which `species_entry_stereo_unresolved` reports.
 - A `stereo_label` of `Ra` or `Sa` is accepted for rings of 6, 7 and 8 (it was `species_stereo_label_invalid`). A label that contradicts the geometry is `species_stereo_contradiction`, as for any allene.
 - `species_entry_stereo_not_represented` still covers a cyclic allene in a ring of **five or fewer** atoms (it was eight or fewer): the reason `axial_small_ring` and its sentence now say five. Rings of 4 and 5 stay `?` and refuse `Ra`/`Sa` labels because no geometry was checked for them.
+- A chirality mark in the SMILES of an allene in a ring of 6, 7 or 8 atoms (for example `C1=[C@]=C(F)CCC1`) is now read as well; it was ignored while those rings were never settled. Marks on allenes in rings of five or fewer stay ignored.
 - Entries already stored with `?` for such a ring are not changed; deposit a geometry or a `stereo_label` to settle them.
 
 ### 0.147.0 - 2026-11-02

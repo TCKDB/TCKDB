@@ -34,9 +34,11 @@ import pytest
 from rdkit import Chem
 from rdkit.Chem import inchi
 
+from app.api.error_contract import CodedValueError
 from app.chemistry import stereo
 from app.chemistry.species import identity_mol_from_smiles
 from app.db.models.common import StereoResolution
+from app.services.species_resolution import stereo_unresolved_warning
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "cyclic_allene_xtb"
 
@@ -205,3 +207,86 @@ def test_resolving_a_qm_geometry_gives_a_resolved_entry_descriptor(fixture, name
     assert resolved.descriptor == expected
     assert resolved.resolution == StereoResolution.resolved
     assert resolved.unrepresented == ()
+
+
+# ---------------------------------------------------------------------------
+# Rings of five or fewer stay unrepresented; review round 2
+# ---------------------------------------------------------------------------
+
+FORCE_FIELD = Path(__file__).resolve().parents[1] / "fixtures" / "cyclic_allene_force_field"
+#: file -> SMILES. Perceivable twisted 5-ring geometries (ETKDG + MMFF): with the ring guard off the reader gives
+#: Ra or Sa on each, so a pass below means the guard held, not that nothing was read.
+FIVE_RING_GEOMETRIES = {
+    "r5oh_s0": "C1=C=C(O)CC1",
+    "r5oh_s3": "C1=C=C(O)CC1",
+    "r5fused_s9": "C1=C=CC2CCCCC21",
+    "r5fused_s11": "C1=C=CC2CCCCC21",
+}
+
+
+@pytest.mark.parametrize("name", list(FIVE_RING_GEOMETRIES))
+def test_a_perceived_twisted_five_ring_geometry_is_still_not_read(name) -> None:
+    smiles = FIVE_RING_GEOMETRIES[name]
+    text = (FORCE_FIELD / f"{name}.xyz").read_text()
+    f = frame(smiles)
+    axial = next(i for i, e in enumerate(f.elements) if e.kind == "axial")
+    assert f.elements[axial].never_settled
+    for geometry in (text, mirror_xyz(text)):
+        tokens = stereo.geometry_tokens(f, geometry)
+        assert tokens is not None, "the geometry must be perceived as this molecule, or the test checks nothing"
+        assert tokens[axial] == "?"
+    resolved = stereo.resolve_stereo(f, geometries=[(text, {})], supplied_label=None)
+    assert resolved.descriptor.split(",")[axial] == "?"
+    assert stereo.R_AXIAL_SMALL_RING in resolved.unrepresented
+
+
+MARKED_SMALL_RINGS = ["C1=[C@]=CCC1", "C1=[C@@]=CCC1", "C1=[C@]=C(C)CC1", "C1=[C@@]=CC2CCCCC21", "C1=[C@]=CC1"]
+
+
+@pytest.mark.parametrize("smiles", MARKED_SMALL_RINGS)
+def test_a_smiles_mark_on_an_allene_in_a_ring_of_five_or_fewer_is_ignored(smiles) -> None:
+    resolved = stereo.resolve_stereo(frame(smiles), geometries=[], supplied_label=None)
+    axial = next(i for i, e in enumerate(frame(smiles).elements) if e.kind == "axial")
+    assert resolved.descriptor.split(",")[axial] == "?"
+    assert stereo.R_AXIAL_SMALL_RING in resolved.unrepresented
+    assert stereo.R_AXIAL_MARKS not in resolved.unrepresented
+    warning = stereo_unresolved_warning(resolved)
+    assert warning is not None and warning.code == stereo.W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED
+
+
+@pytest.mark.parametrize(
+    ("smiles", "ring_size"),
+    [
+        ("C12=C=C(CC1)CCCC2", 5),  # the allene is in a ring of 5 and one of 7: the smallest decides
+        ("C1=C=CC2CCCCC21", 5),
+        ("C1=C=CC2(CC2)C1", 5),  # spiro
+        ("C1=C=CC2CCCC2C1", 6),  # a ring of 6 fused to one of 5, the allene only in the 6
+    ],
+)
+def test_the_smallest_ring_through_the_allene_decides(smiles, ring_size) -> None:
+    element = next(e for e in frame(smiles).elements if e.kind == "axial")
+    assert element.ring_size == ring_size
+    assert element.never_settled == (ring_size <= 5)
+
+
+@pytest.mark.parametrize(
+    ("smiles", "mark_label"),
+    [("C1=[C@@]=CCCC1", "Ra"), ("C1=[C@]=CCCC1", "Sa")],
+)
+def test_a_mark_on_a_six_ring_allene_is_read_and_agrees_with_the_qm_geometry_only_when_it_should(smiles, mark_label) -> None:
+    """r6_a is ``Ra``: the mark that reads ``Ra`` is confirmed by it; the opposite mark contradicts it."""
+
+    f = frame(smiles)
+    assert stereo.resolve_stereo(f, geometries=[], supplied_label=None).descriptor == mark_label
+    geometry = [(read_xyz("r6_a"), {})]
+    if mark_label == "Ra":
+        resolved = stereo.resolve_stereo(f, geometries=geometry, supplied_label=None)
+        assert resolved.descriptor == "Ra" and resolved.resolution == StereoResolution.resolved
+    else:
+        with pytest.raises(CodedValueError) as excinfo:
+            stereo.resolve_stereo(f, geometries=geometry, supplied_label=None)
+        assert excinfo.value.code == stereo.W_SPECIES_STEREO_CONTRADICTION
+
+
+def test_a_mark_on_a_substituted_six_ring_allene_is_read() -> None:
+    assert stereo.resolve_stereo(frame("C1=[C@]=C(F)CCC1"), geometries=[], supplied_label=None).descriptor == "Ra"
