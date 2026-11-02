@@ -404,10 +404,10 @@ def test_a_small_ring_allene_deposit_is_accepted_and_the_warning_says_it_is_not_
     assert _UNRESOLVED not in warnings
 
 
-def test_an_allene_deposited_with_marks_only_says_marks_are_not_read(client: TestClient) -> None:
+def test_an_allene_deposited_with_marks_only_is_read_and_earns_no_warning(client: TestClient) -> None:
     warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=[C@]=CC")))
-    assert "allene marks are not read" in warnings[_NOT_REPRESENTED]
-    assert "geometry or a stereo_label" in warnings[_NOT_REPRESENTED]
+    assert _NOT_REPRESENTED not in warnings
+    assert _UNRESOLVED not in warnings
 
 
 def test_a_butatriene_deposit_is_accepted_and_asks_for_a_geometry_or_label(client: TestClient) -> None:

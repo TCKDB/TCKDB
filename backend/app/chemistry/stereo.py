@@ -89,8 +89,9 @@ end atoms. With an even number of double bonds (an allene) it is an axis: ``Ra``
 With an odd number of three or more it is ``E``/``Z``. RDKit perceives neither (no CIP label, marks dropped on
 sanitising, nothing from 3D), so both are read from geometry here: the torsion about the end-to-end axis between the
 two CIP-higher substituents (:func:`chain_geometry_token`; an allene must lie between 10 and 170 degrees, an odd
-cumulene within 30 degrees of planar). Allene SMILES marks and, for now, cumulene ``/`` ``\\`` marks are not read
-(:data:`CUMULENE_MARKS_READ`). Stated ``?`` whatever the data: a cyclic allene in a ring of eight or fewer atoms, and
+cumulene within 30 degrees of planar). An allene's chirality mark (``[C@]`` between the two double bonds) is read
+from the SMILES text (:func:`allene_mark_token`, checked against CDK and the Centres labeller); cumulene ``/``
+``\\`` marks are not read for now (:data:`CUMULENE_MARKS_READ`). Stated ``?`` whatever the data: a cyclic allene in a ring of eight or fewer atoms, and
 a centre or double bond whose stereogenicity depends on an allene's sense (:data:`_ALLENE_DEPENDENT`). See DR-0038.
 """
 
@@ -137,7 +138,7 @@ W_SPECIES_ENTRY_STEREO_UNRESOLVED = "species_entry_stereo_unresolved"
 
 #: The non-blocking warning for an entry with a stereo element that no further data would settle (a symmetry class
 #: past the automorphism cap, a cyclic allene in a ring of eight or fewer, an element that depends on an allene's
-#: sense, an allene or cumulene given only as SMILES marks): real isomers may share the entry.
+#: sense, a cumulene given only as SMILES marks, an allene mark that cannot be read): real isomers may share the entry.
 W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED = "species_entry_stereo_not_represented"
 
 UNKNOWN = "?"
@@ -794,7 +795,7 @@ def mark_tokens(frame: StereoFrame) -> list[str]:
     for element in frame.elements:
         if element.kind == _CUMULENE and CUMULENE_MARKS_READ:
             tokens.append(cumulene_mark_token(frame, element))
-        elif element.kind == _AXIAL and ALLENE_MARKS_READ:
+        elif element.kind == _AXIAL:
             tokens.append(allene_mark_token(frame, element))
         elif element.kind in (_AXIAL, _ALLENE_DEPENDENT, _CUMULENE):
             tokens.append(UNKNOWN)
@@ -1151,9 +1152,6 @@ def cumulene_mark_token(frame: StereoFrame, element: StereoElement) -> str:
     return "Z" if higher_side[0] == higher_side[1] else "E"
 
 
-#: Whether the chirality mark on the centre of an allene (``[C@]`` / ``[C@@]`` between two double bonds) is read.
-ALLENE_MARKS_READ = True
-
 _ORGANIC_SUBSET = ("Cl", "Br", "B", "C", "N", "O", "P", "S", "F", "I", "b", "c", "n", "o", "p", "s", "*")
 _NORMAL_VALENCE = {"C": 4, "c": 4}
 
@@ -1355,6 +1353,20 @@ def allene_mark_token(frame: StereoFrame, element: StereoElement) -> str:
         swaps += length - 1
     clockwise = (mark == "@@") != (swaps % 2 == 1)
     return "Ra" if clockwise else "Sa"
+
+
+def _allene_centre_marked(frame: StereoFrame, element: StereoElement) -> bool:
+    """Whether the SMILES puts a chirality mark on this allene's central atom."""
+
+    raw = _raw_marks_mol(frame)
+    if raw is None or len(element.chain) != 3:
+        return False
+    mapping = _raw_to_constitution(raw, frame)
+    if mapping is None:  # the text cannot be matched onto the molecule: any mark on an allene counts
+        return allene_marks_present(frame)
+    centre = element.chain[1]
+    unmarked = (Chem.ChiralType.CHI_UNSPECIFIED, Chem.ChiralType.CHI_OTHER)
+    return any(c == centre and raw.GetAtomWithIdx(r).GetChiralTag() not in unmarked for r, c in mapping.items())
 
 
 def _raw_to_constitution(raw: Chem.Mol, frame: StereoFrame) -> dict[int, int] | None:
@@ -1807,19 +1819,21 @@ def resolve_stereo(
 def _with_marks_only_reasons(frame: StereoFrame, tokens, result: ResolvedStereo) -> ResolvedStereo:
     """A deposit whose only source is the SMILES, and whose marks sit on an element that cannot be read from them.
 
-    An allene's chirality mark (``[C@]`` between the two double bonds) is not read: RDKit drops it on
-    sanitising and no validated reader exists (#832). Such a deposit is stored as ``?`` and says why, instead of
-    inviting more of the same. A cumulene's ``/`` ``\\`` marks are not read either while
+    An allene's chirality mark (``[C@]`` between the two double bonds) is read by :func:`allene_mark_token`; a
+    mark that reader cannot use (a text it does not understand, atoms it cannot match onto the molecule) leaves the
+    axis ``?`` and says why, instead of inviting more of the same. A cumulene's ``/`` ``\\`` marks are not read either while
     :data:`CUMULENE_MARKS_READ` is off.
     """
 
     open_axial = sum(
-        1 for e, t in zip(frame.elements, tokens, strict=True) if e.kind == _AXIAL and not e.never_settled and t == UNKNOWN
+        1
+        for e, t in zip(frame.elements, tokens, strict=True)
+        if e.kind == _AXIAL and not e.never_settled and t == UNKNOWN and _allene_centre_marked(frame, e)
     )
     open_cumulene = sum(1 for e, t in zip(frame.elements, tokens, strict=True) if e.kind == _CUMULENE and not e.never_settled and t == UNKNOWN)
     reasons = set(result.unrepresented)
     removed = 0
-    if open_axial and allene_marks_present(frame):
+    if open_axial:
         reasons.add(R_AXIAL_MARKS)
         removed += open_axial
     if open_cumulene and not CUMULENE_MARKS_READ and cumulene_marks_present(frame):
