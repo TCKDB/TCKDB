@@ -1,0 +1,120 @@
+name: Mirror CI images to GHCR
+
+# Copies the two Docker Hub images CI pulls most into GitHub Container
+# Registry (ghcr.io/tckdb/...), where GitHub-hosted runners pull without a
+# Docker Hub quota.
+#
+# Why: on 2026-11-02 Backend CI run 41432230795 (attempt 1) failed all ten
+# jobs at "Initialize containers", and build-api-image run 41432230844 failed
+# its smoke test, both on
+#   HEAD https://registry-1.docker.io/v2/informaticsmatters/rdkit-cartridge-debian/manifests/Release_2025_03_3: 429 Too Many Requests
+# CI already logs in to Docker Hub, so that is the shared account's quota,
+# not anonymous throttling. One Backend CI run pulls the rdkit image about ten
+# times and SeaweedFS about nine, so a few runs close together spend it.
+#
+# Why by digest: a tag can be re-pointed upstream, and then the copy CI tests
+# against would silently differ from the image docker-compose.yml runs. Each
+# source below is addressed by the sha256 of its OCI index, and `imagetools
+# create` copies the index and every platform manifest verbatim, so the GHCR
+# copy has the SAME index digest as the upstream image. CI can therefore pin
+# ghcr.io/tckdb/...@sha256:<same digest> and it is provably the identical
+# image. The verify step enforces that equality rather than assuming it.
+#
+# Adding an image later is one line in IMAGES.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/mirror-ci-images.yml
+  # Dry run: resolves the sources and checks their digests, pushes nothing.
+  pull_request:
+    paths:
+      - .github/workflows/mirror-ci-images.yml
+
+permissions:
+  contents: read
+
+env:
+  # One image per line: <destination> <source repository> <index digest>.
+  # Destinations are lowercase under the TCKDB org (GHCR requires lowercase).
+  # The seaweedfs digest is release 4.47, the same pin backend-ci.yml and
+  # backend-nightly.yml use. A source is never given by tag.
+  IMAGES: |
+    ghcr.io/tckdb/rdkit-cartridge-debian:Release_2025_03_3 docker.io/informaticsmatters/rdkit-cartridge-debian sha256:96c34a5b88d0cbe02bf57290531f27f3cb97f5d3e494f03baea75ea99749b5ef
+    ghcr.io/tckdb/seaweedfs:4.47 docker.io/chrislusf/seaweedfs sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+
+jobs:
+  dry-run:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Resolve sources (no push)
+        run: |
+          set -euo pipefail
+          n=0
+          while read -r dest src digest; do
+            [ -n "$dest" ] || continue
+            got=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "${src}@${digest}" | jq -r '.digest // empty')
+            echo "source ${src}@${digest} resolved to '${got}' (would copy to ${dest})"
+            # An empty or different answer must fail: a check that can pass
+            # without comparing two real digests verifies nothing.
+            if [ -z "$got" ] || [ "$got" != "$digest" ]; then
+              echo "::error::source digest mismatch for ${src}: expected ${digest}, got '${got}'"
+              exit 1
+            fi
+            n=$((n + 1))
+          done <<< "$IMAGES"
+          [ "$n" -gt 0 ] || { echo "::error::no images listed"; exit 1; }
+
+  mirror:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      # Docker Hub login for the source pull; GHCR login for the push.
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Copy by digest
+        run: |
+          set -euo pipefail
+          while read -r dest src digest; do
+            [ -n "$dest" ] || continue
+            docker buildx imagetools create --tag "$dest" "${src}@${digest}"
+          done <<< "$IMAGES"
+
+      - name: Verify destination digests equal the source digests
+        run: |
+          set -euo pipefail
+          n=0
+          while read -r dest src digest; do
+            [ -n "$dest" ] || continue
+            got=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$dest" | jq -r '.digest // empty')
+            echo "${dest} -> '${got}' (expected ${digest})"
+            # Empty output (a failed inspect) also fails here.
+            if [ -z "$got" ] || [ "$got" != "$digest" ]; then
+              echo "::error::${dest} digest '${got}' != source ${digest}"
+              exit 1
+            fi
+            n=$((n + 1))
+          done <<< "$IMAGES"
+          [ "$n" -gt 0 ] || { echo "::error::no images listed"; exit 1; }
