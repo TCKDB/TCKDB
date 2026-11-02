@@ -316,7 +316,8 @@ def test_a_small_ring_allene_takes_an_axis_label_like_any_allene() -> None:
 
 
 def test_an_allene_dependent_element_takes_only_an_unknown_label() -> None:
-    smiles = "CC=C=CC(C)C=C=CC"
+    # four identical allenyl arms: the class the centre-between-two-allenes reading does not cover, so it stays '?'
+    smiles = "C(C=C=CC)(C=C=CC)(C=C=CC)C=C=CC"
     kinds = [e.kind for e in frame(smiles).elements]
     wrong = ",".join("Ra" if k == "axial" else "R" for k in kinds)
     with pytest.raises(CodedValueError) as excinfo:

@@ -398,9 +398,20 @@ def test_an_allene_deposited_with_a_label_has_no_stereo_warning(client: TestClie
     assert _NOT_REPRESENTED not in warnings and _UNRESOLVED not in warnings
 
 
+_FOUR_ALLENYL_ARMS = "C(C=C=CC)(C=C=CC)(C=C=CC)C=C=CC"  # a centre the allene-centre reading does not cover
+
+
 def test_an_allene_dependent_deposit_is_accepted_and_the_warning_says_it_is_not_represented(client: TestClient) -> None:
-    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=C=CC(C)C=C=CC")))
+    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body(_FOUR_ALLENYL_ARMS)))
     assert "depends on the sense of an allene is not represented" in warnings[_NOT_REPRESENTED]
+
+
+def test_the_centre_between_two_allenes_is_not_a_not_represented_case(client: TestClient) -> None:
+    """The plain class is read (part 3 of #832): with no data it is an unresolved ``?`` that data could settle."""
+
+    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=C=CC(C)C=C=CC")))
+    assert _NOT_REPRESENTED not in warnings
+    assert _UNRESOLVED in warnings
 
 
 def test_a_five_ring_allene_deposit_is_accepted_and_the_warning_says_it_is_not_represented(client: TestClient) -> None:
@@ -443,8 +454,8 @@ def test_a_butatriene_deposit_is_accepted_and_asks_for_a_geometry_or_label(clien
 
 
 def test_an_allene_dependent_element_with_unknown_axes_says_both(client: TestClient) -> None:
-    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=C=CC(C)C=C=CC")))
-    assert "2 other stereo element(s) are also unknown" in warnings[_NOT_REPRESENTED]
+    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body(_FOUR_ALLENYL_ARMS)))
+    assert "4 other stereo element(s) are also unknown" in warnings[_NOT_REPRESENTED]
 
 
 def test_a_letter_on_an_allene_is_refused_before_anything_is_stored(client: TestClient) -> None:
