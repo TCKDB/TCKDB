@@ -141,8 +141,8 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
       (pseudo-asymmetric centre), ``E`` ``Z`` (double bond, or an odd cumulene), ``e`` ``z`` (pseudo-asymmetric
       double bond), ``Ra`` ``Sa`` (the axis of an allene or any even cumulene; ``Ra`` is IUPAC ``M``, a negative
       torsion between the two CIP-higher substituents, and ``Sa`` is ``P``), ``-`` (not stereogenic in this
-      configuration) and ``?`` (unknown, or not representable). Allene and cumulene tokens are read from geometry
-      only; ``NULL`` only for an achiral species.
+      configuration) and ``?`` (unknown, or not representable). An allene's token is read from geometry or from
+      the chirality mark in the SMILES; an odd cumulene's from geometry only; ``NULL`` only for an achiral species.
     """
 
     __tablename__ = "species_entry"

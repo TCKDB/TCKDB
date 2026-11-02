@@ -1599,8 +1599,9 @@ STEREO_NOT_REPRESENTED_REASONS: dict[str, str] = {
         "represented: its configurations are stored in one entry"
     ),
     "axial_marks": (
-        "the only stereo information is a SMILES mark on an allene, and allene marks are not read: supply a "
-        "geometry or a stereo_label (Ra or Sa) to settle the axis"
+        "the only stereo information is a SMILES mark on an allene, and that mark could not be read (the text is "
+        "not understood or does not match the molecule): supply a geometry or a stereo_label (Ra or Sa) to settle "
+        "the axis"
     ),
     "cumulene_marks": (
         "the only stereo information is the / and \\ marks on a cumulene, and those marks are not read: supply a "

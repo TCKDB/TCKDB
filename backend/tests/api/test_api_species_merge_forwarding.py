@@ -415,10 +415,23 @@ def test_a_six_ring_allene_deposit_asks_for_a_geometry_or_label_like_any_allene(
     assert "Ra/Sa allene axis" in warnings[_UNRESOLVED]
 
 
-def test_an_allene_deposited_with_marks_only_says_marks_are_not_read(client: TestClient) -> None:
+def test_a_standard_isotope_hydrogen_in_an_allene_deposit_is_read(client: TestClient, db_session) -> None:
+    """``[1H]`` is cleared from the identity molecule; the reader once crashed (500) on the mismatch.
+
+    The stored descriptor is asserted too: with the raw parse not clearing the label the text no longer matches the
+    molecule and the axis would fall back to ``?``.
+    """
+
+    for smiles, expected in (("[1H]C(F)=[C@]=CC", "Sa"), ("[1H]C(F)=C=CC", "?")):
+        _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body(smiles)))
+        latest = db_session.scalars(select(SpeciesEntry).order_by(SpeciesEntry.id.desc()).limit(1)).one()
+        assert latest.stereo_descriptor == expected
+
+
+def test_an_allene_deposited_with_marks_only_is_read_and_earns_no_warning(client: TestClient) -> None:
     warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=[C@]=CC")))
-    assert "allene marks are not read" in warnings[_NOT_REPRESENTED]
-    assert "geometry or a stereo_label" in warnings[_NOT_REPRESENTED]
+    assert _NOT_REPRESENTED not in warnings
+    assert _UNRESOLVED not in warnings
 
 
 def test_a_butatriene_deposit_is_accepted_and_asks_for_a_geometry_or_label(client: TestClient) -> None:

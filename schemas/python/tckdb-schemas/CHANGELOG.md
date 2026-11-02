@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.147.0 - 2026-11-02
+## 0.148.0 - 2026-11-02
 
 A cyclic allene in a ring of 6, 7 or 8 atoms is now read from geometry like any other allene. No field is added or removed.
 
@@ -8,6 +8,14 @@ A cyclic allene in a ring of 6, 7 or 8 atoms is now read from geometry like any 
 - A `stereo_label` of `Ra` or `Sa` is accepted for rings of 6, 7 and 8 (it was `species_stereo_label_invalid`). A label that contradicts the geometry is `species_stereo_contradiction`, as for any allene.
 - `species_entry_stereo_not_represented` still covers a cyclic allene in a ring of **five or fewer** atoms (it was eight or fewer): the reason `axial_small_ring` and its sentence now say five. Rings of 4 and 5 stay `?` and refuse `Ra`/`Sa` labels because no geometry was checked for them.
 - Entries already stored with `?` for such a ring are not changed; deposit a geometry or a `stereo_label` to settle them.
+
+## 0.147.0 - 2026-11-02
+
+An allene's chirality mark in a SMILES is now read. No field is added or removed.
+
+- A mark on the central atom of an allene (`[C@]` / `[C@@]` between the two double bonds, as in `NC(Br)=[C@]=C(O)C`) now sets the axis token of the entry: `Ra` or `Sa`. A deposit with such a mark and no geometry is `resolved` for that element and earns no warning. A mark that contradicts a geometry or a supplied `stereo_label` is `species_stereo_contradiction`, as for any other element.
+- `/` `\` marks on a cumulene with an odd number of double bonds are still not read.
+- The `not_represented` reason `axial_marks` now means only: a mark on an allene that could not be read (the text is not understood or does not match the molecule). Its sentence says so.
 
 ## 0.146.0 - 2026-11-01
 

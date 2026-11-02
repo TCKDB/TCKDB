@@ -24,11 +24,22 @@ dataset must never require a code release.
 
 ## Cyclic allenes in rings of 6 to 8 are read from geometry (2026-11-02)
 
-- **Client: no change. `tckdb-schemas` 0.147.0.** No migration, no backfill. Part of #832 (parts 2 and 3 stay open).
+- **Client: no change. `tckdb-schemas` 0.148.0.** No migration, no backfill. Part of #832 (parts 2 and 3 stay open).
 - A cyclic allene in a ring of six, seven or eight atoms now gets `Ra` / `Sa` from a deposited geometry, by the rule rings of nine or more and open-chain allenes already used: the torsion between the two CIP-higher substituents must lie between 10 and 170 degrees. The window is unchanged, so a near-planar axis (the racemisation transition state) still reads `?`.
 - Checked against GFN2-xTB optimised minima of 1,2-cyclohexadiene, -cycloheptadiene and -cyclooctadiene (both enantiomers each, plus a hydroxyl-substituted six- and seven-ring and a nine-ring control), a hand Newman projection for every one, and InChI's `/m` partition on the rings of 8 and 9. InChI writes no stereo layer for an allene in a ring of 6 or 7 whatever the twist, so those two are covered by the hand check and by the reader not depending on ring size; the tests record that gap as a fact.
 - The reason `axial_small_ring` now means a cyclic allene in a ring of **five or fewer** atoms (it was eight or fewer); rings of 4 and 5 stay `?` and refuse `Ra`/`Sa` labels because no geometry was checked for them. It is still reported by `stereo_not_represented`, the CHEMKIN `STEREO_NOT_REPRESENTED=` marker and the species-entry warning, with the new ring size. Entries already stored with `?` for a ring of 6 to 8 are development data and are not rewritten: deposit a geometry or a `stereo_label` to settle one.
 - Frontend: the "cyclic allene" text for `axial_small_ring` now says a ring of 5 or fewer.
+
+## Allene SMILES marks are read (2026-11-02)
+
+- **Client: `tckdb-client` unchanged (0.182.0), `tckdb-schemas` 0.147.0.** No migration, no schema change, no new environment variable. No stored row is rewritten. Part of #832 (part 2 of 3).
+- **What changes.** A chirality mark on the central atom of an allene (`NC(Br)=[C@]=C(O)C`) now sets the entry's axis token, `Ra` or `Sa`, where it used to leave `?`. The reader follows the OpenSMILES extended-tetrahedral rule on the text itself (implicit hydrogens right after their atom, ring-closure digits at the digit, the end written first first), permuted to (CIP-higher, lower) at each end; `@@` is `Ra` in that order.
+- **Checked against an independent labeller.** 442 spellings of 17 molecules (both marks, CDK respellings under random atom orders, ring closures on an end atom, bracket-hydrogen ends, explicit and isotopic hydrogens) agree with the label CDK 2.13 and the Centres 1.2.1 CIP labeller give the same text (`M` is `Ra`, `P` is `Sa`). Centres labels nothing for two of the texts (a ring digit on the central atom; ten others like it are labelled directly), so those rows carry the label of CDK's canonical re-export and are marked so. CI has no Java, so the labels are committed (`backend/tests/fixtures/allene_marks_centres.json`) with the jar URLs, versions, sha256s and command; `backend/scripts/dev/generate_allene_marks_witness.py` regenerates them. The OpenSMILES specification's own example is checked by hand from its depiction.
+- **Read-side structure search changes too.** The query's descriptor comes from the same reader (`descriptor_of_mol`), so an entry-level isomeric search for `CC=[C@]=CC` now looks for the entries whose descriptor is `Ra` (it used to look for `?`), and `CC=[C@@]=CC` for `Sa`.
+- **Fixed on the way.** A standard-isotope label in the text (`[1H]`, `[12C]`) made the raw re-parse one atom longer than the identity molecule and crashed the text matching with a `KeyError`; the same latent crash existed for a cumulene mark on main (`[1H]C(F)=C=C=CC`). The raw parse now clears standard isotopes as the identity molecule does, and a text that cannot be matched reads nothing instead of raising.
+- **Contradictions are now refused for allenes.** An allene mark that disagrees with a geometry or a supplied `stereo_label` is `species_stereo_contradiction`. Cumulene `/` `\\` marks are still ignored.
+- **Warning.** `axial_marks` (under `species_entry_stereo_not_represented`) now means only a mark on an allene that could not be read; its sentence says so.
+- **Not changed.** Small-ring allenes, the pseudo-asymmetric centre between two allenes (`allene_dependent`) and odd-cumulene marks stay `?`.
 
 ## Register coverage for deposit warnings; scan values are checked against their geometries (2026-11-01)
 
