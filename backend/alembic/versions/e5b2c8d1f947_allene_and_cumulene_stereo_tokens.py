@@ -45,6 +45,10 @@ def upgrade() -> None:
     _swap_constraint(_NEW)
     # Imported here, not at module level: importing the app from a migration module at load time would run for
     # every alembic command, including ones that never reach this revision.
+    # Note for a reader of this file alone: the data step below runs the fill service and the stereo reader as they
+    # are in the checked-out code, not as they were when this revision was written. Later changes to which allenes
+    # the reader settles (for example cyclic allenes in rings of 6 to 8, #832) therefore change what a re-run of
+    # this step fills. A database already at or past this revision is not touched.
     from app.services.cumulene_stereo_fill import fill_cumulene_stereo, print_report
 
     bind = op.get_bind()

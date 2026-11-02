@@ -89,10 +89,12 @@ end atoms. With an even number of double bonds (an allene) it is an axis: ``Ra``
 With an odd number of three or more it is ``E``/``Z``. RDKit perceives neither (no CIP label, marks dropped on
 sanitising, nothing from 3D), so both are read from geometry here: the torsion about the end-to-end axis between the
 two CIP-higher substituents (:func:`chain_geometry_token`; an allene must lie between 10 and 170 degrees, an odd
-cumulene within 30 degrees of planar). An allene's chirality mark (``[C@]`` between the two double bonds) is read
-from the SMILES text (:func:`allene_mark_token`, checked against CDK and the Centres labeller); cumulene ``/``
-``\\`` marks are not read for now (:data:`CUMULENE_MARKS_READ`). Stated ``?`` whatever the data: a cyclic allene in a ring of eight or fewer atoms, and
-a centre or double bond whose stereogenicity depends on an allene's sense (:data:`_ALLENE_DEPENDENT`). See DR-0038.
+cumulene within 30 degrees of planar): a cyclic allene in a ring of six or more reads like an acyclic one, and a
+near-planar axis (a racemisation transition state) stays ``?``. An allene's chirality mark (``[C@]`` between the two
+double bonds) is read from the SMILES text (:func:`allene_mark_token`, checked against CDK and the Centres labeller);
+cumulene ``/`` ``\\`` marks are not read for now (:data:`CUMULENE_MARKS_READ`). Stated ``?`` whatever the data: a cyclic
+allene in a ring of five or fewer atoms, and a centre or double bond whose stereogenicity depends on an allene's
+sense (:data:`_ALLENE_DEPENDENT`). See DR-0038.
 """
 
 from __future__ import annotations
@@ -137,7 +139,7 @@ W_SPECIES_STEREO_LABEL_INVALID = "species_stereo_label_invalid"
 W_SPECIES_ENTRY_STEREO_UNRESOLVED = "species_entry_stereo_unresolved"
 
 #: The non-blocking warning for an entry with a stereo element that no further data would settle (a symmetry class
-#: past the automorphism cap, a cyclic allene in a ring of eight or fewer, an element that depends on an allene's
+#: past the automorphism cap, a cyclic allene in a ring of five or fewer, an element that depends on an allene's
 #: sense, a cumulene given only as SMILES marks, an allene mark that cannot be read): real isomers may share the entry.
 W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED = "species_entry_stereo_not_represented"
 
@@ -188,9 +190,18 @@ _CUMULENE = "cumulene"
 _ALLENE_DEPENDENT = "allene_dependent"
 #: Chain elements (anchored at the two chain ends, read from geometry only).
 _CHAIN_KINDS = frozenset({_AXIAL, _CUMULENE})
-#: A cyclic allene in a ring of at most this size is never read: strained, short-lived, no validated reference.
-_SMALL_RING_MAX = 8
+#: A cyclic allene in a ring of at most this size is never read: no QM geometry has been checked for it (a ring of
+#: four or five atoms may not even have the allene as a minimum). Rings of 6, 7 and 8 are read (#832).
+_SMALL_RING_MAX = 5
 #: Allene: the end-to-end torsion between the CIP-higher substituents must lie in [10, 170] degrees (ideal 90).
+#:
+#: The window is the same for every ring size that is read. Cyclic allenes in rings of 6, 7 and 8
+#: relax to a twisted axis in QM (about 50 to 70 degrees; fixtures in ``tests/fixtures/cyclic_allene_xtb``) and are
+#: read as Ra/Sa like any other; only a near-planar axis (the racemisation transition state) is left ``?``.
+#: Do not read the missing InChI test for rings of 6 and 7 as a coverage gap: InChI cannot see an allene axis in a
+#: ring of that size (it writes no stereo layer whatever the twist), so those rings are covered by a hand Newman
+#: check of each fixture and by this reader's independence of ring size, which is validated against InChI's ``/m``
+#: layer on rings of 8 and 9 and on acyclic allenes.
 _ALLENE_TORSION_WINDOW = (10.0, 170.0)
 #: Odd cumulene: cis within this torsion, trans beyond 180 minus it, otherwise twisted and unread.
 _CUMULENE_PLANAR_TOLERANCE = 30.0
@@ -280,7 +291,7 @@ class ResolvedStereo:
     :param stereo_smiles: Canonical isomeric SMILES of the fully resolved
         configuration, when one can be written and round-trips.
     :param unrepresented: Why some ``?`` cannot be settled by the data in hand:
-        ``axial_small_ring``, ``allene_dependent``, ``axial_marks``,
+        ``axial_small_ring``, ``allene_dependent``, ``cumulene_tied_end``, ``axial_marks``,
         ``cumulene_marks``, ``symmetry`` (a symmetry class past the automorphism
         cap). Empty when every ``?`` is an element the data left unknown.
     :param unknown_elements: How many ``?`` are elements the data could settle.
@@ -593,8 +604,9 @@ def _allene_dependent_elements(
 def unrepresented_stereo_kinds(smiles: str) -> tuple[str, ...]:
     """Stereo elements of a molecule that no data can settle.
 
-    ``axial_small_ring`` (an allene in a ring of eight or fewer) and ``allene_dependent`` (a centre or double
-    bond whose stereogenicity depends on an allene's sense) are always ``?`` in an entry's descriptor, so a
+    ``axial_small_ring`` (an allene in a ring of five or fewer), ``allene_dependent`` (a centre or double bond whose
+    stereogenicity depends on an allene's sense) and ``cumulene_tied_end`` (a chain with a tied pair of
+    stereo-bearing arms at an end) are always ``?`` in an entry's descriptor, so a
     reader must not take that ``?`` for "not yet supplied". Empty for a SMILES that does not parse, or a
     molecule with neither. (Cases that depend on the deposit, not the molecule -- the symmetry cap, allene
     marks -- are not listed here: they need the full resolution.)
@@ -985,7 +997,7 @@ def chain_geometry_token(element: StereoElement, mol: Chem.Mol, mapping) -> str:
     is ``Ra`` for a negative torsion (IUPAC ``M``) and ``Sa`` for a positive one (``P``); a torsion outside
     [10, 170] degrees is a flattened axis and is not read. An odd cumulene is ``Z`` within 30 degrees of
     planar cis, ``E`` within 30 degrees of planar trans, otherwise twisted and not read. Cyclic allenes in
-    rings of eight or fewer are never read.
+    rings of five or fewer are never read (see :data:`_ALLENE_TORSION_WINDOW` for what is validated for the rest).
     """
 
     if element.never_settled or mol.GetNumConformers() == 0:
@@ -1641,11 +1653,13 @@ def parse_supplied_label(frame: StereoFrame, label: str) -> list[str]:
         )
     for position, (token, element) in enumerate(zip(tokens, frame.elements, strict=True), 1):
         if element.never_settled and token != UNKNOWN:
+            if element.reason is None:  # unreachable: a never-settled element always names its reason
+                raise RuntimeError("a never-settled stereo element has no reason")
             why = {
                 R_ALLENE_DEPENDENT: "depends on the sense of an allene, which is not represented",
                 R_CUMULENE_TIED_END: "is a cumulated chain with a pair of stereo-bearing arms at one end, which is not represented",
                 R_AXIAL_SMALL_RING: f"is a cyclic allene in a ring of {_SMALL_RING_MAX} or fewer, which is not represented",
-            }[element.reason or R_AXIAL_SMALL_RING]
+            }[element.reason]
             raise _label_invalid(f"token {position} ({token!r}) names an element that {why}; say '?'", expected)
         allowed = {
             _TETRAHEDRAL: TETRAHEDRAL_TOKENS,

@@ -95,7 +95,7 @@ describe("EntryIdentity: no pill boxes, every fact exactly once", () => {
                 stereo_label: null, stereo_descriptor: "?", stereo_resolution: "unresolved",
                 stereo_not_represented: ["axial_small_ring"],
             }))
-            expect(stereoRow()).toHaveTextContent("cyclic allene (ring of 8 or fewer) stereo not represented")
+            expect(stereoRow()).toHaveTextContent("cyclic allene (ring of 5 or fewer) stereo not represented")
         })
     })
 

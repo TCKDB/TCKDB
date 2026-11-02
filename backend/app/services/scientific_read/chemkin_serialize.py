@@ -128,7 +128,7 @@ def structure_comment(
     * ``STEREO_RESOLUTION=partial|unresolved`` marks an entry in which some element is still
       unknown, so a ``?`` is never read as a statement;
     * ``STEREO_NOT_REPRESENTED=axial_small_ring|allene_dependent|cumulene_tied_end`` marks an element
-      no data can settle (a cyclic allene in a ring of eight or fewer, a centre or double bond that depends on
+      no data can settle (a cyclic allene in a ring of five or fewer, a centre or double bond that depends on
       an allene's sense, or a cumulated chain with a tied pair of stereo-bearing arms at one end), whose
       isomers share the entry.
 

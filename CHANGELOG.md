@@ -22,6 +22,15 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Cyclic allenes in rings of 6 to 8 are read from geometry (2026-11-02)
+
+- **Client: no change. `tckdb-schemas` 0.148.0.** No migration, no backfill. Part of #832 (part 3 stays open).
+- A cyclic allene in a ring of six, seven or eight atoms now gets `Ra` / `Sa` from a deposited geometry, by the rule rings of nine or more and open-chain allenes already used: the torsion between the two CIP-higher substituents must lie between 10 and 170 degrees. The window is unchanged, so a near-planar axis (the racemisation transition state) still reads `?`.
+- Checked against GFN2-xTB optimised minima of 1,2-cyclohexadiene, -cycloheptadiene and -cyclooctadiene (both enantiomers each, plus a hydroxyl-substituted six- and seven-ring and a nine-ring control), a hand Newman projection for every one, and InChI's `/m` partition on the rings of 8 and 9. InChI writes no stereo layer for an allene in a ring of 6 or 7 whatever the twist, so those two are covered by the hand check and by the reader not depending on ring size; the tests record that gap as a fact.
+- The reason `axial_small_ring` now means a cyclic allene in a ring of **five or fewer** atoms (it was eight or fewer); rings of 4 and 5 stay `?` and refuse `Ra`/`Sa` labels because no geometry was checked for them. It is still reported by `stereo_not_represented`, the CHEMKIN `STEREO_NOT_REPRESENTED=` marker and the species-entry warning, with the new ring size. Entries already stored with `?` for a ring of 6 to 8 are development data and are not rewritten: deposit a geometry or a `stereo_label` to settle one.
+- A chirality mark in the SMILES of an allene in a ring of 6, 7 or 8 (for example `C1=[C@]=C(F)CCC1`, which reads `Ra`) is now read too; it was ignored while those rings were never settled. Marks on allenes in rings of five or fewer stay ignored.
+- Frontend: the "cyclic allene" text for `axial_small_ring` now says a ring of 5 or fewer.
+
 ## Allene SMILES marks are read (2026-11-02)
 
 - **Client: `tckdb-client` unchanged (0.182.0), `tckdb-schemas` 0.147.0.** No migration, no schema change, no new environment variable. No stored row is rewritten. Part of #832 (part 2 of 3).

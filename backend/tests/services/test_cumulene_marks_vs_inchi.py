@@ -167,7 +167,7 @@ def test_the_side_logic_agrees_with_rdkit_for_an_ordinary_double_bond(smiles: st
     frame = stereo.frame_from_mol(identity_mol_from_smiles(smiles))
     (element,) = frame.elements
     synthetic = stereo.StereoElement(
-        stereo._CUMULENE, element.atoms, element.key, chain=tuple(element.atoms), ring_size=0
+        stereo._CUMULENE, element.atoms, element.key, chain=tuple(element.atoms)
     )
     assert stereo.cumulene_mark_token(frame, synthetic) == reference
 

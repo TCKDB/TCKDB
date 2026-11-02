@@ -137,7 +137,7 @@ def test_unanimous_geometries_fill_in_place_and_the_rest_is_listed_and_left(db_s
 
     no_geometry, _ = _entry(db_session, _species(db_session, "FC=C=CCl"), "FC=C=CCl", "?")
 
-    small, _ = _entry(db_session, _species(db_session, "C1=C=C(C)CCC1"), "C1=C=C(C)CCC1", "?")  # never settled
+    small, _ = _entry(db_session, _species(db_session, "C1=C=C(C)CCC1"), "C1=C=C(C)CCC1", "?")  # settleable (#832), but no geometry
     flat, _ = _entry(db_session, _species(db_session, "OC=C=CC"), "OC=C=CC", "?")
     _geometry(db_session, flat, fx.build("OC=C=CC", 0.0))
 
@@ -152,7 +152,7 @@ def test_unanimous_geometries_fill_in_place_and_the_rest_is_listed_and_left(db_s
         assert _state(db_session, entry)[:3] == ("?", "unresolved", None), entry
     assert disputed_ref in out and "geometries disagree" in out
     assert "0 changed" not in out
-    assert re.search(r"2 filled, 1 left \(geometries do not settle the element\), 1 left \(no linked geometry\)", out), out
+    assert re.search(r"2 filled, 1 left \(geometries do not settle the element\), 2 left \(no linked geometry\)", out), out
     assert "1 left (geometries disagree)" in out
 
 

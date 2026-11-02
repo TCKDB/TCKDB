@@ -71,9 +71,9 @@ def test_partial_and_unresolved_entries_are_marked() -> None:
 
 
 def test_a_small_ring_allene_axis_is_marked_not_represented() -> None:
-    export = _export(_record(1, "C1=C=C(C)CCC1"))
+    export = _export(_record(1, "C1=C=C(C)CC1"))
     assert _species_block(export.files["chem.inp"]) == [
-        "SMILES=CC1=C=CCCC1  STEREO=?  STEREO_RESOLUTION=unresolved  STEREO_NOT_REPRESENTED=axial_small_ring ref=S1"
+        "SMILES=CC1=C=CCC1  STEREO=?  STEREO_RESOLUTION=unresolved  STEREO_NOT_REPRESENTED=axial_small_ring ref=S1"
     ]
 
 
