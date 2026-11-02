@@ -41,7 +41,7 @@ SKELETONS = {"Me_H": ("C", "[H]"), "Me_F": ("C", "F"), "OH_H": ("O", "[H]"), "Cl
 #: Atom indices of the template below: allene A ends 1 and 4, centre 6, ligands 7 and 8, allene B ends 9 and 12.
 ARM_ATOMS = {"A": (1, 4), "B": (9, 12)}
 CENTRE = 6
-CONFORMERS_PER_SKELETON = 80
+CONFORMERS_PER_SKELETON = 400
 
 
 def template(x: str, y: str, a: str = "", c: str = "", b: str = "") -> str:
@@ -121,6 +121,11 @@ def main(jar: str) -> None:
         for cid in ids:
             tokens = stereo.geometry_tokens(frame, Chem.MolToXYZBlock(plain, confId=cid))
             if tokens is None or "?" in tokens:
+                continue
+            # InChI does not see an allene axis below about 30 degrees of twist (it writes ``?`` in the /t layer);
+            # a case it cannot see is no witness of distinctness, so it is not kept.
+            conformer_inchi = inchi.MolBlockToInchi(Chem.MolToMolBlock(plain, confId=cid))
+            if "?" in conformer_inchi or "/t" not in conformer_inchi:
                 continue
             picked.setdefault(tuple(stereo.canonical_tokens(frame, tokens)), []).append(cid)
         for descriptor, conformers in sorted(picked.items()):
