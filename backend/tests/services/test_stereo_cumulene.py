@@ -316,7 +316,8 @@ def test_a_small_ring_allene_takes_an_axis_label_like_any_allene() -> None:
 
 
 def test_an_allene_dependent_element_takes_only_an_unknown_label() -> None:
-    smiles = "CC=C=CC(C)C=C=CC"
+    # four identical allenyl arms: the class the centre-between-two-allenes reading does not cover, so it stays '?'
+    smiles = "C(C=C=CC)(C=C=CC)(C=C=CC)C=C=CC"
     kinds = [e.kind for e in frame(smiles).elements]
     wrong = ",".join("Ra" if k == "axial" else "R" for k in kinds)
     with pytest.raises(CodedValueError) as excinfo:
@@ -458,39 +459,66 @@ def test_meso_allene_pair_is_one_descriptor_and_the_enantiomer_pair_two() -> Non
     assert labels == {"Ra,Ra", "Ra,Sa", "Sa,Sa"}
 
 
-def test_documented_limit_a_centre_that_depends_on_an_allene_is_unknown_not_non_stereogenic() -> None:
-    """``CC=C=CC(C)C=C=CC`` has 4 stereoisomers (``Ra,Ra``, ``Sa,Sa`` and the two meso forms whose middle carbon is
-    pseudo-asymmetric r or s) but only 3 descriptors are possible: the centre is stated ``?`` (#832)."""
+def test_a_centre_between_two_allene_axes_has_four_descriptors_not_three() -> None:
+    """``CC=C=CC(C)C=C=CC`` has 4 stereoisomers (``Ra,Ra`` and ``Sa,Sa`` with a non-stereogenic centre, and the two
+    meso forms whose middle carbon is pseudo-asymmetric r or s): one descriptor each (#832, part 3)."""
 
     smiles = "CC=C=CC(C)C=C=CC"
     f = frame(smiles)
     assert sorted(e.kind for e in f.elements) == ["allene_dependent", "axial", "axial"]
     isomers = stereo.stereoisomers(f)
-    descriptors = {",".join(t) for t, _ in isomers}
-    assert len(descriptors) == 3 < 4
-    assert all(t.count("-") == 0 and t.count("?") == 1 for t, _ in isomers)
-    assert stereo.unrepresented_stereo_kinds(smiles) == (stereo.R_ALLENE_DEPENDENT,)
-    # nothing deduces the centre away
-    refined = stereo.refine(f, [("?" if e.kind == "allene_dependent" else "Ra") for e in f.elements])
-    assert refined[[e.kind for e in f.elements].index("allene_dependent")] == "?"
-    r = resolve(smiles)
-    assert stereo.R_ALLENE_DEPENDENT in r.unrepresented
-    w = stereo_unresolved_warning(r)
-    assert w.code == stereo.W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED
-    assert "allene" in w.message
-
-
-def test_the_allene_dependent_position_takes_only_an_unknown_label() -> None:
-    f = frame("CC=C=CC(C)C=C=CC")
+    assert {",".join(t) for t, _ in isomers} == {"Ra,Ra,-", "Sa,Sa,-", "Ra,Sa,r", "Ra,Sa,s"}
+    assert stereo.unrepresented_stereo_kinds(smiles) == ()
+    assert stereo.R_ALLENE_DEPENDENT not in resolve(smiles).unrepresented
+    # with no data the centre is a '?' the data could settle, and refine does not deduce it away
+    refined = stereo.refine(f, ["?"] * 3)
+    assert refined == ["?"] * 3
+    # the axes fix a '-' where they are equal, and leave r/s open where they differ
     kinds = [e.kind for e in f.elements]
     dependent = kinds.index("allene_dependent")
-    ok = ["Ra"] * 3
+    equal = ["Ra"] * 3
+    equal[dependent] = "?"
+    assert stereo.refine(f, equal)[dependent] == "-"
+    # arms that differ leave r/s open: nothing deduces one of them
+    unequal = ["Ra", "Sa"]
+    unequal.insert(dependent, "?")
+    assert stereo.refine(f, unequal)[dependent] == "?"
+
+
+def test_the_centre_between_two_allene_axes_takes_dash_for_equal_senses_and_r_or_s_for_unequal_ones() -> None:
+    smiles = "CC=C=CC(C)C=C=CC"
+    f = frame(smiles)
+    kinds = [e.kind for e in f.elements]
+    dependent = kinds.index("allene_dependent")
+
+    def label(a: str, b: str, centre: str) -> str:
+        tokens = [a, b]
+        tokens.insert(dependent, centre)
+        return ",".join(tokens)
+
+    assert resolve(smiles, label=label("Ra", "Sa", "r")).resolution == StereoResolution.resolved
+    assert resolve(smiles, label=label("Ra", "Ra", "-")).resolution == StereoResolution.resolved
+    for a, b, centre in (("Ra", "Ra", "r"), ("Sa", "Sa", "s"), ("Ra", "Sa", "-")):
+        with pytest.raises(CodedValueError) as excinfo:
+            resolve(smiles, label=label(a, b, centre))
+        assert excinfo.value.code == stereo.W_SPECIES_STEREO_LABEL_INVALID, (a, b, centre)
+    for bad in ("R", "S", "E"):
+        with pytest.raises(CodedValueError) as excinfo:
+            resolve(smiles, label=label("Ra", "Sa", bad))
+        assert excinfo.value.code == stereo.W_SPECIES_STEREO_LABEL_INVALID
+
+
+def test_the_unsettled_allene_dependent_position_takes_only_an_unknown_label() -> None:
+    smiles = TETRA_ALLENYL
+    kinds = [e.kind for e in frame(smiles).elements]
+    dependent = kinds.index("allene_dependent")
+    ok = ["Ra"] * len(kinds)
     ok[dependent] = "?"
-    assert resolve("CC=C=CC(C)C=C=CC", label=",".join(ok)).resolution == StereoResolution.partial
-    bad = ["Ra"] * 3
+    assert resolve(smiles, label=",".join(ok)).resolution == StereoResolution.partial
+    bad = ["Ra"] * len(kinds)
     bad[dependent] = "r"
     with pytest.raises(CodedValueError) as excinfo:
-        resolve("CC=C=CC(C)C=C=CC", label=",".join(bad))
+        resolve(smiles, label=",".join(bad))
     assert excinfo.value.code == stereo.W_SPECIES_STEREO_LABEL_INVALID
 
 
@@ -622,14 +650,12 @@ SPIRO = "C12(C=C=CCCCC=C=C1)C=C=CCCCC=C=C2"
 BOND_ALLENYL_CARBINOL = "CC=C=CC(C=C=CC)=C(C(C)O)C(C)O"
 ACYCLIC_2_2 = "CC=C=CC(C=C=CC)(C=C=CCC)C=C=CCC"
 TETRA_ALLENYL = "C(C=C=CC)(C=C=CC)(C=C=CC)C=C=CC"
-TWO_ONE_ONE = "CC=C=CC(C=C=CC)(C)O"
 
 #: template -> (is the centre allene-dependent?, number of descriptors enumerated)
 TIE_PATTERNS = {
     "spiro, two allenes per ring": (SPIRO, True, 6),
     "quaternary 2+2": (ACYCLIC_2_2, True, 9),
     "four identical arms": (TETRA_ALLENYL, True, 5),
-    "2+1+1": (TWO_ONE_ONE, True, 3),
     "ring pair, three ranks": ("CC1C=C=CCCCCC=C=C1", True, 3),
     "double bond with tied allenyl arms": ("CC=C=CC(=CC)C=C=CC", True, 3),
     # ordinary centres that must stay a correct '-': the swap of the tied arms fixes the axes, or a tied group
@@ -676,7 +702,7 @@ def _uff(smiles: str, seed: int) -> Chem.Mol:
     return mol
 
 
-@pytest.mark.parametrize("smiles", [SPIRO, ACYCLIC_2_2, TETRA_ALLENYL, TWO_ONE_ONE, BOND_ALLENYL_CARBINOL])
+@pytest.mark.parametrize("smiles", [SPIRO, ACYCLIC_2_2, TETRA_ALLENYL, BOND_ALLENYL_CARBINOL])
 def test_a_relaxed_geometry_and_its_mirror_never_state_the_dependent_centre(smiles: str) -> None:
     order = [e.kind for e in frame(smiles).elements]
     dependent = order.index("allene_dependent")

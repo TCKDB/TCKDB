@@ -94,7 +94,10 @@ near-planar axis (a racemisation transition state) stays ``?``. An allene's chir
 double bonds) is read from the SMILES text (:func:`allene_mark_token`, checked against CDK and the Centres labeller);
 cumulene ``/`` ``\\`` marks are not read for now (:data:`CUMULENE_MARKS_READ`). Stated ``?`` whatever the data: a cyclic
 allene in a ring of five or fewer atoms, and a centre or double bond whose stereogenicity depends on an allene's
-sense (:data:`_ALLENE_DEPENDENT`). See DR-0038.
+sense and is not the plain case below (:data:`_ALLENE_DEPENDENT`). The plain case is a centre with two
+constitutionally equal arms that each hold one allene axis (``CC=C=CC(C)C=C=CC``): ``-`` when the two senses are
+equal, ``r`` or ``s`` when they differ, because an ``Ra`` arm outranks an ``Sa`` arm (IUPAC 2013 P-92.5, Rule 5); see
+:func:`pseudo_geometry_token`. See DR-0038.
 """
 
 from __future__ import annotations
@@ -186,7 +189,8 @@ _AXIAL = "axial"
 #: Cis/trans across a cumulated chain with an odd number (three or more) of double bonds: ``E``/``Z``.
 _CUMULENE = "cumulene"
 #: A centre or double bond whose stereogenicity depends on the sense of an allene (two constitutionally equal
-#: arms that can be enantiomorphic). RDKit cannot see it and we do not compute it: always ``?``.
+#: arms that can be enantiomorphic). RDKit cannot see it. A centre of the plain class (``StereoElement.arms``)
+#: is computed here; every other element of this kind is always ``?``.
 _ALLENE_DEPENDENT = "allene_dependent"
 #: Chain elements (anchored at the two chain ends, read from geometry only).
 _CHAIN_KINDS = frozenset({_AXIAL, _CUMULENE})
@@ -228,13 +232,17 @@ class StereoElement:
     #: Chain elements only: an end carries a tied pair of stereo-bearing substituents (``CC=C=CC(C=C=CC)=C=C(C)Cl``).
     #: The chain is then stereogenic through the senses of those arms, which needs a token we do not compute.
     tied_end: bool = False
+    #: Allene-dependent centre only: the ``chain`` of each of its two tied arms' allene axes. Present when the
+    #: centre is read (``-`` when the two senses are equal, ``r``/``s`` when they differ, see
+    #: :func:`pseudo_centre_options`); empty when the class is not handled and the element stays ``?``.
+    arms: tuple[tuple[int, ...], ...] = ()
 
     @property
     def never_settled(self) -> bool:
         """True when no data can settle this element (it is stated ``?`` always)."""
 
         return (
-            self.kind == _ALLENE_DEPENDENT
+            (self.kind == _ALLENE_DEPENDENT and not self.arms)
             or self.tied_end
             or (self.kind == _AXIAL and 0 < self.ring_size <= _SMALL_RING_MAX)
         )
@@ -243,7 +251,7 @@ class StereoElement:
     def reason(self) -> str | None:
         """The ``not_represented`` reason of a never-settled element, else ``None``."""
 
-        if self.kind == _ALLENE_DEPENDENT:
+        if self.kind == _ALLENE_DEPENDENT and not self.arms:
             return R_ALLENE_DEPENDENT
         if self.tied_end:
             return R_CUMULENE_TIED_END
@@ -559,22 +567,23 @@ def _allene_dependent_elements(
     element there. When the arms are enantiomorphic (``Ra`` against ``Sa``) it is a pseudo-asymmetric centre. The
     same holds for every other tie pattern (a spiro or quaternary centre with two tied pairs, four identical arms,
     arms joined by a ring). Neither RDKit's perception nor its CIP labeller can see allene chirality, so the
-    element is listed and always stated ``?``; it is never deduced non-stereogenic. Over-flagging is safe (``?``
-    and a warning); a wrong ``-`` is not.
+    element is listed. The plain class (:func:`_pseudo_centre_arms`) is computed; the others are always stated
+    ``?``, never deduced non-stereogenic. Over-flagging is safe (``?`` and a warning); a wrong ``-`` is not.
     """
 
     chains = [e.chain for e in found if e.kind == _AXIAL]
     if not chains:
         return []
     content_atoms = {a for e in found for a in (e.chain or e.atoms)}
-    extra: list[StereoElement] = []
+    centres: list[int] = []
     for atom in mol_h.GetAtoms():
         idx = atom.GetIdx()
         if atom.GetDegree() != 4:
             continue
         neighbours = [n.GetIdx() for n in atom.GetNeighbors()]
         if _tied_group_depends_on_allene(mol_h, idx, neighbours, ranks_h, chains, content_atoms):
-            extra.append(StereoElement(_ALLENE_DEPENDENT, (idx,), (ranks[idx], 0, ranks[idx])))
+            centres.append(idx)
+    bonds: list[StereoElement] = []
     for bond in mol_h.GetBonds():
         if bond.GetBondType() != Chem.BondType.DOUBLE or bond.GetIdx() in skipped:
             continue
@@ -596,8 +605,69 @@ def _allene_dependent_elements(
         if None in verdicts or "allene" not in verdicts:
             continue
         low, high = sorted((ranks[begin], ranks[end]))
-        extra.append(StereoElement(_ALLENE_DEPENDENT, (begin, end), (low, 1, high)))
-    return extra
+        # A double bond is left ``?``: its pseudo-asymmetric e/z has no independent witness.
+        bonds.append(StereoElement(_ALLENE_DEPENDENT, (begin, end), (low, 1, high)))
+    other_dependent = set(centres) | {a for e in bonds for a in e.atoms}
+    axial = {e.chain: e for e in found if e.kind == _AXIAL}
+    extra: list[StereoElement] = []
+    for idx in centres:
+        arms = _pseudo_centre_arms(mol_h, idx, ranks_h, axial, content_atoms, other_dependent - {idx})
+        extra.append(StereoElement(_ALLENE_DEPENDENT, (idx,), (ranks[idx], 0, ranks[idx]), arms=arms))
+    return extra + bonds
+
+
+def _pseudo_centre_arms(
+    mol_h: Chem.Mol,
+    centre: int,
+    ranks_h: list[int],
+    axial: dict[tuple[int, ...], StereoElement],
+    content_atoms: set[int],
+    other_dependent: set[int],
+) -> tuple[tuple[int, ...], ...]:
+    """The two arms' axis chains when ``centre`` is a plain pseudo-asymmetric centre, else ``()``.
+
+    The handled class is the one the independent witness covers: a tetrahedral centre with exactly two
+    constitutionally equal neighbours (the arms) and two others that differ from each other and from the arms;
+    the arms are separate branches (no ring or spiro joins them), each holding exactly one allene axis that can
+    be read and nothing else stereogenic, and no other allene-dependent element. Then the centre is ``-`` when
+    the axes have the same sense and ``r``/``s`` when they differ. Every other tie pattern (3+1, 2+2, four equal
+    arms, ring-shared or spiro arms, arms with further stereo content) returns ``()`` and stays ``?``. So do an
+    arm root that is itself isotopic, and a ligand that ties the arms once isotopes are ignored (``CD3`` beside
+    two ``CH3``-ended arms): the Rule 2 isotope decision would then fall between the arms and that ligand, and
+    the marker, which acts at sphere 1, would put the arms in the wrong place.
+    """
+
+    neighbours = [n.GetIdx() for n in mol_h.GetAtomWithIdx(centre).GetNeighbors()]
+    by_rank = Counter(ranks_h[n] for n in neighbours)
+    if sorted(by_rank.values()) != [1, 1, 2]:
+        return ()
+    arms = [n for n in neighbours if by_rank[ranks_h[n]] == 2]
+    # The marker that ranks the Ra arm above the Sa arm is a mass number on the arm's root atom, so a root that
+    # already carries an isotope cannot take it: the centre is left ``?``.
+    if any(mol_h.GetAtomWithIdx(a).GetIsotope() for a in arms):
+        return ()
+    # Canonical ranks count isotopes, so a ligand that differs from the arms only by an isotope deep inside (a CD3
+    # arm beside two CH3 arms) looks distinct yet ties the arms at CIP Rule 1, where the isotope is decided later
+    # (Rule 2) than the marker. Its true place relative to the arms is then not the marker's: leave the centre ``?``.
+    blind = Chem.Mol(mol_h)
+    for atom in blind.GetAtoms():
+        atom.SetIsotope(0)
+        atom.SetFormalCharge(0)
+    blind_ranks = list(Chem.CanonicalRankAtoms(blind, breakTies=False))
+    if any(blind_ranks[n] == blind_ranks[arms[0]] for n in neighbours if n not in arms):
+        return ()
+    branches = [_branch(mol_h, a, centre) for a in arms]
+    if branches[0] & branches[1] or centre in branches[0] | branches[1]:
+        return ()
+    found_chains: list[tuple[int, ...]] = []
+    for branch in branches:
+        inside = [c for c in axial if set(c) <= branch]
+        if len(inside) != 1 or axial[inside[0]].never_settled:
+            return ()
+        if (content_atoms | other_dependent) & branch != set(inside[0]):
+            return ()
+        found_chains.append(inside[0])
+    return tuple(found_chains)
 
 
 @lru_cache(maxsize=8192)
@@ -816,6 +886,10 @@ def mark_tokens(frame: StereoFrame) -> list[str]:
         else:
             begin, end = (frame.marked_index[index] for index in element.atoms)
             tokens.append(_bond_token(marked.GetBondBetweenAtoms(begin, end)))
+    slot = _chain_slots(frame)
+    for i, element in enumerate(frame.elements):
+        if element.kind == _ALLENE_DEPENDENT and element.arms:
+            tokens[i] = pseudo_mark_token(frame, element, tuple(tokens[slot[arm]] for arm in element.arms))
     return tokens
 
 
@@ -1373,6 +1447,54 @@ def allene_mark_token(frame: StereoFrame, element: StereoElement) -> str:
     return "Ra" if clockwise else "Sa"
 
 
+def pseudo_mark_token(frame: StereoFrame, element: StereoElement, arm_tokens: tuple[str, ...]) -> str:
+    """``r``/``s`` of an allene-dependent centre from the chirality mark on the centre's own atom in the SMILES.
+
+    The mark is on the centre (``[C@H]``), which RDKit drops on sanitising when the two arms are
+    constitutionally equal; here the raw parse keeps it. As for geometry (:func:`pseudo_geometry_token`) the
+    ``Ra`` arm's root atom takes a mass number one above natural, which makes the centre a real stereocentre
+    that survives sanitising, and the CIP labeller names it. Only the centre's own tag is kept (the allene's
+    tags are read by :func:`allene_mark_token`). ``-`` when the arms' senses are equal, ``?`` when they are not
+    both known, the text is unmarked or it cannot be matched onto the molecule.
+    """
+
+    options = pseudo_centre_options(arm_tokens)
+    if len(options) == 1:
+        return options[0]  # equal senses: ``-``; a sense not known: ``?``
+    raw = _raw_marks_mol(frame)
+    mapping = _raw_to_constitution(raw, frame) if raw is not None else None
+    if raw is None or mapping is None:
+        return UNKNOWN
+    to_raw = {c: r for r, c in mapping.items()}
+    mol_h = frame.constitution_h
+    centre = element.atoms[0]
+    ra_chain = element.arms[0] if arm_tokens[0] == "Ra" else element.arms[1]
+    root = next(
+        (n.GetIdx() for n in mol_h.GetAtomWithIdx(centre).GetNeighbors() if set(ra_chain) <= _branch(mol_h, n.GetIdx(), centre)),
+        None,
+    )
+    if root is None or centre not in to_raw or root not in to_raw:
+        return UNKNOWN
+    raw_centre, raw_root = to_raw[centre], to_raw[root]
+    tags = (Chem.ChiralType.CHI_TETRAHEDRAL_CW, Chem.ChiralType.CHI_TETRAHEDRAL_CCW)
+    if raw.GetAtomWithIdx(raw_centre).GetChiralTag() not in tags or raw.GetAtomWithIdx(raw_root).GetIsotope():
+        return UNKNOWN
+    marked = Chem.Mol(raw)
+    for atom in marked.GetAtoms():
+        if atom.GetIdx() != raw_centre:
+            atom.SetChiralTag(Chem.ChiralType.CHI_UNSPECIFIED)
+    root_atom = marked.GetAtomWithIdx(raw_root)
+    root_atom.SetIsotope(Chem.GetPeriodicTable().GetMostCommonIsotope(root_atom.GetAtomicNum()) + 1)
+    try:
+        Chem.SanitizeMol(marked)
+        Chem.AssignStereochemistry(marked, cleanIt=True, force=True)
+        rdCIPLabeler.AssignCIPLabels(marked)
+    except (ValueError, RuntimeError):
+        return UNKNOWN
+    code = _atom_token(marked.GetAtomWithIdx(raw_centre))
+    return code.lower() if code in ("R", "S") else UNKNOWN
+
+
 def _allene_centre_marked(frame: StereoFrame, element: StereoElement) -> bool:
     """Whether the SMILES puts a chirality mark on the middle atom of this axial chain."""
 
@@ -1435,13 +1557,75 @@ def geometry_tokens(
             except (ValueError, RuntimeError, KeyError):  # a geometry the labeller cannot probe says nothing
                 tokens.append(UNKNOWN)
         elif element.kind == _ALLENE_DEPENDENT:
-            tokens.append(UNKNOWN)
+            tokens.append(UNKNOWN)  # a centre with readable arms is filled below, once the axes are known
         elif element.kind == _TETRAHEDRAL:
             tokens.append(_atom_token(mol.GetAtomWithIdx(mapping[element.atoms[0]])))
         else:
             begin, end = element.atoms
             tokens.append(_bond_token(mol.GetBondBetweenAtoms(mapping[begin], mapping[end])))
+    slot = _chain_slots(frame)
+    for i, element in enumerate(frame.elements):
+        if element.kind == _ALLENE_DEPENDENT and element.arms:
+            try:
+                tokens[i] = pseudo_geometry_token(
+                    frame, element, mol, mapping, tuple(tokens[slot[arm]] for arm in element.arms)
+                )
+            except (ValueError, RuntimeError, KeyError):
+                tokens[i] = UNKNOWN
     return tokens
+
+
+def _chain_slots(frame: StereoFrame) -> dict[tuple[int, ...], int]:
+    """Element index of each cumulated chain, by its atom path."""
+
+    return {e.chain: i for i, e in enumerate(frame.elements) if e.kind in _CHAIN_KINDS}
+
+
+def pseudo_centre_options(arm_tokens: tuple[str, ...]) -> tuple[str, ...]:
+    """The tokens an allene-dependent centre takes for two arm senses: ``-`` for equal, ``r``/``s`` for unequal.
+
+    Equal senses make the arms identical (swapping them is a symmetry), so the centre is not stereogenic.
+    Opposite senses make the arms enantiomorphic, so exchanging two of the centre's ligands gives a different
+    molecule: pseudo-asymmetric ``r`` or ``s``. ``?`` when a sense is not known.
+    """
+
+    if UNKNOWN in arm_tokens or not all(t in AXIAL_TOKENS for t in arm_tokens):
+        return (UNKNOWN,)
+    return (NOT_STEREOGENIC,) if arm_tokens[0] == arm_tokens[1] else ("r", "s")
+
+
+def pseudo_geometry_token(
+    frame: StereoFrame, element: StereoElement, mol: Chem.Mol, mapping, arm_tokens: tuple[str, ...]
+) -> str:
+    """``-``/``r``/``s`` of an allene-dependent centre read from coordinates, given its arms' ``Ra``/``Sa``.
+
+    The rule (IUPAC 2013 P-92.5, Rule 5): an ``Ra`` (``M``) arm outranks an ``Sa`` (``P``) arm, then ordinary CIP
+    on the centre. It is applied by giving the root atom of the ``Ra`` arm a mass number one above its natural
+    one: that decides the tie between the two arms (Rule 2) and nothing else, because the arms are
+    constitutionally identical and differ from the other ligands at Rule 1 (:func:`_pseudo_centre_arms` leaves a
+    centre ``?`` where a ligand ties the arms once isotopes are ignored). The centre's chirality is read from
+    the coordinates and labelled by the CIP labeller; the label is the pseudo-asymmetric ``r``/``s``.
+    """
+
+    options = pseudo_centre_options(arm_tokens)
+    if len(options) == 1:
+        return options[0]
+    if mol.GetNumConformers() == 0:
+        return UNKNOWN
+    mol_h = frame.constitution_h
+    centre = element.atoms[0]
+    ra_chain = element.arms[0] if arm_tokens[0] == "Ra" else element.arms[1]
+    roots = [n.GetIdx() for n in mol_h.GetAtomWithIdx(centre).GetNeighbors()]
+    root = next(r for r in roots if set(ra_chain) <= _branch(mol_h, r, centre))
+    marked = Chem.Mol(mol)
+    atom = marked.GetAtomWithIdx(mapping[root])
+    if atom.GetIsotope():
+        return UNKNOWN
+    atom.SetIsotope(Chem.GetPeriodicTable().GetMostCommonIsotope(atom.GetAtomicNum()) + 1)
+    Chem.AssignStereochemistryFrom3D(marked)
+    rdCIPLabeler.AssignCIPLabels(marked)
+    code = _atom_token(marked.GetAtomWithIdx(mapping[centre]))
+    return code.lower() if code in ("R", "S") else UNKNOWN
 
 
 # ---------------------------------------------------------------------------
@@ -1497,8 +1681,9 @@ def stereoisomers(frame: StereoFrame) -> list[tuple[tuple[str, ...], Chem.Mol]] 
     ``None`` when the molecule has more than :data:`_ENUMERATION_CAP` potential
     elements. Cached on the frame. RDKit enumerates tetrahedral centres and double bonds; the cumulated
     chains are crossed with them here (an allene is ``Ra`` or ``Sa``, an odd cumulene ``E`` or ``Z``).
-    The one case this misses is documented: an element that depends on an allene's sense is ``?``
-    (``allene_dependent``), so such a molecule has fewer descriptors than isomers.
+    A centre whose two arms hold allene axes takes ``-`` when the senses are equal and ``r``/``s`` when they
+    differ (:func:`pseudo_centre_options`). The cases still missed are documented: an allene-dependent element
+    of any other class stays ``?`` (``allene_dependent``), so such a molecule has fewer descriptors than isomers.
     """
 
     if "isomers" in frame.cache:
@@ -1514,6 +1699,8 @@ def stereoisomers(frame: StereoFrame) -> list[tuple[tuple[str, ...], Chem.Mol]] 
     )
     slots = [i for i, e in enumerate(frame.elements) if e.kind in _CHAIN_KINDS]
     choices = [_chain_choices(frame.elements[i]) for i in slots]
+    slot_of = _chain_slots(frame)
+    pseudo = [i for i, e in enumerate(frame.elements) if e.kind == _ALLENE_DEPENDENT and e.arms]
     seen: dict[tuple[str, ...], Chem.Mol] = {}
     try:
         for iso in EnumerateStereoisomers(frame.constitution_h, options=options):
@@ -1522,7 +1709,14 @@ def stereoisomers(frame: StereoFrame) -> list[tuple[tuple[str, ...], Chem.Mol]] 
                 tokens = list(base)
                 for i, value in zip(slots, combo, strict=True):
                     tokens[i] = value
-                seen.setdefault(canonical_tokens(frame, tokens), iso)
+                centre_options = [
+                    pseudo_centre_options(tuple(tokens[slot_of[arm]] for arm in frame.elements[i].arms))
+                    for i in pseudo
+                ]
+                for picks in itertools.product(*centre_options):
+                    for i, value in zip(pseudo, picks, strict=True):
+                        tokens[i] = value
+                    seen.setdefault(canonical_tokens(frame, tokens), iso)
     except (ValueError, RuntimeError):
         frame.cache["isomers"] = None
         return None
@@ -1561,14 +1755,17 @@ def refine(frame: StereoFrame, tokens: list[str]) -> list[str]:
 
     ``(S,?,S)`` for pentane-2,3,4-triol can only be the isomer whose C3 is not a
     stereocentre, so C3 is ``-``. Nothing else is inferred: an element that some
-    consistent stereoisomer makes stereogenic stays ``?``.
+    consistent stereoisomer makes stereogenic stays ``?``. That includes the axes:
+    ``?,Ra,-`` at a centre between two allenes forces the first axis to ``Ra`` (a ``-`` there means equal
+    senses), but only ``-`` is ever deduced, so the axis stays ``?``. The inference is deliberately not drawn.
 
     :raises CodedValueError: ``species_stereo_contradiction`` when no stereoisomer
         has the configuration the sources together state.
     """
 
-    if UNKNOWN not in tokens:
-        return tokens
+    # A fully stated vector is checked too: sources that each pass alone can combine into a configuration no
+    # stereoisomer has (equal allene senses with an ``r`` between them, ``R,S`` around a ``-`` that needs ``R,R``).
+    # Past the enumeration cap there is no realizable set to check against, and the tokens stand as before.
     isomers = stereoisomers(frame)
     if isomers is None:
         return tokens
@@ -1666,9 +1863,13 @@ def parse_supplied_label(frame: StereoFrame, label: str) -> list[str]:
             _DOUBLE_BOND: DOUBLE_BOND_TOKENS,
             _AXIAL: AXIAL_TOKENS,
             _CUMULENE: CUMULENE_TOKENS,
-            _ALLENE_DEPENDENT: frozenset(),
+            _ALLENE_DEPENDENT: frozenset({"r", "s"}),
         }[element.kind]
-        extra = (UNKNOWN, NOT_STEREOGENIC) if element.kind in (_TETRAHEDRAL, _DOUBLE_BOND) else (UNKNOWN,)
+        extra = (
+            (UNKNOWN, NOT_STEREOGENIC)
+            if element.kind in (_TETRAHEDRAL, _DOUBLE_BOND, _ALLENE_DEPENDENT)
+            else (UNKNOWN,)
+        )
         if token not in allowed and token not in extra:
             raise _label_invalid(
                 f"token {position} ({token!r}) cannot label {_element_noun(element)}",
@@ -1684,6 +1885,8 @@ def parse_supplied_label(frame: StereoFrame, label: str) -> list[str]:
 
 
 def _element_noun(element: StereoElement) -> str:
+    if element.kind == _ALLENE_DEPENDENT and element.arms:
+        return "a centre between two allene axes (r, s or -)"
     if element.kind == _ALLENE_DEPENDENT:
         return "an element that depends on the sense of an allene (only '?')"
     if element.tied_end:
@@ -1699,6 +1902,8 @@ def _element_noun(element: StereoElement) -> str:
 
 
 def _kind_text(element: StereoElement) -> str:
+    if element.kind == _ALLENE_DEPENDENT and element.arms:
+        return "r/s (pseudo-asymmetric, from the two allene senses)"
     if element.kind == _ALLENE_DEPENDENT:
         return "? (depends on an allene's sense, not represented)"
     if element.tied_end:

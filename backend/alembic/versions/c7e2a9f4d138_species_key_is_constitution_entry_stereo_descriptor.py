@@ -64,6 +64,12 @@ A merged-away row that would collide with another under the old unique keys is r
 merged row is an ordinary empty-looking row; the results stay on the survivor. Because the markers are forgotten,
 the upgrade refuses, loudly, a database that still carries the ``merged:`` sentinels the downgrade leaves.
 
+Note (comment only, added with #832 part 3): the data step imports live stereo code
+(``app.services.stereo_identity_merge``, which reads ``app.chemistry.stereo``), so a re-run of this revision
+uses the checked-out reader, not the one that existed on 2026-10-26. That reader now includes the allene-dependent
+``r``/``s`` centre (a centre between two allene axes is ``-``, ``r`` or ``s`` rather than ``?``). Nothing
+executable here changed.
+
 Revision ID: c7e2a9f4d138
 Revises: b7e4c9a2d518
 Create Date: 2026-10-26

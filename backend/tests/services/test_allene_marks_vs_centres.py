@@ -97,10 +97,15 @@ def test_no_token_without_a_mark() -> None:
     assert stereo.allene_mark_token(frame, element) == "?"
 
 
-def test_the_pseudo_asymmetric_centre_between_two_allenes_stays_unknown() -> None:
-    """Part 3 is not built: the centre stays ``?`` with its reason, whatever the marks say."""
+def test_the_centre_between_two_allenes_is_read_from_the_marks() -> None:
+    """Part 3 of #832: with both axes marked the centre is ``-``, ``r`` or ``s`` (Centres: M,P with the centre mark
+    ``@`` is ``r``; M,M is not stereogenic). Unmarked, nothing is stated and no reason is given: data could settle it.
+    The fuller witness (every skeleton, every mark combination, respellings) is ``test_allene_pseudo_centre.py``."""
 
-    for smiles in ("CC=C=CC(C)C=C=CC", "CC=[C@]=C[C@H](C)C=[C@@]=CC", "CC=[C@]=C[C@H](C)C=[C@]=CC"):
-        result = stereo.resolve_stereo(stereo.frame_from_mol(identity_mol_from_smiles(smiles)))
-        assert result.descriptor.split(",")[-1] == "?"
-        assert "allene_dependent" in result.unrepresented
+    def resolved(smiles: str) -> stereo.ResolvedStereo:
+        return stereo.resolve_stereo(stereo.frame_from_mol(identity_mol_from_smiles(smiles)))
+
+    unmarked = resolved("CC=C=CC(C)C=C=CC")
+    assert unmarked.descriptor == "?,?,?" and "allene_dependent" not in unmarked.unrepresented
+    assert resolved("CC=[C@]=C[C@H](C)C=[C@@]=CC").descriptor == "Ra,Sa,r"
+    assert resolved("CC=[C@]=C[C@H](C)C=[C@]=CC").descriptor == "Ra,Ra,-"
