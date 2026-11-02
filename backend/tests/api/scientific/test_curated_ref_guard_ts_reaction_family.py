@@ -125,8 +125,17 @@ def test_ts_and_reaction_routes_name_no_hidden_record_under_curated(client, db_s
 # ---------------------------------------------------------------------------
 
 
-def _get(client, path, profile, **params):
+def _get_raw(client, path, profile, **params):
+    """A request that asserts nothing: for callers that accept a fail-closed answer."""
     return client.get(f"{BASE}{path}", params={**params, "profile": profile})
+
+
+def _get(client, path, profile, **params):
+    response = _get_raw(client, path, profile, **params)
+    # Fail with the body, not with a KeyError two lines later: a one-off
+    # statement timeout once surfaced as ``KeyError: 'records'``.
+    assert response.status_code == 200, (path, params, response.status_code, response.text)
+    return response
 
 
 def _walk(node):
@@ -278,7 +287,7 @@ def test_every_block_the_family_registers_is_reached_and_matters(client, db_sess
         assert registered.status_code == 200, (model.__name__, route, registered.text)
         monkeypatch.setattr(ref_guard, "POINTER_MODELS", registry - {model})
         try:
-            answer = _get(client, route, "curated", **params).text
+            answer = _get_raw(client, route, "curated", **params).text
         except ref_guard.RefGuardUnplaceable:
             answer = None
         finally:
