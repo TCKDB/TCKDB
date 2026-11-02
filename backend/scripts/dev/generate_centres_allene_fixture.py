@@ -6,7 +6,9 @@ Java, it reads the committed fixture.
 
     curl -L -o centres.jar https://github.com/SiMolecule/centres/releases/download/1.2.1/centres.jar
     sha256sum centres.jar        # must be 6c5d5cafa9393ed7b667a2340222348cd15a9bbdd0d1b92518229f26cc5e87fb
-    conda run -n tckdb_env python backend/scripts/dev/generate_centres_allene_fixture.py centres.jar
+    curl -L -o cdk.jar https://github.com/cdk/cdk/releases/download/cdk-2.13/cdk-2.13.jar   # respelling only
+    sha256sum cdk.jar            # must be 5a42221d412dca53e48fdfc0bfae645310f9de80082800af801d06a87df32411
+    conda run -n tckdb_env python backend/scripts/dev/generate_centres_allene_fixture.py centres.jar cdk.jar
 
 The jar is run as ``java -jar centres.jar x.smi`` (one ``SMILES name`` per line) and ``java -jar centres.jar
 x.sdf`` (3D). Centres does not label the pseudo-asymmetric centre from SDF coordinates, so the geometry cases
@@ -34,6 +36,46 @@ from app.chemistry.species import identity_mol_from_smiles
 
 JAR_URL = "https://github.com/SiMolecule/centres/releases/download/1.2.1/centres.jar"
 JAR_SHA256 = "6c5d5cafa9393ed7b667a2340222348cd15a9bbdd0d1b92518229f26cc5e87fb"
+CDK_URL = "https://github.com/cdk/cdk/releases/download/cdk-2.13/cdk-2.13.jar"
+CDK_SHA256 = "5a42221d412dca53e48fdfc0bfae645310f9de80082800af801d06a87df32411"
+RESPELLINGS = 4
+#: CDK respells a SMILES text with the atoms and bonds in a random order (fixed seeds): lines ``name<TAB>smiles``.
+JAVA = r"""
+import org.openscience.cdk.interfaces.*;
+import org.openscience.cdk.silent.SilentChemObjectBuilder;
+import org.openscience.cdk.smiles.*;
+import java.io.*;
+import java.util.*;
+
+public class Respell {
+  public static void main(String[] args) throws Exception {
+    SmilesParser sp = new SmilesParser(SilentChemObjectBuilder.getInstance());
+    SmilesGenerator sg = new SmilesGenerator(SmiFlavor.Stereo | SmiFlavor.AtomicMass);
+    int n = Integer.parseInt(args[1]);
+    try (BufferedReader r = new BufferedReader(new FileReader(args[0]))) {
+      String line;
+      while ((line = r.readLine()) != null) {
+        String[] c = line.split("\t");
+        IAtomContainer mol = sp.parseSmiles(c[1]);
+        for (int seed = 0; seed < n; seed++) {
+          Random rnd = new Random(1000 + seed);
+          List<IAtom> atoms = new ArrayList<>();
+          for (IAtom a : mol.atoms()) atoms.add(a);
+          List<IBond> bonds = new ArrayList<>();
+          for (IBond b : mol.bonds()) bonds.add(b);
+          Collections.shuffle(atoms, rnd);
+          Collections.shuffle(bonds, rnd);
+          IAtomContainer p = mol.getBuilder().newAtomContainer();
+          for (IAtom a : atoms) p.addAtom(a);
+          for (IBond b : bonds) p.addBond(b);
+          for (IStereoElement se : mol.stereoElements()) p.addStereoElement(se);
+          System.out.println(c[0] + "\t" + seed + "\t" + sg.create(p));
+        }
+      }
+    }
+  }
+}
+"""
 OUT = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "centres_allene_pseudo.json"
 
 CD3 = "C([2H])([2H])[2H]"
@@ -120,12 +162,29 @@ def spell(positions: np.ndarray, x: str, y: str, tail: str) -> str:
     )
 
 
-def main(jar: str) -> None:
-    digest = hashlib.sha256(Path(jar).read_bytes()).hexdigest()
-    if digest != JAR_SHA256:
-        sys.exit(f"centres.jar sha256 is {digest}, expected {JAR_SHA256}")
+def respell(cdk_jar: str, rows: list[tuple[str, str]]) -> list[tuple[str, int, str]]:
+    """``(name, seed, smiles)`` for ``RESPELLINGS`` random atom orders of each ``(name, smiles)``."""
+
+    with tempfile.TemporaryDirectory() as tmp:
+        source = Path(tmp) / "Respell.java"
+        source.write_text(JAVA)
+        (Path(tmp) / "in.tsv").write_text("".join(f"{name}\t{smiles}\n" for name, smiles in rows))
+        out = subprocess.run(
+            ["java", "-cp", cdk_jar, str(source), str(Path(tmp) / "in.tsv"), str(RESPELLINGS)],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    return [(n, int(seed), smi) for n, seed, smi in (line.split("\t") for line in out.splitlines())]
+
+
+def main(jar: str, cdk_jar: str) -> None:
+    for path, expected in ((jar, JAR_SHA256), (cdk_jar, CDK_SHA256)):
+        digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+        if digest != expected:
+            sys.exit(f"{path} sha256 is {digest}, expected {expected}")
     marks = ("@", "@@")
-    mark_cases, geometry_cases = [], []
+    mark_cases, geometry_cases, respellings = [], [], []
     for name, (x, y, tail, handled) in SKELETONS.items():
         rows = []
         third = marks if "{m}" in x + y else ("",)
@@ -143,6 +202,18 @@ def main(jar: str) -> None:
             )
         if not handled:
             continue  # the reader leaves its centre ``?``; only the marks witness is recorded
+        # CDK respellings of the mark rows: the labels are kept as the sorted axis letters and the centre letter,
+        # since the atom numbers of a respelled text no longer name the arms
+        sources = [(f"{name}|{a}|{c}|{b}", template(x, y, a, c, b, tail)) for a in marks for c in marks for b in marks]
+        spelled_rows = [(f"{n}|{seed}", smi) for n, seed, smi in respell(cdk_jar, sources)]
+        relabelled = run_smiles(jar, spelled_rows)
+        for key, smi in spelled_rows:
+            labels = relabelled[key]
+            axes = sorted(v for v in labels.values() if v in ("M", "P"))
+            others = [v for v in labels.values() if v not in ("M", "P")]
+            respellings.append(
+                {"skeleton": name, "source": key.split("|", 4)[1:4], "smiles": smi, "axes": axes, "centre": others[0] if others else ""}
+            )
         # 3D
         plain = Chem.AddHs(parse_keeping_hydrogens(template(x, y, tail=tail)))
         ids = list(AllChem.EmbedMultipleConfs(plain, CONFORMERS_PER_SKELETON, randomSeed=11))
@@ -196,6 +267,12 @@ def main(jar: str) -> None:
             "jar_sha256": JAR_SHA256,
             "jar_sha256_note": "hash of the file as fetched; the release publishes no digest",
             "command": "java -jar centres.jar x.smi   (and x.sdf for the 3D axis labels)",
+            "respelling": {
+                "tool": "CDK 2.13 (cdk-2.13.jar), SmilesGenerator with Stereo and AtomicMass, atoms and bonds shuffled",
+                "jar_url": CDK_URL,
+                "jar_sha256": CDK_SHA256,
+                "seeds": f"1000..{999 + RESPELLINGS}",
+            },
             "generator": "backend/scripts/dev/generate_centres_allene_fixture.py",
             "label_key": "atom index (0-based, template order) -> Centres label; M is Ra, P is Sa, absent is not stereogenic",
         },
@@ -213,10 +290,11 @@ def main(jar: str) -> None:
         },
         "mark_cases": mark_cases,
         "geometry_cases": geometry_cases,
+        "respellings": respellings,
     }
     OUT.write_text(json.dumps(document, indent=1) + "\n")
     print(f"wrote {OUT}: {len(mark_cases)} mark cases, {len(geometry_cases)} geometry cases")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main(sys.argv[1], sys.argv[2])

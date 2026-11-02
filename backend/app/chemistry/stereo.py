@@ -875,6 +875,10 @@ def mark_tokens(frame: StereoFrame) -> list[str]:
         else:
             begin, end = (frame.marked_index[index] for index in element.atoms)
             tokens.append(_bond_token(marked.GetBondBetweenAtoms(begin, end)))
+    slot = _chain_slots(frame)
+    for i, element in enumerate(frame.elements):
+        if element.kind == _ALLENE_DEPENDENT and element.arms:
+            tokens[i] = pseudo_mark_token(frame, element, tuple(tokens[slot[arm]] for arm in element.arms))
     return tokens
 
 
@@ -1430,6 +1434,54 @@ def allene_mark_token(frame: StereoFrame, element: StereoElement) -> str:
         swaps += length - 1
     clockwise = (mark == "@@") != (swaps % 2 == 1)
     return "Ra" if clockwise else "Sa"
+
+
+def pseudo_mark_token(frame: StereoFrame, element: StereoElement, arm_tokens: tuple[str, ...]) -> str:
+    """``r``/``s`` of an allene-dependent centre from the chirality mark on the centre's own atom in the SMILES.
+
+    The mark is on the centre (``[C@H]``), which RDKit drops on sanitising when the two arms are
+    constitutionally equal; here the raw parse keeps it. As for geometry (:func:`pseudo_geometry_token`) the
+    ``Ra`` arm's root atom takes a mass number one above natural, which makes the centre a real stereocentre
+    that survives sanitising, and the CIP labeller names it. Only the centre's own tag is kept (the allene's
+    tags are read by :func:`allene_mark_token`). ``?`` when the arms' senses are not both known, when they are
+    equal (:func:`refine` deduces ``-``), or when the text is unmarked or cannot be matched onto the molecule.
+    """
+
+    if len(pseudo_centre_options(arm_tokens)) != 2:
+        return UNKNOWN
+    raw = _raw_marks_mol(frame)
+    mapping = _raw_to_constitution(raw, frame) if raw is not None else None
+    if raw is None or mapping is None:
+        return UNKNOWN
+    to_raw = {c: r for r, c in mapping.items()}
+    mol_h = frame.constitution_h
+    centre = element.atoms[0]
+    ra_chain = element.arms[0] if arm_tokens[0] == "Ra" else element.arms[1]
+    root = next(
+        n.GetIdx()
+        for n in mol_h.GetAtomWithIdx(centre).GetNeighbors()
+        if set(ra_chain) <= _branch(mol_h, n.GetIdx(), centre)
+    )
+    if centre not in to_raw or root not in to_raw:
+        return UNKNOWN
+    raw_centre, raw_root = to_raw[centre], to_raw[root]
+    tags = (Chem.ChiralType.CHI_TETRAHEDRAL_CW, Chem.ChiralType.CHI_TETRAHEDRAL_CCW)
+    if raw.GetAtomWithIdx(raw_centre).GetChiralTag() not in tags or raw.GetAtomWithIdx(raw_root).GetIsotope():
+        return UNKNOWN
+    marked = Chem.Mol(raw)
+    for atom in marked.GetAtoms():
+        if atom.GetIdx() != raw_centre:
+            atom.SetChiralTag(Chem.ChiralType.CHI_UNSPECIFIED)
+    root_atom = marked.GetAtomWithIdx(raw_root)
+    root_atom.SetIsotope(Chem.GetPeriodicTable().GetMostCommonIsotope(root_atom.GetAtomicNum()) + 1)
+    try:
+        Chem.SanitizeMol(marked)
+        Chem.AssignStereochemistry(marked, cleanIt=True, force=True)
+        rdCIPLabeler.AssignCIPLabels(marked)
+    except (ValueError, RuntimeError):
+        return UNKNOWN
+    code = _atom_token(marked.GetAtomWithIdx(raw_centre))
+    return code.lower() if code in ("R", "S") else UNKNOWN
 
 
 def _allene_centre_marked(frame: StereoFrame, element: StereoElement) -> bool:

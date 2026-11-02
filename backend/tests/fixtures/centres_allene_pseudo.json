@@ -5,6 +5,12 @@
   "jar_sha256": "6c5d5cafa9393ed7b667a2340222348cd15a9bbdd0d1b92518229f26cc5e87fb",
   "jar_sha256_note": "hash of the file as fetched; the release publishes no digest",
   "command": "java -jar centres.jar x.smi   (and x.sdf for the 3D axis labels)",
+  "respelling": {
+   "tool": "CDK 2.13 (cdk-2.13.jar), SmilesGenerator with Stereo and AtomicMass, atoms and bonds shuffled",
+   "jar_url": "https://github.com/cdk/cdk/releases/download/cdk-2.13/cdk-2.13.jar",
+   "jar_sha256": "5a42221d412dca53e48fdfc0bfae645310f9de80082800af801d06a87df32411",
+   "seeds": "1000..1003"
+  },
   "generator": "backend/scripts/dev/generate_centres_allene_fixture.py",
   "label_key": "atom index (0-based, template order) -> Centres label; M is Ra, P is Sa, absent is not stereogenic"
  },
@@ -2600,6 +2606,3080 @@
     "15": "P"
    },
    "inchi": "InChI=1S/C10H14/c1-4-6-8-10(3)9-7-5-2/h4-5,8-10H,1-3H3/t6-,7-/m1/s1/i3D3"
+  }
+ ],
+ "respellings": [
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@]=C([H])C)(C)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "C[C@](C([H])=[C@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@@](C([H])=[C@@]=C(C)[H])(C)[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@@](C(=[C@]=C([H])C)[H])(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@@]=C([H])C)(C)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C[C@](C([H])=[C@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@@](C([H])=[C@@]=C(C)[H])(C)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@@](C(=[C@]=C([H])C)[H])(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@]=C([H])C)(C)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C[C@@](C([H])=[C@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@](C([H])=[C@@]=C(C)[H])(C)[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@](C(=[C@]=C([H])C)[H])(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@@]=C([H])C)(C)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C[C@@](C([H])=[C@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@](C([H])=[C@@]=C(C)[H])(C)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@](C(=[C@]=C([H])C)[H])(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@]=C([H])C)(C)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "C[C@](C([H])=[C@@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@@](C([H])=[C@]=C(C)[H])(C)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@@](C(=[C@@]=C([H])C)[H])(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@@]=C([H])C)(C)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C[C@](C([H])=[C@@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@@](C([H])=[C@]=C(C)[H])(C)[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@@](C(=[C@@]=C([H])C)[H])(C)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@]=C([H])C)(C)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C[C@@](C([H])=[C@@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@](C([H])=[C@]=C(C)[H])(C)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@](C(=[C@@]=C([H])C)[H])(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@@]=C([H])C)(C)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C[C@@](C([H])=[C@@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@](C([H])=[C@]=C(C)[H])(C)[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@](C(=[C@@]=C([H])C)[H])(C)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "F[C@@](C([H])=[C@]=C([H])C)(C)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "C[C@](C([H])=[C@]=C([H])C)(C(=[C@]=C([H])C)[H])F",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@@](C([H])=[C@@]=C(C)[H])(C)F",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@@](C(=[C@]=C([H])C)[H])(C)F)[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "F[C@@](C([H])=[C@@]=C([H])C)(C)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C[C@](C([H])=[C@]=C([H])C)(C(=[C@@]=C([H])C)[H])F",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@@](C([H])=[C@@]=C(C)[H])(C)F",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@@](C(=[C@]=C([H])C)[H])(C)F)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "F[C@](C([H])=[C@]=C([H])C)(C)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C[C@@](C([H])=[C@]=C([H])C)(C(=[C@]=C([H])C)[H])F",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@](C([H])=[C@@]=C(C)[H])(C)F",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@](C(=[C@]=C([H])C)[H])(C)F)[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "F[C@](C([H])=[C@@]=C([H])C)(C)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C[C@@](C([H])=[C@]=C([H])C)(C(=[C@@]=C([H])C)[H])F",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@](C([H])=[C@@]=C(C)[H])(C)F",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@](C(=[C@]=C([H])C)[H])(C)F)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "F[C@@](C([H])=[C@]=C([H])C)(C)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "C[C@](C([H])=[C@@]=C([H])C)(C(=[C@]=C([H])C)[H])F",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@@](C([H])=[C@]=C(C)[H])(C)F",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@@](C(=[C@@]=C([H])C)[H])(C)F)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "F[C@@](C([H])=[C@@]=C([H])C)(C)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C[C@](C([H])=[C@@]=C([H])C)(C(=[C@@]=C([H])C)[H])F",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@@](C([H])=[C@]=C(C)[H])(C)F",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@@](C(=[C@@]=C([H])C)[H])(C)F)[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "F[C@](C([H])=[C@]=C([H])C)(C)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C[C@@](C([H])=[C@@]=C([H])C)(C(=[C@]=C([H])C)[H])F",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@](C([H])=[C@]=C(C)[H])(C)F",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@](C(=[C@@]=C([H])C)[H])(C)F)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "F[C@](C([H])=[C@@]=C([H])C)(C)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C[C@@](C([H])=[C@@]=C([H])C)(C(=[C@@]=C([H])C)[H])F",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@](C([H])=[C@]=C(C)[H])(C)F",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_F",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@](C(=[C@@]=C([H])C)[H])(C)F)[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@]=C([H])C)(O)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "O[C@](C([H])=[C@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@@](C([H])=[C@@]=C(C)[H])(O)[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@@](C(=[C@]=C([H])C)[H])(O)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@@]=C([H])C)(O)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "O[C@](C([H])=[C@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@@](C([H])=[C@@]=C(C)[H])(O)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@@](C(=[C@]=C([H])C)[H])(O)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@]=C([H])C)(O)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "O[C@@](C([H])=[C@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@](C([H])=[C@@]=C(C)[H])(O)[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@](C(=[C@]=C([H])C)[H])(O)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@@]=C([H])C)(O)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "O[C@@](C([H])=[C@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@](C([H])=[C@@]=C(C)[H])(O)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@](C(=[C@]=C([H])C)[H])(O)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@]=C([H])C)(O)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "O[C@](C([H])=[C@@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@@](C([H])=[C@]=C(C)[H])(O)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@@](C(=[C@@]=C([H])C)[H])(O)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@@]=C([H])C)(O)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "O[C@](C([H])=[C@@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@@](C([H])=[C@]=C(C)[H])(O)[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@@](C(=[C@@]=C([H])C)[H])(O)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@]=C([H])C)(O)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "O[C@@](C([H])=[C@@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@](C([H])=[C@]=C(C)[H])(O)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@](C(=[C@@]=C([H])C)[H])(O)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@@]=C([H])C)(O)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "O[C@@](C([H])=[C@@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@](C([H])=[C@]=C(C)[H])(O)[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@](C(=[C@@]=C([H])C)[H])(O)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@]=C([H])C)(Cl)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "Cl[C@](C([H])=[C@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@@](C([H])=[C@@]=C(C)[H])(Cl)[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@@](C(=[C@]=C([H])C)[H])(Cl)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@@]=C([H])C)(Cl)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "Cl[C@](C([H])=[C@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@@](C([H])=[C@@]=C(C)[H])(Cl)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@@](C(=[C@]=C([H])C)[H])(Cl)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@]=C([H])C)(Cl)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "Cl[C@@](C([H])=[C@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@](C([H])=[C@@]=C(C)[H])(Cl)[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@](C(=[C@]=C([H])C)[H])(Cl)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@@]=C([H])C)(Cl)C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "Cl[C@@](C([H])=[C@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@](C([H])=[C@@]=C(C)[H])(Cl)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@](C(=[C@]=C([H])C)[H])(Cl)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@]=C([H])C)(Cl)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "Cl[C@](C([H])=[C@@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@@](C([H])=[C@]=C(C)[H])(Cl)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@@](C(=[C@@]=C([H])C)[H])(Cl)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@@]=C([H])C)(Cl)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "Cl[C@](C([H])=[C@@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@@](C([H])=[C@]=C(C)[H])(Cl)[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@@](C(=[C@@]=C([H])C)[H])(Cl)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@]=C([H])C)(Cl)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "Cl[C@@](C([H])=[C@@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@](C([H])=[C@]=C(C)[H])(Cl)[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@](C(=[C@@]=C([H])C)[H])(Cl)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@@]=C([H])C)(Cl)C([H])=[C@@]=C([H])C",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "Cl[C@@](C([H])=[C@@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@](C([H])=[C@]=C(C)[H])(Cl)[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@](C(=[C@@]=C([H])C)[H])(Cl)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@]=C([H])C)([2H])C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[2H][C@](C([H])=[C@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@@](C([H])=[C@@]=C(C)[H])([2H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@@](C(=[C@]=C([H])C)[H])([2H])[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@@]=C([H])C)([2H])C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[2H][C@](C([H])=[C@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@@](C([H])=[C@@]=C(C)[H])([2H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@@](C(=[C@]=C([H])C)[H])([2H])[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@]=C([H])C)([2H])C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[2H][C@@](C([H])=[C@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@](C([H])=[C@@]=C(C)[H])([2H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@](C(=[C@]=C([H])C)[H])([2H])[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@@]=C([H])C)([2H])C([H])=[C@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[2H][C@@](C([H])=[C@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@](C([H])=[C@@]=C(C)[H])([2H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@](C(=[C@]=C([H])C)[H])([2H])[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@]=C([H])C)([2H])C([H])=[C@@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[2H][C@](C([H])=[C@@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@@](C([H])=[C@]=C(C)[H])([2H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@@](C(=[C@@]=C([H])C)[H])([2H])[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H][C@@](C([H])=[C@@]=C([H])C)([2H])C([H])=[C@@]=C([H])C",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[2H][C@](C([H])=[C@@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@@](C([H])=[C@]=C(C)[H])([2H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@@](C(=[C@@]=C([H])C)[H])([2H])[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@]=C([H])C)([2H])C([H])=[C@@]=C([H])C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[2H][C@@](C([H])=[C@@]=C([H])C)(C(=[C@]=C([H])C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@](C([H])=[C@]=C(C)[H])([2H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@@](=C(C)[H])=C([C@](C(=[C@@]=C([H])C)[H])([2H])[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H][C@](C([H])=[C@@]=C([H])C)([2H])C([H])=[C@@]=C([H])C",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[2H][C@@](C([H])=[C@@]=C([H])C)(C(=[C@@]=C([H])C)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@](C([H])=[C@]=C(C)[H])([2H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@](=C(C)[H])=C([C@](C(=[C@@]=C([H])C)[H])([2H])[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@@](C([2H])([2H])[2H])(C([H])=[C@@]=C(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([C@@](C([H])=[C@@]=C(C)[H])(C([H])=[C@]=C([H])C)[H])[2H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@](C([H])=[C@]=C([H])C)(C([H])=[C@@]=C(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC(=[C@]=C([H])[C@@](C([2H])([2H])[2H])(C([H])=[C@@]=C(C)[H])[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@@](C([2H])([2H])[2H])(C([H])=[C@]=C(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([C@@](C([H])=[C@]=C(C)[H])(C([H])=[C@]=C([H])C)[H])[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@](C([H])=[C@]=C([H])C)(C([H])=[C@]=C(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC(=[C@]=C([H])[C@@](C([2H])([2H])[2H])(C([H])=[C@]=C(C)[H])[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@](C([2H])([2H])[2H])(C([H])=[C@@]=C(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([C@](C([H])=[C@@]=C(C)[H])(C([H])=[C@]=C([H])C)[H])[2H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@@](C([H])=[C@]=C([H])C)(C([H])=[C@@]=C(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC(=[C@]=C([H])[C@](C([2H])([2H])[2H])(C([H])=[C@@]=C(C)[H])[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@]=C(C)[H])[C@](C([2H])([2H])[2H])(C([H])=[C@]=C(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([C@](C([H])=[C@]=C(C)[H])(C([H])=[C@]=C([H])C)[H])[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@@](C([H])=[C@]=C([H])C)(C([H])=[C@]=C(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC(=[C@]=C([H])[C@](C([2H])([2H])[2H])(C([H])=[C@]=C(C)[H])[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@@](C([2H])([2H])[2H])(C([H])=[C@@]=C(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([C@@](C([H])=[C@@]=C(C)[H])(C([H])=[C@@]=C([H])C)[H])[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@](C([H])=[C@@]=C([H])C)(C([H])=[C@@]=C(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC(=[C@@]=C([H])[C@@](C([2H])([2H])[2H])(C([H])=[C@@]=C(C)[H])[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@@](C([2H])([2H])[2H])(C([H])=[C@]=C(C)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([C@@](C([H])=[C@]=C(C)[H])(C([H])=[C@@]=C([H])C)[H])[2H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@](C([H])=[C@@]=C([H])C)(C([H])=[C@]=C(C)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC(=[C@@]=C([H])[C@@](C([2H])([2H])[2H])(C([H])=[C@]=C(C)[H])[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@](C([2H])([2H])[2H])(C([H])=[C@@]=C(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([C@](C([H])=[C@@]=C(C)[H])(C([H])=[C@@]=C([H])C)[H])[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@@](C([H])=[C@@]=C([H])C)(C([H])=[C@@]=C(C)[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC(=[C@@]=C([H])[C@](C([2H])([2H])[2H])(C([H])=[C@@]=C(C)[H])[H])[H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[H]C(=[C@@]=C(C)[H])[C@](C([2H])([2H])[2H])(C([H])=[C@]=C(C)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([C@](C([H])=[C@]=C(C)[H])(C([H])=[C@@]=C([H])C)[H])[2H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@@](C([H])=[C@@]=C([H])C)(C([H])=[C@]=C(C)[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC(=[C@@]=C([H])[C@](C([2H])([2H])[2H])(C([H])=[C@]=C(C)[H])[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
   }
  ]
 }

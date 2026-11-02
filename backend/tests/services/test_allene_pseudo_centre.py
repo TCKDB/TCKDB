@@ -19,6 +19,7 @@ import numpy as np
 import pytest
 from rdkit import Chem
 
+from app.api.error_contract import CodedValueError
 from app.chemistry import stereo
 from app.chemistry.species import identity_mol_from_smiles
 from app.db.models.common import StereoResolution
@@ -180,6 +181,8 @@ LEFT_UNKNOWN = {
     "a CD3-ended arm beside H": "CC=C=CC(C=C=CC([2H])([2H])[2H])C=C=CC",
     "a 13C-ended arm beside O": "CC=C=CC(O)(C=C=C[13CH3])C=C=CC",
     "a 13C-ended arm beside H": "CC=C=CC(C=C=C[13CH3])C=C=CC",
+    # a ligand that differs from the arms by formal charge alone: CIP ignores charge, so it ties them too
+    "a third arm that differs by formal charge only": "[CH](C=C=C[CH2-])(C=C=C[CH2-])C=C=C[CH2+]",
     # an isotopic arm root cannot take the marker
     "an isotopic arm root": "CC=C=[13CH]C(C)[13CH]=C=CC",
     # the arm holds more stereo content than its axis (guard on the arm's content)
@@ -226,3 +229,73 @@ def test_a_ligand_tying_the_arms_without_isotopes_stays_unknown_though_centres_l
     assert dependent and all(not e.arms for e in dependent)
     labelled = [c for c in FIXTURE["mark_cases"] if c["skeleton"] == name and str(sk["centre"]) in c["centres"]]
     assert labelled and {c["centres"][str(sk["centre"])] for c in labelled} <= {"r", "s"}
+
+
+# ---------------------------------------------------------------------------
+# The centre from the SMILES marks (the allene marks reader, #845, plus the centre's own mark)
+# ---------------------------------------------------------------------------
+
+HANDLED_MARK_CASES = [c for c in FIXTURE["mark_cases"] if c["skeleton"] in HANDLED]
+
+
+def _marks_frame(smiles: str) -> stereo.StereoFrame:
+    return stereo.frame_from_mol(identity_mol_from_smiles(smiles))
+
+
+@pytest.mark.parametrize("case", HANDLED_MARK_CASES, ids=lambda c: f"{c['skeleton']}-{''.join(c['marks'])}")
+def test_the_marks_give_the_descriptor_centres_labels(case: dict) -> None:
+    frame = _marks_frame(case["smiles"])
+    expected = descriptor_from_centres(frame, case["skeleton"], case["centres"])
+    resolved = stereo.resolve_stereo(frame)
+    assert resolved.descriptor == expected
+    assert resolved.resolution == StereoResolution.resolved
+    assert stereo.R_ALLENE_DEPENDENT not in resolved.unrepresented
+
+
+def _descriptor_from_letters(frame: stereo.StereoFrame, axes: list[str], centre: str) -> str:
+    """Centres' letters for a respelled text (each axis is labelled at both ends, atom numbers are not kept)."""
+
+    names = {"M": "Ra", "P": "Sa"}
+    pair = iter([names[axes[0]], names[axes[2]]])
+    tokens = [centre or "-" if e.kind == "allene_dependent" else next(pair) for e in frame.elements]
+    return ",".join(stereo.canonical_tokens(frame, tokens))
+
+
+@pytest.mark.parametrize("name", HANDLED)
+def test_respelled_marks_give_the_same_descriptors_as_centres(name: str) -> None:
+    rows = [r for r in FIXTURE["respellings"] if r["skeleton"] == name]
+    assert len(rows) == 32
+    for row in rows:
+        frame = _marks_frame(row["smiles"])
+        expected = _descriptor_from_letters(frame, row["axes"], row["centre"])
+        assert stereo.resolve_stereo(frame).descriptor == expected, row["smiles"]
+
+
+@pytest.mark.parametrize("name", UNHANDLED)
+def test_marks_on_a_ligand_that_ties_the_arms_leave_the_centre_unknown(name: str) -> None:
+    for case in [c for c in FIXTURE["mark_cases"] if c["skeleton"] == name][:4]:
+        frame = _marks_frame(case["smiles"])
+        resolved = stereo.resolve_stereo(frame)
+        centre = [t for e, t in zip(frame.elements, resolved.descriptor.split(","), strict=True) if e.kind == "allene_dependent"]
+        assert centre == ["?"] and stereo.R_ALLENE_DEPENDENT in resolved.unrepresented
+
+
+def test_a_geometry_and_the_marks_of_the_same_molecule_agree_on_the_centre() -> None:
+    meso = next(
+        c for c in FIXTURE["geometry_cases"] if c["skeleton"] == "Me_H" and c["centres_smiles"].get("6") in ("r", "s")
+    )
+    resolved = stereo.resolve_stereo(skeleton_frame("Me_H"), geometries=[meso["xyz"]])
+    # the spelling written from that conformer's coordinates names the same centre through the marks alone
+    assert stereo.resolve_stereo(_marks_frame(meso["smiles_spelling"])).descriptor == resolved.descriptor
+
+
+def test_a_mark_on_the_centre_that_contradicts_a_geometry_is_refused() -> None:
+    meso = next(
+        c for c in FIXTURE["geometry_cases"] if c["skeleton"] == "Me_H" and c["centres_smiles"].get("6") in ("r", "s")
+    )
+    other = "@" if "@@" in meso["smiles_spelling"].split("[C")[2] else "@@"  # flip the centre's mark
+    parts = meso["smiles_spelling"].split("[C")
+    flipped = "[C".join([parts[0], parts[1], other + parts[2].lstrip("@"), *parts[3:]])
+    with pytest.raises(CodedValueError) as excinfo:
+        stereo.resolve_stereo(_marks_frame(flipped), geometries=[meso["xyz"]])
+    assert excinfo.value.code == stereo.W_SPECIES_STEREO_CONTRADICTION
