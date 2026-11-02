@@ -618,7 +618,10 @@ def _pseudo_centre_arms(
     the arms are separate branches (no ring or spiro joins them), each holding exactly one allene axis that can
     be read and nothing else stereogenic, and no other allene-dependent element. Then the centre is ``-`` when
     the axes have the same sense and ``r``/``s`` when they differ. Every other tie pattern (3+1, 2+2, four equal
-    arms, ring-shared or spiro arms, arms with further stereo content) returns ``()`` and stays ``?``.
+    arms, ring-shared or spiro arms, arms with further stereo content) returns ``()`` and stays ``?``. So do an
+    arm root that is itself isotopic, and a ligand that ties the arms once isotopes are ignored (``CD3`` beside
+    two ``CH3``-ended arms): the Rule 2 isotope decision would then fall between the arms and that ligand, and
+    the marker, which acts at sphere 1, would put the arms in the wrong place.
     """
 
     neighbours = [n.GetIdx() for n in mol_h.GetAtomWithIdx(centre).GetNeighbors()]
@@ -626,6 +629,20 @@ def _pseudo_centre_arms(
     if sorted(by_rank.values()) != [1, 1, 2]:
         return ()
     arms = [n for n in neighbours if by_rank[ranks_h[n]] == 2]
+    # The marker that ranks the Ra arm above the Sa arm is a mass number on the arm's root atom, so a root that
+    # already carries an isotope cannot take it: the centre is left ``?``.
+    if any(mol_h.GetAtomWithIdx(a).GetIsotope() for a in arms):
+        return ()
+    # Canonical ranks count isotopes, so a ligand that differs from the arms only by an isotope deep inside (a CD3
+    # arm beside two CH3 arms) looks distinct yet ties the arms at CIP Rule 1, where the isotope is decided later
+    # (Rule 2) than the marker. Its true place relative to the arms is then not the marker's: leave the centre ``?``.
+    blind = Chem.Mol(mol_h)
+    for atom in blind.GetAtoms():
+        atom.SetIsotope(0)
+        atom.SetFormalCharge(0)
+    blind_ranks = list(Chem.CanonicalRankAtoms(blind, breakTies=False))
+    if any(blind_ranks[n] == blind_ranks[arms[0]] for n in neighbours if n not in arms):
+        return ()
     branches = [_branch(mol_h, a, centre) for a in arms]
     if branches[0] & branches[1] or centre in branches[0] | branches[1]:
         return ()
@@ -1270,7 +1287,8 @@ def pseudo_geometry_token(
     The rule (IUPAC 2013 P-92.5, Rule 5): an ``Ra`` (``M``) arm outranks an ``Sa`` (``P``) arm, then ordinary CIP
     on the centre. It is applied by giving the root atom of the ``Ra`` arm a mass number one above its natural
     one: that decides the tie between the two arms (Rule 2) and nothing else, because the arms are
-    constitutionally identical and differ from the other ligands at Rule 1. The centre's chirality is read from
+    constitutionally identical and differ from the other ligands at Rule 1 (:func:`_pseudo_centre_arms` leaves a
+    centre ``?`` where a ligand ties the arms once isotopes are ignored). The centre's chirality is read from
     the coordinates and labelled by the CIP labeller; the label is the pseudo-asymmetric ``r``/``s``.
     """
 
@@ -1422,7 +1440,9 @@ def refine(frame: StereoFrame, tokens: list[str]) -> list[str]:
 
     ``(S,?,S)`` for pentane-2,3,4-triol can only be the isomer whose C3 is not a
     stereocentre, so C3 is ``-``. Nothing else is inferred: an element that some
-    consistent stereoisomer makes stereogenic stays ``?``.
+    consistent stereoisomer makes stereogenic stays ``?``. That includes the axes:
+    ``?,Ra,-`` at a centre between two allenes forces the first axis to ``Ra`` (a ``-`` there means equal
+    senses), but only ``-`` is ever deduced, so the axis stays ``?``. The inference is deliberately not drawn.
 
     :raises CodedValueError: ``species_stereo_contradiction`` when no stereoisomer
         has the configuration the sources together state.
