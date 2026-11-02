@@ -423,9 +423,9 @@ def test_a_butatriene_deposit_is_accepted_and_asks_for_a_geometry_or_label(clien
     assert "marks on a cumulene" in marked[_NOT_REPRESENTED]
 
 
-def test_a_small_ring_allene_with_an_unknown_centre_says_both(client: TestClient) -> None:
-    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("C1=C=C(C)C(C)CC1")))
-    assert "1 other stereo element(s) are also unknown" in warnings[_NOT_REPRESENTED]
+def test_an_allene_dependent_element_with_unknown_axes_says_both(client: TestClient) -> None:
+    warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=C=CC(C)C=C=CC")))
+    assert "2 other stereo element(s) are also unknown" in warnings[_NOT_REPRESENTED]
 
 
 def test_a_letter_on_an_allene_is_refused_before_anything_is_stored(client: TestClient) -> None:
