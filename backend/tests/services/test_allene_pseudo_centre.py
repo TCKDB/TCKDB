@@ -61,7 +61,7 @@ def test_the_enumeration_is_the_four_descriptors_centres_reaches(name: str) -> N
             d = descriptor_from_centres(frame, case["centres"])
             reached[d] = reached.get(d, 0) + 1
     # eight mark spellings, two per isomer: every isomer is reached and none lies outside the enumeration
-    assert reached == {d: 2 for d in enumerated}
+    assert reached == dict.fromkeys(enumerated, 2)
 
 
 @pytest.mark.parametrize("name", list(SKELETONS))

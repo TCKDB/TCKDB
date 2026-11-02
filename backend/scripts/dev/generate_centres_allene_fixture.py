@@ -128,7 +128,7 @@ def main(jar: str) -> None:
             if "?" in conformer_inchi or "/t" not in conformer_inchi:
                 continue
             picked.setdefault(tuple(stereo.canonical_tokens(frame, tokens)), []).append(cid)
-        for descriptor, conformers in sorted(picked.items()):
+        for _descriptor, conformers in sorted(picked.items()):
             for cid in conformers[:2]:
                 positions = plain.GetConformer(cid).GetPositions()
                 spelled = spell(positions, x, y)
