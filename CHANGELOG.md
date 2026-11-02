@@ -22,6 +22,14 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The centre between two allene axes is read as `-`, `r` or `s` (2026-11-02)
+
+- **Client: `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no schema change, no new environment variable, no vocabulary change (`r` and `s` were already tokens). Part 3 of #832 (part of, not closing). Existing data is dev data: an entry stored with `?` at such a centre is not rewritten, and a new deposit of the same molecule now computes a different key; the two are not reconciled.
+- **What changed.** A centre with two constitutionally equal arms that each hold one allene axis (`CC=C=CC(C)C=C=CC`, also `CC=C=CC(C=C=CC)(C)O`) used to stay `?` with the reason `allene_dependent`, so four real stereoisomers had three descriptors. It is now an element with a token: `-` when the two axes have the same sense (`Ra,Ra`, `Sa,Sa`: an enantiomeric pair), `r` or `s` when they differ (`Ra,Sa`: two achiral forms). Four isomers, four descriptors, four distinct InChIs.
+- **The rule.** An `Ra` (M) arm outranks an `Sa` (P) arm (IUPAC 2013 P-92.5, Rule 5), then ordinary CIP on the centre. Read from geometry, from the enumeration (realisability, `-` deduction, supplied labels), never from SMILES marks yet (allene marks are still not read).
+- **Witness.** Centres 1.2.1 (Hanson et al. 2018) agrees with the rule on 32 of 32 mark spellings (4 skeletons, 8 mark combinations each) and on 32 of 32 constructed 3D conformers; the results are committed in `backend/tests/fixtures/centres_allene_pseudo.json` (CI has no Java; `backend/scripts/dev/generate_centres_allene_fixture.py` regenerates it and records the jar's sha256).
+- **Still `?` with `allene_dependent`.** Arms joined by a ring or spiro, three or four equal arms, a tied pair beside another tied pair, arms with further stereo content, and a double bond whose ends hold allene arms.
+
 ## Register coverage for deposit warnings; scan values are checked against their geometries (2026-11-01)
 
 - **Client: `tckdb-client` unchanged (0.182.0), `tckdb-schemas` 0.146.0.** No migration, no schema change, no new environment variable. No stored row is rewritten.

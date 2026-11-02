@@ -91,7 +91,10 @@ sanitising, nothing from 3D), so both are read from geometry here: the torsion a
 two CIP-higher substituents (:func:`chain_geometry_token`; an allene must lie between 10 and 170 degrees, an odd
 cumulene within 30 degrees of planar). Allene SMILES marks and, for now, cumulene ``/`` ``\\`` marks are not read
 (:data:`CUMULENE_MARKS_READ`). Stated ``?`` whatever the data: a cyclic allene in a ring of eight or fewer atoms, and
-a centre or double bond whose stereogenicity depends on an allene's sense (:data:`_ALLENE_DEPENDENT`). See DR-0038.
+a centre or double bond whose stereogenicity depends on an allene's sense and is not the plain case below
+(:data:`_ALLENE_DEPENDENT`). The plain case is a centre with two constitutionally equal arms that each hold one
+allene axis (``CC=C=CC(C)C=C=CC``): ``-`` when the two senses are equal, ``r`` or ``s`` when they differ, because
+an ``Ra`` arm outranks an ``Sa`` arm (IUPAC 2013 P-92.5, Rule 5); see :func:`pseudo_geometry_token`. See DR-0038.
 """
 
 from __future__ import annotations
@@ -182,7 +185,8 @@ _AXIAL = "axial"
 #: Cis/trans across a cumulated chain with an odd number (three or more) of double bonds: ``E``/``Z``.
 _CUMULENE = "cumulene"
 #: A centre or double bond whose stereogenicity depends on the sense of an allene (two constitutionally equal
-#: arms that can be enantiomorphic). RDKit cannot see it and we do not compute it: always ``?``.
+#: arms that can be enantiomorphic). RDKit cannot see it. A centre of the plain class (``StereoElement.arms``)
+#: is computed here; every other element of this kind is always ``?``.
 _ALLENE_DEPENDENT = "allene_dependent"
 #: Chain elements (anchored at the two chain ends, read from geometry only).
 _CHAIN_KINDS = frozenset({_AXIAL, _CUMULENE})
@@ -550,8 +554,8 @@ def _allene_dependent_elements(
     element there. When the arms are enantiomorphic (``Ra`` against ``Sa``) it is a pseudo-asymmetric centre. The
     same holds for every other tie pattern (a spiro or quaternary centre with two tied pairs, four identical arms,
     arms joined by a ring). Neither RDKit's perception nor its CIP labeller can see allene chirality, so the
-    element is listed and always stated ``?``; it is never deduced non-stereogenic. Over-flagging is safe (``?``
-    and a warning); a wrong ``-`` is not.
+    element is listed. The plain class (:func:`_pseudo_centre_arms`) is computed; the others are always stated
+    ``?``, never deduced non-stereogenic. Over-flagging is safe (``?`` and a warning); a wrong ``-`` is not.
     """
 
     chains = [e.chain for e in found if e.kind == _AXIAL]
