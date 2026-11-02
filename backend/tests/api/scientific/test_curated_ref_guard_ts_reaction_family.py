@@ -126,7 +126,11 @@ def test_ts_and_reaction_routes_name_no_hidden_record_under_curated(client, db_s
 
 
 def _get(client, path, profile, **params):
-    return client.get(f"{BASE}{path}", params={**params, "profile": profile})
+    response = client.get(f"{BASE}{path}", params={**params, "profile": profile})
+    # Fail with the body, not with a KeyError two lines later: a one-off
+    # statement timeout once surfaced as ``KeyError: 'records'``.
+    assert response.status_code == 200, (path, params, response.status_code, response.text)
+    return response
 
 
 def _walk(node):

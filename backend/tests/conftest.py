@@ -1293,6 +1293,41 @@ def _sweep_stale_test_databases(current_db_name: str) -> None:
         engine.dispose()
 
 
+#: Per-database settings that make a slow or stuck statement explain itself in
+#: the Postgres server log. Test harness only: nothing here touches application
+#: or deployed configuration. See ``backend/docs/testing.md`` ("Slow-statement
+#: diagnostics"). ``session_preload_libraries`` is appended separately, only
+#: once ``auto_explain`` is known to load.
+_TEST_DB_DIAGNOSTIC_SETTINGS: tuple[tuple[str, str], ...] = (
+    ("log_lock_waits", "on"),
+    ("deadlock_timeout", "'1s'"),
+    ("auto_explain.log_min_duration", "'3s'"),
+    ("auto_explain.log_analyze", "off"),
+    ("auto_explain.log_nested_statements", "on"),
+)
+
+
+def _apply_test_database_diagnostics(connection, db_name: str) -> None:
+    """Make lock waits and slow statements show up in the server log.
+
+    Needs a role allowed to ``ALTER DATABASE ... SET`` these (superuser: CI's
+    role and the local compose role). A role that cannot is skipped with one
+    line, never failed: the diagnostics are a convenience, not a gate.
+    """
+    settings = list(_TEST_DB_DIAGNOSTIC_SETTINGS)
+    try:
+        connection.execute(text("LOAD 'auto_explain'"))
+        settings.append(("session_preload_libraries", "'auto_explain'"))
+    except Exception as error:
+        print(f"[test-db diagnostics] auto_explain unavailable ({type(error).__name__}); plans will not be logged")
+        settings = [(k, v) for k, v in settings if not k.startswith("auto_explain.")]
+    try:
+        for name, value in settings:
+            connection.execute(text(f'ALTER DATABASE "{db_name}" SET {name} = {value}'))
+    except Exception as error:
+        print(f"[test-db diagnostics] skipped: role may not ALTER DATABASE SET ({type(error).__name__})")
+
+
 def _recreate_test_database(db_name: str) -> None:
     db_name = _validate_test_db_name(db_name)
     admin_url = _database_url("postgres")
@@ -1319,6 +1354,7 @@ def _recreate_test_database(db_name: str) -> None:
             connection.execute(
                 text(f"COMMENT ON DATABASE \"{db_name}\" IS '{_ownership_marker()}'")
             )
+            _apply_test_database_diagnostics(connection, db_name)
     finally:
         engine.dispose()
 
