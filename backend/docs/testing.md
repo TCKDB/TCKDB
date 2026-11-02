@@ -244,6 +244,10 @@ Then restart the backend database service so Compose uses the selected
 port. This recovery procedure is backend tooling and applies equally to
 local development environments and automation.
 
+## Slow-statement diagnostics
+
+When the harness creates a test database (`_apply_test_database_diagnostics` in `backend/tests/conftest.py`) it sets `log_lock_waits = on`, `deadlock_timeout = 1s`, and loads `auto_explain` with a 3 s threshold (`log_analyze = off`, nested statements on). A statement that waits on a lock for over a second, or runs for over 3 s, then writes its holder/waiter pids or its plan to the Postgres server log; the CI service container's log is printed when the job ends. This exists because one `statement_timeout` (30 s, sqlstate 57014) hit a browse count query in CI that takes under a millisecond locally, and nothing recorded whether it was a lock wait, a stalled runner or a bad plan. The settings are per test database only; they change no application or deployed configuration. They need a role that may `ALTER DATABASE ... SET` (superuser, as in CI and the compose database); otherwise the harness prints one skip line and carries on. The `_get` helpers in three curated scientific read tests also assert a 200 and show the response body, so a failed request reads as its error rather than as a `KeyError`.
+
 ## Profiling slow tests
 
 `test-profile.sh` runs the requested subset with `--durations=50` so
