@@ -1,0 +1,4448 @@
+{
+ "provenance": {
+  "purpose": "Independent witness for allene SMILES marks (#832 part 2). Labels written by Centres, not by TCKDB.",
+  "mapping": "M is Ra, P is Sa (IUPAC; the sign of the torsion between the two CIP-higher substituents).",
+  "cdk": {
+   "url": "https://github.com/cdk/cdk/releases/download/cdk-2.13/cdk-2.13.jar",
+   "version": "2.13",
+   "sha256": "5a42221d412dca53e48fdfc0bfae645310f9de80082800af801d06a87df32411",
+   "used_for": "respelling the SMILES, canonical re-export"
+  },
+  "centres": {
+   "url": "https://github.com/SiMolecule/centres/releases/download/1.2.1/centres.jar",
+   "version": "1.2.1",
+   "sha256": "6c5d5cafa9393ed7b667a2340222348cd15a9bbdd0d1b92518229f26cc5e87fb",
+   "used_for": "reading the marks and labelling the axis"
+  },
+  "command": "python backend/scripts/dev/generate_allene_marks_witness.py --cdk-jar cdk-2.13.jar --centres-jar centres-1.2.1.jar   (labels: java -jar centres-1.2.1.jar <file.smi>; respellings: 12 random atom and bond orders per molecule and mark, fixed seeds 1000..)",
+  "java": "openjdk version \"21.0.12\" 2026-07-21",
+  "via_values": {
+   "direct": "Centres labelled the SMILES in the row.",
+   "cdk-canonical-roundtrip": "Centres labels nothing for this text (a ring digit on the central atom, though other texts with one are labelled directly); the label is that of CDK's canonical re-export, given in roundtrip_smiles."
+  }
+ },
+ "cases": [
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "CC=[C@]=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "CC=[C@@]=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "CC(Cl)=[C@]=C(F)C",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "CC(Cl)=[C@@]=C(F)C",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "CC=[C@]=C(F)Cl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "CC=[C@@]=C(F)Cl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "OC=[C@]=CC(C)C",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "OC=[C@@]=CC(C)C",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "CC=[C@]=CC(C)O",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "CC=[C@@]=CC(C)O",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "NC(Br)=[C@]=C(O)C",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "NC(Br)=[C@@]=C(O)C",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "FC(Cl)=[C@]=CBr",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "FC(Cl)=[C@@]=CBr",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "[2H]C=[C@]=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "[2H]C=[C@@]=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "C1=[C@]=C(F)CCCCCCCC1",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "C1=[C@@]=C(F)CCCCCCCC1",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "C1(Cl)=[C@]=C(F)CCCCCCCC1",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "C1(Cl)=[C@@]=C(F)CCCCCCCC1",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "C1CCCCCCCC(F)=[C@]=C1",
+   "centres": "9P 12P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "C1CCCCCCCC(F)=[C@@]=C1",
+   "centres": "9M 12M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "F[CH]=[C@]=[CH]Cl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "F[CH]=[C@@]=[CH]Cl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "C[CH]=[C@]=[CH]C(C)O",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "C[CH]=[C@@]=[CH]C(C)O",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "[CH](C)=[C@]=[CH]F",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "[CH](C)=[C@@]=[CH]F",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "[H]C(F)=[C@]=C(Cl)[H]",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "[H]C(F)=[C@@]=C(Cl)[H]",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "FC([H])=[C@]=C(Cl)C",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "FC([H])=[C@@]=C(Cl)C",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@",
+   "origin": "as-written",
+   "smiles": "[2H]C(F)=[C@]=C([H])Cl",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@@",
+   "origin": "as-written",
+   "smiles": "[2H]C(F)=[C@@]=C([H])Cl",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C(=[C@@]=CC)C",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "C(=[C@@]=CC)C",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "CC=[C@]=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "CC=[C@]=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "[C@@](=CC)=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "C(=[C@@]=CC)C",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "[C@@](=CC)=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "[C@@](=CC)=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C(C)=[C@@]=CC",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "C(=[C@@]=CC)C",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "CC=[C@]=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "CC=[C@]=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C(=[C@]=CC)C",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "C(=[C@]=CC)C",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "CC=[C@@]=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "CC=[C@@]=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "[C@](=CC)=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "C(=[C@]=CC)C",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "[C@](=CC)=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "[C@](=CC)=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C(C)=[C@]=CC",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "C(=[C@]=CC)C",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "CC=[C@@]=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "CC=[C@@]=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "[C@](=C(F)C)=C(C)Cl",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "ClC(=[C@@]=C(F)C)C",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "ClC(C)=[C@]=C(C)F",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "[C@](=C(C)F)=C(Cl)C",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "CC(Cl)=[C@]=C(F)C",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "CC(=[C@]=C(F)C)Cl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(Cl)(C)=[C@]=C(C)F",
+   "centres": "1M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(Cl)(=[C@@]=C(F)C)C",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "[C@@](=C(F)C)=C(Cl)C",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "ClC(C)=[C@@]=C(F)C",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(Cl)(=[C@@]=C(F)C)C",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "CC(=[C@@]=C(C)F)Cl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "[C@@](=C(F)C)=C(C)Cl",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "ClC(=[C@]=C(F)C)C",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "ClC(C)=[C@@]=C(C)F",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "[C@@](=C(C)F)=C(Cl)C",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "CC(Cl)=[C@@]=C(F)C",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "CC(=[C@@]=C(F)C)Cl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(Cl)(C)=[C@@]=C(C)F",
+   "centres": "1P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(Cl)(=[C@]=C(F)C)C",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "[C@](=C(F)C)=C(Cl)C",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "ClC(C)=[C@]=C(F)C",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(Cl)(=[C@]=C(F)C)C",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC(Cl)=[C{M}]=C(F)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "CC(=[C@]=C(C)F)Cl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "FC(=[C@@]=CC)Cl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "CC=[C@@]=C(Cl)F",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "C(F)(=[C@@]=CC)Cl",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C(Cl)(F)=[C@]=CC",
+   "centres": "1M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "ClC(=[C@]=CC)F",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "CC=[C@@]=C(Cl)F",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "FC(=[C@@]=CC)Cl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(Cl)(F)=[C@]=CC",
+   "centres": "1M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C(Cl)(F)=[C@]=CC",
+   "centres": "1M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "FC(=[C@@]=CC)Cl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(C)=[C@@]=C(F)Cl",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "FC(=[C@@]=CC)Cl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "FC(=[C@]=CC)Cl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "CC=[C@]=C(Cl)F",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "C(F)(=[C@]=CC)Cl",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C(Cl)(F)=[C@@]=CC",
+   "centres": "1P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "ClC(=[C@@]=CC)F",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "CC=[C@]=C(Cl)F",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "FC(=[C@]=CC)Cl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(Cl)(F)=[C@@]=CC",
+   "centres": "1P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C(Cl)(F)=[C@@]=CC",
+   "centres": "1P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "FC(=[C@]=CC)Cl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(C)=[C@]=C(F)Cl",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=C(F)Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "FC(=[C@]=CC)Cl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C(C(C)C)=[C@@]=CO",
+   "centres": "1M 6M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "[C@@](=CO)=CC(C)C",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "[C@@](=CC(C)C)=CO",
+   "centres": "2M 6M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C(C(C)C)=[C@@]=CO",
+   "centres": "1M 6M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "OC=[C@]=CC(C)C",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "OC=[C@]=CC(C)C",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(=[C@@]=CC(C)C)O",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(=[C@@]=CC(C)C)O",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C(C(C)C)=[C@@]=CO",
+   "centres": "1M 6M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "[C@@](=CO)=CC(C)C",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(=[C@@]=CC(C)C)O",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "OC=[C@]=CC(C)C",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C(C(C)C)=[C@]=CO",
+   "centres": "1P 6P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "[C@](=CO)=CC(C)C",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "[C@](=CC(C)C)=CO",
+   "centres": "2P 6P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C(C(C)C)=[C@]=CO",
+   "centres": "1P 6P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "OC=[C@@]=CC(C)C",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "OC=[C@@]=CC(C)C",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(=[C@]=CC(C)C)O",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(=[C@]=CC(C)C)O",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C(C(C)C)=[C@]=CO",
+   "centres": "1P 6P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "[C@](=CO)=CC(C)C",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(=[C@]=CC(C)C)O",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "OC=[C{M}]=CC(C)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "OC=[C@@]=CC(C)C",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C(C(C)O)=[C@@]=CC",
+   "centres": "1M 6M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "[C@@](=CC)=CC(C)O",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "[C@@](=CC(O)C)=CC",
+   "centres": "2M 6M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C(C(O)C)=[C@@]=CC",
+   "centres": "1M 6M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "CC=[C@]=CC(C)O",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "CC=[C@]=CC(C)O",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(=[C@@]=CC(O)C)C",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(=[C@@]=CC(C)O)C",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C(C(C)O)=[C@@]=CC",
+   "centres": "1M 6M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "[C@@](=CC)=CC(C)O",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(=[C@@]=CC(C)O)C",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "CC=[C@]=CC(O)C",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C(C(C)O)=[C@]=CC",
+   "centres": "1P 6P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "[C@](=CC)=CC(C)O",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "[C@](=CC(O)C)=CC",
+   "centres": "2P 6P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C(C(O)C)=[C@]=CC",
+   "centres": "1P 6P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "CC=[C@@]=CC(C)O",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "CC=[C@@]=CC(C)O",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(=[C@]=CC(O)C)C",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(=[C@]=CC(C)O)C",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C(C(C)O)=[C@]=CC",
+   "centres": "1P 6P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "[C@](=CC)=CC(C)O",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(=[C@]=CC(C)O)C",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "CC=[C{M}]=CC(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "CC=[C@@]=CC(O)C",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "[C@](=C(O)C)=C(N)Br",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "BrC(=[C@@]=C(O)C)N",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "BrC(N)=[C@]=C(C)O",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "[C@](=C(C)O)=C(Br)N",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "NC(Br)=[C@]=C(O)C",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "NC(=[C@]=C(O)C)Br",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(Br)(N)=[C@]=C(C)O",
+   "centres": "1M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(Br)(=[C@@]=C(O)C)N",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "[C@@](=C(O)C)=C(Br)N",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "BrC(N)=[C@@]=C(O)C",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(Br)(=[C@@]=C(O)C)N",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "NC(=[C@@]=C(C)O)Br",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "[C@@](=C(O)C)=C(N)Br",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "BrC(=[C@]=C(O)C)N",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "BrC(N)=[C@@]=C(C)O",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "[C@@](=C(C)O)=C(Br)N",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "NC(Br)=[C@@]=C(O)C",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "NC(=[C@@]=C(O)C)Br",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(Br)(N)=[C@@]=C(C)O",
+   "centres": "1P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(Br)(=[C@]=C(O)C)N",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "[C@](=C(O)C)=C(Br)N",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "BrC(N)=[C@]=C(O)C",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(Br)(=[C@]=C(O)C)N",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "NC(Br)=[C{M}]=C(O)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "NC(=[C@]=C(C)O)Br",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C(=[C@@]=C(Cl)F)Br",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "FC(=[C@]=CBr)Cl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "[C@](=CBr)=C(F)Cl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "[C@](=CBr)=C(F)Cl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "BrC=[C@]=C(Cl)F",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "FC(Cl)=[C@]=CBr",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(=[C@@]=C(Cl)F)Br",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "[C@@](=CBr)=C(Cl)F",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "[C@](=CBr)=C(F)Cl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "C(=[C@@]=C(Cl)F)Br",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(F)(Cl)=[C@]=CBr",
+   "centres": "1P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "C(=[C@]=C(F)Cl)Br",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C(=[C@]=C(Cl)F)Br",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "FC(=[C@@]=CBr)Cl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "[C@@](=CBr)=C(F)Cl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "[C@@](=CBr)=C(F)Cl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "BrC=[C@@]=C(Cl)F",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "FC(Cl)=[C@@]=CBr",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(=[C@]=C(Cl)F)Br",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "[C@](=CBr)=C(Cl)F",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "[C@@](=CBr)=C(F)Cl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "C(=[C@]=C(Cl)F)Br",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(F)(Cl)=[C@@]=CBr",
+   "centres": "1M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC(Cl)=[C{M}]=CBr",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "C(=[C@@]=C(F)Cl)Br",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C(=[C@@]=CC)[2H]",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "C(=[C@@]=CC)[2H]",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "[2H]C=[C@]=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "[2H]C=[C@]=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "[C@@](=C[2H])=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "C(=[C@@]=C[2H])C",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "[C@@](=C[2H])=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "[C@@](=C[2H])=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C([2H])=[C@@]=CC",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "C(=[C@@]=CC)[2H]",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "[2H]C=[C@]=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "CC=[C@]=C[2H]",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C(=[C@]=CC)[2H]",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "C(=[C@]=CC)[2H]",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "[2H]C=[C@@]=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "[2H]C=[C@@]=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "[C@](=C[2H])=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "C(=[C@]=C[2H])C",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "[C@](=C[2H])=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "[C@](=C[2H])=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C([2H])=[C@]=CC",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "C(=[C@]=CC)[2H]",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "[2H]C=[C@@]=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C=[C{M}]=CC",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "CC=[C@@]=C[2H]",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "FC1=[C@]=CCCCCCCCC1",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "C1CCCC(F)=[C@@]=CCCCC1",
+   "centres": "5M 8M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "C1CCCCCCC(=[C@@]=CC1)F",
+   "centres": "8M 10M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C1CCCCCCCC(=[C@@]=C1)F",
+   "centres": "9M 11M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "C1CCCCC=[C@]=C(CCC1)F",
+   "centres": "6M 8M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "C1CCCCCCCC=[C@]=C1F",
+   "centres": "9M 11M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C1CCCCC(=[C@@]=CCCC1)F",
+   "centres": "6M 8M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C1CCC(=[C@@]=CCCCCC1)F",
+   "centres": "4M 6M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C1CC=[C@]=C(CCCCCC1)F",
+   "centres": "3M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "C1CCCCC=[C@]=C(CCC1)F",
+   "centres": "6M 8M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C1CCCCC(=[C@@]=CCCC1)F",
+   "centres": "6M 8M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "C1CCCCCC=[C@]=C(CC1)F",
+   "centres": "7M 9M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "FC1=[C@@]=CCCCCCCCC1",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "C1CCCC(F)=[C@]=CCCCC1",
+   "centres": "5P 8P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "C1CCCCCCC(=[C@]=CC1)F",
+   "centres": "8P 10P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C1CCCCCCCC(=[C@]=C1)F",
+   "centres": "9P 11P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "C1CCCCC=[C@@]=C(CCC1)F",
+   "centres": "6P 8P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "C1CCCCCCCC=[C@@]=C1F",
+   "centres": "9P 11P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C1CCCCC(=[C@]=CCCC1)F",
+   "centres": "6P 8P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C1CCC(=[C@]=CCCCCC1)F",
+   "centres": "4P 6P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C1CC=[C@@]=C(CCCCCC1)F",
+   "centres": "3P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "C1CCCCC=[C@@]=C(CCC1)F",
+   "centres": "6P 8P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C1CCCCC(=[C@]=CCCC1)F",
+   "centres": "6P 8P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "C1CCCCCC=[C@@]=C(CC1)F",
+   "centres": "7P 9P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C1CCCCC(=[C@@]=C(CCC1)F)Cl",
+   "centres": "6M 8M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "C1CCCC(=[C@]=C(F)CCCC1)Cl",
+   "centres": "5M 7M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "C1CCCCCC(=[C@]=C(F)CC1)Cl",
+   "centres": "7M 9M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C=1(F)CCCCCCCCC(=[C@]1)Cl",
+   "centres": "1M 11M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "C1C(Cl)=[C@@]=C(CCCCCCC1)F",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "C1CC(=[C@]=C(Cl)CCCCCC1)F",
+   "centres": "3M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C1CCCCCC(Cl)=[C@]=C(F)CC1",
+   "centres": "7M 10M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C1CCCCCCCC(=[C@@]=C1Cl)F",
+   "centres": "9M 11M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C1CCCCCC(Cl)=[C@@]=C(CC1)F",
+   "centres": "7M 10M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "C1CCCCCCC(=[C@]=C(Cl)C1)F",
+   "centres": "8M 10M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C1CCCC(=[C@@]=C(CCCC1)F)Cl",
+   "centres": "5M 7M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "C=1(F)CCCCCCCCC(Cl)=[C@]1",
+   "centres": "1M 11M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C1CCCCC(=[C@]=C(CCC1)F)Cl",
+   "centres": "6P 8P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "C1CCCC(=[C@@]=C(F)CCCC1)Cl",
+   "centres": "5P 7P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "C1CCCCCC(=[C@@]=C(F)CC1)Cl",
+   "centres": "7P 9P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C=1(F)CCCCCCCCC(=[C@@]1)Cl",
+   "centres": "1P 11P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "C1C(Cl)=[C@]=C(CCCCCCC1)F",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "C1CC(=[C@@]=C(Cl)CCCCCC1)F",
+   "centres": "3P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C1CCCCCC(Cl)=[C@@]=C(F)CC1",
+   "centres": "7P 10P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C1CCCCCCCC(=[C@]=C1Cl)F",
+   "centres": "9P 11P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C1CCCCCC(Cl)=[C@]=C(CC1)F",
+   "centres": "7P 10P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "C1CCCCCCC(=[C@@]=C(Cl)C1)F",
+   "centres": "8P 10P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C1CCCC(=[C@]=C(CCCC1)F)Cl",
+   "centres": "5P 7P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1(Cl)=[C{M}]=C(F)CCCCCCCC1",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "C=1(F)CCCCCCCCC(Cl)=[C@@]1",
+   "centres": "1P 11P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C1CCCC=[C@]=C(F)CCCC1",
+   "centres": "5P 7P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "C1CCCCCCCC=[C@@]=C1F",
+   "centres": "9P 11P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "[C@@]=1=C(CCCCCCCCC1)F",
+   "centres": "7P 9P",
+   "via": "cdk-canonical-roundtrip",
+   "roundtrip_smiles": "C1CCCCCC(=[C@]=CCC1)F",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C1=[C@]=C(F)CCCCCCCC1",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "C1C(F)=[C@]=CCCCCCCC1",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "C1CCCC(F)=[C@]=CCCCC1",
+   "centres": "5P 8P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C=1(CCCCCCCCC=[C@@]1)F",
+   "centres": "1P 10P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C1CCCCCCC=[C@@]=C(C1)F",
+   "centres": "8P 10P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "[C@]=1=CCCCCCCCCC1F",
+   "centres": "2P 11P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "C1C(=[C@]=CCCCCCCC1)F",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C=1(CCCCCCCCC=[C@@]1)F",
+   "centres": "1P 10P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "C1CC(F)=[C@]=CCCCCCC1",
+   "centres": "3P 6P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C1CCCC=[C@@]=C(F)CCCC1",
+   "centres": "5M 7M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "C1CCCCCCCC=[C@]=C1F",
+   "centres": "9M 11M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "[C@]=1=C(CCCCCCCCC1)F",
+   "centres": "7M 9M",
+   "via": "cdk-canonical-roundtrip",
+   "roundtrip_smiles": "C1CCCCCC(=[C@@]=CCC1)F",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C1=[C@@]=C(F)CCCCCCCC1",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "C1C(F)=[C@@]=CCCCCCCC1",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "C1CCCC(F)=[C@@]=CCCCC1",
+   "centres": "5M 8M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C=1(CCCCCCCCC=[C@]1)F",
+   "centres": "1M 10M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C1CCCCCCC=[C@]=C(C1)F",
+   "centres": "8M 10M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "[C@@]=1=CCCCCCCCCC1F",
+   "centres": "2M 11M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "C1C(=[C@@]=CCCCCCCC1)F",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C=1(CCCCCCCCC=[C@]1)F",
+   "centres": "1M 10M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C1CCCCCCCC(F)=[C{M}]=C1",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "C1CC(F)=[C@@]=CCCCCCC1",
+   "centres": "3M 6M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C(=[C@@]=CCl)F",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "C(=[C@@]=CCl)F",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "FC=[C@]=CCl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "FC=[C@]=CCl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "[C@@](=CF)=CCl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "C(=[C@@]=CF)Cl",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "[C@@](=CF)=CCl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "[C@@](=CF)=CCl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C(F)=[C@@]=CCl",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "C(=[C@@]=CCl)F",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "FC=[C@]=CCl",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "ClC=[C@]=CF",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C(=[C@]=CCl)F",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "C(=[C@]=CCl)F",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "FC=[C@@]=CCl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "FC=[C@@]=CCl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "[C@](=CF)=CCl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "C(=[C@]=CF)Cl",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "[C@](=CF)=CCl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "[C@](=CF)=CCl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C(F)=[C@]=CCl",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "C(=[C@]=CCl)F",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "FC=[C@@]=CCl",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "F[CH]=[C{M}]=[CH]Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "ClC=[C@@]=CF",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C(C(C)O)=[C@@]=CC",
+   "centres": "1M 6M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "[C@@](=CC)=CC(C)O",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "[C@@](=CC(O)C)=CC",
+   "centres": "2M 6M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C(C(O)C)=[C@@]=CC",
+   "centres": "1M 6M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "CC=[C@]=CC(C)O",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "CC=[C@]=CC(C)O",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(=[C@@]=CC(O)C)C",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(=[C@@]=CC(C)O)C",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C(C(C)O)=[C@@]=CC",
+   "centres": "1M 6M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "[C@@](=CC)=CC(C)O",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(=[C@@]=CC(C)O)C",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "CC=[C@]=CC(O)C",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "C(C(C)O)=[C@]=CC",
+   "centres": "1P 6P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "[C@](=CC)=CC(C)O",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "[C@](=CC(O)C)=CC",
+   "centres": "2P 6P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C(C(O)C)=[C@]=CC",
+   "centres": "1P 6P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "CC=[C@@]=CC(C)O",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "CC=[C@@]=CC(C)O",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(=[C@]=CC(O)C)C",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(=[C@]=CC(C)O)C",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "C(C(C)O)=[C@]=CC",
+   "centres": "1P 6P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "[C@](=CC)=CC(C)O",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(=[C@]=CC(C)O)C",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "C[CH]=[C{M}]=[CH]C(C)O",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "CC=[C@@]=CC(O)C",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "CC=[C@@]=CF",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "CC=[C@@]=CF",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "C(=[C@]=CF)C",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C(C)=[C@]=CF",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "[C@](=CC)=CF",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "C(=[C@]=CC)F",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "[C@](=CC)=CF",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "[C@](=CC)=CF",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "CC=[C@@]=CF",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "CC=[C@@]=CF",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(=[C@]=CF)C",
+   "centres": "1P 3P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "FC=[C@@]=CC",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "CC=[C@]=CF",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "CC=[C@]=CF",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "C(=[C@@]=CF)C",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "C(C)=[C@@]=CF",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "[C@@](=CC)=CF",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "C(=[C@@]=CC)F",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "[C@@](=CC)=CF",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "[C@@](=CC)=CF",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "CC=[C@]=CF",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "CC=[C@]=CF",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(=[C@@]=CF)C",
+   "centres": "1M 3M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[CH](C)=[C{M}]=[CH]F",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "FC=[C@]=CC",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "[C@](=C(Cl)[H])=C([H])F",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "FC(=[C@@]=C(Cl)[H])[H]",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "FC([H])=[C@]=C([H])Cl",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "[C@](=C([H])Cl)=C(F)[H]",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "[H]C(F)=[C@]=C(Cl)[H]",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "[H]C(=[C@]=C(Cl)[H])F",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(F)([H])=[C@]=C([H])Cl",
+   "centres": "1M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(F)(=[C@@]=C(Cl)[H])[H]",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "[C@@](=C(Cl)[H])=C(F)[H]",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "FC([H])=[C@@]=C(Cl)[H]",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(F)(=[C@@]=C(Cl)[H])[H]",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "[H]C(=[C@@]=C([H])Cl)F",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "[C@@](=C(Cl)[H])=C([H])F",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "FC(=[C@]=C(Cl)[H])[H]",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "FC([H])=[C@@]=C([H])Cl",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "[C@@](=C([H])Cl)=C(F)[H]",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "[H]C(F)=[C@@]=C(Cl)[H]",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "[H]C(=[C@@]=C(Cl)[H])F",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(F)([H])=[C@@]=C([H])Cl",
+   "centres": "1P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(F)(=[C@]=C(Cl)[H])[H]",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "[C@](=C(Cl)[H])=C(F)[H]",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "FC([H])=[C@]=C(Cl)[H]",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(F)(=[C@]=C(Cl)[H])[H]",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[H]C(F)=[C{M}]=C(Cl)[H]",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "[H]C(=[C@]=C([H])Cl)F",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "[C@](=C(Cl)C)=C(F)[H]",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "[H]C(=[C@@]=C(Cl)C)F",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "[H]C(F)=[C@]=C(C)Cl",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "[C@](=C(C)Cl)=C([H])F",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "FC([H])=[C@]=C(Cl)C",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "FC(=[C@]=C(Cl)C)[H]",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C([H])(F)=[C@]=C(C)Cl",
+   "centres": "1P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C([H])(=[C@@]=C(Cl)C)F",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "[C@@](=C(Cl)C)=C([H])F",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "[H]C(F)=[C@@]=C(Cl)C",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C([H])(=[C@@]=C(Cl)C)F",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "FC(=[C@@]=C(C)Cl)[H]",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "[C@@](=C(Cl)C)=C(F)[H]",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "[H]C(=[C@]=C(Cl)C)F",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "[H]C(F)=[C@@]=C(C)Cl",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "[C@@](=C(C)Cl)=C([H])F",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "FC([H])=[C@@]=C(Cl)C",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "FC(=[C@@]=C(Cl)C)[H]",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C([H])(F)=[C@@]=C(C)Cl",
+   "centres": "1M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C([H])(=[C@]=C(Cl)C)F",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "[C@](=C(Cl)C)=C([H])F",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "[H]C(F)=[C@]=C(Cl)C",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C([H])(=[C@]=C(Cl)C)F",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "FC([H])=[C{M}]=C(Cl)C",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "FC(=[C@]=C(C)Cl)[H]",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-0",
+   "smiles": "[C@](=C([H])Cl)=C([2H])F",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-1",
+   "smiles": "FC(=[C@@]=C([H])Cl)[2H]",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-2",
+   "smiles": "FC([2H])=[C@]=C(Cl)[H]",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-3",
+   "smiles": "[C@](=C(Cl)[H])=C(F)[2H]",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-4",
+   "smiles": "[2H]C(F)=[C@]=C([H])Cl",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-5",
+   "smiles": "[2H]C(=[C@]=C([H])Cl)F",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(F)([2H])=[C@]=C(Cl)[H]",
+   "centres": "1P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(F)(=[C@@]=C([H])Cl)[2H]",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-8",
+   "smiles": "[C@@](=C([H])Cl)=C(F)[2H]",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-9",
+   "smiles": "FC([2H])=[C@@]=C([H])Cl",
+   "centres": "2P 5P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(F)(=[C@@]=C([H])Cl)[2H]",
+   "centres": "1P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@",
+   "origin": "cdk-respelling-11",
+   "smiles": "[2H]C(=[C@@]=C(Cl)[H])F",
+   "centres": "2P 4P",
+   "via": "direct",
+   "witness": "P",
+   "expected": "Sa"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-0",
+   "smiles": "[C@@](=C([H])Cl)=C([2H])F",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-1",
+   "smiles": "FC(=[C@]=C([H])Cl)[2H]",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-2",
+   "smiles": "FC([2H])=[C@@]=C(Cl)[H]",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-3",
+   "smiles": "[C@@](=C(Cl)[H])=C(F)[2H]",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-4",
+   "smiles": "[2H]C(F)=[C@@]=C([H])Cl",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-5",
+   "smiles": "[2H]C(=[C@@]=C([H])Cl)F",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-6",
+   "smiles": "C(F)([2H])=[C@@]=C(Cl)[H]",
+   "centres": "1M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-7",
+   "smiles": "C(F)(=[C@]=C([H])Cl)[2H]",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-8",
+   "smiles": "[C@](=C([H])Cl)=C(F)[2H]",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-9",
+   "smiles": "FC([2H])=[C@]=C([H])Cl",
+   "centres": "2M 5M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-10",
+   "smiles": "C(F)(=[C@]=C([H])Cl)[2H]",
+   "centres": "1M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  },
+  {
+   "base": "[2H]C(F)=[C{M}]=C([H])Cl",
+   "mark": "@@",
+   "origin": "cdk-respelling-11",
+   "smiles": "[2H]C(=[C@]=C(Cl)[H])F",
+   "centres": "2M 4M",
+   "via": "direct",
+   "witness": "M",
+   "expected": "Ra"
+  }
+ ]
+}
