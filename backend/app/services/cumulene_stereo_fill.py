@@ -165,7 +165,7 @@ def fill_cumulene_stereo(bind, *, revision: str, apply: bool = True) -> FillRepo
         if resolved.descriptor == row.stereo_descriptor:
             report.unsettled += 1
             continue
-        # An element that depends on an allene's sense (or a small-ring allene) is never stated by this step:
+        # An element that depends on an allene's sense is never stated by this step:
         # a '-' there would be a deduction no source supports, so such a row is listed and left.
         blocked = [
             e for e, t in zip(frame.elements, resolved.descriptor.split(","), strict=False) if e.never_settled and t != "?"
@@ -173,7 +173,7 @@ def fill_cumulene_stereo(bind, *, revision: str, apply: bool = True) -> FillRepo
         if blocked:
             report.unreadable.append(
                 f"{row.public_ref}: {resolved.descriptor!r} would state an element that depends on an allene's "
-                "sense (or a small-ring allene); that element is only ever '?'"
+                "sense; that element is only ever '?'"
             )
             continue
         planned.append((row, resolved))

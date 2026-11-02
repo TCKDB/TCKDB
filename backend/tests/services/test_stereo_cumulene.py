@@ -149,25 +149,19 @@ def test_twisted_ring_allenes_of_nine_or_more_are_read_and_mirror_cleanly(smiles
     assert len(seen["Ra"]) == 1 and len(seen["Sa"]) == 1 and seen["Ra"] != seen["Sa"]
 
 
-@pytest.mark.parametrize("size", [6, 7, 8])
-def test_cyclic_allenes_in_rings_of_eight_or_fewer_stay_unknown_whatever_the_geometry(size: int) -> None:
+@pytest.mark.parametrize("size", [6, 7, 8, 9])
+def test_a_cyclic_allene_of_any_ring_size_is_settleable_not_unrepresented(size: int) -> None:
+    """Rings of 6 to 8 were once stated ``?`` always (#832); they read like a ring of 9 now.
+
+    The geometry cases (QM fixtures, near-planar axis) are in ``test_stereo_cyclic_allene_small_rings.py``.
+    """
+
     smiles = "C1=C=C(C)" + "C" * (size - 3) + "1"
-    assert [e.ring_size for e in frame(smiles).elements] == [size]
-    for seed in range(4):
-        m = Chem.AddHs(Chem.MolFromSmiles(smiles))
-        AllChem.EmbedMolecule(m, randomSeed=seed)
-        assert tokens(smiles, m) == ["?"]
-        assert tokens(smiles, fx.mirror(m)) == ["?"]
-    r = resolve(smiles, geometries=[m])
-    assert r.descriptor == "?" and r.unrepresented == (stereo.R_AXIAL_SMALL_RING,)
-    assert stereo.unrepresented_stereo_kinds(smiles) == (stereo.R_AXIAL_SMALL_RING,)
-
-
-def test_a_nine_membered_ring_allene_is_not_small() -> None:
-    smiles = "C1=C=C(C)CCCCCC1"
-    assert frame(smiles).elements[0].ring_size == 9
-    assert not frame(smiles).elements[0].never_settled
+    (element,) = frame(smiles).elements
+    assert element.kind == "axial" and not element.never_settled and element.reason is None
     assert stereo.unrepresented_stereo_kinds(smiles) == ()
+    assert resolve(smiles).unrepresented == ()
+    assert resolve(smiles, label="Ra").descriptor == "Ra"
 
 
 @pytest.mark.parametrize("torsion", [0.0, 5.0, 9.0, 171.0, 175.0, 180.0, -180.0, -3.0, -176.0])
@@ -294,12 +288,22 @@ def test_ra_cannot_label_a_double_bond_or_a_centre() -> None:
         assert excinfo.value.code == stereo.W_SPECIES_STEREO_LABEL_INVALID
 
 
-def test_a_small_ring_allene_takes_only_an_unknown_label() -> None:
+def test_a_small_ring_allene_takes_an_axis_label_like_any_allene() -> None:
+    for label in ("Ra", "Sa", "?"):
+        assert resolve("C1=C=C(C)CCC1", label=label).descriptor == label
     with pytest.raises(CodedValueError) as excinfo:
-        resolve("C1=C=C(C)CCC1", label="Ra")
+        resolve("C1=C=C(C)CCC1", label="R")
     assert excinfo.value.code == stereo.W_SPECIES_STEREO_LABEL_INVALID
-    assert "ring" in str(excinfo.value)
-    assert resolve("C1=C=C(C)CCC1", label="?").descriptor == "?"
+
+
+def test_an_allene_dependent_element_takes_only_an_unknown_label() -> None:
+    smiles = "CC=C=CC(C)C=C=CC"
+    kinds = [e.kind for e in frame(smiles).elements]
+    wrong = ",".join("Ra" if k == "axial" else "R" for k in kinds)
+    with pytest.raises(CodedValueError) as excinfo:
+        resolve(smiles, label=wrong)
+    assert excinfo.value.code == stereo.W_SPECIES_STEREO_LABEL_INVALID
+    assert "not represented" in str(excinfo.value)
 
 
 def test_an_allene_label_with_a_centre_is_checked_per_position() -> None:
@@ -353,13 +357,10 @@ def test_a_resolved_allene_has_no_warning() -> None:
     assert _warning("CC=C=CC", geometries=[fx.build("CC=C=CC", 90.0)]) is None
 
 
-def test_a_small_ring_allene_warns_not_represented_even_with_a_geometry() -> None:
-    m = Chem.AddHs(Chem.MolFromSmiles("C1=C=C(C)CCC1"))
-    AllChem.EmbedMolecule(m, randomSeed=1)
-    for kw in ({}, {"geometries": [m]}):
-        w = _warning("C1=C=C(C)CCC1", **kw)
-        assert w.code == stereo.W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED
-        assert "ring" in w.message
+def test_a_small_ring_allene_with_no_data_is_unresolved_not_unrepresented() -> None:
+    w = _warning("C1=C=C(C)CCC1")
+    assert w.code == stereo.W_SPECIES_ENTRY_STEREO_UNRESOLVED
+    assert _warning("C1=C=C(C)CCC1", label="Sa") is None
 
 
 def test_an_allene_deposited_with_marks_only_warns_not_represented_and_says_so() -> None:

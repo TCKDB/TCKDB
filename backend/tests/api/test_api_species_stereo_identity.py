@@ -269,19 +269,19 @@ def test_the_entry_label_says_an_unresolved_or_partial_entry_is_so(client: TestC
 # ---------------------------------------------------------------------------
 
 
-def test_reads_flag_a_small_ring_allene_as_not_represented_and_a_plain_unknown_as_unknown(
+def test_reads_flag_an_allene_dependent_element_as_not_represented_and_a_plain_unknown_as_unknown(
     client: TestClient, db_session
 ) -> None:
     """``stereo_not_represented`` lets a reader tell "not yet supplied" from "cannot be stated"."""
-    allene = _resolve(db_session, "C1=C=C(C)CCC1")
+    allene = _resolve(db_session, "CC=C=CC(C)C=C=CC")
     butene = _resolve(db_session, "CC=CC")
     plain_allene = _resolve(db_session, "CC=C=CC")
     db_session.flush()
 
-    allene_hit = _hits(client, query_smiles="C1=C=C(C)CCC1")
+    allene_hit = _hits(client, query_smiles="CC=C=CC(C)C=C=CC")
     assert [r["species_entry_ref"] for r in allene_hit] == [allene.public_ref]
-    assert allene_hit[0]["stereo_descriptor"] == "?"
-    assert allene_hit[0]["stereo_not_represented"] == ["axial_small_ring"]
+    assert allene_hit[0]["stereo_descriptor"] == "?,?,?"
+    assert allene_hit[0]["stereo_not_represented"] == ["allene_dependent"]
 
     # an open-chain allene's "?" is just not supplied yet: a geometry or a label would settle it
     plain_hit = _hits(client, query_smiles="CC=C=CC")
@@ -295,4 +295,4 @@ def test_reads_flag_a_small_ring_allene_as_not_represented_and_a_plain_unknown_a
     species = client.get(
         "/api/v1/scientific/species/search", params={"species_entry_ref": allene.public_ref}
     ).json()["records"][0]["entries"]
-    assert species[0]["stereo_not_represented"] == ["axial_small_ring"]
+    assert species[0]["stereo_not_represented"] == ["allene_dependent"]

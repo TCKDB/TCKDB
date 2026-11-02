@@ -89,9 +89,10 @@ end atoms. With an even number of double bonds (an allene) it is an axis: ``Ra``
 With an odd number of three or more it is ``E``/``Z``. RDKit perceives neither (no CIP label, marks dropped on
 sanitising, nothing from 3D), so both are read from geometry here: the torsion about the end-to-end axis between the
 two CIP-higher substituents (:func:`chain_geometry_token`; an allene must lie between 10 and 170 degrees, an odd
-cumulene within 30 degrees of planar). Allene SMILES marks and, for now, cumulene ``/`` ``\\`` marks are not read
-(:data:`CUMULENE_MARKS_READ`). Stated ``?`` whatever the data: a cyclic allene in a ring of eight or fewer atoms, and
-a centre or double bond whose stereogenicity depends on an allene's sense (:data:`_ALLENE_DEPENDENT`). See DR-0038.
+cumulene within 30 degrees of planar), whatever the ring size: a cyclic allene in a ring of six or more reads like
+an acyclic one, and a near-planar axis (a racemisation transition state) stays ``?``. Allene SMILES marks and, for
+now, cumulene ``/`` ``\\`` marks are not read (:data:`CUMULENE_MARKS_READ`). Stated ``?`` whatever the data: a centre
+or double bond whose stereogenicity depends on an allene's sense (:data:`_ALLENE_DEPENDENT`). See DR-0038.
 """
 
 from __future__ import annotations
@@ -135,8 +136,7 @@ W_SPECIES_STEREO_LABEL_INVALID = "species_stereo_label_invalid"
 W_SPECIES_ENTRY_STEREO_UNRESOLVED = "species_entry_stereo_unresolved"
 
 #: The non-blocking warning for an entry with a stereo element that no further data would settle (a symmetry class
-#: past the automorphism cap, a cyclic allene in a ring of eight or fewer, an element that depends on an allene's
-#: sense, an allene or cumulene given only as SMILES marks): real isomers may share the entry.
+#: past the automorphism cap, an element that depends on an allene's sense, an allene or cumulene given only as SMILES marks): real isomers may share the entry.
 W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED = "species_entry_stereo_not_represented"
 
 UNKNOWN = "?"
@@ -155,7 +155,6 @@ VOCABULARY = TETRAHEDRAL_TOKENS | DOUBLE_BOND_TOKENS | AXIAL_TOKENS | {UNKNOWN, 
 DESCRIPTOR_PATTERN = r"^(Ra|Sa|[RSrsEZez?-])(,(Ra|Sa|[RSrsEZez?-]))*$"
 
 #: Reasons an element is stated ``?`` that no further data would settle (``ResolvedStereo.unrepresented``).
-R_AXIAL_SMALL_RING = "axial_small_ring"
 #: A cumulated chain with a tied pair of stereo-bearing substituents at an end: stereogenic through the arms' senses.
 R_CUMULENE_TIED_END = "cumulene_tied_end"
 R_ALLENE_DEPENDENT = "allene_dependent"
@@ -186,9 +185,15 @@ _CUMULENE = "cumulene"
 _ALLENE_DEPENDENT = "allene_dependent"
 #: Chain elements (anchored at the two chain ends, read from geometry only).
 _CHAIN_KINDS = frozenset({_AXIAL, _CUMULENE})
-#: A cyclic allene in a ring of at most this size is never read: strained, short-lived, no validated reference.
-_SMALL_RING_MAX = 8
 #: Allene: the end-to-end torsion between the CIP-higher substituents must lie in [10, 170] degrees (ideal 90).
+#:
+#: The window is the same for every ring size, including the small ones. Cyclic allenes in rings of 6, 7 and 8
+#: relax to a twisted axis in QM (about 50 to 70 degrees; fixtures in ``tests/fixtures/cyclic_allene_xtb``) and are
+#: read as Ra/Sa like any other; only a near-planar axis (the racemisation transition state) is left ``?``.
+#: Do not read the missing InChI test for rings of 6 and 7 as a coverage gap: InChI cannot see an allene axis in a
+#: ring of that size (it writes no stereo layer whatever the twist), so those rings are covered by a hand Newman
+#: check of each fixture and by this reader's independence of ring size, which is validated against InChI's ``/m``
+#: layer on rings of 8 and 9 and on acyclic allenes.
 _ALLENE_TORSION_WINDOW = (10.0, 170.0)
 #: Odd cumulene: cis within this torsion, trans beyond 180 minus it, otherwise twisted and unread.
 _CUMULENE_PLANAR_TOLERANCE = 30.0
@@ -210,8 +215,6 @@ class StereoElement:
     key: tuple[int, ...]
     #: Chain elements only: the chain's atoms from one end to the other (constitution_h numbering).
     chain: tuple[int, ...] = ()
-    #: Chain elements only: size of the smallest ring through the whole chain, 0 when acyclic.
-    ring_size: int = 0
     #: Chain elements only: an end carries a tied pair of stereo-bearing substituents (``CC=C=CC(C=C=CC)=C=C(C)Cl``).
     #: The chain is then stereogenic through the senses of those arms, which needs a token we do not compute.
     tied_end: bool = False
@@ -220,11 +223,7 @@ class StereoElement:
     def never_settled(self) -> bool:
         """True when no data can settle this element (it is stated ``?`` always)."""
 
-        return (
-            self.kind == _ALLENE_DEPENDENT
-            or self.tied_end
-            or (self.kind == _AXIAL and 0 < self.ring_size <= _SMALL_RING_MAX)
-        )
+        return self.kind == _ALLENE_DEPENDENT or self.tied_end
 
     @property
     def reason(self) -> str | None:
@@ -234,8 +233,6 @@ class StereoElement:
             return R_ALLENE_DEPENDENT
         if self.tied_end:
             return R_CUMULENE_TIED_END
-        if self.never_settled:
-            return R_AXIAL_SMALL_RING
         return None
 
 
@@ -278,7 +275,7 @@ class ResolvedStereo:
     :param stereo_smiles: Canonical isomeric SMILES of the fully resolved
         configuration, when one can be written and round-trips.
     :param unrepresented: Why some ``?`` cannot be settled by the data in hand:
-        ``axial_small_ring``, ``allene_dependent``, ``axial_marks``,
+        ``allene_dependent``, ``cumulene_tied_end``, ``axial_marks``,
         ``cumulene_marks``, ``symmetry`` (a symmetry class past the automorphism
         cap). Empty when every ``?`` is an element the data left unknown.
     :param unknown_elements: How many ``?`` are elements the data could settle.
@@ -367,9 +364,8 @@ def _cumulated_bonds(
 
     cumulated: set[int] = set()
     elements: list[StereoElement] = []
-    rings = [set(r) for r in mol_h.GetRingInfo().AtomRings()]
-    #: (ends, other substituents per end, path, kind, ring size) of every chain whose ends can be stereogenic
-    candidates: list[tuple[list[int], list[list[int]], list[int], str, int]] = []
+    #: (ends, other substituents per end, path, kind) of every chain whose ends can be stereogenic
+    candidates: list[tuple[list[int], list[list[int]], list[int], str]] = []
     for members in chains.values():
         if len(members) < 2:
             continue
@@ -398,18 +394,16 @@ def _cumulated_bonds(
             )
             previous = here
             path.append(step)
-        ring_size = min((len(r) for r in rings if set(path) <= r), default=0)
         kind = _AXIAL if len(members) % 2 == 0 else _CUMULENE
-        candidates.append((ends, end_others, path, kind, ring_size))
+        candidates.append((ends, end_others, path, kind))
 
-    def element(ends, path, kind, ring_size, tied_end):
+    def element(ends, path, kind, tied_end):
         low, high = sorted((ranks[ends[0]], ranks[ends[1]]))
         return StereoElement(
             kind,
             (ends[0], ends[1]),
             (low, 2 if kind == _AXIAL else 3, high),
             chain=tuple(path),
-            ring_size=ring_size,
             tied_end=tied_end,
         )
 
@@ -422,24 +416,24 @@ def _cumulated_bonds(
             bond = mol_h.GetBondWithIdx(info.centeredOn)
             content.update((bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()))
     pending = []
-    for ends, end_others, path, kind, ring_size in candidates:
+    for ends, end_others, path, kind in candidates:
         tied = [ranks_h[o[0]] == ranks_h[o[1]] for o in end_others]
         if not any(tied):
-            elements.append(element(ends, path, kind, ring_size, False))
+            elements.append(element(ends, path, kind, False))
             content.update(path)
         else:
-            pending.append((ends, end_others, path, kind, ring_size, tied))
+            pending.append((ends, end_others, path, kind, tied))
     changed = True
     while changed and pending:
         changed = False
         for item in list(pending):
-            ends, end_others, path, kind, ring_size, tied = item
+            ends, end_others, path, kind, tied = item
             ok = all(
                 (not is_tied) or any(_branch(mol_h, m, end) & content for m in others)
                 for end, others, is_tied in zip(ends, end_others, tied, strict=True)
             )
             if ok:
-                elements.append(element(ends, path, kind, ring_size, True))
+                elements.append(element(ends, path, kind, True))
                 content.update(path)
                 pending.remove(item)
                 changed = True
@@ -591,8 +585,8 @@ def _allene_dependent_elements(
 def unrepresented_stereo_kinds(smiles: str) -> tuple[str, ...]:
     """Stereo elements of a molecule that no data can settle.
 
-    ``axial_small_ring`` (an allene in a ring of eight or fewer) and ``allene_dependent`` (a centre or double
-    bond whose stereogenicity depends on an allene's sense) are always ``?`` in an entry's descriptor, so a
+    ``allene_dependent`` (a centre or double bond whose stereogenicity depends on an allene's sense) and
+    ``cumulene_tied_end`` (a chain with a tied pair of stereo-bearing arms at an end) are always ``?`` in an entry's descriptor, so a
     reader must not take that ``?`` for "not yet supplied". Empty for a SMILES that does not parse, or a
     molecule with neither. (Cases that depend on the deposit, not the molecule -- the symmetry cap, allene
     marks -- are not listed here: they need the full resolution.)
@@ -605,7 +599,7 @@ def unrepresented_stereo_kinds(smiles: str) -> tuple[str, ...]:
     except ValueError:
         return ()
     reasons = {e.reason for e in frame.elements if e.reason}
-    return tuple(r for r in (R_AXIAL_SMALL_RING, R_ALLENE_DEPENDENT, R_CUMULENE_TIED_END) if r in reasons)
+    return tuple(r for r in (R_ALLENE_DEPENDENT, R_CUMULENE_TIED_END) if r in reasons)
 
 
 def frame_from_mol(marked: Chem.Mol) -> StereoFrame:
@@ -980,8 +974,8 @@ def chain_geometry_token(element: StereoElement, mol: Chem.Mol, mapping) -> str:
     The two CIP-higher substituents (one per end) define the torsion about the end-to-end axis. An allene
     is ``Ra`` for a negative torsion (IUPAC ``M``) and ``Sa`` for a positive one (``P``); a torsion outside
     [10, 170] degrees is a flattened axis and is not read. An odd cumulene is ``Z`` within 30 degrees of
-    planar cis, ``E`` within 30 degrees of planar trans, otherwise twisted and not read. Cyclic allenes in
-    rings of eight or fewer are never read.
+    planar cis, ``E`` within 30 degrees of planar trans, otherwise twisted and not read. The ring size of a
+    cyclic allene does not matter (see :data:`_ALLENE_TORSION_WINDOW` for what is and is not validated).
     """
 
     if element.never_settled or mol.GetNumConformers() == 0:
@@ -1393,8 +1387,7 @@ def parse_supplied_label(frame: StereoFrame, label: str) -> list[str]:
             why = {
                 R_ALLENE_DEPENDENT: "depends on the sense of an allene, which is not represented",
                 R_CUMULENE_TIED_END: "is a cumulated chain with a pair of stereo-bearing arms at one end, which is not represented",
-                R_AXIAL_SMALL_RING: f"is a cyclic allene in a ring of {_SMALL_RING_MAX} or fewer, which is not represented",
-            }[element.reason or R_AXIAL_SMALL_RING]
+            }[element.reason]
             raise _label_invalid(f"token {position} ({token!r}) names an element that {why}; say '?'", expected)
         allowed = {
             _TETRAHEDRAL: TETRAHEDRAL_TOKENS,
@@ -1423,8 +1416,6 @@ def _element_noun(element: StereoElement) -> str:
         return "an element that depends on the sense of an allene (only '?')"
     if element.tied_end:
         return "a cumulated chain with stereo-bearing arms at one end (only '?')"
-    if element.never_settled:
-        return f"a cyclic allene in a ring of {_SMALL_RING_MAX} or fewer (only '?')"
     return {
         _TETRAHEDRAL: "a tetrahedral centre",
         _DOUBLE_BOND: "a double bond",
@@ -1438,8 +1429,6 @@ def _kind_text(element: StereoElement) -> str:
         return "? (depends on an allene's sense, not represented)"
     if element.tied_end:
         return "? (cumulated chain with stereo-bearing arms at one end, not represented)"
-    if element.never_settled:
-        return f"? (cyclic allene, ring of {_SMALL_RING_MAX} or fewer, not represented)"
     return {
         _TETRAHEDRAL: "R/S",
         _DOUBLE_BOND: "E/Z",

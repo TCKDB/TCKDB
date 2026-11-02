@@ -391,10 +391,7 @@ def test_a_stereogenic_cumulene_is_one_element_and_unknown_without_data(smiles: 
     assert [e.kind for e in frame(smiles).elements] == [kind]
     r = resolve(smiles)
     assert (r.descriptor, r.resolution) == ("?", StereoResolution.unresolved)
-    if smiles == "C1=C=C(C)CCC1":  # a ring of six: never read, so no data would settle it
-        assert r.unrepresented == ("axial_small_ring",) and r.unknown_elements == 0
-    else:
-        assert r.unrepresented == () and r.unknown_elements == 1
+    assert r.unrepresented == () and r.unknown_elements == 1  # a ring of six too: a geometry would settle it
 
 
 @pytest.mark.parametrize("size", [6, 7, 8, 9])
@@ -402,7 +399,7 @@ def test_cyclic_allenes_of_every_ring_size_carry_an_unknown_axis_without_data(si
     smiles = "C1=C=C(C)" + "C" * (size - 3) + "1"
     r = resolve(smiles)
     assert r.descriptor == "?", smiles
-    assert r.unrepresented == (("axial_small_ring",) if size <= 8 else ()), smiles
+    assert r.unrepresented == () and r.unknown_elements == 1, smiles
     assert resolve(smiles, label="?").descriptor == "?"
 
 

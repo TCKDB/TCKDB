@@ -22,6 +22,14 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Cyclic allenes in rings of 6 to 8 are read from geometry (2026-11-02)
+
+- **Client: no change. `tckdb-schemas` 0.147.0.** No migration, no backfill. Part of #832 (parts 2 and 3 stay open).
+- A cyclic allene in a ring of six, seven or eight atoms now gets `Ra` / `Sa` from a deposited geometry, by the rule rings of nine or more and open-chain allenes already used: the torsion between the two CIP-higher substituents must lie between 10 and 170 degrees. The window is unchanged, so a near-planar axis (the racemisation transition state) still reads `?`.
+- Checked against GFN2-xTB optimised minima of 1,2-cyclohexadiene, -cycloheptadiene and -cyclooctadiene (both enantiomers each, plus a hydroxyl-substituted six- and seven-ring and a nine-ring control), a hand Newman projection for every one, and InChI's `/m` partition on the rings of 8 and 9. InChI writes no stereo layer for an allene in a ring of 6 or 7 whatever the twist, so those two are covered by the hand check and by the reader not depending on ring size; the tests record that gap as a fact.
+- The reason `axial_small_ring` is removed from `stereo_not_represented` and from the CHEMKIN `STEREO_NOT_REPRESENTED=` marker, and the species-entry warning no longer says a small-ring allene is not represented. Entries already stored with `?` for such a ring are development data and are not rewritten: deposit a geometry or a `stereo_label` to settle one.
+- Frontend: the "cyclic allene (ring of 8 or fewer)" text is gone with the reason.
+
 ## Register coverage for deposit warnings; scan values are checked against their geometries (2026-11-01)
 
 - **Client: `tckdb-client` unchanged (0.182.0), `tckdb-schemas` 0.146.0.** No migration, no schema change, no new environment variable. No stored row is rewritten.

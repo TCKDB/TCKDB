@@ -1585,10 +1585,6 @@ def _hessian_not_stored(code: str):
 #: Why part of an entry's stereochemistry cannot be stated yet, by the reason token the stereo descriptor reports
 #: (``R_*`` in ``app.chemistry.stereo``; a test pins the two).
 STEREO_NOT_REPRESENTED_REASONS: dict[str, str] = {
-    "axial_small_ring": (
-        "a cyclic allene in a ring of eight or fewer atoms is not represented, whatever the geometry: both "
-        "mirror-image forms are stored in one entry"
-    ),
     "cumulene_tied_end": (
         "a cumulated chain has a pair of stereo-bearing arms at one end (for example two allenyl or two carbinol "
         "groups), so its configuration depends on the senses of those arms, which is not represented: its "

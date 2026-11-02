@@ -1735,7 +1735,7 @@ def _compute_section_ids(
 
 
 def _stereo_not_represented(entry: SpeciesEntry) -> list[str]:
-    """Why a ``?`` of this molecule can never be settled by data (a small-ring allene, an allene-dependent element)."""
+    """Why a ``?`` of this molecule can never be settled by data (an allene-dependent element, a tied end)."""
     if entry.stereo_descriptor is None or "?" not in entry.stereo_descriptor:
         return []
     return list(unrepresented_stereo_kinds(entry.species.smiles))

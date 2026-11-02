@@ -50,7 +50,6 @@ export function stereoChip(label: string): string {
 }
 
 const NOT_REPRESENTED_TEXT: Record<string, string> = {
-    axial_small_ring: "cyclic allene (ring of 8 or fewer) stereo not represented",
     allene_dependent: "stereo that depends on an allene's sense not represented",
     cumulene_tied_end: "cumulene with stereo-bearing arms at one end: stereo not represented",
 }
@@ -67,7 +66,7 @@ const NOT_REPRESENTED_TEXT: Record<string, string> = {
  * - `partial` -> "Partly resolved (E,?)";
  * - `unresolved` -> "Unresolved (?)";
  * - an element no data can settle (`stereo_not_represented`) is named, so the `?` is not read
- *   as "not yet supplied": "cyclic allene (ring of 8 or fewer) stereo not represented".
+ *   as "not yet supplied": "stereo that depends on an allene's sense not represented".
  *
  * A response from before the descriptor existed (field absent, not `null`) falls back to
  * `stereo_label`, and returns `null` (nothing to say) when that is absent too.

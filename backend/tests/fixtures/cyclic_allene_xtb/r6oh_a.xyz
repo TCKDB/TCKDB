@@ -1,0 +1,17 @@
+15
+C1=C=C(O)CCC1 ring=6 GFN2-xTB xtb 6.3.3 --opt tight; allene torsion between the CIP-higher substituents=105.1 deg; expected=Sa; derived by hand Newman projection (higher substituent on C1 and C3 by atomic number; positive = clockwise front to back = P = Sa, negative = M = Ra); witness: hand Newman only: InChI writes no stereo layer for a ring of this size
+C  -0.86585100  1.09404187  0.88529264
+C   0.45153994  1.15685053  0.93733216
+C   1.29810353  0.35637890  0.29761020
+O   2.54427113  0.59374379 -0.17424323
+C   0.75054445 -1.04126396  0.15136123
+C  -0.63968898 -0.92833818 -0.54194225
+C  -1.37297530  0.43790161 -0.37485225
+H  -1.54535013  1.43577743  1.64628159
+H   2.71401998  1.54339916 -0.18098108
+H   1.43498005 -1.63850592 -0.44945633
+H   0.63478957 -1.51731429  1.12475073
+H  -0.51056148 -1.11666615 -1.60774091
+H  -1.28080225 -1.71344015 -0.14147588
+H  -2.44950071  0.27588121 -0.32613359
+H  -1.16351780  1.06155615 -1.24580304
