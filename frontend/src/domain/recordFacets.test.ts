@@ -105,7 +105,7 @@ describe("facetChips: includeState (grouped-card redundancy)", () => {
             .toContain("Partly resolved (E,?)")
         expect(facetChips({
             ...base, stereo_descriptor: "?", stereo_resolution: "unresolved", stereo_not_represented: ["axial_small_ring"],
-        })).toContain("Unresolved (?) · cyclic allene (ring of 8 or fewer) stereo not represented")
+        })).toContain("Unresolved (?) · cyclic allene (ring of 5 or fewer) stereo not represented")
     })
 
     it("names an allene axis token and a cumulene's E/Z", () => {

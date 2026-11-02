@@ -1,0 +1,14 @@
+12
+C1=C=C(O)CC1 ETKDG (useRandomCoords, seed 3) then MMFF94 force field, RDKit 2025.09.6; allene torsion between the CIP-higher substituents=126.2 deg; read as Sa if the ring were not excluded; expected=? because a ring of five or fewer is never read (no QM geometry was checked for it); a force-field geometry, not a minimum
+C      0.725242   -0.179979    1.662793
+C      1.702198    0.664992    1.720634
+C      2.306689    0.903349    0.603379
+O      2.834639    2.140061    0.345989
+C      1.682669    0.106771   -0.518341
+C      0.561234   -0.667810    0.237704
+H      0.116063   -0.494430    2.497632
+H      2.962866    2.583807    1.203729
+H      1.260848    0.752188   -1.295411
+H      2.405560   -0.580611   -0.968323
+H      0.711631   -1.749818    0.170273
+H     -0.428821   -0.415491   -0.154779

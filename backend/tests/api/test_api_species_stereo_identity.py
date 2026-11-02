@@ -273,12 +273,12 @@ def test_reads_flag_a_small_ring_allene_as_not_represented_and_a_plain_unknown_a
     client: TestClient, db_session
 ) -> None:
     """``stereo_not_represented`` lets a reader tell "not yet supplied" from "cannot be stated"."""
-    allene = _resolve(db_session, "C1=C=C(C)CCC1")
+    allene = _resolve(db_session, "C1=C=C(C)CC1")
     butene = _resolve(db_session, "CC=CC")
     plain_allene = _resolve(db_session, "CC=C=CC")
     db_session.flush()
 
-    allene_hit = _hits(client, query_smiles="C1=C=C(C)CCC1")
+    allene_hit = _hits(client, query_smiles="C1=C=C(C)CC1")
     assert [r["species_entry_ref"] for r in allene_hit] == [allene.public_ref]
     assert allene_hit[0]["stereo_descriptor"] == "?"
     assert allene_hit[0]["stereo_not_represented"] == ["axial_small_ring"]

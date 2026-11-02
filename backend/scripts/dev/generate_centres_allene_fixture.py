@@ -8,7 +8,10 @@ Java, it reads the committed fixture.
     sha256sum centres.jar        # must be 6c5d5cafa9393ed7b667a2340222348cd15a9bbdd0d1b92518229f26cc5e87fb
     curl -L -o cdk.jar https://github.com/cdk/cdk/releases/download/cdk-2.13/cdk-2.13.jar   # respelling only
     sha256sum cdk.jar            # must be 5a42221d412dca53e48fdfc0bfae645310f9de80082800af801d06a87df32411
-    conda run -n tckdb_env python backend/scripts/dev/generate_centres_allene_fixture.py centres.jar cdk.jar
+    PYTHONPATH=backend conda run -n tckdb_env python backend/scripts/dev/generate_centres_allene_fixture.py centres.jar cdk.jar
+
+Run it with ``backend`` on ``PYTHONPATH`` (or from ``backend/``): from a linked worktree ``app`` otherwise resolves to the
+main checkout, whose reader differs, and the run would silently yield no geometry cases (the script refuses that).
 
 The jar is run as ``java -jar centres.jar x.smi`` (one ``SMILES name`` per line) and ``java -jar centres.jar
 x.sdf`` (3D). Centres does not label the pseudo-asymmetric centre from SDF coordinates, so the geometry cases
@@ -283,6 +286,8 @@ def main(jar: str, cdk_jar: str) -> None:
                         "inchi": inchi.MolBlockToInchi(Chem.MolToMolBlock(molecule)),
                     }
                 )
+    if not geometry_cases:
+        sys.exit("no geometry case was kept: is `app` the checkout you mean? Run with PYTHONPATH=backend (or from backend/)")
     document = {
         "source": {
             "tool": "Centres 1.2.1 (SiMolecule/centres; Hanson et al., J. Chem. Inf. Model. 2018)",

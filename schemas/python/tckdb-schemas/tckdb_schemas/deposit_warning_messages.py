@@ -1586,7 +1586,7 @@ def _hessian_not_stored(code: str):
 #: (``R_*`` in ``app.chemistry.stereo``; a test pins the two).
 STEREO_NOT_REPRESENTED_REASONS: dict[str, str] = {
     "axial_small_ring": (
-        "a cyclic allene in a ring of eight or fewer atoms is not represented, whatever the geometry: both "
+        "a cyclic allene in a ring of five or fewer atoms is not represented, whatever the geometry: both "
         "mirror-image forms are stored in one entry"
     ),
     "cumulene_tied_end": (

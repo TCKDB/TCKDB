@@ -317,19 +317,29 @@ def test_a_mark_on_the_centre_that_contradicts_a_geometry_is_refused() -> None:
 # ---------------------------------------------------------------------------
 
 UNREALIZABLE_COMBINATIONS = {
-    "equal allene senses around an r": ("CC=[C@]=CC(C)C=[C@]=CC", "?,?,r"),
     "unequal allene senses around a dash": ("CC=[C@]=CC(C)C=[C@@]=CC", "?,?,-"),
     # pre-existing for ordinary centres: R,S around a dash needs R,R
     "an ordinary centre": ("C[C@H](O)C(O)[C@@H](C)O", "?,?,-"),
 }
 
 
+# Refused by ``refine``'s check of the fully stated vector (no ``?`` is left after the merge).
 @pytest.mark.parametrize(("why", "case"), list(UNREALIZABLE_COMBINATIONS.items()))
 def test_a_fully_stated_combination_no_isomer_has_is_a_contradiction(why: str, case: tuple[str, str]) -> None:
     smiles, label = case
     with pytest.raises(CodedValueError) as excinfo:
         stereo.resolve_stereo(_marks_frame(smiles), supplied_label=label)
     assert excinfo.value.code == stereo.W_SPECIES_STEREO_CONTRADICTION, why
+
+
+def test_equal_allene_senses_around_an_r_label_are_refused_by_the_merge() -> None:
+    """Marks give ``Ra,Ra`` (equal senses make the centre ``-``) and the label says ``r``: the two sources disagree
+    at the centre, which ``merge_sources`` refuses before ``refine`` sees a fully stated vector."""
+
+    with pytest.raises(CodedValueError) as excinfo:
+        stereo.resolve_stereo(_marks_frame("CC=[C@]=CC(C)C=[C@]=CC"), supplied_label="?,?,r")
+    assert excinfo.value.code == stereo.W_SPECIES_STEREO_CONTRADICTION
+    assert excinfo.value.context["sources"] != ["combined sources"]  # named sources: the merge, not refine
 
 
 def test_a_realizable_combination_of_the_same_sources_is_accepted() -> None:
