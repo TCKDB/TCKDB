@@ -99,6 +99,7 @@ from __future__ import annotations
 import itertools
 import logging
 import math
+import re
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
@@ -793,6 +794,8 @@ def mark_tokens(frame: StereoFrame) -> list[str]:
     for element in frame.elements:
         if element.kind == _CUMULENE and CUMULENE_MARKS_READ:
             tokens.append(cumulene_mark_token(frame, element))
+        elif element.kind == _AXIAL and ALLENE_MARKS_READ:
+            tokens.append(allene_mark_token(frame, element))
         elif element.kind in (_AXIAL, _ALLENE_DEPENDENT, _CUMULENE):
             tokens.append(UNKNOWN)
         elif element.kind == _TETRAHEDRAL:
@@ -1146,6 +1149,230 @@ def cumulene_mark_token(frame: StereoFrame, element: StereoElement) -> str:
             return UNKNOWN
         higher_side.append(verdicts.pop())
     return "Z" if higher_side[0] == higher_side[1] else "E"
+
+
+#: Whether the chirality mark on the centre of an allene (``[C@]`` / ``[C@@]`` between two double bonds) is read.
+ALLENE_MARKS_READ = True
+
+_ORGANIC_SUBSET = ("Cl", "Br", "B", "C", "N", "O", "P", "S", "F", "I", "b", "c", "n", "o", "p", "s", "*")
+_NORMAL_VALENCE = {"C": 4, "c": 4}
+
+
+@dataclass
+class _TextAtom:
+    """One atom of a SMILES text, in text order, with its neighbours in the order the text writes them.
+
+    ``neighbours`` holds ``(atom index, bond order)`` for a bonded atom and ``("H", 0)`` for a hydrogen that
+    is not an atom of its own (an implicit one, or the count of a bracket atom). OpenSMILES puts that hydrogen
+    immediately after the preceding atom, before any ring closure or branch; a ring-closure digit takes its
+    place at the digit, on both of its atoms.
+    """
+
+    symbol: str
+    isotope: int = 0
+    mark: str = ""
+    has_from: bool = False
+    hydrogens: int = 0
+    neighbours: list = field(default_factory=list)
+
+
+def _scan_smiles(text: str) -> list[_TextAtom] | None:
+    """A minimal reader of the neighbour order of a SMILES text; ``None`` when the text is not understood."""
+
+    atoms: list[_TextAtom] = []
+    stack: list[int] = []
+    previous: int | None = None
+    bond_order = 1
+    rings: dict[str, tuple[int, int, int]] = {}  # digit -> (atom, position in its neighbour list, order)
+    i = 0
+    n = len(text)
+
+    def attach(atom: _TextAtom, hydrogens: int) -> None:
+        nonlocal previous, bond_order
+        index = len(atoms)
+        atoms.append(atom)
+        atom.hydrogens = hydrogens
+        if previous is not None:
+            atoms[previous].neighbours.append((index, bond_order))
+            atom.neighbours.append((previous, bond_order))
+            atom.has_from = True
+        bond_order = 1
+        previous = index
+
+    while i < n:
+        c = text[i]
+        if c == "(":
+            if previous is None:
+                return None
+            stack.append(previous)
+            i += 1
+        elif c == ")":
+            if not stack:
+                return None
+            previous = stack.pop()
+            i += 1
+        elif c in "-=#:/\\$":
+            bond_order = {"=": 2, "#": 3}.get(c, 1)
+            i += 1
+        elif c == ".":
+            previous = None
+            i += 1
+        elif c == "[":
+            j = text.find("]", i)
+            if j < 0:
+                return None
+            body = text[i + 1 : j]
+            m = re.fullmatch(r"(\d*)([A-Za-z][a-z]?|\*)(@{1,2})?(?:H(\d*))?([+-]+\d*|)(?::\d+)?", body)
+            if m is None:
+                return None
+            isotope = int(m.group(1)) if m.group(1) else 0
+            hcount = 0 if m.group(4) is None else (int(m.group(4)) if m.group(4) else 1)
+            attach(_TextAtom(m.group(2), isotope, m.group(3) or ""), hcount)
+            i = j + 1
+        elif c.isdigit() or c == "%":
+            if c == "%":
+                digit, i = text[i : i + 3], i + 3
+            else:
+                digit, i = c, i + 1
+            if previous is None:
+                return None
+            if digit in rings:
+                opener, position, order = rings.pop(digit)
+                order = max(order, bond_order)
+                atoms[opener].neighbours[position] = (previous, order)
+                atoms[previous].neighbours.append((opener, order))
+            else:
+                rings[digit] = (previous, len(atoms[previous].neighbours), bond_order)
+                atoms[previous].neighbours.append(("R", digit))
+            bond_order = 1
+        else:
+            token = next((t for t in _ORGANIC_SUBSET if text.startswith(t, i)), None)
+            if token is None:
+                return None
+            attach(_TextAtom(token), -1)
+            i += len(token)
+    if rings or stack:
+        return None
+    for atom in atoms:
+        count = atom.hydrogens
+        if count < 0:  # organic-subset atom: implicit hydrogens fill the normal valence
+            valence = _NORMAL_VALENCE.get(atom.symbol)
+            if valence is None:
+                continue
+            used = sum(order for _, order in atom.neighbours)
+            count = max(0, valence - used)
+        for _ in range(count):  # right after the "from" atom, before ring closures and branches
+            atom.neighbours.insert(1 if atom.has_from else 0, ("H", 0))
+    return atoms
+
+
+def allene_mark_token(frame: StereoFrame, element: StereoElement) -> str:
+    """``Ra``/``Sa`` of an allene from the chirality mark on its central atom (OpenSMILES extended tetrahedral).
+
+    The four substituents of the two ends are listed in the order the text writes them (the first end's, then
+    the second's; an implicit or bracket hydrogen right after its owner, a ring-closure digit at its digit).
+    ``@`` looks from the first one with the rest counter-clockwise, ``@@`` clockwise. The list is permuted to
+    ``(CIP-higher at the first end, lower there, higher at the second end, lower there)``; in that order
+    ``@@`` is ``Ra`` and ``@`` is ``Sa`` (constant fixed by hand on ``NC(Br)=[C@@]=C(O)C``, whose first end
+    outranks N with Br and whose second outranks C with O, and checked against an independent labeller).
+    ``?`` when the text is absent, unmarked, not understood or does not match the molecule.
+    """
+
+    if element.never_settled or len(element.chain) != 3 or not frame.marked.HasProp(SMILES_PROP):
+        return UNKNOWN
+    atoms = _scan_smiles(frame.marked.GetProp(SMILES_PROP))
+    raw = _raw_marks_mol(frame)
+    if atoms is None or raw is None or len(atoms) != raw.GetNumAtoms():
+        return UNKNOWN
+    raw_to_constitution = _raw_to_constitution(raw, frame)
+    if raw_to_constitution is None:
+        return UNKNOWN
+    constitution_to_raw = {c: r for r, c in raw_to_constitution.items()}
+    end_a, centre, end_b = element.chain
+    if centre not in constitution_to_raw:
+        return UNKNOWN
+    raw_centre = constitution_to_raw[centre]
+    mark = atoms[raw_centre].mark
+    if mark not in ("@", "@@"):
+        return UNKNOWN
+    ends = [n for n, order in atoms[raw_centre].neighbours if n != "H" and n != "R" and order == 2]
+    if len(ends) != 2:
+        return UNKNOWN
+    mol_h = frame.constitution_h
+    labelled: list[int] = []  # the four substituents in text order, as mol_h atoms
+    targets: list[int] = []  # (higher, lower) at the first written end, then at the second
+    for raw_end in ends:
+        end = raw_to_constitution.get(raw_end)
+        if end not in (end_a, end_b):
+            return UNKNOWN
+        chain_neighbour = element.chain[1] if end == end_a else element.chain[-2]
+        order = cip_higher_substituent(mol_h, end, chain_neighbour)
+        if order is None:
+            return UNKNOWN
+        slots = [(k, o) for k, o in atoms[raw_end].neighbours if k != raw_centre]
+        if len(slots) != 2:
+            return UNKNOWN
+        used: set[int] = set()
+        for kind, _ in slots:
+            if kind == "H":
+                isotope: int | None = 0
+            elif kind == "R" or atoms[kind].symbol != "H":
+                isotope = None
+            else:
+                isotope = atoms[kind].isotope
+            if isotope is None:
+                mapped = raw_to_constitution.get(kind)
+            else:
+                mapped = next(
+                    (
+                        a
+                        for a in order
+                        if mol_h.GetAtomWithIdx(a).GetAtomicNum() == 1
+                        and mol_h.GetAtomWithIdx(a).GetIsotope() == isotope
+                        and a not in used
+                    ),
+                    None,
+                )
+            if mapped is None or mapped not in order:
+                return UNKNOWN
+            used.add(mapped)
+            labelled.append(mapped)
+        targets.extend(order)
+    if len(set(labelled)) != 4 or sorted(labelled) != sorted(targets):
+        return UNKNOWN
+    # parity of the permutation taking the text order to (higher, lower, higher, lower)
+    permutation = [labelled.index(t) for t in targets]
+    swaps = 0
+    seen = [False] * 4
+    for start in range(4):
+        if seen[start]:
+            continue
+        length, j = 0, start
+        while not seen[j]:
+            seen[j] = True
+            j = permutation[j]
+            length += 1
+        swaps += length - 1
+    clockwise = (mark == "@@") != (swaps % 2 == 1)
+    return "Ra" if clockwise else "Sa"
+
+
+def _raw_to_constitution(raw: Chem.Mol, frame: StereoFrame) -> dict[int, int] | None:
+    """Raw-parse atom index -> constitution atom index (the matching :func:`_mark_sides` does)."""
+
+    try:
+        for atom in raw.GetAtoms():
+            atom.SetIntProp("_raw_idx", atom.GetIdx())
+        clean = Chem.Mol(raw)
+        Chem.SanitizeMol(clean)
+        raw_constitution = constitution_mol(clean)
+    except (ValueError, RuntimeError):
+        return None
+    match = _skeleton(raw_constitution).GetSubstructMatch(_skeleton(frame.constitution))
+    if len(match) != frame.constitution.GetNumAtoms():
+        return None
+    to_constitution = {m: i for i, m in enumerate(match)}
+    return {a.GetIntProp("_raw_idx"): to_constitution[a.GetIdx()] for a in raw_constitution.GetAtoms()}
 
 
 def geometry_tokens(
