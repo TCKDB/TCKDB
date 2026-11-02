@@ -1022,7 +1022,22 @@ def _raw_marks_mol(frame: StereoFrame) -> Chem.Mol | None:
     params = Chem.SmilesParserParams()
     params.sanitize = False
     params.removeHs = False
-    return Chem.MolFromSmiles(frame.marked.GetProp(SMILES_PROP), params)
+    raw = Chem.MolFromSmiles(frame.marked.GetProp(SMILES_PROP), params)
+    if raw is not None:
+        # a standard isotope ([1H], [12C]) names nothing: the identity molecule has cleared it, so must the raw one
+        for atom in raw.GetAtoms():
+            if atom.GetIsotope() and _standard_isotope(atom.GetSymbol(), atom.GetIsotope()):
+                atom.SetIsotope(0)
+    return raw
+
+
+def _standard_isotope(symbol: str, mass_number: int) -> bool:
+    from app.chemistry.isotopes import normalize_isotope
+
+    try:
+        return normalize_isotope(symbol, mass_number) is None
+    except (KeyError, ValueError):
+        return False
 
 
 def allene_marks_present(frame: StereoFrame) -> bool:
@@ -1073,22 +1088,9 @@ def _mark_sides(frame: StereoFrame) -> dict[int, dict[int, int]] | None:
         # begin written first: '/' puts end above begin, so begin sees end above (+1) and end sees begin below (-1)
         marks.append((begin, end, 1 if up else -1))
         marks.append((end, begin, -1 if up else 1))
-    try:
-        for atom in raw.GetAtoms():
-            atom.SetIntProp("_raw_idx", atom.GetIdx())
-        clean = Chem.Mol(raw)
-        Chem.SanitizeMol(clean)
-        raw_constitution = constitution_mol(clean)
-    except (ValueError, RuntimeError):
+    raw_to_constitution = _raw_to_constitution(raw, frame)
+    if raw_to_constitution is None:
         return None
-    match = _skeleton(raw_constitution).GetSubstructMatch(_skeleton(frame.constitution))
-    if len(match) != frame.constitution.GetNumAtoms():
-        return None
-    # match[i] is the raw-constitution atom standing for constitution atom i
-    to_constitution = {m: i for i, m in enumerate(match)}
-    raw_to_constitution: dict[int, int] = {}
-    for atom in raw_constitution.GetAtoms():
-        raw_to_constitution[atom.GetIntProp("_raw_idx")] = to_constitution[atom.GetIdx()]
     raw_hydrogens = {a.GetIdx() for a in raw.GetAtoms() if a.GetAtomicNum() == 1 and not a.GetIsotope()}
     sides: dict[int, dict[int, int]] = {}
     for atom_idx, neighbour_idx, side in marks:
@@ -1282,6 +1284,8 @@ def allene_mark_token(frame: StereoFrame, element: StereoElement) -> str:
     raw = _raw_marks_mol(frame)
     if atoms is None or raw is None or len(atoms) != raw.GetNumAtoms():
         return UNKNOWN
+    if any(a.symbol.capitalize() != r.GetSymbol() for a, r in zip(atoms, raw.GetAtoms(), strict=True)):
+        return UNKNOWN  # the scanner and the parser disagree about the text: read nothing
     raw_to_constitution = _raw_to_constitution(raw, frame)
     if raw_to_constitution is None:
         return UNKNOWN
@@ -1318,6 +1322,8 @@ def allene_mark_token(frame: StereoFrame, element: StereoElement) -> str:
                 isotope = None
             else:
                 isotope = atoms[kind].isotope
+                if isotope and _standard_isotope("H", isotope):
+                    isotope = 0
             if isotope is None:
                 mapped = raw_to_constitution.get(kind)
             else:
@@ -1356,21 +1362,21 @@ def allene_mark_token(frame: StereoFrame, element: StereoElement) -> str:
 
 
 def _allene_centre_marked(frame: StereoFrame, element: StereoElement) -> bool:
-    """Whether the SMILES puts a chirality mark on this allene's central atom."""
+    """Whether the SMILES puts a chirality mark on the middle atom of this axial chain."""
 
     raw = _raw_marks_mol(frame)
-    if raw is None or len(element.chain) != 3:
+    if raw is None:
         return False
     mapping = _raw_to_constitution(raw, frame)
     if mapping is None:  # the text cannot be matched onto the molecule: any mark on an allene counts
         return allene_marks_present(frame)
-    centre = element.chain[1]
+    centre = element.chain[len(element.chain) // 2]  # the middle atom of an allene or of any even cumulene
     unmarked = (Chem.ChiralType.CHI_UNSPECIFIED, Chem.ChiralType.CHI_OTHER)
     return any(c == centre and raw.GetAtomWithIdx(r).GetChiralTag() not in unmarked for r, c in mapping.items())
 
 
 def _raw_to_constitution(raw: Chem.Mol, frame: StereoFrame) -> dict[int, int] | None:
-    """Raw-parse atom index -> constitution atom index (the matching :func:`_mark_sides` does)."""
+    """Raw-parse atom index -> constitution atom index; ``None`` when the text cannot be matched onto the molecule."""
 
     try:
         for atom in raw.GetAtoms():
@@ -1384,7 +1390,13 @@ def _raw_to_constitution(raw: Chem.Mol, frame: StereoFrame) -> dict[int, int] | 
     if len(match) != frame.constitution.GetNumAtoms():
         return None
     to_constitution = {m: i for i, m in enumerate(match)}
-    return {a.GetIntProp("_raw_idx"): to_constitution[a.GetIdx()] for a in raw_constitution.GetAtoms()}
+    mapping: dict[int, int] = {}
+    for atom in raw_constitution.GetAtoms():
+        index = to_constitution.get(atom.GetIdx())
+        if index is None:  # the text keeps an atom the molecule does not: it cannot be matched
+            return None
+        mapping[atom.GetIntProp("_raw_idx")] = index
+    return mapping
 
 
 def geometry_tokens(

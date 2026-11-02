@@ -18,7 +18,7 @@
   "java": "openjdk version \"21.0.12\" 2026-07-21",
   "via_values": {
    "direct": "Centres labelled the SMILES in the row.",
-   "cdk-canonical-roundtrip": "Centres labels nothing when a ring digit sits on the central atom; the label is that of CDK's canonical re-export, given in roundtrip_smiles."
+   "cdk-canonical-roundtrip": "Centres labels nothing for this text (a ring digit on the central atom, though other texts with one are labelled directly); the label is that of CDK's canonical re-export, given in roundtrip_smiles."
   }
  },
  "cases": [

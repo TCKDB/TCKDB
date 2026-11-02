@@ -164,7 +164,7 @@ def main() -> None:
             row["via"] = "direct"
             letter = _witness(row["centres"])
             if letter is None:
-                # Centres labels nothing when a ring-closure digit sits on the central atom itself. CDK still reads
+                # Centres labels nothing for two of the texts (a ring digit sits on the central atom; other such texts are labelled). CDK still reads
                 # the text, so its canonical re-export (no digit on the centre) is labelled instead.
                 (work / "one.tsv").write_text(f"x\t{row['smiles']}\n")
                 canonical = _run([*cdk, "canon", str(work / "one.tsv")]).strip().split("\t")[2]
@@ -191,8 +191,8 @@ def main() -> None:
             "via_values": {
                 "direct": "Centres labelled the SMILES in the row.",
                 "cdk-canonical-roundtrip": (
-                    "Centres labels nothing when a ring digit sits on the central atom; the label is that of CDK's "
-                    "canonical re-export, given in roundtrip_smiles."
+                    "Centres labels nothing for this text (a ring digit on the central atom, though other texts with one are "
+                    "labelled directly); the label is that of CDK's canonical re-export, given in roundtrip_smiles."
                 ),
             },
         },

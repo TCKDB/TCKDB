@@ -6,8 +6,8 @@ tool is part of this repository and CI has no Java, so the table is generated on
 ``backend/scripts/dev/generate_allene_marks_witness.py`` (the file header records the jar URLs, versions, sha256s
 and the command) and committed. The texts are 17 molecules, both mark spellings, as written and respelled by CDK
 under 12 random atom and bond orders: central atom first, ring closures on an end atom, bracket-hydrogen ends,
-explicit hydrogen atoms, an isotopic hydrogen end. Two rows have a ring digit on the central atom itself, which
-Centres cannot label; they carry the label of CDK's canonical re-export and are marked ``cdk-canonical-roundtrip``.
+explicit hydrogen atoms, an isotopic hydrogen end. Two rows are texts for which Centres labels nothing (a ring digit
+on the central atom; ten other rows with one are labelled directly); they carry the label of CDK's canonical re-export and are marked ``cdk-canonical-roundtrip``.
 """
 
 from __future__ import annotations
@@ -50,7 +50,10 @@ def test_the_reader_agrees_with_the_independent_labeller(case: dict) -> None:
     assert _token(case["smiles"]) == case["expected"]
     # ... and the reader is wired into the resolution of an entry deposited with these marks alone
     frame = stereo.frame_from_mol(identity_mol_from_smiles(case["smiles"]))
-    assert case["expected"] in stereo.resolve_stereo(frame).descriptor.split(",")
+    tokens = stereo.resolve_stereo(frame).descriptor.split(",")
+    (position,) = [i for i, e in enumerate(frame.elements) if e.kind == "axial"]
+    assert tokens[position] == case["expected"]
+    assert all(t == "?" for i, t in enumerate(tokens) if i != position)  # nothing but the axis is marked
     if case["via"] == "cdk-canonical-roundtrip":
         assert _token(case["roundtrip_smiles"]) == case["expected"]
 

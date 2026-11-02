@@ -404,6 +404,13 @@ def test_a_small_ring_allene_deposit_is_accepted_and_the_warning_says_it_is_not_
     assert _UNRESOLVED not in warnings
 
 
+def test_a_standard_isotope_hydrogen_in_an_allene_deposit_is_accepted(client: TestClient) -> None:
+    """``[1H]`` is cleared from the identity molecule; the reader once crashed (500) on the mismatch."""
+
+    for smiles in ("[1H]C(F)=[C@]=CC", "[1H]C(F)=C=CC"):
+        _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body(smiles)))
+
+
 def test_an_allene_deposited_with_marks_only_is_read_and_earns_no_warning(client: TestClient) -> None:
     warnings = _warnings(client.post("/api/v1/uploads/thermo", json=_thermo_body("CC=[C@]=CC")))
     assert _NOT_REPRESENTED not in warnings
