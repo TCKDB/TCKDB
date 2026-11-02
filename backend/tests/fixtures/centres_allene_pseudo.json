@@ -2611,6 +2611,279 @@
  "respellings": [
   {
    "skeleton": "Me_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](C)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@]=C%11.[C@H]%10%11C",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](C)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@@]=C%11.[C@H]%10%11C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](C)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@]=C%11.[C@@H]%10%11C",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](C)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@@]=C%11.[C@@H]%10%11C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](C)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@]=C%11.[C@H]%10%11C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](C)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@@]=C%11.[C@H]%10%11C",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](C)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@]=C%11.[C@@H]%10%11C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](C)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@@]=C%11.[C@@H]%10%11C",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -2627,6 +2900,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -2643,6 +2917,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -2659,6 +2934,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -2675,6 +2951,75 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@@H](C)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](C)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](C=[C@]=CC)C",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@H](C)(C=[C@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -2691,6 +3036,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -2707,6 +3053,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -2723,6 +3070,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -2739,6 +3087,75 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@@H](C)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](C)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](C=[C@@]=CC)C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@@H](C)(C=[C@@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -2755,6 +3172,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -2771,6 +3189,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -2787,6 +3206,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -2803,6 +3223,75 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@H](C)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](C)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](C=[C@]=CC)C",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@H](C)(C=[C@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -2819,6 +3308,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -2835,6 +3325,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -2851,6 +3342,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -2867,6 +3359,75 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@H](C)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](C)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](C=[C@@]=CC)C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@H](C)(C=[C@@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -2883,6 +3444,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -2899,6 +3461,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -2915,6 +3478,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -2931,6 +3495,75 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@@H](C)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](C)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](C=[C@]=CC)C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@H](C)(C=[C@]=CC)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -2947,6 +3580,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -2963,6 +3597,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -2979,6 +3614,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -2995,6 +3631,75 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@@H](C)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](C)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](C=[C@@]=CC)C",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@@H](C)(C=[C@@]=CC)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3011,6 +3716,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3027,6 +3733,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3043,6 +3750,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3059,6 +3767,75 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@H](C)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](C)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](C=[C@]=CC)C",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@H](C)(C=[C@]=CC)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3075,6 +3852,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3091,6 +3869,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3107,6 +3886,7 @@
   },
   {
    "skeleton": "Me_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3122,7 +3902,76 @@
    "centre": ""
   },
   {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@H](C)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](C)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](C=[C@@]=CC)C",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Me_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@H](C)(C=[C@@]=CC)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3139,6 +3988,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3155,6 +4005,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3171,6 +4022,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3187,6 +4039,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3203,6 +4056,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3219,6 +4073,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3235,6 +4090,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3251,6 +4107,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3267,6 +4124,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3283,6 +4141,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3299,6 +4158,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3315,6 +4175,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3331,6 +4192,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3347,6 +4209,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3363,6 +4226,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3379,6 +4243,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -3395,6 +4260,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -3411,6 +4277,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -3427,6 +4294,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -3443,6 +4311,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -3459,6 +4328,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -3475,6 +4345,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -3491,6 +4362,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -3507,6 +4379,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3523,6 +4396,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3539,6 +4413,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3555,6 +4430,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3571,6 +4447,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3587,6 +4464,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3603,6 +4481,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3619,6 +4498,7 @@
   },
   {
    "skeleton": "Me_F",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -3635,6 +4515,279 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](O)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@]=C%11.[C@H]%10%11O",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](O)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@@]=C%11.[C@H]%10%11O",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](O)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@]=C%11.[C@@H]%10%11O",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](O)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@@]=C%11.[C@@H]%10%11O",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](O)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@]=C%11.[C@H]%10%11O",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](O)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@@]=C%11.[C@H]%10%11O",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](O)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@]=C%11.[C@@H]%10%11O",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](O)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@@]=C%11.[C@@H]%10%11O",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3651,6 +4804,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3667,6 +4821,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3683,6 +4838,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3699,6 +4855,75 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@@H](O)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](O)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](C=[C@]=CC)O",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@H](O)(C=[C@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3715,6 +4940,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3731,6 +4957,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3747,6 +4974,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -3763,6 +4991,75 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@@H](O)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](O)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](C=[C@@]=CC)O",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@@H](O)(C=[C@@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3779,6 +5076,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3795,6 +5093,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3811,6 +5110,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3827,6 +5127,75 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@H](O)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](O)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](C=[C@]=CC)O",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@H](O)(C=[C@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3843,6 +5212,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3859,6 +5229,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3875,6 +5246,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -3891,6 +5263,75 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@H](O)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](O)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](C=[C@@]=CC)O",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@H](O)(C=[C@@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -3907,6 +5348,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -3923,6 +5365,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -3939,6 +5382,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -3955,6 +5399,75 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@@H](O)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](O)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](C=[C@]=CC)O",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@H](O)(C=[C@]=CC)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -3971,6 +5484,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -3987,6 +5501,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -4003,6 +5518,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -4019,6 +5535,75 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@@H](O)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](O)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](C=[C@@]=CC)O",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@@H](O)(C=[C@@]=CC)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4035,6 +5620,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4051,6 +5637,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4067,6 +5654,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4083,6 +5671,75 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@H](O)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](O)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](C=[C@]=CC)O",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@H](O)(C=[C@]=CC)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4099,6 +5756,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4115,6 +5773,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4131,6 +5790,7 @@
   },
   {
    "skeleton": "OH_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4146,7 +5806,348 @@
    "centre": ""
   },
   {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@H](O)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](O)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](C=[C@@]=CC)O",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "OH_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@H](O)(C=[C@@]=CC)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
    "skeleton": "Cl_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](Cl)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@]=C%11.[C@H]%10%11Cl",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](Cl)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@@]=C%11.[C@H]%10%11Cl",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](Cl)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@]=C%11.[C@@H]%10%11Cl",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](Cl)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@@]=C%11.[C@@H]%10%11Cl",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](Cl)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@]=C%11.[C@H]%10%11Cl",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](Cl)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@@]=C%11.[C@H]%10%11Cl",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](Cl)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@]=C%11.[C@@H]%10%11Cl",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](Cl)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@@]=C%11.[C@@H]%10%11Cl",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4163,6 +6164,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4179,6 +6181,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4195,6 +6198,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4211,6 +6215,75 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@@H](Cl)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](Cl)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](C=[C@]=CC)Cl",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@H](Cl)(C=[C@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4227,6 +6300,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4243,6 +6317,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4259,6 +6334,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4275,6 +6351,75 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@@H](Cl)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](Cl)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](C=[C@@]=CC)Cl",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@@H](Cl)(C=[C@@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4291,6 +6436,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4307,6 +6453,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4323,6 +6470,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4339,6 +6487,75 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@H](Cl)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](Cl)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](C=[C@]=CC)Cl",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@H](Cl)(C=[C@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4355,6 +6572,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4371,6 +6589,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4387,6 +6606,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4403,6 +6623,75 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@H](Cl)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](Cl)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](C=[C@@]=CC)Cl",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@H](Cl)(C=[C@@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -4419,6 +6708,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -4435,6 +6725,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -4451,6 +6742,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -4467,6 +6759,75 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@@H](Cl)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](Cl)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](C=[C@]=CC)Cl",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@H](Cl)(C=[C@]=CC)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -4483,6 +6844,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -4499,6 +6861,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -4515,6 +6878,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -4531,6 +6895,75 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@@H](Cl)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](Cl)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](C=[C@@]=CC)Cl",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@@H](Cl)(C=[C@@]=CC)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4547,6 +6980,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4563,6 +6997,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4579,6 +7014,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4595,6 +7031,75 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@H](Cl)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](Cl)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](C=[C@]=CC)Cl",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@H](Cl)(C=[C@]=CC)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4611,6 +7116,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4627,6 +7133,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4643,6 +7150,7 @@
   },
   {
    "skeleton": "Cl_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -4658,7 +7166,348 @@
    "centre": ""
   },
   {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@H](Cl)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](Cl)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](C=[C@@]=CC)Cl",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "Cl_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@H](Cl)(C=[C@@]=CC)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
    "skeleton": "D_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@H]([2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@]=C%11.[C@H]%10%11[2H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@H]([2H])C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@@]=C%11.[C@H]%10%11[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H]([2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@]=C%11.[C@@H]%10%11[2H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H]([2H])C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@@]=C%11.[C@@H]%10%11[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H]([2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@]=C%11.[C@H]%10%11[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H]([2H])C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@@]=C%11.[C@H]%10%11[2H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H]([2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@]=C%11.[C@@H]%10%11[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H]([2H])C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@@]=C%11.[C@@H]%10%11[2H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4675,6 +7524,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4691,6 +7541,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4707,6 +7558,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4723,6 +7575,75 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@@H]([2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@H]([2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](C=[C@]=CC)[2H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@H]([2H])(C=[C@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4739,6 +7660,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4755,6 +7677,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4771,6 +7694,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -4787,6 +7711,75 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@@H]([2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@H]([2H])C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](C=[C@@]=CC)[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@@H]([2H])(C=[C@@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4803,6 +7796,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4819,6 +7813,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4835,6 +7830,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4851,6 +7847,75 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@H]([2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H]([2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](C=[C@]=CC)[2H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@H]([2H])(C=[C@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4867,6 +7932,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4883,6 +7949,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4899,6 +7966,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -4915,6 +7983,75 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@H]([2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H]([2H])C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](C=[C@@]=CC)[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@H]([2H])(C=[C@@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -4931,6 +8068,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -4947,6 +8085,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -4963,6 +8102,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -4979,6 +8119,75 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@@H]([2H])C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H]([2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](C=[C@]=CC)[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[C@@H]([2H])(C=[C@]=CC)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -4995,6 +8204,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -5011,6 +8221,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -5027,6 +8238,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -5043,6 +8255,75 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@@H]([2H])C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H]([2H])C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](C=[C@@]=CC)[2H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[C@@H]([2H])(C=[C@@]=CC)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -5059,6 +8340,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -5075,6 +8357,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -5091,6 +8374,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -5107,6 +8391,75 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C(C)=[C@@]=C[C@H]([2H])C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H]([2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](C=[C@]=CC)[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[C@H]([2H])(C=[C@]=CC)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -5123,6 +8476,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -5139,6 +8493,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -5155,6 +8510,7 @@
   },
   {
    "skeleton": "D_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -5170,7 +8526,348 @@
    "centre": ""
   },
   {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C(C)=[C@]=C[C@H]([2H])C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H]([2H])C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](C=[C@@]=CC)[2H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "D_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[C@H]([2H])(C=[C@@]=CC)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
    "skeleton": "CD3_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](C([2H])([2H])[2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@]=C%11.[C@H]%10%11C([2H])([2H])[2H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@H](C([2H])([2H])[2H])C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@@]=C%11.[C@H]%10%11C([2H])([2H])[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](C([2H])([2H])[2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@]=C%11.[C@@H]%10%11C([2H])([2H])[2H]",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "implicit-h",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C[C@@H](C([2H])([2H])[2H])C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "ring-closure",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@]=C%10.CC=[C@@]=C%11.[C@@H]%10%11C([2H])([2H])[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](C([2H])([2H])[2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@]=C%11.[C@H]%10%11C([2H])([2H])[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@H](C([2H])([2H])[2H])C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@@]=C%11.[C@H]%10%11C([2H])([2H])[2H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](C([2H])([2H])[2H])C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@]=C%11.[C@@H]%10%11C([2H])([2H])[2H]",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "implicit-h",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C[C@@H](C([2H])([2H])[2H])C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "ring-closure",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "CC=[C@@]=C%10.CC=[C@@]=C%11.[C@@H]%10%11C([2H])([2H])[2H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -5187,6 +8884,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -5203,6 +8901,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -5219,6 +8918,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -5235,6 +8935,75 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@@H](C=[C@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "C([C@@H](C([2H])([2H])[2H])C=[C@]=CC)=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@@H](C=[C@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@"
+   ],
+   "smiles": "C([C@H](C([2H])([2H])[2H])C=[C@]=CC)=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -5251,6 +9020,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -5267,6 +9037,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -5283,6 +9054,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@",
@@ -5299,6 +9071,75 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@@H](C=[C@]=CC)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C([C@@H](C([2H])([2H])[2H])C=[C@]=CC)=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@@H](C=[C@]=CC)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C([C@H](C([2H])([2H])[2H])C=[C@@]=CC)=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -5315,6 +9156,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -5331,6 +9173,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -5347,6 +9190,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -5363,6 +9207,75 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@H](C=[C@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C([C@H](C([2H])([2H])[2H])C=[C@]=CC)=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@H](C=[C@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C([C@@H](C([2H])([2H])[2H])C=[C@]=CC)=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "M",
+    "M"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -5379,6 +9292,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -5395,6 +9309,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -5411,6 +9326,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@",
     "@@",
@@ -5427,6 +9343,75 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@H](C=[C@]=CC)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C([C@H](C([2H])([2H])[2H])C=[C@]=CC)=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@H](C=[C@]=CC)C=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C([C@@H](C([2H])([2H])[2H])C=[C@@]=CC)=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -5443,6 +9428,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -5459,6 +9445,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -5475,6 +9462,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -5491,6 +9479,75 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@@H](C=[C@@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "C([C@@H](C([2H])([2H])[2H])C=[C@@]=CC)=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@@H](C=[C@@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@"
+   ],
+   "smiles": "C([C@H](C([2H])([2H])[2H])C=[C@]=CC)=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "s"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -5507,6 +9564,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -5523,6 +9581,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -5539,6 +9598,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@",
@@ -5555,6 +9615,75 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@@H](C=[C@@]=CC)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C([C@@H](C([2H])([2H])[2H])C=[C@@]=CC)=[C@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@@H](C=[C@@]=CC)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@",
+    "@@"
+   ],
+   "smiles": "C([C@H](C([2H])([2H])[2H])C=[C@@]=CC)=[C@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -5571,6 +9700,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -5587,6 +9717,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -5603,6 +9734,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -5619,6 +9751,75 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@H](C=[C@@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C([C@H](C([2H])([2H])[2H])C=[C@@]=CC)=[C@@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@H](C=[C@@]=CC)C=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@"
+   ],
+   "smiles": "C([C@@H](C([2H])([2H])[2H])C=[C@]=CC)=[C@]=CC",
+   "axes": [
+    "M",
+    "M",
+    "P",
+    "P"
+   ],
+   "centre": "r"
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -5635,6 +9836,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -5651,6 +9853,7 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
@@ -5667,12 +9870,81 @@
   },
   {
    "skeleton": "CD3_H",
+   "origin": "cdk",
    "source": [
     "@@",
     "@@",
     "@@"
    ],
    "smiles": "CC(=[C@@]=C([H])[C@](C([2H])([2H])[2H])(C([H])=[C@]=C(C)[H])[H])[H]",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@H](C=[C@@]=CC)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C([C@H](C([2H])([2H])[2H])C=[C@@]=CC)=[C@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "[2H]C([2H])([2H])[C@H](C=[C@@]=CC)C=[C@@]=CC",
+   "axes": [
+    "P",
+    "P",
+    "P",
+    "P"
+   ],
+   "centre": ""
+  },
+  {
+   "skeleton": "CD3_H",
+   "origin": "cdk-implicit",
+   "source": [
+    "@@",
+    "@@",
+    "@@"
+   ],
+   "smiles": "C([C@@H](C([2H])([2H])[2H])C=[C@@]=CC)=[C@]=CC",
    "axes": [
     "P",
     "P",

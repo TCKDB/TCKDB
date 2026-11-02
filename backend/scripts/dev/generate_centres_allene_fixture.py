@@ -202,17 +202,40 @@ def main(jar: str, cdk_jar: str) -> None:
             )
         if not handled:
             continue  # the reader leaves its centre ``?``; only the marks witness is recorded
-        # CDK respellings of the mark rows: the labels are kept as the sorted axis letters and the centre letter,
-        # since the atom numbers of a respelled text no longer name the arms
-        sources = [(f"{name}|{a}|{c}|{b}", template(x, y, a, c, b, tail)) for a in marks for c in marks for b in marks]
-        spelled_rows = [(f"{n}|{seed}", smi) for n, seed, smi in respell(cdk_jar, sources)]
-        relabelled = run_smiles(jar, spelled_rows)
-        for key, smi in spelled_rows:
+        # Respelled mark rows. The labels are kept as the sorted axis letters and the centre letter, since the atom
+        # numbers of a respelled text no longer name the arms. Origins: ``cdk`` (CDK shuffles the explicit-hydrogen
+        # text), and, where the centre carries a hydrogen, ``implicit-h`` (every hydrogen implicit, the centre
+        # ``[C@H]``), ``ring-closure`` (the centre written last, bonded through ``%10`` ``%11``, so its tag is
+        # relative to a different neighbour order) and ``cdk-implicit`` (CDK shuffles the implicit-hydrogen text).
+        origins: list[tuple[str, str, str]] = []  # (origin, key, smiles)
+        for a in marks:
+            for c in marks:
+                for b in marks:
+                    key = f"{name}|{a}|{c}|{b}"
+                    origins += [("as-written", key, template(x, y, a, c, b, tail))]
+                    if y == "[H]":
+                        implicit = f"CC=[C{a}]=C[C{c}H]({x})C=[C{b}]=C{tail}"
+                        closure = f"CC=[C{a}]=C%10.CC=[C{b}]=C%11.[C{c}H]%10%11{x}"
+                        origins += [("implicit-h", key, implicit), ("ring-closure", key, closure)]
+        sources = [(f"{origin}|{key}", smi) for origin, key, smi in origins if origin in ("as-written", "implicit-h")]
+        rows = [(f"{origin}|{key}", smi, origin) for origin, key, smi in origins if origin != "as-written"]
+        for source_name, seed, smi in respell(cdk_jar, sources):
+            origin = "cdk" if source_name.startswith("as-written") else "cdk-implicit"
+            rows.append((f"{source_name}|{seed}", smi, origin))
+        relabelled = run_smiles(jar, [(k, smi) for k, smi, _ in rows])
+        for key, smi, origin in rows:
             labels = relabelled[key]
             axes = sorted(v for v in labels.values() if v in ("M", "P"))
             others = [v for v in labels.values() if v not in ("M", "P")]
             respellings.append(
-                {"skeleton": name, "source": key.split("|", 4)[1:4], "smiles": smi, "axes": axes, "centre": others[0] if others else ""}
+                {
+                    "skeleton": name,
+                    "origin": origin,
+                    "source": key.split("|")[2:5],
+                    "smiles": smi,
+                    "axes": axes,
+                    "centre": others[0] if others else "",
+                }
             )
         # 3D
         plain = Chem.AddHs(parse_keeping_hydrogens(template(x, y, tail=tail)))

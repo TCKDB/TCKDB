@@ -261,14 +261,25 @@ def _descriptor_from_letters(frame: stereo.StereoFrame, axes: list[str], centre:
     return ",".join(stereo.canonical_tokens(frame, tokens))
 
 
-@pytest.mark.parametrize("name", HANDLED)
-def test_respelled_marks_give_the_same_descriptors_as_centres(name: str) -> None:
-    rows = [r for r in FIXTURE["respellings"] if r["skeleton"] == name]
-    assert len(rows) == 32
+RESPELLING_GROUPS = sorted({(r["skeleton"], r["origin"]) for r in FIXTURE["respellings"]})
+
+
+@pytest.mark.parametrize(("name", "origin"), RESPELLING_GROUPS)
+def test_respelled_marks_give_the_same_descriptors_as_centres(name: str, origin: str) -> None:
+    rows = [r for r in FIXTURE["respellings"] if r["skeleton"] == name and r["origin"] == origin]
+    assert rows
     for row in rows:
         frame = _marks_frame(row["smiles"])
         expected = _descriptor_from_letters(frame, row["axes"], row["centre"])
-        assert stereo.resolve_stereo(frame).descriptor == expected, row["smiles"]
+        assert stereo.resolve_stereo(frame).descriptor == expected, (row["origin"], row["smiles"])
+
+
+def test_the_witness_covers_the_implicit_hydrogen_and_ring_closure_spellings() -> None:
+    for name in HANDLED:
+        origins = {o for n, o in RESPELLING_GROUPS if n == name}
+        assert "cdk" in origins
+        if SKELETONS[name]["y"] == "[H]":  # the centre carries a hydrogen
+            assert {"implicit-h", "ring-closure", "cdk-implicit"} <= origins, name
 
 
 @pytest.mark.parametrize("name", UNHANDLED)
@@ -299,3 +310,41 @@ def test_a_mark_on_the_centre_that_contradicts_a_geometry_is_refused() -> None:
     with pytest.raises(CodedValueError) as excinfo:
         stereo.resolve_stereo(_marks_frame(flipped), geometries=[meso["xyz"]])
     assert excinfo.value.code == stereo.W_SPECIES_STEREO_CONTRADICTION
+
+
+# ---------------------------------------------------------------------------
+# Sources that each pass alone but combine into a configuration no stereoisomer has (review round 3)
+# ---------------------------------------------------------------------------
+
+UNREALIZABLE_COMBINATIONS = {
+    "equal allene senses around an r": ("CC=[C@]=CC(C)C=[C@]=CC", "?,?,r"),
+    "unequal allene senses around a dash": ("CC=[C@]=CC(C)C=[C@@]=CC", "?,?,-"),
+    # pre-existing for ordinary centres: R,S around a dash needs R,R
+    "an ordinary centre": ("C[C@H](O)C(O)[C@@H](C)O", "?,?,-"),
+}
+
+
+@pytest.mark.parametrize(("why", "case"), list(UNREALIZABLE_COMBINATIONS.items()))
+def test_a_fully_stated_combination_no_isomer_has_is_a_contradiction(why: str, case: tuple[str, str]) -> None:
+    smiles, label = case
+    with pytest.raises(CodedValueError) as excinfo:
+        stereo.resolve_stereo(_marks_frame(smiles), supplied_label=label)
+    assert excinfo.value.code == stereo.W_SPECIES_STEREO_CONTRADICTION, why
+
+
+def test_a_realizable_combination_of_the_same_sources_is_accepted() -> None:
+    resolved = stereo.resolve_stereo(_marks_frame("CC=[C@]=CC(C)C=[C@]=CC"), supplied_label="?,?,-")
+    assert resolved.descriptor == "Ra,Ra,-" and resolved.resolution == StereoResolution.resolved
+    resolved = stereo.resolve_stereo(_marks_frame("C[C@H](O)C(O)[C@H](C)O"), supplied_label="?,?,-")
+    assert resolved.resolution == StereoResolution.resolved
+
+
+def test_a_fully_stated_descriptor_past_the_enumeration_cap_is_still_accepted() -> None:
+    """Above the cap there is no realizable set to check against: the tokens stand, as they did before."""
+
+    smiles = "CC(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C(O)C(C)O"
+    frame = _marks_frame(smiles)
+    assert len(frame.elements) > stereo._ENUMERATION_CAP
+    assert stereo.stereoisomers(frame) is None
+    label = ",".join(["R"] * len(frame.elements))
+    assert stereo.resolve_stereo(frame, supplied_label=label).resolution == StereoResolution.resolved

@@ -1443,12 +1443,13 @@ def pseudo_mark_token(frame: StereoFrame, element: StereoElement, arm_tokens: tu
     constitutionally equal; here the raw parse keeps it. As for geometry (:func:`pseudo_geometry_token`) the
     ``Ra`` arm's root atom takes a mass number one above natural, which makes the centre a real stereocentre
     that survives sanitising, and the CIP labeller names it. Only the centre's own tag is kept (the allene's
-    tags are read by :func:`allene_mark_token`). ``?`` when the arms' senses are not both known, when they are
-    equal (:func:`refine` deduces ``-``), or when the text is unmarked or cannot be matched onto the molecule.
+    tags are read by :func:`allene_mark_token`). ``-`` when the arms' senses are equal, ``?`` when they are not
+    both known, the text is unmarked or it cannot be matched onto the molecule.
     """
 
-    if len(pseudo_centre_options(arm_tokens)) != 2:
-        return UNKNOWN
+    options = pseudo_centre_options(arm_tokens)
+    if len(options) == 1:
+        return options[0]  # equal senses: ``-``; a sense not known: ``?``
     raw = _raw_marks_mol(frame)
     mapping = _raw_to_constitution(raw, frame) if raw is not None else None
     if raw is None or mapping is None:
@@ -1458,11 +1459,10 @@ def pseudo_mark_token(frame: StereoFrame, element: StereoElement, arm_tokens: tu
     centre = element.atoms[0]
     ra_chain = element.arms[0] if arm_tokens[0] == "Ra" else element.arms[1]
     root = next(
-        n.GetIdx()
-        for n in mol_h.GetAtomWithIdx(centre).GetNeighbors()
-        if set(ra_chain) <= _branch(mol_h, n.GetIdx(), centre)
+        (n.GetIdx() for n in mol_h.GetAtomWithIdx(centre).GetNeighbors() if set(ra_chain) <= _branch(mol_h, n.GetIdx(), centre)),
+        None,
     )
-    if centre not in to_raw or root not in to_raw:
+    if root is None or centre not in to_raw or root not in to_raw:
         return UNKNOWN
     raw_centre, raw_root = to_raw[centre], to_raw[root]
     tags = (Chem.ChiralType.CHI_TETRAHEDRAL_CW, Chem.ChiralType.CHI_TETRAHEDRAL_CCW)
@@ -1752,8 +1752,9 @@ def refine(frame: StereoFrame, tokens: list[str]) -> list[str]:
         has the configuration the sources together state.
     """
 
-    if UNKNOWN not in tokens:
-        return tokens
+    # A fully stated vector is checked too: sources that each pass alone can combine into a configuration no
+    # stereoisomer has (equal allene senses with an ``r`` between them, ``R,S`` around a ``-`` that needs ``R,R``).
+    # Past the enumeration cap there is no realizable set to check against, and the tokens stand as before.
     isomers = stereoisomers(frame)
     if isomers is None:
         return tokens
