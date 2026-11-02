@@ -362,18 +362,33 @@ def test_a_small_ring_allene_warns_not_represented_even_with_a_geometry() -> Non
         assert "ring" in w.message
 
 
-def test_an_allene_deposited_with_marks_only_warns_not_represented_and_says_so() -> None:
+def test_an_allene_deposited_with_marks_only_is_read_and_has_no_warning() -> None:
+    assert _warning("CC=[C@]=CC") is None
+    assert resolve("CC=[C@]=CC").unrepresented == ()
+
+
+def test_an_allene_mark_that_cannot_be_read_warns_not_represented_and_says_so(monkeypatch) -> None:
+    """The reason survives for a mark the reader cannot use (here: a text it does not understand)."""
+
+    monkeypatch.setattr(stereo, "_scan_smiles", lambda text: None)
     w = _warning("CC=[C@]=CC")
     assert w.code == stereo.W_SPECIES_ENTRY_STEREO_NOT_REPRESENTED
-    assert "marks" in w.message and "geometry" in w.message
+    assert "mark" in w.message and "geometry" in w.message
     assert resolve("CC=[C@]=CC").unrepresented == (stereo.R_AXIAL_MARKS,)
 
 
-def test_allene_marks_are_never_read_into_a_token() -> None:
-    assert resolve("CC=[C@]=CC").descriptor == resolve("CC=[C@@]=CC").descriptor == "?"
-    # ... but a geometry or a label next to the marks settles it: the warning is then gone
-    assert _warning("CC=[C@]=CC", label="Sa") is None
-    assert _warning("CC=[C@]=CC", geometries=[fx.build("CC=C=CC", 90.0)]) is None
+def test_allene_marks_are_read_into_a_token() -> None:
+    assert resolve("CC=[C@]=CC").descriptor == "Ra"
+    assert resolve("CC=[C@@]=CC").descriptor == "Sa"
+    # an UNmarked allene still says nothing
+    assert resolve("CC=C=CC").descriptor == "?"
+    # a geometry or a label next to the marks must agree with them, and then adds nothing
+    assert _warning("CC=[C@]=CC", label="Ra") is None
+    assert _warning("CC=[C@@]=CC", geometries=[fx.build("CC=C=CC", 90.0)]) is None
+    for contradiction in ({"label": "Sa"}, {"geometries": [fx.build("CC=C=CC", 90.0)]}):
+        with pytest.raises(CodedValueError) as raised:
+            resolve("CC=[C@]=CC", **contradiction)
+        assert raised.value.code == stereo.W_SPECIES_STEREO_CONTRADICTION
 
 
 def test_odd_cumulene_marks_only_warn_not_represented_and_say_so() -> None:
@@ -508,8 +523,9 @@ def test_stereo_smiles_is_null_for_any_entry_with_a_cumulene_element() -> None:
     assert resolve("CC=CC", label="E").stereo_smiles is not None
 
 
-def test_descriptor_of_mol_reads_nothing_for_an_allene_from_marks() -> None:
-    assert stereo.descriptor_of_mol(identity_mol_from_smiles("CC=[C@]=CC")) == "?"
+def test_descriptor_of_mol_reads_an_allene_from_marks() -> None:
+    assert stereo.descriptor_of_mol(identity_mol_from_smiles("CC=[C@]=CC")) == "Ra"
+    assert stereo.descriptor_of_mol(identity_mol_from_smiles("CC=C=CC")) == "?"
 
 
 def test_a_dihedral_of_nan_or_a_zero_length_axis_is_not_read() -> None:

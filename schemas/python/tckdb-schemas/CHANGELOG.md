@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.147.0 - 2026-11-02
+
+An allene's chirality mark in a SMILES is now read. No field is added or removed.
+
+- A mark on the central atom of an allene (`[C@]` / `[C@@]` between the two double bonds, as in `NC(Br)=[C@]=C(O)C`) now sets the axis token of the entry: `Ra` or `Sa`. A deposit with such a mark and no geometry is `resolved` for that element and earns no warning. A mark that contradicts a geometry or a supplied `stereo_label` is `species_stereo_contradiction`, as for any other element.
+- `/` `\` marks on a cumulene with an odd number of double bonds are still not read.
+- The `not_represented` reason `axial_marks` now means only: a mark on an allene that could not be read (the text is not understood or does not match the molecule). Its sentence says so.
+
 ## 0.146.0 - 2026-11-01
 
 An accepted deposit can now earn one more warning, and the warning codes have a reference of their own. No field is added or removed.
