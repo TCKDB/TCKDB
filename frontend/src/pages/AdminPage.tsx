@@ -153,8 +153,8 @@ export default function AdminPage() {
                             <thead>
                                 <tr>
                                     <th scope="col">Username</th>
-                                    <th scope="col">Name</th>
-                                    <th scope="col">Affiliation</th>
+                                    <th scope="col">Name (as typed)</th>
+                                    <th scope="col">Affiliation (as typed)</th>
                                     <th scope="col">Joined</th>
                                     <th scope="col">Role</th>
                                 </tr>

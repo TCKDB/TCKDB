@@ -488,10 +488,11 @@ describe("EntryStatmechSection", () => {
         // column via `data-label`, so a Top<->Invalidated column swap
         // (values transposed, headers untouched) is caught, not just a
         // "does this text appear somewhere in the row" check.
-        expect(cellAt(soundRow, "Top")).toBe("methyl-sound")
         expect(cellAt(soundRow, "Invalidated")).toBe("not invalidated")
-        expect(cellAt(invalidRow, "Top")).toBe("methyl-bad")
-        expect(cellAt(invalidRow, "Invalidated")).toBe("scan did not close")
+        expect(cellAt(invalidRow, "Invalidated")).toBe("invalidated")
+        // `top_description` and `invalidated_reason` are depositor free text: neither is printed.
+        expect(within(table).queryByText("methyl-sound")).toBeNull()
+        expect(within(table).queryByText("scan did not close")).toBeNull()
     })
 
     it("renders a heavy section as a static, request-free line when no record on the entry has it", async () => {

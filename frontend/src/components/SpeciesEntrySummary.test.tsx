@@ -106,11 +106,12 @@ describe("EntryIdentity: no pill boxes, every fact exactly once", () => {
 
         rerender(
             <MemoryRouter>
-                <EntryIdentity entry={baseEntry({ term_symbol: "T1", isotope_key: "13C1" })} />
+                <EntryIdentity entry={baseEntry({ term_symbol: "3Σg-", electronic_state_label: "DEPOSITOR_SENTINEL_state", isotope_key: "13C1" })} />
             </MemoryRouter>,
         )
         const facts = screen.getByRole("list", { name: "Record facts" })
-        expect(within(facts).getByText("Term symbol").nextElementSibling).toHaveTextContent("T1")
+        expect(within(facts).getByText("Term symbol").nextElementSibling).toHaveTextContent("3Σg-")
+        expect(document.body.innerHTML).not.toContain("DEPOSITOR_SENTINEL")
         expect(within(facts).getByText("Isotopologue").nextElementSibling).toHaveTextContent("13C1")
     })
 })

@@ -15,6 +15,7 @@ import { ReactionEquation } from "../components/ReactionEquation"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton } from "../components/RefsDisclosure"
 import { stereoChip } from "../domain/recordFacets"
+import { publicSpeciesEntryLabel } from "../domain/publicText"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { listMetaOf } from "../api/listEnvelope"
 import { chooserHeaderSourceNote } from "../domain/reactionChooser"
@@ -251,7 +252,7 @@ function ParticipantCell({ participant, separator }: { participant: ReactionOver
                 participant cell ("H2 ... · H2N2 ... · Z isomer"). Round-2
                 review finding: parentheses keep the chip visually bound
                 to the participant it immediately follows. */}
-            {participant.species_entry_label && <> ({stereoChip(participant.species_entry_label)})</>}
+            {publicSpeciesEntryLabel(participant.species_entry_label) && <> ({stereoChip(publicSpeciesEntryLabel(participant.species_entry_label)!)})</>}
         </span>
     )
 }

@@ -331,7 +331,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                         <dl className="kv-list">
                             <div><dt>Entry status</dt><dd>{statusLabel(entry.status)}</dd></div>
                             <div><dt>Deposited</dt><dd>{isoDate(entry.created_at)}</dd></div>
-                            {ts?.note && <div><dt>Transition state note</dt><dd>{ts.note}</dd></div>}
+                            {/* No `ts.note`: depositor free text (house rule, owner decision 2026-11-03). */}
                             {/* A plain fact, not a second pill -- see the
                                 comment on `RecordIdentityHeader`'s `pill`
                                 prop above. */}

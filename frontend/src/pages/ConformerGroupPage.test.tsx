@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import ConformerGroupPage from "./ConformerGroupPage"
+import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -645,5 +646,19 @@ describe("ConformerGroupPage", () => {
         )
         // Never the abbreviated, operator-vocabulary form.
         expect(message.textContent).not.toMatch(/\d+s\b/)
+    })
+})
+
+describe("ConformerGroupPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
+        const { value, planted } = plantSentinels(payload, ["label", "note", "top_description"])
+        expectPlanted(planted, 2)
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(value)))
+
+        page()
+        expect(await screen.findByRole("heading", { name: "Conformer basin" })).toBeVisible()
+        expect(screen.getAllByText("cg_demo").length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
     })
 })

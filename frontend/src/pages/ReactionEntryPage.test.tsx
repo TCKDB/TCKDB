@@ -280,7 +280,8 @@ describe("ReactionEntryPage -- three-state network wording", () => {
         }))
         const { container } = page()
         expect(await screen.findByText("net_test1")).toBeVisible()
-        expect(screen.getByText("hydrazine")).toBeVisible()
+        expect(screen.getAllByText("Pressure-dependent network").length).toBeGreaterThan(0)
+        expect(document.body.innerHTML).not.toContain("hydrazine")
         expect(screen.getByText("21")).toBeVisible()
         // `net_` refs are never cited in this page's References disclosure
         // (plan §2's non-goal: no network page yet, so a network is a plain

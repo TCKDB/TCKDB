@@ -72,10 +72,11 @@ describe("SpeciesEntryLink", () => {
         expect(e.container.querySelector("a")!.textContent).toBe("CC=CC (C4H8) · E isomer")
     })
 
-    it("a label stereoChip does not recognise still rides along with the SpeciesFace, unchanged, never suppressed", () => {
-        const { container } = renderLink({ speciesEntryRef: "se_abc123", smiles: "C1=CC=CC=C1C", formula: "C9H9", speciesEntryLabel: "T1" })
+    it("a computed token stereoChip does not rewrite still rides along; a depositor-typed token is dropped", () => {
+        const { container } = renderLink({ speciesEntryRef: "se_abc123", smiles: "C1=CC=CC=C1C", formula: "C9H9", speciesEntryLabel: "excited 3Σg- T1 DEPOSITOR_SENTINEL_state" })
         const link = container.querySelector("a")!
-        expect(link.textContent).toBe("C1=CC=CC=C1C (C9H9) · T1")
+        expect(link.textContent).toBe("C1=CC=CC=C1C (C9H9) · excited 3Σg-")
+        expect(container.innerHTML).not.toContain("DEPOSITOR_SENTINEL")
     })
 
     it("no formula served: the SMILES stands alone (no parenthesised formula), still in a data-face code element", () => {

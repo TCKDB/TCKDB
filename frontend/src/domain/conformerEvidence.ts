@@ -1,35 +1,27 @@
 import type { ConformerProjection } from "../api/speciesEntryApi"
 
-// The archive's own auto-numbering convention for a basin that was never
-// given a real depositor-chosen label: `conformer_<N>`. A reader who
-// doesn't know that convention reads it as an opaque token, not as "the
-// Nth conformer group" -- so it displays as "Conformer Group N" instead.
-// Anchored at both ends so a label that merely CONTAINS the pattern (a
-// depositor-chosen label like "conformer_1_reoptimized") is left alone.
+// The archive's own auto-numbering convention for a basin: `conformer_<N>`. A
+// reader who doesn't know that convention reads it as an opaque token, not as
+// "the Nth conformer group" -- so it displays as "Conformer Group N" instead.
+// Anchored at both ends, and only the captured digits are ever printed: any
+// other label is depositor-typed text, which no public page prints (house
+// rule, owner decision 2026-11-03).
 const AUTO_NUMBERED_LABEL = /^conformer_(\d+)$/
 
 /**
  * The label a reader picks a conformer by.
  *
- * - No deposited label at all (`null`), or a deposited label that is empty
- *   or whitespace-only: falls back to the group's own stable ref, verbatim.
- *   A blank string is not a usable label any more than a missing one is --
- *   without this, a blank label would render as an empty heading ("Evidence
- *   for ") and a blank card, which is worse than the honest fallback. A ref
- *   is not a label and is never run through the pattern below -- this
- *   function never invents a display name for a group that was never given
- *   a real one.
- * - A deposited label matching the archive's `conformer_<N>` auto-numbering
- *   convention: displays as "Conformer Group N".
- * - Any other deposited label (including one a depositor chose themselves,
- *   even if it happens to contain the word "conformer"): renders verbatim.
- *   This function never coerces a label into a shape it does not have.
+ * - A label matching the archive's `conformer_<N>` auto-numbering convention:
+ *   displays as "Conformer Group N" (the digits are the only part printed).
+ * - Anything else -- no label, a blank label, or any other deposited label --
+ *   falls back to the group's own stable ref, verbatim. A deposited label is
+ *   never printed: it is a string the depositor typed.
  */
 export function conformerLabel(conformer: ConformerProjection): string {
     const label = conformer.conformer_group.label
     if (label === null || label.trim() === "") return conformer.conformer_group.conformer_group_ref
     const match = label.match(AUTO_NUMBERED_LABEL)
-    return match ? `Conformer Group ${match[1]}` : label
+    return match ? `Conformer Group ${match[1]}` : conformer.conformer_group.conformer_group_ref
 }
 
 /**

@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import FrequencyScaleFactorPage from "./FrequencyScaleFactorPage"
+import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -65,5 +66,19 @@ describe("FrequencyScaleFactorPage: the standalone scale-factor page", () => {
 
         const usageTable = screen.getByRole("table", { name: "Statmech records using this frequency scale factor" })
         expect(within(usageTable).getByText("sm_one")).toBeVisible()
+    })
+})
+
+describe("FrequencyScaleFactorPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
+        // `level_of_theory.label` is rendered by the server from the level's own facets, not typed.
+        const { value, planted } = plantSentinels(mockResponse(), ["note"])
+        expectPlanted(planted, 1)
+        server.use(http.get("/api/v1/scientific/frequency-scale-factors/fsf_one", () => HttpResponse.json(value)))
+        page()
+        await screen.findByText("fundamental")
+        expect(screen.getByText("0.999")).toBeVisible()
+
+        expectNoDepositorText()
     })
 })

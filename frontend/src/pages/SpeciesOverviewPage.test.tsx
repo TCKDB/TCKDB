@@ -55,7 +55,7 @@ function excitedEntry() {
         ...groundEntry(),
         species_entry_ref: excitedEntryRef,
         electronic_state_kind: "excited",
-        term_symbol: "T1",
+        term_symbol: "3B1",
         availability: { ...groundEntry().availability, calculation_count: 3 },
     }
 }
@@ -110,7 +110,7 @@ describe("species overview", () => {
         // (that redundancy was the owner's own report; see
         // `domain/recordFacets.test.ts`'s `includeState` tests). A card's
         // heading still carries anything the group heading does NOT
-        // establish -- here, the excited entry's own term symbol "T1".
+        // establish -- here, the excited entry's own term symbol "3B1".
         const groundCard = await cardFor(entryRef)
         expect(within(groundCard).getByRole("link", { name: "minimum" }))
             .toHaveAttribute("href", `/species-entries/${entryRef}`)
@@ -121,7 +121,7 @@ describe("species overview", () => {
         expect(screen.queryByText(/Open state-specific record/)).not.toBeInTheDocument()
 
         const excitedCard = await cardFor(excitedEntryRef)
-        expect(within(excitedCard).getByRole("link", { name: "minimum · T1" }))
+        expect(within(excitedCard).getByRole("link", { name: "minimum · 3B1" }))
             .toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
 
         // Scoped to `dd` -- the formula heading above ("CH3") now renders

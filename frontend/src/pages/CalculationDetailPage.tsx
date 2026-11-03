@@ -1402,7 +1402,6 @@ function EnergyCorrectionsSection({ calculationRef, available }: { calculationRe
                                 <th scope="col">Role</th>
                                 <th scope="col">Applied value</th>
                                 <th scope="col">Target</th>
-                                <th scope="col">Scheme</th>
                                 <th scope="col">Scheme ref</th>
                                 <th scope="col">Frequency scale factor ref</th>
                             </tr>
@@ -1413,7 +1412,6 @@ function EnergyCorrectionsSection({ calculationRef, available }: { calculationRe
                                     <td data-label="Role">{statusLabel(row.application_role)}</td>
                                     <td data-label="Applied value" className="num">{row.applied_value} {row.applied_value_unit}</td>
                                     <td data-label="Target">{row.target_record_ref ?? "not recorded"}</td>
-                                    <td data-label="Scheme">{row.energy_correction_scheme_name ?? "not recorded"}</td>
                                     <td data-label="Scheme ref">
                                         {row.energy_correction_scheme_ref
                                             ? <Link to={correctionSchemePath(row.energy_correction_scheme_ref)}>{row.energy_correction_scheme_ref}</Link>
@@ -1556,13 +1554,15 @@ function ParametersSection({ calculationRef, available }: { calculationRef: stri
             {(rows) => (rows?.length ? (
                 <div className="table-scroll">
                     <table className="data-table" aria-label="Parsed execution parameters">
-                        <thead><tr><th scope="col">Key</th><th scope="col">Value</th><th scope="col">Section</th></tr></thead>
+                        <thead><tr><th scope="col">Key</th><th scope="col">Value</th></tr></thead>
                         <tbody>
                             {rows.map((row, index) => (
                                 <tr key={`param-${index}`}>
-                                    <td data-label="Key">{row.canonical_key ?? row.raw_key}</td>
-                                    <td data-label="Value">{row.canonical_value ?? row.raw_value}{row.unit ? ` ${row.unit}` : ""}</td>
-                                    <td data-label="Section">{row.section ?? "not recorded"}</td>
+                                    {/* Only a key TCKDB recognised (`canonical_key`, its own vocabulary) is
+                                        printed. `raw_key`, `raw_value`, `section` and `unit` are strings the
+                                        producer wrote (house rule, owner decision 2026-11-03). */}
+                                    <td data-label="Key">{row.canonical_key ?? "unrecognised parameter"}</td>
+                                    <td data-label="Value">{row.canonical_key ? (row.canonical_value ?? "recorded") : "not shown"}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -1741,7 +1741,6 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
                         <thead>
                             <tr>
                                 <th scope="col">Kind</th>
-                                <th scope="col">Filename</th>
                                 <th scope="col">Size</th>
                                 <th scope="col">Artifact ref</th>
                                 <th scope="col">SHA-256</th>
@@ -1752,7 +1751,6 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
                             {rows.map((row, index) => (
                                 <tr key={`artifact-${index}`}>
                                     <td data-label="Kind">{statusLabel(row.kind)}</td>
-                                    <td data-label="Filename">{row.filename ?? "not recorded"}</td>
                                     <td data-label="Size" className="num">{row.bytes.toLocaleString()} bytes</td>
                                     <td data-label="Artifact ref">
                                         {row.artifact_ref ? (

@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import ConformerObservationPage from "./ConformerObservationPage"
+import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 
 /** Reads the `<dd>` text for a `.kv-list`-shaped `<dt>` term inside `container` --
  *  the same helper `CalculationDetailPage.test.tsx` uses on its own coverage
@@ -755,5 +756,27 @@ describe("ConformerObservationPage", () => {
         const siblingRow = screen.getByRole("link", { name: "co_two" }).closest("li")
         expect(siblingRow).not.toBeNull()
         expect(within(siblingRow as HTMLElement).getByText("reviewed")).toBeVisible()
+    })
+})
+
+describe("ConformerObservationPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
+        const { value, planted } = plantSentinels(mockRecord({
+            species: {
+                species_ref: "spc_demo", species_entry_ref: "spe_demo", formula: "CH3", canonical_smiles: "[CH3]",
+                // The server joins computed and typed parts into one label; the typed ones carry the sentinel.
+                species_entry_label: "excited DEPOSITOR_SENTINEL_state_label DEPOSITOR_SENTINEL_term_symbol",
+            },
+        }), ["label", "note", "top_description"])
+        expectPlanted(planted, 3)
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => HttpResponse.json({ record: value })))
+
+        page()
+        // The fixture reached the page: its ref and its computed species facts are on screen.
+        expect(await screen.findByRole("heading", { name: "Computed observation" })).toBeVisible()
+        expect(screen.getAllByText("co_one").length).toBeGreaterThan(0)
+        expect(screen.getAllByText("cg_demo").length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
     })
 })

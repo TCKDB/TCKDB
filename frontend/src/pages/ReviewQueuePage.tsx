@@ -1,3 +1,4 @@
+import { publicSmiles } from "../domain/publicText"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Link, Navigate } from "react-router-dom"
 import "../auth.css"
@@ -349,7 +350,10 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
                             no formula could be derived from this candidate's
                             own SMILES:{" "}
                             <code className="data">
-                                {subject.chemistry.unmapped_smiles}
+                                {/* Stored as typed and never parsed: shown only if it is SMILES
+                                    syntax. The queue is readable by any signed-in account, so it
+                                    is treated as public (owner decision 2026-11-03). */}
+                                {publicSmiles(subject.chemistry.unmapped_smiles) ?? "not shown (not SMILES syntax)"}
                             </code>
                         </p>
                     ) : (

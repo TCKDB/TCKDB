@@ -24,10 +24,10 @@ describe("facetChips", () => {
         const chips = facetChips({
             species_entry_kind: "minimum",
             electronic_state_kind: "excited",
-            term_symbol: "T1",
+            term_symbol: "3Σg-",
             stereo_label: null,
         })
-        expect(chips).toEqual(["minimum", "excited state · T1"])
+        expect(chips).toEqual(["minimum", "excited state · 3Σg-"])
         expect(chips.some((chip) => /stereo/i.test(chip))).toBe(false)
         expect(chips.some((chip) => chip === "R enantiomer" || chip === "S enantiomer")).toBe(false)
     })
@@ -39,13 +39,15 @@ describe("facetChips", () => {
             .toContain("Z isomer")
     })
 
-    it("folds electronic_state_label and term_symbol into the state chip when set", () => {
+    it("folds a term symbol into the state chip, and never prints electronic_state_label or a term symbol not shaped like one", () => {
         const chips = facetChips({
             species_entry_kind: "minimum",
             electronic_state_kind: "excited",
-            electronic_state_label: "T1",
+            electronic_state_label: "DEPOSITOR_SENTINEL_state",
+            term_symbol: "DEPOSITOR_SENTINEL_term",
         })
-        expect(chips).toContain("excited state · T1")
+        expect(chips).toEqual(["minimum", "excited state"])
+        expect(facetChips({ species_entry_kind: "minimum", electronic_state_kind: "excited", term_symbol: "3Σg-" })).toContain("excited state · 3Σg-")
     })
 
     it("adds an isotopologue chip only when isotope_key is set", () => {
@@ -81,12 +83,12 @@ describe("facetChips: includeState (grouped-card redundancy)", () => {
         expect(chips.some((chip) => /ground/i.test(chip))).toBe(false)
     })
 
-    it("still surfaces electronic_state_label/term_symbol when includeState is false -- those are not established by a group heading that only names the bare state", () => {
+    it("still surfaces the term symbol when includeState is false -- those are not established by a group heading that only names the bare state", () => {
         const chips = facetChips(
-            { species_entry_kind: "minimum", electronic_state_kind: "excited", term_symbol: "T1" },
+            { species_entry_kind: "minimum", electronic_state_kind: "excited", term_symbol: "3Σg-" },
             { includeState: false },
         )
-        expect(chips).toEqual(["minimum", "T1"])
+        expect(chips).toEqual(["minimum", "3Σg-"])
     })
 
     it("still surfaces stereochemistry and isotopologue when includeState is false", () => {

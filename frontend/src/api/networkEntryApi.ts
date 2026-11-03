@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { publicStateLabel } from "../domain/publicText"
 import { recordReviewSchema } from "./scientificSchemas"
 import { loadEntryThermo } from "./thermoApi"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
@@ -105,7 +106,13 @@ const stateCompositionSchema = z.object({
     // depositor free text and null on every state measured against the live
     // archive) -- see `backend/app/schemas/reads/scientific_network_composition.py`.
     state_label: z.string().default(""),
-}).passthrough()
+}).passthrough().transform((composition) => ({
+    ...composition,
+    // The server renders `state_label` with each participant's `species_entry_label`, which can
+    // carry a depositor-typed state label or term symbol. Rebuilt here from the sanitised
+    // participant labels whenever any of the typed parts had to be dropped.
+    state_label: publicStateLabel(composition),
+}))
 
 const stateSchema = z.object({
     composition_hash: z.string(),

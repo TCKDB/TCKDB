@@ -1,3 +1,4 @@
+import { publicSmiles } from "../domain/publicText"
 import type { ReactNode } from "react"
 import "../record-identity-header.css"
 import { CopyButton } from "./RefsDisclosure"
@@ -310,8 +311,12 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
                     the reaction-deposit context already distinguish the
                     record; this header never reads `identity.label` for
                     display any more. */}
-                <IdentityFact label="Reaction SMILES (unmapped)" wide copy={identity.unmappedSmiles ?? undefined}>
-                    {identity.unmappedSmiles ? <code>{withSmilesBreaks(identity.unmappedSmiles)}</code> : <span className="record-identity-absent-inline">not recorded</span>}
+                {/* `unmapped_smiles` is stored as the depositor typed it (whitespace-trimmed, not
+                    parsed or canonicalised), so it is printed only when every character of it
+                    parses as SMILES syntax; any other string is depositor text and is not shown
+                    (house rule, owner decision 2026-11-03). */}
+                <IdentityFact label="Reaction SMILES (unmapped)" wide copy={publicSmiles(identity.unmappedSmiles) ?? undefined}>
+                    {publicSmiles(identity.unmappedSmiles) ? <code>{withSmilesBreaks(publicSmiles(identity.unmappedSmiles)!)}</code> : <span className="record-identity-absent-inline">{identity.unmappedSmiles ? "not shown (not SMILES syntax)" : "not recorded"}</span>}
                 </IdentityFact>
                 <IdentityFact label="Charge / multiplicity">
                     {chargeDisplay(identity.charge)} / {spinDisplay(identity.multiplicity)}

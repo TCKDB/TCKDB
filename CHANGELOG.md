@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The website no longer prints text a depositor typed (2026-11-03)
+
+- **Frontend only. API, `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no schema change, no new environment variable. The API still returns these fields in their marked places.
+- **What changed.** No public page prints a string a depositor typed: not as text, link text, a pill, a tooltip, an `aria-label`, SVG text, a `data-` attribute or an element id. Conformer labels, record notes (transition state, conformer, scale factor, correction scheme), network name, description and channel keys, group-additivity scheme and group labels, torsion top descriptions, artifact filenames, parsed parameter keys and values, level-of-theory keywords, electronic state labels and unrecognised term symbols are gone; the ref, formula or a TCKDB noun stands in. An unmapped SMILES and a correction-parameter key are shown only when they parse as SMILES or as an element or bond key.
+- **Mixed server strings are reduced to their computed tokens.** `species_entry_label` and the network `state_label` embed the typed state label and term symbol, so the frontend keeps only the stereo, state-kind and isotope tokens.
+- **Kept.** Curator review notes and supersession reasons (written by a signed-in curator), the owner's own API-key labels and name on the account page and the admin user list (both marked as typed), and the scientific method strings (software, level-of-theory method and basis, master-equation method, literature title).
+
 ## The centre between two allene axes is read as `-`, `r` or `s` (2026-11-02)
 
 - **Client: `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no schema change, no new environment variable, no vocabulary change (`r` and `s` were already tokens). Part 3 of #832 (part of, not closing). Existing data is dev data: an entry stored with `?` at such a centre is not rewritten, and a new deposit of the same molecule now computes a different key; the two are not reconciled.

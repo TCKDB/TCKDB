@@ -19,6 +19,8 @@
  * occurrence, the honest reading of "this API does not yet say how many".
  */
 
+import { publicSpeciesEntryLabel } from "./publicText"
+
 export interface EquationParticipantInput {
     species_entry_ref: string
     species_entry_label?: string | null
@@ -53,7 +55,7 @@ function collapseSide(participants: EquationParticipantInput[]): EquationPartici
         }
         byRef.set(participant.species_entry_ref, {
             speciesEntryRef: participant.species_entry_ref,
-            speciesEntryLabel: participant.species_entry_label ?? null,
+            speciesEntryLabel: publicSpeciesEntryLabel(participant.species_entry_label),
             smiles: participant.smiles,
             formula: participant.formula ?? null,
             coefficient: participant.stoichiometry,

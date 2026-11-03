@@ -1,4 +1,5 @@
 import { words } from "./provenanceFormat"
+import { publicTermSymbol } from "./publicText"
 
 /**
  * The four orthogonal axes that make one species entry chemically
@@ -31,9 +32,11 @@ function kindChip(kind: string): string {
     return KIND_LABELS[kind] ?? words(kind) ?? kind
 }
 
-function stateChip(kind: string, label?: string | null, termSymbol?: string | null): string {
+function stateChip(kind: string, termSymbol?: string | null): string {
     const base = kind === "ground" ? "ground state" : kind === "excited" ? "excited state" : `${words(kind) ?? kind} state`
-    const extra = [label, termSymbol].filter((part): part is string => Boolean(part)).join(" · ")
+    // `electronic_state_label` is never printed, and `term_symbol` only when it is shaped like one:
+    // both are depositor-typed (house rule, owner decision 2026-11-03).
+    const extra = publicTermSymbol(termSymbol)
     return extra ? `${base} · ${extra}` : base
 }
 
@@ -132,11 +135,9 @@ export function facetChips(entry: EntryFacetAxes, options?: { includeState?: boo
     const includeState = options?.includeState ?? true
     const chips = [kindChip(entry.species_entry_kind)]
     if (includeState) {
-        chips.push(stateChip(entry.electronic_state_kind, entry.electronic_state_label, entry.term_symbol))
+        chips.push(stateChip(entry.electronic_state_kind, entry.term_symbol))
     } else {
-        const extra = [entry.electronic_state_label, entry.term_symbol]
-            .filter((part): part is string => Boolean(part))
-            .join(" · ")
+        const extra = publicTermSymbol(entry.term_symbol)
         if (extra) chips.push(extra)
     }
     // An achiral entry contributes no chip: "achiral" on every ordinary card is noise, and its

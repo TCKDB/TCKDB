@@ -556,8 +556,9 @@ describe("EntryThermoSection", () => {
         await screen.findByText("thm_beta")
         const betaCard = screen.getByText("thm_beta").closest("article") as HTMLElement
         expect(within(betaCard).getByText("Group-additivity estimation")).toBeVisible()
-        expect(within(betaCard).getByText("Benson v2 (2.0)")).toBeVisible()
-        expect(within(betaCard).getByText("C/H3")).toBeVisible()
+        expect(within(betaCard).getByText("gas_1")).toBeVisible()
+        // The scheme name/version/commit and the group label are depositor free text: not printed.
+        for (const typed of ["Benson v2", "2.0", "abc123", "C/H3"]) expect(betaCard.innerHTML).not.toContain(typed)
 
         // thm_alpha has group_additivity: null — no section at all, not a
         // heading over an explicit "not recorded" line.

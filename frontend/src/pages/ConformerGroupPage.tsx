@@ -472,7 +472,7 @@ function ObservationCard({ observation }: { observation: Observation }) {
                     <small>{core.scientific_origin ?? "origin not recorded"}</small>
                 </div>
             </header>
-            {core.note && <p className="observation-note">{core.note}</p>}
+            {/* No `core.note`: depositor free text is never printed on a public page. */}
             {calculations.length ? (
                 <CalculationTable
                     calculations={calculations}

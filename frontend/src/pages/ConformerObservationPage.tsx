@@ -234,7 +234,8 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                 )}
                             </dl>
                         </div>
-                        {core.note && <p className="observation-note">{core.note}</p>}
+                        {/* No `core.note`: a depositor's free-text note is never printed on a public page
+                            (house rule, owner decision 2026-11-03). */}
                     </header>
                 )}
             >

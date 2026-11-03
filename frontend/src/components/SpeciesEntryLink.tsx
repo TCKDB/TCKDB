@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom"
 import { SpeciesFace } from "./Formula"
 import { stereoChip } from "../domain/recordFacets"
+import { publicSpeciesEntryLabel } from "../domain/publicText"
 
 /**
  * The "Species entry" link every record page that owns a species (the
@@ -83,13 +84,15 @@ export function SpeciesEntryLink({ speciesEntryRef, smiles, formula, speciesEntr
     formula?: string | null
     speciesEntryLabel?: string | null
 }) {
+    // Only the computed tokens of the label: it embeds depositor-typed state labels and term symbols.
+    const chip = publicSpeciesEntryLabel(speciesEntryLabel)
     const base = (smiles || formula)
         ? <SpeciesFace smiles={smiles} formula={formula} />
         : <code className="data">{speciesEntryRef}</code>
     return (
         <Link to={`/species-entries/${speciesEntryRef}`}>
             {base}
-            {speciesEntryLabel && <> · {stereoChip(speciesEntryLabel)}</>}
+            {chip && <> · {stereoChip(chip)}</>}
         </Link>
     )
 }
