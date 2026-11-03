@@ -19,7 +19,9 @@
  * occurrence, the honest reading of "this API does not yet say how many".
  */
 
-export interface EquationParticipantInput {
+import { participantChips, type ParticipantFacets } from "./participantFacets"
+
+export interface EquationParticipantInput extends ParticipantFacets {
     species_entry_ref: string
     species_entry_label?: string | null
     smiles: string
@@ -30,6 +32,8 @@ export interface EquationParticipantInput {
 
 export interface EquationParticipant {
     speciesEntryRef: string
+    /** Chips from the structured facets ("Z isomer", "excited state"), never from the joined label. */
+    chips: string[]
     smiles: string
     formula: string | null
     coefficient: number
@@ -52,6 +56,7 @@ function collapseSide(participants: EquationParticipantInput[]): EquationPartici
         }
         byRef.set(participant.species_entry_ref, {
             speciesEntryRef: participant.species_entry_ref,
+            chips: participantChips(participant),
             smiles: participant.smiles,
             formula: participant.formula ?? null,
             coefficient: participant.stoichiometry,

@@ -359,6 +359,31 @@ describe("NetworkEntryPage -- channel_key never reaches the DOM", () => {
     })
 })
 
+describe("NetworkEntryPage -- structured stereo facets tell isomeric states apart", () => {
+    it("labels the Z and E diazene states from the participants' structured facets, not the joined label", async () => {
+        const facets = { species_entry_kind: "minimum", electronic_state_kind: "ground", stereo_resolution: "resolved" }
+        const state = (hash: string, stereo: string) => ({
+            composition_hash: hash, kind: "well", label: null, participant_count: 1,
+            composition: {
+                participants: [{
+                    species_entry_ref: `spe_${stereo}`, species_ref: "sp_nn", canonical_smiles: "N=N", stoichiometry: 1,
+                    // The joined label carries a typed R as well; it is never read.
+                    species_entry_label: `${stereo} R`, ...facets, stereo_label: stereo, stereo_descriptor: stereo,
+                }],
+                participant_count_total: 1, participants_truncated: false, state_label: `N=N (${stereo} R)`,
+            },
+        })
+        handleEverything({ record: { states: [state("hash_z", "Z"), state("hash_e", "E")], channels: [] }, thermoCounts: { spe_Z: 0, spe_E: 0 } })
+        const { container } = page()
+        await screen.findByText(NETWORK_REF)
+        const table = await screen.findByRole("table", { name: "States in this network" })
+        const text = table.textContent ?? ""
+        expect(text).toContain("N=N (Z isomer)")
+        expect(text).toContain("N=N (E isomer)")
+        expect(container.textContent).not.toContain("enantiomer")
+    })
+})
+
 describe("NetworkEntryPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
     it("prints none of the fields a depositor typed, in text, SVG text, ids or any attribute", async () => {
         const detail = networkDetailFixture()
@@ -1166,5 +1191,33 @@ describe("NetworkEntryPage -- which solve the energies came from, and the order 
         const value = term.nextElementSibling as HTMLElement
         expect(value.textContent).toContain("modified strong collision (nsolve_test1)")
         expect(value.textContent).toContain("reservoir state (nsolve_test2)")
+    })
+})
+
+describe("NetworkEntryPage -- literature title (depositor text guard)", () => {
+    async function mount(literature: Record<string, unknown>) {
+        handleNetworkDetail(networkDetailFixture({ literature }))
+        handleSolveDetail("nsolve_test1")
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "2 [NH2] <=> NN")
+        handleKtpEvaluate()
+        page()
+        // The fixture reached the page: the Literature row rendered.
+        await screen.findByText("Literature", { selector: "dt" })
+    }
+
+    it("withholds a typed title and a spam DOI; prints the public ref and says the title is not verified", async () => {
+        await mount({
+            literature_ref: "lit_net1", title: "DEPOSITOR_SENTINEL_literature_title", title_source: "depositor_supplied",
+            doi: "10.1/ DEPOSITOR_SENTINEL_literature_doi spam.example",
+        })
+        expect(screen.getByText("Literature", { selector: "dt" }).nextElementSibling?.textContent).toBe("lit_net1 · Title not verified")
+        expectNoDepositorText()
+        expect(document.body.innerHTML).not.toContain("spam.example")
+    })
+
+    it("shows a registry-resolved title (the positive control)", async () => {
+        await mount({ literature_ref: "lit_net1", title: "RESOLVED_TITLE", title_source: "resolved_metadata" })
+        expect(screen.getByText("Literature", { selector: "dt" }).nextElementSibling?.textContent).toBe("RESOLVED_TITLE")
     })
 })

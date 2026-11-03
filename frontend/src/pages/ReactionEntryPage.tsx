@@ -29,6 +29,7 @@ import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { buildEquationSides, type EquationParticipant } from "../domain/reactionEquation"
+import { participantChips } from "../domain/participantFacets"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 
@@ -340,7 +341,7 @@ function equationWithEntries(
     if (reactants.length === 0 || products.length === 0) return served
     const sides = buildEquationSides(reactants, products)
     const side = (participants: EquationParticipant[]) => participants
-        .map((p) => `${p.coefficient > 1 ? `${p.coefficient} ` : ""}${p.smiles}`)
+        .map((p) => `${p.coefficient > 1 ? `${p.coefficient} ` : ""}${p.smiles}${p.chips.length > 0 ? ` [${p.chips.join(", ")}]` : ""}`)
         .join(" + ")
     return `${side(sides.reactants)} ${reversible ? "<=>" : "->"} ${side(sides.products)}`
 }
@@ -368,6 +369,9 @@ function ParticipantsTable({ label, participants }: {
                                     <Link to={`/species-entries/${participant.species_entry_ref}`}>
                                         <SpeciesFace smiles={participant.smiles} formula={participant.formula} />
                                     </Link>
+                                    {participantChips(participant).length > 0 && (
+                                        <span className="reaction-equation-chip"> · {participantChips(participant).join(", ")}</span>
+                                    )}
                                 </td>
                                 <td data-label="Ref">
                                     <code className="data">{participant.species_entry_ref}</code>

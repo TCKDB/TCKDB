@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { levelOfTheorySchema, productLevelsSchema, recordReviewSchema } from "./scientificSchemas"
+import { levelOfTheorySchema, productLevelsSchema, recordReviewSchema, entryFacetFields } from "./scientificSchemas"
 import { parseScientificResponse, requestScientificJson, ScientificApiError } from "./scientificTransport"
 
 /**
@@ -45,6 +45,9 @@ const workflowToolReleaseSummarySchema = z.object({
 const literatureSummarySchema = z.object({
     literature_ref: z.string().optional(),
     title: z.string().nullable().optional(),
+    title_source: z.string().nullable().optional(),
+    doi: z.string().nullable().optional(),
+    isbn: z.string().nullable().optional(),
 }).passthrough()
 
 // `ScientificLevelsSummary` -- geometry/frequency/energy levels of theory
@@ -89,6 +92,7 @@ const reactionEntrySummarySchema = z.object({
 const speciesParticipantSchema = z.object({
     species_entry_ref: z.string(),
     species_entry_label: z.string().nullable().optional(),
+    ...entryFacetFields,
     smiles: z.string(),
     formula: z.string().nullable().optional(),
     stoichiometry: z.number().optional().default(1),

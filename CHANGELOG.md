@@ -29,6 +29,19 @@ dataset must never require a code release.
 - Every accepted spelling is stored in one canonical form (`2Pi`, `^2Pi`, `2Π` are `²Π`; `A~` is `Ã`), the typed spelling going to `term_symbol_raw`. A state label is a letter (with tilde and primes) or an ordinal; `E`/`e` are allowed.
 - A bare `R`, `S`, `Z`, `M`, `P`, `Ra`, `Sa`, `?`, `-` or a word can no longer be a state label. The joined `species_entry_label` and a network `state_label` now introduce the state part with the word `state` (`excited state A`), so a stored label cannot read as "R enantiomer".
 
+## Participants serve their computed identity facets (2026-11-03)
+
+- **Client: `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no new environment variable. Additive fields on read responses; the OpenAPI golden is regenerated.
+- **What changed.** Every read block that names a species entry and used to serve only the joined `species_entry_label` now also serves the computed parts as separate fields, named as the species surface names them: `species_entry_kind`, `electronic_state_kind`, `stereo_label`, `stereo_descriptor`, `stereo_resolution`, `isotope_key`. Blocks: reaction participants (search and `/full`), network state participants and network species, and the species context of conformer, statmech, transport, geometry and calculation records. The typed `electronic_state_label` and `term_symbol` are deliberately not served on them.
+- **Frontend.** Reaction and network pages render chips from these fields through `facetChips`, so a Z to E step reads "Z isomer" to "E isomer" again instead of "N=N to N=N". The joined label is still never printed.
+
+## Literature records say where their title came from; the review queue is for curators (2026-11-03)
+
+- **Client: `tckdb-client` and `tckdb-schemas` unchanged. Migration `b4d8e1a7c953`, no new environment variable.** Adds the nullable column `literature.title_source` (`resolved_metadata` | `depositor_supplied`). Existing rows stay `NULL`, meaning "not recorded"; there is no backfill because their titles cannot be classified honestly.
+- **What changed.** The resolver sets `title_source` from what happened: `resolved_metadata` only when the DOI/ISBN lookup returned a title, else `depositor_supplied`. An existing row matched later by DOI/ISBN is adopted as it stands; its title and source are never rewritten. The literature reads (`/literature`, `/scientific/literature`) and the literature summary embedded in other reads carry `title_source`; the summary also carries `isbn`.
+- **Website.** A literature title is shown only when `title_source` is `resolved_metadata`. Otherwise the page shows the ISBN, else the public ref, with "Title not verified". A DOI is never printed or linked there: it is depositor-typed text.
+- **Review queue.** `GET /record-reviews/queue` and `GET /record-reviews` (the same rows, flat) now require the curator or admin role; a plain account gets 403. `GET /record-reviews/{record_type}/{record_id}` (one record's status) is unchanged.
+
 ## The website no longer prints text a depositor typed (2026-11-03)
 
 - **Frontend only. API, `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no schema change, no new environment variable. The API still returns these fields in their marked places.

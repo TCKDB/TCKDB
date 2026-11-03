@@ -385,6 +385,11 @@ enum LiteratureKind {
   webpage
 }
 
+enum LiteratureTitleSource {
+  resolved_metadata
+  depositor_supplied
+}
+
 enum MachineReviewCuratorTaskState {
   untriaged
   needs_curator_review
@@ -2692,6 +2697,7 @@ Table literature {
   id bigint [pk, not null]
   kind LiteratureKind [not null]
   title text [not null]
+  title_source LiteratureTitleSource
   journal text
   year int
   volume text

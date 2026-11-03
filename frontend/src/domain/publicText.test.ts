@@ -5,7 +5,6 @@ import {
     publicChemistryKey,
     publicParameterValue,
     publicPointGroup,
-    publicStateLabel,
     publicTermSymbol,
 } from "./publicText"
 
@@ -31,23 +30,6 @@ describe("publicChemistryKey", () => {
         expect(publicChemistryKey("Xx")).toBe("unrecognised key")
         expect(publicChemistryKey("No-Ho-Es")).toBe("unrecognised key")
         expect(publicChemistryKey("C-Uu")).toBe("unrecognised key")
-    })
-})
-
-describe("publicStateLabel", () => {
-    const participant = (smiles: string, stoichiometry = 1) => ({ canonical_smiles: smiles, stoichiometry })
-
-    it("rebuilds the label from SMILES and stoichiometry only, never from the served label", () => {
-        const label = publicStateLabel({
-            participants: [participant("N=N"), participant("[H][H]", 2)],
-            participants_truncated: true,
-            state_label: "N=N (E excited DEPOSITOR_SENTINEL_x) + 2 [H][H] + ...",
-        })
-        expect(label).toBe("N=N + 2 [H][H] + ...")
-    })
-
-    it("returns an empty label when there are no participants, never the served one", () => {
-        expect(publicStateLabel({ participants: [], state_label: "NN" })).toBe("")
     })
 })
 

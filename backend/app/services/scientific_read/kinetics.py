@@ -1459,8 +1459,10 @@ def _literature_summaries(
             id=lit.id,
             literature_ref=lit.public_ref,
             title=lit.title,
+            title_source=lit.title_source,
             year=lit.year,
             doi=lit.doi,
+            isbn=lit.isbn,
         )
         for lit in rows
     }

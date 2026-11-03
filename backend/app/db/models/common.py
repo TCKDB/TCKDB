@@ -1301,6 +1301,17 @@ class LiteratureKind(str, Enum):
     webpage = "webpage"
 
 
+class LiteratureTitleSource(str, Enum):
+    """Where a ``literature.title`` came from.
+
+    ``NULL`` on the column means "not recorded" (rows written before the column
+    existed); it is never a third value to infer from.
+    """
+
+    resolved_metadata = "resolved_metadata"  # fetched from the DOI/ISBN registry
+    depositor_supplied = "depositor_supplied"  # typed by the depositor
+
+
 class AppUserRole(str, Enum):
     user = "user"
     curator = "curator"

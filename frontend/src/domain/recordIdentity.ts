@@ -19,6 +19,8 @@
  * - `{ kind: "absent" }` -- no owner at all.
  */
 
+import type { ParticipantFacets } from "./participantFacets"
+
 export type AmbiguousIdentityOwner = { kind: string; ref: string }
 
 export type SpeciesIdentity = {
@@ -30,6 +32,8 @@ export type SpeciesIdentity = {
     multiplicity: number
     speciesRef?: string
     speciesEntryRef?: string
+    /** Computed identity facets of the entry (stereo, state kind, isotope), when the API served them. */
+    facets?: ParticipantFacets
 }
 
 export type TransitionStateIdentity = {
@@ -71,7 +75,7 @@ export type GeometryIdentityWire = {
         inchi_key: string
         charge: number
         multiplicity: number
-    } | null
+    } & ParticipantFacets | null
     transition_state_entry?: {
         transition_state_ref: string
         transition_state_entry_ref: string
@@ -105,6 +109,7 @@ export function identityFromGeometry(identity: GeometryIdentityWire | null | und
             multiplicity: entry.multiplicity,
             speciesRef: entry.species_ref,
             speciesEntryRef: entry.species_entry_ref,
+            facets: entry,
         }
     }
     if (identity.kind === "transition_state_entry" && identity.transition_state_entry) {
@@ -138,7 +143,7 @@ export type CalculationOwnerWire = {
         inchi_key: string
         charge: number
         multiplicity: number
-    } | null
+    } & ParticipantFacets | null
     transition_state_entry?: {
         transition_state_ref: string
         transition_state_entry_ref: string
@@ -164,6 +169,7 @@ export function identityFromCalculationOwner(owner: CalculationOwnerWire | null 
             multiplicity: entry.multiplicity,
             speciesRef: entry.species_ref,
             speciesEntryRef: entry.species_entry_ref,
+            facets: entry,
         }
     }
     if (owner.kind === "transition_state_entry" && owner.transition_state_entry) {

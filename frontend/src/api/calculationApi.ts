@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { compositeEnergyVerificationSchema, levelOfTheorySchema } from "./scientificSchemas"
+import { compositeEnergyVerificationSchema, levelOfTheorySchema, entryFacetFields } from "./scientificSchemas"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 // ---------------------------------------------------------------------------
@@ -65,6 +65,7 @@ const speciesEntryOwnerSchema = z.object({
     species_ref: z.string(),
     species_entry_ref: z.string(),
     species_entry_label: z.string().nullable().optional(),
+    ...entryFacetFields,
     formula: z.string().nullable().optional(),
     canonical_smiles: z.string(),
     inchi_key: z.string(),
@@ -119,8 +120,10 @@ const workflowToolReleaseSchema = z.object({
 const literatureSchema = z.object({
     literature_ref: z.string(),
     title: z.string().nullable().optional(),
+    title_source: z.string().nullable().optional(),
     year: z.number().nullable().optional(),
     doi: z.string().nullable().optional(),
+    isbn: z.string().nullable().optional(),
 }).passthrough()
 
 // `*_applicable` fields answer "can this calculation's TYPE structurally

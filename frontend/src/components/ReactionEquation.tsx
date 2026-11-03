@@ -138,6 +138,10 @@ function EquationParticipantFace({
             formulaOnly={formulaOnly}
         />
     )
+    // Chips come from the structured facets only (`participantChips`), never the joined species_entry_label.
+    const chip = participant.chips.length > 0 && (
+        <span className="reaction-equation-chip"> · {participant.chips.join(", ")}</span>
+    )
     return (
         <>
             {participant.coefficient > 1 && `${participant.coefficient} `}
@@ -145,11 +149,13 @@ function EquationParticipantFace({
                 ? (
                     <Link to={`/species-entries/${participant.speciesEntryRef}`}>
                         {face}
+                        {chip}
                     </Link>
                 )
                 : (
                     <>
                         {face}
+                        {chip}
                     </>
                 )}
         </>

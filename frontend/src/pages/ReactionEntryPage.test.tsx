@@ -825,30 +825,49 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
         expect(link?.textContent).toBe("O (H2O)")
     })
 
-    it("never prints a participant's served species_entry_label, in the equation fact or the participant cells", async () => {
+    it("tells a Z-to-E isomerisation apart from the structured facets, and never from the joined species_entry_label", async () => {
         const base = mockFull()
+        const facets = { species_entry_kind: "minimum", electronic_state_kind: "ground", isotope_key: null, stereo_resolution: "resolved" }
         handleFull({
             ...base,
             reaction_entry: { ...base.reaction_entry, equation: "CC=CC -> CC=CC", reversible: false },
             species: {
                 reactants: [{
-                    species_entry_ref: "spe_z", species_entry_label: "Z", smiles: "CC=CC", formula: "C4H8",
-                    stoichiometry: 1, participant_index: 0, review: { status: "not_reviewed" },
+                    species_entry_ref: "spe_z", species_entry_label: "Z", ...facets, stereo_label: "Z", stereo_descriptor: "Z",
+                    smiles: "CC=CC", formula: "C4H8", stoichiometry: 1, participant_index: 0, review: { status: "not_reviewed" },
                 }],
                 products: [{
-                    species_entry_ref: "spe_e", species_entry_label: "E", smiles: "CC=CC", formula: "C4H8",
-                    stoichiometry: 1, participant_index: 0, review: { status: "not_reviewed" },
+                    species_entry_ref: "spe_e", species_entry_label: "E", ...facets, stereo_label: "E", stereo_descriptor: "E",
+                    smiles: "CC=CC", formula: "C4H8", stoichiometry: 1, participant_index: 0, review: { status: "not_reviewed" },
                 }],
             },
         })
         const { container } = page()
         await screen.findByText("kin_test1")
         const fact = Array.from(container.querySelectorAll(".record-identity-header dt")).find((el) => el.textContent === "Equation (as deposited)")
-        expect(fact?.nextElementSibling?.textContent).toBe("CC=CC -> CC=CC")
+        expect(fact?.nextElementSibling?.textContent).toBe("CC=CC [Z isomer] -> CC=CC [E isomer]")
         const reactantCell = container.querySelector('table[aria-label="Reactant participants"] td[data-label="Species"]')
-        expect(reactantCell?.textContent).not.toContain("isomer")
+        expect(reactantCell?.textContent).toContain("Z isomer")
         const productCell = container.querySelector('table[aria-label="Product participants"] td[data-label="Species"]')
-        expect(productCell?.textContent).not.toContain("isomer")
+        expect(productCell?.textContent).toContain("E isomer")
+    })
+
+    it("builds no stereo wording from a joined label whose R was typed as an electronic state label", async () => {
+        const base = mockFull()
+        handleFull({
+            ...base,
+            species: {
+                reactants: [{
+                    species_entry_ref: "spe_typed", species_entry_label: "R", species_entry_kind: "minimum", electronic_state_kind: "ground",
+                    stereo_label: null, stereo_descriptor: null, smiles: "[CH3]", formula: "CH3", stoichiometry: 1, participant_index: 0,
+                    review: { status: "not_reviewed" },
+                }],
+                products: base.species.products,
+            },
+        })
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        expect(container.textContent).not.toContain("enantiomer")
     })
 
     function factText(container: HTMLElement): string | null | undefined {
@@ -1091,5 +1110,32 @@ describe("ReactionEntryPage -- no depositor-typed text (owner decision 2026-11-0
 
         expectNoDepositorText()
         expectNoAdversarialText()
+    })
+})
+
+describe("ReactionEntryPage -- kinetics literature (depositor text guard)", () => {
+    async function mount(literature: Record<string, unknown>) {
+        const payload = mockFull()
+        ;(payload.kinetics as Array<{ provenance: Record<string, unknown> }>)[0].provenance.literature = literature
+        handleFull(payload)
+        page()
+        await screen.findByText("kin_test1")
+        // The fixture reached the page: the Literature row rendered.
+        return screen.getByText("Literature", { selector: "dt" }).nextElementSibling?.textContent
+    }
+
+    it("withholds a typed title and a spam DOI; prints the public ref and says the title is not verified", async () => {
+        const row = await mount({
+            literature_ref: "lit_kin1", title: "DEPOSITOR_SENTINEL_literature_title", title_source: "depositor_supplied",
+            doi: "10.1/ DEPOSITOR_SENTINEL_literature_doi spam.example",
+        })
+        expect(row).toBe("lit_kin1 · Title not verified")
+        expectNoDepositorText()
+        expect(document.body.innerHTML).not.toContain("spam.example")
+    })
+
+    it("shows a registry-resolved title (the positive control)", async () => {
+        const row = await mount({ literature_ref: "lit_kin1", title: "RESOLVED_TITLE", title_source: "resolved_metadata" })
+        expect(row).toBe("RESOLVED_TITLE")
     })
 })

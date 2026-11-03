@@ -66,7 +66,9 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
     STEREO_DISPLAY,
+    entry_facets_of,
     species_entry_label_for,
 )
 from app.services.scientific_read.supersession import fetch_supersession_notices
@@ -364,6 +366,7 @@ def _build_species_context(
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
         )
         .join(Species, Species.id == SpeciesEntry.species_id)
         .where(SpeciesEntry.id == species_entry_id)
@@ -376,6 +379,7 @@ def _build_species_context(
         species_entry_id=row.entry_id,
         species_entry_ref=row.entry_ref,
         species_entry_label=species_entry_label_for(row),
+        **entry_facets_of(row),
         canonical_smiles=row.smiles,
         inchi_key=row.inchi_key,
         charge=row.charge,
@@ -448,8 +452,10 @@ def _build_literature_summary(
         id=lit.id,
         literature_ref=lit.public_ref,
         title=getattr(lit, "title", None),
+        title_source=getattr(lit, "title_source", None),
         year=getattr(lit, "year", None),
         doi=getattr(lit, "doi", None),
+        isbn=getattr(lit, "isbn", None),
     )
 
 

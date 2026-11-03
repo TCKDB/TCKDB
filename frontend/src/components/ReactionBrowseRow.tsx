@@ -11,6 +11,12 @@ function toEquationParticipants(participants: ReactionBrowseRecord["reactants"])
     return participants.map((participant) => ({
         species_entry_ref: participant.species_entry_ref,
         species_entry_label: participant.species_entry_label,
+        species_entry_kind: participant.species_entry_kind,
+        electronic_state_kind: participant.electronic_state_kind,
+        stereo_label: participant.stereo_label,
+        stereo_descriptor: participant.stereo_descriptor,
+        stereo_resolution: participant.stereo_resolution,
+        isotope_key: participant.isotope_key,
         smiles: participant.smiles,
         formula: participant.formula,
         stoichiometry: participant.stoichiometry,

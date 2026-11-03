@@ -382,6 +382,12 @@
    reaction-browse participant measured so far carries a `formula`), same
    as the entry-page rule this mirrors -- added now so the row does not
    silently regress the instant one does. */
+.reaction-browse-row-title .reaction-equation-chip {
+    font: var(--type-note-font);
+    letter-spacing: var(--type-note-tracking);
+    color: var(--muted);
+}
+
 .reaction-browse-row-title code.data {
     font-size: inherit;
 }
