@@ -532,3 +532,44 @@ class TestOutputLogBackfill:
         db_session.add(log)
         db_session.flush()
         assert script_mod._select_input_artifact(db_session, calc_id).id == deck_id
+
+
+    def test_force_with_storage_down_for_a_log_changes_nothing_and_reports_the_failure(
+        self, db_session, stub_load_artifact_bytes
+    ):
+        calc_id, _ = _seed_calc(db_session)
+        stub_load_artifact_bytes[GAUSSIAN_GJF_SHA] = GAUSSIAN_GJF_TEXT
+        # A stored output log whose bytes the (down) storage cannot serve, and the log row already derived from it.
+        db_session.add(
+            CalculationArtifact(
+                calculation_id=calc_id,
+                kind=ArtifactKind.output_log,
+                uri="s3://test/cc",
+                sha256="c" * 64,
+                bytes=1,
+                filename="job.log",
+            )
+        )
+        db_session.add(
+            CalculationParameter(
+                calculation_id=calc_id,
+                raw_key="Acc2E",
+                raw_value="12",
+                canonical_key="integral.accuracy",
+                canonical_value="12",
+                source=ParameterSource.parser,
+                artifact_kind=ArtifactKind.output_log,
+            )
+        )
+        db_session.commit()
+
+        stats = script_mod.run_backfill(db_session, calculation_id=calc_id, force=True)
+
+        assert stats.failed == 1 and stats.succeeded == 0
+        kept = db_session.scalars(
+            select(CalculationParameter.raw_key).where(
+                CalculationParameter.calculation_id == calc_id,
+                CalculationParameter.artifact_kind == ArtifactKind.output_log,
+            )
+        ).all()
+        assert kept == ["Acc2E"]

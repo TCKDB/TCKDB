@@ -319,7 +319,15 @@ def _process_one(
     if force:
         # Log rows are appended and carry no source artifact, so a parser fix cannot replace them one by one:
         # --force re-derives all of them from the stored output logs, under the deck-wins rule.
-        refresh_output_log_rows(session, calculation)
+        try:
+            refresh_output_log_rows(session, calculation)
+        except Exception as exc:
+            # Nothing was deleted (the refresh reads every log first); discard the deck pass too and report it.
+            session.rollback()
+            stats.failed += 1
+            stats.failures.append((calculation_id, f"{type(exc).__name__}: {exc}"))
+            logger.warning("calc id=%s: output-log refresh failed, nothing changed: %s", calculation_id, exc)
+            return False
     session.commit()
     stats.succeeded += 1
     logger.info(

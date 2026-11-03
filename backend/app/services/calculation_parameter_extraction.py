@@ -400,66 +400,93 @@ def _stored_log_rows_restore_reason(artifact: CalculationArtifact, exc: Exceptio
     return f"stored output log id={artifact.id} not re-read: {type(exc).__name__}: {exc}"
 
 
+def _stored_output_logs(session: Session, calculation: Calculation) -> list[CalculationArtifact]:
+    return list(
+        session.scalars(
+            select(CalculationArtifact)
+            .where(
+                CalculationArtifact.calculation_id == calculation.id,
+                CalculationArtifact.kind == ArtifactKind.output_log,
+            )
+            .order_by(CalculationArtifact.id)
+        )
+    )
+
+
+def _parse_stored_log(session: Session, calculation: Calculation, artifact: CalculationArtifact, client_box: list):
+    """``(software, observations, parser stamp)`` for one stored output log; raises when it cannot be read or parsed.
+
+    Bytes uploaded in this request come from memory; others are read through a short-timeout client (made once and
+    kept in ``client_box``).
+    """
+    content = session.info.get("parameter_artifact_bytes", {}).get(artifact.sha256)
+    if content is None:
+        if not client_box:
+            client_box.append(_short_timeout_client())
+        content = load_artifact_bytes(artifact.sha256, client=client_box[0])
+    text = _decode_text(content)
+    software = _resolve_software(calculation, text)
+    parsed = _run_parser(software, text)
+    stamp = ParserStamp(**parsed["parser"]) if isinstance(parsed.get("parser"), dict) else None
+    return software, [_to_observation(p) for p in parsed.get("parameters", [])], stamp
+
+
+def _append_log_observations(session: Session, calculation: Calculation, software, observations, stamp) -> None:
+    observations, _ = merge_artifact_observations(
+        session, calculation, observations, artifact_kind=ArtifactKind.output_log, software=software
+    )
+    persist_calculation_parameters(
+        session,
+        calculation,
+        observations,
+        source=ParameterSource.parser,
+        parser=stamp,
+        artifact_kind=ArtifactKind.output_log,
+        replace=False,
+    )
+
+
 def _restore_log_rows(session: Session, calculation: Calculation) -> None:
     """Re-read the stored output logs so a setting a re-read deck no longer states is not lost.
 
     A deck read drops the log rows for the settings it states. When the deck is re-read with fewer settings, the
     dropped log rows are re-derived here from the calculation's stored output logs, in upload order, and appended
     where no stored row states the setting. Runs only on a deck *re-read*, never on a calculation's first deck.
-    Bytes uploaded in this request come from memory; others are read from storage through a short-timeout client,
-    and an artifact that cannot be read or parsed is skipped with a logged reason (the deck's own rows are kept).
-    Conflicts were reported when the log arrived and are not repeated.
+    Best effort: an artifact that cannot be read or parsed is skipped with a logged reason and the deck's own rows
+    are kept. Conflicts were reported when the log arrived and are not repeated.
     """
-    artifacts = session.scalars(
-        select(CalculationArtifact)
-        .where(
-            CalculationArtifact.calculation_id == calculation.id,
-            CalculationArtifact.kind == ArtifactKind.output_log,
-        )
-        .order_by(CalculationArtifact.id)
-    ).all()
-    cache = session.info.get("parameter_artifact_bytes", {})
-    client = None
-    for artifact in artifacts:
+    client_box: list = []
+    for artifact in _stored_output_logs(session, calculation):
         try:
-            content = cache.get(artifact.sha256)
-            if content is None:
-                if client is None:
-                    client = _short_timeout_client()
-                content = load_artifact_bytes(artifact.sha256, client=client)
-            text = _decode_text(content)
-            log_software = _resolve_software(calculation, text)
-            parsed = _run_parser(log_software, text)
-            observations = [_to_observation(p) for p in parsed.get("parameters", [])]
-            observations, _ = merge_artifact_observations(
-                session, calculation, observations, artifact_kind=ArtifactKind.output_log, software=log_software
-            )
-            persist_calculation_parameters(
-                session,
-                calculation,
-                observations,
-                source=ParameterSource.parser,
-                parser=ParserStamp(**parsed["parser"]) if isinstance(parsed.get("parser"), dict) else None,
-                artifact_kind=ArtifactKind.output_log,
-                replace=False,
-            )
+            software, observations, stamp = _parse_stored_log(session, calculation, artifact, client_box)
+            _append_log_observations(session, calculation, software, observations, stamp)
         except Exception as exc:  # best effort, never blocks the deck's own rows
             logger.warning(_stored_log_rows_restore_reason(artifact, exc))
 
 
 def refresh_output_log_rows(session: Session, calculation: Calculation) -> None:
-    """Drop the calculation's log-derived rows and re-derive them from its stored output logs (after a parser fix).
+    """Re-derive the calculation's log rows from its stored output logs (after a parser fix); all or nothing.
 
     Log rows are appended, first statement wins, and carry no source artifact, so a parser improvement cannot
-    replace them one by one; the backfill calls this to re-derive them all, in upload order, under the deck-wins rule.
+    replace them one by one. Every stored log is read and parsed first; if any cannot be, this raises
+    :class:`ParameterExtractionError` having deleted nothing, so an outage never turns two rows into none. Only then
+    are the old log rows dropped and the new ones appended, in upload order, under the deck-wins rule.
     """
+    client_box: list = []
+    parsed = []
+    for artifact in _stored_output_logs(session, calculation):
+        try:
+            parsed.append(_parse_stored_log(session, calculation, artifact, client_box))
+        except Exception as exc:
+            raise ParameterExtractionError(_stored_log_rows_restore_reason(artifact, exc)) from exc
     session.query(CalculationParameter).filter(
         CalculationParameter.calculation_id == calculation.id,
         CalculationParameter.source == ParameterSource.parser,
         CalculationParameter.artifact_kind == ArtifactKind.output_log,
     ).delete(synchronize_session=False)
     session.expire_all()
-    _restore_log_rows(session, calculation)
+    for software, observations, stamp in parsed:
+        _append_log_observations(session, calculation, software, observations, stamp)
 
 
 def _decode_text(content: bytes) -> str:

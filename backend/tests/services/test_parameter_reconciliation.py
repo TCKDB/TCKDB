@@ -652,3 +652,28 @@ def test_the_same_functional_with_its_dispersion_stated_apart_agrees(db_conn):
         other = _calc(session, method="B3LYP-D3BJ")
         _, no_disp = _read(session, other, "#P b3lyp/6-31g(d) opt\n")
         assert "level_of_theory_disagrees_with_artifact" in _codes(no_disp)
+
+
+def test_refresh_with_storage_down_raises_and_deletes_nothing(db_conn, monkeypatch):
+    from app.services import calculation_parameter_extraction as cpe
+    from app.services.artifact_storage import ArtifactStorageUnavailable
+    from app.services.calculation_parameter_extraction import ParameterExtractionError, refresh_output_log_rows
+
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        first = _gaussian_log("#P b3lyp/6-31g(d) opt int=ultrafine scf=tight")
+        second = _gaussian_log("#P b3lyp/6-31g(d) opt EmpiricalDispersion=GD3BJ")
+        _store_log(session, monkeypatch, calc, first, "a.log")
+        _store_log(session, monkeypatch, calc, second, "b.log")
+        _read(session, calc, first, kind=ArtifactKind.output_log)
+        _read(session, calc, second, kind=ArtifactKind.output_log)
+        before = _stored(session, calc)
+        assert len(before) >= 3
+
+        def outage(*args, **kwargs):
+            raise ArtifactStorageUnavailable("storage down")
+
+        monkeypatch.setattr(cpe, "load_artifact_bytes", outage)
+        with pytest.raises(ParameterExtractionError):
+            refresh_output_log_rows(session, calc)
+        assert _stored(session, calc) == before
