@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Participants serve their computed identity facets (2026-11-03)
+
+- **Client: `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no new environment variable. Additive fields on read responses; the OpenAPI golden is regenerated.
+- **What changed.** Every read block that names a species entry and used to serve only the joined `species_entry_label` now also serves the computed parts as separate fields, named as the species surface names them: `species_entry_kind`, `electronic_state_kind`, `stereo_label`, `stereo_descriptor`, `stereo_resolution`, `isotope_key`. Blocks: reaction participants (search and `/full`), network state participants and network species, and the species context of conformer, statmech, transport, geometry and calculation records. The typed `electronic_state_label` and `term_symbol` are deliberately not served on them.
+- **Frontend.** Reaction and network pages render chips from these fields through `facetChips`, so a Z to E step reads "Z isomer" to "E isomer" again instead of "N=N to N=N". The joined label is still never printed.
+
 ## The website no longer prints text a depositor typed (2026-11-03)
 
 - **Frontend only. API, `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no schema change, no new environment variable. The API still returns these fields in their marked places.

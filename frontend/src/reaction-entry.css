@@ -40,6 +40,11 @@
     font-size: inherit;
 }
 
+.record-identity-title .reaction-equation-chip {
+    font: var(--type-body-font);
+    color: var(--muted);
+}
+
 /* Spacing tokens for `ReactionTransitionStatesSection.tsx` -- named
    classes in place of page-local inline `style={{marginTop}}`, so this
    file stays the one place page-scoped layout for these two pages lives

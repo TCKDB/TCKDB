@@ -120,7 +120,9 @@ from app.services.scientific_read.network_channel_chemistry import (
 )
 from app.services.scientific_read.network_declarations import solve_declarations, solve_determinations
 from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
     STEREO_DISPLAY,
+    entry_facets_of,
     species_entry_label_for,
 )
 
@@ -504,6 +506,7 @@ def _build_species(
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
         )
         .join(
             SpeciesEntry,
@@ -518,6 +521,7 @@ def _build_species(
             species_entry_id=r.species_entry_id,
             species_entry_ref=r.entry_ref,
             species_entry_label=species_entry_label_for(r),
+            **entry_facets_of(r),
             species_ref=r.species_ref,
             role=r.role,
             canonical_smiles=r.smiles,

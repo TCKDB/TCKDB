@@ -42,6 +42,7 @@ from app.schemas.reads.scientific_common import (
     WorkflowToolReleaseSummary,
 )
 from app.schemas.reads.scientific_deposit_warnings import RecordWarnings, SubmissionWarnings
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 from app.services.trust.models import TrustFragment
 
 # ---------------------------------------------------------------------------
@@ -102,7 +103,7 @@ class TransportCoreBlock(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class TransportSpeciesContext(BaseModel):
+class TransportSpeciesContext(EntryFacetFields):
     """Lightweight species/species-entry pointer for a transport record.
 
     Mirrors the statmech / conformer / TS species context shape.

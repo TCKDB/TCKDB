@@ -242,6 +242,13 @@ def _assert_public_state_composition(state, composition_hash: str) -> None:
         "canonical_smiles",
         "species_entry_label",
         "stoichiometry",
+        # The computed facets of the entry; never the typed electronic_state_label / term_symbol.
+        "species_entry_kind",
+        "electronic_state_kind",
+        "stereo_label",
+        "stereo_descriptor",
+        "stereo_resolution",
+        "isotope_key",
     }
     assert all(set(item) == public_keys for item in composition["participants"])
     # A truncated state must say so in its label too: a label that quietly
@@ -2480,6 +2487,13 @@ def test_nkin_detail_channel_context_has_public_compositions(client, db_session)
         # The only entry of its species, so nothing to disambiguate against.
         "species_entry_label": None,
         "stoichiometry": 2,
+        # The computed facets: a plain ground-state minimum with no stereo or isotope label.
+        "species_entry_kind": "minimum",
+        "electronic_state_kind": "ground",
+        "stereo_label": None,
+        "stereo_descriptor": None,
+        "stereo_resolution": None,
+        "isotope_key": None,
     }
     # The rendered side carries the stoichiometry the participants declare.
     assert "2 [OH]" in source["state_label"]

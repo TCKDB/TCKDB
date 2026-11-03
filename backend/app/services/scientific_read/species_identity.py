@@ -154,8 +154,39 @@ def species_entry_label_for(entry) -> str | None:
     )
 
 
+#: Columns a query selects so :func:`entry_facets_of` can read the computed facets off a row. Together with the
+#: columns :func:`species_entry_label_for` already needs (``STEREO_DISPLAY`` as ``stereo_display``,
+#: ``electronic_state_kind``, ``electronic_state_label``, ``term_symbol``, ``isotope_key``) they come from the same
+#: ``species_entry`` row the query already reads, so a block serving the facets costs no extra query.
+ENTRY_FACET_COLUMNS = (
+    SpeciesEntry.kind.label("entry_kind"),
+    SpeciesEntry.stereo_label,
+    SpeciesEntry.stereo_descriptor,
+    SpeciesEntry.stereo_resolution,
+)
+
+
+def entry_facets_of(entry) -> dict:
+    """The computed facets of a species entry, as keyword arguments for an ``EntryFacetFields`` block.
+
+    Takes a loaded ``SpeciesEntry`` or a ``Row`` that selected :data:`ENTRY_FACET_COLUMNS` and
+    ``electronic_state_kind`` / ``isotope_key``. ``electronic_state_label`` and ``term_symbol`` are typed text and are
+    never part of this.
+    """
+    return {
+        "species_entry_kind": entry.entry_kind if hasattr(entry, "entry_kind") else entry.kind,
+        "electronic_state_kind": entry.electronic_state_kind,
+        "stereo_label": entry.stereo_label,
+        "stereo_descriptor": entry.stereo_descriptor,
+        "stereo_resolution": entry.stereo_resolution,
+        "isotope_key": entry.isotope_key,
+    }
+
+
 __all__ = [
+    "ENTRY_FACET_COLUMNS",
     "IDENTITY_COLUMNS",
+    "entry_facets_of",
     "species_entry_label",
     "species_entry_label_for",
 ]
