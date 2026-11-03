@@ -69,14 +69,34 @@ def test_z_to_e_participants_carry_their_stereo_facets_on_search_and_full(client
     assert record["products"][0]["stereo_descriptor"] == "E"
 
 
-def test_the_typed_state_label_and_term_symbol_are_not_served_as_facets(client, db_session) -> None:
-    """A depositor-typed ``electronic_state_label`` of ``R`` joins the label but is not a stereo facet."""
-    typed = {"smiles": "[H]", "charge": 0, "multiplicity": 2, "electronic_state_label": "R"}
-    ref = _entry_ref(db_session, _post(client, [typed, typed], [{"smiles": "[H][H]", "charge": 0, "multiplicity": 1}]))
-
-    participant = _search(client, ref)["reactants"][0]
-    assert participant["species_entry_label"] == "R"  # the joined label cannot be taken apart...
-    assert participant["stereo_label"] is None  # ...which is why the facets are served separately
+def _assert_no_state_facets(participant: dict) -> None:
+    assert participant["stereo_label"] is None
     assert participant["stereo_descriptor"] is None
     assert "electronic_state_label" not in participant
     assert "term_symbol" not in participant
+
+
+def test_a_legal_state_label_and_term_symbol_are_not_served_as_facets(client, db_session) -> None:
+    """``E`` is both a state letter and a stereo descriptor; as a state label it must not become a stereo facet."""
+    typed = {"smiles": "[H]", "charge": 0, "multiplicity": 2, "electronic_state_label": "E", "term_symbol": "2S"}
+    ref = _entry_ref(db_session, _post(client, [typed, typed], [{"smiles": "[H][H]", "charge": 0, "multiplicity": 1}]))
+
+    participant = _search(client, ref)["reactants"][0]
+    assert participant["species_entry_label"] == "state E \u00b2S"  # marked, so it cannot read as the descriptor E
+    _assert_no_state_facets(participant)
+
+
+def test_a_legacy_state_label_outside_the_grammar_is_not_served_as_a_facet(client, db_session) -> None:
+    """Rows stored before the grammar (planted via the ORM; an upload of ``R`` is refused) stay out of the facets."""
+    from sqlalchemy import update
+
+    from app.db.models.species import SpeciesEntry
+
+    typed = {"smiles": "[H]", "charge": 0, "multiplicity": 2, "electronic_state_label": "X"}
+    ref = _entry_ref(db_session, _post(client, [typed, typed], [{"smiles": "[H][H]", "charge": 0, "multiplicity": 1}]))
+    db_session.execute(update(SpeciesEntry).where(SpeciesEntry.electronic_state_label == "X").values(electronic_state_label="R"))
+    db_session.flush()
+
+    participant = _search(client, ref)["reactants"][0]
+    assert participant["species_entry_label"] == "state R"  # the joined label cannot be taken apart...
+    _assert_no_state_facets(participant)  # ...which is why the facets are served separately
