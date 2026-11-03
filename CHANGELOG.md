@@ -22,6 +22,15 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Gaussian and ORCA decks are read for grid, SCF, dispersion, solvation, RI, frozen core and relativity (2026-11-03)
+
+- **Client: `tckdb-client` and `tckdb-schemas` unchanged.** One new Alembic revision, `e5b1c8a3d702`, inserts nine rows into `calculation_parameter_vocab` and nothing else: no column, no level-of-theory identity change, no rewrite of a stored parameter row. No new environment variable. Stage 1 of the per-calculation-parameter work (part 1 of 2).
+- **What was wrong.** `Int=UltraFine`, `Int=(Grid=UltraFine)`, `SCF=Tight` without parentheses, `Opt(TS)`, `EmpiricalDispersion=GD3BJ`, `SCRF=(SMD,Solvent=Water)`, `Stable=Opt`, `5D`, `MP2(Full)`, and on the ORCA side `RIJCOSX`, `NoRI`, `D3BJ`, `NoFrozenCore`, `CPCM(Water)`, `DKH2` were either dropped or stored as raw rows with no canonical key, and `grid.quality` never had a canonical value. A depositor could not be checked against their deck on any of them.
+- **What changed.** Each spelling now lands on a canonical key with a value from a closed set (`app/services/parameter_closed_values.py`); a spelling the parser does not know stays a raw row with no key. A numeric `Grid=99590` is an unpruned grid and a named one (`UltraFine`) is pruned, so they are different values: the digits are the canonical value of a numeric grid and never equal a name. ORCA's bare `D3` is Becke-Johnson damping (`d3_bj`), Gaussian's `GD3` is zero damping (`d3_zero`). A key that is not stated has no row: the program default is never assumed. Keys added: `dispersion.correction`, `solvation.model`, `solvation.solvent`, `ri.approximation`, `core.frozen`, `relativistic.hamiltonian`, `basis.d_function_type`, `basis.f_function_type`, `scf.stability_analysis`.
+- **Decided: no `basis.auxiliary` key.** `def2/J`, `def2/JK` and `/C` tokens stay raw rows (section `basis_aux`); `level_of_theory.aux_basis` is their home and a second one would let the two disagree.
+- **Searches and tolerance.** Rows moved sections, so a raw `parameter_key=SCF` or `=Int` search no longer matches the rows it used to (`scf`/`integral` sections hold them now); search the canonical key. A Gaussian `Int=UltraFine` (and `Int=(Grid=UltraFine)`) now reaches the imaginary-mode tolerance as a tight grid on new deposits, which it did not before because no `grid.quality` canonical value was set.
+- **Read API.** `include=parameters` (and the entity read) now carries `source` (`parser`, `upload` or `curated`) on each parameter row.
+
 ## Electronic-state labels and term symbols are checked against a strict grammar (2026-11-03)
 
 - **`tckdb-schemas` 0.149.0, `tckdb-client` 0.183.0.** No migration (no DB CHECK: the schema package is the one place the grammar lives, and a SQL copy of a regex would be a second one to keep in step), no new environment variable, no backfill. Existing rows are dev data and are not rewritten.

@@ -30,6 +30,7 @@ from app.db.models.common import (
     CoordinateUnit,
     HessianSource,
     IRCDirection,
+    ParameterSource,
     PathSearchMethod,
     ValidationStatus,
 )
@@ -491,6 +492,7 @@ class CalculationParameterRead(TimestampedReadSchema):
     value_type: str | None = None
     unit: str | None = None
     parameter_index: int | None = None
+    source: ParameterSource | None = None
 
 
 # ---------------------------------------------------------------------------

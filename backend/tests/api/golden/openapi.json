@@ -7487,6 +7487,16 @@
             ],
             "title": "Section"
           },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParameterSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "unit": {
             "anyOf": [
               {
@@ -7521,7 +7531,7 @@
         "type": "object"
       },
       "CalculationParameterSummary": {
-        "description": "One parsed ``calculation_parameter`` row, projected for the\n``include=parameters`` heavy include.\n\nCarries both the raw (software-specific) and canonical (normalized)\nkey/value pairs plus the small bag of parser metadata that's\npublic-safe (``section``, ``value_type``, ``unit``,\n``parameter_index``). The full vocab row (descriptions, classification\nflags) is intentionally not inlined; callers that need it can fetch\nthe vocab via a separate read.\n\n``parameter_id`` is subject to the Phase D internal-ID visibility\npolicy and is stripped by the strip helper when the deployment\nforbids exposing internal ids.",
+        "description": "One parsed ``calculation_parameter`` row, projected for the\n``include=parameters`` heavy include.\n\nCarries both the raw (software-specific) and canonical (normalized)\nkey/value pairs plus the small bag of parser metadata that's\npublic-safe (``section``, ``value_type``, ``unit``,\n``parameter_index``) and ``source``, which says where the row came from:\n``parser`` (read from an uploaded input deck or output log), ``upload``\n(typed by the depositor) or ``curated``. A reader comparing two rows for\nthe same key needs it to tell a declaration from an observation. The full\nvocab row (descriptions, classification flags) is intentionally not\ninlined; callers that need it can fetch the vocab via a separate read.\n\n``parameter_id`` is subject to the Phase D internal-ID visibility\npolicy and is stripped by the strip helper when the deployment\nforbids exposing internal ids.",
         "properties": {
           "canonical_key": {
             "anyOf": [
@@ -7598,6 +7608,16 @@
               }
             ],
             "title": "Section"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParameterSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "unit": {
             "anyOf": [
@@ -41013,6 +41033,16 @@
           "same_basin"
         ],
         "title": "Pairing",
+        "type": "string"
+      },
+      "ParameterSource": {
+        "description": "Provenance of a ``calculation_parameter`` row.\n\nReplace-all on re-parse only deletes ``parser`` rows; ``upload`` and\n``curated`` rows are preserved.",
+        "enum": [
+          "parser",
+          "upload",
+          "curated"
+        ],
+        "title": "ParameterSource",
         "type": "string"
       },
       "ParserStamp": {

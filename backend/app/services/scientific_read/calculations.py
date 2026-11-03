@@ -2512,6 +2512,7 @@ def _build_parameters(
             value_type=row.value_type,
             unit=row.unit,
             parameter_index=row.parameter_index,
+            source=row.source,
             created_at=row.created_at,
         )
         for row in rows
