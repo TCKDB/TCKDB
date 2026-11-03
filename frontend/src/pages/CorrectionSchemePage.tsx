@@ -12,6 +12,7 @@ import { schemeKindLabel } from "../domain/correctionSchemeFormat"
 import { softwareLabel, toolReleaseLabel, words } from "../domain/provenanceFormat"
 import { useCorrectionScheme } from "../hooks/useCorrectionScheme"
 import type { EnergyCorrectionSchemeRecord, EnergyCorrectionSchemeUsage } from "../api/methodsApi"
+import { LiteratureCitation } from "../components/LiteratureCitation"
 
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
@@ -200,7 +201,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                         <dt>Literature source</dt>
                                         <dd>
                                             {record.literature
-                                                ? <>{record.literature.title ?? record.literature.literature_ref}{record.literature.year ? ` (${record.literature.year})` : ""}</>
+                                                ? <><LiteratureCitation literature={record.literature} />{record.literature.year ? ` (${record.literature.year})` : ""}</>
                                                 : "not recorded"}
                                         </dd>
                                     </div>

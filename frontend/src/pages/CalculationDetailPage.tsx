@@ -56,6 +56,7 @@ import { reviewPillClass } from "../domain/reviewPillFormat"
 import { hessianMethodLabel, isAssumedTauBasis, tauBasisNote } from "../domain/tauBasis"
 import { useCalculation } from "../hooks/useCalculation"
 import { useCalculationSection, type CalculationSectionState } from "../hooks/useCalculationSection"
+import { LiteratureCitation } from "../components/LiteratureCitation"
 
 // ---------------------------------------------------------------------------
 // Section-loading design (see the brief's "design problem" — recorded here
@@ -546,7 +547,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                                 <div>
                                     <dt>Literature</dt>
                                     <dd>
-                                        {literature.title ?? literature.literature_ref}
+                                        <LiteratureCitation literature={literature} />
                                         {literature.year ? ` (${literature.year})` : ""}
                                     </dd>
                                 </div>

@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Literature records say where their title came from; the review queue is for curators (2026-11-03)
+
+- **Client: `tckdb-client` and `tckdb-schemas` unchanged. Migration `b4d8e1a7c953`, no new environment variable.** Adds the nullable column `literature.title_source` (`resolved_metadata` | `depositor_supplied`). Existing rows stay `NULL`, meaning "not recorded"; there is no backfill because their titles cannot be classified honestly.
+- **What changed.** The resolver sets `title_source` from what happened: `resolved_metadata` only when the DOI/ISBN lookup returned a title, else `depositor_supplied`. An existing row matched later by DOI/ISBN is adopted as it stands; its title and source are never rewritten. The literature reads (`/literature`, `/scientific/literature`) and the literature summary embedded in other reads carry `title_source`; the summary also carries `isbn`.
+- **Website.** A literature title is shown only when `title_source` is `resolved_metadata`. Otherwise the page shows the DOI (as a link) or ISBN, else the public ref, with "Title not verified".
+- **Review queue.** `GET /record-reviews/queue` and `GET /record-reviews` (the same rows, flat) now require the curator or admin role; a plain account gets 403. `GET /record-reviews/{record_type}/{record_id}` (one record's status) is unchanged.
+
 ## The centre between two allene axes is read as `-`, `r` or `s` (2026-11-02)
 
 - **Client: `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no schema change, no new environment variable, no vocabulary change (`r` and `s` were already tokens). Part 3 of #832 (part of, not closing). Existing data is dev data: an entry stored with `?` at such a centre is not rewritten, and a new deposit of the same molecule now computes a different key; the two are not reconciled.

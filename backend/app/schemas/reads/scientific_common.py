@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.chemistry.level_label import render_level_label
 from app.db.models.common import (
+    LiteratureTitleSource,
     CompositeAssembly,
     CompositeEnergyVerificationState,
     CompositeSchemeKind,
@@ -658,8 +659,10 @@ class LiteratureSummary(BaseModel):
     id: int
     literature_ref: str
     title: str | None = None
+    title_source: LiteratureTitleSource | None = None
     year: int | None = None
     doi: str | None = None
+    isbn: str | None = None
 
 
 # ---------------------------------------------------------------------------

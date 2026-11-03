@@ -22,6 +22,7 @@ import { ReviewNote } from "../components/ReviewNote"
 import { computeSpeciesEnergyCoverage, solveEnergySourceSentence, STATE_ENERGY_ORDER_NOTE } from "../domain/networkEnergyCoverage"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
+import { LiteratureCitation } from "../components/LiteratureCitation"
 
 /**
  * `/networks/:networkRef` -- PR 2 (§3: identity, evidence incl. the
@@ -134,7 +135,7 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                                     <div><dt>Interpolation model</dt><dd>{perSolve((solve) => solve.interpolation_model)}</dd></div>
                                     <div><dt>Software (solve)</dt><dd>{record.software_release ? softwareText(record.software_release) : <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
                                     <div><dt>Workflow tool</dt><dd>{record.workflow_tool_release ? softwareText({ software: record.workflow_tool_release.workflow_tool, version: record.workflow_tool_release.version }) : <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
-                                    <div><dt>Literature</dt><dd>{record.literature?.title ?? <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
+                                    <div><dt>Literature</dt><dd>{record.literature ? <LiteratureCitation literature={record.literature} /> : <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
                                 </dl>
                             </div>
                         </div>

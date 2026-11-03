@@ -125,7 +125,7 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
 
     it("renders a deposited literature source", async () => {
         server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({
-            literature: { literature_ref: "lit_one", title: "A BAC parameterisation study", year: 2019, doi: null },
+            literature: { literature_ref: "lit_one", title: "A BAC parameterisation study", title_source: "resolved_metadata", year: 2019, doi: null },
         }))))
         page()
         await screen.findByRole("heading", { level: 1 })
