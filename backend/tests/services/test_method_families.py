@@ -335,6 +335,9 @@ def test_family_and_rung_are_never_an_order_key_a_tie_break_or_a_select_default(
         "api/routes/scientific/transition_states_browse.py",
         "schemas/reads/_method_family.py",
         "schemas/reads/scientific_level_of_theory.py",
+        # Asks only whether a stripped prefix or suffix leaves a known method name (a membership test); it filters
+        # and orders nothing.
+        "services/parameter_reconciliation.py",
         "services/scientific_read/calculation_provenance_filters.py",
         "services/scientific_read/calculations_search.py",
         "services/scientific_read/level_of_theory_search.py",
