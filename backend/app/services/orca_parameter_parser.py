@@ -76,20 +76,23 @@ _CANONICAL_MAP: dict[tuple[str, str], tuple[str, str | None]] = {
     ("grid", "grid6"): ("grid.quality", "grid6"),
     ("grid", "grid7"): ("grid.quality", "grid7"),
     # Resolution of the identity (from ! line; ``scf`` is where these have always been filed).
-    # ``NoCOSX`` removes only the chain-of-spheres part of the hybrid default, leaving RI-J
-    # (ORCA 6 manual, RIJCOSX, "Basic Usage").
+    # ``NoCOSX`` only turns the chain-of-spheres part off (ORCA 6 manual, RIJCOSX, "Basic Usage"); what is left
+    # depends on the method, so it stays a raw row with no canonical key.
     ("scf", "nori"): ("ri.approximation", "none"),
     ("scf", "ri"): ("ri.approximation", "rij"),
-    ("scf", "nocosx"): ("ri.approximation", "rij"),
     ("scf", "rijcosx"): ("ri.approximation", "rijcosx"),
     ("scf", "rijk"): ("ri.approximation", "rijk"),
     ("scf", "rijonx"): ("ri.approximation", "rijonx"),
-    # Empirical dispersion keywords. ``D3`` is the zero-damping D3 (ORCA's ``D3ZERO`` alias).
+    # Empirical dispersion keywords (ORCA 6 manual, Table 3.13; ORCA 5.0.4, "DFT-D3": ``! D3BJ`` "or simply
+    # ``! D3``"). Bare ``D3`` is Becke-Johnson damping in ORCA, whereas Gaussian's ``GD3`` is zero damping, so the
+    # two programs genuinely differ here and each parser maps its own spelling.
     ("dispersion", "d2"): ("dispersion.correction", "d2"),
-    ("dispersion", "d3"): ("dispersion.correction", "d3_zero"),
-    ("dispersion", "d3zero"): ("dispersion.correction", "d3_zero"),
+    ("dispersion", "d3"): ("dispersion.correction", "d3_bj"),
     ("dispersion", "d3bj"): ("dispersion.correction", "d3_bj"),
+    ("dispersion", "d3zero"): ("dispersion.correction", "d3_zero"),
+    ("dispersion", "d30"): ("dispersion.correction", "d3_zero"),
     ("dispersion", "d4"): ("dispersion.correction", "d4"),
+    ("dispersion", "novdw"): ("dispersion.correction", "none"),
     ("dispersion", "nod3"): ("dispersion.correction", "none"),
     ("dispersion", "nod3bj"): ("dispersion.correction", "none"),
     ("dispersion", "nod4"): ("dispersion.correction", "none"),
@@ -160,7 +163,7 @@ def _is_method_token(kw_lower: str) -> bool:
 
 #: Dispersion correction keywords — belong in level_of_theory.dispersion.
 _DISPERSION_KEYWORDS = frozenset({
-    "d2", "d3", "d3bj", "d3zero", "d4", "vdwfn",
+    "d2", "d3", "d3bj", "d3zero", "d30", "d4", "vdwfn", "novdw",
     "nod3", "nod3bj", "nod4", "novdwfn",
 })
 
@@ -325,6 +328,19 @@ def _solvation_rows(keyword: str) -> list[dict]:
             "value_type": "string",
         })
     return rows
+
+
+def _resolve_dkh_order(params: list[dict]) -> list[dict]:
+    """``%rel Method DKH`` is DKH2 when no ``Order`` is given or the order is 2 (ORCA 6 manual: ``Order`` defaults to 2).
+
+    Any other order is a different Hamiltonian the closed set does not hold, so the row stays raw.
+    """
+    rel = [p for p in params if p.get("section") == "relativity"]
+    orders = [p["raw_value"].strip() for p in rel if p["raw_key"].lower() == "order"]
+    for p in rel:
+        if p["raw_key"].lower() == "method" and p["raw_value"].strip().lower() == "dkh" and all(o == "2" for o in orders):
+            p["canonical_key"], p["canonical_value"] = "relativistic.hamiltonian", "dkh2"
+    return params
 
 
 def _resolve_smd_over_cpcm(params: list[dict]) -> list[dict]:
@@ -500,7 +516,7 @@ def _block_canonical(section: str, raw_key: str, raw_value: str) -> tuple[str | 
     if section == "relativity" and key == "method":
         return canonical_or_none("relativistic.hamiltonian", {"zora": "zora", "iora": "iora", "x2c": "x2c"}.get(value))
     if section == "general" and key == "frozencore":
-        return canonical_or_none("core.frozen", {"fc_none": "all_electron", "fc_ewin": "window"}.get(value))
+        return canonical_or_none("core.frozen", {"fc_none": "all_electron", "fc_ewin": "window", "fc_electrons": "frozen_core"}.get(value))
     return _lookup_canonical(section, raw_key)
 
 
@@ -1227,7 +1243,7 @@ def parse_orca_log(
     # Parse all parameter sources
     keyword_params = _parse_keyword_lines(input_lines)
     block_params = _parse_block_sections(input_lines)
-    all_params = _resolve_smd_over_cpcm(keyword_params + block_params)
+    all_params = _resolve_dkh_order(_resolve_smd_over_cpcm(keyword_params + block_params))
 
     # Parse scan coordinate definitions from %GEOM blocks (if any)
     scan_coordinates = _parse_scan_definitions(input_lines)
