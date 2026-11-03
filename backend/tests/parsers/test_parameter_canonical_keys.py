@@ -58,6 +58,12 @@ def test_gaussian_grid_spellings_give_one_canonical_value(route, expected):
     assert _canonical(_parse_route_tokens(route))["grid.quality"] == [expected]
 
 
+def test_gaussian_grid_name_gaussian_does_not_document_stays_raw():
+    params = _parse_route_tokens("#p b3lyp/6-31g(d) opt int=(grid=Foo)")
+    assert "grid.quality" not in _canonical(params)
+    assert any(p["raw_key"] == "grid" and p["raw_value"] == "Foo" for p in params)
+
+
 def test_gaussian_grid_without_a_stated_grid_has_no_grid_row():
     assert "grid.quality" not in _canonical(_parse_route_tokens("#p b3lyp/6-31g(d) opt freq"))
 
