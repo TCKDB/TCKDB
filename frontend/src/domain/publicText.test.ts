@@ -29,6 +29,7 @@ describe("publicChemistryKey", () => {
         expect(publicChemistryKey("DEPOSITOR_SENTINEL_target")).toBe("unrecognised key")
         expect(publicChemistryKey("Fu-Ck")).toBe("unrecognised key")
         expect(publicChemistryKey("Xx")).toBe("unrecognised key")
+        expect(publicChemistryKey("No-Ho-Es")).toBe("unrecognised key")
         expect(publicChemistryKey("C-Uu")).toBe("unrecognised key")
     })
 })
@@ -45,8 +46,8 @@ describe("publicStateLabel", () => {
         expect(label).toBe("N=N + 2 [H][H] + ...")
     })
 
-    it("keeps the served label when there are no participants to rebuild from", () => {
-        expect(publicStateLabel({ participants: [], state_label: "NN" })).toBe("NN")
+    it("returns an empty label when there are no participants, never the served one", () => {
+        expect(publicStateLabel({ participants: [], state_label: "NN" })).toBe("")
     })
 })
 

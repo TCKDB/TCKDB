@@ -196,7 +196,6 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
         // Never served on this endpoint (see `TransitionStateEntryCoreBlock`)
         // -- a TS has no molecular-graph formula the way a species does.
         formula: null,
-        unmappedSmiles: entry.unmapped_smiles ?? null,
         charge: entry.charge,
         multiplicity: entry.multiplicity,
         transitionStateRef: ts?.transition_state_ref,

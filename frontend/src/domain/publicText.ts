@@ -44,7 +44,7 @@ export function channelHandle(key: string | null | undefined): string | undefine
  * A network state's one-string spelling (`N=N + 2 [H][H]`), rebuilt from the
  * participants' canonical SMILES and stoichiometry only. The server's own
  * `state_label` embeds each participant's `species_entry_label`, which joins in
- * depositor-typed parts, so it is only used when there are no participants.
+ * depositor-typed parts, so it is never used: no participants gives "".
  */
 export function publicStateLabel(composition: {
     participants?: ReadonlyArray<{ canonical_smiles: string; stoichiometry: number }>
@@ -52,7 +52,7 @@ export function publicStateLabel(composition: {
     state_label: string
 }): string {
     const participants = composition.participants ?? []
-    if (participants.length === 0) return composition.state_label
+    if (participants.length === 0) return ""
     const parts = participants.map((participant) => (
         participant.stoichiometry !== 1 ? `${participant.stoichiometry} ${participant.canonical_smiles}` : participant.canonical_smiles
     ))
@@ -76,7 +76,8 @@ const KEY_PART = /^([A-Z][a-z]?)(\d*)$/
  */
 export function publicChemistryKey(value: string): string {
     const parts = value.split(/[-=#:~]/)
-    const ok = parts.length > 0 && parts.every((part) => {
+    // An element, or a two-part bond key (`C-H`, `C=O`, `N#N`): the shapes the Petersson and Melius schemes use.
+    const ok = parts.length >= 1 && parts.length <= 2 && parts.every((part) => {
         const match = KEY_PART.exec(part)
         return match !== null && ELEMENTS.has(match[1])
     })

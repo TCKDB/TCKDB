@@ -288,10 +288,6 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
                     the reaction-deposit context already distinguish the
                     record; this header never reads `identity.label` for
                     display any more. */}
-                {/* `unmapped_smiles` is stored as the depositor typed it (whitespace-trimmed, not
-                    parsed or canonicalised), so it is printed only when every character of it
-                    parses as SMILES syntax; any other string is depositor text and is not shown
-                    (house rule, owner decision 2026-11-03). */}
                 {/* No unmapped SMILES: it is stored exactly as the depositor typed it, with no parsing
                     or canonicalisation, so no check on its shape can show it safely. The title
                     already carries the reaction equation (owner decision 2026-11-03). */}

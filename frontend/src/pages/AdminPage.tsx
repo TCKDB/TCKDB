@@ -162,7 +162,7 @@ export default function AdminPage() {
                             <tbody>
                                 {usersState.users.map((user) => (
                                     <tr key={user.id}>
-                                        <th scope="row">
+                                        <th scope="row" id={`admin-user-${user.id}`}>
                                             {user.username}
                                             {user.id === signedInUserId && <span className="admin-you"> (you)</span>}
                                             {!user.is_active && <span className="admin-inactive"> deactivated</span>}
@@ -179,7 +179,7 @@ export default function AdminPage() {
                                                 header alone is not enough -- every row's
                                                 select would announce as "Role". */}
                                             <select
-                                                aria-label={`Role for account ${user.id}`}
+                                                aria-labelledby={`admin-user-${user.id}`}
                                                 className="admin-role-select"
                                                 value={user.role}
                                                 disabled={pendingId === user.id}

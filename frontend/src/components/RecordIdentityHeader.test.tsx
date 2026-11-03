@@ -34,7 +34,6 @@ const speciesIdentity: RecordIdentity = {
 const tsIdentity: RecordIdentity = {
     kind: "transition_state_entry",
     formula: null,
-    unmappedSmiles: null,
     charge: 0,
     multiplicity: 2,
     transitionStateEntryRef: "tse_demo",
@@ -95,7 +94,7 @@ describe("RecordIdentityHeader", () => {
 
     it("never renders a transition-state's unmapped SMILES, whatever it holds", () => {
         for (const typed of ["[CH2]OO[CH2]", "PISS.ON.BOOBS", "DEPOSITOR_SENTINEL_smiles"]) {
-            const { unmount } = renderHeader({ identity: { ...tsIdentity, unmappedSmiles: typed } })
+            const { unmount } = renderHeader({ identity: { ...tsIdentity, unmappedSmiles: typed } as unknown as RecordIdentity })
             expect(document.body.innerHTML).not.toContain(typed)
             unmount()
         }
@@ -243,7 +242,7 @@ describe("RecordIdentityHeader", () => {
 
         it("a transition-state identity's entry-ref fact gets a copy button, and no unmapped SMILES is offered", () => {
             renderHeader({
-                identity: { ...tsIdentity, unmappedSmiles: "[CH3].[OH2]", transitionStateEntryRef: "tse_demo" },
+                identity: { ...tsIdentity, unmappedSmiles: "[CH3].[OH2]", transitionStateEntryRef: "tse_demo" } as unknown as RecordIdentity,
             })
             expect(screen.queryByRole("button", { name: /copy reaction smiles/i })).not.toBeInTheDocument()
             expect(screen.getByRole("button", { name: /copy transition state entry/i })).toBeVisible()
@@ -295,27 +294,27 @@ describe("RecordIdentityHeader", () => {
         // normalisation of it.
         it("shows SMILES-leads-formula-in-brackets and never the served species_entry_label", () => {
             renderHeader({
-                identity: { ...speciesIdentity, formula: "CH3", speciesEntryLabel: "R" },
+                identity: { ...speciesIdentity, formula: "CH3" },
             })
             const link = document.querySelector('a[href="/species-entries/spe_demo"]')!
             expect(link.textContent).toBe("[CH3] (CH3)")
         })
 
         it("shows SMILES-leads-formula-in-brackets alone when the identity carries no label", () => {
-            renderHeader({ identity: { ...speciesIdentity, formula: "CH3", speciesEntryLabel: null } })
+            renderHeader({ identity: { ...speciesIdentity, formula: "CH3" } })
             const link = document.querySelector('a[href="/species-entries/spe_demo"]')!
             expect(link.textContent).toBe("[CH3] (CH3)")
         })
 
         it("no formula served, SMILES still is: the SMILES stands alone (no bracketed formula)", () => {
-            renderHeader({ identity: { ...speciesIdentity, formula: null, speciesEntryLabel: null } })
+            renderHeader({ identity: { ...speciesIdentity, formula: null } })
             const link = screen.getByRole("link", { name: "[CH3]" })
             expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
             expect(link.querySelector("code.data")?.textContent).toBe("[CH3]")
         })
 
         it("falls back to the entry ref, as a data code run, when the identity carries no SMILES, no formula, and no label", () => {
-            renderHeader({ identity: { ...speciesIdentity, canonicalSmiles: "", formula: null, speciesEntryLabel: null } })
+            renderHeader({ identity: { ...speciesIdentity, canonicalSmiles: "", formula: null } })
             const link = screen.getByRole("link", { name: "spe_demo" })
             expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
             const code = link.querySelector("code")
