@@ -17,13 +17,13 @@ from pathlib import Path
 
 import pytest
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.db.models.common import SpeciesEntryStateKind
 from app.db.models.species import Species, SpeciesEntry
 from app.services.scientific_read.species_identity import species_entry_label
 from tests.api.test_api_created_by_attribution import _computed_species_payload_with_thermo_and_statmech
-from tests.api.test_api_network_reads import _pdep_payload
+from tests.api.test_api_network_reads import _pdep_payload, _upload_pdep_network
 from tests.api.test_api_statmech_upload import _statmech_payload
 from tests.api.test_api_transport_upload import _transport_payload
 from tests.api.test_api_uploads import (
@@ -150,7 +150,7 @@ def _models_with(field: str) -> set[type[BaseModel]]:
 
 
 #: Models that only describe what is stored. They must keep rendering data stored before the rule.
-_READ_ONLY = ("Read", "Summary", "Chemistry")
+_READ_ONLY = ("Read", "Summary", "Chemistry", "Base")
 
 
 @pytest.mark.parametrize("field", list(CODES))
@@ -167,6 +167,34 @@ def test_every_schema_that_accepts_the_field_validates_it(field) -> None:
             model.model_validate({field: "ground state"})
         codes = {getattr(e.get("ctx", {}).get("error"), "code", None) for e in caught.value.errors()}
         assert CODES[field] in codes, model
+
+
+@pytest.mark.parametrize("field", list(CODES))
+def test_no_read_model_carries_the_check(field) -> None:
+    """A row stored before the rule must still read back: validating on read would 422 the GET."""
+    reads = {m for m in _models_with(field) if m.__name__.endswith("Read")}
+    assert "SpeciesEntryRead" in {m.__name__ for m in reads}
+    for model in reads:
+        decorated = [
+            v for v in model.__pydantic_decorators__.field_validators.values() if field in v.info.fields
+        ]
+        assert decorated == [], model
+
+
+def test_a_stored_row_outside_the_grammar_still_reads_back(client, db_session) -> None:
+    """Pre-rule data: the entry route and a network read both return 200, with the stored text."""
+    network_id, _ = _upload_pdep_network(client, name="legacy-state-label")
+    db_session.execute(update(SpeciesEntry).values(electronic_state_label="R", term_symbol="TWIN"))
+    db_session.flush()
+    entry_id = db_session.scalars(select(SpeciesEntry.id)).first()
+
+    entry = client.get(f"/api/v1/species-entries/{entry_id}")
+    assert entry.status_code == 200, entry.text[:500]
+    assert (entry.json()["electronic_state_label"], entry.json()["term_symbol"]) == ("R", "TWIN")
+
+    network = client.get(f"/api/v1/networks/{network_id}")
+    assert network.status_code == 200, network.text[:500]
+    assert {s["species_entry"]["electronic_state_label"] for s in network.json()["species"]} == {"R"}
 
 
 @pytest.mark.parametrize(

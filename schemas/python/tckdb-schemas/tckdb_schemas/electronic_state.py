@@ -12,7 +12,7 @@ This module is the one place the grammar lives. A frontend mirrors it by
 compiling the same pattern source: ``ELECTRONIC_STATE_LABEL_SOURCE`` and
 ``TERM_SYMBOL_SOURCE`` are written in the subset of regular-expression syntax
 that Python's ``re`` and JavaScript's ``RegExp`` (``u`` flag) read identically
-(non-capturing groups, ``[0-9]`` rather than ``\\d``, ``\\uXXXX`` escapes, no
+(non-capturing groups, ``[0-9]`` rather than ``\\d``, literal characters (never ``\\uXXXX`` escapes), no
 inline flags, no named groups), to be anchored as ``^(?:SOURCE)$``. The accepted
 and rejected examples are shipped in ``electronic_state_examples.json`` beside
 this file so a parity test on either side drives the same table.
@@ -101,8 +101,8 @@ TERM_SYMBOL_MAX_LENGTH = 64
 _LETTER = r"(?:[A-DF-LNOQT-Y]|[a-df-lnoqt-y])"
 # Tilde (polyatomic state): ASCII "~", the combining tilde U+0303, or the precomposed A/a with tilde.
 _TILDE = r"(?:~|̃)"
-# Primes: ' '' , U+2032 (prime), U+2033 (double prime).
-_PRIMES = r"(?:''?|′′?|″)"
+# Primes: ' '' " , U+2032 (prime), U+2033 (double prime).
+_PRIMES = r"""(?:''?|"|′′?|″)"""
 _LETTER_LABEL = rf"(?:(?:{_LETTER}{_TILDE}?|[Ãã]){_PRIMES}?)"
 # Ordinal: singlet/doublet/triplet/quartet + energy-order index.
 _ORDINAL = r"[SDTQ](?:0|[1-9][0-9]?)"
@@ -117,7 +117,7 @@ _SIGN = r"(?:\^?[+\-−⁺⁻])"
 _OMEGA = r"(?:_\{[0-9]{1,2}(?:/2)?[+\-]?\}|_?[0-9]{1,2}(?:/2)?[+\-]?)"
 _LINEAR = rf"{_LAMBDA}(?:{_PARITY}{_SIGN}?|{_SIGN}{_PARITY}?)?{_OMEGA}?"
 # Mulliken symmetry species A, B, E, T with an index, parity and primes.
-_IRREP = r"[ABET][1-3]?[gu]?" + _PRIMES + r"?"
+_IRREP = r"[ABET][1-3₁-₃]?[gu]?" + _PRIMES + r"?"
 # Atomic L (the letters the repo's atomic-term parser reads), parity, and J.
 _J = r"(?:[0-9]{1,2}(?:/2)?|[₀-₉]{1,2}(?:[/⁄]₂)?)"
 _ATOMIC = rf"[SPDFGHIK](?:o|°|\*)?(?:_\{{{_J}\}}|_?{_J})?"

@@ -44,6 +44,27 @@ _IDENTITY_TEXT_FIELDS = (
 
 
 class SpeciesEntryIdentityValidatorMixin:
+    @model_validator(mode="after")
+    def normalize_identity_text_fields(self) -> Self:
+        """Normalize optional identity text fields without imposing stricter semantics yet."""
+
+        for field_name in _IDENTITY_TEXT_FIELDS:
+            setattr(
+                self,
+                field_name,
+                normalize_optional_text(getattr(self, field_name, None)),
+            )
+
+        return self
+
+
+class SpeciesEntryIdentityWriteValidatorMixin:
+    """The state-label and term-symbol checks, for models that *accept* the fields.
+
+    Deliberately separate from :class:`SpeciesEntryIdentityValidatorMixin`, which read schemas
+    share: a read model must keep rendering a row stored before the grammar existed.
+    """
+
     @field_validator("electronic_state_label", mode="before", check_fields=False)
     @classmethod
     def electronic_state_label_has_accepted_shape(cls, value: object) -> object:
@@ -65,19 +86,6 @@ class SpeciesEntryIdentityValidatorMixin:
         """
 
         return check_term_symbol(value)
-
-    @model_validator(mode="after")
-    def normalize_identity_text_fields(self) -> Self:
-        """Normalize optional identity text fields without imposing stricter semantics yet."""
-
-        for field_name in _IDENTITY_TEXT_FIELDS:
-            setattr(
-                self,
-                field_name,
-                normalize_optional_text(getattr(self, field_name, None)),
-            )
-
-        return self
 
 
 #: The reserved token that declares a free electron as a reaction participant.
@@ -266,6 +274,7 @@ class SpeciesIdentityPayload(SchemaBase):
 
 
 class SpeciesEntryIdentityPayload(
+    SpeciesEntryIdentityWriteValidatorMixin,
     SpeciesEntryIdentityValidatorMixin,
     SpeciesIdentityPayload,
 ):
