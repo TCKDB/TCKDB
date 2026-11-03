@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from tckdb_schemas.deposit_warning_messages import EXCITED_STATE_METHODS
+from tckdb_schemas.electronic_state import canonical_term_symbol, is_valid_term_symbol
 from tckdb_schemas.stationary_point import (
     TS_IMAGINARY_FREQUENCY_MIN_CM1,
     W_N_IMAG_CONTRADICTS_MINIMUM,
@@ -400,8 +401,12 @@ def _reconcile_deduction(
     if payload_value is None:
         return None
 
-    # Compare
-    if str(payload_value) == str(deduction.value):
+    # Compare. A term symbol is stored in its canonical spelling (tckdb_schemas.electronic_state),
+    # while the deduction is spelled the way ``derive_term_symbol`` writes it (``1A1``).
+    deduced_value = str(deduction.value)
+    if deduction.field == "term_symbol" and is_valid_term_symbol(deduced_value):
+        deduced_value = canonical_term_symbol(deduced_value)
+    if str(payload_value) == deduced_value:
         return None
 
     code = _DEDUCTION_WARNING_CODES[deduction.field]

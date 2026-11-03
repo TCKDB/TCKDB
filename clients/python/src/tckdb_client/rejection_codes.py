@@ -150,6 +150,7 @@ class RejectionCode(str, Enum):
     CURSOR_OFFSET_CONFLICT = "cursor_offset_conflict"
     CURSOR_QUERY_MISMATCH = "cursor_query_mismatch"
     DOI_ALREADY_RECORDED = "doi_already_recorded"
+    ELECTRONIC_STATE_LABEL_INVALID = "electronic_state_label_invalid"
     EMAIL_TAKEN = "email_taken"
     ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_NOT_APPLICABLE = "energy_correction_scheme_frequency_level_not_applicable"
     ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_WITHOUT_ENERGY_LEVEL = "energy_correction_scheme_frequency_level_without_energy_level"
@@ -362,6 +363,7 @@ class RejectionCode(str, Enum):
     TCKDB_CLIENT_VERSION_INVALID = "tckdb_client_version_invalid"
     TCKDB_CLIENT_VERSION_MISSING = "tckdb_client_version_missing"
     TCKDB_CLIENT_VERSION_UNSUPPORTED = "tckdb_client_version_unsupported"
+    TERM_SYMBOL_INVALID = "term_symbol_invalid"
     THERMO_DECLARATION_INVALID = "thermo_declaration_invalid"
     THERMO_ENERGY_LEVEL_AMBIGUOUS = "thermo_energy_level_ambiguous"
     THERMO_ENERGY_LEVEL_CONTRADICTION = "thermo_energy_level_contradiction"
@@ -499,6 +501,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.CONFORMER_KEY_UNDECLARED,
         RejectionCode.CURSOR_OFFSET_CONFLICT,
         RejectionCode.CURSOR_QUERY_MISMATCH,
+        RejectionCode.ELECTRONIC_STATE_LABEL_INVALID,
         RejectionCode.ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_NOT_APPLICABLE,
         RejectionCode.ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_WITHOUT_ENERGY_LEVEL,
         RejectionCode.ENTHALPY_DECLARATION_ABSENT,
@@ -674,6 +677,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.STRUCTURE_SELECTION_UNSUPPORTED,
         RejectionCode.SUBJECT_TYPE_MISMATCH,
         RejectionCode.SUPERSEDES_SAME_RECORD,
+        RejectionCode.TERM_SYMBOL_INVALID,
         RejectionCode.THERMO_DECLARATION_INVALID,
         RejectionCode.THERMO_ENERGY_LEVEL_AMBIGUOUS,
         RejectionCode.THERMO_ENERGY_LEVEL_CONTRADICTION,
@@ -842,6 +846,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.CURSOR_OFFSET_CONFLICT: frozenset({422}),
     RejectionCode.CURSOR_QUERY_MISMATCH: frozenset({422}),
     RejectionCode.DOI_ALREADY_RECORDED: frozenset({409}),
+    RejectionCode.ELECTRONIC_STATE_LABEL_INVALID: frozenset({422}),
     RejectionCode.EMAIL_TAKEN: frozenset({409}),
     RejectionCode.ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_NOT_APPLICABLE: frozenset({422}),
     RejectionCode.ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_WITHOUT_ENERGY_LEVEL: frozenset({422}),
@@ -1054,6 +1059,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.TCKDB_CLIENT_VERSION_INVALID: frozenset({426}),
     RejectionCode.TCKDB_CLIENT_VERSION_MISSING: frozenset({426}),
     RejectionCode.TCKDB_CLIENT_VERSION_UNSUPPORTED: frozenset({426}),
+    RejectionCode.TERM_SYMBOL_INVALID: frozenset({422}),
     RejectionCode.THERMO_DECLARATION_INVALID: frozenset({422}),
     RejectionCode.THERMO_ENERGY_LEVEL_AMBIGUOUS: frozenset({422}),
     RejectionCode.THERMO_ENERGY_LEVEL_CONTRADICTION: frozenset({422}),

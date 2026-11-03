@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tckdb-schemas"
-version = "0.149.0"
+version = "0.150.0"
 description = "Pure Pydantic wire-contract schemas for TCKDB upload payloads."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -57,6 +57,7 @@ include = ["tckdb_schemas*"]
 # an adapter reads it from the installed package, never from a checkout.
 tckdb_schemas = [
     "py.typed",
+    "electronic_state_examples.json",
     "contract/PRODUCER_CONTRACT.md",
     "contract/CHANGELOG.md",
     "contract/REFUSAL_CODES.md",
