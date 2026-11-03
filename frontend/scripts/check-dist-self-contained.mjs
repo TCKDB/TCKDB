@@ -126,6 +126,8 @@ const ALLOWED_URLS = [
     { url: "https://github.com/molstar/molstar/blob/master/src/mol-gl/shader/fxaa.frag.ts", why: "comment inside 3Dmol.js shader source" },
     { url: "http://mrl.nyu.edu/~dzorin/cg05/lecture12.pdf", why: "comment inside 3Dmol.js shader source" },
     { url: "http://stackoverflow.com/questions/9595300/cylinder-impostor-in-glsl", why: "comment inside 3Dmol.js shader source" },
+    // A link a reader follows, never loaded by the page: the DOI is appended at run time (`domain/literatureCitation.ts`).
+    { url: "https://doi.org/", why: "base of the citation link shown for a literature record's DOI; followed by the reader, never fetched" },
     // 3Dmol.js's own remote loaders: base URLs it appends an id to. The app does not call them (see header).
     { url: "https://files.rcsb.org/view/", why: "3Dmol.js loader base (fetch by PDB id)" },
     { url: "https://models.rcsb.org/", why: "3Dmol.js loader base (BinaryCIF by PDB id)" },

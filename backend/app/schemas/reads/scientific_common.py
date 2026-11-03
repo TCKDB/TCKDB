@@ -17,12 +17,12 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.chemistry.level_label import render_level_label
 from app.db.models.common import (
-    LiteratureTitleSource,
     CompositeAssembly,
     CompositeEnergyVerificationState,
     CompositeSchemeKind,
     CoreTreatment,
     LegacyCompositeShape,
+    LiteratureTitleSource,
     ProfileRecommendation,
     ReadProfile,
     RecordReviewStatus,
