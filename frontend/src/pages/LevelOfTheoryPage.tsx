@@ -118,8 +118,7 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                                     <div><dt>Core treatment</dt><dd>{lot.core_treatment ? words(lot.core_treatment) : "not recorded"}</dd></div>
                                     {lot.aux_basis && <div><dt>Auxiliary basis</dt><dd>{lot.aux_basis}</dd></div>}
                                     {lot.cabs_basis && <div><dt>CABS basis</dt><dd>{lot.cabs_basis}</dd></div>}
-                                    {/* No `lot.keywords`: free text the depositor typed (house rule,
-                                        owner decision 2026-11-03). */}
+                                    {lot.keywords && <div><dt>Keywords</dt><dd>{lot.keywords}</dd></div>}
                                     {lot.composite_scheme && (
                                         <div>
                                             <dt>Composite recipe</dt>

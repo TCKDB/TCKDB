@@ -123,7 +123,7 @@ function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
                                                 : "not recorded"}
                                         </dd>
                                     </div>
-                                    {scheme.note && <div><dt>Note</dt><dd>{scheme.note}</dd></div>}
+                                    {/* No `scheme.note`: not printed (owner decision 2026-11-03). */}
                                 </dl>
                             </div>
                         </div>

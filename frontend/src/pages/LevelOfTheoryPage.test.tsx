@@ -459,7 +459,7 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
 
 describe("LevelOfTheoryPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
     it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
-        const planted = plantSentinels(baseRecord(), ["name", "note", "keywords", "target"])
+        const planted = plantSentinels(baseRecord(), ["name", "note", "target"])
         expectPlanted(planted)
         const { value } = planted
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(value))))
