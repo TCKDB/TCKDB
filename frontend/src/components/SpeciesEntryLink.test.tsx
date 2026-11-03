@@ -107,6 +107,22 @@ describe("SpeciesEntryLink", () => {
     })
 })
 
+describe("SpeciesEntryLink -- structured facets", () => {
+    it("appends chips built from the structured facets, and nothing from a joined label", () => {
+        const { container } = render(
+            <MemoryRouter>
+                <SpeciesEntryLink
+                    speciesEntryRef="se_abc123"
+                    smiles="CC=CC"
+                    formula="C4H8"
+                    facets={{ species_entry_kind: "minimum", electronic_state_kind: "ground", stereo_label: "Z", stereo_descriptor: "Z" }}
+                />
+            </MemoryRouter>,
+        )
+        expect(container.querySelector("a")!.textContent).toBe("CC=CC (C4H8) · Z isomer")
+    })
+})
+
 describe("SpeciesEntryLink -- no depositor-typed text (owner decision 2026-11-03)", () => {
     it("scans the whole link: a typed label is never in its text or any attribute", () => {
         const planted = plantSentinels({ speciesEntryRef: "se_abc123", smiles: "CC", formula: "C2H6", speciesEntryLabel: "x" }, ["speciesEntryLabel"])

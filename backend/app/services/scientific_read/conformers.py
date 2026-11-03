@@ -105,7 +105,9 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
     STEREO_DISPLAY,
+    entry_facets_of,
     species_entry_label_for,
 )
 
@@ -843,6 +845,7 @@ def _build_species_context(
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
         )
         .join(Species, Species.id == SpeciesEntry.species_id)
         .where(SpeciesEntry.id == species_entry_id)
@@ -858,6 +861,7 @@ def _build_species_context(
         species_entry_id=row.entry_id,
         species_entry_ref=row.entry_ref,
         species_entry_label=species_entry_label_for(row),
+        **entry_facets_of(row),
         formula=row.formula,
         canonical_smiles=row.smiles,
         inchi_key=row.inchi_key,

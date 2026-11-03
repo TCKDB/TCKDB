@@ -29,6 +29,8 @@ function page(ref: string) {
 
 const participant = (ref: string, formula: string, smiles: string, label?: string) => ({
     species_entry_ref: ref, formula, smiles, participant_index: 0, species_entry_label: label ?? null,
+    // The computed facets, which are what the page renders chips from.
+    species_entry_kind: "minimum", electronic_state_kind: "ground", stereo_label: label ?? null, stereo_descriptor: label ?? null,
 })
 
 function searchResponse() {
@@ -123,7 +125,7 @@ describe("ReactionOverviewPage", () => {
     // Post-review fix: every participant cell used to render ONLY the
     // formula link, dropping the ref/copy-button/stereo-label chip the
     // mock's own chooser table carried for all four facts.
-    it("each participant cell carries its own spe_ ref, a copy button, and and no served label", async () => {
+    it("each participant cell carries its own spe_ ref, a copy button, and and its structured stereo chip", async () => {
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
         page(REACTION_REF)
         await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
@@ -135,7 +137,7 @@ describe("ReactionOverviewPage", () => {
         expect(refCode.tagName).toBe("CODE")
         const cell = refCode.closest("td")!
         expect(cell.querySelector(".copy-button")).not.toBeNull()
-        expect(cell.textContent).not.toContain("isomer")
+        expect(cell.textContent).toContain("(Z isomer)")
     })
 
     // Round-2 review finding: the between-participant separator ("·") and
@@ -151,10 +153,10 @@ describe("ReactionOverviewPage", () => {
         await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
         const rows = screen.getAllByRole("row").slice(1)
         const productsCell = rows[0].querySelector('td[data-label="Products"]')!
-        // The served species_entry_label is never printed, so there is no chip to mistake for a product.
+        // Exactly ONE "·" (the real participant separator): the chip is parenthesised, so it cannot read as a third product.
         const dotCount = (productsCell.textContent!.match(/·/g) ?? []).length
         expect(dotCount).toBe(1)
-        expect(productsCell.textContent).not.toContain("isomer")
+        expect(productsCell.textContent).toContain("(Z isomer)")
     })
 
     it("the identity header carries the record's own Equation (as deposited) fact", async () => {
@@ -285,6 +287,9 @@ describe("ReactionOverviewPage -- no depositor-typed text (owner decision 2026-1
         expectPlanted(planted)
         const { value } = planted
         setAt(value, "records.0.products.1.species_entry_label", `${ADVERSARIAL.stereoMark} ${ADVERSARIAL.smilesWord}`)
+        // No structured stereo on these participants: the typed R in the joined label must yield no stereo wording.
+        setAt(value, "records.0.products.1.stereo_label", null)
+        setAt(value, "records.0.products.1.stereo_descriptor", null)
         setAt(value, "records.0.reactants.0.species_entry_label", ADVERSARIAL.joinedLabel)
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(value)))
         page(REACTION_REF)

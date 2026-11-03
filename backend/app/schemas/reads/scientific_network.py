@@ -59,6 +59,7 @@ from app.schemas.reads.scientific_common import (
     WorkflowToolReleaseSummary,
 )
 from app.schemas.reads.scientific_deposit_warnings import RecordWarnings, SubmissionWarnings
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 from app.schemas.reads.scientific_network_composition import (
     NetworkStateComposition,
 )
@@ -114,7 +115,7 @@ class NetworkCoreBlock(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class NetworkSpeciesSummary(BaseModel):
+class NetworkSpeciesSummary(EntryFacetFields):
     """One ``network_species`` row projected for ``include=species``.
 
     Composite PK is ``(network_id, species_entry_id, role)`` so there's

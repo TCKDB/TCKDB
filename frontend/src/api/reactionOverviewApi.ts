@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { recordReviewSchema } from "./scientificSchemas"
+import { recordReviewSchema, entryFacetFields } from "./scientificSchemas"
 import { listRequestEchoSchema, paginationSchema } from "./listEnvelope"
 import { pageQuery, parsePagedRef } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
@@ -24,6 +24,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 const participantSchema = z.object({
     species_entry_ref: z.string(),
     species_entry_label: z.string().nullable().optional(),
+    ...entryFacetFields,
     smiles: z.string(),
     formula: z.string().nullable().optional(),
     stoichiometry: z.number().optional().default(1),

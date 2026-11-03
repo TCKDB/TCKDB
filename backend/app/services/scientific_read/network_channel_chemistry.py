@@ -30,7 +30,12 @@ from app.schemas.reads.scientific_network_kinetics_search import (
 # The entry discriminator is shared with the species and structure searches;
 # see app/services/scientific_read/species_identity.py for why it has one
 # definition rather than one per surface.
-from app.services.scientific_read.species_identity import STEREO_DISPLAY, species_entry_label
+from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
+    STEREO_DISPLAY,
+    entry_facets_of,
+    species_entry_label,
+)
 
 
 def build_network_state_composition(
@@ -61,6 +66,7 @@ def build_network_state_composition(
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
             NetworkStateParticipant.stoichiometry,
         )
         .join(
@@ -88,6 +94,7 @@ def build_network_state_composition(
                 term_symbol=row.term_symbol,
                 isotope_key=row.isotope_key,
             ),
+            **entry_facets_of(row),
             stoichiometry=row.stoichiometry,
         )
         for row in rows
