@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 
-class NetworkStateCompositionParticipant(BaseModel):
+
+class NetworkStateCompositionParticipant(EntryFacetFields):
     """One public species participant in a network state.
 
     ``canonical_smiles`` is the *species*-level graph identity and is

@@ -38,6 +38,7 @@ from app.schemas.reads.scientific_conformer import (
     ConformerObservationsSummary,
     ConformerSelectionSummary,
 )
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 from app.schemas.reads.scientific_kinetics import KineticsRecord
 from app.schemas.reads.scientific_transition_state import (
     TransitionStateEntryEvidenceSummary,
@@ -175,7 +176,7 @@ class ReactionEntrySummary(BaseModel):
     atom_maps: list[ReactionAtomMapBadge] = Field(default_factory=list)
 
 
-class ReactionFullSpeciesParticipant(BaseModel):
+class ReactionFullSpeciesParticipant(EntryFacetFields):
     """Reactant or product side participant in /full.
 
     Phase B: ``species_entry_ref`` is the public stable handle for the

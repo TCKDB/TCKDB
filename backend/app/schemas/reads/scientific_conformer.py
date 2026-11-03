@@ -50,6 +50,7 @@ from app.schemas.reads.scientific_common import (
     WorkflowToolReleaseSummary,
 )
 from app.schemas.reads.scientific_deposit_warnings import RecordWarnings, SubmissionWarnings
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 
 # ---------------------------------------------------------------------------
 # Request
@@ -302,7 +303,7 @@ class ConformerObservationGroupSummary(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ConformerSpeciesContext(BaseModel):
+class ConformerSpeciesContext(EntryFacetFields):
     """Lightweight species/species-entry pointer for a conformer record.
 
     Mirrors :class:`SpeciesEntryOwnerSummary` shape conventions used by

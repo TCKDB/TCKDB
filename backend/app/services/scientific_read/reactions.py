@@ -72,7 +72,9 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.reaction_participants import collapse_occurrences, format_reaction_equation
 from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
     STEREO_DISPLAY,
+    entry_facets_of,
     species_entry_label_for,
 )
 from app.services.scientific_read.structure_query import constitution_smiles
@@ -878,8 +880,11 @@ def _resolve_participant_refs(
 
 def _resolve_participant_labels(
     session: Session, species_entry_ids: set[int]
-) -> dict[int, str | None]:
-    """Map species_entry_id → the entry discriminator, or ``None``.
+) -> dict[int, tuple[str | None, dict]]:
+    """Map species_entry_id → (the entry discriminator or ``None``, the computed facets).
+
+    One batched query for every participant of a page of reactions, so serving the facets adds no per-participant
+    query.
 
     A participant's ``smiles`` is the parent *species*' and is shared by
     every entry under it, so two participants that are different
@@ -895,9 +900,10 @@ def _resolve_participant_labels(
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
         ).where(SpeciesEntry.id.in_(species_entry_ids))
     ).all()
-    return {row.id: species_entry_label_for(row) for row in rows}
+    return {row.id: (species_entry_label_for(row), entry_facets_of(row)) for row in rows}
 
 
 def _compute_availability(
@@ -1049,7 +1055,7 @@ def _collapsed_participants(
     participants: list[tuple[int, ReactionRole, int]],
     role: ReactionRole,
     refs_by_entry_species: dict[int, str],
-    labels_by_entry_species: dict[int, str | None],
+    labels_by_entry_species: dict[int, tuple[str | None, dict]],
     smiles_by_entry_species: dict[int, str],
     formulas_by_entry_species: dict[int, str | None],
 ) -> list[ReactionParticipantSummary]:
@@ -1064,7 +1070,8 @@ def _collapsed_participants(
         ReactionParticipantSummary(
             species_entry_id=se,
             species_entry_ref=refs_by_entry_species.get(se, ""),
-            species_entry_label=labels_by_entry_species.get(se),
+            species_entry_label=labels_by_entry_species.get(se, (None, {}))[0],
+            **labels_by_entry_species.get(se, (None, {}))[1],
             smiles=smiles_by_entry_species.get(se, ""),
             formula=formulas_by_entry_species.get(se),
             stoichiometry=count,
@@ -1080,7 +1087,7 @@ def _materialize_and_sort_reaction_records(
     chem_reactions: dict[int, ChemReaction],
     participants_by_entry: dict[int, list[tuple[int, ReactionRole, int]]],
     refs_by_entry_species: dict[int, str],
-    labels_by_entry_species: dict[int, str | None],
+    labels_by_entry_species: dict[int, tuple[str | None, dict]],
     smiles_by_entry_species: dict[int, str],
     formulas_by_entry_species: dict[int, str | None],
     species_id_by_entry_species: dict[int, int],

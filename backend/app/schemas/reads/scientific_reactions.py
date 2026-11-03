@@ -34,6 +34,7 @@ from app.schemas.reads.scientific_common import (
     ScientificResponse,
     WatermarkEcho,
 )
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 
 
 class ReactionDirectionQuery(str, Enum):
@@ -286,7 +287,7 @@ class ReactionsBrowseRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ReactionParticipantSummary(BaseModel):
+class ReactionParticipantSummary(EntryFacetFields):
     """Reactant or product participant within a reaction-entry record.
 
     Phase B: ``species_entry_ref`` is the public stable handle for the

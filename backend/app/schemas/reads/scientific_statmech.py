@@ -48,6 +48,7 @@ from app.schemas.reads.scientific_common import (
     WorkflowToolReleaseSummary,
 )
 from app.schemas.reads.scientific_deposit_warnings import RecordWarnings, SubmissionWarnings
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 from app.services.trust.models import TrustFragment
 
 # ---------------------------------------------------------------------------
@@ -115,7 +116,7 @@ class StatmechCoreBlock(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class StatmechSpeciesContext(BaseModel):
+class StatmechSpeciesContext(EntryFacetFields):
     """Lightweight species/species-entry pointer for a statmech record.
 
     Mirrors the species context shape used by the conformer and
