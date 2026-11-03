@@ -22,6 +22,7 @@ from app.db.models.common import (
     CompositeSchemeKind,
     CoreTreatment,
     LegacyCompositeShape,
+    LiteratureTitleSource,
     ProfileRecommendation,
     ReadProfile,
     RecordReviewStatus,
@@ -658,8 +659,10 @@ class LiteratureSummary(BaseModel):
     id: int
     literature_ref: str
     title: str | None = None
+    title_source: LiteratureTitleSource | None = None
     year: int | None = None
     doi: str | None = None
+    isbn: str | None = None
 
 
 # ---------------------------------------------------------------------------

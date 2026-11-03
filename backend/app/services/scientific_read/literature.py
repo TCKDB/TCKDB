@@ -141,6 +141,7 @@ def _build_core(lit: Literature) -> LiteratureCoreBlock:
         literature_ref=lit.public_ref,
         kind=lit.kind,
         title=lit.title,
+        title_source=lit.title_source,
         journal=lit.journal,
         year=lit.year,
         volume=lit.volume,
