@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom"
 import { SpeciesFace } from "./Formula"
+import { participantChips, type ParticipantFacets } from "../domain/participantFacets"
 
 /**
  * The "Species entry" link every record page that owns a species points at
@@ -14,17 +15,21 @@ import { SpeciesFace } from "./Formula"
  * fields (`stereo_label`, `electronic_state_kind`, `isotope_key`) show them
  * through `facetChips`.
  */
-export function SpeciesEntryLink({ speciesEntryRef, smiles, formula }: {
+export function SpeciesEntryLink({ speciesEntryRef, smiles, formula, facets }: {
     speciesEntryRef: string
     smiles?: string | null
     formula?: string | null
+    /** The computed identity facets the API serves beside the species context (never the joined label). */
+    facets?: ParticipantFacets | null
 }) {
+    const chips = participantChips(facets)
     const base = (smiles || formula)
         ? <SpeciesFace smiles={smiles} formula={formula} />
         : <code className="data">{speciesEntryRef}</code>
     return (
         <Link to={`/species-entries/${speciesEntryRef}`}>
             {base}
+            {chips.length > 0 && <> · {chips.join(", ")}</>}
         </Link>
     )
 }

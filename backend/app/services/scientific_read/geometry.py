@@ -44,7 +44,12 @@ from app.services.scientific_read.handles import resolve_geometry_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
-from app.services.scientific_read.species_identity import STEREO_DISPLAY, species_entry_label
+from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
+    STEREO_DISPLAY,
+    entry_facets_of,
+    species_entry_label,
+)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "review",
@@ -328,6 +333,7 @@ def _build_species_identity(
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
             Species.id.label("species_id"),
             Species.public_ref.label("species_ref"),
             Species.smiles,
@@ -356,6 +362,7 @@ def _build_species_identity(
         inchi_key=row.inchi_key,
         charge=row.charge,
         multiplicity=row.multiplicity,
+        **entry_facets_of(row),
     )
 
 

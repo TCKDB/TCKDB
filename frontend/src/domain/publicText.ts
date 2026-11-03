@@ -40,26 +40,6 @@ export function channelHandle(key: string | null | undefined): string | undefine
     return key == null ? undefined : opaqueHandle(key)
 }
 
-/**
- * A network state's one-string spelling (`N=N + 2 [H][H]`), rebuilt from the
- * participants' canonical SMILES and stoichiometry only. The server's own
- * `state_label` embeds each participant's `species_entry_label`, which joins in
- * depositor-typed parts, so it is never used: no participants gives "".
- */
-export function publicStateLabel(composition: {
-    participants?: ReadonlyArray<{ canonical_smiles: string; stoichiometry: number }>
-    participants_truncated?: boolean
-    state_label: string
-}): string {
-    const participants = composition.participants ?? []
-    if (participants.length === 0) return ""
-    const parts = participants.map((participant) => (
-        participant.stoichiometry !== 1 ? `${participant.stoichiometry} ${participant.canonical_smiles}` : participant.canonical_smiles
-    ))
-    if (composition.participants_truncated) parts.push("...")
-    return parts.join(" + ")
-}
-
 const ELEMENTS = new Set((
     "H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn Ga Ge As Se Br Kr "
     + "Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu "
