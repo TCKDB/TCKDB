@@ -1,9 +1,5 @@
 // Sentinel guard (owner decision 2026-11-03): a literature title shows on a public page only when
-// the server says it was resolved from DOI/ISBN metadata. Any other title is depositor text.
-//
-// NOTE FOR RECONCILIATION: PR #848 adds `src/test/depositorSentinel.ts` with a shared sentinel
-// helper. It is not on main yet, so this file carries a minimal local equivalent
-// (`expectNoSentinel`). Switch to the shared helper once #848 lands.
+// the server says it was resolved from DOI/ISBN metadata. Any other title, and any DOI, is depositor text.
 
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
@@ -12,6 +8,7 @@ import { cleanup, render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { EntryTransportSection } from "./EntryTransportSection"
 import { TITLE_NOT_VERIFIED } from "../domain/literatureCitation"
+import { expectNoDepositorText } from "../test/depositorSentinel"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -62,10 +59,7 @@ async function renderWith(literature: Record<string, unknown>) {
     await screen.findByText("trn_lit")
 }
 
-function expectNoSentinel() {
-    expect(document.body.innerHTML).not.toContain(SENTINEL)
-    expect(document.title).not.toContain(SENTINEL)
-}
+const expectNoSentinel = expectNoDepositorText
 
 const base = { literature_ref: "lit_abc", title: SENTINEL, year: 2024, doi: "10.1000/xyz" }
 
