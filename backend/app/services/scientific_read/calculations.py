@@ -147,6 +147,7 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.species_identity import (
     STEREO_DISPLAY,
+    derived_stereo_label,
     species_entry_label,
 )
 from app.services.trust import (
@@ -653,7 +654,6 @@ def _build_species_owner(
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
-            SpeciesEntry.stereo_label,
             SpeciesEntry.stereo_descriptor,
             SpeciesEntry.stereo_resolution,
             _owner_formula_expr(Species.smiles).label("formula"),
@@ -680,7 +680,7 @@ def _build_species_owner(
         multiplicity=row.multiplicity,
         species_entry_kind=row.entry_kind,
         electronic_state_kind=row.electronic_state_kind,
-        stereo_label=row.stereo_label,
+        stereo_label=derived_stereo_label(row.stereo_descriptor, row.stereo_resolution),
         stereo_descriptor=row.stereo_descriptor,
         stereo_resolution=row.stereo_resolution,
         isotope_key=row.isotope_key,

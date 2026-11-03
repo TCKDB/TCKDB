@@ -166,17 +166,31 @@ ENTRY_FACET_COLUMNS = (
 )
 
 
+def derived_stereo_label(descriptor: str | None, resolution) -> str | None:
+    """The stereo display text, derived from the descriptor as ``ResolvedStereo.label`` derives it.
+
+    The descriptor, except that a fully unknown configuration (``unresolved``) displays as nothing. The raw
+    ``species_entry.stereo_label`` column is not used: before the descriptor existed it was free text up to 64
+    characters, and a contradicted legacy row kept whatever text it was deposited with
+    (``stereo_identity_merge.py``), so it can hold a string that is not a stereo mark at all.
+    """
+    value = getattr(resolution, "value", resolution)
+    if descriptor is None or value is None or value == "unresolved":
+        return None
+    return descriptor
+
+
 def entry_facets_of(entry) -> dict:
     """The computed facets of a species entry, as keyword arguments for an ``EntryFacetFields`` block.
 
     Takes a loaded ``SpeciesEntry`` or a ``Row`` that selected :data:`ENTRY_FACET_COLUMNS` and
-    ``electronic_state_kind`` / ``isotope_key``. ``electronic_state_label`` and ``term_symbol`` are typed text and are
-    never part of this.
+    ``electronic_state_kind`` / ``isotope_key``. ``stereo_label`` is derived from the descriptor and resolution, never
+    the raw column. ``electronic_state_label`` and ``term_symbol`` are typed text and are never part of this.
     """
     return {
         "species_entry_kind": entry.entry_kind if hasattr(entry, "entry_kind") else entry.kind,
         "electronic_state_kind": entry.electronic_state_kind,
-        "stereo_label": entry.stereo_label,
+        "stereo_label": derived_stereo_label(entry.stereo_descriptor, entry.stereo_resolution),
         "stereo_descriptor": entry.stereo_descriptor,
         "stereo_resolution": entry.stereo_resolution,
         "isotope_key": entry.isotope_key,
@@ -186,6 +200,7 @@ def entry_facets_of(entry) -> dict:
 __all__ = [
     "ENTRY_FACET_COLUMNS",
     "IDENTITY_COLUMNS",
+    "derived_stereo_label",
     "entry_facets_of",
     "species_entry_label",
     "species_entry_label_for",
