@@ -205,3 +205,9 @@ def test_the_payload_refuses_with_the_code_and_ignores_the_raw_term() -> None:
             _entry(**{field: bad})
         (error,) = caught.value.errors()
         assert error["ctx"]["error"].code == FIELDS[field][2]
+
+
+@pytest.mark.parametrize("blank", ["", "   ", None])
+def test_a_blank_raw_does_not_block_the_copy_of_the_typed_spelling(blank) -> None:
+    entry = _entry(term_symbol="2Pi", term_symbol_raw=blank)
+    assert (entry.term_symbol, entry.term_symbol_raw) == ("\u00b2\u03a0", "2Pi")

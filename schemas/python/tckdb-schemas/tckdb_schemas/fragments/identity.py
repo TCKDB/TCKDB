@@ -84,7 +84,9 @@ class SpeciesEntryIdentityWriteValidatorMixin:
         if not isinstance(data, dict):
             return data
         typed = data.get("term_symbol")
-        if not isinstance(typed, str) or data.get("term_symbol_raw") is not None:
+        raw = data.get("term_symbol_raw")
+        # A blank raw is "not given": it would be cleared to None, losing the typed spelling.
+        if not isinstance(typed, str) or (isinstance(raw, str) and raw.strip()) or (raw is not None and not isinstance(raw, str)):
             return data
         typed = typed.strip()
         if typed and is_valid_term_symbol(typed) and canonical_term_symbol(typed) != typed:
