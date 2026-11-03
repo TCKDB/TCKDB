@@ -1702,9 +1702,14 @@ def _hessian_disagrees(context: Mapping[str, Any]) -> str | None:
 _PARAMETER_ORIGINS = {"input": "input deck", "output_log": "output log"}
 
 
+def _origin(context: Mapping[str, Any]) -> str | None:
+    observed = context.get("observed_in")
+    return _PARAMETER_ORIGINS.get(observed) if isinstance(observed, str) else None
+
+
 def _parameter_disagrees(context: Mapping[str, Any]) -> str | None:
     key = _token(context.get("canonical_key"))
-    origin = _PARAMETER_ORIGINS.get(context.get("observed_in"))
+    origin = _origin(context)
     if key is None or origin is None:
         return None
     return (
@@ -1725,7 +1730,7 @@ def _deck_disagrees_with_log(context: Mapping[str, Any]) -> str | None:
 
 def _lot_disagrees(context: Mapping[str, Any]) -> str | None:
     component = _token(context.get("component"), frozenset({"method", "basis"}))
-    origin = _PARAMETER_ORIGINS.get(context.get("observed_in"))
+    origin = _origin(context)
     if component is None or origin is None:
         return None
     return (
