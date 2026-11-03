@@ -1411,6 +1411,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "the Replay.may_succeed default: waiting for the other "
                 "writer to finish is exactly what clears it."
             )),
+    ApiCode("electronic_state_label_invalid", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/electronic_state.py",
+            note="context names the field, the accepted shapes and the length cap; the refused value is never echoed."),
     ApiCode("email_taken", 409, Surface.message_prefix,
             "backend/app/api/routes/auth.py",
             note=(
@@ -2775,6 +2778,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("tckdb_client_version_unsupported", 426, Surface.detail_object,
             "backend/app/api/client_version.py",
             shape=Shape.relationship),
+    ApiCode("term_symbol_invalid", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/electronic_state.py",
+            note="context names the field, the accepted shapes and the length cap; the refused value is never echoed."),
     ApiCode("thermo_declaration_invalid", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/thermo_declarations.py",
             note="A declaration that skipped request validation (model_construct) and fails it in a service: unrecognised target kind, or an invalid protocol."),

@@ -83,6 +83,10 @@ IDENTITY_COLUMNS: tuple[str, ...] = (
 )
 
 
+#: The word that introduces the electronic-state label in a joined entry label (``excited state A``).
+STATE_LABEL_MARKER = "state"
+
+
 def species_entry_label(
     *,
     stereo_label: str | None,
@@ -103,8 +107,10 @@ def species_entry_label(
     saying so of every ordinary species would bury the one entry that is not
     ground in noise. Everything else is spelled as stored: these are the
     depositor's own labels (``E``, ``Z``, ``T1``, a term symbol, an isotope
-    key) and rewording them would put a spelling in a plot title that appears
-    nowhere else in the record.
+    key), except that the electronic-state label is introduced by the word
+    ``state`` (``state T1``) so it can never be read as a stereo descriptor.
+    Rewording the labels themselves would put a spelling in a plot title that
+    appears nowhere else in the record.
 
     An entry with no label of any kind returns ``None``, never ``""``. There
     is nothing stored to render, and an empty string would read as a label
@@ -123,7 +129,10 @@ def species_entry_label(
     ):
         parts.append(electronic_state_kind.value)
     if electronic_state_label:
-        parts.append(electronic_state_label)
+        # Marked, never bare: a stored state label may not read as a stereo descriptor
+        # (``R``/``S``/``E``/``Z``). New uploads cannot carry one
+        # (``tckdb_schemas.electronic_state``), but rows stored before that rule can.
+        parts.append(f"{STATE_LABEL_MARKER} {electronic_state_label}")
     if term_symbol:
         parts.append(term_symbol)
     if isotope_key:
