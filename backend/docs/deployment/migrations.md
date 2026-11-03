@@ -929,6 +929,16 @@ own transaction**, through the same declared-repair machinery as `d3f8a1c6e92b`.
   revision that merges species entries or changes stereo identity before it. It declines unless the default scheme is exactly
   (`torsion_basin`, 3); `d3f8a1c6e92b`'s step now declines on any database that is not at version 2.
 
+## Literature titles: re-check against the registry (revision `b4d8e1a7c953`)
+
+The migration only adds the nullable `literature.title_source` column; existing rows stay NULL ("not recorded"). To classify them, or to upgrade a depositor-typed title whose registry lookup failed at deposit time, run the explicit step `backend/scripts/ops/reresolve_literature_titles.py`. It re-fetches DOI/ISBN metadata through the resolver's own fetch functions and sets `title` and `title_source=resolved_metadata` where a title comes back; a failed or empty lookup leaves the row unchanged. It never touches DOI, ISBN or the public ref. Dry run is the default:
+
+```bash
+python backend/scripts/ops/reresolve_literature_titles.py            # dry run (default)
+python backend/scripts/ops/reresolve_literature_titles.py --apply --i-know-this-is-deployed
+# narrow with --ref lit_..., --limit N, --since YYYY-MM-DD
+```
+
 ## Self-hosted / Raspberry Pi note
 
 Single-node and Raspberry-Pi deployments follow the same flow as any other deployed DB. Two extra notes:
