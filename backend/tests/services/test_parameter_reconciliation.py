@@ -93,13 +93,22 @@ def test_a_typed_value_the_deck_contradicts_warns_with_the_key_and_marks_the_val
         assert "grid.quality" in warning.message and "ultrafine" not in warning.message and "fine" not in warning.message.replace("define", "")
 
 
-@pytest.mark.parametrize("deck_grid", ["int=ultrafine", "int=(grid=99590)", "integral=ultrafinegrid"])
+@pytest.mark.parametrize("deck_grid", ["int=ultrafine", "int=(grid=ultrafine)", "integral=ultrafinegrid"])
 def test_spellings_of_the_same_grid_do_not_warn(db_conn, deck_grid):
     with Session(db_conn) as session, session.begin():
         calc = _calc(session)
         _typed(session, calc, "grid.quality", "ultrafine")
         _, warnings = _read(session, calc, f"#P b3lyp/6-31g(d) opt {deck_grid}\n")
         assert "parameter_disagrees_with_artifact" not in _codes(warnings)
+
+
+def test_a_numeric_grid_is_a_different_grid_from_the_named_one(db_conn):
+    """Grid=99590 is unpruned; UltraFine is pruned (99,590): not the same grid, so a typed UltraFine disagrees."""
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        _typed(session, calc, "grid.quality", "ultrafine")
+        _, warnings = _read(session, calc, "#P b3lyp/6-31g(d) opt int=(grid=99590)\n")
+        assert "parameter_disagrees_with_artifact" in _codes(warnings)
 
 
 def test_a_setting_the_deck_does_not_state_is_not_a_disagreement(db_conn):
