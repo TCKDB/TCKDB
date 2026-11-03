@@ -29340,6 +29340,16 @@
             "title": "Title",
             "type": "string"
           },
+          "title_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiteratureTitleSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "volume": {
             "anyOf": [
               {
@@ -29720,6 +29730,16 @@
             "title": "Title",
             "type": "string"
           },
+          "title_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiteratureTitleSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "url": {
             "anyOf": [
               {
@@ -29834,6 +29854,17 @@
             "type": "integer",
             "x-tckdb-policy-hidden": true
           },
+          "isbn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isbn"
+          },
           "literature_ref": {
             "title": "Literature Ref",
             "type": "string"
@@ -29848,6 +29879,16 @@
               }
             ],
             "title": "Title"
+          },
+          "title_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiteratureTitleSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "year": {
             "anyOf": [
@@ -29866,6 +29907,15 @@
         ],
         "title": "LiteratureSummary",
         "type": "object"
+      },
+      "LiteratureTitleSource": {
+        "description": "Where a ``literature.title`` came from.\n\n``NULL`` on the column means \"not recorded\" (rows written before the column\nexisted); it is never a third value to infer from.",
+        "enum": [
+          "resolved_metadata",
+          "depositor_supplied"
+        ],
+        "title": "LiteratureTitleSource",
+        "type": "string"
       },
       "LiteratureUploadRequest": {
         "additionalProperties": false,

@@ -126,12 +126,26 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
 
     it("renders a deposited literature source", async () => {
         server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({
-            literature: { literature_ref: "lit_one", title: "A BAC parameterisation study", year: 2019, doi: null },
+            literature: { literature_ref: "lit_one", title: "A BAC parameterisation study", title_source: "resolved_metadata", year: 2019, doi: null },
         }))))
         page()
         await screen.findByRole("heading", { level: 1 })
         expect(screen.getByText("Literature source")).toBeVisible()
         expect(screen.getByText("A BAC parameterisation study (2019)")).toBeVisible()
+    })
+
+    it("withholds a depositor-typed literature title and DOI, keeping the year after the ref (guard)", async () => {
+        server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({
+            literature: {
+                literature_ref: "lit_one", title: "DEPOSITOR_SENTINEL_literature_title", title_source: "depositor_supplied",
+                year: 2019, doi: "10.1/ DEPOSITOR_SENTINEL_literature_doi spam.example",
+            },
+        }))))
+        page()
+        await screen.findByRole("heading", { level: 1 })
+        expect(screen.getByText("Literature source")).toBeVisible()
+        expect(screen.getByText("Literature source").nextElementSibling?.textContent).toBe("lit_one (2019) · Title not verified")
+        expect(document.body.innerHTML).not.toContain("DEPOSITOR_SENTINEL")
     })
 
     /**

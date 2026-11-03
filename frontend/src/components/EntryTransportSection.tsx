@@ -25,6 +25,7 @@ import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 import { SourceCalculationsTable } from "./SourceCalculationsTable"
 import { SupersessionNotice } from "./SupersessionNotice"
+import { LiteratureCitation } from "./LiteratureCitation"
 
 // ---------------------------------------------------------------------------
 // Same entry-scoped-LIST design as `EntryStatmechSection.tsx`, with only two
@@ -245,7 +246,7 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
                 {" · "}Workflow:{" "}
                 {toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}
                 {" · "}Literature:{" "}
-                {record.literature ? (record.literature.title ?? record.literature.literature_ref) : "not recorded"}
+                {record.literature ? <LiteratureCitation literature={record.literature} /> : "not recorded"}
             </p>
         </article>
     )

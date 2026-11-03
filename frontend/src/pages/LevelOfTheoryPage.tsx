@@ -23,6 +23,7 @@ import type {
     LevelOfTheoryUsage,
     LevelOfTheoryWorkflowToolUsage,
 } from "../api/methodsApi"
+import { publicCitationText } from "../domain/literatureCitation"
 
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
@@ -397,7 +398,7 @@ function correctionSchemeSelectorLabel(scheme: EnergyCorrectionSchemeRecord, sib
         (sibling) => (softwareLabel(sibling.software_release) ?? "software not recorded") === releaseLabel,
     ).length > 1
     if (!sharesReleaseLabel) return releaseLabel
-    const citation = scheme.literature?.title ?? scheme.literature?.literature_ref
+    const citation = scheme.literature ? publicCitationText(scheme.literature) : null
     return citation
         ? `${releaseLabel} · ${citation}`
         : `${releaseLabel} · ${scheme.energy_correction_scheme.energy_correction_scheme_ref}`

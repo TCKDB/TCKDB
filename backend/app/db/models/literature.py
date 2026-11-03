@@ -7,7 +7,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, PublicRefMixin, TimestampMixin
-from app.db.models.common import LiteratureKind
+from app.db.models.common import LiteratureKind, LiteratureTitleSource
 
 if TYPE_CHECKING:
     from app.db.models.literature_author import LiteratureAuthor
@@ -23,6 +23,11 @@ class Literature(Base, TimestampMixin, PublicRefMixin):
         nullable=False,
     )
     title: Mapped[str] = mapped_column(Text, nullable=False)
+    # Where ``title`` came from. NULL = not recorded (pre-existing rows).
+    title_source: Mapped[Optional[LiteratureTitleSource]] = mapped_column(
+        SAEnum(LiteratureTitleSource, name="literature_title_source"),
+        nullable=True,
+    )
 
     journal: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

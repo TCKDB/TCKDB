@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Literature records say where their title came from; the review queue is for curators (2026-11-03)
+
+- **Client: `tckdb-client` and `tckdb-schemas` unchanged. Migration `b4d8e1a7c953`, no new environment variable.** Adds the nullable column `literature.title_source` (`resolved_metadata` | `depositor_supplied`). Existing rows stay `NULL`, meaning "not recorded"; there is no backfill because their titles cannot be classified honestly.
+- **What changed.** The resolver sets `title_source` from what happened: `resolved_metadata` only when the DOI/ISBN lookup returned a title, else `depositor_supplied`. An existing row matched later by DOI/ISBN is adopted as it stands; its title and source are never rewritten. The literature reads (`/literature`, `/scientific/literature`) and the literature summary embedded in other reads carry `title_source`; the summary also carries `isbn`.
+- **Website.** A literature title is shown only when `title_source` is `resolved_metadata`. Otherwise the page shows the ISBN, else the public ref, with "Title not verified". A DOI is never printed or linked there: it is depositor-typed text.
+- **Review queue.** `GET /record-reviews/queue` and `GET /record-reviews` (the same rows, flat) now require the curator or admin role; a plain account gets 403. `GET /record-reviews/{record_type}/{record_id}` (one record's status) is unchanged.
+
 ## The website no longer prints text a depositor typed (2026-11-03)
 
 - **Frontend only. API, `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no schema change, no new environment variable. The API still returns these fields in their marked places.

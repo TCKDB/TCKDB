@@ -2188,6 +2188,7 @@ the gap.
 | `id` | BIGINT | no | — | — | — | not documented |
 | `kind` | LiteratureKind (enum) | no | — | — | `article`, `book`, `thesis`, `report`, `dataset`, `webpage` | not documented |
 | `title` | TEXT | no | — | — | — | not documented |
+| `title_source` | LiteratureTitleSource (enum) | yes | — | — | `resolved_metadata`, `depositor_supplied` | not documented |
 | `journal` | TEXT | yes | — | — | — | not documented |
 | `year` | INTEGER | yes | — | — | — | not documented |
 | `volume` | TEXT | yes | — | — | — | not documented |
