@@ -478,7 +478,7 @@ def _store_log(session, monkeypatch, calc, text: str, name: str) -> None:
     stored = getattr(cpe, "_test_bytes", {})
     stored[sha] = content
     monkeypatch.setattr(cpe, "_test_bytes", stored, raising=False)
-    monkeypatch.setattr(cpe, "load_artifact_bytes", lambda digest: stored[digest])
+    monkeypatch.setattr(cpe, "load_artifact_bytes", lambda digest, **_: stored[digest])
 
 
 def test_a_deck_reread_with_fewer_settings_restores_the_log_rows_it_had_shadowed(db_conn, monkeypatch):
@@ -524,3 +524,131 @@ def test_the_same_output_log_uploaded_twice_changes_nothing_and_warns_nothing(db
         _, again = _read(session, calc, log, kind=ArtifactKind.output_log)
         assert "output_log_disagrees_with_earlier_output_log" not in _codes(again)
         assert _stored(session, calc) == before
+
+
+def test_a_dropped_log_observation_is_still_judged_against_what_was_typed_in_either_order(db_conn):
+    """Typed ultrafine; the deck states ultrafine too; the log says fine. The log's grid is dropped for the deck's,
+    but the typed value and the log still disagree, whichever of the two is read first."""
+    codes_by_order = {}
+    for deck_first in (True, False):
+        with Session(db_conn) as session, session.begin():
+            calc = _calc(session)
+            _typed(session, calc, "grid.quality", "ultrafine")
+            steps = [("#P b3lyp/6-31g(d) opt int=ultrafine\n", ArtifactKind.input),
+                     (_gaussian_log("#P b3lyp/6-31g(d) opt int=fine"), ArtifactKind.output_log)]
+            collected = []
+            for text, kind in steps if deck_first else steps[::-1]:
+                collected += _read(session, calc, text, kind=kind)[1]
+            codes_by_order[deck_first] = sorted(_codes(collected))
+    assert codes_by_order[True] == codes_by_order[False]
+    assert "parameter_disagrees_with_artifact" in codes_by_order[True]
+
+
+def test_the_log_that_a_deck_does_not_shadow_is_judged_the_same_in_either_order(db_conn):
+    """Typed ultrafine; the deck is silent on the grid; the log says fine: warns in both orders."""
+    for deck_first in (True, False):
+        with Session(db_conn) as session, session.begin():
+            calc = _calc(session)
+            _typed(session, calc, "grid.quality", "ultrafine")
+            steps = [("#P b3lyp/6-31g(d) opt scf=tight\n", ArtifactKind.input),
+                     (_gaussian_log("#P b3lyp/6-31g(d) opt int=fine"), ArtifactKind.output_log)]
+            collected = []
+            for text, kind in steps if deck_first else steps[::-1]:
+                collected += _read(session, calc, text, kind=kind)[1]
+            assert _codes(collected).count("parameter_disagrees_with_artifact") == 1, deck_first
+
+
+def test_a_first_deck_never_reads_storage_for_the_logs(db_conn, monkeypatch):
+    from app.services import calculation_parameter_extraction as cpe
+
+    calls = []
+
+    def spy(*args, **kwargs):
+        calls.append(args)
+        raise AssertionError("storage must not be read on a calculation's first deck")
+
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        _store_log(session, monkeypatch, calc, _gaussian_log("#P b3lyp/6-31g(d) opt int=fine"), "job.log")
+        monkeypatch.setattr(cpe, "load_artifact_bytes", spy)
+        _read(session, calc, "#P b3lyp/6-31g(d) opt int=ultrafine\n")
+        assert calls == []
+        # A re-read of the deck does read the stored log (the spy proves the path is live, so the empty list above
+        # is not vacuous).
+        _read(session, calc, "#P b3lyp/6-31g(d) opt int=ultrafine\n")
+        assert len(calls) == 1
+
+
+def test_a_reread_uses_bytes_from_this_request_before_storage_and_survives_an_outage(db_conn, monkeypatch, caplog):
+    from app.services import calculation_parameter_extraction as cpe
+    from app.services.artifact_storage import ArtifactStorageUnavailable
+
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        _read(session, calc, "#P b3lyp/6-31g(d) opt int=ultrafine scf=tight\n")
+        log = _gaussian_log("#P b3lyp/6-31g(d) opt int=ultrafine scf=tight")
+        _store_log(session, monkeypatch, calc, log, "job.log")
+        _read(session, calc, log, kind=ArtifactKind.output_log)
+
+        def outage(*args, **kwargs):
+            raise ArtifactStorageUnavailable("storage down")
+
+        # In memory for this request: storage is not touched.
+        monkeypatch.setattr(cpe, "load_artifact_bytes", outage)
+        cpe.remember_artifact_bytes(session, log.encode())
+        _read(session, calc, "#P b3lyp/6-31g(d) opt int=ultrafine\n")
+        assert ("scf.convergence", "tight", ArtifactKind.output_log) in _stored(session, calc)
+
+        # Not in memory and storage down: soft failure, the deck's rows stand and a reason is logged.
+        session.info.pop("parameter_artifact_bytes", None)
+        session.query(CalculationParameter).filter(
+            CalculationParameter.calculation_id == calc.id,
+            CalculationParameter.artifact_kind == ArtifactKind.output_log,
+        ).delete()
+        with caplog.at_level("WARNING"):
+            _read(session, calc, "#P b3lyp/6-31g(d) opt int=ultrafine\n")
+        assert ("grid.quality", "ultrafine", ArtifactKind.input) in _stored(session, calc)
+        assert "not re-read" in caplog.text
+
+
+def test_refresh_rederives_every_log_row_from_the_stored_logs(db_conn, monkeypatch):
+    from app.services.calculation_parameter_extraction import refresh_output_log_rows
+
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        log = _gaussian_log("#P b3lyp/6-31g(d) opt int=ultrafine scf=tight")
+        _store_log(session, monkeypatch, calc, log, "job.log")
+        _read(session, calc, log, kind=ArtifactKind.output_log)
+        session.query(CalculationParameter).filter(CalculationParameter.calculation_id == calc.id).update(
+            {"canonical_value": "stale"}
+        )
+        refresh_output_log_rows(session, calc)
+        assert _stored(session, calc) >= {("scf.convergence", "tight", ArtifactKind.output_log)}
+        assert not [row for row in _stored(session, calc) if row[1] == "stale"]
+
+
+@pytest.mark.parametrize(
+    ("declared", "deck"),
+    [
+        ("RPBE", "#P pbe/6-31g(d) opt\n"),
+        ("wB97X-D3", "#P wb97x/6-31g(d) opt\n"),
+        ("B97-D3", "#P b97/6-31g(d) opt\n"),
+        ("B97", "#P b97-d3/6-31g(d) opt\n"),
+    ],
+)
+def test_a_prefix_or_suffix_that_is_part_of_a_functional_name_is_not_stripped(db_conn, declared, deck):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, method=declared)
+        _, warnings = _read(session, calc, deck)
+        assert "level_of_theory_disagrees_with_artifact" in _codes(warnings)
+
+
+def test_the_same_functional_with_its_dispersion_stated_apart_agrees(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, method="B3LYP-D3BJ")
+        _, warnings = _read(session, calc, "#P b3lyp/6-31g(d) EmpiricalDispersion=GD3BJ opt\n")
+        assert "level_of_theory_disagrees_with_artifact" not in _codes(warnings)
+        # Without the dispersion stated, the suffix is part of the declared name and the deck does not have it.
+        other = _calc(session, method="B3LYP-D3BJ")
+        _, no_disp = _read(session, other, "#P b3lyp/6-31g(d) opt\n")
+        assert "level_of_theory_disagrees_with_artifact" in _codes(no_disp)

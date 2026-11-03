@@ -87,6 +87,7 @@ from app.db.models.calculation import (
 from app.db.models.common import ArtifactKind, ParameterSource
 from app.services.calculation_parameter_extraction import (
     ParameterExtractionError,
+    refresh_output_log_rows,
     try_extract_parameters_from_input_artifact_row,
 )
 
@@ -222,6 +223,7 @@ def _process_one(
     artifact_id_override: int | None,
     dry_run: bool,
     stats: _RunStats,
+    force: bool = False,
 ) -> bool:
     """Process a single calculation. Returns True on success/skip.
 
@@ -314,6 +316,10 @@ def _process_one(
         )
         return True
 
+    if force:
+        # Log rows are appended and carry no source artifact, so a parser fix cannot replace them one by one:
+        # --force re-derives all of them from the stored output logs, under the deck-wins rule.
+        refresh_output_log_rows(session, calculation)
     session.commit()
     stats.succeeded += 1
     logger.info(
@@ -450,6 +456,7 @@ def run_backfill(
             artifact_id_override=artifact_id,
             dry_run=dry_run,
             stats=stats,
+            force=force,
         )
         if not ok and fail_fast:
             logger.error("--fail-fast set; stopping after first failure")

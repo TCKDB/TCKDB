@@ -54,6 +54,7 @@ from sqlalchemy.orm import Session
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.chemistry.basis_set_names import basis_identity_key
+from app.chemistry.method_families import CLASSIFICATION
 from app.chemistry.method_names import method_identity_key
 from app.db.models.calculation import Calculation, CalculationParameter, CalculationParameterVocab
 from app.db.models.common import ArtifactKind, ParameterSource
@@ -181,20 +182,20 @@ def declared_software(calculation: Calculation) -> str | None:
 def declared_parameter_warnings(
     session: Session,
     calculation: Calculation,
-    stored_rows: Sequence[CalculationParameter],
+    observed: Iterable[tuple[str | None, str | None]],
     *,
     parsed_software: str,
     artifact_kind: ArtifactKind,
 ) -> list[UploadWarning]:
-    """Warn for each key the depositor typed and ``stored_rows`` (just read) contradict.
+    """Warn for each key the depositor typed and the artifact just read (``observed`` pairs) contradict.
 
-    Only the keys in ``stored_rows`` are judged, so an artifact whose rows were all dropped in favour of the
-    deck does not repeat the deck's warning.
+    ``observed`` is what the artifact says, whether or not its rows were stored (the deck-wins rule can drop a
+    log's rows), so the judgement is the same whichever artifact of a request is read first.
     """
     declared = declared_software(calculation)
     if declared is None or declared != parsed_software.strip().lower():
         return []
-    read = _values_by_key((r.canonical_key, r.canonical_value) for r in stored_rows)
+    read = _values_by_key(observed)
     keys = set(read) - _NOT_RECONCILED_HERE
     if not keys:
         return []
@@ -256,7 +257,23 @@ _NO_BASIS = frozenset({"gen", "genecp", "chkbasis", "read"})
 #: the level, and a program's H-atom deck may swap the correlated method for it; it counts only when it is alone.
 _REFERENCE_ONLY = frozenset({"hf", "uhf", "rhf", "rohf"})
 _METHOD_ALIASES = {"pbe1pbe": "pbe0"}
-_DISPERSION_SUFFIX = re.compile(r"-(d2|d3|d3bj|d3zero|d4)$")
+_DISPERSION_SUFFIX = re.compile(r"^(.+)-(d2|d3|d3bj|d3zero|d4)$")
+#: The dispersion a method-name suffix stands for (a bare ``D3`` is either damping, by program).
+_SUFFIX_DISPERSION = {
+    "d2": {"d2"},
+    "d3": {"d3_bj", "d3_zero"},
+    "d3bj": {"d3_bj"},
+    "d3zero": {"d3_zero"},
+    "d4": {"d4"},
+}
+#: Functionals whose names merely start with ``r`` or ``u`` (method-family table, ``method_families``): not a spin
+#: prefix on a shorter method, so ``RPBE`` is not ``PBE`` and ``R2SCAN`` is not ``2SCAN``.
+_NOT_SPIN_PREFIXED = frozenset(
+    {
+        "r2scan", "r2scan-3c", "r2scan0", "r2scan50", "r2scanh", "rscan", "revpbe", "revpbe0", "revtpss", "revtpssh",
+        "revdsd-pbep86", "revdsd-pbepbe", "rpbe", "rs2", "rs2c", "rs3", "rasscf", "rm1", "reaxff", "uff",
+    }
+)
 
 
 def _strip_options(method: str) -> str:
@@ -266,23 +283,33 @@ def _strip_options(method: str) -> str:
     return re.sub(r"\((full|fc|frozencore)\)$", "", lowered)
 
 
-def _method_keys(method: str) -> set[str]:
+def _is_known_method(key: str) -> bool:
+    return method_identity_key(key) in CLASSIFICATION
+
+
+def _method_keys(method: str, dispersions: frozenset[str] = frozenset()) -> set[str]:
     """Every spelling a method can be compared under: its identity key and the forms a route or keyword line adds.
 
     A frozen-core option, a spin prefix (``U``/``R``/``RO``), an RI prefix or suffix (``RI-MP2``, ``CCSD(T)-F12/RI``),
-    a dispersion suffix (``B3LYP-D3BJ``, stated apart by a deck) and ``PBE1PBE`` for ``PBE0``. Both the declared
-    and the parsed method go through this, and they agree when their key sets meet.
+    a dispersion suffix and ``PBE1PBE`` for ``PBE0``. A prefix or suffix is stripped only when what is left is a
+    known method (the method-family table), the full name is not itself a functional that merely starts that way
+    (``RPBE``), and, for a dispersion suffix, the artifact states that dispersion apart (``B3LYP-D3BJ`` against a deck
+    with ``B3LYP`` and ``D3BJ``): ``wB97X-D3`` is not ``wB97X``, and ``B97-D3`` is not ``B97``.
     """
     keys = {method_identity_key(method), method_identity_key(_strip_options(method))}
     for _ in range(3):
         for key in list(keys):
             keys.add(re.sub(r"/ri(-f12)?$", "", key))
-            keys.add(_DISPERSION_SUFFIX.sub("", key))
-            if key.startswith("ri-"):
+            if key.startswith("ri-") and _is_known_method(key[3:]):
                 keys.add(key[3:])
-            for prefix in _SPIN_PREFIXES:
-                if key.startswith(prefix) and len(key) > len(prefix) + 1:
-                    keys.add(key[len(prefix):])
+            suffix = _DISPERSION_SUFFIX.match(key)
+            if suffix and _SUFFIX_DISPERSION[suffix.group(2)] & dispersions and _is_known_method(suffix.group(1)):
+                keys.add(method_identity_key(suffix.group(1)))
+            if key not in _NOT_SPIN_PREFIXED:
+                for prefix in _SPIN_PREFIXES:
+                    if key.startswith(prefix) and _is_known_method(key[len(prefix):]):
+                        keys.add(method_identity_key(key[len(prefix):]))
+                        break
             if key in _METHOD_ALIASES:
                 keys.add(_METHOD_ALIASES[key])
     return keys
@@ -320,6 +347,7 @@ def level_of_theory_warnings(
     *,
     parsed_software: str,
     artifact_kind: ArtifactKind,
+    dispersions: Iterable[str] = (),
 ) -> list[UploadWarning]:
     """Warn when no job of the artifact has the declared method and basis (never refuses).
 
@@ -333,11 +361,12 @@ def level_of_theory_warnings(
     if not all_jobs or lot is None or declared is None or declared != parsed_software.strip().lower():
         return []
 
-    declared_keys = _method_keys(lot.method) if lot.method else set()
+    stated_dispersions = frozenset(dispersions)
+    declared_keys = _method_keys(lot.method, stated_dispersions) if lot.method else set()
 
     def method_ok(job: dict) -> bool:
         methods = _effective_methods(job.get("methods") or [])
-        return not methods or not declared_keys or any(declared_keys & _method_keys(m) for m in methods)
+        return not methods or not declared_keys or any(declared_keys & _method_keys(m, stated_dispersions) for m in methods)
 
     def basis_ok(job: dict) -> bool:
         basis = job.get("basis")

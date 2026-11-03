@@ -25,10 +25,11 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from tckdb_schemas.fragments.version import ParserStamp
 
@@ -308,6 +309,22 @@ def extract_and_store_calculation_parameters(
             )
 
     observations = [_to_observation(p) for p in parsed.get("parameters", [])]
+    # What this artifact says, before the deck-wins rule drops any of it: the typed-versus-read judgement is made on
+    # this, so it does not depend on which artifact of the request was read first.
+    observed = [(o.canonical_key, o.canonical_value) for o in observations]
+    # A deck read that replaces earlier deck rows is a re-read; only then can log rows it shadowed need restoring.
+    is_reread = is_deck and (
+        session.scalar(
+            select(func.count())
+            .select_from(CalculationParameter)
+            .where(
+                CalculationParameter.calculation_id == calculation.id,
+                CalculationParameter.source == ParameterSource.parser,
+                CalculationParameter.artifact_kind == ArtifactKind.input,
+            )
+        )
+        or 0
+    ) > 0
     observations, conflicts = merge_artifact_observations(
         session, calculation, observations, artifact_kind=artifact_kind, software=software
     )
@@ -329,8 +346,8 @@ def extract_and_store_calculation_parameters(
         # :mod:`app.services.parameter_reconciliation`).
         replace=is_deck,
     )
-    if is_deck:
-        _restore_log_rows(session, calculation, software)
+    if is_reread:
+        _restore_log_rows(session, calculation)
 
     if warnings is not None:
         # Best effort: a failure comparing with what the depositor typed must not lose the parameters.
@@ -339,7 +356,7 @@ def extract_and_store_calculation_parameters(
             warnings.extend(conflicts)
             warnings.extend(
                 declared_parameter_warnings(
-                    session, calculation, rows, parsed_software=software, artifact_kind=artifact_kind
+                    session, calculation, observed, parsed_software=software, artifact_kind=artifact_kind
                 )
             )
             if software in ("gaussian", "orca"):
@@ -350,6 +367,7 @@ def extract_and_store_calculation_parameters(
                         parsed.get("method_basis_jobs"),
                         parsed_software=software,
                         artifact_kind=artifact_kind,
+                        dispersions={v for k, v in observed if k == "dispersion.correction" and v},
                     )
                 )
         except Exception as exc:  # pragma: no cover - defensive, never blocks
@@ -363,13 +381,34 @@ def extract_and_store_calculation_parameters(
     return rows
 
 
-def _restore_log_rows(session: Session, calculation: Calculation, software: SoftwareName) -> None:
-    """Re-read the stored output logs after a deck re-read, so a setting the new deck no longer states is not lost.
+def remember_artifact_bytes(session: Session, content: bytes) -> None:
+    """Keep the bytes of an artifact uploaded in this request, so a re-read in the same request does not go to storage."""
+    cache = session.info.setdefault("parameter_artifact_bytes", {})
+    cache[hashlib.sha256(content).hexdigest()] = content
 
-    A deck read drops the log rows for the settings it states. If the deck is later re-read with fewer settings,
-    the dropped log rows are re-derived here from the stored log artifacts, in upload order, and appended where no
-    stored row states the setting. Best effort and quiet: an artifact that cannot be read or parsed is skipped, and
-    conflicts were already reported when the log arrived.
+
+def _short_timeout_client():
+    """An S3 client that gives up in seconds: a storage outage must not stall a deck upload for a minute."""
+    from botocore.config import Config
+
+    from app.services.artifact_storage import _get_s3_client
+
+    return _get_s3_client(Config(connect_timeout=2, read_timeout=5, retries={"max_attempts": 1}))
+
+
+def _stored_log_rows_restore_reason(artifact: CalculationArtifact, exc: Exception) -> str:
+    return f"stored output log id={artifact.id} not re-read: {type(exc).__name__}: {exc}"
+
+
+def _restore_log_rows(session: Session, calculation: Calculation) -> None:
+    """Re-read the stored output logs so a setting a re-read deck no longer states is not lost.
+
+    A deck read drops the log rows for the settings it states. When the deck is re-read with fewer settings, the
+    dropped log rows are re-derived here from the calculation's stored output logs, in upload order, and appended
+    where no stored row states the setting. Runs only on a deck *re-read*, never on a calculation's first deck.
+    Bytes uploaded in this request come from memory; others are read from storage through a short-timeout client,
+    and an artifact that cannot be read or parsed is skipped with a logged reason (the deck's own rows are kept).
+    Conflicts were reported when the log arrived and are not repeated.
     """
     artifacts = session.scalars(
         select(CalculationArtifact)
@@ -379,9 +418,16 @@ def _restore_log_rows(session: Session, calculation: Calculation, software: Soft
         )
         .order_by(CalculationArtifact.id)
     ).all()
+    cache = session.info.get("parameter_artifact_bytes", {})
+    client = None
     for artifact in artifacts:
         try:
-            text = _decode_text(load_artifact_bytes(artifact.sha256))
+            content = cache.get(artifact.sha256)
+            if content is None:
+                if client is None:
+                    client = _short_timeout_client()
+                content = load_artifact_bytes(artifact.sha256, client=client)
+            text = _decode_text(content)
             log_software = _resolve_software(calculation, text)
             parsed = _run_parser(log_software, text)
             observations = [_to_observation(p) for p in parsed.get("parameters", [])]
@@ -397,8 +443,23 @@ def _restore_log_rows(session: Session, calculation: Calculation, software: Soft
                 artifact_kind=ArtifactKind.output_log,
                 replace=False,
             )
-        except Exception as exc:  # pragma: no cover - best effort, never blocks the deck's own rows
-            logger.info("stored output log id=%s not re-read after a deck: %s: %s", artifact.id, type(exc).__name__, exc)
+        except Exception as exc:  # best effort, never blocks the deck's own rows
+            logger.warning(_stored_log_rows_restore_reason(artifact, exc))
+
+
+def refresh_output_log_rows(session: Session, calculation: Calculation) -> None:
+    """Drop the calculation's log-derived rows and re-derive them from its stored output logs (after a parser fix).
+
+    Log rows are appended, first statement wins, and carry no source artifact, so a parser improvement cannot
+    replace them one by one; the backfill calls this to re-derive them all, in upload order, under the deck-wins rule.
+    """
+    session.query(CalculationParameter).filter(
+        CalculationParameter.calculation_id == calculation.id,
+        CalculationParameter.source == ParameterSource.parser,
+        CalculationParameter.artifact_kind == ArtifactKind.output_log,
+    ).delete(synchronize_session=False)
+    session.expire_all()
+    _restore_log_rows(session, calculation)
 
 
 def _decode_text(content: bytes) -> str:
@@ -460,6 +521,7 @@ def try_extract_parameters_from_artifact_upload(
         )
         return None
 
+    remember_artifact_bytes(session, content)
     text = _decode_text(content)
     return _extract_safe(
         session, calculation, text, source=artifact_in.filename, warnings=warnings, artifact_kind=kind
