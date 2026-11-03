@@ -66,6 +66,11 @@ from app.services.ess_software_detection import (
     SoftwareName,
     detect_software_from_text,
 )
+from app.services.parameter_reconciliation import (
+    declared_parameter_warnings,
+    level_of_theory_warnings,
+    merge_artifact_observations,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -224,8 +229,15 @@ def extract_and_store_calculation_parameters(
     *,
     parser: ParserStamp | None = None,
     warnings: list[UploadWarning] | None = None,
+    artifact_kind: ArtifactKind = ArtifactKind.input,
 ) -> list[CalculationParameter]:
     """Parse calculation input text and persist normalized parameters.
+
+    ``artifact_text`` is an input deck (``artifact_kind=input``) or an output log whose echoed input is read
+    (``artifact_kind=output_log``). The two are stored side by side and never erase each other; where both
+    state a setting the deck's row is kept (see :mod:`app.services.parameter_reconciliation`). A log skips
+    the software reconciliation, which the output-log hooks already run once per batch, and does not
+    overwrite the ``parameters_json`` snapshot a deck wrote.
 
     Pipeline:
 
@@ -234,8 +246,8 @@ def extract_and_store_calculation_parameters(
        for a banner sniffing cannot identify).
     2. Invoke that parser on ``artifact_text``.
     3. Replace every existing ``CalculationParameter`` row on this
-       calculation with ``source='parser'`` (true replace-all, not
-       scoped by parser_version — see
+       calculation with ``source='parser'`` and the same ``artifact_kind``
+       (true replace-all, not scoped by parser_version — see
        :func:`persist_calculation_parameters` for the rationale).
     4. Insert the new batch with ``source=ParameterSource.parser`` and the
        parser's version tag.
@@ -262,47 +274,81 @@ def extract_and_store_calculation_parameters(
 
     software = _resolve_software(calculation, artifact_text)
     parsed = _run_parser(software, artifact_text)
+    is_deck = artifact_kind is ArtifactKind.input
 
     # DR-0008: reconcile the declared software_release against the version
     # banner the parser just observed, and persist the outcome on the
     # calculation. Non-blocking: a mismatch is recorded, never raised, and
     # any failure here must not abort parameter extraction / the upload.
-    try:
-        result = record_software_reconciliation(
-            session,
-            calculation,
-            declared_ref=software_release_to_declared_ref(
-                calculation.software_release
-            ),
-            parsed_software=parsed.get("software"),
-        )
-        if warnings is not None:
-            warning = software_reconciliation_warning(result)
-            if warning is not None:
-                warnings.append(warning)
-    except Exception as exc:  # pragma: no cover - defensive, never blocks
-        logger.warning(
-            "software provenance reconciliation skipped for calculation "
-            "id=%s: %s: %s",
-            calculation.id,
-            type(exc).__name__,
-            exc,
-        )
+    # Output logs are reconciled once per batch by the output-log hooks.
+    if is_deck:
+        try:
+            result = record_software_reconciliation(
+                session,
+                calculation,
+                declared_ref=software_release_to_declared_ref(
+                    calculation.software_release
+                ),
+                parsed_software=parsed.get("software"),
+            )
+            if warnings is not None:
+                warning = software_reconciliation_warning(result)
+                if warning is not None:
+                    warnings.append(warning)
+        except Exception as exc:  # pragma: no cover - defensive, never blocks
+            logger.warning(
+                "software provenance reconciliation skipped for calculation "
+                "id=%s: %s: %s",
+                calculation.id,
+                type(exc).__name__,
+                exc,
+            )
 
     observations = [_to_observation(p) for p in parsed.get("parameters", [])]
+    observations, conflicts = merge_artifact_observations(
+        session, calculation, observations, artifact_kind=artifact_kind, software=software
+    )
     parsed_stamp = parsed.get("parser")
     effective_parser = parser or (ParserStamp(**parsed_stamp) if isinstance(parsed_stamp, dict) else None)
+    snapshot_is_ours = is_deck or calculation.parameters_json is None
 
-    return persist_calculation_parameters(
+    rows = persist_calculation_parameters(
         session,
         calculation,
         observations,
-        parameters_json=parsed.get("parameters_json"),
-        parameters_parser=effective_parser,
-        parameters_extracted_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        parameters_json=parsed.get("parameters_json") if snapshot_is_ours else None,
+        parameters_parser=effective_parser if snapshot_is_ours else None,
+        parameters_extracted_at=datetime.now(timezone.utc).replace(tzinfo=None) if snapshot_is_ours else None,
         source=ParameterSource.parser,
         parser=effective_parser,
+        artifact_kind=artifact_kind,
     )
+
+    if warnings is not None:
+        # Best effort: a failure comparing with what the depositor typed must not lose the parameters.
+        try:
+            session.flush()
+            warnings.extend(conflicts)
+            warnings.extend(
+                declared_parameter_warnings(
+                    session, calculation, rows, parsed_software=software, artifact_kind=artifact_kind
+                )
+            )
+            if software in ("gaussian", "orca"):
+                warnings.extend(
+                    level_of_theory_warnings(
+                        calculation, parsed.get("method_basis"), parsed_software=software, artifact_kind=artifact_kind
+                    )
+                )
+        except Exception as exc:  # pragma: no cover - defensive, never blocks
+            logger.warning(
+                "parameter reconciliation skipped for calculation id=%s: %s: %s",
+                calculation.id,
+                type(exc).__name__,
+                exc,
+            )
+
+    return rows
 
 
 def _decode_text(content: bytes) -> str:
@@ -317,14 +363,18 @@ def _decode_text(content: bytes) -> str:
     return content.decode("utf-8", errors="replace")
 
 
-def try_extract_parameters_from_input_upload(
+#: The artifact kinds whose text is read for parameters: a deck, and a log that echoes the deck.
+_PARAMETER_ARTIFACT_KINDS = (ArtifactKind.input, ArtifactKind.output_log)
+
+
+def try_extract_parameters_from_artifact_upload(
     session: Session,
     calculation: Calculation,
     artifact_in: ArtifactIn,
     *,
     warnings: list[UploadWarning] | None = None,
 ) -> list[CalculationParameter] | None:
-    """Opportunistic upload-side hook: extract from an ArtifactIn.
+    """Opportunistic upload-side hook: extract from an ArtifactIn (an input deck or an output log).
 
     Used by the artifact upload route and inline-bundle workflows
     immediately after the matching ``CalculationArtifact`` row has been
@@ -332,7 +382,7 @@ def try_extract_parameters_from_input_upload(
     no S3 round-trip is needed.
 
     Returns ``None`` (and logs a warning) on any failure or when the
-    artifact kind is not ``input``. Never raises — artifact upload is
+    artifact kind is neither ``input`` nor ``output_log``. Never raises — artifact upload is
     canonical and must not be aborted by parameter-extraction failure.
 
     :param warnings: Optional list to append a depositor-facing warning to
@@ -346,7 +396,8 @@ def try_extract_parameters_from_input_upload(
     # ORM. Both are ``(str, Enum)`` with identical members, so a value
     # comparison (``!=``) works across the boundary — an identity check
     # would always fail because the enum classes are not the same object.
-    if artifact_in.kind != ArtifactKind.input:
+    kind = next((k for k in _PARAMETER_ARTIFACT_KINDS if artifact_in.kind == k), None)
+    if kind is None:
         return None
     try:
         content = base64.b64decode(artifact_in.content_base64, validate=True)
@@ -361,7 +412,7 @@ def try_extract_parameters_from_input_upload(
 
     text = _decode_text(content)
     return _extract_safe(
-        session, calculation, text, source=artifact_in.filename, warnings=warnings
+        session, calculation, text, source=artifact_in.filename, warnings=warnings, artifact_kind=kind
     )
 
 
@@ -380,7 +431,7 @@ def try_extract_parameters_from_input_artifact_row(
     can continue across the rest of the corpus.
     """
 
-    if artifact.kind is not ArtifactKind.input:
+    if artifact.kind not in _PARAMETER_ARTIFACT_KINDS:
         return None
     if not artifact.sha256:
         logger.warning(
@@ -425,6 +476,7 @@ def try_extract_parameters_from_input_artifact_row(
         text,
         source=f"artifact id={artifact.id}",
         warnings=warnings,
+        artifact_kind=artifact.kind,
     )
 
 
@@ -435,6 +487,7 @@ def _extract_safe(
     *,
     source: str,
     warnings: list[UploadWarning] | None = None,
+    artifact_kind: ArtifactKind = ArtifactKind.input,
 ) -> list[CalculationParameter] | None:
     """Run extraction as a genuinely best-effort operation.
 
@@ -460,7 +513,7 @@ def _extract_safe(
     def _run() -> list[CalculationParameter] | None:
         try:
             return extract_and_store_calculation_parameters(
-                session, calculation, text, warnings=warnings
+                session, calculation, text, warnings=warnings, artifact_kind=artifact_kind
             )
         except ParameterExtractionError as exc:
             # A parse-layer refusal is expected and unremarkable — an

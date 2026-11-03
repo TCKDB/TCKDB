@@ -56,6 +56,7 @@ from app.db.models.calculation import (
     CalculationWavefunctionDiagnostic,
 )
 from app.db.models.common import (
+    ArtifactKind,
     CalculationDependencyRole,
     CalculationGeometryRole,
     CalculationRecordKind,
@@ -1568,6 +1569,7 @@ def persist_calculation_parameters(
     parameters_extracted_at: datetime | None = None,
     source: ParameterSource = ParameterSource.upload,
     parser: ParserStamp | None = None,
+    artifact_kind: ArtifactKind = ArtifactKind.input,
 ) -> list[CalculationParameter]:
     """Persist parsed execution-control parameters for a calculation.
 
@@ -1602,6 +1604,9 @@ def persist_calculation_parameters(
     :param source: Provenance applied to every newly inserted row.
     :param parser: Per-row parser stamp, used only when
         ``source=parser``.
+    :param artifact_kind: With ``source=parser``, the kind of artifact the rows were read from (``input`` or
+        ``output_log``). Replace-all is scoped to it, so an input deck and an output log never erase each
+        other's rows. Ignored for ``upload`` and ``curated`` rows, which carry no artifact kind.
     :returns: Newly created parameter rows in the order they were supplied.
     """
 
@@ -1616,7 +1621,7 @@ def persist_calculation_parameters(
     # Replace-all is bound to source=parser. Run the delete before the
     # early-return guard so an empty re-parse still clears stale rows.
     if source is ParameterSource.parser:
-        _delete_parser_parameter_rows(session, calculation.id)
+        _delete_parser_parameter_rows(session, calculation.id, artifact_kind)
 
     if not observations:
         return []
@@ -1651,6 +1656,7 @@ def persist_calculation_parameters(
             source=source,
             parser_name=row_parser.name if row_parser is not None else None,
             parser_version=row_parser.version if row_parser is not None else None,
+            artifact_kind=artifact_kind if source is ParameterSource.parser else None,
         )
         session.add(row)
         rows.append(row)
@@ -1658,8 +1664,13 @@ def persist_calculation_parameters(
     return rows
 
 
-def _delete_parser_parameter_rows(session: Session, calculation_id: int) -> None:
-    """Drop every parser-derived parameter row on this calculation.
+def _delete_parser_parameter_rows(
+    session: Session, calculation_id: int, artifact_kind: ArtifactKind = ArtifactKind.input
+) -> None:
+    """Drop the parser-derived parameter rows of one artifact kind on this calculation.
+
+    Scoped to ``artifact_kind`` so that re-reading the input deck leaves the rows read from the output log
+    alone, and the other way round.
 
     Pending in-session parser rows on this same calc are also expunged so
     a caller that re-parses twice in one transaction does not get a flush
@@ -1671,12 +1682,14 @@ def _delete_parser_parameter_rows(session: Session, calculation_id: int) -> None
             isinstance(obj, CalculationParameter)
             and obj.calculation_id == calculation_id
             and obj.source is ParameterSource.parser
+            and obj.artifact_kind == artifact_kind
         ):
             session.expunge(obj)
 
     session.query(CalculationParameter).filter(
         CalculationParameter.calculation_id == calculation_id,
         CalculationParameter.source == ParameterSource.parser,
+        CalculationParameter.artifact_kind == artifact_kind,
     ).delete(synchronize_session=False)
 
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.149.0 - 2026-11-03
+
+An accepted deposit can now earn three more warnings, each about a setting, a deck or a log that disagrees with what was declared. No field is added or removed.
+
+- New warning `parameter_disagrees_with_artifact`. A parameter the deposit states (`parameters[]` with a `canonical_key` and `canonical_value`) differs from the same setting read from an uploaded input deck or output log of the same program. Only settings that can change the result are compared (`calculation_parameter_vocab.affects_scientific_result`), only when both sides state a canonical value (a deck that is silent about a setting agrees with every declaration of it), and never across programs. `freq.hessian_method` is left to `hessian_method_disagrees_with_stored_tau_basis`. `context` has `canonical_key`, `software`, `observed_in` (`input` or `output_log`) and, under `depositor_supplied`, `declared_value` and `observed_value`. Both rows are kept.
+- New warning `input_deck_disagrees_with_output_log`. A deck and a log attached to one calculation state different values for one setting. The deck's value is kept; the log's row for that setting is not stored. `context` has `canonical_key`, `software` and, under `depositor_supplied`, `deck_value` and `log_value`.
+- New warning `level_of_theory_disagrees_with_artifact`. The method or the basis set read from the route line or keyword line of an uploaded Gaussian or ORCA deck or log differs from the declared level of theory, compared through the same identity keys the level of theory is deduplicated by. `context` has `component` (`method` or `basis`), `software`, `observed_in` and, under `depositor_supplied`, `declared_value` and `observed_value`. The declaration is kept.
+- Output logs are now read for parameters, from the input they echo. A deck and a log never erase each other's rows, and where both state a setting the deck's row is the one kept, whichever arrived first.
+- `include=parameters` on the scientific calculation read, and the calculation parameter read, carry `source` (`parser`, `upload`, `curated`) on every row.
+
 ## 0.148.0 - 2026-11-02
 
 A cyclic allene in a ring of 6, 7 or 8 atoms is now read from geometry like any other allene. No field is added or removed.

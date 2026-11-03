@@ -92,7 +92,7 @@ from app.services.artifact_persistence import (
     persist_artifact_batch,
 )
 from app.services.calculation_parameter_extraction import (
-    try_extract_parameters_from_input_upload,
+    try_extract_parameters_from_artifact_upload,
 )
 from app.services.charge_multiplicity_extraction import (
     try_reconcile_charge_multiplicity_from_output_upload,
@@ -815,7 +815,7 @@ def upload_calculation_artifacts(
     # filling it when absent and flagging a mismatch for review.
     warnings: list[UploadWarning] = []
     for art_in in request.artifacts:
-        try_extract_parameters_from_input_upload(
+        try_extract_parameters_from_artifact_upload(
             session, calculation, art_in, warnings=warnings
         )
         sp_warning = try_reconcile_sp_energy_from_output_upload(

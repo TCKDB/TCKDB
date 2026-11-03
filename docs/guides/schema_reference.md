@@ -174,10 +174,12 @@ the gap.
 | `source` | ParameterSource (enum) | no | upload | — | `parser`, `upload`, `curated` | not documented |
 | `parser_name` | TEXT | yes | — | — | — | not documented |
 | `parser_version` | TEXT | yes | — | — | — | not documented |
+| `artifact_kind` | ArtifactKind (enum) | yes | — | — | `input`, `output_log`, `checkpoint`, `formatted_checkpoint`, `hessian`, `ancillary` | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 
 **Check constraints:**
 
+- `ck_calculation_parameter_artifact_kind_parser_input_or_log`: `artifact_kind IS NULL OR (source = 'parser' AND artifact_kind IN ('input', 'output_log'))`
 - `ck_calculation_parameter_parameter_index_ge_0`: `parameter_index IS NULL OR parameter_index >= 0`
 
 ### `composite_scheme`
