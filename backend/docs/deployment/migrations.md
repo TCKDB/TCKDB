@@ -933,11 +933,27 @@ own transaction**, through the same declared-repair machinery as `d3f8a1c6e92b`.
 
 The migration only adds the nullable `literature.title_source` column; existing rows stay NULL ("not recorded"). To classify them, or to upgrade a depositor-typed title whose registry lookup failed at deposit time, run the explicit step `backend/scripts/ops/reresolve_literature_titles.py`. It re-fetches DOI/ISBN metadata through the resolver's own fetch functions and sets `title` and `title_source=resolved_metadata` where a title comes back; a failed or empty lookup leaves the row unchanged. It never touches DOI, ISBN or the public ref. Dry run is the default:
 
+Run it from the API image, the way `tckdb_deploy.sh` runs `alembic upgrade head` (the container's workdir is `/app/backend`, and `python` is only on `PATH` through the image's entrypoint, which `docker exec` skips). Use the same `DB_NETWORK`, `ENV_FILE` and `IMAGE` values the deploy used (`TCKDB_DB_NETWORK`, `TCKDB_ENV_FILE`, `<TCKDB_IMAGE_REPO>:<tag>`):
+
 ```bash
-python backend/scripts/ops/reresolve_literature_titles.py            # dry run (default)
-python backend/scripts/ops/reresolve_literature_titles.py --apply --i-know-this-is-deployed
-# narrow with --ref lit_..., --limit N, --since YYYY-MM-DD
+# (a) a throwaway container, dry run first (the default)
+docker run --rm --network "$DB_NETWORK" --env-file "$ENV_FILE" -e DB_HOST=db -e DB_PORT=5432 \
+    "$IMAGE" python scripts/ops/reresolve_literature_titles.py
+# then write
+docker run --rm --network "$DB_NETWORK" --env-file "$ENV_FILE" -e DB_HOST=db -e DB_PORT=5432 \
+    "$IMAGE" python scripts/ops/reresolve_literature_titles.py --apply --i-know-this-is-deployed
+
+# (b) alternatively, inside the running API container
+docker exec <api> micromamba run -n base python scripts/ops/reresolve_literature_titles.py
 ```
+
+Narrow with `--ref lit_...`, `--limit N`, `--since YYYY-MM-DD`. Notes:
+
+- Use an image built after the PR that added this script; an older image does not contain it.
+- The container's network needs outbound internet. Without it every lookup fails and every row is counted `lookup_error`: dry-run first and check the tally before `--apply`.
+- It commits every 50 rows; an interrupted run keeps its progress and a re-run only picks up what is still unverified.
+- The summary counts upgrades whose registry title does not match the stored title (normalised as the deposit-time warning does). Check those refs: the deposited DOI/ISBN may be the wrong one, and the row would now read as verified.
+- For an ISBN, "resolved" means a third-party catalogue (OpenLibrary, which is user-editable) said so: the same trust as at deposit time.
 
 ## Self-hosted / Raspberry Pi note
 

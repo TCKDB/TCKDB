@@ -68,21 +68,23 @@ def _lit(session, doi, title, source) -> Literature:
 
 @pytest.fixture
 def registry(monkeypatch):
-    """A fake registry: DOI -> title (or None for a failed lookup), recording every call."""
+    """A fake registry: DOI or ISBN -> title (or absent for a failed lookup), recording every call."""
     titles: dict[str, str | None] = {}
     calls: list[str] = []
+    module = sys.modules["reresolve_literature_titles"]
 
-    def fake(doi):
+    def fake_doi(doi):
         calls.append(doi)
         title = titles.get(doi)
         return None if title is None else {"title": title}
 
-    monkeypatch.setattr("app.services.literature_metadata.fetch_doi_metadata", fake)
-    monkeypatch.setattr(sys.modules["reresolve_literature_titles"], "fetch_doi_metadata", fake)
-    monkeypatch.setattr(
-        sys.modules["reresolve_literature_titles"], "fetch_isbn_metadata",
-        lambda isbn: (_ for _ in ()).throw(AssertionError("no ISBN lookups expected")),
-    )
+    def fake_isbn(isbn):
+        calls.append(isbn)
+        title = titles.get(isbn)
+        return None if title is None else {"Title": title}
+
+    monkeypatch.setattr(module, "fetch_doi_metadata", fake_doi)
+    monkeypatch.setattr(module, "fetch_isbn_metadata", fake_isbn)
     return titles, calls
 
 
@@ -179,3 +181,68 @@ def test_apply_on_a_deployed_looking_database_is_refused_without_the_flag(script
     assert calls == []
     db_session.refresh(row)
     assert row.title_source is None
+
+
+def test_the_isbn_branch_upgrades_a_row_that_has_only_an_isbn(script, registry, monkeypatch, db_session) -> None:
+    titles, calls = registry
+    row = Literature(kind="book", title="Typed Book", isbn="9780387954523", title_source=LiteratureTitleSource.depositor_supplied)
+    db_session.add(row)
+    db_session.flush()
+    titles["9780387954523"] = "Registry Book"
+
+    assert _run(script, monkeypatch, db_session, ["--apply", "--ref", row.public_ref]) == 0
+
+    db_session.refresh(row)
+    assert (row.title, row.title_source) == ("Registry Book", LiteratureTitleSource.resolved_metadata)
+    assert calls == ["9780387954523"]
+
+
+def test_a_mixed_run_tallies_each_outcome_and_flags_titles_that_differ(script, registry, monkeypatch, db_session, capsys) -> None:
+    titles, _ = registry
+    # Same title up to case and a trailing period: an upgrade, not a mismatch.
+    same = _lit(db_session, "10.1000/mix1", "a study of x.", LiteratureTitleSource.depositor_supplied)
+    titles["10.1000/mix1"] = "A Study of X"
+    # A different paper under the DOI: an upgrade, flagged.
+    other = _lit(db_session, "10.1000/mix2", "Typed Title About Y", None)
+    titles["10.1000/mix2"] = "A Completely Different Paper"
+    # No registry answer.
+    missing = _lit(db_session, "10.1000/mix3", "Typed Title", LiteratureTitleSource.depositor_supplied)
+    # Out of scope: already verified.
+    done = _lit(db_session, "10.1000/mix4", "Verified", LiteratureTitleSource.resolved_metadata)
+    titles["10.1000/mix4"] = "Changed Upstream"
+    monkeypatch.setattr(script, "_BATCH", 1)  # commit after every row, exercising the batch path
+
+    assert _run(script, monkeypatch, db_session, ["--apply", "--since", "2000-01-01"]) == 0
+
+    for row in (same, other, missing, done):
+        db_session.refresh(row)
+    assert (same.title, same.title_source) == ("A Study of X", LiteratureTitleSource.resolved_metadata)
+    assert (other.title, other.title_source) == ("A Completely Different Paper", LiteratureTitleSource.resolved_metadata)
+    assert (missing.title, missing.title_source) == ("Typed Title", LiteratureTitleSource.depositor_supplied)
+    assert (done.title, done.title_source) == ("Verified", LiteratureTitleSource.resolved_metadata)
+    out = capsys.readouterr().out
+    assert "no_title=1" in out and "upgraded=2" in out
+    assert f"{other.public_ref}  not_recorded -> resolved_metadata  [registry title differs from stored]" in out
+    assert f"{same.public_ref}  depositor_supplied -> resolved_metadata\n" in out  # not flagged
+    assert "1 upgrade(s) replaced a stored title the registry title does not match" in out
+    assert "A Completely Different Paper" not in out and "Typed Title About Y" not in out
+
+
+def test_since_leaves_older_rows_alone(script, registry, monkeypatch, db_session) -> None:
+    from datetime import datetime, timezone
+
+    titles, calls = registry
+    old = _lit(db_session, "10.1000/old", "Typed Old", None)
+    new = _lit(db_session, "10.1000/new", "Typed New", None)
+    old.created_at = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    db_session.flush()
+    titles["10.1000/old"] = "Registry Old"
+    titles["10.1000/new"] = "Registry New"
+
+    assert _run(script, monkeypatch, db_session, ["--apply", "--since", "2025-01-01"]) == 0
+
+    db_session.refresh(old)
+    db_session.refresh(new)
+    assert (old.title, old.title_source) == ("Typed Old", None)
+    assert (new.title, new.title_source) == ("Registry New", LiteratureTitleSource.resolved_metadata)
+    assert "10.1000/old" not in calls

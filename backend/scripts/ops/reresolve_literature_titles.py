@@ -20,7 +20,10 @@ Lookups go through the resolver's own fetch functions
 The lookups are made one at a time, ``--delay`` seconds apart (default 0.5) so a
 large run stays polite to Crossref.
 
-A lookup that errors, or returns no title, leaves the row unchanged and is counted.
+A lookup that errors, or returns no title, leaves the row unchanged and is counted. Rows are committed in
+batches of 50 (a re-run only selects what is still unverified). Upgrades whose registry title does not match
+the stored one -- normalised as the deposit-time mismatch warning does -- are flagged and tallied, since that
+can mean the wrong DOI/ISBN was deposited (for example during a registry outage) and is now marked verified.
 A row already ``resolved_metadata`` is never selected.
 
 Usage::
@@ -69,7 +72,12 @@ from app.services.literature_metadata import (  # noqa: E402
     normalize_doi,
     normalize_isbn,
 )
-from app.services.literature_resolution import _metadata_to_fields  # noqa: E402
+from app.services.literature_resolution import (  # noqa: E402
+    _metadata_to_fields,
+    _normalize_title_for_comparison,
+)
+
+_BATCH = 50  # rows per commit: progress survives an interruption and no transaction stays open for the whole run
 
 _TEST_DB_NAME = re.compile(r"^tckdb_test(?:_[A-Za-z0-9_]+)?$")
 
@@ -159,17 +167,25 @@ def main() -> int:
             return 0
 
         tally: Counter[str] = Counter()
+        differing = 0
         for index, row in enumerate(rows):
             if index and args.delay > 0:
                 time.sleep(args.delay)
+            if args.apply and index and index % _BATCH == 0:
+                session.commit()  # idempotent: a re-run only selects what is still unverified
+            ref = row.public_ref
             title, outcome = _registry_title(row)
             old = row.title_source.value if row.title_source is not None else "not_recorded"
             if title is None:
                 tally[outcome] += 1
-                print(f"  {row.public_ref}  {old} -> unchanged ({outcome})")
+                print(f"  {ref}  {old} -> unchanged ({outcome})")
                 continue
             tally["upgraded" if args.apply else "would_upgrade"] += 1
-            print(f"  {row.public_ref}  {old} -> resolved_metadata")
+            # The same comparison the deposit-time mismatch warning makes. A different title under the same
+            # DOI/ISBN may mean the wrong identifier was deposited: flag it for a person to look at.
+            differs = _normalize_title_for_comparison(row.title) != _normalize_title_for_comparison(title)
+            differing += differs
+            print(f"  {ref}  {old} -> resolved_metadata" + ("  [registry title differs from stored]" if differs else ""))
             if args.apply:
                 row.title = title
                 row.title_source = LiteratureTitleSource.resolved_metadata
@@ -178,6 +194,11 @@ def main() -> int:
             session.commit()
 
         print(f"{len(rows)} row(s) examined: " + ", ".join(f"{k}={v}" for k, v in sorted(tally.items())))
+        print(
+            f"{differing} upgrade(s) {'replaced' if args.apply else 'would replace'} a stored title the registry title "
+            "does not match (normalised as the deposit-time warning does); check those refs: the deposited "
+            "DOI/ISBN may be the wrong one."
+        )
         if not args.apply:
             print("Dry run -- nothing was written. Re-run with --apply to write.")
     return 0
