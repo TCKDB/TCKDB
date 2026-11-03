@@ -22,7 +22,12 @@ from typing import Self
 from pydantic import Field, field_validator, model_validator
 
 from tckdb_schemas.common import SchemaBase
-from tckdb_schemas.electronic_state import check_electronic_state_label, check_term_symbol
+from tckdb_schemas.electronic_state import (
+    canonical_term_symbol,
+    check_electronic_state_label,
+    check_term_symbol,
+    is_valid_term_symbol,
+)
 from tckdb_schemas.enums import (
     MoleculeKind,
     SpeciesEntryStateKind,
@@ -63,12 +68,33 @@ class SpeciesEntryIdentityWriteValidatorMixin:
 
     Deliberately separate from :class:`SpeciesEntryIdentityValidatorMixin`, which read schemas
     share: a read model must keep rendering a row stored before the grammar existed.
+
+    Each accepted value is replaced by its one canonical spelling
+    (:mod:`tckdb_schemas.electronic_state`), so every spelling of a state is one stored value and
+    one species-entry identity. A term symbol the depositor wrote differently is kept as typed in
+    ``term_symbol_raw`` unless they supplied a ``term_symbol_raw`` of their own; a state label has
+    no raw field and is only canonicalised.
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def keep_the_typed_term_symbol_as_raw(cls, data: object) -> object:
+        """Copy a differently spelled ``term_symbol`` into ``term_symbol_raw`` before it is canonicalised."""
+
+        if not isinstance(data, dict):
+            return data
+        typed = data.get("term_symbol")
+        if not isinstance(typed, str) or data.get("term_symbol_raw") is not None:
+            return data
+        typed = typed.strip()
+        if typed and is_valid_term_symbol(typed) and canonical_term_symbol(typed) != typed:
+            return {**data, "term_symbol_raw": typed}
+        return data
 
     @field_validator("electronic_state_label", mode="before", check_fields=False)
     @classmethod
     def electronic_state_label_has_accepted_shape(cls, value: object) -> object:
-        """Refuse a state label outside the strict grammar (``electronic_state_label_invalid``).
+        """Refuse a state label outside the strict grammar (``electronic_state_label_invalid``); store its canonical form.
 
         Runs before the length cap so a too-long or junk value gets the coded refusal.
         """
@@ -78,7 +104,7 @@ class SpeciesEntryIdentityWriteValidatorMixin:
     @field_validator("term_symbol", mode="before", check_fields=False)
     @classmethod
     def term_symbol_has_accepted_shape(cls, value: object) -> object:
-        """Refuse a term symbol outside the strict grammar (``term_symbol_invalid``).
+        """Refuse a term symbol outside the strict grammar (``term_symbol_invalid``); store its canonical form.
 
         ``term_symbol_raw`` is deliberately not checked: it is the depositor's own wording, kept
         verbatim for provenance (the CCCBDB importer writes ``X 1A1g (planar, D6h)``), and is never
@@ -291,13 +317,14 @@ class SpeciesEntryIdentityPayload(
         and the SMILES marks leave unresolved and is cross-checked where they
         exist; the server decides whether it fits the molecule.
     :param electronic_state_kind: Electronic-state classification.
-    :param electronic_state_label: Optional state label such as ``X``, ``A``, ``T1`` or
-        ``1A1``; only the shapes in :mod:`tckdb_schemas.electronic_state` are accepted
-        (``electronic_state_label_invalid`` otherwise).
+    :param electronic_state_label: Optional state label such as ``X``, ``A``, ``E`` or
+        ``T1``; only the shapes in :mod:`tckdb_schemas.electronic_state` are accepted
+        (``electronic_state_label_invalid`` otherwise) and the canonical spelling is stored.
     :param term_symbol_raw: Optional raw uploaded term symbol, kept verbatim and not checked.
     :param term_symbol: Optional canonicalized term symbol such as ``2Pi``, ``3P2`` or ``X 1A1``;
         only the shapes in :mod:`tckdb_schemas.electronic_state` are accepted
-        (``term_symbol_invalid`` otherwise).
+        (``term_symbol_invalid`` otherwise) and the canonical spelling (``²Π``) is stored, the
+        typed spelling going to ``term_symbol_raw`` when that is not given.
 
     Isotopic resolution is *not* a field on this payload. It is derived
     server-side from the atom-resolved isotope labels in ``smiles`` (see

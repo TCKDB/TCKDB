@@ -123,12 +123,28 @@ def test_an_over_long_value_gets_the_same_coded_refusal(client, field) -> None:
     assert response.json()["code"] == CODES[field]
 
 
-@pytest.mark.parametrize("token", ["R", "S", "E", "Z", "r", "s", "M", "P", "Ra", "Sa", "?", "-"])
+@pytest.mark.parametrize("token", ["R", "S", "Z", "r", "s", "M", "P", "Ra", "Sa", "?", "-"])
 def test_a_stereo_looking_state_label_is_refused_end_to_end(client, token) -> None:
     """The reviewer's case: a typed state label ``R`` on a ground-state entry."""
     response = _post(client, "thermo", "electronic_state_label", token)
     assert response.status_code == 422
     assert response.json()["code"] == "electronic_state_label_invalid"
+
+
+def test_every_spelling_of_one_state_is_one_stored_value_and_one_entry(client, db_session) -> None:
+    """2Pi, ^2Pi, ^{2}Pi and the Greek spelling are one state; so are A~ and A + combining tilde."""
+    ids = set()
+    for term, label in [("2Pi", "A~"), ("^2Pi", "A\u0303"), ("^{2}Pi", "\u00c3"), ("2\u03a0", "A~"), ("\u00b2\u03a0", "A~")]:
+        payload = _thermo()
+        payload["species_entry"].update({"term_symbol": term, "electronic_state_label": label})
+        response = client.post("/api/v1/uploads/thermo", json=payload)
+        assert response.status_code == 201, response.text[:500]
+        ids.add(response.json()["species_entry_id"])
+    assert len(ids) == 1
+    entry = db_session.get(SpeciesEntry, ids.pop())
+    assert (entry.term_symbol, entry.electronic_state_label) == ("\u00b2\u03a0", "\u00c3")
+    # the first spelling the depositor typed is kept; later spellings find the same entry
+    assert entry.term_symbol_raw == "2Pi"
 
 
 def test_the_term_symbol_raw_is_not_checked(client) -> None:

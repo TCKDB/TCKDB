@@ -236,13 +236,14 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 ### 0.149.0 - 2026-11-03
 
-An electronic-state label and a term symbol must now be a recognised spectroscopic shape. Two refusal codes join the contract. No field is added or removed.
+An electronic-state label and a term symbol must now be a recognised spectroscopic shape, and are stored in one canonical spelling. Two refusal codes join the contract. No field is added or removed.
 
-- `electronic_state_label_invalid` (422): `electronic_state_label` must be a spectroscopic letter with an optional tilde and primes (`X`, `A`, `a`, `X~`, `A'`, `A''`), a state ordinal (`S0`, `S1`, `T1`, `D0`, `Q0`), or a multiplicity and symmetry species (`1A1`, `2A'`, `3B2`, `2Sigma+`), in at most 8 characters.
-- `term_symbol_invalid` (422): `term_symbol` must be an atomic term (`3P`, `3P2`, `2P_{3/2}`), a linear-molecule term (`2Pi`, `3Sigma_g-`, `1Sigma_g+`, `2Pi_{3/2}`, or the Greek and superscript spellings `2Π`, `³Σg⁻`) or a polyatomic term (`1A1`, `2A'`, `1A1g`), optionally with a state letter in front (`X2Pi`, `X 1A1`, `X^2Pi`), in at most 64 characters.
-- A bare `R`, `S`, `E`, `Z`, `M`, `P` (or their lower case), `Ra`, `Sa`, `?`, `-`, a word such as `ground`, or an isotope-like `[2H]` is refused in either field, so a state label can never be read as a stereo descriptor. The refusal names the field and the accepted shapes; it never repeats what you sent.
+- `electronic_state_label_invalid` (422): `electronic_state_label` must be a spectroscopic letter with an optional tilde and primes (`X`, `A`, `E`, `a`, `X~`, `A'`, `A''`) or a state ordinal (`S0`, `S1`, `T1`, `D0`, `Q0`), in at most 8 characters. Symmetry species such as `1A1` belong in `term_symbol`, not here.
+- `term_symbol_invalid` (422): `term_symbol` must be an atomic term (`3P`, `3P2`, `2P_{3/2}`), a linear-molecule term (`2Pi`, `3Sigma_g-`, `1Sigma_g+`, `2Pi_{3/2}`, or Greek and superscript spellings) or a polyatomic term (`1A1`, `2A'`, `1A1g`), optionally with a state letter in front (`X2Pi`, `X 1A1`, `X^2Pi`), in at most 64 characters.
+- Every accepted spelling is stored as one canonical form, so `2Pi`, `^2Pi`, `^{2}Pi` and `2Π` are one value and one species entry: superscript multiplicity, Greek capitals, subscript indices and J, `′`/`″` for primes, a combining tilde (`A~` is `Ã`), and a state letter written first and followed by one space (`X ²Π`). The spelling you typed is kept in `term_symbol_raw` when it differs and you did not send one. A state label has no raw field.
+- `R`, `S`, `Z`, `M`, `P` (and lower case) are refused as state letters, as are `Ra`, `Sa`, `?`, `-`, words and isotope-like text. `E`/`e` are accepted (CO E¹Π); the server writes the state part of a joined label with the word `state`, so `state E` cannot be read as the stereo descriptor `E`.
 - `term_symbol_raw` is not checked: it is kept verbatim for provenance and is never joined into a displayed label.
-- `tckdb_schemas.electronic_state` is the one place the grammar is written (`ELECTRONIC_STATE_LABEL_SOURCE`, `TERM_SYMBOL_SOURCE`, `is_valid_electronic_state_label`, `is_valid_term_symbol`). `electronic_state_examples.json` ships in the package with the accepted and rejected examples and the pattern sources, for a frontend parity test.
+- `tckdb_schemas.electronic_state` is the one place the grammar and the canonical form are written (`ELECTRONIC_STATE_LABEL_SOURCE`, `TERM_SYMBOL_SOURCE`, `is_valid_*`, `canonical_*`). `electronic_state_examples.json` ships in the package with accepted and rejected examples, the pattern sources, and an input to canonical-form map, for a frontend parity test.
 - Entries already stored are not rewritten. The server now writes the state part of a joined entry label with the word `state` (`excited state A`, `state T1`), so a stored label that looks like a stereo descriptor cannot be misread.
 
 ### 0.148.0 - 2026-11-02
@@ -8316,9 +8317,9 @@ Unknown keys are refused.
 | `stereo_kind` | `StereoKind` | no | `"unspecified"` | `unspecified`, `achiral`, `enantiomer`, `diastereomer`, `ez_isomer` | Stereo classification for the resolved entry.
 | `stereo_label` | string \| null | no |  | length <= 512 | Optional stereo descriptor in the closed vocabulary ``R``/``S``/``r``/``s`` (lower case: a pseudo-asymmetric centre)/``E``/``Z``/``-`` (an element that is not stereogenic in this configuration)/``?``, one comma-separated token per potential stereo element in canonical order (``E``, ``R,S``, ``E,?``). Free text such as ``"trans"`` is refused. It fills only the elements the geometry and the SMILES marks leave unresolved and is cross-checked where they exist; the server decides whether it fits the molecule.
 | `electronic_state_kind` | `SpeciesEntryStateKind` | no | `"ground"` | `ground`, `excited` | Electronic-state classification.
-| `electronic_state_label` | string \| null | no |  | length <= 8 | Optional state label such as ``X``, ``A``, ``T1`` or ``1A1``; only the shapes in :mod:`tckdb_schemas.electronic_state` are accepted (``electronic_state_label_invalid`` otherwise).
+| `electronic_state_label` | string \| null | no |  | length <= 8 | Optional state label such as ``X``, ``A``, ``E`` or ``T1``; only the shapes in :mod:`tckdb_schemas.electronic_state` are accepted (``electronic_state_label_invalid`` otherwise) and the canonical spelling is stored.
 | `term_symbol_raw` | string \| null | no |  | length <= 64 | Optional raw uploaded term symbol, kept verbatim and not checked.
-| `term_symbol` | string \| null | no |  | length <= 64 | Optional canonicalized term symbol such as ``2Pi``, ``3P2`` or ``X 1A1``; only the shapes in :mod:`tckdb_schemas.electronic_state` are accepted (``term_symbol_invalid`` otherwise).
+| `term_symbol` | string \| null | no |  | length <= 64 | Optional canonicalized term symbol such as ``2Pi``, ``3P2`` or ``X 1A1``; only the shapes in :mod:`tckdb_schemas.electronic_state` are accepted (``term_symbol_invalid`` otherwise) and the canonical spelling (``²Π``) is stored, the typed spelling going to ``term_symbol_raw`` when that is not given.
 
 - **SpeciesEntryIdentityPayload.check_electron_identity** (model, after; can refuse):
 
@@ -8329,16 +8330,17 @@ Unknown keys are refused.
   carrying ``[e-]`` would be handed to RDKit, which cannot parse it.
 
 - **SpeciesEntryIdentityPayload.normalize_identity_text_fields** (model, after): Normalize optional identity text fields without imposing stricter semantics yet.
+- **SpeciesEntryIdentityPayload.keep_the_typed_term_symbol_as_raw** (model, before; can refuse via `canonical_term_symbol`): Copy a differently spelled ``term_symbol`` into ``term_symbol_raw`` before it is canonicalised.
 - **SpeciesEntryIdentityPayload.normalize_smiles** (field, after on `smiles`; can refuse via `normalize_required_text`): applies `normalize_required_text` to `smiles`: Trim required text inputs and reject blank values.
 - **SpeciesEntryIdentityPayload.electronic_state_label_has_accepted_shape** (field, before on `electronic_state_label`; can refuse via `check_electronic_state_label`):
 
-  Refuse a state label outside the strict grammar (``electronic_state_label_invalid``).
+  Refuse a state label outside the strict grammar (``electronic_state_label_invalid``); store its canonical form.
 
   Runs before the length cap so a too-long or junk value gets the coded refusal.
 
 - **SpeciesEntryIdentityPayload.term_symbol_has_accepted_shape** (field, before on `term_symbol`; can refuse via `check_term_symbol`):
 
-  Refuse a term symbol outside the strict grammar (``term_symbol_invalid``).
+  Refuse a term symbol outside the strict grammar (``term_symbol_invalid``); store its canonical form.
 
   ``term_symbol_raw`` is deliberately not checked: it is the depositor's own wording, kept
   verbatim for provenance (the CCCBDB importer writes ``X 1A1g (planar, D6h)``), and is never

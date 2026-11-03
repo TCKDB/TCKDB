@@ -27,7 +27,7 @@ def test_conformer_upload_request_normalizes_nested_identity_fields() -> None:
     assert request.species_entry.smiles == "[H]"
     assert request.species_entry.stereo_label is None
     assert request.species_entry.electronic_state_label == "X"
-    assert request.species_entry.term_symbol == "X2S"
+    assert request.species_entry.term_symbol == "X ²S"
     assert request.geometry.xyz_text == "1\ncomment\nH 0.0 0.0 0.0"
     assert request.note == "imported"
     assert request.label == "conf-a"
