@@ -25,10 +25,10 @@
       "1": "65d26afde98949e8ddd85279e553351df7f95348d87d88b1f38f383cb0479a36"
     },
     "tckdb_reproducibility": {
-      "1": "494eaa34e4601c7529b8e48ca0bbede52e489dff51e99a76aceece4a9abe6fef"
+      "1": "adea9360a4ba641340d991217eaab67908ebc0ef4d2fe640aacdacf5a49c4d7b"
     },
     "tckdb_reproducibility_ts_statmech": {
-      "1": "68087dee093b2380db7114d0aca019ac56a287d7f5c85d682ed1bba44e311bd8"
+      "1": "64ab078fdcd9b76ad6d75959bc7f3e2d37bca7502429c4844d3aadc1451042d6"
     }
   },
   "unbumped_overrides": [
@@ -272,6 +272,16 @@
       "name": "tckdb_reproducibility_ts_statmech",
       "version": 1,
       "reason": "New nullable literature.title_source column (enum LiteratureTitleSource): the walker follows ORM enum columns of reached models, so the new enum entered the fingerprint. No check, threshold or grading reads it; decides nothing new."
+    },
+    {
+      "name": "tckdb_reproducibility",
+      "version": 1,
+      "reason": "calculation_parameter.artifact_kind joins the columns a snapshot never includes (bookkeeping about which uploaded artifact a parser row was read from); no existing digest or grade moves, and the species statmech frozen digests are unchanged"
+    },
+    {
+      "name": "tckdb_reproducibility_ts_statmech",
+      "version": 1,
+      "reason": "calculation_parameter.artifact_kind joins the columns a snapshot never includes (bookkeeping about which uploaded artifact a parser row was read from); no existing digest or grade moves, and the species statmech frozen digests are unchanged"
     }
   ]
 }

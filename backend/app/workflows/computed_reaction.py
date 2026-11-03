@@ -75,7 +75,7 @@ from app.services.calculation_ownership import (
     assert_calculation_owned_by,
 )
 from app.services.calculation_parameter_extraction import (
-    try_extract_parameters_from_input_upload,
+    try_extract_parameters_from_artifact_upload,
 )
 from app.services.calculation_resolution import (
     add_dependency_edge_idempotent,
@@ -290,7 +290,7 @@ def _persist_calculation_unattributed(
         # abort the bundle. Input artifacts yield parameter rows; output
         # logs reconcile the single-point energy against the tool's
         # reported value (fill/mismatch), the same as the artifacts route.
-        try_extract_parameters_from_input_upload(
+        try_extract_parameters_from_artifact_upload(
             session, calculation, artifact_in, warnings=sp_energy_warnings
         )
         sp_warning = try_reconcile_sp_energy_from_output_upload(

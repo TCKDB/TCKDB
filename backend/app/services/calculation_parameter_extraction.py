@@ -25,9 +25,11 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import logging
 from datetime import datetime, timezone
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from tckdb_schemas.fragments.version import ParserStamp
 
@@ -65,6 +67,11 @@ from app.services.calculation_resolution import (
 from app.services.ess_software_detection import (
     SoftwareName,
     detect_software_from_text,
+)
+from app.services.parameter_reconciliation import (
+    declared_parameter_warnings,
+    level_of_theory_warnings,
+    merge_artifact_observations,
 )
 
 logger = logging.getLogger(__name__)
@@ -213,6 +220,8 @@ def _parse_gaussian_text(text: str) -> dict:
         "software": g.parse_software_version(text),
         "charge_multiplicity": g.parse_charge_multiplicity(text),
         "method_basis": g.parse_method_basis(route),
+        # Every job of a ``--Link1--`` file or a multi-step log, for the declared-level check.
+        "method_basis_jobs": g.parse_method_basis_jobs(text),
         "parser": g.PARSER.stamp().model_dump(),
     }
 
@@ -224,8 +233,15 @@ def extract_and_store_calculation_parameters(
     *,
     parser: ParserStamp | None = None,
     warnings: list[UploadWarning] | None = None,
+    artifact_kind: ArtifactKind = ArtifactKind.input,
 ) -> list[CalculationParameter]:
     """Parse calculation input text and persist normalized parameters.
+
+    ``artifact_text`` is an input deck (``artifact_kind=input``) or an output log whose echoed input is read
+    (``artifact_kind=output_log``). The two are stored side by side and never erase each other; where both
+    state a setting the deck's row is kept (see :mod:`app.services.parameter_reconciliation`). A log skips
+    the software reconciliation, which the output-log hooks already run once per batch, and does not
+    overwrite the ``parameters_json`` snapshot a deck wrote.
 
     Pipeline:
 
@@ -234,8 +250,8 @@ def extract_and_store_calculation_parameters(
        for a banner sniffing cannot identify).
     2. Invoke that parser on ``artifact_text``.
     3. Replace every existing ``CalculationParameter`` row on this
-       calculation with ``source='parser'`` (true replace-all, not
-       scoped by parser_version — see
+       calculation with ``source='parser'`` and the same ``artifact_kind``
+       (true replace-all, not scoped by parser_version — see
        :func:`persist_calculation_parameters` for the rationale).
     4. Insert the new batch with ``source=ParameterSource.parser`` and the
        parser's version tag.
@@ -262,47 +278,215 @@ def extract_and_store_calculation_parameters(
 
     software = _resolve_software(calculation, artifact_text)
     parsed = _run_parser(software, artifact_text)
+    is_deck = artifact_kind is ArtifactKind.input
 
     # DR-0008: reconcile the declared software_release against the version
     # banner the parser just observed, and persist the outcome on the
     # calculation. Non-blocking: a mismatch is recorded, never raised, and
     # any failure here must not abort parameter extraction / the upload.
-    try:
-        result = record_software_reconciliation(
-            session,
-            calculation,
-            declared_ref=software_release_to_declared_ref(
-                calculation.software_release
-            ),
-            parsed_software=parsed.get("software"),
-        )
-        if warnings is not None:
-            warning = software_reconciliation_warning(result)
-            if warning is not None:
-                warnings.append(warning)
-    except Exception as exc:  # pragma: no cover - defensive, never blocks
-        logger.warning(
-            "software provenance reconciliation skipped for calculation "
-            "id=%s: %s: %s",
-            calculation.id,
-            type(exc).__name__,
-            exc,
-        )
+    # Output logs are reconciled once per batch by the output-log hooks.
+    if is_deck:
+        try:
+            result = record_software_reconciliation(
+                session,
+                calculation,
+                declared_ref=software_release_to_declared_ref(
+                    calculation.software_release
+                ),
+                parsed_software=parsed.get("software"),
+            )
+            if warnings is not None:
+                warning = software_reconciliation_warning(result)
+                if warning is not None:
+                    warnings.append(warning)
+        except Exception as exc:  # pragma: no cover - defensive, never blocks
+            logger.warning(
+                "software provenance reconciliation skipped for calculation "
+                "id=%s: %s: %s",
+                calculation.id,
+                type(exc).__name__,
+                exc,
+            )
 
     observations = [_to_observation(p) for p in parsed.get("parameters", [])]
+    # What this artifact says, before the deck-wins rule drops any of it: the typed-versus-read judgement is made on
+    # this, so it does not depend on which artifact of the request was read first.
+    observed = [(o.canonical_key, o.canonical_value) for o in observations]
+    # A deck read that replaces earlier deck rows is a re-read; only then can log rows it shadowed need restoring.
+    is_reread = is_deck and (
+        session.scalar(
+            select(func.count())
+            .select_from(CalculationParameter)
+            .where(
+                CalculationParameter.calculation_id == calculation.id,
+                CalculationParameter.source == ParameterSource.parser,
+                CalculationParameter.artifact_kind == ArtifactKind.input,
+            )
+        )
+        or 0
+    ) > 0
+    observations, conflicts = merge_artifact_observations(
+        session, calculation, observations, artifact_kind=artifact_kind, software=software
+    )
     parsed_stamp = parsed.get("parser")
     effective_parser = parser or (ParserStamp(**parsed_stamp) if isinstance(parsed_stamp, dict) else None)
+    snapshot_is_ours = is_deck or calculation.parameters_json is None
 
-    return persist_calculation_parameters(
+    rows = persist_calculation_parameters(
         session,
         calculation,
         observations,
-        parameters_json=parsed.get("parameters_json"),
-        parameters_parser=effective_parser,
-        parameters_extracted_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        parameters_json=parsed.get("parameters_json") if snapshot_is_ours else None,
+        parameters_parser=effective_parser if snapshot_is_ours else None,
+        parameters_extracted_at=datetime.now(timezone.utc).replace(tzinfo=None) if snapshot_is_ours else None,
         source=ParameterSource.parser,
         parser=effective_parser,
+        artifact_kind=artifact_kind,
+        # An output log is appended, never replaced: a setting's first statement stands (see
+        # :mod:`app.services.parameter_reconciliation`).
+        replace=is_deck,
     )
+    if is_reread:
+        _restore_log_rows(session, calculation)
+
+    if warnings is not None:
+        # Best effort: a failure comparing with what the depositor typed must not lose the parameters.
+        try:
+            session.flush()
+            warnings.extend(conflicts)
+            warnings.extend(
+                declared_parameter_warnings(
+                    session, calculation, observed, parsed_software=software, artifact_kind=artifact_kind
+                )
+            )
+            if software in ("gaussian", "orca"):
+                warnings.extend(
+                    level_of_theory_warnings(
+                        calculation,
+                        parsed.get("method_basis"),
+                        parsed.get("method_basis_jobs"),
+                        parsed_software=software,
+                        artifact_kind=artifact_kind,
+                        dispersions={v for k, v in observed if k == "dispersion.correction" and v},
+                    )
+                )
+        except Exception as exc:  # pragma: no cover - defensive, never blocks
+            logger.warning(
+                "parameter reconciliation skipped for calculation id=%s: %s: %s",
+                calculation.id,
+                type(exc).__name__,
+                exc,
+            )
+
+    return rows
+
+
+def remember_artifact_bytes(session: Session, content: bytes) -> None:
+    """Keep the bytes of an artifact uploaded in this request, so a re-read in the same request does not go to storage."""
+    cache = session.info.setdefault("parameter_artifact_bytes", {})
+    cache[hashlib.sha256(content).hexdigest()] = content
+
+
+def _short_timeout_client():
+    """An S3 client that gives up in seconds: a storage outage must not stall a deck upload for a minute."""
+    from botocore.config import Config
+
+    from app.services.artifact_storage import _get_s3_client
+
+    return _get_s3_client(Config(connect_timeout=2, read_timeout=5, retries={"max_attempts": 1}))
+
+
+def _stored_log_rows_restore_reason(artifact: CalculationArtifact, exc: Exception) -> str:
+    return f"stored output log id={artifact.id} not re-read: {type(exc).__name__}: {exc}"
+
+
+def _stored_output_logs(session: Session, calculation: Calculation) -> list[CalculationArtifact]:
+    return list(
+        session.scalars(
+            select(CalculationArtifact)
+            .where(
+                CalculationArtifact.calculation_id == calculation.id,
+                CalculationArtifact.kind == ArtifactKind.output_log,
+            )
+            .order_by(CalculationArtifact.id)
+        )
+    )
+
+
+def _parse_stored_log(session: Session, calculation: Calculation, artifact: CalculationArtifact, client_box: list):
+    """``(software, observations, parser stamp)`` for one stored output log; raises when it cannot be read or parsed.
+
+    Bytes uploaded in this request come from memory; others are read through a short-timeout client (made once and
+    kept in ``client_box``).
+    """
+    content = session.info.get("parameter_artifact_bytes", {}).get(artifact.sha256)
+    if content is None:
+        if not client_box:
+            client_box.append(_short_timeout_client())
+        content = load_artifact_bytes(artifact.sha256, client=client_box[0])
+    text = _decode_text(content)
+    software = _resolve_software(calculation, text)
+    parsed = _run_parser(software, text)
+    stamp = ParserStamp(**parsed["parser"]) if isinstance(parsed.get("parser"), dict) else None
+    return software, [_to_observation(p) for p in parsed.get("parameters", [])], stamp
+
+
+def _append_log_observations(session: Session, calculation: Calculation, software, observations, stamp) -> None:
+    observations, _ = merge_artifact_observations(
+        session, calculation, observations, artifact_kind=ArtifactKind.output_log, software=software
+    )
+    persist_calculation_parameters(
+        session,
+        calculation,
+        observations,
+        source=ParameterSource.parser,
+        parser=stamp,
+        artifact_kind=ArtifactKind.output_log,
+        replace=False,
+    )
+
+
+def _restore_log_rows(session: Session, calculation: Calculation) -> None:
+    """Re-read the stored output logs so a setting a re-read deck no longer states is not lost.
+
+    A deck read drops the log rows for the settings it states. When the deck is re-read with fewer settings, the
+    dropped log rows are re-derived here from the calculation's stored output logs, in upload order, and appended
+    where no stored row states the setting. Runs only on a deck *re-read*, never on a calculation's first deck.
+    Best effort: an artifact that cannot be read or parsed is skipped with a logged reason and the deck's own rows
+    are kept. Conflicts were reported when the log arrived and are not repeated.
+    """
+    client_box: list = []
+    for artifact in _stored_output_logs(session, calculation):
+        try:
+            software, observations, stamp = _parse_stored_log(session, calculation, artifact, client_box)
+            _append_log_observations(session, calculation, software, observations, stamp)
+        except Exception as exc:  # best effort, never blocks the deck's own rows
+            logger.warning(_stored_log_rows_restore_reason(artifact, exc))
+
+
+def refresh_output_log_rows(session: Session, calculation: Calculation) -> None:
+    """Re-derive the calculation's log rows from its stored output logs (after a parser fix); all or nothing.
+
+    Log rows are appended, first statement wins, and carry no source artifact, so a parser improvement cannot
+    replace them one by one. Every stored log is read and parsed first; if any cannot be, this raises
+    :class:`ParameterExtractionError` having deleted nothing, so an outage never turns two rows into none. Only then
+    are the old log rows dropped and the new ones appended, in upload order, under the deck-wins rule.
+    """
+    client_box: list = []
+    parsed = []
+    for artifact in _stored_output_logs(session, calculation):
+        try:
+            parsed.append(_parse_stored_log(session, calculation, artifact, client_box))
+        except Exception as exc:
+            raise ParameterExtractionError(_stored_log_rows_restore_reason(artifact, exc)) from exc
+    session.query(CalculationParameter).filter(
+        CalculationParameter.calculation_id == calculation.id,
+        CalculationParameter.source == ParameterSource.parser,
+        CalculationParameter.artifact_kind == ArtifactKind.output_log,
+    ).delete(synchronize_session=False)
+    session.expire_all()
+    for software, observations, stamp in parsed:
+        _append_log_observations(session, calculation, software, observations, stamp)
 
 
 def _decode_text(content: bytes) -> str:
@@ -317,14 +501,18 @@ def _decode_text(content: bytes) -> str:
     return content.decode("utf-8", errors="replace")
 
 
-def try_extract_parameters_from_input_upload(
+#: The artifact kinds whose text is read for parameters: a deck, and a log that echoes the deck.
+_PARAMETER_ARTIFACT_KINDS = (ArtifactKind.input, ArtifactKind.output_log)
+
+
+def try_extract_parameters_from_artifact_upload(
     session: Session,
     calculation: Calculation,
     artifact_in: ArtifactIn,
     *,
     warnings: list[UploadWarning] | None = None,
 ) -> list[CalculationParameter] | None:
-    """Opportunistic upload-side hook: extract from an ArtifactIn.
+    """Opportunistic upload-side hook: extract from an ArtifactIn (an input deck or an output log).
 
     Used by the artifact upload route and inline-bundle workflows
     immediately after the matching ``CalculationArtifact`` row has been
@@ -332,7 +520,7 @@ def try_extract_parameters_from_input_upload(
     no S3 round-trip is needed.
 
     Returns ``None`` (and logs a warning) on any failure or when the
-    artifact kind is not ``input``. Never raises — artifact upload is
+    artifact kind is neither ``input`` nor ``output_log``. Never raises — artifact upload is
     canonical and must not be aborted by parameter-extraction failure.
 
     :param warnings: Optional list to append a depositor-facing warning to
@@ -346,7 +534,8 @@ def try_extract_parameters_from_input_upload(
     # ORM. Both are ``(str, Enum)`` with identical members, so a value
     # comparison (``!=``) works across the boundary — an identity check
     # would always fail because the enum classes are not the same object.
-    if artifact_in.kind != ArtifactKind.input:
+    kind = next((k for k in _PARAMETER_ARTIFACT_KINDS if artifact_in.kind == k), None)
+    if kind is None:
         return None
     try:
         content = base64.b64decode(artifact_in.content_base64, validate=True)
@@ -359,9 +548,10 @@ def try_extract_parameters_from_input_upload(
         )
         return None
 
+    remember_artifact_bytes(session, content)
     text = _decode_text(content)
     return _extract_safe(
-        session, calculation, text, source=artifact_in.filename, warnings=warnings
+        session, calculation, text, source=artifact_in.filename, warnings=warnings, artifact_kind=kind
     )
 
 
@@ -380,7 +570,7 @@ def try_extract_parameters_from_input_artifact_row(
     can continue across the rest of the corpus.
     """
 
-    if artifact.kind is not ArtifactKind.input:
+    if artifact.kind not in _PARAMETER_ARTIFACT_KINDS:
         return None
     if not artifact.sha256:
         logger.warning(
@@ -425,6 +615,7 @@ def try_extract_parameters_from_input_artifact_row(
         text,
         source=f"artifact id={artifact.id}",
         warnings=warnings,
+        artifact_kind=artifact.kind,
     )
 
 
@@ -435,6 +626,7 @@ def _extract_safe(
     *,
     source: str,
     warnings: list[UploadWarning] | None = None,
+    artifact_kind: ArtifactKind = ArtifactKind.input,
 ) -> list[CalculationParameter] | None:
     """Run extraction as a genuinely best-effort operation.
 
@@ -460,7 +652,7 @@ def _extract_safe(
     def _run() -> list[CalculationParameter] | None:
         try:
             return extract_and_store_calculation_parameters(
-                session, calculation, text, warnings=warnings
+                session, calculation, text, warnings=warnings, artifact_kind=artifact_kind
             )
         except ParameterExtractionError as exc:
             # A parse-layer refusal is expected and unremarkable — an

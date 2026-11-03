@@ -77,7 +77,7 @@ from app.services.calculation_ownership import (
     assert_calculation_owned_by,
 )
 from app.services.calculation_parameter_extraction import (
-    try_extract_parameters_from_input_upload,
+    try_extract_parameters_from_artifact_upload,
 )
 from app.services.calculation_resolution import (
     _DEPENDENCY_ROLE_FOR_TYPE,
@@ -783,7 +783,7 @@ def persist_computed_species_upload(
                 # same as the standalone artifacts route.
                 with attribute_warnings(session, upload_warnings, record=(SubmissionRecordType.calculation, calc_row.id)):
                     for art_in in calc_in.artifacts:
-                        try_extract_parameters_from_input_upload(
+                        try_extract_parameters_from_artifact_upload(
                             session, calc_row, art_in, warnings=upload_warnings
                         )
                         sp_warning = try_reconcile_sp_energy_from_output_upload(

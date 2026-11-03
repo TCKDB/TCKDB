@@ -88,6 +88,9 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
 #:   text, so an entry whose stereo changes still changes its digest through the label, while an
 #:   entry whose stereo did not change keeps the digest it had. Without this every stored review
 #:   of every record naming a species entry would read as stale the day the columns appeared.
+#: * ``calculation_parameter.artifact_kind`` says which uploaded artifact (the deck or the log it echoes) a
+#:   parser row was read from. It is provenance of the reading, and the row's own columns (key, value,
+#:   section) are already hashed, so a stored review does not restale the day the column appeared.
 #: * ``merged_into_*``: forwarding bookkeeping of a row that was merged into another, written only
 #:   by a migration; the row's own review history stays on it and does not restale.
 DERIVED_COLUMNS: frozenset[tuple[str, str]] = frozenset(
@@ -96,6 +99,7 @@ DERIVED_COLUMNS: frozenset[tuple[str, str]] = frozenset(
         ("species_entry", "stereo_resolution"),
         ("species_entry", "stereo_smiles"),
         ("species_entry", "merged_into_species_entry_id"),
+        ("calculation_parameter", "artifact_kind"),
         ("species", "merged_into_species_id"),
         ("chem_reaction", "merged_into_chem_reaction_id"),
     }

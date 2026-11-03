@@ -7,12 +7,14 @@ the CalculationParameter model.  No DB dependency.
 from __future__ import annotations
 
 import re
+from itertools import pairwise
 from pathlib import Path
 
 from tckdb_schemas.hessian_method_detection import (  # noqa: F401  (re-exported: the route readers live in tckdb-schemas)
     _IOP_RE,
     _ROUTE_DELIM,
     GAUSSIAN_FREQ_HESSIAN_OPTIONS,
+    _echo_text,
     _extract_route_line_fallback,
     _extract_route_line_from_log_echo,
     _extract_route_line_from_raw_input,
@@ -755,7 +757,9 @@ def parse_all_charge_multiplicity(text: str) -> list[tuple[int, int]]:
 # Method / basis extraction from route line
 # ---------------------------------------------------------------------------
 
-_METHOD_BASIS_RE = re.compile(r"(?:^|\s)(u?\w+)/(\S+)", re.IGNORECASE)
+#: ``method/basis``: the method starts with a letter and may carry hyphens (``CAM-B3LYP``, ``wB97X-D``) and one
+#: parenthesised group (``CCSD(T)``, ``CCSD(T,Full)``, ``MP2(Full)``). An ``IOp(2/9=2000)`` is not one.
+_METHOD_BASIS_RE = re.compile(r"(?:^|\s)([A-Za-z][\w\-+*]*(?:\([^)\s]*\))?)/(\S+)")
 
 
 def parse_method_basis(route: str) -> dict | None:
@@ -764,6 +768,38 @@ def parse_method_basis(route: str) -> dict | None:
     if m:
         return {"method": m.group(1), "basis": m.group(2)}
     return None
+
+
+_LINK1 = re.compile(r"^\s*--link1--\s*$", re.IGNORECASE | re.MULTILINE)
+
+
+def all_route_texts(text: str) -> list[str]:
+    """The route of every job in the file: each echoed route block of a log, else each ``--Link1--`` part of a deck."""
+    lines = text.splitlines()
+    dashes = [i for i, line in enumerate(lines) if _ROUTE_DELIM.match(line.strip())]
+    echoed = []
+    for first, second in pairwise(dashes):
+        block = "".join(_echo_text(lines[j]) for j in range(first + 1, second))
+        if block.startswith("#"):
+            echoed.append(block)
+    if echoed:
+        return echoed
+    routes = []
+    for part in _LINK1.split(text):
+        route = extract_gaussian_route_text(part)
+        if route:
+            routes.append(route)
+    return routes
+
+
+def parse_method_basis_jobs(text: str) -> list[dict]:
+    """``{"methods": [method], "basis": basis}`` for every job whose route states a ``method/basis``."""
+    jobs = []
+    for route in all_route_texts(text):
+        found = parse_method_basis(route)
+        if found:
+            jobs.append({"methods": [found["method"]], "basis": found["basis"]})
+    return jobs
 
 
 # ---------------------------------------------------------------------------

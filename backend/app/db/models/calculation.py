@@ -1891,6 +1891,15 @@ class CalculationParameter(Base, TimestampMixin):
         nullable=True,
         doc="Version of that parser, as text, when source='parser'.",
     )
+    artifact_kind: Mapped[Optional[ArtifactKind]] = mapped_column(
+        SAEnum(ArtifactKind, name="artifact_kind", create_type=False),
+        nullable=True,
+        doc=(
+            "Which uploaded artifact a parser row was read from: 'input' (the deck) or 'output_log' (the "
+            "input echoed in a log). NULL for upload and curated rows. A re-parse replaces only the rows of "
+            "its own kind; where both kinds state the same setting the deck's row is the one kept."
+        ),
+    )
 
     calculation: Mapped["Calculation"] = relationship(back_populates="parameters")
     vocab: Mapped[Optional["CalculationParameterVocab"]] = relationship(
@@ -1918,6 +1927,10 @@ class CalculationParameter(Base, TimestampMixin):
         CheckConstraint(
             "parameter_index IS NULL OR parameter_index >= 0",
             name="parameter_index_ge_0",
+        ),
+        CheckConstraint(
+            "artifact_kind IS NULL OR (source = 'parser' AND artifact_kind IN ('input', 'output_log'))",
+            name="artifact_kind_parser_input_or_log",
         ),
     )
 

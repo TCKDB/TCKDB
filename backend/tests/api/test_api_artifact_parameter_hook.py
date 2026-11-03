@@ -3,7 +3,8 @@ fired by the artifact upload route and inline-bundle workflows.
 
 Hook contract:
 
-- Fires only on ``kind='input'`` artifacts.
+- Fires on ``kind='input'`` artifacts (the deck) and on ``kind='output_log'`` artifacts (the input the
+  log echoes); every other kind is ignored. Rows are tagged with the kind they were read from.
 - Failure of the parser (or anything else inside the hook) must NEVER
   abort the artifact upload — artifacts are canonical, parameters are
   derived metadata.
@@ -24,7 +25,7 @@ from app.db.models.calculation import (
     CalculationArtifact,
     CalculationParameter,
 )
-from app.db.models.common import ParameterSource
+from app.db.models.common import ArtifactKind, ParameterSource
 from app.schemas.fragments.calculation import CalculationParameterObservation
 from app.services.calculation_resolution import persist_calculation_parameters
 from tests.api.artifact_urls import artifacts_url
@@ -141,7 +142,7 @@ class TestUploadHook:
             db_session, calc_id, source=ParameterSource.parser
         ) > 0
 
-    def test_output_log_upload_does_not_trigger_extraction(
+    def test_output_log_upload_extracts_the_echoed_input_tagged_output_log(
         self, client, db_session, stub_store_artifact
     ):
         calc_id = _create_calc_id(client)
@@ -151,8 +152,30 @@ class TestUploadHook:
             json={"artifacts": [_gaussian_output_log_artifact()]},
         )
         assert resp.status_code == 201, resp.text
-        # Hook is restricted to ArtifactKind.input — output_log goes
-        # through the same persist path but emits no parameter rows.
+        # The log echoes the input; its parameters are read like a deck's, and tagged as the log's.
+        assert _parameter_count(
+            db_session, calc_id, source=ParameterSource.parser
+        ) > 0
+        kinds = set(
+            db_session.scalars(
+                select(CalculationParameter.artifact_kind).where(
+                    CalculationParameter.calculation_id == calc_id,
+                    CalculationParameter.source == ParameterSource.parser,
+                )
+            )
+        )
+        assert kinds == {ArtifactKind.output_log}
+
+    def test_non_deck_non_log_artifact_does_not_trigger_extraction(
+        self, client, db_session, stub_store_artifact
+    ):
+        calc_id = _create_calc_id(client)
+
+        resp = client.post(
+            artifacts_url(client, calc_id),
+            json={"artifacts": [{**_gaussian_input_artifact("notes.txt"), "kind": "ancillary"}]},
+        )
+        assert resp.status_code == 201, resp.text
         assert _parameter_count(
             db_session, calc_id, source=ParameterSource.parser
         ) == 0

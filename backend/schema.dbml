@@ -1795,6 +1795,7 @@ Table calculation_parameter {
   source ParameterSource [not null, default: 'upload']
   parser_name text
   parser_version text
+  artifact_kind ArtifactKind
   created_at timestamp [not null, default: 'now']
 
   indexes {
@@ -1806,6 +1807,7 @@ Table calculation_parameter {
   }
 
   checks {
+    `artifact_kind IS NULL OR (source = 'parser' AND artifact_kind IN ('input', 'output_log'))` [name: 'ck_calculation_parameter_artifact_kind_parser_input_or_log']
     `parameter_index IS NULL OR parameter_index >= 0` [name: 'ck_calculation_parameter_parameter_index_ge_0']
   }
 

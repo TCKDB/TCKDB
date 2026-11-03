@@ -206,6 +206,23 @@ RENDERED: dict[str, str] = {
     "sp_energy_filled_from_log": (
         "No single-point energy was deposited; the value re-derived from the uploaded output log was stored."
     ),
+    "parameter_disagrees_with_artifact": (
+        "A setting the deposit states for this calculation differs from the same setting in an uploaded input "
+        "deck or output log. The stated value was kept and the artifact's value was stored beside it; correct "
+        "whichever of the two is wrong."
+    ),
+    "input_deck_disagrees_with_output_log": (
+        "The input deck and the output log uploaded for this calculation state different values for the same "
+        "setting. The deck's value was kept and the log's row for it was not stored."
+    ),
+    "output_log_disagrees_with_earlier_output_log": (
+        "Two output logs uploaded for this calculation state different values for the same setting. The earlier "
+        "log's value was kept and the later log's row for it was not stored."
+    ),
+    "level_of_theory_disagrees_with_artifact": (
+        "The method or the basis set of the declared level of theory differs from the one an uploaded input "
+        "deck or output log states. The declared level of theory was kept; correct whichever of the two is wrong."
+    ),
     "software_release_identity_corrected_from_artifact": (
         "The declared software name disagreed with the program identified in the uploaded artifact, so the "
         "calculation now points at the program the artifact names."
@@ -1686,6 +1703,56 @@ def _hessian_disagrees(context: Mapping[str, Any]) -> str | None:
     return None
 
 
+_PARAMETER_ORIGINS = {"input": "input deck", "output_log": "output log"}
+
+
+def _origin(context: Mapping[str, Any]) -> str | None:
+    observed = context.get("observed_in")
+    return _PARAMETER_ORIGINS.get(observed) if isinstance(observed, str) else None
+
+
+def _parameter_disagrees(context: Mapping[str, Any]) -> str | None:
+    key = _token(context.get("canonical_key"))
+    origin = _origin(context)
+    if key is None or origin is None:
+        return None
+    return (
+        f"The value the deposit states for {key} differs from the value in the uploaded {_program(context)}{origin}. "
+        "The stated value was kept and the artifact's value was stored beside it."
+    )
+
+
+def _deck_disagrees_with_log(context: Mapping[str, Any]) -> str | None:
+    key = _token(context.get("canonical_key"))
+    if key is None:
+        return None
+    return (
+        f"The uploaded {_program(context)}input deck and output log state different values for {key}. The deck's "
+        "value was kept and the log's row for it was not stored."
+    )
+
+
+def _log_disagrees_with_log(context: Mapping[str, Any]) -> str | None:
+    key = _token(context.get("canonical_key"))
+    if key is None:
+        return None
+    return (
+        f"Two {_program(context)}output logs uploaded for this calculation state different values for {key}. The "
+        "earlier log's value was kept and the later log's row for it was not stored."
+    )
+
+
+def _lot_disagrees(context: Mapping[str, Any]) -> str | None:
+    component = _token(context.get("component"), frozenset({"method", "basis"}))
+    origin = _origin(context)
+    if component is None or origin is None:
+        return None
+    return (
+        f"The {component} of the declared level of theory differs from the {component} in the uploaded "
+        f"{_program(context)}{origin}. The declared level of theory was kept."
+    )
+
+
 def _multiplicity(context: Mapping[str, Any]) -> str | None:
     declared, logged = context.get("declared"), context.get("logged")
     if isinstance(declared, int) and isinstance(logged, int):
@@ -1724,6 +1791,10 @@ _WITH_CONTEXT: dict[str, Any] = {
     "sp_energy_payload_log_mismatch": _sp_mismatch,
     "sp_energy_filled_from_log": _sp_filled,
     "hessian_method_disagrees_with_stored_tau_basis": _hessian_disagrees,
+    "parameter_disagrees_with_artifact": _parameter_disagrees,
+    "input_deck_disagrees_with_output_log": _deck_disagrees_with_log,
+    "level_of_theory_disagrees_with_artifact": _lot_disagrees,
+    "output_log_disagrees_with_earlier_output_log": _log_disagrees_with_log,
     "n_imag_contradicts_minimum": _n_imag_contradicts_minimum,
     "n_imag_higher_order_saddle": _n_imag_higher_order,
     "n_imag_suggests_transition_state": _vdw_suggests_ts,
@@ -1838,6 +1909,9 @@ def _closed_values(key: str, code: str) -> Any:
         "confidence": frozenset({"definitive", "derived", "heuristic"}),
         "coordinate_kind": _SCAN_COORDINATE_KINDS,
         "pattern": _SCAN_PATTERNS,
+        "canonical_key": re.compile(r"[a-z0-9_]+(\.[a-z0-9_]+)+"),
+        "component": frozenset({"method", "basis"}),
+        "observed_in": frozenset(_PARAMETER_ORIGINS),
         "deck_method": _HESSIAN_METHODS,
         "stored_method": _HESSIAN_METHODS,
         "deduced": _DEDUCED,

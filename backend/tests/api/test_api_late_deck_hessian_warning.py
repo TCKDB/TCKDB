@@ -86,6 +86,45 @@ def test_a_numerical_deck_against_an_assumed_analytic_basis_warns_and_relabels_n
     assert "Freq=Numer" not in item["message"] and "B3LYP" not in item["message"]
 
 
+_DASHES = " " + "-" * 70
+
+
+def _gaussian_log(route: str) -> str:
+    return f" Entering Gaussian System, Link 0=g16\n Gaussian 16:  ES64L-G16RevC.01 3-Jul-2019\n{_DASHES}\n {route}\n{_DASHES}\n"
+
+
+def _upload_log(client, calc: Calculation, text: str):
+    resp = client.post(
+        artifacts_url(client, calc.id),
+        json={
+            "artifacts": [
+                {"kind": "output_log", "filename": "late.log", "content_base64": base64.b64encode(text.encode()).decode()}
+            ]
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    return resp
+
+
+def test_a_late_output_log_echoing_a_numerical_frequency_job_warns_and_relabels_nothing(client, db_session):
+    calc = _freq_calc(client, db_session, imag_freq_cm1=-20.0, label="late-log")
+    before = (calc.freq_result.imaginary_mode_tau_cm1, calc.freq_result.imaginary_mode_tau_basis)
+    assert before == (30.0, "assumed_analytic_default")
+
+    resp = _upload_log(client, calc, _gaussian_log("#P B3LYP/6-31G(d) Freq=Numer"))
+
+    assert [w["code"] for w in resp.json()["warnings"] if w["code"] == _CODE] == [_CODE]
+    db_session.expire_all()
+    stored = db_session.get(CalculationFreqResult, calc.id)
+    assert (stored.imaginary_mode_tau_cm1, stored.imaginary_mode_tau_basis) == before
+
+
+def test_a_late_output_log_that_agrees_warns_nothing(client, db_session):
+    calc = _freq_calc(client, db_session, imag_freq_cm1=-20.0, label="late-log-agrees")
+    resp = _upload_log(client, calc, _gaussian_log("#P B3LYP/6-31G(d) Freq"))
+    assert _CODE not in {w["code"] for w in resp.json()["warnings"]}
+
+
 def test_a_numerical_deck_against_a_recorded_analytic_basis_warns(client, db_session):
     calc = _freq_calc(
         client, db_session, imag_freq_cm1=-10.0, parameters=_ANALYTIC_TIGHT, label="late-recorded"
