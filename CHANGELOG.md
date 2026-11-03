@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Electronic-state labels and term symbols are checked against a strict grammar (2026-11-03)
+
+- **`tckdb-schemas` 0.149.0, `tckdb-client` 0.183.0.** No migration (no DB CHECK: the schema package is the one place the grammar lives, and a SQL copy of a regex would be a second one to keep in step), no new environment variable, no backfill. Existing rows are dev data and are not rewritten.
+- `species_entry.electronic_state_label` and `term_symbol` now refuse anything but a recognised spectroscopic shape, on every upload that carries a species entry, with `electronic_state_label_invalid` or `term_symbol_invalid` (422) naming the field and the accepted shapes. `term_symbol_raw` stays verbatim and unchecked.
+- A bare `R`, `S`, `E`, `Z`, `M`, `P`, `Ra`, `Sa`, `?`, `-` or a word can no longer be a state label. The joined `species_entry_label` and a network `state_label` now introduce the state part with the word `state` (`excited state A`), so a stored label cannot read as "R enantiomer".
+
 ## The centre between two allene axes is read as `-`, `r` or `s` (2026-11-02)
 
 - **Client: `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no schema change, no new environment variable, no vocabulary change (`r` and `s` were already tokens). Part 3 of #832 (part of, not closing). Existing data is dev data: an entry stored with `?` at such a centre is not rewritten, and a new deposit of the same molecule now computes a different key; the two are not reconciled.

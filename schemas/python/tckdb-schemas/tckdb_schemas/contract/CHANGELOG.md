@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.149.0 - 2026-11-03
+
+An electronic-state label and a term symbol must now be a recognised spectroscopic shape. Two refusal codes join the contract. No field is added or removed.
+
+- `electronic_state_label_invalid` (422): `electronic_state_label` must be a spectroscopic letter with an optional tilde and primes (`X`, `A`, `a`, `X~`, `A'`, `A''`), a state ordinal (`S0`, `S1`, `T1`, `D0`, `Q0`), or a multiplicity and symmetry species (`1A1`, `2A'`, `3B2`, `2Sigma+`), in at most 8 characters.
+- `term_symbol_invalid` (422): `term_symbol` must be an atomic term (`3P`, `3P2`, `2P_{3/2}`), a linear-molecule term (`2Pi`, `3Sigma_g-`, `1Sigma_g+`, `2Pi_{3/2}`, or the Greek and superscript spellings `2Π`, `³Σg⁻`) or a polyatomic term (`1A1`, `2A'`, `1A1g`), optionally with a state letter in front (`X2Pi`, `X 1A1`, `X^2Pi`), in at most 64 characters.
+- A bare `R`, `S`, `E`, `Z`, `M`, `P` (or their lower case), `Ra`, `Sa`, `?`, `-`, a word such as `ground`, or an isotope-like `[2H]` is refused in either field, so a state label can never be read as a stereo descriptor. The refusal names the field and the accepted shapes; it never repeats what you sent.
+- `term_symbol_raw` is not checked: it is kept verbatim for provenance and is never joined into a displayed label.
+- `tckdb_schemas.electronic_state` is the one place the grammar is written (`ELECTRONIC_STATE_LABEL_SOURCE`, `TERM_SYMBOL_SOURCE`, `is_valid_electronic_state_label`, `is_valid_term_symbol`). `electronic_state_examples.json` ships in the package with the accepted and rejected examples and the pattern sources, for a frontend parity test.
+- Entries already stored are not rewritten. The server now writes the state part of a joined entry label with the word `state` (`excited state A`, `state T1`), so a stored label that looks like a stereo descriptor cannot be misread.
+
 ## 0.148.0 - 2026-11-02
 
 A cyclic allene in a ring of 6, 7 or 8 atoms is now read from geometry like any other allene. No field is added or removed.

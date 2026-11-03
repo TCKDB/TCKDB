@@ -22,6 +22,7 @@ from typing import Self
 from pydantic import Field, field_validator, model_validator
 
 from tckdb_schemas.common import SchemaBase
+from tckdb_schemas.electronic_state import check_electronic_state_label, check_term_symbol
 from tckdb_schemas.enums import (
     MoleculeKind,
     SpeciesEntryStateKind,
@@ -43,6 +44,28 @@ _IDENTITY_TEXT_FIELDS = (
 
 
 class SpeciesEntryIdentityValidatorMixin:
+    @field_validator("electronic_state_label", mode="before", check_fields=False)
+    @classmethod
+    def electronic_state_label_has_accepted_shape(cls, value: object) -> object:
+        """Refuse a state label outside the strict grammar (``electronic_state_label_invalid``).
+
+        Runs before the length cap so a too-long or junk value gets the coded refusal.
+        """
+
+        return check_electronic_state_label(value)
+
+    @field_validator("term_symbol", mode="before", check_fields=False)
+    @classmethod
+    def term_symbol_has_accepted_shape(cls, value: object) -> object:
+        """Refuse a term symbol outside the strict grammar (``term_symbol_invalid``).
+
+        ``term_symbol_raw`` is deliberately not checked: it is the depositor's own wording, kept
+        verbatim for provenance (the CCCBDB importer writes ``X 1A1g (planar, D6h)``), and is never
+        joined into a displayed label.
+        """
+
+        return check_term_symbol(value)
+
     @model_validator(mode="after")
     def normalize_identity_text_fields(self) -> Self:
         """Normalize optional identity text fields without imposing stricter semantics yet."""
@@ -259,9 +282,13 @@ class SpeciesEntryIdentityPayload(
         and the SMILES marks leave unresolved and is cross-checked where they
         exist; the server decides whether it fits the molecule.
     :param electronic_state_kind: Electronic-state classification.
-    :param electronic_state_label: Optional state label such as ``X`` or ``A``.
-    :param term_symbol_raw: Optional raw uploaded term symbol.
-    :param term_symbol: Optional canonicalized term symbol.
+    :param electronic_state_label: Optional state label such as ``X``, ``A``, ``T1`` or
+        ``1A1``; only the shapes in :mod:`tckdb_schemas.electronic_state` are accepted
+        (``electronic_state_label_invalid`` otherwise).
+    :param term_symbol_raw: Optional raw uploaded term symbol, kept verbatim and not checked.
+    :param term_symbol: Optional canonicalized term symbol such as ``2Pi``, ``3P2`` or ``X 1A1``;
+        only the shapes in :mod:`tckdb_schemas.electronic_state` are accepted
+        (``term_symbol_invalid`` otherwise).
 
     Isotopic resolution is *not* a field on this payload. It is derived
     server-side from the atom-resolved isotope labels in ``smiles`` (see

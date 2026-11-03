@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 349 | `backend/app/api/code_catalogue.py` |
-| **total** | **689** | |
+| Refusal codes a caller can receive | 351 | `backend/app/api/code_catalogue.py` |
+| **total** | **691** | |
 
 ## How a record is named
 
@@ -807,7 +807,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (284 codes)
+### HTTP 422 (286 codes)
 
 | Code | Names |
 | --- | --- |
@@ -873,6 +873,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `conformer_key_undeclared` | a thing |
 | `cursor_offset_conflict` | a relationship — read `context` |
 | `cursor_query_mismatch` | a relationship — read `context` |
+| `electronic_state_label_invalid` | a thing |
 | `energy_correction_scheme_frequency_level_not_applicable` | a relationship — read `context` |
 | `energy_correction_scheme_frequency_level_without_energy_level` | a relationship — read `context` |
 | `enthalpy_declaration_absent` | a relationship — read `context` |
@@ -1048,6 +1049,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `structure_selection_unsupported` | a relationship — read `context` |
 | `subject_type_mismatch` | a relationship — read `context` |
 | `supersedes_same_record` | a relationship — read `context` |
+| `term_symbol_invalid` | a thing |
 | `thermo_declaration_invalid` | a thing |
 | `thermo_energy_level_ambiguous` | a relationship — read `context` |
 | `thermo_energy_level_contradiction` | a relationship — read `context` |
