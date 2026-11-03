@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { levelOfTheorySchema, recordReviewSchema } from "./scientificSchemas"
+import { levelOfTheorySchema, recordReviewSchema, entryFacetFields } from "./scientificSchemas"
 import { scientificSpeciesRecordSchema } from "./scientificSpeciesSchemas"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
@@ -716,6 +716,7 @@ const transitionStateBrowseResponseSchema = z.object({
 const reactionParticipantSchema = z.object({
     species_entry_ref: z.string(),
     species_entry_label: z.string().nullable().optional(),
+    ...entryFacetFields,
     smiles: z.string(),
     formula: z.string().nullable().optional(),
     stoichiometry: z.number(),

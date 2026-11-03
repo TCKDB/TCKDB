@@ -261,3 +261,30 @@ def test_an_unambiguous_participant_carries_no_discriminator(client, db_session)
         for p in participants
         if p["canonical_smiles"] == "N=N"
     } == {"E", "Z"}
+
+
+def test_participants_serve_the_computed_facets_that_tell_e_from_z(client, db_session):
+    """The two diazene entries differ in served structured fields, not only in the joined label."""
+    fx = _hydrazine_network(db_session)
+    body = client.get(
+        "/api/v1/scientific/network-kinetics/search"
+        f"?network_ref={fx['network'].public_ref}&limit=50"
+    ).json()
+    participants = [
+        p
+        for record in body["records"]
+        for state in (
+            record["network_channel"]["source_state"],
+            record["network_channel"]["sink_state"],
+        )
+        for p in state["participants"]
+    ]
+    diazene = [p for p in participants if p["canonical_smiles"] == "N=N"]
+    assert {p["stereo_label"] for p in diazene} == {"E", "Z"}
+    assert {p["stereo_descriptor"] for p in diazene} == {"E", "Z"}
+    for p in participants:
+        assert p["species_entry_kind"] == "minimum"
+        assert p["electronic_state_kind"] == "ground"
+        # Typed text is never part of the structured facets.
+        assert "electronic_state_label" not in p
+        assert "term_symbol" not in p

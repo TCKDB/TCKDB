@@ -203,6 +203,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                                             speciesEntryRef={species.species_entry_ref}
                                             smiles={species.canonical_smiles}
                                             formula={species.formula}
+                                            facets={species}
                                         />
                                     </dd>
                                 </div>

@@ -359,6 +359,31 @@ describe("NetworkEntryPage -- channel_key never reaches the DOM", () => {
     })
 })
 
+describe("NetworkEntryPage -- structured stereo facets tell isomeric states apart", () => {
+    it("labels the Z and E diazene states from the participants' structured facets, not the joined label", async () => {
+        const facets = { species_entry_kind: "minimum", electronic_state_kind: "ground", stereo_resolution: "resolved" }
+        const state = (hash: string, stereo: string) => ({
+            composition_hash: hash, kind: "well", label: null, participant_count: 1,
+            composition: {
+                participants: [{
+                    species_entry_ref: `spe_${stereo}`, species_ref: "sp_nn", canonical_smiles: "N=N", stoichiometry: 1,
+                    // The joined label carries a typed R as well; it is never read.
+                    species_entry_label: `${stereo} R`, ...facets, stereo_label: stereo, stereo_descriptor: stereo,
+                }],
+                participant_count_total: 1, participants_truncated: false, state_label: `N=N (${stereo} R)`,
+            },
+        })
+        handleEverything({ record: { states: [state("hash_z", "Z"), state("hash_e", "E")], channels: [] }, thermoCounts: { spe_Z: 0, spe_E: 0 } })
+        const { container } = page()
+        await screen.findByText(NETWORK_REF)
+        const table = await screen.findByRole("table", { name: "States in this network" })
+        const text = table.textContent ?? ""
+        expect(text).toContain("N=N (Z isomer)")
+        expect(text).toContain("N=N (E isomer)")
+        expect(container.textContent).not.toContain("enantiomer")
+    })
+})
+
 describe("NetworkEntryPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
     it("prints none of the fields a depositor typed, in text, SVG text, ids or any attribute", async () => {
         const detail = networkDetailFixture()

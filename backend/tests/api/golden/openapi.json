@@ -15015,6 +15015,16 @@
             ],
             "title": "Charge"
           },
+          "electronic_state_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpeciesEntryStateKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "formula": {
             "anyOf": [
               {
@@ -15036,6 +15046,17 @@
               }
             ],
             "title": "Inchi Key"
+          },
+          "isotope_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotope Key"
           },
           "multiplicity": {
             "anyOf": [
@@ -15059,6 +15080,16 @@
             ],
             "title": "Species Entry Id",
             "x-tckdb-policy-hidden": true
+          },
+          "species_entry_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StationaryPointKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "species_entry_label": {
             "anyOf": [
@@ -15090,6 +15121,38 @@
           "species_ref": {
             "title": "Species Ref",
             "type": "string"
+          },
+          "stereo_descriptor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Descriptor"
+          },
+          "stereo_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Label"
+          },
+          "stereo_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StereoResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -21633,6 +21696,16 @@
             "title": "Charge",
             "type": "integer"
           },
+          "electronic_state_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpeciesEntryStateKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "formula": {
             "anyOf": [
               {
@@ -21648,6 +21721,17 @@
             "title": "Inchi Key",
             "type": "string"
           },
+          "isotope_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotope Key"
+          },
           "multiplicity": {
             "title": "Multiplicity",
             "type": "integer"
@@ -21656,6 +21740,16 @@
             "title": "Species Entry Id",
             "type": "integer",
             "x-tckdb-policy-hidden": true
+          },
+          "species_entry_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StationaryPointKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "species_entry_label": {
             "anyOf": [
@@ -21680,6 +21774,38 @@
           "species_ref": {
             "title": "Species Ref",
             "type": "string"
+          },
+          "stereo_descriptor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Descriptor"
+          },
+          "stereo_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Label"
+          },
+          "stereo_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StereoResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -39270,6 +39396,16 @@
             ],
             "title": "Canonical Smiles"
           },
+          "electronic_state_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpeciesEntryStateKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "inchi_key": {
             "anyOf": [
               {
@@ -39280,6 +39416,17 @@
               }
             ],
             "title": "Inchi Key"
+          },
+          "isotope_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotope Key"
           },
           "role": {
             "$ref": "#/components/schemas/NetworkSpeciesRole"
@@ -39295,6 +39442,16 @@
             ],
             "title": "Species Entry Id",
             "x-tckdb-policy-hidden": true
+          },
+          "species_entry_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StationaryPointKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "species_entry_label": {
             "anyOf": [
@@ -39314,6 +39471,38 @@
           "species_ref": {
             "title": "Species Ref",
             "type": "string"
+          },
+          "stereo_descriptor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Descriptor"
+          },
+          "stereo_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Label"
+          },
+          "stereo_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StereoResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -39381,6 +39570,37 @@
             "title": "Canonical Smiles",
             "type": "string"
           },
+          "electronic_state_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpeciesEntryStateKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isotope_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotope Key"
+          },
+          "species_entry_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StationaryPointKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "species_entry_label": {
             "anyOf": [
               {
@@ -39399,6 +39619,38 @@
           "species_ref": {
             "title": "Species Ref",
             "type": "string"
+          },
+          "stereo_descriptor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Descriptor"
+          },
+          "stereo_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Label"
+          },
+          "stereo_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StereoResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "stoichiometry": {
             "minimum": 1.0,
@@ -42606,6 +42858,16 @@
       "ReactionFullSpeciesParticipant": {
         "description": "Reactant or product side participant in /full.\n\nPhase B: ``species_entry_ref`` is the public stable handle for the\nparticipant species entry.\n\n``smiles`` is the *species'* graph identity, shared by every entry\nunder it, so two participants that are different stereoisomers of\none species render identically from it alone -- the hydrazine\nnetwork's ``N=N`` carries a ``Z`` entry and an ``E`` entry, and an\nisomerisation between them reads as running from a species to\nitself. ``species_entry_label`` is what tells them apart: ``\"E\"``,\n``\"Z\"``, ``\"excited T1\"``, or ``None`` for the plain ground-state,\nstereo-unlabelled entry. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`.\n\nNote that the record's ``equation`` string is still rendered from\n``smiles`` alone and therefore still collapses two such\nparticipants. Changing it would change a served value that\nconsumers parse, so it is left alone here; render from\n``species_entry_label`` if you need the equation to be unambiguous.\n\n``formula`` is the Hill-notation formula RDKit derives from ``smiles``\n(``app.services.scientific_read.common.molecular_formula_expr``, the\nsame expression the species surface serves); ``null`` when ``smiles``\nfails to parse. ``stoichiometry`` is how many times THIS species entry occurs on this side of the entry's own\nequation (``H + H -> H2`` serves the one H entry once, with ``stoichiometry`` 2). A deposit stores one\nstructure-participant row per occurrence; each distinct entry is served once per side, so a consumer that sums\n``stoichiometry`` over the rows gets the right count. It is the entry's count, not the species-level coefficient\n(two entries of one species on one side each keep their own).",
         "properties": {
+          "electronic_state_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpeciesEntryStateKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "formula": {
             "anyOf": [
               {
@@ -42616,6 +42878,17 @@
               }
             ],
             "title": "Formula"
+          },
+          "isotope_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotope Key"
           },
           "participant_index": {
             "title": "Participant Index",
@@ -42633,6 +42906,16 @@
             "type": "integer",
             "x-tckdb-policy-hidden": true
           },
+          "species_entry_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StationaryPointKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "species_entry_label": {
             "anyOf": [
               {
@@ -42647,6 +42930,38 @@
           "species_entry_ref": {
             "title": "Species Entry Ref",
             "type": "string"
+          },
+          "stereo_descriptor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Descriptor"
+          },
+          "stereo_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Label"
+          },
+          "stereo_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StereoResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "stoichiometry": {
             "title": "Stoichiometry",
@@ -42675,6 +42990,16 @@
       "ReactionParticipantSummary": {
         "description": "Reactant or product participant within a reaction-entry record.\n\nPhase B: ``species_entry_ref`` is the public stable handle for the\nparticipant species entry.\n\n``smiles`` is the *species'* graph identity, shared by every entry\nunder it, so two participants that are different stereoisomers of\none species render identically from it alone -- the hydrazine\nnetwork's ``N=N`` carries a ``Z`` entry and an ``E`` entry, and an\nisomerisation between them reads as running from a species to\nitself. ``species_entry_label`` is what tells them apart: ``\"E\"``,\n``\"Z\"``, ``\"excited T1\"``, or ``None`` for the plain ground-state,\nstereo-unlabelled entry. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`.\n\nNote that the record's ``equation`` string is still rendered from\n``smiles`` alone and therefore still collapses two such\nparticipants. Changing it would change a served value that\nconsumers parse, so it is left alone here; render from\n``species_entry_label`` if you need the equation to be unambiguous.\n\n``formula`` and ``stoichiometry`` mirror ``ReactionFullSpeciesParticipant`` (``scientific_provenance.py``): each\ndistinct species entry is served once per side, ``stoichiometry`` being how many times it occurs there\n(``H + H -> H2`` serves the one H entry once, with 2), so a search row and a ``/full`` row render identically.",
         "properties": {
+          "electronic_state_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpeciesEntryStateKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "formula": {
             "anyOf": [
               {
@@ -42685,6 +43010,17 @@
               }
             ],
             "title": "Formula"
+          },
+          "isotope_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotope Key"
           },
           "participant_index": {
             "title": "Participant Index",
@@ -42698,6 +43034,16 @@
             "title": "Species Entry Id",
             "type": "integer",
             "x-tckdb-policy-hidden": true
+          },
+          "species_entry_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StationaryPointKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "species_entry_label": {
             "anyOf": [
@@ -42713,6 +43059,38 @@
           "species_entry_ref": {
             "title": "Species Entry Ref",
             "type": "string"
+          },
+          "stereo_descriptor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Descriptor"
+          },
+          "stereo_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Label"
+          },
+          "stereo_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StereoResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "stoichiometry": {
             "title": "Stoichiometry",
@@ -54723,6 +55101,17 @@
             "title": "Inchi Key",
             "type": "string"
           },
+          "isotope_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotope Key"
+          },
           "multiplicity": {
             "title": "Multiplicity",
             "type": "integer"
@@ -54758,17 +55147,49 @@
           "species_ref": {
             "title": "Species Ref",
             "type": "string"
+          },
+          "stereo_descriptor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Descriptor"
+          },
+          "stereo_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Label"
+          },
+          "stereo_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StereoResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
+          "species_entry_kind",
+          "electronic_state_kind",
           "species_ref",
           "species_entry_ref",
           "canonical_smiles",
           "inchi_key",
           "charge",
-          "multiplicity",
-          "species_entry_kind",
-          "electronic_state_kind"
+          "multiplicity"
         ],
         "title": "SpeciesEntryOwnerSummary",
         "type": "object"
@@ -58387,6 +58808,16 @@
             ],
             "title": "Charge"
           },
+          "electronic_state_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpeciesEntryStateKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "inchi_key": {
             "anyOf": [
               {
@@ -58397,6 +58828,17 @@
               }
             ],
             "title": "Inchi Key"
+          },
+          "isotope_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotope Key"
           },
           "multiplicity": {
             "anyOf": [
@@ -58420,6 +58862,16 @@
             ],
             "title": "Species Entry Id",
             "x-tckdb-policy-hidden": true
+          },
+          "species_entry_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StationaryPointKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "species_entry_label": {
             "anyOf": [
@@ -58451,6 +58903,38 @@
           "species_ref": {
             "title": "Species Ref",
             "type": "string"
+          },
+          "stereo_descriptor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Descriptor"
+          },
+          "stereo_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Label"
+          },
+          "stereo_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StereoResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -71284,6 +71768,16 @@
             ],
             "title": "Charge"
           },
+          "electronic_state_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpeciesEntryStateKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "inchi_key": {
             "anyOf": [
               {
@@ -71294,6 +71788,17 @@
               }
             ],
             "title": "Inchi Key"
+          },
+          "isotope_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotope Key"
           },
           "multiplicity": {
             "anyOf": [
@@ -71317,6 +71822,16 @@
             ],
             "title": "Species Entry Id",
             "x-tckdb-policy-hidden": true
+          },
+          "species_entry_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StationaryPointKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "species_entry_label": {
             "anyOf": [
@@ -71348,6 +71863,38 @@
           "species_ref": {
             "title": "Species Ref",
             "type": "string"
+          },
+          "stereo_descriptor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Descriptor"
+          },
+          "stereo_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Label"
+          },
+          "stereo_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StereoResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [

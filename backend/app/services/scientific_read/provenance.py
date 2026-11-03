@@ -108,7 +108,9 @@ from app.services.scientific_read.kinetics import get_reaction_kinetics
 from app.services.scientific_read.networks import build_network_record
 from app.services.scientific_read.reaction_participants import collapse_occurrences, format_reaction_equation
 from app.services.scientific_read.species_identity import (
+    ENTRY_FACET_COLUMNS,
     STEREO_DISPLAY,
+    entry_facets_of,
     species_entry_label_for,
 )
 from app.services.scientific_read.transition_states import (
@@ -598,6 +600,7 @@ def _build_species_section(
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            *ENTRY_FACET_COLUMNS,
         )
         .join(
             SpeciesEntry,
@@ -631,6 +634,7 @@ def _build_species_section(
                     species_entry_id=species_entry_id,
                     species_entry_ref=row.public_ref,
                     species_entry_label=species_entry_label_for(row),
+                    **entry_facets_of(row),
                     smiles=row.smiles,
                     formula=row.formula,
                     stoichiometry=count,

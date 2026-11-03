@@ -57,6 +57,7 @@ from app.schemas.reads.scientific_common import (
     WorkflowToolReleaseSummary,
 )
 from app.schemas.reads.scientific_deposit_warnings import RecordWarnings, SubmissionWarnings
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 from app.services.trust.models import TrustFragment
 
 # ---------------------------------------------------------------------------
@@ -125,7 +126,7 @@ class RequestEcho(ProfiledRequestEcho):
 # ---------------------------------------------------------------------------
 
 
-class SpeciesEntryOwnerSummary(BaseModel):
+class SpeciesEntryOwnerSummary(EntryFacetFields):
     """Compact species/species-entry owner shape for a calculation.
 
     Mirrors ``SpeciesCalculationsSpeciesContext`` but only carries the

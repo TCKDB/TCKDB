@@ -234,6 +234,7 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
                                 speciesEntryRef={identity.speciesEntryRef}
                                 smiles={identity.canonicalSmiles}
                                 formula={identity.formula}
+                                facets={identity.facets}
                             />
                         </IdentityFact>
                     )}

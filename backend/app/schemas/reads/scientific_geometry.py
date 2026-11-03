@@ -19,6 +19,7 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     ScientificResponse,
 )
+from app.schemas.reads.scientific_entry_facets import EntryFacetFields
 
 
 class GeometryReadRequest(BaseModel):
@@ -106,7 +107,7 @@ class GeometryProvenance(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class GeometrySpeciesIdentity(BaseModel):
+class GeometrySpeciesIdentity(EntryFacetFields):
     """Identity of a species-owned geometry's owning entry.
 
     ``formula`` is derived server-side (RDKit cartridge, Hill notation)

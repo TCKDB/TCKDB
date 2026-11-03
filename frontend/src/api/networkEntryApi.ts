@@ -1,6 +1,6 @@
 import { z } from "zod"
-import { publicStateLabel } from "../domain/publicText"
-import { recordReviewSchema } from "./scientificSchemas"
+import { publicStateLabel } from "../domain/participantFacets"
+import { recordReviewSchema, entryFacetFields } from "./scientificSchemas"
 import { loadEntryThermo } from "./thermoApi"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
@@ -98,6 +98,7 @@ const stateParticipantSchema = z.object({
     species_ref: z.string(),
     canonical_smiles: z.string(),
     species_entry_label: z.string().nullable().optional(),
+    ...entryFacetFields,
     stoichiometry: z.number(),
 }).passthrough()
 
