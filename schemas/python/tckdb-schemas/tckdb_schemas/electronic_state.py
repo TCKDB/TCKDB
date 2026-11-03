@@ -207,6 +207,15 @@ _LINEAR_PARTS = re.compile(
 _IRREP_PARTS = re.compile(r"([ABET])([1-3₁-₃])?([gu])?(.*)")
 
 
+def _groups(pattern: re.Pattern[str], text: str) -> tuple[Any, ...]:
+    """The groups of a full match of an already validated part; a miss is a bug in this module."""
+
+    m = pattern.fullmatch(text)
+    if m is None:
+        raise AssertionError("a validated term-symbol part did not parse")
+    return m.groups()
+
+
 def _primes(text: str | None) -> str:
     if not text:
         return ""
@@ -244,10 +253,10 @@ def _canonical_term(text: str) -> str:
     digit = _SUPER_TO_ASCII.get(digit, digit)
     head = (_canonical_letter_label(prefix) + " " if prefix else "") + _SUPERSCRIPT[digit]
     if atomic is not None:
-        letter, parity, tail = _ATOMIC_PARTS.fullmatch(atomic).groups()
+        letter, parity, tail = _groups(_ATOMIC_PARTS, atomic)
         return head + letter + ("°" if parity else "") + _digits_sub(tail)
     if linear is not None:
-        lam, p1, s1, s2, p2, omega = _LINEAR_PARTS.fullmatch(linear).groups()
+        lam, p1, s1, s2, p2, omega = _groups(_LINEAR_PARTS, linear)
         parity = p1 or p2 or ""
         sign = (s1 or s2 or "").lstrip("^")
         out = _GREEK[lam] + parity + (_SIGN_CANONICAL[sign] if sign else "")
@@ -257,7 +266,7 @@ def _canonical_term(text: str) -> str:
                 body = body[:-1] + _SIGN_CANONICAL[body[-1]]
             out += _digits_sub(body)
         return head + out
-    base, index, parity, primes = _IRREP_PARTS.fullmatch(irrep).groups()
+    base, index, parity, primes = _groups(_IRREP_PARTS, irrep)
     return head + base + (_SUBSCRIPT[_SUB_TO_ASCII.get(index, index)] if index else "") + (parity or "") + _primes(primes)
 
 
