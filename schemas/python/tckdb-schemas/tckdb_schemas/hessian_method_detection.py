@@ -97,13 +97,22 @@ def extract_gaussian_route_text(text: str) -> str | None:
         return log_route
     return _extract_route_line_from_raw_input(text)
 
+def _echo_text(line: str) -> str:
+    """One echoed route line without its leading blank column and without its line ending."""
+    line = line.rstrip("\r\n")
+    return line[1:] if line.startswith(" ") else line.lstrip()
+
+
 def _extract_route_line_from_log_echo(text: str) -> str:
     """Extract the route line from a Gaussian log echo.
 
     The route line sits between two rows of dashes (``------``) in the
     early part of the output.  It may span multiple physical lines, but
-    Gaussian wraps at column width with no internal spaces, so the
-    parts must be concatenated with no separator.
+    Gaussian wraps at column width, so the parts are concatenated with no
+    separator. Every echoed line starts with one blank column; that column is
+    dropped and nothing else is stripped from the line, so a space that falls at
+    the wrap point (``guess=read`` then `` ub3lyp/def2tzvp``) is kept and the two
+    tokens are not fused into ``guess=readub3lyp/def2tzvp``.
     """
 
     lines = text.splitlines()
@@ -119,7 +128,7 @@ def _extract_route_line_from_log_echo(text: str) -> str:
             in_route = True
             continue
         if in_route:
-            route_parts.append(stripped)
+            route_parts.append(_echo_text(line))
 
     raw = "".join(route_parts)
     if raw.startswith("#"):
@@ -137,7 +146,7 @@ def _extract_route_line_fallback(text: str) -> str:
     for i in range(len(dash_positions) - 1):
         start = dash_positions[i] + 1
         end = dash_positions[i + 1]
-        block = "".join(lines[j].strip() for j in range(start, end))
+        block = "".join(_echo_text(lines[j]) for j in range(start, end))
         if block.startswith("#"):
             return block
     return ""

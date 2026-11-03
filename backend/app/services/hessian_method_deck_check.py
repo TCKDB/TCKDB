@@ -1,6 +1,6 @@
 """Warn when a deck uploaded later states a Hessian method the stored tolerance does not rest on.
 
-A deck attached with the deposit is read before the deposit is judged. One
+A deck (or an output log, which echoes the deck it ran) attached with the deposit is read before the deposit is judged. One
 attached afterwards through the artifact route is not, so a calculation can
 already carry a tau and basis that were decided without it. Stored rows are
 append-only, so nothing is relabelled: when the later deck states a method whose
@@ -16,6 +16,8 @@ The message is built from the code and TCKDB's own values, never from deck text.
 """
 
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 from sqlalchemy.orm import Session
 from tckdb_schemas.enums import HessianMethod
@@ -51,7 +53,7 @@ def try_hessian_method_disagreement_from_input_upload(
     (:func:`~app.services.best_effort.isolated_best_effort`), so a database error
     here cannot leave the upload's transaction aborted. Never raises.
     """
-    if artifact_in.kind != ArtifactKind.input:
+    if artifact_in.kind not in (ArtifactKind.input, ArtifactKind.output_log):
         return None
     return isolated_best_effort(
         session,
@@ -69,7 +71,9 @@ def _disagreement(calculation: Calculation, artifact_in: ArtifactIn) -> UploadWa
         return None
     release = calculation.software_release
     declared = normalize_software_name(release.software.name) if release is not None else None
-    deck = deck_hessian_method(declared, [artifact_in])
+    # An output log echoes the deck it ran, so it states the same Hessian method; read it as a deck.
+    as_deck = SimpleNamespace(kind="input", content_base64=artifact_in.content_base64)
+    deck = deck_hessian_method(declared, [as_deck])
     if deck is None or deck is stored:
         return None
     # TCKDB's own method tokens, so a gradient-versus-energy disagreement reads as one.

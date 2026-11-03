@@ -28,6 +28,7 @@ import binascii
 import logging
 from datetime import datetime, timezone
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tckdb_schemas.fragments.version import ParserStamp
 
@@ -218,6 +219,8 @@ def _parse_gaussian_text(text: str) -> dict:
         "software": g.parse_software_version(text),
         "charge_multiplicity": g.parse_charge_multiplicity(text),
         "method_basis": g.parse_method_basis(route),
+        # Every job of a ``--Link1--`` file or a multi-step log, for the declared-level check.
+        "method_basis_jobs": g.parse_method_basis_jobs(text),
         "parser": g.PARSER.stamp().model_dump(),
     }
 
@@ -322,7 +325,12 @@ def extract_and_store_calculation_parameters(
         source=ParameterSource.parser,
         parser=effective_parser,
         artifact_kind=artifact_kind,
+        # An output log is appended, never replaced: a setting's first statement stands (see
+        # :mod:`app.services.parameter_reconciliation`).
+        replace=is_deck,
     )
+    if is_deck:
+        _restore_log_rows(session, calculation, software)
 
     if warnings is not None:
         # Best effort: a failure comparing with what the depositor typed must not lose the parameters.
@@ -337,7 +345,11 @@ def extract_and_store_calculation_parameters(
             if software in ("gaussian", "orca"):
                 warnings.extend(
                     level_of_theory_warnings(
-                        calculation, parsed.get("method_basis"), parsed_software=software, artifact_kind=artifact_kind
+                        calculation,
+                        parsed.get("method_basis"),
+                        parsed.get("method_basis_jobs"),
+                        parsed_software=software,
+                        artifact_kind=artifact_kind,
                     )
                 )
         except Exception as exc:  # pragma: no cover - defensive, never blocks
@@ -349,6 +361,44 @@ def extract_and_store_calculation_parameters(
             )
 
     return rows
+
+
+def _restore_log_rows(session: Session, calculation: Calculation, software: SoftwareName) -> None:
+    """Re-read the stored output logs after a deck re-read, so a setting the new deck no longer states is not lost.
+
+    A deck read drops the log rows for the settings it states. If the deck is later re-read with fewer settings,
+    the dropped log rows are re-derived here from the stored log artifacts, in upload order, and appended where no
+    stored row states the setting. Best effort and quiet: an artifact that cannot be read or parsed is skipped, and
+    conflicts were already reported when the log arrived.
+    """
+    artifacts = session.scalars(
+        select(CalculationArtifact)
+        .where(
+            CalculationArtifact.calculation_id == calculation.id,
+            CalculationArtifact.kind == ArtifactKind.output_log,
+        )
+        .order_by(CalculationArtifact.id)
+    ).all()
+    for artifact in artifacts:
+        try:
+            text = _decode_text(load_artifact_bytes(artifact.sha256))
+            log_software = _resolve_software(calculation, text)
+            parsed = _run_parser(log_software, text)
+            observations = [_to_observation(p) for p in parsed.get("parameters", [])]
+            observations, _ = merge_artifact_observations(
+                session, calculation, observations, artifact_kind=ArtifactKind.output_log, software=log_software
+            )
+            persist_calculation_parameters(
+                session,
+                calculation,
+                observations,
+                source=ParameterSource.parser,
+                parser=ParserStamp(**parsed["parser"]) if isinstance(parsed.get("parser"), dict) else None,
+                artifact_kind=ArtifactKind.output_log,
+                replace=False,
+            )
+        except Exception as exc:  # pragma: no cover - best effort, never blocks the deck's own rows
+            logger.info("stored output log id=%s not re-read after a deck: %s: %s", artifact.id, type(exc).__name__, exc)
 
 
 def _decode_text(content: bytes) -> str:

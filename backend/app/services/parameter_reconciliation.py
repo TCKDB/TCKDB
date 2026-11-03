@@ -58,12 +58,14 @@ from app.chemistry.method_names import method_identity_key
 from app.db.models.calculation import Calculation, CalculationParameter, CalculationParameterVocab
 from app.db.models.common import ArtifactKind, ParameterSource
 from app.schemas.fragments.calculation import CalculationParameterObservation
+from app.services.parameter_closed_values import normalise_typed_value
 
 logger = logging.getLogger(__name__)
 
 W_PARAMETER_DISAGREES_WITH_ARTIFACT = "parameter_disagrees_with_artifact"
 W_INPUT_DECK_DISAGREES_WITH_OUTPUT_LOG = "input_deck_disagrees_with_output_log"
 W_LEVEL_OF_THEORY_DISAGREES_WITH_ARTIFACT = "level_of_theory_disagrees_with_artifact"
+W_OUTPUT_LOG_DISAGREES_WITH_EARLIER_OUTPUT_LOG = "output_log_disagrees_with_earlier_output_log"
 
 #: Keys another check owns, or whose value does not name the setting.
 _NOT_RECONCILED_HERE = frozenset({"freq.hessian_method", "internal_option.iop"})
@@ -96,6 +98,18 @@ def _conflict_warning(key: str, software: str, deck_values: set[str], log_values
     )
 
 
+def _log_conflict_warning(key: str, software: str, earlier: set[str], later: set[str]) -> UploadWarning:
+    return UploadWarning.from_code(
+        field="artifacts",
+        code=W_OUTPUT_LOG_DISAGREES_WITH_EARLIER_OUTPUT_LOG,
+        context={
+            "canonical_key": key,
+            "software": software,
+            "depositor_supplied": {"earlier_value": sorted(earlier), "later_value": sorted(later)},
+        },
+    )
+
+
 def merge_artifact_observations(
     session: Session,
     calculation: Calculation,
@@ -106,45 +120,47 @@ def merge_artifact_observations(
 ) -> tuple[list[CalculationParameterObservation], list[UploadWarning]]:
     """Apply the deck-wins rule to a new read; return the observations to store and the conflicts found.
 
-    For ``output_log``: observations for settings the stored deck rows already state are dropped (and
-    compared with the deck's values). For ``input``: nothing is dropped from the new deck rows, but the
-    stored log rows for the settings the deck states are compared and deleted.
+    For ``output_log``: observations for settings the stored deck rows or an earlier log's rows already state are
+    dropped (the first statement stands, a later log never silently replaces it) and compared with the stored
+    values. For ``input``: nothing is dropped from the new deck rows, but the stored log rows for the settings
+    the deck states are compared and deleted.
 
     Call before storing the new batch. Flushes nothing it does not delete.
     """
-    other_kind = ArtifactKind.output_log if artifact_kind is ArtifactKind.input else ArtifactKind.input
-    stored = list(
+    parser_rows = list(
         session.scalars(
             select(CalculationParameter).where(
                 CalculationParameter.calculation_id == calculation.id,
                 CalculationParameter.source == ParameterSource.parser,
-                CalculationParameter.artifact_kind == other_kind,
             )
         )
     )
+    decks = [r for r in parser_rows if r.artifact_kind is ArtifactKind.input]
+    logs = [r for r in parser_rows if r.artifact_kind is ArtifactKind.output_log]
     new_identities = {_identity(o.canonical_key, o.section, o.raw_key, o.parameter_index) for o in observations}
-    stored_identities = {_identity(r.canonical_key, r.section, r.raw_key, r.parameter_index) for r in stored}
-
     new_values = _values_by_key((o.canonical_key, o.canonical_value) for o in observations)
-    stored_values = _values_by_key((r.canonical_key, r.canonical_value) for r in stored)
-    warnings: list[UploadWarning] = []
-    for key in sorted(new_values.keys() & stored_values.keys()):
-        if new_values[key] != stored_values[key]:
-            deck, log = (
-                (new_values[key], stored_values[key])
-                if artifact_kind is ArtifactKind.input
-                else (stored_values[key], new_values[key])
-            )
-            warnings.append(_conflict_warning(key, software, deck, log))
 
+    def compare(stored: Sequence[CalculationParameter], make) -> list[UploadWarning]:
+        stored_values = _values_by_key((r.canonical_key, r.canonical_value) for r in stored)
+        return [
+            make(key, stored_values[key], new_values[key])
+            for key in sorted(new_values.keys() & stored_values.keys())
+            if new_values[key] != stored_values[key]
+        ]
+
+    warnings: list[UploadWarning] = []
     if artifact_kind is ArtifactKind.output_log:
+        warnings += compare(decks, lambda key, stored, new: _conflict_warning(key, software, stored, new))
+        warnings += compare(logs, lambda key, stored, new: _log_conflict_warning(key, software, stored, new))
+        taken = {_identity(r.canonical_key, r.section, r.raw_key, r.parameter_index) for r in decks + logs}
         return [
             o
             for o in observations
-            if _identity(o.canonical_key, o.section, o.raw_key, o.parameter_index) not in stored_identities
+            if _identity(o.canonical_key, o.section, o.raw_key, o.parameter_index) not in taken
         ], warnings
 
-    for row in stored:
+    warnings += compare(logs, lambda key, stored, new: _conflict_warning(key, software, new, stored))
+    for row in logs:
         if _identity(row.canonical_key, row.section, row.raw_key, row.parameter_index) in new_identities:
             session.delete(row)
     return list(observations), warnings
@@ -198,7 +214,14 @@ def declared_parameter_warnings(
             CalculationParameter.canonical_key.in_(scientific),
         )
     )
-    typed = _values_by_key((r.canonical_key, r.canonical_value) for r in typed_rows)
+    typed_raw = _values_by_key((r.canonical_key, r.canonical_value) for r in typed_rows)
+    # A typed value is folded to the form the parsers emit before it is compared; one that cannot be (a non-token
+    # for a closed-set key) is never judged.
+    typed: dict[str, set[str]] = {}
+    for key, values in typed_raw.items():
+        folded = {normalise_typed_value(key, v, declared) for v in values}
+        if None not in folded:
+            typed[key] = {v for v in folded if v is not None}
 
     warnings: list[UploadWarning] = []
     for key in sorted(scientific & typed.keys()):
@@ -212,7 +235,7 @@ def declared_parameter_warnings(
                         "software": declared,
                         "observed_in": artifact_kind.value,
                         "depositor_supplied": {
-                            "declared_value": sorted(typed[key]),
+                            "declared_value": sorted(typed_raw[key]),
                             "observed_value": sorted(read[key]),
                         },
                     },
@@ -229,6 +252,11 @@ _SPIN_PREFIXES = ("ro", "u", "r")
 _BASIS_POLARISATION = (("(d,p)", "**"), ("(d)", "*"))
 #: Basis tokens that name no basis set (a general-basis block follows).
 _NO_BASIS = frozenset({"gen", "genecp", "chkbasis", "read"})
+#: A bare reference method named beside a correlated one (``DLPNO-CCSD(T)-F12`` with its ``HF``) says nothing about
+#: the level, and a program's H-atom deck may swap the correlated method for it; it counts only when it is alone.
+_REFERENCE_ONLY = frozenset({"hf", "uhf", "rhf", "rohf"})
+_METHOD_ALIASES = {"pbe1pbe": "pbe0"}
+_DISPERSION_SUFFIX = re.compile(r"-(d2|d3|d3bj|d3zero|d4)$")
 
 
 def _strip_options(method: str) -> str:
@@ -239,11 +267,24 @@ def _strip_options(method: str) -> str:
 
 
 def _method_keys(method: str) -> set[str]:
+    """Every spelling a method can be compared under: its identity key and the forms a route or keyword line adds.
+
+    A frozen-core option, a spin prefix (``U``/``R``/``RO``), an RI prefix or suffix (``RI-MP2``, ``CCSD(T)-F12/RI``),
+    a dispersion suffix (``B3LYP-D3BJ``, stated apart by a deck) and ``PBE1PBE`` for ``PBE0``. Both the declared
+    and the parsed method go through this, and they agree when their key sets meet.
+    """
     keys = {method_identity_key(method), method_identity_key(_strip_options(method))}
-    for key in list(keys):
-        for prefix in _SPIN_PREFIXES:
-            if key.startswith(prefix) and len(key) > len(prefix) + 1:
-                keys.add(key[len(prefix):])
+    for _ in range(3):
+        for key in list(keys):
+            keys.add(re.sub(r"/ri(-f12)?$", "", key))
+            keys.add(_DISPERSION_SUFFIX.sub("", key))
+            if key.startswith("ri-"):
+                keys.add(key[3:])
+            for prefix in _SPIN_PREFIXES:
+                if key.startswith(prefix) and len(key) > len(prefix) + 1:
+                    keys.add(key[len(prefix):])
+            if key in _METHOD_ALIASES:
+                keys.add(_METHOD_ALIASES[key])
     return keys
 
 
@@ -251,50 +292,66 @@ def _basis_key(basis: str | None) -> str | None:
     key = basis_identity_key(basis)
     if key is None:
         return None
+    key = key.removesuffix("/auto")
     for spelled, star in _BASIS_POLARISATION:
         key = key.replace(spelled, star)
     return key
 
 
+def _jobs(method_basis: dict | None, jobs: list[dict] | None) -> list[dict]:
+    """Every job's ``{"methods": [...], "basis": ...}``; the single ``method_basis`` when the parser gave no list."""
+    if jobs:
+        return jobs
+    if method_basis:
+        methods = method_basis.get("methods") or ([method_basis["method"]] if method_basis.get("method") else [])
+        return [{"methods": methods, "basis": method_basis.get("basis")}]
+    return []
+
+
+def _effective_methods(methods: list[str]) -> list[str]:
+    correlated = [m for m in methods if m.strip().lower() not in _REFERENCE_ONLY]
+    return correlated or methods
+
+
 def level_of_theory_warnings(
     calculation: Calculation,
     method_basis: dict | None,
+    jobs: list[dict] | None = None,
     *,
     parsed_software: str,
     artifact_kind: ArtifactKind,
 ) -> list[UploadWarning]:
-    """Warn when the parsed method or basis differs from the declared level of theory (never refuses).
+    """Warn when no job of the artifact has the declared method and basis (never refuses).
 
-    Silent when the parsed side states nothing, when the declaration states no basis, when the basis is a
+    A file can hold several jobs (``--Link1--``, ORCA ``$new_job``): the declaration agrees when one job's pair
+    matches it. Silent when the artifact states nothing, when the declaration states no basis, when the basis is a
     general-basis marker, and when the calculation's declared program is not the parser's program.
     """
     lot = calculation.lot
     declared = declared_software(calculation)
-    if (
-        not method_basis
-        or lot is None
-        or declared is None
-        or declared != parsed_software.strip().lower()
-    ):
+    all_jobs = _jobs(method_basis, jobs)
+    if not all_jobs or lot is None or declared is None or declared != parsed_software.strip().lower():
         return []
-    warnings: list[UploadWarning] = []
 
-    parsed_methods = method_basis.get("methods") or ([method_basis["method"]] if method_basis.get("method") else [])
-    if parsed_methods and lot.method:
-        # A deck can name several methods (a correlated method and its reference); the declaration agrees
-        # with the deck when it matches any of them.
-        if not any(method_identity_key(lot.method) in _method_keys(m) for m in parsed_methods):
-            warnings.append(_lot_warning("method", declared, artifact_kind, lot.method, parsed_methods[-1]))
+    declared_keys = _method_keys(lot.method) if lot.method else set()
 
-    parsed_basis = method_basis.get("basis")
-    if (
-        parsed_basis
-        and lot.basis
-        and parsed_basis.strip().lower() not in _NO_BASIS
-        and _basis_key(lot.basis) != _basis_key(parsed_basis)
-    ):
-        warnings.append(_lot_warning("basis", declared, artifact_kind, lot.basis, parsed_basis))
-    return warnings
+    def method_ok(job: dict) -> bool:
+        methods = _effective_methods(job.get("methods") or [])
+        return not methods or not declared_keys or any(declared_keys & _method_keys(m) for m in methods)
+
+    def basis_ok(job: dict) -> bool:
+        basis = job.get("basis")
+        if not basis or not lot.basis or basis.strip().lower() in _NO_BASIS:
+            return True
+        return _basis_key(lot.basis) == _basis_key(basis)
+
+    if any(method_ok(job) and basis_ok(job) for job in all_jobs):
+        return []
+    if not any(method_ok(job) for job in all_jobs):
+        observed = next((m for job in all_jobs for m in _effective_methods(job.get("methods") or [])), "")
+        return [_lot_warning("method", declared, artifact_kind, lot.method, observed)]
+    observed = next((job["basis"] for job in all_jobs if job.get("basis")), "")
+    return [_lot_warning("basis", declared, artifact_kind, lot.basis, observed)]
 
 
 def _lot_warning(component: str, software: str, kind: ArtifactKind, declared_text: str, observed_text: str) -> UploadWarning:

@@ -267,9 +267,9 @@ def test_sp_only_atom_is_accepted_on_the_species_route(client, db_session, scena
     # Nothing is said about the missing optimisation or an edge to it. What is
     # said belongs to the fixture: its "ORCA 6.0.0" version string, and an
     # energy-correction scheme that names no software and no citation. The
-    # atom's own deck runs `uHF` while the declared level is DLPNO-CCSD(T)-F12
-    # (a correlated method has nothing to correlate in one atom), so the
-    # deck-versus-declaration check says so.
+    # atom's own deck states only `uHF hf` (the method token is `hf`) while the
+    # declared level is DLPNO-CCSD(T)-F12; a producer swaps the correlated
+    # method for HF on a one-electron atom, so the warning is true and kept.
     assert {w["code"] for w in resp.json()["warnings"]} == {
         "level_of_theory_disagrees_with_artifact",
         "software_release_version_is_composite",

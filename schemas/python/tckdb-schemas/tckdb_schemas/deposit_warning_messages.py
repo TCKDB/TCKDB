@@ -215,6 +215,10 @@ RENDERED: dict[str, str] = {
         "The input deck and the output log uploaded for this calculation state different values for the same "
         "setting. The deck's value was kept and the log's row for it was not stored."
     ),
+    "output_log_disagrees_with_earlier_output_log": (
+        "Two output logs uploaded for this calculation state different values for the same setting. The earlier "
+        "log's value was kept and the later log's row for it was not stored."
+    ),
     "level_of_theory_disagrees_with_artifact": (
         "The method or the basis set of the declared level of theory differs from the one an uploaded input "
         "deck or output log states. The declared level of theory was kept; correct whichever of the two is wrong."
@@ -1728,6 +1732,16 @@ def _deck_disagrees_with_log(context: Mapping[str, Any]) -> str | None:
     )
 
 
+def _log_disagrees_with_log(context: Mapping[str, Any]) -> str | None:
+    key = _token(context.get("canonical_key"))
+    if key is None:
+        return None
+    return (
+        f"Two {_program(context)}output logs uploaded for this calculation state different values for {key}. The "
+        "earlier log's value was kept and the later log's row for it was not stored."
+    )
+
+
 def _lot_disagrees(context: Mapping[str, Any]) -> str | None:
     component = _token(context.get("component"), frozenset({"method", "basis"}))
     origin = _origin(context)
@@ -1780,6 +1794,7 @@ _WITH_CONTEXT: dict[str, Any] = {
     "parameter_disagrees_with_artifact": _parameter_disagrees,
     "input_deck_disagrees_with_output_log": _deck_disagrees_with_log,
     "level_of_theory_disagrees_with_artifact": _lot_disagrees,
+    "output_log_disagrees_with_earlier_output_log": _log_disagrees_with_log,
     "n_imag_contradicts_minimum": _n_imag_contradicts_minimum,
     "n_imag_higher_order_saddle": _n_imag_higher_order,
     "n_imag_suggests_transition_state": _vdw_suggests_ts,

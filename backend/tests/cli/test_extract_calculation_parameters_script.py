@@ -496,3 +496,39 @@ class TestRunBackfill:
             )
         ).all()
         assert rows
+
+
+class TestOutputLogBackfill:
+    """A calculation deposited with only its output log is backfilled from the log, which echoes the input."""
+
+    def test_log_only_calculation_is_selected_and_read(self, db_session, stub_load_artifact_bytes):
+        calc_id, _ = _seed_calc(db_session, with_input_artifact=False)
+        log = GAUSSIAN_GJF_TEXT
+        sha = hashlib.sha256(log).hexdigest()
+        artifact = CalculationArtifact(
+            calculation_id=calc_id,
+            kind=ArtifactKind.output_log,
+            uri=f"s3://test/{sha[:2]}/{sha}",
+            sha256=sha,
+            bytes=len(log),
+            filename="job.log",
+        )
+        db_session.add(artifact)
+        db_session.flush()
+
+        assert script_mod._select_input_artifact(db_session, calc_id).id == artifact.id
+        assert calc_id in script_mod._calculations_with_input_and_no_parser_rows(db_session, force=False, limit=None)
+
+    def test_a_deck_is_preferred_over_a_log(self, db_session):
+        calc_id, deck_id = _seed_calc(db_session)
+        log = CalculationArtifact(
+            calculation_id=calc_id,
+            kind=ArtifactKind.output_log,
+            uri="s3://test/xx",
+            sha256="b" * 64,
+            bytes=1,
+            filename="job.log",
+        )
+        db_session.add(log)
+        db_session.flush()
+        assert script_mod._select_input_artifact(db_session, calc_id).id == deck_id

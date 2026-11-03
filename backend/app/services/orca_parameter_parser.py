@@ -1136,6 +1136,25 @@ def parse_software_version(text: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 
+_NEW_JOB = re.compile(r"^\s*\$new_job\s*$", re.IGNORECASE)
+
+
+def parse_method_basis_jobs(text: str) -> list[dict]:
+    """``{"methods": [...], "basis": basis}`` for each job of the deck (``$new_job`` starts the next one)."""
+    jobs: list[list[str]] = [[]]
+    for line in _extract_input_block(text):
+        if _NEW_JOB.match(line):
+            jobs.append([])
+        else:
+            jobs[-1].append(line)
+    out = []
+    for lines in jobs:
+        found = _method_basis_of_lines(lines)
+        if found:
+            out.append({"methods": found["methods"], "basis": found["basis"]})
+    return out
+
+
 def parse_method_basis(text: str) -> dict | None:
     """Extract method and basis from ORCA ! keyword line.
 
@@ -1146,8 +1165,11 @@ def parse_method_basis(text: str) -> dict | None:
     - first orbital basis → primary basis
     - remaining → aux_basis
     """
-    input_lines = _extract_input_block(text)
+    return _method_basis_of_lines(_extract_input_block(text))
 
+
+def _method_basis_of_lines(input_lines: list[str]) -> dict | None:
+    """:func:`parse_method_basis` over already-extracted input lines (one job's, or all)."""
     method = None
     basis = None
     aux_basis = None
@@ -1272,6 +1294,7 @@ def parse_orca_log(
         "software": parse_software_version(text),
         "charge_multiplicity": parse_charge_multiplicity(text),
         "method_basis": parse_method_basis(text),
+        "method_basis_jobs": parse_method_basis_jobs(text),
         "parser": PARSERS.get("orca_parameters").stamp().model_dump(),
     }
 

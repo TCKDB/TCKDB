@@ -1,4 +1,4 @@
-"""Backfill calculation_parameter rows from already-stored input artifacts.
+"""Backfill calculation_parameter rows from already-stored input decks and output logs.
 
 Operational entry point for parsing input artifacts (Gaussian ``.gjf`` /
 ORCA ``.in``) that pre-date the artifact-upload extraction hook, or for
@@ -35,6 +35,11 @@ Usage::
 
 Artifact-selection policy
 -------------------------
+
+A calculation with an input deck is read from its deck; the service then re-reads the calculation's stored output
+logs beside it, deck first, under the precedence rule of ``app/services/parameter_reconciliation.py`` (the deck's
+row wins where both state a setting). A calculation deposited with only an output log is read from its earliest
+log, which echoes the input.
 
 When multiple input artifacts exist for one calculation, the backfill
 parser uses the **earliest input artifact by ``calculation_artifact.id``**
@@ -118,19 +123,26 @@ def _select_input_artifact(
             return None
         if row.calculation_id != calculation_id:
             return None
-        if row.kind is not ArtifactKind.input:
+        if row.kind not in (ArtifactKind.input, ArtifactKind.output_log):
             return None
         return row
 
-    return session.scalar(
-        select(CalculationArtifact)
-        .where(
-            CalculationArtifact.calculation_id == calculation_id,
-            CalculationArtifact.kind == ArtifactKind.input,
+    # The input deck when there is one (the service then re-reads the calculation's stored output logs beside it,
+    # deck first); a calculation deposited with only its output log is read from the first log, which echoes the
+    # input.
+    for kind in (ArtifactKind.input, ArtifactKind.output_log):
+        row = session.scalar(
+            select(CalculationArtifact)
+            .where(
+                CalculationArtifact.calculation_id == calculation_id,
+                CalculationArtifact.kind == kind,
+            )
+            .order_by(CalculationArtifact.id.asc())
+            .limit(1)
         )
-        .order_by(CalculationArtifact.id.asc())
-        .limit(1)
-    )
+        if row is not None:
+            return row
+    return None
 
 
 def _calculations_with_input_and_no_parser_rows(
@@ -150,7 +162,7 @@ def _calculations_with_input_and_no_parser_rows(
         select(CalculationArtifact.id)
         .where(
             CalculationArtifact.calculation_id == Calculation.id,
-            CalculationArtifact.kind == ArtifactKind.input,
+            CalculationArtifact.kind.in_((ArtifactKind.input, ArtifactKind.output_log)),
         )
         .exists()
     )

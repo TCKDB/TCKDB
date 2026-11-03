@@ -1570,6 +1570,7 @@ def persist_calculation_parameters(
     source: ParameterSource = ParameterSource.upload,
     parser: ParserStamp | None = None,
     artifact_kind: ArtifactKind = ArtifactKind.input,
+    replace: bool = True,
 ) -> list[CalculationParameter]:
     """Persist parsed execution-control parameters for a calculation.
 
@@ -1607,6 +1608,8 @@ def persist_calculation_parameters(
     :param artifact_kind: With ``source=parser``, the kind of artifact the rows were read from (``input`` or
         ``output_log``). Replace-all is scoped to it, so an input deck and an output log never erase each
         other's rows. Ignored for ``upload`` and ``curated`` rows, which carry no artifact kind.
+    :param replace: With ``source=parser``, replace the calculation's rows of this ``artifact_kind`` (the default).
+        An output log is appended instead (``False``): the first statement of a setting stands.
     :returns: Newly created parameter rows in the order they were supplied.
     """
 
@@ -1620,7 +1623,7 @@ def persist_calculation_parameters(
 
     # Replace-all is bound to source=parser. Run the delete before the
     # early-return guard so an empty re-parse still clears stale rows.
-    if source is ParameterSource.parser:
+    if source is ParameterSource.parser and replace:
         _delete_parser_parameter_rows(session, calculation.id, artifact_kind)
 
     if not observations:

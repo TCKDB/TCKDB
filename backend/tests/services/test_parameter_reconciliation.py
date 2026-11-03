@@ -288,6 +288,9 @@ def test_frozen_core_option_and_polarisation_spelling_do_not_make_a_method_or_ba
         calc = _calc(session, method="CCSD(T)", basis="6-31G*")
         _, warnings = _read(session, calc, "#P ccsd(t,full)/6-31g(d) sp\n")
         assert "level_of_theory_disagrees_with_artifact" not in _codes(warnings)
+        # The comparison happens: a method that differs warns, so the pass above is not vacuous.
+        _, twin = _read(session, calc, "#P mp2(full)/6-31g(d) sp\n")
+        assert "level_of_theory_disagrees_with_artifact" in _codes(twin)
 
 
 def test_orca_method_and_basis_are_compared(db_conn):
@@ -314,3 +317,210 @@ def test_a_deck_that_names_a_reference_method_beside_the_declared_one_is_not_a_m
         assert "level_of_theory_disagrees_with_artifact" not in _codes(warnings)
         _, other = _read(session, calc, _orca_deck("PBE0 cc-pVTZ-F12 HF"))
         assert "level_of_theory_disagrees_with_artifact" in _codes(other)
+
+
+# ---------------------------------------------------------------------------
+# typed values are folded before they are compared
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("key", "typed", "route"),
+    [
+        ("grid.quality", "UltraFine", "int=ultrafine"),
+        ("grid.quality", "UltraFineGrid", "int=ultrafine"),
+        ("scf.convergence", "Tight", "scf=tight"),
+        ("scf.convergence", "VeryTight", "scf=verytight"),
+        ("dispersion.correction", "GD3BJ", "EmpiricalDispersion=GD3BJ"),
+        ("dispersion.correction", "D3BJ", "EmpiricalDispersion=GD3BJ"),
+        ("solvation.model", "SMD", "scrf=(smd,solvent=water)"),
+        ("solvation.model", "PCM", "scrf=(pcm,solvent=water)"),
+        ("solvation.solvent", "Water", "scrf=(smd,solvent=water)"),
+    ],
+)
+def test_a_typed_value_in_another_case_or_alias_spelling_agrees(db_conn, key, typed, route):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        _typed(session, calc, key, typed)
+        _, warnings = _read(session, calc, f"#P b3lyp/6-31g(d) opt {route}\n")
+        assert "parameter_disagrees_with_artifact" not in _codes(warnings)
+
+
+@pytest.mark.parametrize(
+    ("key", "typed", "route"),
+    [
+        ("grid.quality", "Fine", "int=ultrafine"),
+        ("scf.convergence", "Loose", "scf=tight"),
+        ("dispersion.correction", "GD3", "EmpiricalDispersion=GD3BJ"),
+        ("solvation.model", "CPCM", "scrf=(smd,solvent=water)"),
+        ("solvation.solvent", "Toluene", "scrf=(smd,solvent=water)"),
+    ],
+)
+def test_a_typed_value_that_really_differs_still_warns_after_folding(db_conn, key, typed, route):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        _typed(session, calc, key, typed)
+        _, warnings = _read(session, calc, f"#P b3lyp/6-31g(d) opt {route}\n")
+        assert "parameter_disagrees_with_artifact" in _codes(warnings)
+
+
+def test_a_typed_non_token_for_a_closed_set_key_is_never_judged(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        _typed(session, calc, "dispersion.correction", "some dispersion I use")
+        _, warnings = _read(session, calc, "#P b3lyp/6-31g(d) opt EmpiricalDispersion=GD3BJ\n")
+        assert "parameter_disagrees_with_artifact" not in _codes(warnings)
+
+
+# ---------------------------------------------------------------------------
+# method and basis spellings, several jobs, reference tokens
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("software", "method", "basis", "text"),
+    [
+        ("gaussian", "B3LYP", "6-31G(d)", "#P ub3lyp/6-31g(d) opt\n"),
+        ("gaussian", "HF", "6-31G(d)", "#P rhf/6-31g(d) opt\n"),
+        ("gaussian", "PBE0", "6-31G(d)", "#P pbe1pbe/6-31g(d) opt\n"),
+        ("gaussian", "wB97X-D", "def2-TZVP", "#P wb97xd/def2tzvp/auto opt\n"),
+        ("gaussian", "CAM-B3LYP", "6-31G(d)", "#P cam-b3lyp/6-31g(d) opt\n"),
+        ("gaussian", "ROCCSD(T)", "cc-pVTZ", "#P roccsd(t)/cc-pvtz sp\n"),
+        ("gaussian", "B3LYP-D3BJ", "6-31G(d)", "#P b3lyp/6-31g(d) EmpiricalDispersion=GD3BJ opt\n"),
+        ("orca", "CCSD(T)-F12/RI", "cc-pVTZ-F12", _orca_deck("CCSD(T)-F12 cc-pVTZ-F12")),
+        ("orca", "RI-MP2", "def2-TZVP", _orca_deck("MP2 RI def2-TZVP")),
+    ],
+)
+def test_alias_spellings_of_the_same_level_agree(db_conn, software, method, basis, text):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, software=software, method=method, basis=basis)
+        _, warnings = _read(session, calc, text)
+        assert "level_of_theory_disagrees_with_artifact" not in _codes(warnings)
+
+
+@pytest.mark.parametrize(
+    ("method", "route"),
+    [
+        ("CCSD(T)", "#P ccsd/6-31g(d) sp\n"),
+        ("CAM-B3LYP", "#P b3lyp/6-31g(d) sp\n"),
+        ("wB97X-D", "#P wb97x/6-31g(d) sp\n"),
+        ("ROCCSD(T)", "#P rohf/6-31g(d) sp\n"),
+    ],
+)
+def test_the_methods_the_old_pattern_could_not_read_are_now_compared(db_conn, method, route):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, method=method)
+        _, warnings = _read(session, calc, route)
+        assert "level_of_theory_disagrees_with_artifact" in _codes(warnings)
+
+
+_TWO_JOBS = "#P b3lyp/6-31g(d) opt\n\ntitle\n\n0 1\nH 0 0 0\n\n--Link1--\n#P mp2/cc-pvtz sp\n\ntitle\n\n0 1\nH 0 0 0\n\n"
+
+
+def test_a_declaration_matching_any_job_of_a_link1_file_agrees(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, method="MP2", basis="cc-pVTZ")
+        _, warnings = _read(session, calc, _TWO_JOBS)
+        assert "level_of_theory_disagrees_with_artifact" not in _codes(warnings)
+        # ...but the method of one job with the basis of the other is no job's pair.
+        mixed = _calc(session, method="MP2", basis="6-31G(d)")
+        _, mixed_warnings = _read(session, mixed, _TWO_JOBS)
+        assert "level_of_theory_disagrees_with_artifact" in _codes(mixed_warnings)
+        none = _calc(session, method="CCSD", basis="cc-pVTZ")
+        _, none_warnings = _read(session, none, _TWO_JOBS)
+        assert "level_of_theory_disagrees_with_artifact" in _codes(none_warnings)
+
+
+def test_orca_new_job_decks_are_compared_job_by_job(db_conn):
+    deck = _orca_deck("B3LYP def2-SVP Opt") + "$new_job\n" + _orca_deck("DLPNO-CCSD(T) def2-TZVP TightPNO")
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, software="orca", method="DLPNO-CCSD(T)", basis="def2-TZVP")
+        _, warnings = _read(session, calc, deck)
+        assert "level_of_theory_disagrees_with_artifact" not in _codes(warnings)
+        wrong = _calc(session, software="orca", method="DLPNO-CCSD(T)", basis="def2-SVP")
+        _, wrong_warnings = _read(session, wrong, deck)
+        assert "level_of_theory_disagrees_with_artifact" in _codes(wrong_warnings)
+
+
+def test_a_bare_reference_token_beside_a_correlated_method_is_ignored(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, software="orca", method="HF", basis="cc-pVTZ-F12")
+        _, warnings = _read(session, calc, _orca_deck("DLPNO-CCSD(T)-F12 cc-pVTZ-F12 HF"))
+        # HF is named in the deck but only as the reference of the correlated method, so it does not match HF.
+        assert "level_of_theory_disagrees_with_artifact" in _codes(warnings)
+
+
+# ---------------------------------------------------------------------------
+# a deck re-read with fewer settings, and a second log
+# ---------------------------------------------------------------------------
+
+
+def _store_log(session, monkeypatch, calc, text: str, name: str) -> None:
+    """A log artifact row whose bytes the re-read can load (storage itself is out of scope here)."""
+    import hashlib
+
+    from app.db.models.calculation import CalculationArtifact
+    from app.services import calculation_parameter_extraction as cpe
+
+    content = text.encode()
+    sha = hashlib.sha256(content).hexdigest()
+    session.add(
+        CalculationArtifact(
+            calculation_id=calc.id,
+            kind=ArtifactKind.output_log,
+            uri=f"s3://test/{sha}",
+            sha256=sha,
+            bytes=len(content),
+            filename=name,
+        )
+    )
+    session.flush()
+    stored = getattr(cpe, "_test_bytes", {})
+    stored[sha] = content
+    monkeypatch.setattr(cpe, "_test_bytes", stored, raising=False)
+    monkeypatch.setattr(cpe, "load_artifact_bytes", lambda digest: stored[digest])
+
+
+def test_a_deck_reread_with_fewer_settings_restores_the_log_rows_it_had_shadowed(db_conn, monkeypatch):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        _read(session, calc, "#P b3lyp/6-31g(d) opt int=ultrafine scf=tight\n")
+        log = _gaussian_log("#P b3lyp/6-31g(d) opt int=ultrafine scf=tight EmpiricalDispersion=GD3BJ")
+        _store_log(session, monkeypatch, calc, log, "job.log")
+        _read(session, calc, log, kind=ArtifactKind.output_log)
+        assert ("scf.convergence", "tight", ArtifactKind.input) in _stored(session, calc)
+        assert ("scf.convergence", "tight", ArtifactKind.output_log) not in _stored(session, calc)
+
+        _read(session, calc, "#P b3lyp/6-31g(d) opt int=ultrafine\n")
+        stored = _stored(session, calc)
+        assert ("scf.convergence", "tight", ArtifactKind.output_log) in stored
+        assert ("grid.quality", "ultrafine", ArtifactKind.input) in stored
+        keys = [row[0] for row in stored]
+        assert len(keys) == len(set(keys))
+
+
+def test_a_second_output_log_is_checked_against_the_first_and_never_silently_replaces_it(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        _, first = _read(session, calc, _gaussian_log("#P b3lyp/6-31g(d) opt int=ultrafine"), kind=ArtifactKind.output_log)
+        assert "output_log_disagrees_with_earlier_output_log" not in _codes(first)
+        _, second = _read(session, calc, _gaussian_log("#P b3lyp/6-31g(d) opt int=fine scf=tight"), kind=ArtifactKind.output_log)
+        [warning] = [w for w in second if w.code == "output_log_disagrees_with_earlier_output_log"]
+        assert warning.context["canonical_key"] == "grid.quality"
+        assert warning.context["depositor_supplied"] == {"earlier_value": ["ultrafine"], "later_value": ["fine"]}
+        stored = _stored(session, calc)
+        assert ("grid.quality", "ultrafine", ArtifactKind.output_log) in stored
+        assert ("grid.quality", "fine", ArtifactKind.output_log) not in stored
+        # What the earlier log did not state is added.
+        assert ("scf.convergence", "tight", ArtifactKind.output_log) in stored
+
+
+def test_the_same_output_log_uploaded_twice_changes_nothing_and_warns_nothing(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        log = _gaussian_log("#P b3lyp/6-31g(d) opt int=ultrafine")
+        _read(session, calc, log, kind=ArtifactKind.output_log)
+        before = _stored(session, calc)
+        _, again = _read(session, calc, log, kind=ArtifactKind.output_log)
+        assert "output_log_disagrees_with_earlier_output_log" not in _codes(again)
+        assert _stored(session, calc) == before
