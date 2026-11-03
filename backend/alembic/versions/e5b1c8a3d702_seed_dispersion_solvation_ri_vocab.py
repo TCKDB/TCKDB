@@ -23,7 +23,7 @@ Downgrade nulls the canonical key on any parameter row that used one of these
 keys (the raw key and value stay) and then removes the vocabulary rows.
 
 Revision ID: e5b1c8a3d702
-Revises: f7a2c9e4b183
+Revises: b4d8e1a7c953
 Create Date: 2026-11-03 00:00:00.000000
 
 """
@@ -36,7 +36,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "e5b1c8a3d702"
-down_revision: Union[str, Sequence[str], None] = "f7a2c9e4b183"
+down_revision: Union[str, Sequence[str], None] = "b4d8e1a7c953"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

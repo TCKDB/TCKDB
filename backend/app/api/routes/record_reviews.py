@@ -119,7 +119,7 @@ def list_reviews(
     submission_id: int | None = Query(default=None),
     pagination: PaginationParams = Depends(),
     session: Session = Depends(get_db),
-    _user: AppUser = Depends(get_current_user),
+    _user: AppUser = Depends(require_curator_or_admin),
 ) -> list[RecordReviewRead]:
     """List review rows newest-first, filterable by type/status/submission."""
     rows = list_record_reviews(
@@ -138,7 +138,7 @@ def list_review_queue_page(
     status: RecordReviewStatus | None = Query(default=None),
     pagination: PaginationParams = Depends(),
     session: Session = Depends(get_db),
-    _user: AppUser = Depends(get_current_user),
+    _user: AppUser = Depends(require_curator_or_admin),
 ) -> ReviewQueuePageRead:
     """The review queue grouped by subject: one block per record a curator
     judges as one unit, every review row nested under it.
