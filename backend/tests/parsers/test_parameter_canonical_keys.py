@@ -43,9 +43,12 @@ def _orca(deck: str) -> list[dict]:
         ("#p b3lyp/6-31g(d) opt integral=(grid=ultrafine,acc2e=12)", "ultrafine"),
         ("#p b3lyp/6-31g(d) opt integral=ultrafinegrid", "ultrafine"),
         ("#p b3lyp/6-31g(d) opt int=grid=ultrafine", "ultrafine"),
-        # A named grid and its size are one value.
-        ("#p b3lyp/6-31g(d) opt int=(grid=99590)", "ultrafine"),
-        ("#p b3lyp/6-31g(d) opt int=(grid=75302)", "fine"),
+        # A numeric grid is unpruned mmm x nnn, a named grid is pruned: they are different grids, so the
+        # digits are their own canonical value and never equal a name (G09 Integral manual).
+        ("#p b3lyp/6-31g(d) opt int=(grid=99590)", "99590"),
+        ("#p b3lyp/6-31g(d) opt int=(grid=75302)", "75302"),
+        ("#p b3lyp/6-31g(d) opt int=(grid=Pass0Grid)", "pass0grid"),
+        ("#p b3lyp/6-31g(d) opt int=pass0grid", "pass0grid"),
         ("#p b3lyp/6-31g(d) opt int=finegrid", "fine"),
         ("#p b3lyp/6-31g(d) opt int=superfine", "superfine"),
         ("#p b3lyp/6-31g(d) opt int=(grid=-96032)", "-96032"),
@@ -82,6 +85,7 @@ def test_gaussian_opt_options_without_equals_are_read():
 
 def test_gaussian_free_form_values_are_mirrored_into_the_canonical_value():
     canonical = _canonical(_parse_route_tokens("#p b3lyp/6-31g(d) scf=(maxcycle=512) int=(acc2e=12) opt=(maxstep=10)"))
+    assert _canonical(_parse_route_tokens("#p b3lyp/6-31g(d) guess=Read"))["guess.strategy"] == ["read"]
     assert canonical["scf.max_cycles"] == ["512"]
     assert canonical["integral.accuracy"] == ["12"]
     assert canonical["opt.max_step"] == ["10"]
@@ -149,6 +153,12 @@ def test_gaussian_frozen_core_marker(route, expected):
     assert _canonical(_parse_route_tokens(route))["core.frozen"] == [expected]
 
 
+def test_gaussian_method_options_with_their_own_equals_are_read_whole():
+    params = _parse_route_tokens("#p CIS(NStates=5,Full)/6-31G")
+    assert _canonical(params)["core.frozen"] == ["all_electron"]
+    assert not [p for p in params if "NStates" in p["raw_key"]]
+
+
 def test_gaussian_plain_correlated_method_states_no_core_choice():
     assert "core.frozen" not in _canonical(_parse_route_tokens("#p ccsd(t)/cc-pvtz"))
     assert "core.frozen" not in _canonical(_parse_route_tokens("#p b3lyp/6-31g(d) pop=(full)"))
@@ -175,17 +185,33 @@ def test_gaussian_relativistic_hamiltonian():
 
 @pytest.mark.parametrize(
     "keyword, expected",
-    [("RIJCOSX", "rijcosx"), ("RIJK", "rijk"), ("NoRI", "none"), ("RIJONX", "rijonx"), ("NoCOSX", "rij")],
+    [("RIJCOSX", "rijcosx"), ("RIJK", "rijk"), ("NoRI", "none"), ("RIJONX", "rijonx")],
 )
 def test_orca_ri_approximation(keyword, expected):
     assert _canonical(_orca(f"! B3LYP def2-SVP {keyword}"))["ri.approximation"] == [expected]
+
+
+def test_orca_nocosx_stays_raw_because_what_is_left_depends_on_the_method():
+    params = _orca("! HF def2-SVP NoCOSX")
+    assert "ri.approximation" not in _canonical(params)
+    assert any(p["raw_key"] == "NoCOSX" for p in params)
 
 
 def test_orca_without_an_ri_keyword_states_no_ri_approximation():
     assert "ri.approximation" not in _canonical(_orca("! B3LYP def2-SVP TightSCF"))
 
 
-@pytest.mark.parametrize("keyword, expected", [("D3BJ", "d3_bj"), ("D3ZERO", "d3_zero"), ("D3", "d3_zero"), ("D4", "d4"), ("NoD3", "none")])
+@pytest.mark.parametrize("keyword, expected", [
+        ("D3BJ", "d3_bj"),
+        ("D3ZERO", "d3_zero"),
+        ("D30", "d3_zero"),
+        # ORCA's bare D3 is Becke-Johnson damping (ORCA 6 manual Table 3.13; ORCA 5.0.4 "D3BJ or simply D3"),
+        # unlike Gaussian's GD3, which is zero damping.
+        ("D3", "d3_bj"),
+        ("D4", "d4"),
+        ("NoD3", "none"),
+        ("NoVDW", "none"),
+    ])
 def test_orca_dispersion_keyword(keyword, expected):
     assert _canonical(_orca(f"! B3LYP def2-SVP {keyword}"))["dispersion.correction"] == [expected]
 
@@ -211,11 +237,18 @@ def test_orca_frozen_core_keyword(keyword, expected):
 def test_orca_frozen_core_block_window():
     assert _canonical(_orca("! DLPNO-CCSD(T) cc-pVTZ\n%method FrozenCore FC_EWIN end"))["core.frozen"] == ["window"]
     assert _canonical(_orca("! DLPNO-CCSD(T) cc-pVTZ\n%method FrozenCore FC_NONE end"))["core.frozen"] == ["all_electron"]
+    assert _canonical(_orca("! DLPNO-CCSD(T) cc-pVTZ\n%method FrozenCore FC_ELECTRONS end"))["core.frozen"] == ["frozen_core"]
 
 
 @pytest.mark.parametrize("keyword, expected", [("DKH2", "dkh2"), ("DKH", "dkh2"), ("ZORA", "zora"), ("X2C", "x2c")])
 def test_orca_relativistic_keyword(keyword, expected):
     assert _canonical(_orca(f"! B3LYP SARC-DKH-TZVP {keyword}"))["relativistic.hamiltonian"] == [expected]
+
+
+def test_orca_rel_block_dkh_is_dkh2_unless_another_order_is_stated():
+    assert _canonical(_orca("! B3LYP SARC-DKH-TZVP\n%rel Method DKH end"))["relativistic.hamiltonian"] == ["dkh2"]
+    assert _canonical(_orca("! B3LYP SARC-DKH-TZVP\n%rel Method DKH Order 2 end"))["relativistic.hamiltonian"] == ["dkh2"]
+    assert "relativistic.hamiltonian" not in _canonical(_orca("! B3LYP SARC-DKH-TZVP\n%rel Method DKH Order 4 end"))
 
 
 def test_orca_auxiliary_basis_tokens_are_raw_rows_with_no_canonical_key():

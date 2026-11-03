@@ -76,6 +76,7 @@ _CANONICAL_MAP: dict[tuple[str, str], tuple[str, str | None]] = {
             "fine": "fine", "finegrid": "fine",
             "ultrafine": "ultrafine", "ultrafinegrid": "ultrafine",
             "superfine": "superfine", "superfinegrid": "superfine",
+            "pass0grid": "pass0grid",
         }.items()
     },
     # Gaussian's ``Integral`` relativistic options (G09 manual, Integral, "Relativistic calculations"):
@@ -246,9 +247,11 @@ _SECTIONED_KEYWORDS = {"int": "integral", "integral": "integral", "scf": "scf", 
 
 _KEYWORD_SPLIT = re.compile(r"^([A-Za-z][A-Za-z0-9]*)(?:=(.*)|(\(.*\)))?$", re.DOTALL)
 
-#: Named grids and their pruned-grid size, so ``Int=UltraFine`` and ``Int=Grid=99590`` are one value. Only the
-#: sizes Gaussian documents for a named grid are listed; any other size is kept as its digits.
-_GRID_SIZES = {"75302": "fine", "99590": "ultrafine", "150974": "superfine"}
+#: A named grid (``UltraFine``, ``FineGrid``) is a *pruned* grid; ``Grid=mmmnnn`` is an *unpruned* mmm x nnn grid
+#: (G09 Integral manual, "Integration grid selection option"). They are different grids, so a numeric grid is never
+#: mapped to a named one: it keeps its digits (``99590``) as its canonical value. The tight-grid test of the
+#: imaginary-mode tolerance (``stationary_point._TIGHT_GRID_VALUES``) lists the digits ``99590`` beside the names and
+#: is unchanged.
 _GRID_NAMES = {
     name: value
     for (section, name), (key, value) in _CANONICAL_MAP.items()
@@ -277,14 +280,31 @@ _FUNCTION_TYPES = {
 }
 
 
-def _grid_value(raw: str) -> str | None:
-    """The canonical grid for ``Grid=<raw>``: a named grid, a known size mapped to its name, or the digits."""
-    cleaned = raw.strip().lower().lstrip("+")
-    if cleaned in _GRID_NAMES:
-        return _GRID_NAMES[cleaned]
-    if cleaned.lstrip("-").isdigit():
-        return _GRID_SIZES.get(cleaned, cleaned)
+def _method_part(token: str) -> str | None:
+    """The method of a ``method/basis`` token, or ``None`` when the token is not one.
+
+    The first ``/`` outside parentheses splits them, and an ``=`` outside parentheses before it means the token
+    is a keyword with a value, not a method (``CIS(NStates=5,Full)/6-31G`` is a method: its ``=`` is inside).
+    """
+    depth = 0
+    for index, char in enumerate(token):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif depth == 0 and char == "=":
+            return None
+        elif depth == 0 and char == "/":
+            return token[:index]
     return None
+
+
+def _grid_value(raw: str) -> str | None:
+    """The canonical grid for ``Grid=<raw>``: a named grid, the digits of a numeric grid, else the lower-cased name."""
+    cleaned = raw.strip().lower().lstrip("+")
+    if not cleaned:
+        return None
+    return _GRID_NAMES.get(cleaned, cleaned)
 
 
 def _split_keyword(token: str) -> tuple[str, str, str] | None:
@@ -412,7 +432,11 @@ def _mirror_free_form_value(row: dict) -> dict:
         and row["canonical_key"] != "internal_option.iop"
         and row["canonical_key"] not in CLOSED_VALUES
     ):
-        row["canonical_value"] = row["raw_value"]
+        value = row["raw_value"]
+        # Case carries no meaning in a setting's value (``Guess=Read``, ``Grid=Pass0Grid``), and the comparison
+        # with a typed value is exact, so the canonical form is lower case; a memory request or a processor count
+        # is left as written.
+        row["canonical_value"] = value if row["canonical_key"].startswith(("memory.", "parallel.")) else value.lower()
     return row
 
 
@@ -501,8 +525,9 @@ def _parse_route_tokens(route: str) -> list[dict]:
 
         # method/basis pattern: ``method/basis``. The method and basis are level-of-theory, not parameters,
         # but the method can carry the frozen-core choice (``CCSD(T,Full)/cc-pVTZ``), which is.
-        if "/" in token and "=" not in token.split("/", 1)[0]:
-            params.extend(_emit_core_options(token.split("/", 1)[0]))
+        method_part = _method_part(token)
+        if method_part is not None:
+            params.extend(_emit_core_options(method_part))
             continue
 
         split = _split_keyword(token)
