@@ -4,6 +4,7 @@ import "../network-diagram.css"
 import "../thermo-cp-chart.css"
 import type { NetworkChannel, NetworkChannelBarrier, NetworkState, NetworkStateEnergy } from "../api/networkEntryApi"
 import { formatTicks, linearScale } from "../domain/chartScale"
+import { channelHandle } from "../domain/publicText"
 import {
     computeNetworkPesLayout,
     NETWORK_PES_CAPTION_CHAR_WIDTH,
@@ -192,7 +193,7 @@ function NetworkPesChannelFieldset({ saddles, hiddenChannelKeys, onToggle }: {
                         <label
                             className="net-pes-channel-option"
                             key={saddle.channelKey ?? `${saddle.sourceHash}-${saddle.sinkHash}-${index}`}
-                            data-channel-key={saddle.channelKey ?? undefined}
+                            data-channel-key={channelHandle(saddle.channelKey)}
                         >
                             <input
                                 type="checkbox"
@@ -347,7 +348,7 @@ function NetworkPesSection({ layout, states, channels, barrierTotal, hiddenChann
                         <li
                             key={`${item.channelKey ?? "unkeyed"}-${index}`}
                             className="note"
-                            data-channel-key={item.channelKey ?? undefined}
+                            data-channel-key={channelHandle(item.channelKey)}
                         >
                             {item.sourceLabel && item.sinkLabel
                                 ? `${item.sourceLabel} to ${item.sinkLabel}: ${item.reason}.`
@@ -371,7 +372,9 @@ function stateRowId(compositionHash: string): string {
 }
 
 function channelRowId(channelKey: string | null, index: number): string {
-    return `channel-row-${channelKey ?? `unkeyed-${index}`}`
+    // Position only: the key is a string the depositor typed and never goes into the DOM.
+    void channelKey
+    return `channel-row-${index}`
 }
 
 function NetworkPesSvg({ layout, channels, totalStates, totalChannels, hiddenChannelKeys }: {
@@ -505,7 +508,7 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels, hiddenCha
                                     // `channel_key` lives in exactly two
                                     // places: this `data-*` hook and the
                                     // channel table row (invariant 4).
-                                    data-channel-key={saddle.channelKey ?? undefined}
+                                    data-channel-key={channelHandle(saddle.channelKey)}
                                     className={`net-pes-connector ${pesConnectorKindClass(saddle.kind)}`}
                                     strokeDasharray={dash}
                                 />
@@ -514,13 +517,13 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels, hiddenCha
                                     x2={barRightX}
                                     y1={saddle.peakY}
                                     y2={saddle.peakY}
-                                    data-channel-key={saddle.channelKey ?? undefined}
+                                    data-channel-key={channelHandle(saddle.channelKey)}
                                     className={`net-pes-ts-bar ${pesConnectorKindClass(saddle.kind)}`}
                                     strokeDasharray={dash}
                                 />
                                 <polyline
                                     points={`${sinkEdgeX},${saddle.peakY} ${saddle.sinkLegX},${saddle.sinkY}`}
-                                    data-channel-key={saddle.channelKey ?? undefined}
+                                    data-channel-key={channelHandle(saddle.channelKey)}
                                     className={`net-pes-connector ${pesConnectorKindClass(saddle.kind)}`}
                                     strokeDasharray={dash}
                                 />
@@ -687,9 +690,7 @@ function NetworkChannelsTable({ channels, states }: { channels: NetworkChannel[]
                         {channels.map((channel, index) => (
                             <tr key={`${channel.channel_key ?? "unkeyed"}-${index}`} id={channelRowId(channel.channel_key ?? null, index)}>
                                 <td data-label="Channel">
-                                    {channel.channel_key
-                                        ? <code className="data">{channel.channel_key}</code>
-                                        : <span className="record-identity-absent-inline">not recorded</span>}
+                                    <code className="data">{index + 1}</code>
                                 </td>
                                 <td data-label="Kind"><span className="value-pill">{channel.kind}</span></td>
                                 <td data-label="Mechanism">{channel.mechanism}</td>

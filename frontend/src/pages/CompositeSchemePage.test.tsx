@@ -5,6 +5,7 @@ import { cleanup, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import CompositeSchemePage from "./CompositeSchemePage"
 import { resetAllRequestCaches } from "../api/requestCache"
+import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 import "../design-system.css"
 
 const server = setupServer()
@@ -151,5 +152,29 @@ describe("CompositeSchemePage", () => {
     it("says a recipe with no terms has none, once", async () => {
         await load({ composite_scheme: core({ kind: "named_method", name: "CBS-QB3" }) })
         expect(screen.getAllByText(/states no terms/)).toHaveLength(1)
+    })
+})
+
+describe("CompositeSchemePage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints no note on a user-built recipe, while the scheme name (which can carry level-of-theory keywords) is still shown", async () => {
+        const planted = plantSentinels({ scheme: core(), terms: EXTRAPOLATION_TERMS }, ["note"])
+        expectPlanted(planted)
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(record({ composite_scheme: planted.value.scheme, terms: planted.value.terms }))))
+        page()
+        // The fixture reached the page: the recipe heading rendered.
+        expect(await screen.findByRole("heading", { level: 1, name: /recipe$/ })).toBeVisible()
+
+        expectNoDepositorText()
+    })
+})
+
+describe("CompositeSchemePage -- a TCKDB-written note", () => {
+    it("shows the note of a catalogued named method", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(record({
+            composite_scheme: core({ kind: "named_method", name: "CBS-QB3", note: "Defining paper: doi:10.1063/1.478522. Values as catalogued by TCKDB when the row was written." }),
+        }))))
+        page()
+        await screen.findByRole("heading", { level: 1, name: /recipe$/ })
+        expect(screen.getByText(/Defining paper: doi:10.1063\/1.478522/)).toBeVisible()
     })
 })

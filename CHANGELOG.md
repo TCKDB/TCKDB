@@ -30,6 +30,14 @@ dataset must never require a code release.
 - **Decided: no `basis.auxiliary` key.** `def2/J`, `def2/JK` and `/C` tokens stay raw rows (section `basis_aux`); `level_of_theory.aux_basis` is their home and a second one would let the two disagree.
 - **Read API.** `include=parameters` (and the entity read) now carries `source` (`parser`, `upload` or `curated`) on each parameter row.
 
+## The website no longer prints text a depositor typed (2026-11-03)
+
+- **Frontend only. API, `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no schema change, no new environment variable. The API still returns these fields in their marked places.
+- **What changed.** No public page prints a string a depositor typed: not as text, link text, a pill, a tooltip, an `aria-label`, SVG text, a `data-` attribute or an element id. Notes (transition state, conformer, scale factor, correction scheme), network name, description and channel keys, group-additivity scheme and group labels, torsion top descriptions and reasons, artifact filenames, parsed parameter keys and values, electronic state labels, unmapped SMILES and unrecognised point groups are gone; the ref, formula or a TCKDB noun stands in. A parameter value prints only if it is a number or boolean; a point group only if it is a Schoenflies symbol; a correction-parameter key only if every part is a real element symbol.
+- **`species_entry_label` and network `state_label` are no longer printed.** The server joins the typed state label and term symbol into them, so they cannot be split on the client; pages that have the structured fields (`stereo_label`, `electronic_state_kind`, `isotope_key`) show those. Reaction equations and network states show SMILES and stoichiometry only, so two stereoisomers of one species read alike there.
+- **Conformer groups** show as "Conformer Group N" (the server numbers them itself) or by ref. Downloads are named from the artifact kind and ref, with only a known extension taken from the recorded filename (the command-line client still uses the recorded stem).
+- **Kept.** Curator review notes and supersession reasons (written by a signed-in curator), the owner's own API-key labels and name on the account page and the admin user list (both marked as typed), composite scheme names, the note of a catalogued named-method composite scheme, level-of-theory keywords, and the scientific method strings (software, level-of-theory method and basis, master-equation method, literature title).
+
 ## The centre between two allene axes is read as `-`, `r` or `s` (2026-11-02)
 
 - **Client: `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no schema change, no new environment variable, no vocabulary change (`r` and `s` were already tokens). Part 3 of #832 (part of, not closing). Existing data is dev data: an entry stored with `?` at such a centre is not rewritten, and a new deposit of the same molecule now computes a different key; the two are not reconciled.

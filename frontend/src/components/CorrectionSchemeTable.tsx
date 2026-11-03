@@ -1,4 +1,5 @@
 import type { CorrectionTerm } from "../api/methodsApi"
+import { publicChemistryKey } from "../domain/publicText"
 import { ENERGY_DISPLAY_UNITS, energyUnitLabel, type EnergyDisplayUnit } from "../domain/energyUnits"
 
 /**
@@ -66,7 +67,7 @@ function SimpleParamTable({ caption, rows, unitLabel }: { caption: "Element" | "
                 <tbody>
                     {rows.map((row) => (
                         <tr key={`${row.correction_kind}-${row.target}`}>
-                            <td data-label={caption}><span className="data">{row.target}</span></td>
+                            <td data-label={caption}><span className="data">{publicChemistryKey(row.target)}</span></td>
                             <td data-label="Value" className="num">{row.value}</td>
                         </tr>
                     ))}
@@ -107,7 +108,7 @@ function ComponentParamTables({ rows, unitLabel }: { rows: CorrectionTerm[]; uni
                             <tbody>
                                 {kindRows.map((row) => (
                                     <tr key={`${kind}-${row.target}`}>
-                                        <td data-label="Target"><span className="data">{row.target}</span></td>
+                                        <td data-label="Target"><span className="data">{publicChemistryKey(row.target)}</span></td>
                                         <td data-label="Value" className="num">{row.value}</td>
                                     </tr>
                                 ))}

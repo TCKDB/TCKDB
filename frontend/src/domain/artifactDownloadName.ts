@@ -1,48 +1,28 @@
 /**
- * What to call a downloaded artifact.
+ * What to call a downloaded artifact: `<kind>_<artifact_ref><ext>`, for example
+ * `output_log_art_7k2p9x.log`. The name says what the file IS, then which
+ * record it is, then its format.
  *
- * `<kind>_<artifact_ref><ext>` -- `output_log_art_7k2p9x.log`. The name
- * says what the file IS, then which record it is, then its format.
- *
- * Why not the recorded filename
- * -----------------------------
- * Because on this corpus it identifies nothing. MEASURED on the hosted
- * instance 2026-09-14: 317 artifacts of kind `output_log` are all called
- * `input.log`, and 246 of kind `input` are all called `input.gjf`. That
- * is Gaussian's own convention -- `g16 input.gjf` writes `input.log`, so
- * the output is named after the JOB, not after its role -- and ARC names
- * every job file `input.gjf`.
- *
- * So the recorded filename was both non-identifying (563 files, two
- * distinct names) and actively misleading: a folder of downloads whose
- * every entry began `input` when most of them were outputs. The archive
- * still records the true filename and shows it in the Filename column;
- * nothing is lost, it just stops being the thing a local copy is named
- * after.
- *
- * The original extension is kept, because it is the one part of the
- * recorded name that carries information a reader needs: it decides what
- * opens the file.
- *
- * **The filename is stored data, not a fact about the viewer's machine.**
- * A browser save honours the name it is given, so a recorded filename of
- * `../../thing` would be a name this app chose to propose. Every segment
- * is reduced to characters that cannot mean anything to a path.
- *
- * This duplicates `artifact_download_name` in
- * `clients/python/src/tckdb_client/cli.py`. Two languages, one rule: a
- * file downloaded from the website and the same file downloaded with
- * `tckdb download artifact` should land under the same name, and if the
- * two ever disagree this comment is where to start.
+ * The recorded filename is depositor-typed (and on this corpus it identifies
+ * nothing: 317 `output_log` artifacts are all called `input.log`). Only its
+ * extension is used, and only when it is one of a known set (owner decision
+ * 2026-11-03); its stem never reaches the saved name or the anchor's
+ * `download` attribute. This now differs from `artifact_download_name` in
+ * `clients/python/src/tckdb_client/cli.py`, which still uses the recorded stem.
  */
-const UNSAFE = /[^A-Za-z0-9._-]+/g
+const UNSAFE = /[^A-Za-z0-9_-]+/g
+
+// The only extensions a download may carry. The recorded filename is a string
+// the producer typed and the browser briefly puts the name in an anchor's
+// `download` attribute, so its stem is never used and its extension counts only
+// when it is one of these.
+const KNOWN_EXTENSIONS = new Set([
+    ".log", ".out", ".gjf", ".com", ".inp", ".in", ".xyz", ".json", ".yml", ".yaml", ".txt", ".chk", ".fchk",
+    ".cube", ".molden", ".hess", ".dat", ".csv", ".zip", ".gz", ".tgz", ".tar",
+])
 
 function sanitiseSegment(value: string): string {
-    // Basename first: this is what discards any directory component,
-    // traversal or otherwise, before anything else looks at the value.
-    const afterPosix = value.split("/").pop() ?? ""
-    const afterWindows = afterPosix.split("\\").pop() ?? ""
-    return afterWindows.replace(UNSAFE, "_").replace(/^[._]+/, "").replace(/[._]+$/, "")
+    return value.replace(UNSAFE, "_").replace(/^[_-]+/, "").replace(/[_-]+$/, "")
 }
 
 export function artifactDownloadName(
@@ -51,25 +31,18 @@ export function artifactDownloadName(
     sha256: string,
     kind?: string | null,
 ): string {
-    const safeName = filename ? sanitiseSegment(filename.trim()) : ""
     const safeRef = artifactRef ? sanitiseSegment(artifactRef) : ""
     const safeKind = kind ? sanitiseSegment(kind) : ""
 
-    // The extension is taken from the RECORDED name, never from the kind:
-    // `output_log` is a role, `.log` is a format, and an artifact of that
-    // kind could perfectly well be a `.out`.
-    const lastDot = safeName.lastIndexOf(".")
-    const ext = lastDot > 0 ? safeName.slice(lastDot) : ""
-    const stem = lastDot > 0 ? safeName.slice(0, lastDot) : safeName
+    // Extension from the recorded name, only from the known set.
+    const lastDot = filename ? filename.trim().lastIndexOf(".") : -1
+    const candidate = filename && lastDot > 0 ? filename.trim().slice(lastDot).toLowerCase() : ""
+    const ext = KNOWN_EXTENSIONS.has(candidate) ? candidate : ""
 
-    // Kind leads when the archive knows it. Falling back to the recorded
-    // stem keeps this working for any deployment whose filenames DO
-    // identify something -- the measurement above is about this corpus,
-    // not about artifacts in general.
-    const lead = safeKind || stem
-    if (lead && safeRef) return `${lead}_${safeRef}${ext}`
-    if (lead) return `${lead}${ext}`
-    // The digest is always a correct answer; it is only ever the least
-    // useful one.
-    return safeName || sha256
+    // Built from the kind and the ref only: TCKDB's own words.
+    if (safeKind && safeRef) return `${safeKind}_${safeRef}${ext}`
+    if (safeKind) return `${safeKind}${ext}`
+    if (safeRef) return `artifact_${safeRef}${ext}`
+    // The digest is always a correct answer; it is only ever the least useful one.
+    return sha256
 }

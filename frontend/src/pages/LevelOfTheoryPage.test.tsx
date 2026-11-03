@@ -5,6 +5,7 @@ import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import LevelOfTheoryPage from "./LevelOfTheoryPage"
+import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -453,5 +454,23 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
         page()
         expect(await screen.findByRole("heading", { level: 1, name: "b3lyp/def2tzvp" })).toBeInTheDocument()
+    })
+})
+
+describe("LevelOfTheoryPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
+        const planted = plantSentinels(baseRecord(), ["name", "note", "target"])
+        expectPlanted(planted)
+        const { value } = planted
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(value))))
+        const user = userEvent.setup()
+        page()
+        expect(await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })).toBeVisible()
+        await user.click(screen.getByText("Atom-energy correction").closest("summary") as HTMLElement)
+        await user.click(screen.getByText("Petersson bond-additivity correction").closest("summary") as HTMLElement)
+        // The fixture reached the page: both scheme tables rendered with their rows.
+        expect(within(screen.getByRole("table", { name: "Element correction parameters" })).getAllByRole("row")).toHaveLength(9)
+
+        expectNoDepositorText()
     })
 })

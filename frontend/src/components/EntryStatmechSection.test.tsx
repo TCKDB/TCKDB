@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { MemoryRouter } from "react-router-dom"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { EntryStatmechSection } from "./EntryStatmechSection"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 // `design-system.css` is normally reached only via `index.css`'s `@import`
 // -- see `ReactionEntryPage.test.tsx`'s identical import for why a
 // component test rendered in isolation needs it directly to exercise
@@ -488,10 +489,11 @@ describe("EntryStatmechSection", () => {
         // column via `data-label`, so a Top<->Invalidated column swap
         // (values transposed, headers untouched) is caught, not just a
         // "does this text appear somewhere in the row" check.
-        expect(cellAt(soundRow, "Top")).toBe("methyl-sound")
         expect(cellAt(soundRow, "Invalidated")).toBe("not invalidated")
-        expect(cellAt(invalidRow, "Top")).toBe("methyl-bad")
-        expect(cellAt(invalidRow, "Invalidated")).toBe("scan did not close")
+        expect(cellAt(invalidRow, "Invalidated")).toBe("invalidated")
+        // `top_description` and `invalidated_reason` are depositor free text: neither is printed.
+        expect(within(table).queryByText("methyl-sound")).toBeNull()
+        expect(within(table).queryByText("scan did not close")).toBeNull()
     })
 
     it("renders a heavy section as a static, request-free line when no record on the entry has it", async () => {
@@ -1563,5 +1565,39 @@ describe("EntryStatmechSection: paging", () => {
         // The eager on-demand sections (source calculations, frequencies) are refetched for THIS window, never
         // read from the first page's response: a record on page 2 must not be matched against page 1's data.
         await waitFor(() => expect(seen.some((call) => call.offset === "1" && call.includes.includes("frequencies"))).toBe(true))
+    })
+})
+
+describe("EntryStatmechSection -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the typed fields: point group, torsion top and reasons, notes, joined species label", async () => {
+        const withTorsions = baseRecord({
+            statmech: { ...baseRecord().statmech, statmech_ref: "sm_two" },
+            available_sections: { ...baseRecord().available_sections, has_torsions: true },
+            torsions: [{
+                torsion_index: 0, treatment_kind: "hindered_rotor", symmetry_number: 3, dimension: 1,
+                top_description: "x", invalidated_reason: "x", note: "x", source_scan_calculation_ref: "calc_scan", coordinates: [],
+            }],
+        })
+        const planted = plantSentinels(mockResponse([baseRecord(), withTorsions]), ["point_group", "top_description", "invalidated_reason", "note"])
+        expectPlanted(planted)
+        const { value } = planted
+        // A point group that is not a Schoenflies symbol, and a species label that joins in typed parts.
+        for (const record of value.records as { statmech: { point_group: string }; species: { species_entry_label: string | null } }[]) {
+            record.species.species_entry_label = ADVERSARIAL.joinedLabel
+        }
+        ;(value.records[0] as { statmech: { point_group: string } }).statmech.point_group = ADVERSARIAL.pointGroup
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(value)))
+        page()
+        await screen.findByText("sm_one")
+        fireEvent.click(screen.getByText("Torsions"))
+        const section = screen.getByText("Torsions").closest("details") as HTMLDetailsElement
+        await within(section).findByText("Torsions loaded.")
+        // The fixture reached the page: the torsion rows and both records rendered, the typed point group as "not shown".
+        expect(within(section).getAllByRole("row").length).toBeGreaterThan(1)
+        expect(screen.getAllByText("sm_two").length).toBeGreaterThan(0)
+        expect(screen.getAllByText("not shown").length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
     })
 })
