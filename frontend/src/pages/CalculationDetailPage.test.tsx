@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { AuthProvider } from "../components/AuthProvider"
 import CalculationDetailPage from "./CalculationDetailPage"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 import { resetAllRequestCaches } from "../api/requestCache"
 import { bySummaryText } from "../test/disclosureQueries"
 // `design-system.css` is normally reached only via `index.css`'s `@import`
@@ -396,7 +397,7 @@ describe("CalculationDetailPage", () => {
         // comment).
         const identityHeader = document.querySelector(".record-identity-header") as HTMLElement
         const speciesEntryLink = identityHeader.querySelector('a[href="/species-entries/spe_demo"]')!
-        expect(speciesEntryLink.textContent).toBe("[CH3] (CH3) · ground state")
+        expect(speciesEntryLink.textContent).toBe("[CH3] (CH3)")
 
         // The calculation's own ref is visible at rest, first in the
         // identity block -- never behind the collapsed References
@@ -1221,8 +1222,10 @@ describe("CalculationDetailPage", () => {
 
             fireEvent.click(screen.getByText("Artifacts"))
             const artifactSection = screen.getByText("Artifacts").closest("details") as HTMLElement
-            const row = (await within(artifactSection).findByText("input.log")).closest("tr") as HTMLElement
+            const row = (await within(artifactSection).findByText("no ref")).closest("tr") as HTMLElement
             expect(within(row).getByText("no ref")).toBeVisible()
+            // The recorded filename is producer-typed text: it is not printed.
+            expect(row.innerHTML).not.toContain("input.log")
             expect(within(row).queryByRole("button", { name: /Copy/ })).not.toBeInTheDocument()
         })
     })
@@ -1906,5 +1909,35 @@ describe("CalculationDetailPage", () => {
             const projTable = await within(section).findByRole("table", { name: "Imaginary mode projections" })
             expect(getComputedStyle(within(projTable).getByRole("columnheader", { name: "Frequency (cm-1)" })).textTransform).toBe("none")
         })
+    })
+})
+
+describe("CalculationDetailPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the fields a depositor typed, in text or in any attribute, once every section is open", async () => {
+        const planted = plantSentinels(mockRecord({
+            conformer: {
+                conformer_observation_ref: "co_demo", conformer_group_ref: "cg_demo", conformer_group_label: null,
+            },
+        }), [
+            "note", "filename", "raw_key", "raw_value", "section", "unit",
+            "energy_correction_scheme_name", "conformer_group_label", "canonical_value",
+        ])
+        expectPlanted(planted)
+        const { value } = planted
+        // The owner's joined species label carries a typed state label that reads like a stereo mark.
+        ;(value.owner as { species_entry: { species_entry_label: string } }).species_entry.species_entry_label = ADVERSARIAL.joinedLabel
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: value })))
+        const { container } = page()
+        await findLoaded("Frequency")
+        for (const summary of Array.from(container.querySelectorAll("summary"))) fireEvent.click(summary)
+        // The fixture reached the page: lazily loaded rows with their controlled/ref columns are on screen.
+        expect(await screen.findByText("scf_convergence")).toBeVisible()
+        expect(await screen.findByText("no ref")).toBeVisible()
+        expect(screen.getAllByText("calc_freq_one").length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
+        // A recognised key's free-text value reads "recorded", never the string itself.
+        expect(screen.getAllByText("recorded").length).toBeGreaterThan(0)
     })
 })

@@ -51,16 +51,16 @@ describe("conformerLabel", () => {
         expect(conformerLabel(many)).toBe("Conformer Group 42")
     })
 
-    it("renders a non-matching deposited label verbatim, never coerced into the 'Conformer Group N' shape", () => {
+    it("never prints a non-matching deposited label: the group's own ref stands in", () => {
         const depositorNamed = group({ conformer_group: { conformer_group_ref: "cg_x", label: "anti-periplanar" } })
-        expect(conformerLabel(depositorNamed)).toBe("anti-periplanar")
+        expect(conformerLabel(depositorNamed)).toBe("cg_x")
         // Contains the pattern's own word but doesn't MATCH it (extra
         // suffix) -- must not be mistaken for the auto-numbered case.
         const suffixed = group({ conformer_group: { conformer_group_ref: "cg_y", label: "conformer_1_reoptimized" } })
-        expect(conformerLabel(suffixed)).toBe("conformer_1_reoptimized")
+        expect(conformerLabel(suffixed)).toBe("cg_y")
         // Leading zero / non-numeric suffix: still not a match.
         const nonNumeric = group({ conformer_group: { conformer_group_ref: "cg_z", label: "conformer_a" } })
-        expect(conformerLabel(nonNumeric)).toBe("conformer_a")
+        expect(conformerLabel(nonNumeric)).toBe("cg_z")
     })
 
     it("falls back to the group's own stable ref, verbatim, when no label was deposited -- never inventing a display name", () => {
@@ -286,16 +286,15 @@ describe("sortConformersForDisplay", () => {
         expect(sorted.map((c) => c.conformer_group.conformer_group_ref)).toEqual(["cg_1", "cg_2", "cg_9", "cg_10"])
     })
 
-    it("sorts non-numbered conformers after every numbered one, alphabetically by display label", () => {
+    it("sorts non-numbered conformers after every numbered one, then by ref (never by the typed label)", () => {
         const c1 = group({ conformer_group: { conformer_group_ref: "cg_1", label: "conformer_1" } })
         const named = group({ conformer_group: { conformer_group_ref: "cg_named", label: "anti-periplanar" } })
         const unlabeled = group({ conformer_group: { conformer_group_ref: "cg_unlabeled", label: null } })
         const other = group({ conformer_group: { conformer_group_ref: "cg_other", label: "gauche" } })
         const sorted = sortConformersForDisplay([unlabeled, other, c1, named])
-        // Numbered first (cg_1), then non-numbered alphabetically by display
-        // label: "anti-periplanar" < "cg_unlabeled" (its own ref, since it
-        // has no label) < "gauche".
-        expect(sorted.map((c) => c.conformer_group.conformer_group_ref)).toEqual(["cg_1", "cg_named", "cg_unlabeled", "cg_other"])
+        // Numbered first (cg_1), then non-numbered by their own ref, which is what
+        // `conformerLabel` shows for them.
+        expect(sorted.map((c) => c.conformer_group.conformer_group_ref)).toEqual(["cg_1", "cg_named", "cg_other", "cg_unlabeled"])
     })
 
     it("never mutates the input array, and produces a total order stable across repeated calls", () => {

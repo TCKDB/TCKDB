@@ -30,7 +30,6 @@ export interface EquationParticipantInput {
 
 export interface EquationParticipant {
     speciesEntryRef: string
-    speciesEntryLabel: string | null
     smiles: string
     formula: string | null
     coefficient: number
@@ -53,7 +52,6 @@ function collapseSide(participants: EquationParticipantInput[]): EquationPartici
         }
         byRef.set(participant.species_entry_ref, {
             speciesEntryRef: participant.species_entry_ref,
-            speciesEntryLabel: participant.species_entry_label ?? null,
             smiles: participant.smiles,
             formula: participant.formula ?? null,
             coefficient: participant.stoichiometry,

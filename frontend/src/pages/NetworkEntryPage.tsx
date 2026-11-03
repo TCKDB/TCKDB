@@ -101,11 +101,11 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                                 <span className="t-kicker record-identity-kicker">Pressure-dependent network · deposited scientific record</span>
                                 <span className={reviewPillClass(network.review.status)}>{statusLabel(network.review.status)}</span>
                             </div>
-                            {/* Depositor prose, displayed as-is (plan §7's ruling; the
-                                mock's own disclosure label below is the "as named by
-                                the depositor" qualifier -- no second inline caveat is
-                                layered on top of it). */}
-                            <h1 className="t-display-2 record-identity-title">{network.name ?? "not named"}</h1>
+                            {/* `network.name` and `network.description` are depositor
+                                prose and are not printed (house rule, owner decision
+                                2026-11-03, reversing plan §7's ruling): the heading is a
+                                TCKDB noun, the network is identified by its ref below. */}
+                            <h1 className="t-display-2 record-identity-title">Pressure-dependent network</h1>
                             <div className="record-identity-known">
                                 <dl className="kv-list record-identity-facts">
                                     <div>
@@ -139,11 +139,6 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                                 </dl>
                             </div>
                         </div>
-                        {network.description && (
-                            <Disclosure summary="Description (depositor-authored)">
-                                <p className="t-body" style={{ margin: 0 }}>{network.description}</p>
-                            </Disclosure>
-                        )}
                         <RefsDisclosure refs={refs} />
                     </header>
                 )}
@@ -331,9 +326,9 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
                                 <table className="data-table" aria-label="Solve-internal channel barriers">
                                     <thead><tr><th scope="col">Channel</th><th scope="col">Forward barrier</th><th scope="col">Reverse barrier</th><th scope="col">Source calculation</th></tr></thead>
                                     <tbody>
-                                        {channelBarriers.map((row) => (
+                                        {channelBarriers.map((row, barrierIndex) => (
                                             <tr key={row.channel_key}>
-                                                <td data-label="Channel"><code className="data">{row.channel_key}</code></td>
+                                                <td data-label="Channel"><code className="data">{barrierIndex + 1}</code></td>
                                                 <td className="num" data-label="Forward barrier">{formatKjMol(row.forward_barrier_kj_mol)}</td>
                                                 <td className="num" data-label="Reverse barrier">{formatKjMol(row.reverse_barrier_kj_mol)}</td>
                                                 <td data-label="Source calculation">
@@ -360,6 +355,9 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
 
 type ReactionRow = {
     channelKey: string | null
+    /** 1-based position in the served channel list -- what the page prints in place of the
+     *  depositor-typed `channel_key` (house rule, owner decision 2026-11-03). */
+    channelNumber: number
     pathKind: string
     transitionStateEntryRef: string | null
     reactionEntryRef: string
@@ -367,8 +365,9 @@ type ReactionRow = {
 }
 
 function buildReactionRows(channels: NetworkChannel[], reactionEntries: Record<string, ReactionEntryLite>): ReactionRow[] {
-    return channels.flatMap((channel) => channel.microreactions.map((micro) => ({
+    return channels.flatMap((channel, channelIndex) => channel.microreactions.map((micro) => ({
         channelKey: channel.channel_key ?? null,
+        channelNumber: channelIndex + 1,
         pathKind: micro.path_kind,
         transitionStateEntryRef: micro.transition_state_entry_ref ?? null,
         reactionEntryRef: micro.reaction_entry_ref,
@@ -414,7 +413,7 @@ function ReactionsSection({ channels, reactionEntries, totalChannels }: {
                                     {row.entry ? <code className="data">{row.entry.equation}</code> : <span className="record-identity-absent-inline">not recorded</span>}
                                 </td>
                                 <td data-label="Channel">
-                                    {row.channelKey ? <code className="data">{row.channelKey}</code> : <span className="record-identity-absent-inline">not recorded</span>}
+                                    <code className="data">{row.channelNumber}</code>
                                 </td>
                                 <td data-label="Path kind">{statusLabel(row.pathKind)}</td>
                                 <td data-label="Transition state">

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { publicStateLabel } from "../domain/publicText"
 import { recordReviewSchema } from "./scientificSchemas"
 import { loadEntryThermo } from "./thermoApi"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
@@ -104,11 +105,14 @@ const stateCompositionSchema = z.object({
     participants: z.array(stateParticipantSchema).default([]),
     participant_count_total: z.number().default(0),
     participants_truncated: z.boolean().default(false),
-    // Server-computed, safe to render (never `network_state.label`, which is
-    // depositor free text and null on every state measured against the live
-    // archive) -- see `backend/app/schemas/reads/scientific_network_composition.py`.
+    // Rebuilt below from the participants. Never `network_state.label` (depositor free text).
     state_label: z.string().default(""),
-}).passthrough()
+}).passthrough().transform((composition) => ({
+    ...composition,
+    // The served `state_label` embeds each participant's `species_entry_label` (which joins in typed
+    // parts), so it is always rebuilt from the participants' SMILES and stoichiometry.
+    state_label: publicStateLabel(composition),
+}))
 
 const stateSchema = z.object({
     composition_hash: z.string(),

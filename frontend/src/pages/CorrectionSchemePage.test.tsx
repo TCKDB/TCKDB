@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import CorrectionSchemePage from "./CorrectionSchemePage"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -237,5 +238,22 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
         // Two separate rows, not one merged statement about both.
         expect(toolDt).not.toBe(litDt)
         expect(screen.queryByText(/not applicable/i)).not.toBeInTheDocument()
+    })
+})
+
+describe("CorrectionSchemePage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
+        const planted = plantSentinels(mockResponse(), ["name", "note", "applied_note", "target"])
+        expectPlanted(planted)
+        const { value } = planted
+        // Keys shaped like element/bond keys but not real elements.
+        ;(value.record.corrections as { target: string }[]).forEach((row, index) => { row.target = index === 0 ? ADVERSARIAL.elementKey : "Xx" })
+        server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(value)))
+        page()
+        expect(await screen.findByRole("heading", { name: "Petersson bond-additivity correction b3lyp/def2tzvp", level: 1 })).toBeVisible()
+        expect(within(screen.getByRole("table", { name: "Applications of this correction scheme" })).getByText("spe_one")).toBeVisible()
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
     })
 })

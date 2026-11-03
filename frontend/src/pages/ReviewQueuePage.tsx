@@ -256,7 +256,7 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
         // unremarkable default for nearly every species in the archive,
         // so restating "ground state" next to it on almost every block
         // was noise review #492 measured, not information. Any REAL
-        // extra (an excited-state label, a term symbol) still survives
+        // extra (a term symbol in a recognised shape) still survives
         // `includeState: false` -- see `facetChips`'s own docstring.
         //
         // `facetChips` always leads with a kind chip ("minimum"/"van der
@@ -346,11 +346,9 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
                 {!subject.chemistry.formula &&
                     (smilesRecordedButUnparsed ? (
                         <p className="review-subject-caveat admin-absent">
-                            no formula could be derived from this candidate's
-                            own SMILES:{" "}
-                            <code className="data">
-                                {subject.chemistry.unmapped_smiles}
-                            </code>
+                            {/* The SMILES itself is not printed: it is depositor-typed and
+                                unparsed, and the queue is readable by any signed-in account. */}
+                            no formula could be derived from this candidate's own SMILES
                         </p>
                     ) : (
                         <p className="review-subject-caveat admin-absent">
