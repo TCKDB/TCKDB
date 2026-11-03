@@ -403,6 +403,34 @@ class TestRecordReviewApi:
         assert resp.status_code == 201
         return resp.json()["id"]
 
+    # The review queue is a curator surface: the flat list and the
+    # subject-grouped page serve the same rows, and both are gated.
+    _QUEUE_URLS = ("/api/v1/record-reviews", "/api/v1/record-reviews/queue")
+
+    def test_a_plain_user_gets_403_and_no_queue_data_from_either_queue_route(self, client):
+        thermo_id = self._seed_thermo(client)
+        for url in self._QUEUE_URLS:
+            resp = client.get(url)  # default test user is role=user
+            assert resp.status_code == 403, (url, resp.text)
+            assert resp.json()["detail"] == "Curator or admin role required.", url
+            assert "subjects" not in resp.text and "record_id" not in resp.text, url
+        # Not vacuous: the row the plain user was refused exists.
+        assert thermo_id
+
+    def test_a_curator_reads_the_queue_and_an_admin_does_too(
+        self, client, login_as, _api_curator_user, _api_admin_user
+    ):
+        thermo_id = self._seed_thermo(client)
+        for user_id in (_api_curator_user, _api_admin_user):
+            login_as(user_id)
+            flat = client.get("/api/v1/record-reviews", params={"limit": 50})
+            assert flat.status_code == 200, flat.text
+            assert thermo_id in {r["record_id"] for r in flat.json()}
+            grouped = client.get("/api/v1/record-reviews/queue", params={"limit": 50})
+            assert grouped.status_code == 200, grouped.text
+            body = grouped.json()
+            assert body["record_total"] >= 1 and body["subjects"]
+
     def test_get_one(self, client):
         thermo_id = self._seed_thermo(client)
         resp = client.get(f"/api/v1/record-reviews/thermo/{thermo_id}")
@@ -417,8 +445,9 @@ class TestRecordReviewApi:
         resp = client.get("/api/v1/record-reviews/thermo/9999999")
         assert resp.status_code == 404
 
-    def test_list_filters_by_status(self, client):
+    def test_list_filters_by_status(self, login_as, _api_curator_user, client):
         self._seed_thermo(client)
+        login_as(_api_curator_user)
         resp = client.get(
             "/api/v1/record-reviews",
             params={"status": "not_reviewed", "limit": 50},
@@ -454,7 +483,7 @@ class TestRecordReviewApi:
         # reviewer about to click it.
         assert ref == db_session.get(Thermo, thermo_id).public_ref
 
-    def test_the_list_route_names_every_row_it_returns(self, client, db_session):
+    def test_the_list_route_names_every_row_it_returns(self, login_as, _api_curator_user, client, db_session):
         """Resolved for a whole page, not just for the single-row read.
 
         A list that omitted the ref would send a reviewer to the detail
@@ -462,6 +491,7 @@ class TestRecordReviewApi:
         """
         first = self._seed_thermo(client)
         second = self._seed_thermo(client)
+        login_as(_api_curator_user)
         resp = client.get(
             "/api/v1/record-reviews",
             params={"record_type": "thermo", "status": "not_reviewed", "limit": 50},
@@ -487,7 +517,9 @@ class TestRecordReviewApi:
         assert rows[first]["record_public_ref"] != rows[second]["record_public_ref"]
 
     def test_a_row_whose_record_cannot_be_named_is_still_listed(
-        self, client, db_session
+        self, client, db_session,
+        login_as,
+        _api_curator_user,
     ):
         """Unnameable is not a reason to hide the work.
 
@@ -506,6 +538,7 @@ class TestRecordReviewApi:
         )
         db_session.flush()
 
+        login_as(_api_curator_user)
         resp = client.get(
             "/api/v1/record-reviews",
             params={"record_type": "thermo", "status": "not_reviewed", "limit": 200},
@@ -641,7 +674,7 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
             key.startswith("container") and key.endswith("_id") for key in body
         )
 
-    def test_the_two_halves_are_null_together(self, client, db_session):
+    def test_the_two_halves_are_null_together(self, login_as, _api_curator_user, client, db_session):
         """A ref with no type cannot be linked; a type with no ref names
         nothing. The schema promises they move together, so a row that has
         neither must have neither -- not one of them.
@@ -655,6 +688,7 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
         )
         db_session.flush()
 
+        login_as(_api_curator_user)
         rows = client.get(
             "/api/v1/record-reviews",
             params={"record_type": "species", "status": "not_reviewed", "limit": 200},
@@ -703,7 +737,9 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
         assert body["container_ref"] == entry.public_ref
 
     def test_the_list_route_gives_every_row_its_own_container(
-        self, client, db_session
+        self, client, db_session,
+        login_as,
+        _api_curator_user,
     ):
         """Resolved for a whole page, and per row rather than once per page.
 
@@ -727,6 +763,7 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
         )
         db_session.flush()
 
+        login_as(_api_curator_user)
         rows = {
             r["record_id"]: r
             for r in client.get(
@@ -746,7 +783,7 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
         assert rows[second.id]["container_ref"] == second_entry.public_ref
         assert rows[first]["container_ref"] != rows[second.id]["container_ref"]
 
-    def test_a_longer_page_does_not_cost_more_queries(self, client, db_session):
+    def test_a_longer_page_does_not_cost_more_queries(self, login_as, _api_curator_user, client, db_session):
         """The bulk resolve, measured at the route rather than the service.
 
         Counted as "the same number of statements for 2 rows as for 10",
@@ -780,6 +817,7 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
                 )
             db_session.flush()
 
+        login_as(_api_curator_user)
         def _count() -> int:
             statements = 0
             engine = db_session.connection().engine
@@ -824,7 +862,9 @@ class TestReviewQueueSubjectsApi:
     """
 
     def test_two_corrections_on_one_species_render_as_one_subject_with_a_count(
-        self, client, db_session
+        self, client, db_session,
+        login_as,
+        _api_curator_user,
     ):
         entry = make_species_entry(db_session, make_species(db_session))
         atom = make_applied_energy_correction(
@@ -853,6 +893,7 @@ class TestReviewQueueSubjectsApi:
         )
         db_session.flush()
 
+        login_as(_api_curator_user)
         resp = client.get(
             "/api/v1/record-reviews/queue",
             params={"status": "not_reviewed", "limit": 200},
@@ -874,7 +915,9 @@ class TestReviewQueueSubjectsApi:
             assert record["status"] == "not_reviewed"
 
     def test_species_entry_subject_carries_formula_and_never_says_cannot_be_named(
-        self, client, db_session
+        self, client, db_session,
+        login_as,
+        _api_curator_user,
     ):
         species = make_species(db_session, smiles="O", multiplicity=1)
         entry = make_species_entry(db_session, species)
@@ -892,6 +935,7 @@ class TestReviewQueueSubjectsApi:
         )
         db_session.flush()
 
+        login_as(_api_curator_user)
         resp = client.get(
             "/api/v1/record-reviews/queue",
             params={"status": "not_reviewed", "limit": 200},
@@ -911,7 +955,9 @@ class TestReviewQueueSubjectsApi:
         # above is the real content of this test.
 
     def test_the_header_totals_are_honest_counts_not_estimates(
-        self, client, db_session
+        self, client, db_session,
+        login_as,
+        _api_curator_user,
     ):
         """`subject_total`/`record_total` are the server's OWN count over the
         whole filtered backlog -- not derived from what is shown on this page.
@@ -966,6 +1012,7 @@ class TestReviewQueueSubjectsApi:
 
         # limit=1: the page shows exactly ONE subject and its records, but
         # the totals must still describe the whole 3-subject, 4-record set.
+        login_as(_api_curator_user)
         resp = client.get(
             "/api/v1/record-reviews/queue",
             params={"status": "not_reviewed", "limit": 1},
@@ -975,7 +1022,7 @@ class TestReviewQueueSubjectsApi:
         assert body["subject_total"] == 3
         assert body["record_total"] == 4
 
-    def test_paging_counts_subjects_never_splits_one(self, client, db_session):
+    def test_paging_counts_subjects_never_splits_one(self, login_as, _api_curator_user, client, db_session):
         entry = make_species_entry(db_session, make_species(db_session))
         thermo = make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=5.0)
         statmech = make_statmech(db_session, species_entry=entry)
@@ -995,6 +1042,7 @@ class TestReviewQueueSubjectsApi:
         )
         db_session.flush()
 
+        login_as(_api_curator_user)
         resp = client.get(
             "/api/v1/record-reviews/queue",
             params={"status": "not_reviewed", "limit": 1},
@@ -1009,7 +1057,9 @@ class TestReviewQueueSubjectsApi:
         )
 
     def test_a_nested_records_own_ref_and_container_reach_the_wire(
-        self, client, db_session
+        self, client, db_session,
+        login_as,
+        _api_curator_user,
     ):
         """Review of #492, mutation 2: a build that served ``refs={}``/
         ``containers={}`` for the page's own rows -- so every nested record's
@@ -1031,6 +1081,7 @@ class TestReviewQueueSubjectsApi:
         )
         db_session.flush()
 
+        login_as(_api_curator_user)
         resp = client.get(
             "/api/v1/record-reviews/queue",
             params={"status": "not_reviewed", "limit": 200},
@@ -1046,7 +1097,7 @@ class TestReviewQueueSubjectsApi:
         assert record["container_type"] == "species_entry"
         assert record["container_ref"] == entry.public_ref
 
-    def test_offset_actually_advances_the_page(self, client, db_session):
+    def test_offset_actually_advances_the_page(self, login_as, _api_curator_user, client, db_session):
         """Review of #492, mutation 1: ``page_keys = list(groups.keys())
         [:limit]`` (offset silently ignored) passed all 15 previously-shipped
         tests, because every one of them requested offset 0. Page 2 would
@@ -1072,6 +1123,7 @@ class TestReviewQueueSubjectsApi:
         # Newest-first: the last one seeded is first on the page.
         expected = list(reversed(refs_in_order))
 
+        login_as(_api_curator_user)
         seen = []
         for offset in range(3):
             resp = client.get(

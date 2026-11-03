@@ -120,8 +120,10 @@ const workflowToolReleaseSchema = z.object({
 const literatureSchema = z.object({
     literature_ref: z.string(),
     title: z.string().nullable().optional(),
+    title_source: z.string().nullable().optional(),
     year: z.number().nullable().optional(),
     doi: z.string().nullable().optional(),
+    isbn: z.string().nullable().optional(),
 }).passthrough()
 
 // `*_applicable` fields answer "can this calculation's TYPE structurally

@@ -1112,3 +1112,30 @@ describe("ReactionEntryPage -- no depositor-typed text (owner decision 2026-11-0
         expectNoAdversarialText()
     })
 })
+
+describe("ReactionEntryPage -- kinetics literature (depositor text guard)", () => {
+    async function mount(literature: Record<string, unknown>) {
+        const payload = mockFull()
+        ;(payload.kinetics as Array<{ provenance: Record<string, unknown> }>)[0].provenance.literature = literature
+        handleFull(payload)
+        page()
+        await screen.findByText("kin_test1")
+        // The fixture reached the page: the Literature row rendered.
+        return screen.getByText("Literature", { selector: "dt" }).nextElementSibling?.textContent
+    }
+
+    it("withholds a typed title and a spam DOI; prints the public ref and says the title is not verified", async () => {
+        const row = await mount({
+            literature_ref: "lit_kin1", title: "DEPOSITOR_SENTINEL_literature_title", title_source: "depositor_supplied",
+            doi: "10.1/ DEPOSITOR_SENTINEL_literature_doi spam.example",
+        })
+        expect(row).toBe("lit_kin1 · Title not verified")
+        expectNoDepositorText()
+        expect(document.body.innerHTML).not.toContain("spam.example")
+    })
+
+    it("shows a registry-resolved title (the positive control)", async () => {
+        const row = await mount({ literature_ref: "lit_kin1", title: "RESOLVED_TITLE", title_source: "resolved_metadata" })
+        expect(row).toBe("RESOLVED_TITLE")
+    })
+})

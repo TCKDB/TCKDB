@@ -479,8 +479,10 @@ def _build_literature_summary(
         id=lit.id,
         literature_ref=lit.public_ref,
         title=getattr(lit, "title", None),
+        title_source=getattr(lit, "title_source", None),
         year=getattr(lit, "year", None),
         doi=getattr(lit, "doi", None),
+        isbn=getattr(lit, "isbn", None),
     )
 
 

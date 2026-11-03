@@ -1193,3 +1193,31 @@ describe("NetworkEntryPage -- which solve the energies came from, and the order 
         expect(value.textContent).toContain("reservoir state (nsolve_test2)")
     })
 })
+
+describe("NetworkEntryPage -- literature title (depositor text guard)", () => {
+    async function mount(literature: Record<string, unknown>) {
+        handleNetworkDetail(networkDetailFixture({ literature }))
+        handleSolveDetail("nsolve_test1")
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "2 [NH2] <=> NN")
+        handleKtpEvaluate()
+        page()
+        // The fixture reached the page: the Literature row rendered.
+        await screen.findByText("Literature", { selector: "dt" })
+    }
+
+    it("withholds a typed title and a spam DOI; prints the public ref and says the title is not verified", async () => {
+        await mount({
+            literature_ref: "lit_net1", title: "DEPOSITOR_SENTINEL_literature_title", title_source: "depositor_supplied",
+            doi: "10.1/ DEPOSITOR_SENTINEL_literature_doi spam.example",
+        })
+        expect(screen.getByText("Literature", { selector: "dt" }).nextElementSibling?.textContent).toBe("lit_net1 · Title not verified")
+        expectNoDepositorText()
+        expect(document.body.innerHTML).not.toContain("spam.example")
+    })
+
+    it("shows a registry-resolved title (the positive control)", async () => {
+        await mount({ literature_ref: "lit_net1", title: "RESOLVED_TITLE", title_source: "resolved_metadata" })
+        expect(screen.getByText("Literature", { selector: "dt" }).nextElementSibling?.textContent).toBe("RESOLVED_TITLE")
+    })
+})

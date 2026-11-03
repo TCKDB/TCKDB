@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.db.models.common import LiteratureTitleSource
 from app.db.models.literature import Literature
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
@@ -295,6 +296,106 @@ def test_resolve_or_create_literature_reused_row_does_not_refetch_or_warn(
 
             assert resolved.id == existing.id
             assert warnings == []
+
+
+# ---------------------------------------------------------------------------
+# Where the stored title came from (``title_source``)
+# ---------------------------------------------------------------------------
+
+
+def test_title_from_doi_metadata_is_recorded_as_resolved(monkeypatch) -> None:
+    _stub_doi_metadata(monkeypatch)
+    resolved = resolve_literature_submission(
+        None, LiteratureUploadRequest(doi="10.1000/abc", title="Typed Title")
+    )
+    assert resolved.title == "Canonical Title"
+    assert resolved.title_source == LiteratureTitleSource.resolved_metadata
+
+
+def test_title_from_isbn_metadata_is_recorded_as_resolved(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.services.literature_resolution.fetch_isbn_metadata",
+        lambda isbn: {"Title": "Canonical Book"},
+    )
+    resolved = resolve_literature_submission(
+        None, LiteratureUploadRequest(isbn="0-387-95452-X")
+    )
+    assert resolved.title_source == LiteratureTitleSource.resolved_metadata
+
+
+def test_manual_title_is_recorded_as_depositor_supplied() -> None:
+    resolved = resolve_literature_submission(
+        None, LiteratureUploadRequest(kind="report", title="Manual Title")
+    )
+    assert resolved.title_source == LiteratureTitleSource.depositor_supplied
+
+
+def test_a_failed_lookup_leaves_the_typed_title_marked_depositor_supplied(
+    monkeypatch,
+) -> None:
+    """The DOI was given but the registry returned nothing: the typed title
+    must not pass as a resolved one."""
+    monkeypatch.setattr(
+        "app.services.literature_resolution.fetch_doi_metadata", lambda doi: None
+    )
+    resolved = resolve_literature_submission(
+        None, LiteratureUploadRequest(doi="10.1000/zzz", title="Typed Title")
+    )
+    assert resolved.title == "Typed Title"
+    assert resolved.title_source == LiteratureTitleSource.depositor_supplied
+
+
+def test_created_row_carries_the_source_and_a_later_match_never_rewrites_it(
+    db_conn, monkeypatch
+) -> None:
+    """Identity rows are adopted as they stand. A row created from a typed
+    title keeps ``depositor_supplied`` and its title even when the registry
+    would now resolve one."""
+    monkeypatch.setattr(
+        "app.services.literature_resolution.fetch_doi_metadata", lambda doi: None
+    )
+    with Session(db_conn) as session:
+        with session.begin():
+            first = resolve_or_create_literature(
+                session, LiteratureUploadRequest(doi="10.1000/src", title="Typed Title")
+            )
+            assert first.title_source == LiteratureTitleSource.depositor_supplied
+
+            _stub_doi_metadata(monkeypatch)  # the registry now answers
+            second = resolve_or_create_literature(
+                session, LiteratureUploadRequest(doi="10.1000/src")
+            )
+            assert second.id == first.id
+            assert second.title == "Typed Title"
+            assert second.title_source == LiteratureTitleSource.depositor_supplied
+
+
+def test_crossref_returning_an_empty_title_list_is_treated_as_no_title(monkeypatch) -> None:
+    """Crossref can answer ``"title": []``; that used to raise IndexError. It
+    means "no title", so the typed one stands and is marked as typed."""
+    import requests
+
+    from app.services import literature_metadata
+
+    class _Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"message": {"DOI": "10.1000/empty", "title": [], "issued": {"date-parts": [[2020]]}}}
+
+    monkeypatch.setattr(requests, "get", lambda *a, **k: _Response())
+    metadata = literature_metadata._fetch_doi_metadata_uncached("10.1000/empty")
+    assert metadata is not None and metadata["title"] is None
+
+    monkeypatch.setattr(
+        "app.services.literature_resolution.fetch_doi_metadata", lambda doi: metadata
+    )
+    resolved = resolve_literature_submission(
+        None, LiteratureUploadRequest(doi="10.1000/empty", title="Typed Title")
+    )
+    assert resolved.title == "Typed Title"
+    assert resolved.title_source == LiteratureTitleSource.depositor_supplied
 
 
 # --- trailing-punctuation stripping: linear, and the same answer as the regex it replaced ------------------

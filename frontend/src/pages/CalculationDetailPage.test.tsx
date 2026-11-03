@@ -557,6 +557,29 @@ describe("CalculationDetailPage", () => {
         expect(screen.getByText("Workflow tool", { selector: "dt" })).toBeVisible()
     })
 
+    it("withholds a depositor-typed literature title and DOI, and prints the public ref instead (guard)", async () => {
+        const typed = "DEPOSITOR_SENTINEL_literature_title"
+        const doi = "10.1/ DEPOSITOR_SENTINEL_literature_doi spam.example"
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({ literature: { literature_ref: "lit_1", title: typed, title_source: "depositor_supplied", year: 2019, doi } }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        expect(screen.getByText("Literature", { selector: "dt" })).toBeVisible() // the fixture reached the page
+        expect(screen.getByText(/Title not verified/)).toBeVisible()
+        expect(document.body.innerHTML).not.toContain("DEPOSITOR_SENTINEL")
+        expect(document.title).not.toContain("DEPOSITOR_SENTINEL")
+    })
+
+    it("shows a registry-resolved literature title (the positive control for the guard above)", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({ literature: { literature_ref: "lit_1", title: "RESOLVED_TITLE", title_source: "resolved_metadata", year: 2019 } }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        expect(screen.getByText("RESOLVED_TITLE (2019)")).toBeVisible()
+    })
+
     it("does not stutter the software/workflow-tool name when the version already opens with it", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
         page()

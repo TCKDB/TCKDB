@@ -894,6 +894,25 @@ class TestLiteratureReads:
         assert len(data["authors"]) == 1
         assert data["authors"][0]["author_order"] == 1
 
+    def test_title_source_is_read_back_and_null_means_not_recorded(
+        self, client, db_session
+    ):
+        resolved = Literature(
+            kind="article", title="R", doi="10.1/r", title_source="resolved_metadata"
+        )
+        typed = Literature(
+            kind="article", title="T", doi="10.1/t", title_source="depositor_supplied"
+        )
+        old = Literature(kind="article", title="O", doi="10.1/o")
+        db_session.add_all([resolved, typed, old])
+        db_session.flush()
+        got = {}
+        for lit in (resolved, typed, old):
+            resp = client.get(f"/api/v1/literature/{lit.id}")
+            assert resp.status_code == 200
+            got[lit.title] = resp.json()["title_source"]
+        assert got == {"R": "resolved_metadata", "T": "depositor_supplied", "O": None}
+
     def test_not_found(self, client):
         resp = client.get("/api/v1/literature/999999")
         assert resp.status_code == 404
