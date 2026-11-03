@@ -123,7 +123,11 @@ function CompositeSchemeDetail({ record }: { record: CompositeSchemeRecord }) {
                                                 : "not recorded"}
                                         </dd>
                                     </div>
-                                    {/* No `scheme.note`: not printed (owner decision 2026-11-03). */}
+                                    {/* The note is TCKDB's own text only for a catalogued named method (the one path that
+                                        writes it: `composite_scheme_resolution.py` `get_or_create_named_method_scheme`);
+                                        a user-built recipe never gets one, so a note on any other kind is
+                                        not TCKDB's and is not printed (owner decision 2026-11-03). */}
+                                    {scheme.kind === "named_method" && scheme.note && <div><dt>Note</dt><dd>{scheme.note}</dd></div>}
                                 </dl>
                             </div>
                         </div>

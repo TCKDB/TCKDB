@@ -156,7 +156,7 @@ describe("CompositeSchemePage", () => {
 })
 
 describe("CompositeSchemePage -- no depositor-typed text (owner decision 2026-11-03)", () => {
-    it("prints no note, while the scheme name (which can carry level-of-theory keywords) is still shown", async () => {
+    it("prints no note on a user-built recipe, while the scheme name (which can carry level-of-theory keywords) is still shown", async () => {
         const planted = plantSentinels({ scheme: core(), terms: EXTRAPOLATION_TERMS }, ["note"])
         expectPlanted(planted)
         server.use(http.get(ENDPOINT, () => HttpResponse.json(record({ composite_scheme: planted.value.scheme, terms: planted.value.terms }))))
@@ -165,5 +165,16 @@ describe("CompositeSchemePage -- no depositor-typed text (owner decision 2026-11
         expect(await screen.findByRole("heading", { level: 1, name: /recipe$/ })).toBeVisible()
 
         expectNoDepositorText()
+    })
+})
+
+describe("CompositeSchemePage -- a TCKDB-written note", () => {
+    it("shows the note of a catalogued named method", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(record({
+            composite_scheme: core({ kind: "named_method", name: "CBS-QB3", note: "Defining paper: doi:10.1063/1.478522. Values as catalogued by TCKDB when the row was written." }),
+        }))))
+        page()
+        await screen.findByRole("heading", { level: 1, name: /recipe$/ })
+        expect(screen.getByText(/Defining paper: doi:10.1063\/1.478522/)).toBeVisible()
     })
 })
