@@ -29,6 +29,7 @@ which is the failure mode this file exists to prevent.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -36,10 +37,15 @@ import pytest
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
 
-#: The one Postgres image this repo starts. Pinned by tag in every caller
-#: because the RDKit cartridge is required to migrate: the first revision
-#: issues ``CREATE EXTENSION IF NOT EXISTS rdkit``.
-POSTGRES_IMAGE = "informaticsmatters/rdkit-cartridge-debian"
+#: The one Postgres image this repo starts, matched by repository basename so
+#: the guard sees it under ANY registry. Today every caller uses
+#: ``informaticsmatters/rdkit-cartridge-debian`` from Docker Hub; the follow-up
+#: that moves CI to the GHCR copy (``ghcr.io/tckdb/rdkit-cartridge-debian@sha256:...``)
+#: must keep matching, or this guard goes blind and passes having checked
+#: nothing. Pinned by tag in every caller because the RDKit cartridge is
+#: required to migrate: the first revision issues
+#: ``CREATE EXTENSION IF NOT EXISTS rdkit``.
+POSTGRES_IMAGE = "rdkit-cartridge-debian"
 
 #: What a correctly pinned cluster carries. ``LANG`` is what initdb reads for
 #: its default locale; ``--encoding=UTF8`` is the explicit override. Both are
@@ -64,6 +70,42 @@ def _uncommented(text: str) -> list[str]:
     return [line for line in text.splitlines() if not line.lstrip().startswith("#")]
 
 
+#: The ways this repo's files actually start a container: a ``services:`` or
+#: compose ``image:`` key, or a ``docker run`` / ``docker create`` command.
+#: Merely NAMING the image is not starting it: ``mirror-ci-images.yml`` lists
+#: the image in a table to copy it between registries and never runs Postgres,
+#: so demanding an initdb pin there would be a meaningless setting added to
+#: satisfy a scan. Anything that does start the image, in any file, still
+#: matches one of these shapes and is checked.
+_IMAGE_KEY = re.compile(r"^\s*(?:-\s*)?image:")
+_RUN_COMMAND = re.compile(r"\bdocker\s+(?:compose\s+)?(?:run|create)\b")
+
+
+def _logical_lines(lines: list[str]) -> list[str]:
+    """Join shell ``\\`` continuations, so a ``docker run`` whose image sits on a
+    later line (as in ``build-api-image.yml``) is one line to inspect."""
+    out: list[str] = []
+    pending = ""
+    for line in lines:
+        if line.rstrip().endswith("\\"):
+            pending += line.rstrip()[:-1] + " "
+            continue
+        out.append(pending + line)
+        pending = ""
+    if pending:
+        out.append(pending)
+    return out
+
+
+def _cluster_starts(text: str) -> list[str]:
+    """Uncommented logical lines that start the Postgres image."""
+    return [
+        line
+        for line in _logical_lines(_uncommented(text))
+        if POSTGRES_IMAGE in line and (_IMAGE_KEY.match(line) or _RUN_COMMAND.search(line))
+    ]
+
+
 def _files_that_start_a_cluster() -> list[Path]:
     seen: dict[Path, None] = {}
     for root in SEARCH_ROOTS:
@@ -72,7 +114,7 @@ def _files_that_start_a_cluster() -> list[Path]:
         candidates = sorted(root.glob("*.yml")) + sorted(root.glob("*.yaml"))
         for path in candidates:
             body = path.read_text(encoding="utf-8")
-            if any(POSTGRES_IMAGE in line for line in _uncommented(body)):
+            if _cluster_starts(body):
                 seen[path] = None
     return list(seen)
 
@@ -95,6 +137,27 @@ def test_the_scan_finds_the_clusters_we_know_about() -> None:
     )
 
 
+def test_a_file_that_only_names_the_image_is_not_a_cluster_start() -> None:
+    """The mirror workflow copies the image; it must not be demanded a pin.
+
+    Both halves matter. The real file must be exempt (it names the image but
+    starts nothing), and the exemption must not be a blind spot: the same file
+    with a ``docker run`` of the image added must be flagged.
+    """
+    mirror = REPO_ROOT / ".github" / "workflows" / "mirror-ci-images.yml"
+    text = mirror.read_text(encoding="utf-8")
+    assert any(POSTGRES_IMAGE in line for line in _uncommented(text)), (
+        "mirror-ci-images.yml no longer names the image; this test would pass vacuously."
+    )
+    assert _cluster_starts(text) == []
+
+    started = text + "\n          docker run -d ghcr.io/tckdb/rdkit-cartridge-debian@sha256:abc\n"
+    assert len(_cluster_starts(started)) == 1
+    continued = text + "\n          docker run -d --name x \\\n            ghcr.io/tckdb/rdkit-cartridge-debian:t\n"
+    assert len(_cluster_starts(continued)) == 1
+    assert len(_cluster_starts("    services:\n      pg:\n        image: ghcr.io/tckdb/rdkit-cartridge-debian@sha256:abc\n")) == 1
+
+
 @pytest.mark.parametrize(
     "path", _files_that_start_a_cluster(), ids=lambda p: p.name
 )
@@ -103,7 +166,7 @@ def test_a_started_cluster_pins_utf8(path: Path) -> None:
     lines = _uncommented(path.read_text(encoding="utf-8"))
     body = "\n".join(lines)
 
-    image_starts = sum(1 for line in lines if POSTGRES_IMAGE in line)
+    image_starts = len(_cluster_starts(body))
     pins = sum(1 for line in lines if INITDB_PIN in line)
 
     assert INITDB_PIN in body, (
