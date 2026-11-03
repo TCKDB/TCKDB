@@ -508,10 +508,16 @@ def test_parity_and_caret_forms_of_the_wrong_atomic_term_are_flagged(client, ter
     assert codes & {TERM_CODE, GROUND_TERM_CODE}, codes
 
 
-@pytest.mark.parametrize("term", ["X2Pi", "3A1", "2Π"])
-def test_molecular_terms_on_an_atom_stay_silent(client, term):
-    """Not atomic notation: silence, not a false contradiction."""
+@pytest.mark.parametrize("term", ["3A1", "X 3A1", "X3Pi", "3Π"])
+def test_molecular_terms_on_an_atom_that_agree_on_multiplicity_stay_silent(client, term):
+    """Not atomic notation, and the stated triplet agrees: silence, not a false contradiction."""
     assert TERM_CODE not in _standalone(client, "[O]", 3, term, _levels((0.0, 5)))
+
+
+@pytest.mark.parametrize("term", ["X2Pi", "2Π", "X 1A1"])
+def test_molecular_terms_on_an_atom_that_state_another_multiplicity_are_flagged(client, term):
+    """The grammar is strict now, so a state letter no longer hides the multiplicity: a doublet on a triplet is read."""
+    assert TERM_CODE in _standalone(client, "[O]", 3, term, _levels((0.0, 5)))
 
 
 def test_missing_levels_message_gives_the_right_sign(client):

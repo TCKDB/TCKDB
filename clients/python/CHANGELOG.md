@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.183.0 - 2026-11-03
+
+Two refusal codes join `RejectionCode`: `ELECTRONIC_STATE_LABEL_INVALID` and `TERM_SYMBOL_INVALID` (both 422). The server now refuses an `electronic_state_label` or `term_symbol` that is not a recognised spectroscopic shape; see `tckdb-schemas` 0.149.0 for the accepted shapes. No client code changed.
+
 ## 0.182.0 - 2026-10-31
 
 A warning's `message` is TCKDB's sentence for its `code`.

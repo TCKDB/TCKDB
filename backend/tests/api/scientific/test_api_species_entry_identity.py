@@ -470,7 +470,7 @@ def test_derivation_covers_the_whole_unique_constraint():
                 "term_symbol": None,
                 "isotope_key": None,
             },
-            "excited T1",
+            "excited state T1",
         ),
         (
             {

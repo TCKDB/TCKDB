@@ -18,7 +18,7 @@ def test_species_entry_create_normalizes_identity_text_fields() -> None:
     assert schema.stereo_label is None
     assert schema.electronic_state_label == "X"
     assert schema.term_symbol_raw == "X^2Pi"
-    assert schema.term_symbol == "X2Pi"
+    assert schema.term_symbol == "X ²Π"
 
 
 @pytest.mark.parametrize("schema_cls", [SpeciesEntryCreate, SpeciesEntryUpdate])
@@ -46,7 +46,7 @@ def test_species_entry_update_normalizes_identity_text_fields() -> None:
 
     assert schema.stereo_label == "R"
     assert schema.electronic_state_label is None
-    assert schema.term_symbol == "A2Sigma+"
+    assert schema.term_symbol == "A ²Σ⁺"
 
 
 def test_species_entry_schema_allows_stereo_label_without_stereo_kind() -> None:
