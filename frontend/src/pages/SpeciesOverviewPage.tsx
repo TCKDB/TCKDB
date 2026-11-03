@@ -224,8 +224,8 @@ function Identity({ label, value, identifier, wide }: { label: string; value: st
  * pills used to read (`domain/recordFacets.ts`), so the "bare R" bug this
  * replaced (a heading collapsing to the single character "R" for an entry
  * distinguished only by stereochemistry) stays fixed: the heading is never
- * `species_entry_label` (a compact SERVER discriminator, not free text --
- * see that module's docstring) and always includes kind + state.
+ * `species_entry_label` (a joined server discriminator that includes
+ * depositor-typed parts) and always includes kind + state.
  *
  * `groupHeadingId` points at the enclosing `EntryStateGroup`'s own `<h3>`
  * ("ground electronic state", "excited electronic state") -- since every

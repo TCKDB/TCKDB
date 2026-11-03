@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { Link, MemoryRouter, Route, Routes } from "react-router-dom"
 import ReactionOverviewPage from "./ReactionOverviewPage"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
 
 const REACTION_REF = "rxn_naeqmg4l5wyqex5cl5tir2vt2y"
 const server = setupServer()
@@ -122,7 +123,7 @@ describe("ReactionOverviewPage", () => {
     // Post-review fix: every participant cell used to render ONLY the
     // formula link, dropping the ref/copy-button/stereo-label chip the
     // mock's own chooser table carried for all four facts.
-    it("each participant cell carries its own spe_ ref, a copy button, and its served stereo-label chip", async () => {
+    it("each participant cell carries its own spe_ ref, a copy button, and and no served label", async () => {
         server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
         page(REACTION_REF)
         await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
@@ -134,7 +135,7 @@ describe("ReactionOverviewPage", () => {
         expect(refCode.tagName).toBe("CODE")
         const cell = refCode.closest("td")!
         expect(cell.querySelector(".copy-button")).not.toBeNull()
-        expect(cell.textContent).toContain("(Z isomer)")
+        expect(cell.textContent).not.toContain("isomer")
     })
 
     // Round-2 review finding: the between-participant separator ("·") and
@@ -150,12 +151,10 @@ describe("ReactionOverviewPage", () => {
         await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
         const rows = screen.getAllByRole("row").slice(1)
         const productsCell = rows[0].querySelector('td[data-label="Products"]')!
-        // Exactly TWO "·" characters would appear if the chip used the same
-        // separator as a genuine third participant; there must be only ONE
-        // (the real reactant/product separator), with the label parenthesised.
+        // The served species_entry_label is never printed, so there is no chip to mistake for a product.
         const dotCount = (productsCell.textContent!.match(/·/g) ?? []).length
         expect(dotCount).toBe(1)
-        expect(productsCell.textContent).toContain("(Z isomer)")
+        expect(productsCell.textContent).not.toContain("isomer")
     })
 
     it("the identity header carries the record's own Equation (as deposited) fact", async () => {
@@ -277,5 +276,23 @@ describe("ReactionOverviewPage: what the page says it chose, and paging", () => 
         fireEvent.click(screen.getByRole("link", { name: "other reaction" }))
         expect(await screen.findByText("Showing 1\u20131 of 2 reaction entries.")).toBeVisible()
         expect(seen.at(-1)).toBe("rxn_other@0")
+    })
+})
+
+describe("ReactionOverviewPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the participants' joined species labels, and builds no stereo wording from them", async () => {
+        const planted = plantSentinels(searchResponse(), ["species_entry_label"])
+        expectPlanted(planted)
+        const { value } = planted
+        setAt(value, "records.0.products.1.species_entry_label", `${ADVERSARIAL.stereoMark} ${ADVERSARIAL.smilesWord}`)
+        setAt(value, "records.0.reactants.0.species_entry_label", ADVERSARIAL.joinedLabel)
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(value)))
+        page(REACTION_REF)
+        // The fixture reached the page: both reaction entries rendered with their participant refs.
+        expect(await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })).toBeVisible()
+        expect(screen.getAllByText("spe_cft35qrkqphdifcfqlcenqgdau").length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
     })
 })

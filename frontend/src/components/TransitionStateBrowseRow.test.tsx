@@ -3,6 +3,7 @@ import { cleanup, render, screen, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import type { TransitionStateBrowseRecord } from "../api/browseApi"
 import { TransitionStateBrowseRow } from "./TransitionStateBrowseRow"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 
 afterEach(cleanup)
 
@@ -422,5 +423,20 @@ describe("TransitionStateBrowseRow: design-system primitive adoption", () => {
         const row = document.querySelector(".ts-browse-row") as HTMLElement
         const evidence = within(row).getByText(/Evidence:/)
         expect(evidence).toHaveClass("browse-row-evidence")
+    })
+})
+
+describe("TransitionStateBrowseRow -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the typed label, note or unmapped SMILES, in text or any attribute", () => {
+        const planted = plantSentinels(record(), ["label", "note", "unmapped_smiles"])
+        expectPlanted(planted)
+        const { value } = planted
+        value.transition_state_entry.unmapped_smiles = ADVERSARIAL.unmappedSmiles
+        renderRow(value)
+        // The fixture reached the row: its entry ref link and equation rendered.
+        expect(screen.getAllByText(/rxe_deposit_one|A <=> B/).length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
     })
 })

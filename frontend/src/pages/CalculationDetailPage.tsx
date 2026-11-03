@@ -24,6 +24,7 @@ import {
     type CalculationWavefunctionDiagnostic,
     type OnDemandSectionToken,
 } from "../api/calculationApi"
+import { publicParameterValue } from "../domain/publicText"
 import { ArtifactDownloadButton } from "../components/ArtifactDownloadButton"
 import { CalculationDependencyGraph } from "../components/CalculationDependencyGraph"
 import { CompositeSchemeLink } from "../components/CompositeSchemeLink"
@@ -1562,7 +1563,7 @@ function ParametersSection({ calculationRef, available }: { calculationRef: stri
                                         printed. `raw_key`, `raw_value`, `section` and `unit` are strings the
                                         producer wrote (house rule, owner decision 2026-11-03). */}
                                     <td data-label="Key">{row.canonical_key ?? "unrecognised parameter"}</td>
-                                    <td data-label="Value">{row.canonical_key ? (row.canonical_value ?? "recorded") : "not shown"}</td>
+                                    <td data-label="Value">{row.canonical_key ? publicParameterValue(row.canonical_value) : "not shown"}</td>
                                 </tr>
                             ))}
                         </tbody>

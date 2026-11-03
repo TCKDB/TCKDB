@@ -16,6 +16,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 // rules for a test scoped to this one page.
 import "../design-system.css"
 import ReactionEntryPage from "./ReactionEntryPage"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
 
 const ENTRY_REF = "rxe_test1"
 const server = setupServer()
@@ -824,7 +825,7 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
         expect(link?.textContent).toBe("O (H2O)")
     })
 
-    it("a stereo isomerisation reads apart: the equation fact and the participant cells carry each entry's stereo", async () => {
+    it("never prints a participant's served species_entry_label, in the equation fact or the participant cells", async () => {
         const base = mockFull()
         handleFull({
             ...base,
@@ -843,11 +844,11 @@ describe("ReactionEntryPage -- Participants table: the reference has its own col
         const { container } = page()
         await screen.findByText("kin_test1")
         const fact = Array.from(container.querySelectorAll(".record-identity-header dt")).find((el) => el.textContent === "Equation (as deposited)")
-        expect(fact?.nextElementSibling?.textContent).toBe("CC=CC [Z] -> CC=CC [E]")
+        expect(fact?.nextElementSibling?.textContent).toBe("CC=CC -> CC=CC")
         const reactantCell = container.querySelector('table[aria-label="Reactant participants"] td[data-label="Species"]')
-        expect(reactantCell?.textContent).toContain("Z isomer")
+        expect(reactantCell?.textContent).not.toContain("isomer")
         const productCell = container.querySelector('table[aria-label="Product participants"] td[data-label="Species"]')
-        expect(productCell?.textContent).toContain("E isomer")
+        expect(productCell?.textContent).not.toContain("isomer")
     })
 
     function factText(container: HTMLElement): string | null | undefined {
@@ -1061,5 +1062,34 @@ describe("ReactionEntryPage -- the References disclosure names every kinetics re
 
         const refs = container.querySelector(".refs-disclosure")?.textContent ?? ""
         expect(refs.split("lot_multi1").length - 1).toBe(1)
+    })
+})
+
+describe("ReactionEntryPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the network name, the participants' joined labels, or atom-map and kinetics notes", async () => {
+        const base = mockFull()
+        const planted = plantSentinels(mockFull({
+            species: {
+                reactants: base.species.reactants.map((p) => ({ ...p, species_entry_label: "x" })) as unknown[],
+                products: base.species.products.map((p) => ({ ...p, species_entry_label: "x" })) as unknown[],
+            },
+            networks: [{
+                network_ref: "net_test1", name: "x", solve_temperature_min_k: 300, solve_temperature_max_k: 2000,
+                solve_pressure_min_bar: 0.01, solve_pressure_max_bar: 100, channel_count: 21, review: { status: "not_reviewed" },
+            }],
+            kinetics: [{ ...base.kinetics[0], note: "x" }],
+        }), ["name", "species_entry_label", "note"])
+        expectPlanted(planted)
+        const { value } = planted
+        setAt(value, "species.reactants.0.species_entry_label", `${ADVERSARIAL.stereoMark} ${ADVERSARIAL.smilesWord}`)
+        handleFull(value)
+        page()
+        // The fixture reached the page: the kinetics record, a participant ref and the network row rendered.
+        await screen.findByText("kin_test1")
+        expect(await screen.findByText("net_test1")).toBeVisible()
+        expect(screen.getAllByText("spe_water").length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
     })
 })

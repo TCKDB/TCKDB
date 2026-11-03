@@ -1,4 +1,3 @@
-import { publicSmiles } from "../domain/publicText"
 import type { ReactNode } from "react"
 import "../record-identity-header.css"
 import { CopyButton } from "./RefsDisclosure"
@@ -7,24 +6,6 @@ import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { facetChips } from "../domain/recordFacets"
 import type { EntryFacetAxes } from "../domain/recordFacets"
 import type { RecordIdentity } from "../domain/recordIdentity"
-
-/**
- * Breaks a SMILES-shaped string at `>>` (reaction arrow) and `.`
- * (disconnected-fragment separator) boundaries with `<wbr>` -- the
- * punctuation that already marks a sensible break point in this
- * vocabulary, so a long unmapped-SMILES string wraps at a token
- * boundary instead of `overflow-wrap: anywhere` picking an arbitrary
- * character mid-fragment.
- */
-function withSmilesBreaks(value: string): ReactNode {
-    const parts = value.split(/(>>|\.)/)
-    const nodes: ReactNode[] = []
-    parts.forEach((part, index) => {
-        nodes.push(part)
-        if (part === ">>" || part === ".") nodes.push(<wbr key={`smiles-wbr-${index}`} />)
-    })
-    return nodes
-}
 
 /**
  * The shared header block every record page (species entry, geometry,
@@ -246,17 +227,13 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
                                 header did that; the `<dt>` beside this `<dd>`
                                 already says "Species entry", so repeating it as
                                 the value said nothing a reader didn't already
-                                have), and never the raw `speciesEntryLabel` string
-                                alone as the sole text. See `SpeciesEntryLink`'s own
-                                docstring for why `species_entry_label` is a
-                                server-computed discriminator, not depositor free
-                                text, and why it is expanded through `stereoChip`
-                                rather than shown raw. */}
+                                have). `species_entry_label` is never printed:
+                                it joins in depositor-typed parts (see
+                                `SpeciesEntryLink`). */}
                             <SpeciesEntryLink
                                 speciesEntryRef={identity.speciesEntryRef}
                                 smiles={identity.canonicalSmiles}
                                 formula={identity.formula}
-                                speciesEntryLabel={identity.speciesEntryLabel}
                             />
                         </IdentityFact>
                     )}
@@ -315,9 +292,9 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
                     parsed or canonicalised), so it is printed only when every character of it
                     parses as SMILES syntax; any other string is depositor text and is not shown
                     (house rule, owner decision 2026-11-03). */}
-                <IdentityFact label="Reaction SMILES (unmapped)" wide copy={publicSmiles(identity.unmappedSmiles) ?? undefined}>
-                    {publicSmiles(identity.unmappedSmiles) ? <code>{withSmilesBreaks(publicSmiles(identity.unmappedSmiles)!)}</code> : <span className="record-identity-absent-inline">{identity.unmappedSmiles ? "not shown (not SMILES syntax)" : "not recorded"}</span>}
-                </IdentityFact>
+                {/* No unmapped SMILES: it is stored exactly as the depositor typed it, with no parsing
+                    or canonicalisation, so no check on its shape can show it safely. The title
+                    already carries the reaction equation (owner decision 2026-11-03). */}
                 <IdentityFact label="Charge / multiplicity">
                     {chargeDisplay(identity.charge)} / {spinDisplay(identity.multiplicity)}
                 </IdentityFact>

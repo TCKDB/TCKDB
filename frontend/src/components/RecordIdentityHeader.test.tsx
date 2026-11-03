@@ -75,10 +75,8 @@ describe("RecordIdentityHeader", () => {
         // empty value, not present at all.
         expect(screen.queryByText("SMILES")).not.toBeInTheDocument()
         expect(screen.queryByText("InChIKey")).not.toBeInTheDocument()
-        // Its own field, "Reaction SMILES (unmapped)", is present and
-        // says plainly that nothing was deposited -- not a blank cell.
-        expect(screen.getByText("Reaction SMILES (unmapped)")).toBeVisible()
-        expect(screen.getByText("not recorded")).toBeVisible()
+        // The unmapped SMILES is depositor-typed and unparsed: no such fact at all.
+        expect(screen.queryByText("Reaction SMILES (unmapped)")).not.toBeInTheDocument()
     })
 
     // House rule widened 2026-09: no depositor-typed labels on public
@@ -95,9 +93,12 @@ describe("RecordIdentityHeader", () => {
         expect(screen.queryByText("TS0")).not.toBeInTheDocument()
     })
 
-    it("renders a transition-state's unmapped SMILES when one was deposited", () => {
-        renderHeader({ identity: { ...tsIdentity, unmappedSmiles: "[CH2]OO[CH2]" } })
-        expect(screen.getByText("[CH2]OO[CH2]")).toBeVisible()
+    it("never renders a transition-state's unmapped SMILES, whatever it holds", () => {
+        for (const typed of ["[CH2]OO[CH2]", "PISS.ON.BOOBS", "DEPOSITOR_SENTINEL_smiles"]) {
+            const { unmount } = renderHeader({ identity: { ...tsIdentity, unmappedSmiles: typed } })
+            expect(document.body.innerHTML).not.toContain(typed)
+            unmount()
+        }
     })
 
     it("renders the 'no canonical SMILES' note for a transition-state identity by default", () => {
@@ -108,25 +109,6 @@ describe("RecordIdentityHeader", () => {
     it("omits the 'no canonical SMILES' note when explainTransitionStateIdentity=false -- the caller's own Reaction section covers it instead", () => {
         renderHeader({ identity: tsIdentity, explainTransitionStateIdentity: false })
         expect(screen.queryByText(/no canonical SMILES/i)).not.toBeInTheDocument()
-    })
-
-    it("inserts a <wbr> after '>>' and '.' in a multi-fragment unmapped SMILES so it wraps at token boundaries", () => {
-        const { container } = renderHeader({
-            identity: { ...tsIdentity, unmappedSmiles: "[CH3].[OH2]>>[CH4].[O]" },
-        })
-        const code = container.querySelector(".record-identity-facts code")
-        expect(code).not.toBeNull()
-        expect(code?.querySelectorAll("wbr").length).toBe(3)
-        expect(code?.textContent).toBe("[CH3].[OH2]>>[CH4].[O]")
-    })
-
-    it("spans the unmapped-SMILES fact across the full facts grid", () => {
-        const { container } = renderHeader({
-            identity: { ...tsIdentity, unmappedSmiles: "[CH3].[OH2]" },
-        })
-        const wideFact = container.querySelector(".record-identity-fact-wide")
-        expect(wideFact).not.toBeNull()
-        expect(wideFact?.textContent).toContain("Reaction SMILES (unmapped)")
     })
 
     it("renders no submission row at all when the key is absent (anonymous caller)", () => {
@@ -259,11 +241,11 @@ describe("RecordIdentityHeader", () => {
             expect(screen.queryByRole("button", { name: /copy inchikey/i })).not.toBeInTheDocument()
         })
 
-        it("a transition-state identity's own unmapped-SMILES and entry-ref facts get copy buttons too, once deposited", () => {
+        it("a transition-state identity's entry-ref fact gets a copy button, and no unmapped SMILES is offered", () => {
             renderHeader({
                 identity: { ...tsIdentity, unmappedSmiles: "[CH3].[OH2]", transitionStateEntryRef: "tse_demo" },
             })
-            expect(screen.getByRole("button", { name: /copy reaction smiles \(unmapped\)/i })).toBeVisible()
+            expect(screen.queryByRole("button", { name: /copy reaction smiles/i })).not.toBeInTheDocument()
             expect(screen.getByRole("button", { name: /copy transition state entry/i })).toBeVisible()
         })
 
@@ -311,12 +293,12 @@ describe("RecordIdentityHeader", () => {
         // `href` and asserted on `textContent` here instead, to check the
         // actual rendered text rather than the accname algorithm's own
         // normalisation of it.
-        it("shows SMILES-leads-formula-in-brackets plus the EXPANDED label ('R' -> 'R enantiomer'), reusing recordFacets.ts's own stereoChip wording", () => {
+        it("shows SMILES-leads-formula-in-brackets and never the served species_entry_label", () => {
             renderHeader({
                 identity: { ...speciesIdentity, formula: "CH3", speciesEntryLabel: "R" },
             })
             const link = document.querySelector('a[href="/species-entries/spe_demo"]')!
-            expect(link.textContent).toBe("[CH3] (CH3) · R enantiomer")
+            expect(link.textContent).toBe("[CH3] (CH3)")
         })
 
         it("shows SMILES-leads-formula-in-brackets alone when the identity carries no label", () => {

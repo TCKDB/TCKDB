@@ -1,11 +1,13 @@
 import type { ConformerProjection } from "../api/speciesEntryApi"
 
-// The archive's own auto-numbering convention for a basin: `conformer_<N>`. A
-// reader who doesn't know that convention reads it as an opaque token, not as
-// "the Nth conformer group" -- so it displays as "Conformer Group N" instead.
-// Anchored at both ends, and only the captured digits are ever printed: any
-// other label is depositor-typed text, which no public page prints (house
-// rule, owner decision 2026-11-03).
+// The archive's own auto-numbering of a basin: `conformer_<N>`, assigned by the
+// server when it creates the group (`conformer_resolution.py`,
+// `conformer_basin_store.py`, `conformer_reassignment.py` all set
+// `conformer_{highest+1}` and ignore a submitted label). So it is TCKDB's own
+// text, not depositor text. A reader who doesn't know the convention reads it as
+// an opaque token, so it displays as "Conformer Group N". Anchored at both ends
+// and only the digits are printed; a label that does not match (an old or
+// imported row) is never printed, and the group's ref stands in.
 const AUTO_NUMBERED_LABEL = /^conformer_(\d+)$/
 
 /**
@@ -13,9 +15,8 @@ const AUTO_NUMBERED_LABEL = /^conformer_(\d+)$/
  *
  * - A label matching the archive's `conformer_<N>` auto-numbering convention:
  *   displays as "Conformer Group N" (the digits are the only part printed).
- * - Anything else -- no label, a blank label, or any other deposited label --
- *   falls back to the group's own stable ref, verbatim. A deposited label is
- *   never printed: it is a string the depositor typed.
+ * - Anything else -- no label, a blank label, or a label that is not the
+ *   server's numbering -- falls back to the group's own stable ref, verbatim.
  */
 export function conformerLabel(conformer: ConformerProjection): string {
     const label = conformer.conformer_group.label

@@ -72,8 +72,9 @@ describe("FrequencyScaleFactorPage: the standalone scale-factor page", () => {
 describe("FrequencyScaleFactorPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
     it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
         // `level_of_theory.label` is rendered by the server from the level's own facets, not typed.
-        const { value, planted } = plantSentinels(mockResponse(), ["note"])
-        expectPlanted(planted, 1)
+        const planted = plantSentinels(mockResponse(), ["note"])
+        expectPlanted(planted)
+        const { value } = planted
         server.use(http.get("/api/v1/scientific/frequency-scale-factors/fsf_one", () => HttpResponse.json(value)))
         page()
         await screen.findByText("fundamental")

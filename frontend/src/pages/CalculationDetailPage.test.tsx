@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { AuthProvider } from "../components/AuthProvider"
 import CalculationDetailPage from "./CalculationDetailPage"
-import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 import { resetAllRequestCaches } from "../api/requestCache"
 import { bySummaryText } from "../test/disclosureQueries"
 // `design-system.css` is normally reached only via `index.css`'s `@import`
@@ -397,7 +397,7 @@ describe("CalculationDetailPage", () => {
         // comment).
         const identityHeader = document.querySelector(".record-identity-header") as HTMLElement
         const speciesEntryLink = identityHeader.querySelector('a[href="/species-entries/spe_demo"]')!
-        expect(speciesEntryLink.textContent).toBe("[CH3] (CH3) · ground state")
+        expect(speciesEntryLink.textContent).toBe("[CH3] (CH3)")
 
         // The calculation's own ref is visible at rest, first in the
         // identity block -- never behind the collapsed References
@@ -1891,15 +1891,18 @@ describe("CalculationDetailPage", () => {
 
 describe("CalculationDetailPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
     it("prints none of the fields a depositor typed, in text or in any attribute, once every section is open", async () => {
-        const { value, planted } = plantSentinels(mockRecord({
+        const planted = plantSentinels(mockRecord({
             conformer: {
                 conformer_observation_ref: "co_demo", conformer_group_ref: "cg_demo", conformer_group_label: null,
             },
         }), [
-            "note", "label", "filename", "raw_key", "raw_value", "section", "unit",
-            "energy_correction_scheme_name", "conformer_group_label",
+            "note", "filename", "raw_key", "raw_value", "section", "unit",
+            "energy_correction_scheme_name", "conformer_group_label", "canonical_value",
         ])
-        expectPlanted(planted, 8)
+        expectPlanted(planted)
+        const { value } = planted
+        // The owner's joined species label carries a typed state label that reads like a stereo mark.
+        ;(value.owner as { species_entry: { species_entry_label: string } }).species_entry.species_entry_label = ADVERSARIAL.joinedLabel
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: value })))
         const { container } = page()
         await findLoaded("Frequency")
@@ -1910,5 +1913,8 @@ describe("CalculationDetailPage -- no depositor-typed text (owner decision 2026-
         expect(screen.getAllByText("calc_freq_one").length).toBeGreaterThan(0)
 
         expectNoDepositorText()
+        expectNoAdversarialText()
+        // A recognised key's free-text value reads "recorded", never the string itself.
+        expect(screen.getAllByText("recorded").length).toBeGreaterThan(0)
     })
 })

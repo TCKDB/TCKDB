@@ -3,6 +3,7 @@ import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { act, cleanup, render, screen, within } from "@testing-library/react"
 import App from "../App"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
 
 const speciesRef = "spc_atp56uqux2ajao7hvckx7gx7ca"
 const entryRef = "spe_bcbdjwkip75yoziblpntwzblzu"
@@ -425,5 +426,27 @@ describe("species overview: entries the default visibility left out", () => {
         render(<App />)
         expect(await screen.findByRole("heading", { name: "CH3" })).toBeVisible()
         expect(screen.queryByText(/Not listed by default/)).not.toBeInTheDocument()
+    })
+})
+
+describe("species overview -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the typed state label, term symbol or joined species label", async () => {
+        const planted = plantSentinels(speciesPayload([
+            { ...groundEntry(), electronic_state_label: "x", term_symbol: "x", species_entry_label: "x" } as Record<string, unknown>,
+            { ...excitedEntry(), electronic_state_label: "x", term_symbol: "x", species_entry_label: "x" } as Record<string, unknown>,
+        ] as never), ["electronic_state_label", "term_symbol", "species_entry_label"])
+        expectPlanted(planted)
+        const { value } = planted
+        setAt(value, "records.0.entries.0.species_entry_label", `${ADVERSARIAL.stereoMark} ${ADVERSARIAL.smilesWord}`)
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(value)))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        // The fixture reached the page: the species heading and both entry refs rendered.
+        expect(await screen.findByRole("heading", { name: "CH3" })).toBeVisible()
+        expect(await screen.findByText(entryRef)).toBeVisible()
+        expect(await screen.findByText(excitedEntryRef)).toBeVisible()
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
     })
 })

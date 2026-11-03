@@ -7,7 +7,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 import "../design-system.css"
 import NetworkEntryPage from "./NetworkEntryPage"
 import { channelHandle } from "../domain/publicText"
-import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 
 const NETWORK_REF = "net_test1"
 const server = setupServer()
@@ -363,13 +363,14 @@ describe("NetworkEntryPage -- no depositor-typed text (owner decision 2026-11-03
     it("prints none of the fields a depositor typed, in text, SVG text, ids or any attribute", async () => {
         const detail = networkDetailFixture()
         // The server's state label embeds each participant's `species_entry_label`; plant the typed parts there.
-        const typedLabel = "excited DEPOSITOR_SENTINEL_state_label DEPOSITOR_SENTINEL_term_symbol"
+        const typedLabel = `${ADVERSARIAL.joinedLabel} ${ADVERSARIAL.smilesWord}`
         for (const state of (detail.record as { states: { composition: { participants: Record<string, unknown>[]; state_label: string } }[] }).states) {
             for (const participant of state.composition.participants) participant.species_entry_label = typedLabel
             state.composition.state_label = `${state.composition.state_label} (${typedLabel})`
         }
-        const { value, planted } = plantSentinels(detail, ["name", "description", "channel_key", "label", "note", "convention_note"])
-        expectPlanted(planted, 4)
+        const planted = plantSentinels(detail, ["name", "description", "channel_key", "label"])
+        expectPlanted(planted)
+        const { value } = planted
         handleNetworkDetail(value)
         const barrier = plantSentinels(
             { channel_key: "x", reaction_entry_ref: "rxe_test1", transition_state_entry_ref: "tse_test1", forward_barrier_kj_mol: 20, reverse_barrier_kj_mol: 70, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
@@ -391,6 +392,7 @@ describe("NetworkEntryPage -- no depositor-typed text (owner decision 2026-11-03
         await screen.findByRole("heading", { name: "k(T,P)" })
 
         expectNoDepositorText()
+        expectNoAdversarialText()
     })
 })
 

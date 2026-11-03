@@ -152,7 +152,7 @@ export default function AdminPage() {
                         <table className="data-table" aria-label="Accounts and roles">
                             <thead>
                                 <tr>
-                                    <th scope="col">Username</th>
+                                    <th scope="col">Username (as typed)</th>
                                     <th scope="col">Name (as typed)</th>
                                     <th scope="col">Affiliation (as typed)</th>
                                     <th scope="col">Joined</th>
@@ -179,7 +179,7 @@ export default function AdminPage() {
                                                 header alone is not enough -- every row's
                                                 select would announce as "Role". */}
                                             <select
-                                                aria-label={`Role for ${user.username}`}
+                                                aria-label={`Role for account ${user.id}`}
                                                 className="admin-role-select"
                                                 value={user.role}
                                                 disabled={pendingId === user.id}

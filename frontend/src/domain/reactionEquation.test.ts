@@ -11,8 +11,8 @@ describe("buildEquationSides", () => {
             [participant({ species_entry_ref: "spe_a", smiles: "O", formula: "H2O", participant_index: 0 })],
             [participant({ species_entry_ref: "spe_b", smiles: "C", formula: "CH4", participant_index: 0 })],
         )
-        expect(sides.reactants).toEqual([{ speciesEntryRef: "spe_a", speciesEntryLabel: null, smiles: "O", formula: "H2O", coefficient: 1 }])
-        expect(sides.products).toEqual([{ speciesEntryRef: "spe_b", speciesEntryLabel: null, smiles: "C", formula: "CH4", coefficient: 1 }])
+        expect(sides.reactants).toEqual([{ speciesEntryRef: "spe_a", smiles: "O", formula: "H2O", coefficient: 1 }])
+        expect(sides.products).toEqual([{ speciesEntryRef: "spe_b", smiles: "C", formula: "CH4", coefficient: 1 }])
     })
 
     // The case named in the brief: `[NH2] + [NH2] <=> NN` -- two SEPARATE
@@ -31,7 +31,7 @@ describe("buildEquationSides", () => {
         )
         expect(sides.reactants).toHaveLength(1)
         expect(sides.reactants[0]).toMatchObject({ speciesEntryRef: "spe_nh2", coefficient: 2 })
-        expect(sides.products).toEqual([{ speciesEntryRef: "spe_nn", speciesEntryLabel: null, smiles: "NN", formula: "H4N2", coefficient: 1 }])
+        expect(sides.products).toEqual([{ speciesEntryRef: "spe_nn", smiles: "NN", formula: "H4N2", coefficient: 1 }])
     })
 
     it("a single row already carrying stoichiometry 2 collapses to the same shape trivially", () => {
@@ -77,11 +77,12 @@ describe("buildEquationSides", () => {
         expect(sides.reactants).toHaveLength(2)
     })
 
-    it("carries species_entry_label and null-formula through unchanged", () => {
+    it("carries a null formula through and drops species_entry_label", () => {
         const sides = buildEquationSides(
             [participant({ species_entry_ref: "spe_a", smiles: "N=N", formula: null, species_entry_label: "Z", participant_index: 0 })],
             [],
         )
-        expect(sides.reactants[0]).toMatchObject({ formula: null, speciesEntryLabel: "Z", smiles: "N=N" })
+        expect(sides.reactants[0]).toMatchObject({ formula: null, smiles: "N=N" })
+        expect(sides.reactants[0]).not.toHaveProperty("speciesEntryLabel")
     })
 })

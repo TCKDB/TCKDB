@@ -478,9 +478,10 @@ describe("conformer card DOM structure feeds the CSS row-track pinning (design/c
 
 describe("ConformerSelector -- no depositor-typed text (owner decision 2026-11-03)", () => {
     it("labels each card by its Conformer Group number or its ref, never by the typed label, in text or any attribute", () => {
-        const first = plantSentinels(conformer({ conformer_group: { conformer_group_ref: "cg_first", label: "x" } }), ["label", "note"])
-        const second = plantSentinels(conformer({ conformer_group: { conformer_group_ref: "cg_second", label: "x" } }), ["label", "note"])
-        expectPlanted([...first.planted, ...second.planted], 2)
+        const first = plantSentinels(conformer({ conformer_group: { conformer_group_ref: "cg_first", label: "x" } }), ["label"])
+        const second = plantSentinels(conformer({ conformer_group: { conformer_group_ref: "cg_second", label: "x" } }), ["label"])
+        expectPlanted(first)
+        expectPlanted(second)
         renderSelector([first.value, second.value])
         // The fixture reached the component: both cards rendered, each named by its own ref.
         expect(screen.getAllByText("cg_first").length).toBeGreaterThan(0)

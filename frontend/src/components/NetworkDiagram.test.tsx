@@ -5,6 +5,7 @@ import "../design-system.css"
 import type { NetworkChannel, NetworkChannelBarrier, NetworkState, NetworkStateEnergy } from "../api/networkEntryApi"
 import { NetworkDiagram } from "./NetworkDiagram"
 import { channelHandle } from "../domain/publicText"
+import { DEPOSITOR_SENTINEL, expectNoDepositorText } from "../test/depositorSentinel"
 
 afterEach(() => cleanup())
 
@@ -594,3 +595,26 @@ describe("NetworkDiagram -- per-channel show/hide works in BOTH layout modes, no
  * then reverted and confirmed via `sha256sum -c` against a pre-mutation
  * checksum of `NetworkDiagram.tsx` taken before mutation #1.
  */
+
+describe("NetworkDiagram -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("scans the whole diagram: a typed channel key or state label is in no text, SVG text, id or attribute", () => {
+        // Channel keys must stay consistent between channels and barriers (the page joins on them), so each key is
+        // replaced everywhere by its own sentinel rather than planted field by field.
+        const typed = (value: unknown) => JSON.parse(
+            JSON.stringify(value)
+                .replaceAll('"channel_1"', `"${DEPOSITOR_SENTINEL}_channel_key_a"`)
+                .replaceAll('"channel_2"', `"${DEPOSITOR_SENTINEL}_channel_key_b"`)
+                .replaceAll('"channel_5"', `"${DEPOSITOR_SENTINEL}_channel_key_c"`),
+        )
+        const states = HYDRAZINE_STATES.map((state, index) => ({ ...state, label: `${DEPOSITOR_SENTINEL}_state_label_${index}` }))
+        const channels = typed(HYDRAZINE_CHANNELS) as NetworkChannel[]
+        const barriers = typed(HYDRAZINE_BARRIERS) as NetworkChannelBarrier[]
+        expect(JSON.stringify(channels)).toContain(`${DEPOSITOR_SENTINEL}_channel_key_a`)
+        const { container } = renderDiagram(states, channels, HYDRAZINE_ENERGIES, barriers)
+        // The fixture reached the component: the saddle point and its channel row rendered.
+        expect(container.querySelectorAll(".net-pes-ts-bar").length).toBeGreaterThan(0)
+        expect(container.querySelectorAll('td[data-label="Channel"]').length).toBe(HYDRAZINE_CHANNELS.length)
+
+        expectNoDepositorText()
+    })
+})

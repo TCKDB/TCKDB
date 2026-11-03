@@ -10,49 +10,15 @@
 // holds the few places where the frontend has to look inside a server string
 // that MIXES computed and typed parts, and keep only the computed ones.
 
-// A stereo descriptor token as the server writes it (DR-0038): one CIP mark per
-// stereo element, joined by commas -- `R`, `Sa`, `E,?`, `-`, `r`.
-const STEREO_ELEMENT = "(?:[RS][as]?|[EZ]|[rs-]|\\?)"
-const STEREO_TOKEN = new RegExp(`^${STEREO_ELEMENT}(?:,${STEREO_ELEMENT})*$`)
-
-// The words the server itself appends or substitutes.
-const SERVER_WORDS = new Set(["partial", "unresolved", "excited", "ground", "state"])
-
 // A term symbol in a recognisable shape: multiplicity, letter, optional g/u,
 // +/- or J subscript or prime (`3Σg-`, `2P3/2`, `^3P`, `3B1`, `2A'`). Anything else is typed text.
 const TERM_SYMBOL = /^[¹²³⁴⁵⁶⁷^]?[1-9]\d?[A-HSPDFIΣΠΔΦΓ](?:[_]?\d\/\d|\d|[gu]|[+\-−'′″"]){0,4}$/
-
-// SMILES, token by token. A bracket atom is parsed (isotope, element, chirality,
-// hydrogens, charge, atom class), so `[anything typed]` is not a SMILES atom.
-const BRACKET_ATOM = String.raw`\[(?:\d+)?(?:[A-Z][a-z]?|[bcnops]|se|as)(?:@{1,2}(?:TH|AL|SP|TB|OH)?\d*)?(?:H\d*)?(?:[+-]{1,3}\d*)?(?::\d+)?\]`
-const SMILES_ATOM = `(?:${BRACKET_ATOM}|Cl|Br|[BCNOPSFIbcnops*]|[-=#:/\\$().~@+.>]|%\\d\\d|\\d)`
-const SMILES_TOKEN = new RegExp(`^${SMILES_ATOM}+$`)
-const ISOTOPE_ATOM = /\[\d+[A-Z]/
 
 /** A term symbol, or `null` when what was typed is not shaped like one. */
 export function publicTermSymbol(value: string | null | undefined): string | null {
     if (!value) return null
     const trimmed = value.trim()
     return TERM_SYMBOL.test(trimmed) ? trimmed : null
-}
-
-/**
- * `species_entry_label` is built server-side from stereo, state kind,
- * `electronic_state_label`, `term_symbol` and `isotope_key`, space-joined. The
- * state label and the (unvalidated) term symbol are depositor-typed, so this
- * keeps only the tokens that are recognisably computed or in a validated
- * shape. `null` when nothing is left.
- */
-export function publicSpeciesEntryLabel(label: string | null | undefined): string | null {
-    if (!label) return null
-    const kept = label.split(/\s+/).filter((token) => {
-        if (token === "") return false
-        if (SERVER_WORDS.has(token)) return true
-        if (STEREO_TOKEN.test(token)) return true
-        if (TERM_SYMBOL.test(token)) return true
-        return SMILES_TOKEN.test(token) && ISOTOPE_ATOM.test(token)
-    })
-    return kept.length > 0 ? kept.join(" ") : null
 }
 
 /**
@@ -75,47 +41,70 @@ export function channelHandle(key: string | null | undefined): string | undefine
 }
 
 /**
- * A network state's one-string spelling (`N=N (E) + [H][H]`), rebuilt from the
- * participants with each `species_entry_label` reduced to its computed tokens.
- * The server's own `state_label` embeds the unreduced labels, so it is only
- * used when there are no participants to rebuild from.
+ * A network state's one-string spelling (`N=N + 2 [H][H]`), rebuilt from the
+ * participants' canonical SMILES and stoichiometry only. The server's own
+ * `state_label` embeds each participant's `species_entry_label`, which joins in
+ * depositor-typed parts, so it is only used when there are no participants.
  */
 export function publicStateLabel(composition: {
-    participants?: ReadonlyArray<{ canonical_smiles: string; species_entry_label?: string | null; stoichiometry: number }>
+    participants?: ReadonlyArray<{ canonical_smiles: string; stoichiometry: number }>
     participants_truncated?: boolean
     state_label: string
 }): string {
     const participants = composition.participants ?? []
     if (participants.length === 0) return composition.state_label
-    const parts = participants.map((participant) => {
-        const label = publicSpeciesEntryLabel(participant.species_entry_label)
-        let term = label ? `${participant.canonical_smiles} (${label})` : participant.canonical_smiles
-        if (participant.stoichiometry !== 1) term = `${participant.stoichiometry} ${term}`
-        return term
-    })
+    const parts = participants.map((participant) => (
+        participant.stoichiometry !== 1 ? `${participant.stoichiometry} ${participant.canonical_smiles}` : participant.canonical_smiles
+    ))
     if (composition.participants_truncated) parts.push("...")
     return parts.join(" + ")
 }
 
-/**
- * A SMILES string only if every character parses as SMILES (or reaction-SMILES)
- * syntax; otherwise `null`. For an unmapped SMILES the depositor supplied,
- * which the server stores as typed text and does not validate or canonicalise.
- */
-export function publicSmiles(value: string | null | undefined): string | null {
-    if (!value) return null
-    const trimmed = value.trim()
-    return trimmed !== "" && SMILES_TOKEN.test(trimmed) ? trimmed : null
-}
+const ELEMENTS = new Set((
+    "H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn Ga Ge As Se Br Kr "
+    + "Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu "
+    + "Hf Ta W Re Os Ir Pt Au Hg Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr"
+).split(" "))
 
 // An element or bond key as a parameter table prints it: `C`, `C-H`, `C=O`, `N#N`, `C-Cl2`.
-const CHEMISTRY_KEY = /^[A-Z][a-z]?(?:[-=#:~][A-Z][a-z]?\d*)*\d*$/
+const KEY_PART = /^([A-Z][a-z]?)(\d*)$/
 
 /**
- * A correction-parameter key (element, bond, component target) only when it is
- * shaped like one; otherwise `"unrecognised key"`. The keys are stored as the
- * depositor typed them.
+ * A correction-parameter key (element, bond, component target) only when every
+ * part is a real element symbol (optionally followed by a count) joined by bond
+ * characters; otherwise `"unrecognised key"`. The keys are stored as typed.
  */
 export function publicChemistryKey(value: string): string {
-    return CHEMISTRY_KEY.test(value) ? value : "unrecognised key"
+    const parts = value.split(/[-=#:~]/)
+    const ok = parts.length > 0 && parts.every((part) => {
+        const match = KEY_PART.exec(part)
+        return match !== null && ELEMENTS.has(match[1])
+    })
+    return ok ? value : "unrecognised key"
+}
+
+const NUMERIC = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/
+const BOOLEAN = /^(?:true|false)$/i
+
+/**
+ * A parameter value for a recognised key: printed only when it is a number or
+ * a boolean. `canonical_value` is stored as the producer wrote it, so any other
+ * string is shown as "recorded". The frontend is not served each key's closed
+ * set of enum tokens, so enum-valued settings read "recorded" too.
+ */
+export function publicParameterValue(value: string | null | undefined): string {
+    if (value == null) return "recorded"
+    const trimmed = value.trim()
+    return NUMERIC.test(trimmed) || BOOLEAN.test(trimmed) ? trimmed : "recorded"
+}
+
+// The closed set of Schoenflies point groups, with the spellings the parsers and
+// importers emit for the linear groups (`Cinfv`, `C*v`, `C∞v`).
+const POINT_GROUP = /^(?:C1|Cs|Ci|C[2-9]\d?[vh]?|D[2-9]\d?[dh]?|S[2-9]\d?|T[dh]?|O[h]?|I[h]?|C(?:inf|\*|∞)v|D(?:inf|\*|∞)h)$/
+
+/** A Schoenflies point group symbol, or `null` for any other string. */
+export function publicPointGroup(value: string | null | undefined): string | null {
+    if (!value) return null
+    const trimmed = value.trim()
+    return POINT_GROUP.test(trimmed) ? trimmed : null
 }
