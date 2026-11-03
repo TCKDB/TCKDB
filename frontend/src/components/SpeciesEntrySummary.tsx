@@ -4,6 +4,7 @@ import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
 import type { SpeciesIdentity } from "../domain/recordIdentity"
 import { words } from "../domain/provenanceFormat"
 import { stereoDescription } from "../domain/recordFacets"
+import { publicTermSymbol } from "../domain/publicText"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { Formula } from "./Formula"
 import { RecordIdentityHeader } from "./RecordIdentityHeader"
@@ -105,8 +106,9 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
         <ul className="entry-facts" aria-label="Record facts">
             <FactItem label="Entry kind / state" value={`${displayToken(entry.species_entry_kind)} / ${displayToken(entry.electronic_state_kind)}`} />
             <FactItem label="Archive availability" value={availabilityText(entry)} />
-            {entry.electronic_state_label && <FactItem label="Electronic state label" value={entry.electronic_state_label} />}
-            {entry.term_symbol && <FactItem label="Term symbol" value={entry.term_symbol} />}
+            {/* No `electronic_state_label`, and `term_symbol` only when it is shaped like one: both are
+                strings a depositor typed (house rule, owner decision 2026-11-03). */}
+            {publicTermSymbol(entry.term_symbol) && <FactItem label="Term symbol" value={publicTermSymbol(entry.term_symbol)!} />}
             {stereo && <FactItem label="Stereochemistry" value={stereo} />}
             {entry.stereo_smiles && <FactItem label="Stereo SMILES" value={entry.stereo_smiles} />}
             {entry.isotope_key && <FactItem label="Isotopologue" value={entry.isotope_key} />}

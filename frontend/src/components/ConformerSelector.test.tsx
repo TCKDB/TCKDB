@@ -3,6 +3,7 @@ import { cleanup, render, screen, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { ConformerSelector } from "./ConformerSelector"
+import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 
 afterEach(cleanup)
 
@@ -474,3 +475,18 @@ describe("conformer card DOM structure feeds the CSS row-track pinning (design/c
 // page (`/species-entries/spe_5nr24y2ssxokxlhsvymdwbpwmm`) before and
 // after this change -- see the PR body for that measurement's result.
 // ---------------------------------------------------------------------------
+
+describe("ConformerSelector -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("labels each card by its Conformer Group number or its ref, never by the typed label, in text or any attribute", () => {
+        const first = plantSentinels(conformer({ conformer_group: { conformer_group_ref: "cg_first", label: "x" } }), ["label"])
+        const second = plantSentinels(conformer({ conformer_group: { conformer_group_ref: "cg_second", label: "x" } }), ["label"])
+        expectPlanted(first)
+        expectPlanted(second)
+        renderSelector([first.value, second.value])
+        // The fixture reached the component: both cards rendered, each named by its own ref.
+        expect(screen.getAllByText("cg_first").length).toBeGreaterThan(0)
+        expect(screen.getAllByText("cg_second").length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+    })
+})

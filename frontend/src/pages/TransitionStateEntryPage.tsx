@@ -196,7 +196,6 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
         // Never served on this endpoint (see `TransitionStateEntryCoreBlock`)
         // -- a TS has no molecular-graph formula the way a species does.
         formula: null,
-        unmappedSmiles: entry.unmapped_smiles ?? null,
         charge: entry.charge,
         multiplicity: entry.multiplicity,
         transitionStateRef: ts?.transition_state_ref,
@@ -331,7 +330,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                         <dl className="kv-list">
                             <div><dt>Entry status</dt><dd>{statusLabel(entry.status)}</dd></div>
                             <div><dt>Deposited</dt><dd>{isoDate(entry.created_at)}</dd></div>
-                            {ts?.note && <div><dt>Transition state note</dt><dd>{ts.note}</dd></div>}
+                            {/* No `ts.note`: depositor free text (house rule, owner decision 2026-11-03). */}
                             {/* A plain fact, not a second pill -- see the
                                 comment on `RecordIdentityHeader`'s `pill`
                                 prop above. */}

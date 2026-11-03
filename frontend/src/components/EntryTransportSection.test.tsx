@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { EntryTransportSection } from "./EntryTransportSection"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 // `design-system.css` is normally reached only via `index.css`'s `@import`
 // -- see `ReactionEntryPage.test.tsx`'s identical import for why a
 // component test rendered in isolation needs it directly to exercise
@@ -329,5 +330,24 @@ describe("EntryTransportSection: paging", () => {
         page()
         await screen.findByText("trn_one")
         expect(screen.queryByRole("button", { name: "Next" })).not.toBeInTheDocument()
+    })
+})
+
+describe("EntryTransportSection -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the typed fields, and never wording built from the joined species label", async () => {
+        const planted = plantSentinels(mockResponse(), ["note"])
+        expectPlanted(planted)
+        const { value } = planted
+        for (const record of value.records as { species: { species_entry_label: string | null } }[]) {
+            record.species.species_entry_label = ADVERSARIAL.joinedLabel
+        }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(value)))
+        page()
+        // The fixture reached the page: the record's own ref and its Lennard-Jones sigma rendered.
+        await screen.findByText("trn_one")
+        expect(screen.getAllByText("trn_one").length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
     })
 })

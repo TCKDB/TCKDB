@@ -4,6 +4,8 @@ import { MemoryRouter } from "react-router-dom"
 import "../design-system.css"
 import type { NetworkChannel, NetworkChannelBarrier, NetworkState, NetworkStateEnergy } from "../api/networkEntryApi"
 import { NetworkDiagram } from "./NetworkDiagram"
+import { channelHandle } from "../domain/publicText"
+import { DEPOSITOR_SENTINEL, expectNoDepositorText } from "../test/depositorSentinel"
 
 afterEach(() => cleanup())
 
@@ -178,11 +180,12 @@ describe("NetworkDiagram -- channel_key never reaches a reader, by any route", (
         }
     })
 
-    it("channel_1 appears as a data-channel-key attribute and in the table, never inside <text>", () => {
+    it("channel_1 appears only as an opaque data-channel-key handle, and the table prints the channel's position", () => {
         const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
-        const line = container.querySelector('polyline[data-channel-key="channel_1"]')
+        const line = container.querySelector(`polyline[data-channel-key="${channelHandle("channel_1")}"]`)
         expect(line).not.toBeNull()
-        expect(Array.from(container.querySelectorAll('td[data-label="Channel"] code.data')).some((el) => el.textContent === "channel_1")).toBe(true)
+        expect(Array.from(container.querySelectorAll('td[data-label="Channel"] code.data')).some((el) => el.textContent === "1")).toBe(true)
+        expect(container.innerHTML).not.toContain("channel_1")
     })
 })
 
@@ -261,7 +264,7 @@ describe("NetworkDiagram -- a saddle is drawn as a level bar (TS bar), not a poi
 
     it("carries channel_1 only as a data attribute on the bar, never as its text", () => {
         const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
-        const bar = container.querySelector('.net-pes-svg .net-pes-ts-bar[data-channel-key="channel_1"]')
+        const bar = container.querySelector(`.net-pes-svg .net-pes-ts-bar[data-channel-key="${channelHandle("channel_1")}"]`)
         expect(bar).not.toBeNull()
         expect(bar!.textContent ?? "").not.toMatch(/channel_\d/)
     })
@@ -293,7 +296,7 @@ describe("NetworkDiagram -- a saddle is drawn as a level bar (TS bar), not a poi
         const hubLevel = container.querySelector('.net-pes-level-link[href="#state-row-hub"] .net-pes-level')!
         const hubCentreX = Number(hubLevel.getAttribute("x1")) + 34 // NETWORK_PES_LEVEL_HALF_WIDTH
         const hubY = hubLevel.getAttribute("y1")
-        const polyline = container.querySelector('.net-pes-svg polyline[data-channel-key="ch_right"]')!
+        const polyline = container.querySelector(`.net-pes-svg polyline[data-channel-key="${channelHandle("ch_right")}"]`)!
         const legPoint = polyline.getAttribute("points")!.split(" ")[0]
         expect(legPoint).not.toBe(`${hubCentreX},${hubY}`)
     })
@@ -418,7 +421,7 @@ describe("NetworkDiagram -- per-channel show/hide (invariant 1: offers exactly t
         // deposited barrier (HYDRAZINE_BARRIERS).
         const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
         expect(container.querySelectorAll(".net-pes-channel-option")).toHaveLength(1)
-        expect(container.querySelector('.net-pes-channel-option[data-channel-key="channel_1"]')).not.toBeNull()
+        expect(container.querySelector(`.net-pes-channel-option[data-channel-key="${channelHandle("channel_1")}"]`)).not.toBeNull()
     })
 
     it("renders no channel fieldset at all when no channel carries an accepted barrier", () => {
@@ -437,8 +440,8 @@ describe("NetworkDiagram -- per-channel show/hide labels by chemistry, never by 
         for (const text of texts) {
             expect(text).not.toMatch(/ch_left|ch_right/)
         }
-        expect(container.querySelector('.net-pes-channel-option[data-channel-key="ch_left"]')).not.toBeNull()
-        expect(container.querySelector('.net-pes-channel-option[data-channel-key="ch_right"]')).not.toBeNull()
+        expect(container.querySelector(`.net-pes-channel-option[data-channel-key="${channelHandle("ch_left")}"]`)).not.toBeNull()
+        expect(container.querySelector(`.net-pes-channel-option[data-channel-key="${channelHandle("ch_right")}"]`)).not.toBeNull()
     })
 })
 
@@ -449,7 +452,7 @@ describe("NetworkDiagram -- per-channel show/hide is a view filter only (invaria
             hub: levelBarAttrs(container, "hub"),
             left: levelBarAttrs(container, "left"),
             right: levelBarAttrs(container, "right"),
-            rightBar: container.querySelector('.net-pes-ts-bar[data-channel-key="ch_right"]')!,
+            rightBar: container.querySelector(`.net-pes-ts-bar[data-channel-key="${channelHandle("ch_right")}"]`)!,
         }
         const rightBarBefore = {
             x1: before.rightBar.getAttribute("x1"),
@@ -458,11 +461,11 @@ describe("NetworkDiagram -- per-channel show/hide is a view filter only (invaria
         }
         expect(container.querySelectorAll(".net-pes-svg .net-pes-saddle-link")).toHaveLength(2)
 
-        const checkbox = container.querySelector('.net-pes-channel-option[data-channel-key="ch_left"] input')!
+        const checkbox = container.querySelector(`.net-pes-channel-option[data-channel-key="${channelHandle("ch_left")}"] input`)!
         fireEvent.click(checkbox)
 
         // ch_left's own saddle is gone; ch_right's remains.
-        expect(container.querySelector('.net-pes-svg .net-pes-ts-bar[data-channel-key="ch_left"]')).toBeNull()
+        expect(container.querySelector(`.net-pes-svg .net-pes-ts-bar[data-channel-key="${channelHandle("ch_left")}"]`)).toBeNull()
         const saddleLinksAfter = container.querySelectorAll(".net-pes-svg .net-pes-saddle-link")
         expect(saddleLinksAfter).toHaveLength(1)
 
@@ -473,7 +476,7 @@ describe("NetworkDiagram -- per-channel show/hide is a view filter only (invaria
         expect(levelBarAttrs(container, "right")).toEqual(before.right)
 
         // ch_right's own saddle keeps its exact height (y1) and x position.
-        const rightBarAfter = container.querySelector('.net-pes-ts-bar[data-channel-key="ch_right"]')!
+        const rightBarAfter = container.querySelector(`.net-pes-ts-bar[data-channel-key="${channelHandle("ch_right")}"]`)!
         expect(rightBarAfter.getAttribute("x1")).toBe(rightBarBefore.x1)
         expect(rightBarAfter.getAttribute("x2")).toBe(rightBarBefore.x2)
         expect(rightBarAfter.getAttribute("y1")).toBe(rightBarBefore.y1)
@@ -486,7 +489,7 @@ describe("NetworkDiagram -- the 'N of M shown' count always matches what is actu
         expect(screen.getByText("Saddle points (2 of 2 shown)")).toBeVisible()
         expect(container.querySelectorAll(".net-pes-svg .net-pes-saddle-link")).toHaveLength(2)
 
-        const checkbox = container.querySelector('.net-pes-channel-option[data-channel-key="ch_left"] input')!
+        const checkbox = container.querySelector(`.net-pes-channel-option[data-channel-key="${channelHandle("ch_left")}"] input`)!
         fireEvent.click(checkbox)
 
         const legend = screen.getByText("Saddle points (1 of 2 shown)")
@@ -498,7 +501,7 @@ describe("NetworkDiagram -- the 'N of M shown' count always matches what is actu
 describe("NetworkDiagram -- hiding a channel never shrinks the accessible tables (invariant 3)", () => {
     it("the channel table still lists all 3 channels after the only drawable one is hidden", () => {
         const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
-        const checkbox = container.querySelector('.net-pes-channel-option[data-channel-key="channel_1"] input')!
+        const checkbox = container.querySelector(`.net-pes-channel-option[data-channel-key="${channelHandle("channel_1")}"] input`)!
         fireEvent.click(checkbox)
         expect(container.querySelectorAll('.net-pes-svg .net-pes-saddle-link')).toHaveLength(0)
         const channelTable = screen.getByRole("table", { name: "Channels in this network" })
@@ -515,7 +518,7 @@ describe("NetworkDiagram -- a filtered view says so, and how many of how many ar
 
     it("states the filtered count once a channel is hidden", () => {
         const { container } = renderDiagram(TWO_SADDLE_STATES, TWO_SADDLE_CHANNELS, TWO_SADDLE_ENERGIES, TWO_SADDLE_BARRIERS)
-        const checkbox = container.querySelector('.net-pes-channel-option[data-channel-key="ch_left"] input')!
+        const checkbox = container.querySelector(`.net-pes-channel-option[data-channel-key="${channelHandle("ch_left")}"] input`)!
         fireEvent.click(checkbox)
         expect(screen.getByText(/This view is filtered: 1 of 2 drawable saddle points is shown/)).toBeVisible()
     })
@@ -526,21 +529,21 @@ describe("NetworkDiagram -- per-channel show/hide works in BOTH layout modes, no
         const { container } = renderDiagram(TWO_SADDLE_STATES, TWO_SADDLE_CHANNELS, TWO_SADDLE_ENERGIES, TWO_SADDLE_BARRIERS)
         fireEvent.click(screen.getByLabelText(/By energy/))
         expect(container.querySelectorAll(".net-pes-channel-option")).toHaveLength(2)
-        const checkbox = container.querySelector('.net-pes-channel-option[data-channel-key="ch_left"] input')!
+        const checkbox = container.querySelector(`.net-pes-channel-option[data-channel-key="${channelHandle("ch_left")}"] input`)!
         fireEvent.click(checkbox)
-        expect(container.querySelector('.net-pes-svg .net-pes-ts-bar[data-channel-key="ch_left"]')).toBeNull()
+        expect(container.querySelector(`.net-pes-svg .net-pes-ts-bar[data-channel-key="${channelHandle("ch_left")}"]`)).toBeNull()
         expect(container.querySelectorAll(".net-pes-svg .net-pes-saddle-link")).toHaveLength(1)
     })
 
     it("a hidden channel stays hidden across a layout-mode switch, without re-clicking its checkbox", () => {
         const { container } = renderDiagram(TWO_SADDLE_STATES, TWO_SADDLE_CHANNELS, TWO_SADDLE_ENERGIES, TWO_SADDLE_BARRIERS)
-        const checkbox = container.querySelector('.net-pes-channel-option[data-channel-key="ch_left"] input')!
+        const checkbox = container.querySelector(`.net-pes-channel-option[data-channel-key="${channelHandle("ch_left")}"] input`)!
         fireEvent.click(checkbox)
-        expect(container.querySelector('.net-pes-svg .net-pes-ts-bar[data-channel-key="ch_left"]')).toBeNull()
+        expect(container.querySelector(`.net-pes-svg .net-pes-ts-bar[data-channel-key="${channelHandle("ch_left")}"]`)).toBeNull()
 
         fireEvent.click(screen.getByLabelText(/By energy/))
 
-        expect(container.querySelector('.net-pes-svg .net-pes-ts-bar[data-channel-key="ch_left"]')).toBeNull()
+        expect(container.querySelector(`.net-pes-svg .net-pes-ts-bar[data-channel-key="${channelHandle("ch_left")}"]`)).toBeNull()
         expect(container.querySelectorAll(".net-pes-svg .net-pes-saddle-link")).toHaveLength(1)
         expect((checkbox as HTMLInputElement).checked).toBe(false)
     })
@@ -554,7 +557,7 @@ describe("NetworkDiagram -- per-channel show/hide works in BOTH layout modes, no
  * | 1 | "draws exactly one saddle point (channel_1) though three channels exist" | In `NetworkDiagram.tsx`, changed `layout.saddles.map(...)` to `channels.map((c) => ({ ...saddleFromChannelIgnoringBarrier }))`-shaped stand-in: concretely, replaced `layout.saddles` with `layout.saddles.concat(layout.saddles)` (doubling) as a cheap one-line stand-in for "draws a saddle for a channel with no barrier" | RED -- `saddleLinks` had length 2, `toHaveLength(1)` failed |
  * | 2 | "draws no saddle point at all when NO channel carries a deposited barrier" | Passed `HYDRAZINE_BARRIERS` instead of `[]` as the 4th arg in this one test (simulating the component ignoring an empty barrier list) | RED -- `toHaveLength(0)` failed, length was 1 |
  * | 3 | "shows 274.7, never the bare forward barrier" | In `NetworkDiagram.tsx`, changed `{saddle.heightKjMol.toFixed(1)}` to `{(94.6).toFixed(1)}` (hardcoding the bare forward barrier value) | RED -- expected "274.7", got "94.6" |
- * | 4 | "channel_1 appears as a data-channel-key attribute" | Removed `data-channel-key={saddle.channelKey ?? undefined}` from the `<polyline>` | RED -- `querySelector('polyline[data-channel-key="channel_1"]')` was null |
+ * | 4 | "channel_1 appears as a data-channel-key attribute" | Removed `data-channel-key={saddle.channelKey ?? undefined}` from the `<polyline>` | RED -- `querySelector(`polyline[data-channel-key="${channelHandle("channel_1")}"]`)` was null |
  * | 5 | "renders each plotted state's state_label as SVG text, never the composition_hash" | Changed `level.label` to `level.compositionHash` in the level `<text>` | RED -- `svgTexts` no longer contained "NN"/"[NH-][NH3+]"; contained "hash_n1" instead, failing the negative assertion |
  * | 6 | "does not draw a level for hash_n6" | Removed the `resolvedInServedOrder` filter in `networkPesLayout.ts` (placed every state regardless of a deposited energy) | RED -- `levelLabels` contained "2 [NH2]" |
  * | 7 | "still renders both tables when no state carries a deposited energy at all" | Wrapped `<NetworkStatesTable .../>`/`<NetworkChannelsTable .../>` in `{layout && (...)}` in `NetworkDiagram.tsx` (regressing invariant 5) | RED -- `screen.getByRole("table", ...)` threw, element not found |
@@ -592,3 +595,26 @@ describe("NetworkDiagram -- per-channel show/hide works in BOTH layout modes, no
  * then reverted and confirmed via `sha256sum -c` against a pre-mutation
  * checksum of `NetworkDiagram.tsx` taken before mutation #1.
  */
+
+describe("NetworkDiagram -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("scans the whole diagram: a typed channel key or state label is in no text, SVG text, id or attribute", () => {
+        // Channel keys must stay consistent between channels and barriers (the page joins on them), so each key is
+        // replaced everywhere by its own sentinel rather than planted field by field.
+        const typed = (value: unknown) => JSON.parse(
+            JSON.stringify(value)
+                .replaceAll('"channel_1"', `"${DEPOSITOR_SENTINEL}_channel_key_a"`)
+                .replaceAll('"channel_2"', `"${DEPOSITOR_SENTINEL}_channel_key_b"`)
+                .replaceAll('"channel_5"', `"${DEPOSITOR_SENTINEL}_channel_key_c"`),
+        )
+        const states = HYDRAZINE_STATES.map((state, index) => ({ ...state, label: `${DEPOSITOR_SENTINEL}_state_label_${index}` }))
+        const channels = typed(HYDRAZINE_CHANNELS) as NetworkChannel[]
+        const barriers = typed(HYDRAZINE_BARRIERS) as NetworkChannelBarrier[]
+        expect(JSON.stringify(channels)).toContain(`${DEPOSITOR_SENTINEL}_channel_key_a`)
+        const { container } = renderDiagram(states, channels, HYDRAZINE_ENERGIES, barriers)
+        // The fixture reached the component: the saddle point and its channel row rendered.
+        expect(container.querySelectorAll(".net-pes-ts-bar").length).toBeGreaterThan(0)
+        expect(container.querySelectorAll('td[data-label="Channel"]').length).toBe(HYDRAZINE_CHANNELS.length)
+
+        expectNoDepositorText()
+    })
+})

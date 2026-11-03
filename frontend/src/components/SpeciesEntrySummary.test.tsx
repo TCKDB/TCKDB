@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom"
 import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
 import { bySummaryText } from "../test/disclosureQueries"
 import { EntryIdentity } from "./SpeciesEntrySummary"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 
 afterEach(cleanup)
 
@@ -106,11 +107,12 @@ describe("EntryIdentity: no pill boxes, every fact exactly once", () => {
 
         rerender(
             <MemoryRouter>
-                <EntryIdentity entry={baseEntry({ term_symbol: "T1", isotope_key: "13C1" })} />
+                <EntryIdentity entry={baseEntry({ term_symbol: "3Σg-", electronic_state_label: "DEPOSITOR_SENTINEL_state", isotope_key: "13C1" })} />
             </MemoryRouter>,
         )
         const facts = screen.getByRole("list", { name: "Record facts" })
-        expect(within(facts).getByText("Term symbol").nextElementSibling).toHaveTextContent("T1")
+        expect(within(facts).getByText("Term symbol").nextElementSibling).toHaveTextContent("3Σg-")
+        expect(document.body.innerHTML).not.toContain("DEPOSITOR_SENTINEL")
         expect(within(facts).getByText("Isotopologue").nextElementSibling).toHaveTextContent("13C1")
     })
 })
@@ -145,5 +147,23 @@ describe("EntryIdentity: own ref inline, first, never duplicated in References",
         expect(within(disclosure).getByText("spc_demo")).toBeVisible()
         // Exactly one occurrence of the entry's own ref anywhere on the page.
         expect(screen.getAllByText("spe_demo")).toHaveLength(1)
+    })
+})
+
+describe("EntryIdentity -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the typed state label, term symbol or joined label, and builds no stereo wording from them", () => {
+        const planted = plantSentinels(baseEntry({
+            electronic_state_kind: "excited", electronic_state_label: "x", term_symbol: "x", species_entry_label: "x",
+        } as Partial<SpeciesEntryProjection>), ["electronic_state_label", "term_symbol", "species_entry_label"])
+        expectPlanted(planted)
+        const entry = planted.value as unknown as Record<string, unknown>
+        entry.species_entry_label = `${ADVERSARIAL.stereoMark} ${ADVERSARIAL.smilesWord}`
+        renderEntry(entry as unknown as SpeciesEntryProjection)
+        // The fixture reached the component: the entry ref and the excited state kind rendered.
+        expect(screen.getAllByText("spe_demo").length).toBeGreaterThan(0)
+        expect(screen.getAllByText(/excited/i).length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
     })
 })

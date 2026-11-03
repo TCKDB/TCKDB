@@ -128,8 +128,7 @@ export function ReactionBrowseRow({ record }: { record: ReactionBrowseRecord }) 
             <div className="browse-row-headline">
                 <p className="reaction-browse-row-title">
                     {/* Deliberately NO `aria-label` here: the equation is the
-                        Link's own visible content (`species_entry_label` chip
-                        and the arrow's "reacts reversibly with"/"reacts to
+                        Link's own visible content (the arrow's "reacts reversibly with"/"reacts to
                         form" aria-label included), so the browser's own
                         accname computation already reads as an English
                         sentence -- e.g. "H2N + H2N reacts reversibly with

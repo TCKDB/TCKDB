@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import ConformerGroupPage from "./ConformerGroupPage"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -424,7 +425,7 @@ describe("ConformerGroupPage", () => {
     // formula `span` differently from raw `textContent` -- queried by
     // `href` and asserted on `textContent` here instead (see
     // `RecordIdentityHeader.test.tsx`'s identical comment).
-    it("shows SMILES-leads-formula-in-brackets plus the EXPANDED label ('R' -> 'R enantiomer') instead of the raw discriminator", async () => {
+    it("shows SMILES-leads-formula-in-brackets and never the served species_entry_label", async () => {
         const labelledPayload = {
             record: {
                 ...payload.record,
@@ -436,9 +437,7 @@ describe("ConformerGroupPage", () => {
         await screen.findByRole("heading", { name: "Conformer basin" })
         const identityDl = document.querySelector(".basin-header dl.kv-list") as HTMLElement
         const link = identityDl.querySelector('a[href="/species-entries/spe_demo"]')!
-        expect(link.textContent).toBe("[CH3] (CH3) · R enantiomer")
-        // Never the bare raw token as the whole link text.
-        expect(link.textContent).not.toBe("R")
+        expect(link.textContent).toBe("[CH3] (CH3)")
     })
 
     it("shows SMILES-leads-formula-in-brackets alone with no label suffix when the entry has no deposited label", async () => {
@@ -645,5 +644,22 @@ describe("ConformerGroupPage", () => {
         )
         // Never the abbreviated, operator-vocabulary form.
         expect(message.textContent).not.toMatch(/\d+s\b/)
+    })
+})
+
+describe("ConformerGroupPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
+        const planted = plantSentinels(payload, ["label", "note"])
+        expectPlanted(planted)
+        const { value } = planted
+        ;(value.record.species as { species_entry_label?: string }).species_entry_label = `${ADVERSARIAL.joinedLabel} ${ADVERSARIAL.smilesWord}`
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(value)))
+
+        page()
+        expect(await screen.findByRole("heading", { name: "Conformer basin" })).toBeVisible()
+        expect(screen.getAllByText("cg_demo").length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
     })
 })
