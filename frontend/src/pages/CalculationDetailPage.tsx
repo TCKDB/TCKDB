@@ -548,7 +548,6 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                                     <dt>Literature</dt>
                                     <dd>
                                         <LiteratureCitation literature={literature} />
-                                        {literature.year ? ` (${literature.year})` : ""}
                                     </dd>
                                 </div>
                             )}

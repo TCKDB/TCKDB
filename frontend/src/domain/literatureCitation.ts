@@ -11,7 +11,7 @@ export type CitationLiterature = {
     literature_ref?: string | null
     title?: string | null
     title_source?: string | null
-    doi?: string | null
+    doi?: string | null // accepted so callers can pass a whole record; deliberately never printed
     isbn?: string | null
 }
 
@@ -20,24 +20,22 @@ export const TITLE_NOT_VERIFIED = "Title not verified"
 export interface PublicCitation {
     /** The registry-resolved title, or `null` when it may not be shown. */
     title: string | null
-    /** Identifier text to show instead: DOI, else ISBN, else the public ref. */
+    /** What to print instead: ISBN (validated server-side), else the TCKDB public ref. Never the DOI. */
     identifier: string | null
-    /** A link target for the identifier, when one exists (DOIs only). */
-    href: string | null
 }
 
+// A DOI is deliberately not an option here: the server only trims and lower-cases it, so it is depositor-typed
+// text (`10.1/ visit spam.example`) and, like a typed title, must not reach a public page unverified.
 export function publicCitation(lit: CitationLiterature): PublicCitation {
     const verified = lit.title_source === "resolved_metadata" && !!lit.title
-    const doi = lit.doi?.trim() || null
     const isbn = lit.isbn?.trim() || null
     return {
         title: verified ? (lit.title as string) : null,
-        identifier: doi ? `doi:${doi}` : isbn ? `ISBN ${isbn}` : (lit.literature_ref ?? null),
-        href: doi ? `https://doi.org/${encodeURI(doi)}` : null,
+        identifier: isbn ? `ISBN ${isbn}` : (lit.literature_ref ?? null),
     }
 }
 
-/** Plain-string form for places that cannot hold a link (select options). */
+/** Plain-string form for places that cannot hold markup (select options). */
 export function publicCitationText(lit: CitationLiterature): string | null {
     const c = publicCitation(lit)
     return c.title ?? c.identifier

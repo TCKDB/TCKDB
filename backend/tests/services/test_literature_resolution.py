@@ -370,6 +370,34 @@ def test_created_row_carries_the_source_and_a_later_match_never_rewrites_it(
             assert second.title_source == LiteratureTitleSource.depositor_supplied
 
 
+def test_crossref_returning_an_empty_title_list_is_treated_as_no_title(monkeypatch) -> None:
+    """Crossref can answer ``"title": []``; that used to raise IndexError. It
+    means "no title", so the typed one stands and is marked as typed."""
+    import requests
+
+    from app.services import literature_metadata
+
+    class _Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"message": {"DOI": "10.1000/empty", "title": [], "issued": {"date-parts": [[2020]]}}}
+
+    monkeypatch.setattr(requests, "get", lambda *a, **k: _Response())
+    metadata = literature_metadata._fetch_doi_metadata_uncached("10.1000/empty")
+    assert metadata is not None and metadata["title"] is None
+
+    monkeypatch.setattr(
+        "app.services.literature_resolution.fetch_doi_metadata", lambda doi: metadata
+    )
+    resolved = resolve_literature_submission(
+        None, LiteratureUploadRequest(doi="10.1000/empty", title="Typed Title")
+    )
+    assert resolved.title == "Typed Title"
+    assert resolved.title_source == LiteratureTitleSource.depositor_supplied
+
+
 # --- trailing-punctuation stripping: linear, and the same answer as the regex it replaced ------------------
 
 

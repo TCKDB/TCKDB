@@ -201,7 +201,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                         <dt>Literature source</dt>
                                         <dd>
                                             {record.literature
-                                                ? <><LiteratureCitation literature={record.literature} />{record.literature.year ? ` (${record.literature.year})` : ""}</>
+                                                ? <LiteratureCitation literature={record.literature} />
                                                 : "not recorded"}
                                         </dd>
                                     </div>

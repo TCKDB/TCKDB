@@ -73,21 +73,29 @@ describe("a literature title on a public page", () => {
     it("is shown when it was resolved from DOI/ISBN metadata (the positive case: the test can see the title)", async () => {
         await renderWith({ ...base, title_source: "resolved_metadata" })
         expect(document.body.innerHTML).toContain(SENTINEL)
-        expect(screen.queryByText(new RegExp(TITLE_NOT_VERIFIED))).not.toBeInTheDocument()
+        expect(screen.queryByText(TITLE_NOT_VERIFIED)).not.toBeInTheDocument()
     })
 
-    it("is withheld when the depositor typed it; the DOI is a link and the page says the title is not verified", async () => {
+    it("is withheld when the depositor typed it; the page prints the public ref and says the title is not verified", async () => {
         await renderWith({ ...base, title_source: "depositor_supplied" })
         expectNoSentinel()
-        const link = screen.getByRole("link", { name: "doi:10.1000/xyz" })
-        expect(link).toHaveAttribute("href", "https://doi.org/10.1000/xyz")
-        expect(screen.getByText(new RegExp(TITLE_NOT_VERIFIED))).toBeVisible()
+        expect(screen.getByText(/lit_abc/)).toBeVisible()
+        expect(screen.getByText(TITLE_NOT_VERIFIED)).toBeVisible()
+    })
+
+    it("never prints or links the DOI of an unverified record: it is depositor-typed text", async () => {
+        const doi = "10.1/ DEPOSITOR_SENTINEL_doi visit spam.example"
+        await renderWith({ ...base, doi, title_source: "depositor_supplied" })
+        expectNoSentinel()
+        expect(document.body.innerHTML).not.toContain("spam.example")
+        expect(document.body.innerHTML).not.toContain("doi.org")
+        expect(screen.queryByRole("link", { name: /10\.1/ })).not.toBeInTheDocument()
     })
 
     it("is withheld when its origin was never recorded (null)", async () => {
         await renderWith({ ...base, title_source: null })
         expectNoSentinel()
-        expect(screen.getByText(new RegExp(TITLE_NOT_VERIFIED))).toBeVisible()
+        expect(screen.getByText(TITLE_NOT_VERIFIED)).toBeVisible()
     })
 
     it("is withheld when the field is absent from the response entirely", async () => {

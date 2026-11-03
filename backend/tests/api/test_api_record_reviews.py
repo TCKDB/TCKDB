@@ -90,7 +90,7 @@ class TestDirectUploadsCreateNotReviewedSubmissions:
     """
 
     def test_conformer_upload_creates_submission_and_not_reviewed_rows(
-        self, client, db_session,
+        self, client, db_session
     ):
         before_subs = (
             db_session.scalar(select(func.count()).select_from(Submission)) or 0
@@ -168,7 +168,7 @@ class TestDirectUploadsCreateNotReviewedSubmissions:
         assert SubmissionAuditEventKind.ingestion_succeeded in kinds
 
     def test_thermo_upload_creates_submission_and_not_reviewed_row(
-        self, client, db_session,
+        self, client, db_session
     ):
         resp = client.post(
             "/api/v1/uploads/thermo",
@@ -213,7 +213,7 @@ class TestDirectUploadsCreateNotReviewedSubmissions:
         assert link is not None
 
     def test_computed_species_creates_submission_and_not_reviewed_rows(
-        self, client, db_session,
+        self, client, db_session
     ):
         # Minimal valid computed-species bundle with one conformer + opt
         # primary calc.
@@ -635,7 +635,7 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
         return resp.json()["id"]
 
     def test_a_thermo_row_names_the_species_entry_it_is_shown_on(
-        self, client, db_session,
+        self, client, db_session
     ):
         """The measured defect, at the wire.
 
@@ -701,7 +701,7 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
         assert all(row["container_type"] is None for row in rows)
 
     def test_a_correction_that_cannot_be_named_still_says_where_it_applies(
-        self, client, db_session,
+        self, client, db_session
     ):
         """164 of the 385, and the case the whole field is justified by.
 
