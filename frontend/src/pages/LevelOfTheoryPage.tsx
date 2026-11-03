@@ -465,9 +465,8 @@ function CorrectionSchemeBox({ scheme }: { scheme: EnergyCorrectionSchemeRecord 
                         </dd>
                     </div>
                 )}
-                {scheme.energy_correction_scheme.note && (
-                    <div><dt>Note</dt><dd>{scheme.energy_correction_scheme.note}</dd></div>
-                )}
+                {/* No `energy_correction_scheme.note`: depositor free text (house rule,
+                    owner decision 2026-11-03). */}
                 {/* ADR 0021 / P6: the level the scheme's own frequencies were
                     computed at is part of its identity. Always a row: an
                     unstated one reads "not recorded", never the scheme's

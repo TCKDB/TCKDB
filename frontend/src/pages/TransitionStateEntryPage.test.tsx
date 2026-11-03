@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event"
 import { Link, MemoryRouter, Route, Routes } from "react-router-dom"
 import TransitionStateEntryPage from "./TransitionStateEntryPage"
 import { bySummaryText } from "../test/disclosureQueries"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 
 const ENTRY_REF = "tse_aq5ktxlu27nvul3hmdwpuyuz4e"
 
@@ -156,10 +157,9 @@ describe("TransitionStateEntryPage", () => {
         expect(screen.queryByText("Label", { selector: "dt" })).not.toBeInTheDocument()
         expect(screen.queryByText("TS0")).not.toBeInTheDocument()
 
-        // The unmapped SMILES the API actually serves is shown, relabeled...
-        const unmappedRow = screen.getByText("Reaction SMILES (unmapped)").closest("div")
-        expect(unmappedRow).not.toBeNull()
-        expect(within(unmappedRow as HTMLElement).getByText("C1=C[C]2C=CCC2C=C1>>C1=CC2=C(C=C1)CC=C2.[H]")).toBeVisible()
+        // The unmapped SMILES is depositor-typed and unparsed: not shown at all.
+        expect(screen.queryByText("Reaction SMILES (unmapped)")).not.toBeInTheDocument()
+        expect(document.body.innerHTML).not.toContain("C1=C[C]2C=CCC2C=C1>>")
 
         // ...and no plain "SMILES" row (the species-entry identity field)
         // is ever rendered for a transition state -- it has no canonical
@@ -1319,5 +1319,23 @@ describe("transition-state entry page: siblings when this entry is the only reco
         await user.click(screen.getByRole("link", { name: "go elsewhere" }))
         expect(await screen.findByText("Showing 1–50 of 120 saddle points.")).toBeVisible()
         expect(seen.at(-1)).toBe("0")
+    })
+})
+
+describe("TransitionStateEntryPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the fields a depositor typed, in text or in any attribute", async () => {
+        const planted = plantSentinels(mockRecord(), ["label", "note", "unmapped_smiles"])
+        expectPlanted(planted)
+        const { value } = planted
+        // A string that is not SMILES but is shaped like it, in the one field the page used to print.
+        ;(value.transition_state_entry as { unmapped_smiles: string }).unmapped_smiles = ADVERSARIAL.unmappedSmiles
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json({ record: value })))
+        page()
+        // The fixture reached the page: the reaction equation heading and the entry ref rendered.
+        await screen.findByRole("heading", { name: "C1=C[C]2C=CCC2C=C1 <=> C1=Cc2ccccc2C1 + [H]" })
+        expect(screen.getAllByText(ENTRY_REF).length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
     })
 })

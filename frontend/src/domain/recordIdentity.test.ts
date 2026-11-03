@@ -18,7 +18,7 @@ describe("identityFromGeometry", () => {
             kind: "transition_state_entry",
             transition_state_entry: {
                 transition_state_ref: "ts_1", transition_state_entry_ref: "tse_1",
-                formula: null, unmapped_smiles: null, charge: 0, multiplicity: 2,
+                formula: null, charge: 0, multiplicity: 2,
             },
         })
         expect(result.kind).toBe("transition_state_entry")

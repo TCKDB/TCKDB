@@ -104,12 +104,8 @@ function Ledger({ group }: { group: ConformerGroup }) {
                             widened 2026-09: no depositor-typed labels on public
                             pages at all, not even demoted to a secondary fact;
                             see the "Group ref" fact's own comment below). This is
-                            NOT the same treatment `species_entry_label` gets --
-                            that field is server-COMPUTED from real chemistry
-                            facets (stereo/electronic-state/isotope), not
-                            depositor free text, which is why it still renders
-                            (expanded through `stereoChip`,
-                            `domain/recordFacets.ts`) while this one does not. */}
+                            `species_entry_label` is not printed either: it joins in
+                            depositor-typed parts. */}
                         {/* SHOULD-FIX-7 (PR B review): wrapped in the SAME
                             `.record-identity-header` div `RecordIdentityHeader`
                             itself renders, not left as bare siblings -- an
@@ -207,7 +203,6 @@ function Ledger({ group }: { group: ConformerGroup }) {
                                             speciesEntryRef={species.species_entry_ref}
                                             smiles={species.canonical_smiles}
                                             formula={species.formula}
-                                            speciesEntryLabel={species.species_entry_label}
                                         />
                                     </dd>
                                 </div>
@@ -472,7 +467,7 @@ function ObservationCard({ observation }: { observation: Observation }) {
                     <small>{core.scientific_origin ?? "origin not recorded"}</small>
                 </div>
             </header>
-            {core.note && <p className="observation-note">{core.note}</p>}
+            {/* No `core.note`: depositor free text is never printed on a public page. */}
             {calculations.length ? (
                 <CalculationTable
                     calculations={calculations}

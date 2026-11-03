@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { MemoryRouter } from "react-router-dom"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { EntryThermoSection } from "./EntryThermoSection"
+import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/depositorSentinel"
 import { PageSectionsProvider } from "./PageSections"
 import { TableOfContents } from "./TableOfContents"
 // `design-system.css` is normally reached only via `index.css`'s `@import`
@@ -556,8 +557,9 @@ describe("EntryThermoSection", () => {
         await screen.findByText("thm_beta")
         const betaCard = screen.getByText("thm_beta").closest("article") as HTMLElement
         expect(within(betaCard).getByText("Group-additivity estimation")).toBeVisible()
-        expect(within(betaCard).getByText("Benson v2 (2.0)")).toBeVisible()
-        expect(within(betaCard).getByText("C/H3")).toBeVisible()
+        expect(within(betaCard).getByText("gas_1")).toBeVisible()
+        // The scheme name/version/commit and the group label are depositor free text: not printed.
+        for (const typed of ["Benson v2", "2.0", "abc123", "C/H3"]) expect(betaCard.innerHTML).not.toContain(typed)
 
         // thm_alpha has group_additivity: null — no section at all, not a
         // heading over an explicit "not recorded" line.
@@ -1701,5 +1703,21 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
         await screen.findByText("thm_alpha")
         expect(screen.getByText(/Every thermo record deposited for this entry, each shown independently/)).toBeVisible()
         expect(screen.getByText(/Every deposited thermo record's own evaluated points/)).toBeVisible()
+    })
+})
+
+describe("EntryThermoSection -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the typed fields: group-additivity scheme and group labels, notes, conformer labels", async () => {
+        const planted = plantSentinels(mockResponse(), ["scheme_name", "scheme_version", "code_commit", "group_label", "note"])
+        expectPlanted(planted)
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(planted.value)))
+        const typedGroups = plantSentinels(conformerGroups, ["label"])
+        expectPlanted(typedGroups)
+        page(typedGroups.value[0], typedGroups.value)
+        // The fixture reached the page: the record refs and the group-additivity section rendered.
+        await screen.findByText("thm_beta")
+        expect(screen.getByText("Group-additivity estimation")).toBeVisible()
+
+        expectNoDepositorText()
     })
 })

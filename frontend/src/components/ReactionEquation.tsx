@@ -2,7 +2,6 @@ import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 import { SpeciesFace } from "./Formula"
 import { buildEquationSides, type EquationParticipant, type EquationParticipantInput } from "../domain/reactionEquation"
-import { stereoChip } from "../domain/recordFacets"
 
 const NBSP = " "
 
@@ -139,9 +138,6 @@ function EquationParticipantFace({
             formulaOnly={formulaOnly}
         />
     )
-    const chip = participant.speciesEntryLabel && (
-        <span className="reaction-equation-chip"> · {stereoChip(participant.speciesEntryLabel)}</span>
-    )
     return (
         <>
             {participant.coefficient > 1 && `${participant.coefficient} `}
@@ -149,13 +145,11 @@ function EquationParticipantFace({
                 ? (
                     <Link to={`/species-entries/${participant.speciesEntryRef}`}>
                         {face}
-                        {chip}
                     </Link>
                 )
                 : (
                     <>
                         {face}
-                        {chip}
                     </>
                 )}
         </>

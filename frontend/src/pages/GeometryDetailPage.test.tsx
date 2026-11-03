@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import GeometryDetailPage from "./GeometryDetailPage"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
 import { ANGSTROM_TO_BOHR } from "../domain/geometryXyz"
 // `design-system.css` is normally reached only via `index.css`'s `@import`
 // -- see `ReactionEntryPage.test.tsx`'s identical import for why a page
@@ -145,7 +146,7 @@ describe("GeometryDetailPage identity (#321)", () => {
         await screen.findByRole("heading", { name: "CH4 geometry" })
         expect(screen.queryByText("SMILES")).not.toBeInTheDocument()
         expect(screen.queryByText("InChIKey")).not.toBeInTheDocument()
-        expect(screen.getByText("Reaction SMILES (unmapped)")).toBeVisible()
+        expect(screen.queryByText("Reaction SMILES (unmapped)")).not.toBeInTheDocument()
         // This page does not opt out of `RecordIdentityHeader`'s
         // `explainTransitionStateIdentity` default (only
         // `TransitionStateEntryPage`, which has its own Reaction-section
@@ -995,5 +996,31 @@ describe("GeometryDetailPage", () => {
             expect(viewerMaxWidth).toBe("")
             expect(getComputedStyle(table).maxWidth).not.toBe(proseMaxWidth)
         })
+    })
+})
+
+describe("GeometryDetailPage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("prints none of the typed identity fields, in text or in any attribute", async () => {
+        const planted = plantSentinels(mockRecord({
+            identity: {
+                kind: "transition_state_entry", species_entry: null,
+                transition_state_entry: {
+                    transition_state_ref: "ts_demo", transition_state_entry_ref: "tse_demo", label: "x", note: "x",
+                    formula: null, unmapped_smiles: "x", species_entry_label: "x", charge: 0, multiplicity: 2,
+                },
+                ambiguous_owners: [],
+            },
+        }), ["label", "note", "unmapped_smiles", "species_entry_label"])
+        expectPlanted(planted)
+        const { value } = planted
+        setAt(value, "identity.transition_state_entry.unmapped_smiles", ADVERSARIAL.unmappedSmiles)
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(value)))
+        page()
+        // The fixture reached the page: the geometry's ref and its transition-state entry ref rendered.
+        await screen.findByRole("heading", { name: "CH4 geometry" })
+        expect(screen.getAllByText("tse_demo").length).toBeGreaterThan(0)
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
     })
 })
