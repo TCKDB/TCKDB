@@ -300,11 +300,14 @@ def _method_part(token: str) -> str | None:
 
 
 def _grid_value(raw: str) -> str | None:
-    """The canonical grid for ``Grid=<raw>``: a named grid, the digits of a numeric grid, else the lower-cased name."""
+    """The canonical grid for ``Grid=<raw>``: a documented grid name, or the digits of a numeric grid; else ``None``.
+
+    A name Gaussian does not document stays a raw row with no canonical key.
+    """
     cleaned = raw.strip().lower().lstrip("+")
-    if not cleaned:
-        return None
-    return _GRID_NAMES.get(cleaned, cleaned)
+    if cleaned in _GRID_NAMES:
+        return _GRID_NAMES[cleaned]
+    return cleaned if cleaned.lstrip("-").isdigit() else None
 
 
 def _split_keyword(token: str) -> tuple[str, str, str] | None:
@@ -375,6 +378,8 @@ def _emit_keyword_options(written: str, key: str, body: str) -> list[dict]:
             ck, cv = _lookup_canonical(section, name)
             if ck == "grid.quality" and name.lower() == "grid" and value is not None:
                 cv = _grid_value(value)
+                if cv is None:
+                    ck = None
             rows.append(_row(name, value if value is not None else "true", ck, cv, section, None if value else "bool"))
         return rows
 
