@@ -22,6 +22,7 @@ from tckdb_schemas.hessian_method_detection import (  # noqa: F401  (re-exported
 )
 
 from app.parser_registry import PARSERS
+from app.services.parameter_closed_values import CLOSED_VALUES, canonical_or_none, normalise_solvent
 
 # ---------------------------------------------------------------------------
 # Canonical key mapping — initial seed (core + secondary tier)
@@ -62,9 +63,31 @@ _CANONICAL_MAP: dict[tuple[str, str], tuple[str, str | None]] = {
         ("freq", option): ("freq.hessian_method", method.value)
         for option, method in GAUSSIAN_FREQ_HESSIAN_OPTIONS.items()
     },
-    # integral section
+    # integral section. ``Int=UltraFine``, ``Int=(Grid=UltraFine)`` and ``Integral=UltraFineGrid`` state the
+    # same grid, so the bare names and the ``Grid=`` value land on one canonical value (see
+    # :func:`_grid_value`, which also reads ``Grid=<digits>``).
     ("integral", "grid"): ("grid.quality", None),
     ("integral", "acc2e"): ("integral.accuracy", None),
+    **{
+        ("integral", name): ("grid.quality", value)
+        for name, value in {
+            "coarse": "coarse", "coarsegrid": "coarse",
+            "sg1": "sg1", "sg1grid": "sg1",
+            "fine": "fine", "finegrid": "fine",
+            "ultrafine": "ultrafine", "ultrafinegrid": "ultrafine",
+            "superfine": "superfine", "superfinegrid": "superfine",
+        }.items()
+    },
+    # Gaussian's ``Integral`` relativistic options (G09 manual, Integral, "Relativistic calculations"):
+    # DKH, DKH2 and DouglasKrollHess are synonyms; NoDKH and NonRelativistic request the default Hamiltonian.
+    **{
+        ("integral", name): ("relativistic.hamiltonian", value)
+        for name, value in {
+            "dkh": "dkh2", "dkh2": "dkh2", "douglaskrollhess": "dkh2",
+            "dkh0": "dkh0", "dkhso": "dkhso", "resc": "resc",
+            "nodkh": "none", "nonrelativistic": "none",
+        }.items()
+    },
     # general section
     ("general", "guess"): ("guess.strategy", None),
     # symmetry section
@@ -143,14 +166,16 @@ def _extract_link0(text: str) -> list[dict]:
             value = m.group(2).strip()
             ck, cv = _lookup_canonical("resource", directive)
             params.append(
-                {
-                    "raw_key": directive,
-                    "canonical_key": ck,
-                    "raw_value": value,
-                    "canonical_value": cv,
-                    "section": "resource",
-                    "value_type": _guess_value_type(value),
-                }
+                _mirror_free_form_value(
+                    {
+                        "raw_key": directive,
+                        "canonical_key": ck,
+                        "raw_value": value,
+                        "canonical_value": cv,
+                        "section": "resource",
+                        "value_type": _guess_value_type(value),
+                    }
+                )
             )
     return params
 
@@ -210,6 +235,185 @@ def _emit_scf_convergence_failure_ignored(iop_value: str) -> list[dict]:
 _IOP_TRUST_FLAG_EMITTERS: dict[str, callable] = {
     "5/13": _emit_scf_convergence_failure_ignored,
 }
+
+
+# ---------------------------------------------------------------------------
+# Keywords that carry options: Int/Integral, SCF, Opt, EmpiricalDispersion, SCRF, Stable
+# ---------------------------------------------------------------------------
+
+#: ``keyword`` spellings whose options are read into a section. ``Int`` is Gaussian's short form of ``Integral``.
+_SECTIONED_KEYWORDS = {"int": "integral", "integral": "integral", "scf": "scf", "opt": "opt"}
+
+_KEYWORD_SPLIT = re.compile(r"^([A-Za-z][A-Za-z0-9]*)(?:=(.*)|(\(.*\)))?$", re.DOTALL)
+
+#: Named grids and their pruned-grid size, so ``Int=UltraFine`` and ``Int=Grid=99590`` are one value. Only the
+#: sizes Gaussian documents for a named grid are listed; any other size is kept as its digits.
+_GRID_SIZES = {"75302": "fine", "99590": "ultrafine", "150974": "superfine"}
+_GRID_NAMES = {
+    name: value
+    for (section, name), (key, value) in _CANONICAL_MAP.items()
+    if section == "integral" and key == "grid.quality" and value is not None
+}
+
+_DISPERSION_VALUES = {"gd2": "d2", "gd3": "d3_zero", "gd3bj": "d3_bj", "none": "none"}
+_SCRF_MODELS = {"smd": "smd", "cpcm": "cpcm", "pcm": "iefpcm", "iefpcm": "iefpcm"}
+#: Every SCRF option that is a flag rather than a solvent name, so a solvent name that itself contains a comma
+#: (``n,n-dimethylformamide``) can be rejoined.
+_SCRF_FLAGS = frozenset({
+    "smd", "cpcm", "pcm", "iefpcm", "ipcm", "scipcm", "dipole", "onsager", "read", "check", "iterative", "externaliteration",
+    "nodis", "dis", "norep", "rep", "nocav", "cav", "nocavity", "cavity", "dipolem", "solute", "volume", "tabulated",
+})
+_CORE_OPTIONS = {"full": "all_electron", "fc": "frozen_core", "frozencore": "frozen_core", "window": "window"}
+#: Correlated methods whose route option can carry the frozen-core choice. Not ``Pop=(Full)``, which means something else.
+_CORE_METHOD_PREFIXES = (
+    "mp2", "mp3", "mp4", "mp5", "ccsd", "ccd", "cid", "cisd", "qcisd", "bd", "eomccsd", "ci",
+    "ump2", "ump3", "ump4", "rmp2", "ccsdt",
+)
+_FUNCTION_TYPES = {
+    "5d": ("basis.d_function_type", "spherical"),
+    "6d": ("basis.d_function_type", "cartesian"),
+    "7f": ("basis.f_function_type", "spherical"),
+    "10f": ("basis.f_function_type", "cartesian"),
+}
+
+
+def _grid_value(raw: str) -> str | None:
+    """The canonical grid for ``Grid=<raw>``: a named grid, a known size mapped to its name, or the digits."""
+    cleaned = raw.strip().lower().lstrip("+")
+    if cleaned in _GRID_NAMES:
+        return _GRID_NAMES[cleaned]
+    if cleaned.lstrip("-").isdigit():
+        return _GRID_SIZES.get(cleaned, cleaned)
+    return None
+
+
+def _split_keyword(token: str) -> tuple[str, str, str] | None:
+    """``(keyword as written, lower-cased keyword, option text)`` for ``Key``, ``Key=value``, ``Key=(..)``, ``Key(..)``."""
+    match = _KEYWORD_SPLIT.match(token)
+    if match is None:
+        return None
+    written = match.group(1)
+    body = match.group(2) if match.group(2) is not None else match.group(3)
+    body = (body or "").strip()
+    if body.startswith("(") and body.endswith(")"):
+        body = body[1:-1].strip()
+    return written, written.lower(), body
+
+
+def _split_options(body: str) -> list[tuple[str, str | None]]:
+    """Top-level options of ``body`` as ``(name, value or None)``; commas and spaces separate, parentheses group."""
+    pieces: list[str] = []
+    current: list[str] = []
+    depth = 0
+    for char in body:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        if depth == 0 and char in ", \t":
+            if current:
+                pieces.append("".join(current))
+                current = []
+        else:
+            current.append(char)
+    if current:
+        pieces.append("".join(current))
+
+    options: list[tuple[str, str | None]] = []
+    for piece in pieces:
+        if "=" in piece:
+            name, value = piece.split("=", 1)
+            options.append((name.strip(), value.strip()))
+        elif options and options[-1][0].lower() == "solvent" and piece.lower() not in _SCRF_FLAGS:
+            options[-1] = (options[-1][0], f"{options[-1][1]},{piece}")
+        else:
+            options.append((piece.strip(), None))
+    return options
+
+
+def _row(raw_key: str, raw_value: str, ck: str | None, cv: str | None, section: str, value_type: str | None = None) -> dict:
+    """One parameter row, its canonical key kept only when the value is in the key's closed set."""
+    ck, cv = canonical_or_none(ck, cv)
+    return {
+        "raw_key": raw_key,
+        "canonical_key": ck,
+        "raw_value": raw_value,
+        "canonical_value": cv,
+        "section": section,
+        "value_type": value_type or _guess_value_type(raw_value),
+    }
+
+
+def _emit_keyword_options(written: str, key: str, body: str) -> list[dict]:
+    """Rows for a keyword whose options are parameters (``SCF=Tight``, ``Int=(Grid=UltraFine)``, ``Opt(TS)``, ...)."""
+    options = _split_options(body)
+    rows: list[dict] = []
+
+    if key in _SECTIONED_KEYWORDS:
+        section = _SECTIONED_KEYWORDS[key]
+        for name, value in options:
+            ck, cv = _lookup_canonical(section, name)
+            if ck == "grid.quality" and name.lower() == "grid" and value is not None:
+                cv = _grid_value(value)
+            rows.append(_row(name, value if value is not None else "true", ck, cv, section, None if value else "bool"))
+        return rows
+
+    if key == "empiricaldispersion":
+        if options:
+            name, value = options[0]
+            text = value if value is not None else name
+            rows.append(_row(written, text, "dispersion.correction", _DISPERSION_VALUES.get(text.lower()), "general", "enum"))
+        return rows
+
+    if key == "scrf":
+        for name, value in options:
+            lowered = name.lower()
+            if lowered == "solvent" and value is not None:
+                rows.append(_row(name, value, "solvation.solvent", normalise_solvent(value), "scrf", "string"))
+            elif lowered in _SCRF_MODELS and value is None:
+                rows.append(_row(name, "true", "solvation.model", _SCRF_MODELS[lowered], "scrf", "bool"))
+            else:
+                rows.append(_row(name, value if value is not None else "true", None, None, "scrf"))
+        return rows
+
+    if key == "stable":
+        wants_optimisation = any(name.lower() == "opt" for name, _ in options)
+        rows.append(
+            _row(written, body or "true", "scf.stability_analysis", "optimize" if wants_optimisation else "check_only", "stability", "enum")
+        )
+        return rows
+
+    return rows
+
+
+def _emit_core_options(method_part: str) -> list[dict]:
+    """Frozen-core rows for a correlated method written with route options (``MP2(Full)``, ``CCSD(T,FC)``)."""
+    split = _split_keyword(method_part)
+    if split is None or not split[1].startswith(_CORE_METHOD_PREFIXES):
+        return []
+    rows: list[dict] = []
+    for name, value in _split_options(split[2]):
+        core = _CORE_OPTIONS.get(name.lower())
+        if core is not None:
+            rows.append(_row(name, value if value is not None else "true", "core.frozen", core, "method_options", "enum"))
+    return rows
+
+
+def _mirror_free_form_value(row: dict) -> dict:
+    """Give a canonical row with no mapped value its raw value, as the ORCA parser does.
+
+    ``MaxCycle=512`` has a canonical key and no enumeration to map to; leaving ``canonical_value`` empty made the
+    row unreadable to anything that reads canonical values only. ``IOp`` rows are excluded: their raw key carries
+    the coordinate, so one canonical value would stand for many different options.
+    """
+    if (
+        row.get("canonical_key") is not None
+        and row.get("canonical_value") is None
+        and row["canonical_key"] != "internal_option.iop"
+        and row["canonical_key"] not in CLOSED_VALUES
+    ):
+        row["canonical_value"] = row["raw_value"]
+    return row
 
 
 def _parse_route_tokens(route: str) -> list[dict]:
@@ -282,6 +486,10 @@ def _parse_route_tokens(route: str) -> list[dict]:
     # Remove IOp(...) from route for further parsing
     route = _IOP_RE.sub("", route).strip()
 
+    # ``keyword (options)`` and ``keyword = value`` are one token each.
+    route = re.sub(r"\s*=\s*", "=", route)
+    route = re.sub(r"(?<=[\w)])\s+\(", "(", route)
+
     # Now tokenize the remaining route.
     # Tokens are separated by spaces, but parenthesized groups must be kept together.
     tokens = _tokenize_route(route)
@@ -291,9 +499,24 @@ def _parse_route_tokens(route: str) -> list[dict]:
         if not token:
             continue
 
-        # method/basis pattern: word/word (no = sign, contains /)
-        if "/" in token and "=" not in token and "(" not in token:
-            # This is level-of-theory, not a parameter — skip (belongs in LoT)
+        # method/basis pattern: ``method/basis``. The method and basis are level-of-theory, not parameters,
+        # but the method can carry the frozen-core choice (``CCSD(T,Full)/cc-pVTZ``), which is.
+        if "/" in token and "=" not in token.split("/", 1)[0]:
+            params.extend(_emit_core_options(token.split("/", 1)[0]))
+            continue
+
+        split = _split_keyword(token)
+        if split is not None:
+            written, keyword, body = split
+            if keyword in _SECTIONED_KEYWORDS or keyword in ("empiricaldispersion", "scrf", "stable"):
+                params.extend(_emit_keyword_options(written, keyword, body))
+                continue
+            if keyword.startswith(_CORE_METHOD_PREFIXES):
+                params.extend(_emit_core_options(token))
+                continue
+        if token.lower() in _FUNCTION_TYPES:
+            key, value = _FUNCTION_TYPES[token.lower()]
+            params.append(_row(token, "true", key, value, "basis", "enum"))
             continue
 
         # key=(sub-options) pattern
@@ -436,7 +659,7 @@ def _parse_route_tokens(route: str) -> list[dict]:
             }
         )
 
-    return params
+    return [_mirror_free_form_value(p) for p in params]
 
 
 

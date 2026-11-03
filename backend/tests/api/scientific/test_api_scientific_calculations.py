@@ -2872,6 +2872,21 @@ def test_detail_include_parameters_returns_summaries(client, db_session):
     assert "parameter_id" not in row
 
 
+def test_detail_include_parameters_says_where_each_row_came_from(client, db_session):
+    _, _, calc = _make_species_owned_calc(db_session)
+    _attach_calc_parameter(db_session, calculation=calc, raw_key="typed", raw_value="1")
+    db_session.add(
+        CalculationParameter(
+            calculation_id=calc.id, raw_key="read", raw_value="2", source=ParameterSource.parser
+        )
+    )
+    db_session.flush()
+    rows = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}?include=parameters"
+    ).json()["record"]["parameters"]
+    assert {row["raw_key"]: row["source"] for row in rows} == {"typed": "upload", "read": "parser"}
+
+
 def test_detail_include_parameters_returns_empty_list_when_none(
     client, db_session
 ):

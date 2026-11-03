@@ -32,6 +32,7 @@ from app.db.models.common import (
     ImaginaryModeDisposition,
     IRCDirection,
     LegacyCompositeShape,
+    ParameterSource,
     PathSearchMethod,
     RecordReviewStatus,
     ScanCoordinateKind,
@@ -1016,9 +1017,12 @@ class CalculationParameterSummary(BaseModel):
     Carries both the raw (software-specific) and canonical (normalized)
     key/value pairs plus the small bag of parser metadata that's
     public-safe (``section``, ``value_type``, ``unit``,
-    ``parameter_index``). The full vocab row (descriptions, classification
-    flags) is intentionally not inlined; callers that need it can fetch
-    the vocab via a separate read.
+    ``parameter_index``) and ``source``, which says where the row came from:
+    ``parser`` (read from an uploaded input deck or output log), ``upload``
+    (typed by the depositor) or ``curated``. A reader comparing two rows for
+    the same key needs it to tell a declaration from an observation. The full
+    vocab row (descriptions, classification flags) is intentionally not
+    inlined; callers that need it can fetch the vocab via a separate read.
 
     ``parameter_id`` is subject to the Phase D internal-ID visibility
     policy and is stripped by the strip helper when the deployment
@@ -1034,6 +1038,7 @@ class CalculationParameterSummary(BaseModel):
     value_type: str | None = None
     unit: str | None = None
     parameter_index: int | None = None
+    source: ParameterSource | None = None
     created_at: datetime | None = None
 
 

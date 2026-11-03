@@ -289,6 +289,10 @@ PRESEEDED_TABLES: Mapping[
         frozenset(
             (key,)
             for key in (
+                "basis.d_function_type",
+                "basis.f_function_type",
+                "core.frozen",
+                "dispersion.correction",
                 "f12.ansatz",
                 "freq.hessian_method",
                 "grid.quality",
@@ -307,12 +311,17 @@ PRESEEDED_TABLES: Mapping[
                 "parallel.nproc",
                 "parallel.nproc_shared",
                 "pno.truncation",
+                "relativistic.hamiltonian",
+                "ri.approximation",
                 "scf.convergence",
                 "scf.convergence_failure_action",
                 "scf.convergence_failure_ignored",
                 "scf.direct",
                 "scf.fallback",
                 "scf.max_cycles",
+                "scf.stability_analysis",
+                "solvation.model",
+                "solvation.solvent",
                 "symmetry.disabled",
             )
         ),

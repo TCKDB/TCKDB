@@ -22,6 +22,14 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Gaussian and ORCA decks are read for grid, SCF, dispersion, solvation, RI, frozen core and relativity (2026-11-03)
+
+- **Client: `tckdb-client` and `tckdb-schemas` unchanged.** One new Alembic revision, `e5b1c8a3d702`, inserts nine rows into `calculation_parameter_vocab` and nothing else: no column, no level-of-theory identity change, no rewrite of a stored parameter row. No new environment variable. Stage 1 of the per-calculation-parameter work (part 1 of 2).
+- **What was wrong.** `Int=UltraFine`, `Int=(Grid=UltraFine)`, `SCF=Tight` without parentheses, `Opt(TS)`, `EmpiricalDispersion=GD3BJ`, `SCRF=(SMD,Solvent=Water)`, `Stable=Opt`, `5D`, `MP2(Full)`, and on the ORCA side `RIJCOSX`, `NoRI`, `D3BJ`, `NoFrozenCore`, `CPCM(Water)`, `DKH2` were either dropped or stored as raw rows with no canonical key, and `grid.quality` never had a canonical value. A depositor could not be checked against their deck on any of them.
+- **What changed.** Each spelling now lands on a canonical key with a value from a closed set (`app/services/parameter_closed_values.py`); a spelling the parser does not know stays a raw row with no key. `Grid=99590` and `UltraFine` are one value. A key that is not stated has no row: the program default is never assumed. Keys added: `dispersion.correction`, `solvation.model`, `solvation.solvent`, `ri.approximation`, `core.frozen`, `relativistic.hamiltonian`, `basis.d_function_type`, `basis.f_function_type`, `scf.stability_analysis`.
+- **Decided: no `basis.auxiliary` key.** `def2/J`, `def2/JK` and `/C` tokens stay raw rows (section `basis_aux`); `level_of_theory.aux_basis` is their home and a second one would let the two disagree.
+- **Read API.** `include=parameters` (and the entity read) now carries `source` (`parser`, `upload` or `curated`) on each parameter row.
+
 ## The centre between two allene axes is read as `-`, `r` or `s` (2026-11-02)
 
 - **Client: `tckdb-client` and `tckdb-schemas` unchanged.** No migration, no schema change, no new environment variable, no vocabulary change (`r` and `s` were already tokens). Part 3 of #832 (part of, not closing). Existing data is dev data: an entry stored with `?` at such a centre is not rewritten, and a new deposit of the same molecule now computes a different key; the two are not reconciled.
