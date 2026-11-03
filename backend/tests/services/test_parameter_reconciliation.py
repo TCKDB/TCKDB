@@ -295,3 +295,13 @@ def test_a_declaration_that_states_no_basis_is_not_contradicted(db_conn):
         calc = _calc(session, method="B3LYP", basis=None)
         _, warnings = _read(session, calc, "#P b3lyp/6-31g(d) opt\n")
         assert "level_of_theory_disagrees_with_artifact" not in _codes(warnings)
+
+
+def test_a_deck_that_names_a_reference_method_beside_the_declared_one_is_not_a_mismatch(db_conn):
+    """DLPNO-CCSD(T)-F12 decks also name HF; the declaration matches one of the deck's methods."""
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, software="orca", method="DLPNO-CCSD(T)-F12", basis="cc-pVTZ-F12")
+        _, warnings = _read(session, calc, _orca_deck("DLPNO-CCSD(T)-F12 cc-pVTZ-F12 HF"))
+        assert "level_of_theory_disagrees_with_artifact" not in _codes(warnings)
+        _, other = _read(session, calc, _orca_deck("PBE0 cc-pVTZ-F12 HF"))
+        assert "level_of_theory_disagrees_with_artifact" in _codes(other)

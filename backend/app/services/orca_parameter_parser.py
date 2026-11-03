@@ -1136,6 +1136,7 @@ def parse_method_basis(text: str) -> dict | None:
     basis = None
     aux_basis = None
     cabs_basis = None
+    methods: list[str] = []
 
     for line in input_lines:
         stripped = line.strip()
@@ -1152,6 +1153,7 @@ def parse_method_basis(text: str) -> dict | None:
             # Method detection
             if _is_method_token(kw_lower):
                 method = kw
+                methods.append(kw)
 
             # Basis detection
             elif _BASIS_PATTERNS.match(kw_lower):
@@ -1170,6 +1172,9 @@ def parse_method_basis(text: str) -> dict | None:
             "basis": basis,
             "aux_basis": aux_basis,
             "cabs_basis": cabs_basis,
+            # Every method token in order. A deck can name several (``DLPNO-CCSD(T)-F12`` with its ``HF``
+            # reference); ``method`` keeps the last, so a comparison with a declared method uses this list.
+            "methods": methods,
         }
     return None
 

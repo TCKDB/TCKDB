@@ -279,9 +279,12 @@ def level_of_theory_warnings(
         return []
     warnings: list[UploadWarning] = []
 
-    parsed_method = method_basis.get("method")
-    if parsed_method and lot.method and method_identity_key(lot.method) not in _method_keys(parsed_method):
-        warnings.append(_lot_warning("method", declared, artifact_kind, lot.method, parsed_method))
+    parsed_methods = method_basis.get("methods") or ([method_basis["method"]] if method_basis.get("method") else [])
+    if parsed_methods and lot.method:
+        # A deck can name several methods (a correlated method and its reference); the declaration agrees
+        # with the deck when it matches any of them.
+        if not any(method_identity_key(lot.method) in _method_keys(m) for m in parsed_methods):
+            warnings.append(_lot_warning("method", declared, artifact_kind, lot.method, parsed_methods[-1]))
 
     parsed_basis = method_basis.get("basis")
     if (
