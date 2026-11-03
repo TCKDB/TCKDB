@@ -1069,12 +1069,10 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef, idSuffix = "" }: {
         <section aria-labelledby={`ga-${thermoRef}${idSuffix}`}>
             <h4 className="model-block-heading" id={`ga-${thermoRef}${idSuffix}`}>Group-additivity estimation</h4>
             <dl className="kv-list">
-                <div>
-                    <dt>Scheme</dt>
-                    <dd>{groupAdditivity.scheme_name}{groupAdditivity.scheme_version ? ` (${groupAdditivity.scheme_version})` : ""}</dd>
-                </div>
+                {/* The scheme's name, version and code commit, and each component's group label, are
+                    free text a depositor typed: none of them is printed (house rule, owner decision
+                    2026-11-03). The scheme is identified by its ref. */}
                 <div><dt>Scheme ref</dt><dd>{groupAdditivity.scheme_ref}</dd></div>
-                <div><dt>Code commit</dt><dd>{groupAdditivity.code_commit ?? "not recorded"}</dd></div>
             </dl>
             {groupAdditivity.components && groupAdditivity.components.length > 0 && (
                 <div className="table-scroll table-scroll--compact">
@@ -1095,7 +1093,7 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef, idSuffix = "" }: {
                         <tbody>
                             {groupAdditivity.components.map((component, index) => (
                                 <tr key={`${thermoRef}-ga-${index}`}>
-                                    <td data-label="Group">{component.group_label}</td>
+                                    <td className="num" data-label="Group">{index + 1}</td>
                                     <td data-label="Kind">{component.component_kind}</td>
                                     <td className="num" data-label="Count">{component.count}</td>
                                     <td className="num" data-label="H298 contribution (kJ/mol)">{component.h298_contribution_kj_mol ?? "not recorded"}</td>

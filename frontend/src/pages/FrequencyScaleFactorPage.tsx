@@ -82,7 +82,7 @@ function FrequencyScaleFactorDetail({ record }: { record: FrequencyScaleFactorRe
                                     </div>
                                     <div><dt>Software</dt><dd>{softwareLabel(record.software_release) ?? "not recorded"}</dd></div>
                                     <div><dt>Workflow tool</dt><dd>{toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}</dd></div>
-                                    {fsf.note && <div><dt>Note</dt><dd>{fsf.note}</dd></div>}
+                                    {/* No `fsf.note`: depositor free text (house rule, owner decision 2026-11-03). */}
                                 </dl>
                             </div>
                         </div>

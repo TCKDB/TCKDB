@@ -1,3 +1,4 @@
+import { publicPointGroup } from "../domain/publicText"
 import type { ReactNode } from "react"
 import { useEffect } from "react"
 import { Link } from "react-router-dom"
@@ -462,7 +463,7 @@ function StatmechRecordBody({ record, conformers, sourceCalcsState, frequenciesS
                     <dt>Rigid-rotor kind</dt>
                     <dd>{core.rigid_rotor_kind ? <span className="value-pill">{statusLabel(core.rigid_rotor_kind)}</span> : "not recorded"}</dd>
                 </div>
-                <div><dt>Point group</dt><dd>{core.point_group ?? "not recorded"}</dd></div>
+                <div><dt>Point group</dt><dd>{core.point_group ? (publicPointGroup(core.point_group) ?? "not shown") : "not recorded"}</dd></div>
                 <div><dt>External symmetry</dt><dd>{core.external_symmetry ?? "not recorded"}</dd></div>
                 <div><dt>Linear molecule</dt><dd>{boolLabel(core.is_linear)}</dd></div>
                 <div><dt>Optical isomers</dt><dd>{core.optical_isomers ?? "not recorded"}</dd></div>

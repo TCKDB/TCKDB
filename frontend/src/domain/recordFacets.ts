@@ -1,4 +1,5 @@
 import { words } from "./provenanceFormat"
+import { publicTermSymbol } from "./publicText"
 
 /**
  * The four orthogonal axes that make one species entry chemically
@@ -31,9 +32,11 @@ function kindChip(kind: string): string {
     return KIND_LABELS[kind] ?? words(kind) ?? kind
 }
 
-function stateChip(kind: string, label?: string | null, termSymbol?: string | null): string {
+function stateChip(kind: string, termSymbol?: string | null): string {
     const base = kind === "ground" ? "ground state" : kind === "excited" ? "excited state" : `${words(kind) ?? kind} state`
-    const extra = [label, termSymbol].filter((part): part is string => Boolean(part)).join(" · ")
+    // `electronic_state_label` is never printed, and `term_symbol` only when it is shaped like one:
+    // both are depositor-typed (house rule, owner decision 2026-11-03).
+    const extra = publicTermSymbol(termSymbol)
     return extra ? `${base} · ${extra}` : base
 }
 
@@ -95,21 +98,16 @@ function isotopeChip(key: string): string {
  * (`SpeciesOverviewPage.tsx`'s `EntryCard`, before this module existed).
  *
  * That fallback chain is not what produced the "bare R" bug it looks
- * like it should explain. `species_entry_label` on the wire is not free
- * text a curator typed — it is computed server-side by
- * `app.services.scientific_read.species_identity.species_entry_label`
- * as a compact DISCRIMINATOR: every column that agrees with the
- * species' default (ground state, no term symbol, no isotope label) is
- * deliberately left OUT, so only what makes this entry different from
- * its siblings survives into the string. For an entry whose only
- * distinguishing feature is a stereo descriptor, that discriminator
- * really is just `"R"` — correct on the server's own terms. The bug is
- * entirely on this side: treating that discriminator as if it were a
- * complete heading silently drops "minimum · ground" instead of adding
- * to it.
+ * like it should explain. `species_entry_label` on the wire is built
+ * server-side (`app.services.scientific_read.species_identity.species_entry_label`)
+ * as a compact discriminator that joins stereo, state kind, the typed
+ * `electronic_state_label`, the typed `term_symbol` and the isotope key, so it
+ * MIXES computed and depositor-typed parts and cannot be split safely on the
+ * client. Treating it as a complete heading also silently dropped
+ * "minimum · ground".
  *
  * Chips close that gap structurally rather than by re-ordering the same
- * fallback: they are built ONLY from the four raw axes below and never
+ * fallback: they are built ONLY from the raw axes below and never
  * read `species_entry_label` at all, so there is nothing left that can
  * silently stand in for the whole classification. An axis that is unset
  * (no stereochemistry, no isotopologue) contributes no chip — never a
@@ -132,11 +130,9 @@ export function facetChips(entry: EntryFacetAxes, options?: { includeState?: boo
     const includeState = options?.includeState ?? true
     const chips = [kindChip(entry.species_entry_kind)]
     if (includeState) {
-        chips.push(stateChip(entry.electronic_state_kind, entry.electronic_state_label, entry.term_symbol))
+        chips.push(stateChip(entry.electronic_state_kind, entry.term_symbol))
     } else {
-        const extra = [entry.electronic_state_label, entry.term_symbol]
-            .filter((part): part is string => Boolean(part))
-            .join(" · ")
+        const extra = publicTermSymbol(entry.term_symbol)
         if (extra) chips.push(extra)
     }
     // An achiral entry contributes no chip: "achiral" on every ordinary card is noise, and its

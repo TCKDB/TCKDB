@@ -204,7 +204,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                                 : "not recorded"}
                                         </dd>
                                     </div>
-                                    {scheme.note && <div><dt>Note</dt><dd>{scheme.note}</dd></div>}
+                                    {/* No `scheme.note`: depositor free text (house rule, owner decision 2026-11-03). */}
                                 </dl>
                             </div>
                         </div>

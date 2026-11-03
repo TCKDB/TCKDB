@@ -136,7 +136,7 @@ export default function AccountPage() {
             <h1>Your account</h1>
 
             <dl className="kv-list">
-                <div><dt>Name</dt><dd>{user.full_name || user.username}</dd></div>
+                <div><dt>Name (as you typed it)</dt><dd>{user.full_name || user.username}</dd></div>
                 <div><dt>Email</dt><dd>{user.email ?? "not set"}</dd></div>
                 <div><dt>Role</dt><dd>{user.role}</dd></div>
             </dl>
@@ -188,7 +188,7 @@ export default function AccountPage() {
                         <table className="data-table" aria-label="Your API keys">
                             <thead>
                                 <tr>
-                                    <th scope="col">Label</th>
+                                    <th scope="col">Label (typed by you)</th>
                                     <th scope="col">Created</th>
                                     <th scope="col">Last used</th>
                                     <th scope="col">Revoked</th>

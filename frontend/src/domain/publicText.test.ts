@@ -1,0 +1,83 @@
+import { describe, expect, it } from "vitest"
+import {
+    channelHandle,
+    opaqueHandle,
+    publicChemistryKey,
+    publicParameterValue,
+    publicPointGroup,
+    publicStateLabel,
+    publicTermSymbol,
+} from "./publicText"
+
+describe("publicTermSymbol", () => {
+    it("accepts a term symbol shape and rejects anything else", () => {
+        expect(publicTermSymbol("3Σg-")).toBe("3Σg-")
+        expect(publicTermSymbol("2P")).toBe("2P")
+        expect(publicTermSymbol("3B1")).toBe("3B1")
+        expect(publicTermSymbol("T1")).toBeNull()
+        expect(publicTermSymbol("DEPOSITOR_SENTINEL_term")).toBeNull()
+        expect(publicTermSymbol("hello world")).toBeNull()
+        expect(publicTermSymbol(null)).toBeNull()
+    })
+})
+
+describe("publicChemistryKey", () => {
+    it("prints an element or bond key and hides any other string", () => {
+        expect(publicChemistryKey("C")).toBe("C")
+        expect(publicChemistryKey("C-H")).toBe("C-H")
+        expect(publicChemistryKey("N#N")).toBe("N#N")
+        expect(publicChemistryKey("DEPOSITOR_SENTINEL_target")).toBe("unrecognised key")
+        expect(publicChemistryKey("Fu-Ck")).toBe("unrecognised key")
+        expect(publicChemistryKey("Xx")).toBe("unrecognised key")
+        expect(publicChemistryKey("No-Ho-Es")).toBe("unrecognised key")
+        expect(publicChemistryKey("C-Uu")).toBe("unrecognised key")
+    })
+})
+
+describe("publicStateLabel", () => {
+    const participant = (smiles: string, stoichiometry = 1) => ({ canonical_smiles: smiles, stoichiometry })
+
+    it("rebuilds the label from SMILES and stoichiometry only, never from the served label", () => {
+        const label = publicStateLabel({
+            participants: [participant("N=N"), participant("[H][H]", 2)],
+            participants_truncated: true,
+            state_label: "N=N (E excited DEPOSITOR_SENTINEL_x) + 2 [H][H] + ...",
+        })
+        expect(label).toBe("N=N + 2 [H][H] + ...")
+    })
+
+    it("returns an empty label when there are no participants, never the served one", () => {
+        expect(publicStateLabel({ participants: [], state_label: "NN" })).toBe("")
+    })
+})
+
+describe("opaqueHandle", () => {
+    it("is stable, carries none of the original characters, and tells keys apart", () => {
+        expect(opaqueHandle("channel_1")).toBe(opaqueHandle("channel_1"))
+        expect(opaqueHandle("channel_1")).not.toBe(opaqueHandle("channel_2"))
+        expect(opaqueHandle("channel_1")).toMatch(/^k[0-9a-f]{8}$/)
+        expect(channelHandle(null)).toBeUndefined()
+        expect(channelHandle("channel_1")).toBe(opaqueHandle("channel_1"))
+    })
+})
+
+describe("publicParameterValue", () => {
+    it("prints numbers and booleans, and says recorded for any other string", () => {
+        expect(publicParameterValue("1e-8")).toBe("1e-8")
+        expect(publicParameterValue("-0.5")).toBe("-0.5")
+        expect(publicParameterValue("True")).toBe("True")
+        expect(publicParameterValue("PISS")).toBe("recorded")
+        expect(publicParameterValue(null)).toBe("recorded")
+    })
+})
+
+describe("publicPointGroup", () => {
+    it("accepts Schoenflies symbols and rejects any other string", () => {
+        for (const group of ["C1", "Cs", "Ci", "C2v", "C3h", "D2d", "D6h", "S4", "Td", "Oh", "Ih", "Cinfv", "D*h", "C∞v"]) {
+            expect(publicPointGroup(group)).toBe(group)
+        }
+        for (const junk of ["PISS", "C1 stinks", "Cx", "D1", "C", "DEPOSITOR_SENTINEL_point_group"]) {
+            expect(publicPointGroup(junk)).toBeNull()
+        }
+    })
+})

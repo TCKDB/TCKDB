@@ -5,6 +5,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import ReviewQueuePage from "./ReviewQueuePage"
+import { ADVERSARIAL, expectNoAdversarialText, expectNoDepositorText, expectPlanted, plantSentinels, setAt } from "../test/depositorSentinel"
 import { AuthProvider } from "../components/AuthProvider"
 
 /**
@@ -483,7 +484,8 @@ describe("what a subject block shows (task #269, defect #4: nothing said what th
         const section = await screen.findByText("tse_4").then((el) => el.closest(".review-subject") as HTMLElement)
         expect(within(section).queryByText(/no smiles recorded for this candidate/i)).not.toBeInTheDocument()
         expect(within(section).getByText(/no formula could be derived/i)).toBeInTheDocument()
-        expect(within(section).getByText("[CH3].[H]>>C")).toBeInTheDocument()
+        // The SMILES is depositor-typed and unparsed; the queue is readable by any signed-in account.
+        expect(section.innerHTML).not.toContain("[CH3].[H]>>C")
     })
 
     it("names a subject with no chemistry of its own by its record type, honestly", async () => {
@@ -1947,5 +1949,41 @@ describe("guarantees carried over from the flat queue (review #492, finding 4)",
 
             cleanup()
         }
+    })
+})
+
+describe("ReviewQueuePage -- no depositor-typed text (owner decision 2026-11-03)", () => {
+    it("treats the queue as public: no unmapped SMILES, state label, term symbol or joined label reaches it", async () => {
+        meIs(curator)
+        const planted = plantSentinels(subject([record()], {
+            chemistry: chemistry({
+                formula: "H2O", multiplicity: 1, species_entry_kind: "minimum", electronic_state_kind: "excited",
+                electronic_state_label: "x", term_symbol: "x", unmapped_smiles: "x",
+            }),
+        }), ["electronic_state_label", "term_symbol", "unmapped_smiles"])
+        expectPlanted(planted)
+        const { value } = planted
+        setAt(value, "chemistry.term_symbol", ADVERSARIAL.smilesWord)
+        setAt(value, "chemistry.unmapped_smiles", ADVERSARIAL.unmappedSmiles)
+        queueIs([value])
+        renderPage()
+        // The fixture reached the page: the subject block for the species entry rendered.
+        expect(await subjectFor("spe_h2o")).toBeVisible()
+
+        expectNoDepositorText()
+        expectNoAdversarialText()
+    })
+
+    it("does not print an unparsable unmapped SMILES on a transition-state candidate", async () => {
+        meIs(curator)
+        queueIs([subject([record({ record_type: "statmech", container_type: "transition_state_entry", container_ref: "tse_9" })], {
+            subject_type: "transition_state_entry",
+            subject_ref: "tse_9",
+            chemistry: chemistry({ multiplicity: 2, unmapped_smiles: ADVERSARIAL.unmappedSmiles }),
+        })])
+        renderPage()
+        expect(await subjectFor("tse_9")).toBeVisible()
+
+        expectNoAdversarialText()
     })
 })
