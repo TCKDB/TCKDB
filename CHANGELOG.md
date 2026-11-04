@@ -22,12 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
-## A closed-shell T1 above the conventional rule of thumb is reported (2026-11-04)
+## A closed-shell T1 and a spin contamination beyond their conventional criteria are reported (2026-11-04)
 
-- **Client: `tckdb-schemas` 0.150.0 to 0.151.0 (one new warning code, no field added or removed), `tckdb-client` 0.183.0 to 0.184.0.** No migration, no new environment variable.
+- **Client: `tckdb-schemas` 0.150.0 to 0.151.0 (three new warning codes, no field added or removed), `tckdb-client` 0.183.0 to 0.184.0.** No migration, no new environment variable.
 - **What was wrong.** A coupled-cluster calculation with a large T1 was stored and shown with no remark. The diagnostic was deliberately never read.
 - **What changed.** One warning, `t1_diagnostic_above_closed_shell_threshold`, on the calculation only: the entry's multiplicity is 1, the method is coupled cluster with singles, and the stored T1 is strictly above 0.02 (Lee and Taylor 1989). The sentence says the value is above the rule of thumb and that T1 does not by itself establish multireference character. Nothing about the value, the review status, the evidence label or any selection changes, and a thermo or kinetics record citing the calculation gets no warning of its own.
-- **What did not.** Open-shell T1 and D1 are stored and shown but not thresholded (open-shell T1 is defined differently by each program, and no open-shell or D1 threshold has a verified primary source). The spin-contamination (`<S^2>`) check is not part of this change.
+- **Spin.** `spin_contamination_above_conventional_threshold` when the stored `s_squared` is strictly more than 0.1 from S(S+1), S from the entry's declared multiplicity (never from a printed value; `s_squared_annihilated` unused). 0.1 is a convention of the field, not a recommendation of any paper, and the sentence says so. `spin_expected_contradicts_multiplicity` when the ideal value the program printed differs from S(S+1) of the entry's multiplicity by more than 0.001. The two are separate warnings.
+- **What did not.** Open-shell T1 and D1 are stored and shown but not thresholded (open-shell T1 is defined differently by each program, and no open-shell or D1 threshold has a verified primary source). 
 - **Register.** New entry 52 (group "Wavefunction reliability diagnostics"); the cap test is raised 51 to 52 with its written argument. The documented position that T1/D1 are "deliberately not enforced" is replaced in `scientific_calculation_reads.md` and the model docstring, which also now credits D1 to Janssen and Nielsen (1998).
 
 ## An output log is read for parameters, and what a depositor typed is checked against the deck and the log (2026-11-03)

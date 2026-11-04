@@ -795,6 +795,8 @@ _PINNED_NUMBERS: dict[str, int] = {
     "network_state_energy_sources_partial": 25,
     "scan_point_coordinate_disagrees_with_geometry": 49,
     "t1_diagnostic_above_closed_shell_threshold": 52,
+    "spin_contamination_above_conventional_threshold": 52,
+    "spin_expected_contradicts_multiplicity": 52,
 }
 
 

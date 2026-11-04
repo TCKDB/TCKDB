@@ -2,9 +2,11 @@
 
 ## 0.151.0 - 2026-11-04
 
-An accepted deposit can now earn one more warning, about a coupled-cluster diagnostic stored with a calculation. No field is added or removed.
+An accepted deposit can now earn three more warnings, about wavefunction diagnostics stored with a calculation. No field is added or removed.
 
 - New warning `t1_diagnostic_above_closed_shell_threshold`. A closed-shell calculation (the multiplicity of its species or transition-state entry is 1) whose method is coupled cluster with singles (CCSD, CCSD(T), their F12, local, DLPNO and PNO variants, CCSDT, QCISD) and whose `wavefunction_diagnostic.t1_diagnostic` is strictly above 0.02 earns it. 0.02 is the rule of thumb of Lee and Taylor (1989). The calculation is stored as sent and nothing about the value, its review status or any selection changes. `context` has `t1_diagnostic`, `threshold` (0.02) and `multiplicity` (1). The sentence says only that the value is above the rule of thumb and that T1 does not by itself establish multireference character. It is placed on the calculation's record; a thermo or kinetics record that cites the calculation earns no warning of its own.
+- New warning `spin_contamination_above_conventional_threshold`. A calculation with a stored `spin_diagnostic.s_squared` whose distance from S(S+1) is strictly more than 0.1 earns it, where S comes from the declared multiplicity of the calculation's species or transition-state entry (never from `s_squared` or `s_squared_expected`; `s_squared_annihilated` is not used). 0.1 is a convention of the field (cited in the literature to Williams et al. 2011; Rettig et al. 2020 use a relative 10%), not a finding about the system, and the sentence says so. `context` has `s_squared`, `ideal_s_squared`, `multiplicity` and `threshold`. The calculation is stored as sent.
+- New warning `spin_expected_contradicts_multiplicity`. A stored `spin_diagnostic.s_squared_expected` (the ideal value the program printed) that differs from S(S+1) of the entry's declared multiplicity by more than 0.001 earns it. It is separate from the contamination warning; both can apply to one calculation. `context` has `s_squared_expected`, `expected_from_entry` and `multiplicity`.
 - An open-shell T1 and any D1 value earn no warning: programs define open-shell T1 differently and D1 has no verified threshold. Both stay stored and shown.
 - The `d1_diagnostic` description now names Janssen and Nielsen (1998) as the source of D1.
 

@@ -2,7 +2,7 @@
 
 ## 0.184.0 - 2026-11-04
 
-A deposit can now return the warning `t1_diagnostic_above_closed_shell_threshold`; see `tckdb-schemas` 0.151.0. The client reads warnings by code and message, so no client code changed.
+A deposit can now return the warnings `t1_diagnostic_above_closed_shell_threshold`, `spin_contamination_above_conventional_threshold` and `spin_expected_contradicts_multiplicity`; see `tckdb-schemas` 0.151.0. The client reads warnings by code and message, so no client code changed.
 
 ## 0.183.0 - 2026-11-03
 
