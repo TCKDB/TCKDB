@@ -285,6 +285,6 @@ def test_participants_serve_the_computed_facets_that_tell_e_from_z(client, db_se
     for p in participants:
         assert p["species_entry_kind"] == "minimum"
         assert p["electronic_state_kind"] == "ground"
-        # Typed text is never part of the structured facets.
-        assert "electronic_state_label" not in p
-        assert "term_symbol" not in p
+        # No state label or term symbol was deposited, so the two grammar-validated facets read None.
+        assert p["electronic_state_label"] is None
+        assert p["term_symbol"] is None
