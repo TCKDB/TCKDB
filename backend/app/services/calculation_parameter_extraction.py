@@ -431,11 +431,17 @@ def extract_and_store_calculation_parameters(
             session.flush()
             warnings.extend(conflicts)
             if unbound_log:
-                warnings.append(
-                    UploadWarning.from_code(
-                        field="artifacts", code=W_OUTPUT_LOG_JOB_NOT_BOUND, context={"software": software}
-                    )
+                # One per log: the same log read twice in a request earns one, two different logs earn two.
+                unbound = UploadWarning.from_code(
+                    field="artifacts",
+                    code=W_OUTPUT_LOG_JOB_NOT_BOUND,
+                    context={
+                        "software": software,
+                        "depositor_supplied": {"log_sha256": hashlib.sha256(artifact_text.encode()).hexdigest()[:16]},
+                    },
                 )
+                if not any(w.code == unbound.code and w.context == unbound.context for w in warnings):
+                    warnings.append(unbound)
             warnings.extend(reported_setting_warnings(session, calculation, software, before=disagreements_before))
             warnings.extend(
                 declared_parameter_warnings(

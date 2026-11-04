@@ -858,7 +858,9 @@ def test_an_unbound_link1_log_warns_and_shows_not_stated_not_an_assumed_default(
         calc = _g16_calc(session)  # job 2 or job 3: both are sp wb97xd/def2svp, and no deck is there to tell them apart
         warnings = _upload(session, calc, _LINK1_LOG)
         [warning] = [w for w in warnings if w.code == _NOT_BOUND]
-        assert warning.context["software"] == "gaussian" and "several jobs" in warning.message
+        assert warning.context["software"] == "gaussian"
+        assert "no single job could be matched" in warning.message and "same request as the log" in warning.message
+        assert "job type" not in warning.message  # jobs 2 and 3 both match by type and level: that was untrue
         assert _states(session, calc) == {  # before the warning is stored the log reads as silent: the misleading case
             "grid": EffectiveSettingState.assumed_default,
             "scf_convergence": EffectiveSettingState.assumed_default,
@@ -868,6 +870,16 @@ def test_an_unbound_link1_log_warns_and_shows_not_stated_not_an_assumed_default(
             "grid": EffectiveSettingState.not_stated,
             "scf_convergence": EffectiveSettingState.not_stated,
         }
+
+
+def test_unbound_warnings_are_one_per_log_within_a_request(db_conn):
+    other = _LINK1_LOG + " \n"  # a different artifact (different bytes), equally unbound
+    with Session(db_conn) as session, session.begin():
+        calc = _g16_calc(session)
+        shared: list = []
+        for text in (_LINK1_LOG, _LINK1_LOG, other):
+            extract_and_store_calculation_parameters(session, calc, text, warnings=shared, artifact_kind=ArtifactKind.output_log)
+        assert len([w for w in shared if w.code == _NOT_BOUND]) == 2  # the repeated log once, the other log once
 
 
 def test_a_bound_link1_log_has_no_not_bound_warning_and_its_rows_decide(db_conn):

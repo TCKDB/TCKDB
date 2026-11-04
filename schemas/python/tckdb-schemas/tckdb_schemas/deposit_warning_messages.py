@@ -224,9 +224,9 @@ RENDERED: dict[str, str] = {
         "log's value was kept and the later log's row for it was not stored."
     ),
     "output_log_job_not_bound": (
-        "The output log holds several jobs, and none could be matched to this calculation by job type and level "
-        "of theory, so the settings in it were not read. Upload this calculation's input deck, or a log that holds "
-        "only its job."
+        "The output log holds several jobs, and no single job could be matched to this calculation, so the "
+        "settings in it were not read. Deposit the input deck in the same request as the log (or before it), or "
+        "deposit a log that holds only this job."
     ),
     "level_of_theory_disagrees_with_artifact": (
         "The method or the basis set of the declared level of theory differs from the one an uploaded input "

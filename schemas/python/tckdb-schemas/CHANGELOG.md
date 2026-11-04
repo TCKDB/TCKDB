@@ -5,7 +5,7 @@
 The route of a Gaussian log is read correctly when it is short. One warning code is added (`output_log_job_not_bound`); no field is added or removed.
 
 - **Fixed:** Gaussian sizes the rows of dashes round the echoed route to the route itself (43 wide for `# sp b3lyp/def2svp`, 70 for a long one). The reader only treated rows of 60 or more as the route's edges, so a short route (under 60 characters, which is common) was never closed: it ran on into the log (one measured route was 5012 characters) and the settings read from it included log text, such as `NAtoms` and `Conv`, as if they had been requested. A row of four or more dashes is now an edge too.
-- New warning `output_log_job_not_bound`. An output log holds several jobs (a `--Link1--` file) and none could be matched to this calculation by job type and level of theory, so the settings in it were not read. A reader shows the calculation's grid and SCF convergence as `not_stated` rather than as the program's default while this warning stands and no row from the log exists.
+- New warning `output_log_job_not_bound`. An output log holds several jobs (a `--Link1--` file) and no single job could be matched to this calculation, so the settings in it were not read. One warning per log, however many times the same log is read in a request. A reader shows the calculation's grid and SCF convergence as `not_stated` rather than as the program's default while this warning stands and no row from the log exists.
 - **Measured side effects** (every Gaussian text in the test corpus, before and after):
   - The tau and Hessian-method detection is unchanged on all 521 texts.
   - 59 ARC payload logs (routes of about 55 characters) no longer store about 197 junk raw rows read from log text. No canonical row changed.
