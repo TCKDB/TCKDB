@@ -2159,14 +2159,15 @@ class CalculationWavefunctionDiagnostic(Base, TimestampMixin, CreatedByMixin):
 
     One advisory reads it (``app.services.wavefunction_reliability_warnings``),
     reversing the earlier "deliberately not enforced" position for one case:
-    a closed-shell coupled-cluster calculation (entry multiplicity 1) whose
+    a closed-shell, restricted-reference coupled-cluster calculation (entry
+    multiplicity 1; unrestricted (U) and RO methods are out of scope) whose
     ``t1_diagnostic`` is strictly above 0.02 (Lee and Taylor, 1989) earns the
     deposit warning ``t1_diagnostic_above_closed_shell_threshold``. The reasons
     are closed shell only (the one regime where every program computes the
     same quantity), a primary source for the number, and wording that does not
     judge (the sentence says "above the rule of thumb" and that T1 does not by
-    itself establish multireference character). Open-shell T1 and D1 are
-    stored and shown, never thresholded.
+    itself establish multireference character). Open-shell and unrestricted
+    T1, and D1, are stored and shown, never thresholded.
 
     Producer contract (not enforced by DB):
 

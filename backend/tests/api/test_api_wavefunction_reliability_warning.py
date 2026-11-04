@@ -560,6 +560,7 @@ def test_every_route_that_persists_a_calculation_runs_the_check(client, route) -
 def test_the_difference_in_the_sentence_visibly_exceeds_the_threshold(client) -> None:
     """0.85001 against 0.75 is 0.10001: the sentence must not read 'a difference of 0.1, which exceeds 0.1'."""
     (warning,) = _spin_post(client, 2, {"s_squared": 0.85001})[SPIN_CODE]
+    assert "<S^2> of this calculation is 0.85001," in warning["message"]
     assert "a difference of 0.10001, which exceeds 0.1" in warning["message"]
 
 

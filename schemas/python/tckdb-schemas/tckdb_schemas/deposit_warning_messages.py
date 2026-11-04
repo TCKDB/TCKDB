@@ -948,9 +948,9 @@ def _spin_contamination(context: Mapping[str, Any]) -> str | None:
     if value is None or ideal is None or multiplicity is None or threshold is None:
         return None
     return (
-        f"The <S^2> of this calculation is {value:g}, against an ideal S(S+1) of {ideal:g} for its declared spin "
-        f"multiplicity of {multiplicity}: a difference of {round(abs(value - ideal), 9):.9g}, which exceeds {threshold:g}, the "
-        "conventional criterion for spin contamination. That criterion is a convention of the field, not a finding "
+        f"The <S^2> of this calculation is {value:.9g}, against an ideal S(S+1) of {ideal:g} for its declared spin "
+        f"multiplicity of {multiplicity}: a difference of {round(abs(value - ideal), 9):.9g}, which exceeds "
+        f"{threshold:g}, the conventional criterion for spin contamination. That criterion is a convention of the field, not a finding "
         "about this system. The calculation is stored as deposited."
     )
 

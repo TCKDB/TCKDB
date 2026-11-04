@@ -131,7 +131,7 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # printed ideal <S^2> that is not S(S+1) of the declared multiplicity: a declaration contradicting what the program
     # ran, like entry 12's multiplicity_mismatch (and, like it, warn-tier here although ADR 0008 would put it at block).
     # It is in this entry, not entry 12, because the entry is organised by the data it reads (the stored spin and
-    # wavefunction diagnostics); the owner decided one new entry for all three. No existing entry covers any of them:
+    # wavefunction diagnostics). No existing entry covers any of them:
     # entry 12 compares a declared state with an output log, these judge a stored diagnostic against a criterion or
     # against the entry. Different tier from every blocking entry.
     assert 10 <= len(REGISTER) <= 52, (
