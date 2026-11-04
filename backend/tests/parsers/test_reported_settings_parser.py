@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from app.services.parameter_reconciliation import orca_preset_disagreements
-from app.services.reported_settings_parser import _G_SCF, parse_gaussian_reported, parse_orca_reported
+from app.services.reported_settings_parser import _G_SCF, gaussian_jobs, parse_gaussian_reported, parse_orca_reported
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 _ARC_PAYLOAD = next((FIXTURES / "arc_runs" / "rotor_scan_8").glob("tckdb_payloads/computed_reaction/*.payload.json"))
@@ -188,6 +188,85 @@ def test_a_gaussian_log_holding_two_jobs_reports_nothing():
     assert parse_gaussian_reported(five + five) == []
 
 
+# A Gaussian 16 water run made for these tests: three linked (`--Link1--`) jobs in one file, and a second file with
+# one default job. The jobs differ in route, grid and SCF keywords.
+_LINK1 = "gaussian/water_link1_g16.log"
+_DEFAULT = "gaussian/water_default_g16.log"
+
+
+def test_the_link1_log_splits_at_entering_link_1_and_each_job_keeps_its_own_route():
+    from app.services.gaussian_parameter_parser import all_route_texts
+
+    text = _read(_LINK1)
+    assert text.count("Entering Gaussian System") == 1  # no second banner: the old split saw one job
+    jobs = gaussian_jobs(text)
+    assert len(jobs) == 3
+    assert [all_route_texts(j) for j in jobs] == [
+        ["# opt b3lyp/def2svp int=ultrafine scf=tight"],
+        ["# sp wb97xd/def2svp geom=allcheck guess=read int=finegrid scf=verytight"],
+        ["# sp wb97xd/def2svp geom=allcheck guess=read"],
+    ]
+
+
+def test_every_link1_job_reports_its_own_scf_thresholds_and_the_whole_file_reports_nothing():
+    text = _read(_LINK1)
+    assert parse_gaussian_reported(text) == []  # three jobs bind to no one calculation
+    for job in gaussian_jobs(text):
+        assert _canonical(parse_gaussian_reported(job)) == {
+            "scf.tol_rms_density": "1e-08",
+            "scf.tol_max_density": "1e-06",
+            "scf.tol_energy_eh": "1e-06",
+        }
+
+
+@pytest.mark.parametrize("fixture", [_LINK1, _DEFAULT])
+def test_the_harris_guess_irad_an_is_not_read_as_the_scf_grid(fixture):
+    """IRadAn prints only on the Harris initial-guess lines of these G16 logs (no `IXCGrd=` line): no grid row.
+
+    Measured on the fixture corpus: where a log has both, the Harris lines' IRadAn differs from the SCF grid line's in
+    58 logs (IXCGrd 0 against Harris 1 or 4; IXCGrd 5 against Harris 4), so the guess step's code is not the grid.
+    """
+    text = _read(fixture)
+    assert re.search(r"Harris functional with IExCor=\s*\d+ and IRadAn=\s*5", text) and "IXCGrd=" not in text
+    for job in gaussian_jobs(text):
+        assert "IRadAn" not in _by_key(parse_gaussian_reported(job))
+
+
+def test_a_single_default_job_reports_the_scf_default_and_no_grid():
+    """`# sp b3lyp/def2svp`: no int=, scf= or guess=read. G16 reports 1.00D-08, the same as an explicit scf=tight."""
+    assert gaussian_jobs(_read(_DEFAULT)) == [_read(_DEFAULT)]
+    rows = parse_gaussian_reported(_read(_DEFAULT))
+    assert _canonical(rows)["scf.tol_rms_density"] == "1e-08" and "IRadAn" not in _by_key(rows)
+
+
+def test_a_route_wrapped_inside_a_keyword_is_rejoined_in_the_echo_parse():
+    """Job 2's echo wraps at 70 characters inside `verytight` (`scf=verytigh` / `t`)."""
+    from app.services.calculation_parameter_extraction import _parse_gaussian_text
+
+    job = gaussian_jobs(_read(_LINK1))[1]
+    assert "scf=verytigh\n t\n" in job  # the wrap is really in the log
+    parsed = _parse_gaussian_text(job)
+    assert parsed["route_line"].endswith("int=finegrid scf=verytight")
+    rows = {(p["raw_key"], p["canonical_key"], p["canonical_value"]) for p in parsed["parameters"]}
+    assert ("verytight", "scf.convergence", "very_tight") in rows
+    assert ("finegrid", "grid.quality", "fine") in rows
+
+
+def test_a_short_route_is_closed_by_its_own_short_row_of_dashes():
+    """Gaussian sizes the dashes round a route to the route: job 1's are 43 wide. The echo must stop there."""
+    from app.services.calculation_parameter_extraction import _parse_gaussian_text
+
+    for job, expected in zip(
+        gaussian_jobs(_read(_LINK1)),
+        ["# opt b3lyp/def2svp int=ultrafine scf=tight", None, "# sp wb97xd/def2svp geom=allcheck guess=read"],
+        strict=True,
+    ):
+        parsed = _parse_gaussian_text(job)
+        if expected:
+            assert parsed["route_line"] == expected
+            assert {p["raw_key"] for p in parsed["parameters"]} & {"NAtoms", "Charge", "Conv"} == set()  # no log text
+
+
 def test_an_extra_route_section_the_program_did_not_announce_suppresses_the_report():
     """Synthetic: a second echoed route spliced into a real single-job log, with no `Proceeding to internal job step`."""
     text = _read("gaussian/freq_g09.log")
@@ -219,8 +298,17 @@ def test_the_guard_fires_on_no_gaussian_fixture_log():
             logs.append(Path(path).read_text(errors="replace"))
     assert len(logs) > 100
     with_reports = 0
-    for text in logs:
-        # A log that prints a report must keep it: the guard may not suppress any real single-job fixture.
+    link1 = {"water_link1_g16.log": 3}
+    for path in glob.glob(str(FIXTURES / "gaussian" / "*.log")) + glob.glob(str(FIXTURES / "gaussian_composite" / "*.[lo]*")):
+        if not path.endswith(".md"):
+            # Measured: the split point is safe. Every single-job log, opt+freq and composite included, prints exactly
+            # one `Entering Link 1`; only the --Link1-- fixture prints more.
+            count = len(re.findall(r"^ Entering Link 1 =", Path(path).read_text(errors="replace"), re.M))
+            assert count == link1.get(Path(path).name, 1), path
+    for log in logs:
+        assert len(gaussian_jobs(log)) == (3 if "job 1 of 3" in log else 1)
+    for text in [job for log in logs for job in gaussian_jobs(log)]:
+        # A job that prints a report must keep it: the split may not suppress any real fixture job.
         codes = set(re.findall(r"IXCGrd=\s*\d+ IRadAn=\s*(\d+)", text))
         scf = set(_G_SCF.findall(text))
         if (codes or scf) and len(codes) <= 1 and len(scf) <= 1:

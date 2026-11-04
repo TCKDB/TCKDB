@@ -375,6 +375,99 @@ def _effective_methods(methods: list[str]) -> list[str]:
     return correlated or methods
 
 
+_ROUTE_OPT = re.compile(r"(?:^|\s)opt(?:[=(\s]|$)", re.I)
+_ROUTE_FREQ = re.compile(r"(?:^|\s)freq(?:[=(\s]|$)", re.I)
+_ROUTE_IRC = re.compile(r"(?:^|\s)irc(?:[=(\s]|$)", re.I)
+
+
+def _job_type_matches(calc_type: str, route: str) -> bool:
+    """Whether a route's job keywords fit a calculation type (``opt freq`` fits both an opt and a freq calculation)."""
+    has = {
+        "opt": bool(_ROUTE_OPT.search(route)),
+        "freq": bool(_ROUTE_FREQ.search(route)),
+        "irc": bool(_ROUTE_IRC.search(route)),
+    }
+    if calc_type in has:
+        return has[calc_type]
+    if calc_type == "sp":
+        return not any(has.values())
+    return True  # scan, conf, composite, ...: the method and basis alone decide
+
+
+def _known_route_request(session: Session, calculation: Calculation) -> set[tuple[str, str]]:
+    """The canonical settings the calculation's deck (or the depositor's typed rows) already request, resources aside."""
+    rows = session.scalars(
+        select(CalculationParameter).where(
+            CalculationParameter.calculation_id == calculation.id,
+            CalculationParameter.statement_kind != ParameterStatementKind.reported,
+        )
+    )
+    return {
+        (r.canonical_key, r.canonical_value)
+        for r in rows
+        if r.canonical_key is not None
+        and r.canonical_value is not None
+        and r.artifact_kind is not ArtifactKind.output_log
+        and (r.section or "").lower() != "resource"
+    }
+
+
+def bind_gaussian_job(session: Session, calculation: Calculation, text: str) -> str | None:
+    """The job of a Gaussian log that is this calculation, or ``None`` when no single job is.
+
+    The rule, in order:
+
+    1. A log with one job (one ``Entering Link 1``) is that job.
+    2. Otherwise the candidates are the jobs whose echoed first route has the calculation's job type (``opt``,
+       ``freq`` or ``irc`` keyword present; ``sp``: none of them) and its level of theory (route method and basis
+       equal the calculation's, compared as the declared-level check compares them). One candidate is the job.
+    3. Several candidates (``--Link1--`` jobs at one level differing only in keywords, e.g. two single points on
+       different grids) are told apart by the settings the calculation already requests, from its input deck or typed
+       rows: the job whose route states exactly those settings, resources aside. A calculation with no such rows
+       cannot be told apart, so it binds to nothing.
+    4. No candidate, or several still: ``None``. Nothing is read from the log, and no other job's value stands in.
+
+    Step 3 reads what is stored when the log arrives, so a log that reaches a calculation before its deck is read as
+    "no job" and its rows come from ``refresh_output_log_rows`` once the deck is in; a log with one job is unaffected.
+    """
+    from app.services.gaussian_parameter_parser import _parse_route_tokens, all_route_texts, parse_method_basis
+    from app.services.reported_settings_parser import gaussian_jobs
+
+    jobs = gaussian_jobs(text)
+    if len(jobs) == 1:
+        return jobs[0]
+    lot = calculation.lot
+    if lot is None or not lot.method:
+        return None
+    wanted = _method_keys(lot.method)
+    calc_type = getattr(calculation.type, "value", calculation.type)
+    matches: list[tuple[str, str]] = []  # (job text, its first route)
+    for job in jobs:
+        routes = all_route_texts(job)
+        found = parse_method_basis(routes[0]) if routes else None
+        if not found or not (wanted & _method_keys(found["method"])):
+            continue
+        basis = found["basis"]
+        if lot.basis and basis.strip().lower() not in _NO_BASIS and _basis_key(lot.basis) != _basis_key(basis):
+            continue
+        if _job_type_matches(calc_type, routes[0]):
+            matches.append((job, routes[0]))
+    if len(matches) > 1:
+        known = _known_route_request(session, calculation)
+        if known:
+            matches = [
+                (job, route)
+                for job, route in matches
+                if {
+                    (p["canonical_key"], p["canonical_value"])
+                    for p in _parse_route_tokens(route)
+                    if p.get("canonical_key") is not None and p.get("canonical_value") is not None
+                }
+                == known
+            ]
+    return matches[0][0] if len(matches) == 1 else None
+
+
 def level_of_theory_warnings(
     calculation: Calculation,
     method_basis: dict | None,

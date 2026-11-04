@@ -21,6 +21,7 @@ from app.schemas.fragments.calculation import (
     CalculationParameterObservation,
     CalculationWithResultsPayload,
     OptResultPayload,
+    SPResultPayload,
 )
 from app.schemas.reads.scientific_calculation import EffectiveSettingState
 from app.services.calculation_parameter_extraction import extract_and_store_calculation_parameters
@@ -55,16 +56,31 @@ def _arc_gaussian_default_grid_log() -> str:
     return next(t for t in texts if "Entering Gaussian System" in t and "IRadAn=           0 IRanWt" in t)
 
 
-def _calc(session: Session, *, software: str = "orca", version: str | None = "6.0.0", method: str = "B3LYP"):
+def _calc(
+    session: Session,
+    *,
+    software: str = "orca",
+    version: str | None = "6.0.0",
+    method: str = "B3LYP",
+    basis: str = "def2-TZVP",
+    calc_type: CalculationType = CalculationType.opt,
+):
     entry_id = _create_species_entry(session, inchi_key=_next_inchi_key("RPTD"))
     release = {"name": software}
     if version is not None:
         release["version"] = version
+    results = (
+        {"sp_result": SPResultPayload(electronic_energy_hartree=-76.3)}
+        if calc_type is CalculationType.sp
+        else {"opt_result": OptResultPayload(converged=True)}
+        if calc_type is CalculationType.opt
+        else {}
+    )
     upload = CalculationWithResultsPayload(
-        type=CalculationType.opt,
+        type=calc_type,
         software_release=release,
-        level_of_theory={"method": method, "basis": "def2-TZVP"},
-        opt_result=OptResultPayload(converged=True),
+        level_of_theory={"method": method, "basis": basis},
+        **results,
     )
     return resolve_and_persist_calculation_with_results(session, upload, species_entry_id=entry_id)
 
@@ -529,3 +545,100 @@ def test_a_reported_grid_attaches_only_to_a_calculation_whose_own_method_has_a_d
     composite = (FIXTURES / "gaussian_composite" / "g4_methanol_g16.out").read_text(errors="replace")
     assert "IRadAn" in stored_keys("G4", composite)  # a composite keeps it (its steps already had to agree)
     assert "IRadAn" not in stored_keys("MP2", _G09_LOG)
+
+
+# ---------------------------------------------------------------------------
+# a Gaussian --Link1-- log binds to the job that is the calculation
+# ---------------------------------------------------------------------------
+
+# A G16 water run made for these tests: three linked jobs, no second `Entering Gaussian System` banner.
+_LINK1_LOG = (FIXTURES / "gaussian" / "water_link1_g16.log").read_text(errors="replace")
+_JOB2_DECK = "%mem=2GB\n# sp wb97xd/def2svp geom=allcheck guess=read int=finegrid scf=verytight\n\nwater\n\n0 1\n"
+_JOB3_DECK = "%mem=2GB\n# sp wb97xd/def2svp geom=allcheck guess=read\n\nwater\n\n0 1\n"
+_SCF = {"scf.tol_rms_density", "scf.tol_max_density", "scf.tol_energy_eh"}
+
+
+def _g16_calc(session, calc_type=CalculationType.sp, method="wB97XD", basis="def2-SVP"):
+    return _calc(session, software="gaussian", version="16", method=method, basis=basis, calc_type=calc_type)
+
+
+def _log_rows(session, calc):
+    """``{(canonical key or raw key, value): statement kind}`` of the rows the log wrote."""
+    return {
+        (r.canonical_key or r.raw_key, r.canonical_value or r.raw_value): r.statement_kind
+        for r in _rows(session, calc)
+        if r.source is ParameterSource.parser and r.artifact_kind is ArtifactKind.output_log
+    }
+
+
+def _scf_keys(rows):
+    return {k for k, _ in rows if k.startswith("scf.tol_")}
+
+
+def test_link1_job_1_binds_to_the_opt_calculation_by_type_method_and_basis(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _g16_calc(session, CalculationType.opt, method="B3LYP")
+        _read(session, calc, _LINK1_LOG)
+        rows = _log_rows(session, calc)
+        # Its own echo and its own report; nothing of the two single points (finegrid, verytight).
+        assert rows[("grid.quality", "ultrafine")] is ParameterStatementKind.requested
+        assert rows[("scf.convergence", "tight")] is ParameterStatementKind.requested
+        assert _scf_keys(rows) == _SCF
+        assert not {v for _, v in rows} & {"fine", "very_tight"}
+        assert not any(k == "IRadAn" for k, _ in rows)  # the Harris guess line is not the SCF grid
+
+
+def test_link1_jobs_2_and_3_are_told_apart_by_the_settings_their_deck_requests(db_conn):
+    with Session(db_conn) as session, session.begin():
+        two = _g16_calc(session)
+        _read(session, two, _JOB2_DECK, ArtifactKind.input)
+        _read(session, two, _LINK1_LOG)
+        rows = _log_rows(session, two)
+        assert ("grid.quality", "fine") in rows and ("scf.convergence", "very_tight") in rows
+        assert ("grid.quality", "ultrafine") not in rows and ("scf.convergence", "tight") not in rows
+        assert _scf_keys(rows) == _SCF
+
+        three = _g16_calc(session)
+        _read(session, three, _JOB3_DECK, ArtifactKind.input)
+        _read(session, three, _LINK1_LOG)
+        rows = _log_rows(session, three)
+        assert _scf_keys(rows) == _SCF  # its own report...
+        # ...and no grid or SCF keyword of job 1 or job 2 stands in for the ones job 3 never wrote.
+        assert not {k for k, _ in rows} & {"grid.quality", "scf.convergence"}
+        assert not any(k == "IRadAn" for k, _ in rows)
+        assert ("guess.strategy", "read") in rows
+
+
+def test_link1_jobs_at_one_level_with_nothing_known_about_the_request_bind_to_nothing(db_conn):
+    """Jobs 2 and 3 are both `sp wb97xd/def2svp`; with no deck or typed row the calculation cannot be told from either."""
+    with Session(db_conn) as session, session.begin():
+        calc = _g16_calc(session)
+        _read(session, calc, _LINK1_LOG)
+        assert _log_rows(session, calc) == {}
+        assert calc.parameters_json is None  # no snapshot is taken from a job that may not be this calculation
+
+
+@pytest.mark.parametrize(
+    ("calc_type", "method", "basis"),
+    [
+        (CalculationType.freq, "B3LYP", "def2-SVP"),  # the right level, but no job has a freq keyword
+        (CalculationType.opt, "B3LYP", "6-31G(d)"),  # the right type and method, another basis
+        (CalculationType.sp, "B3LYP", "def2-SVP"),  # a single point at job 1's level, but job 1 is an opt
+        (CalculationType.opt, "MP2", "def2-SVP"),
+    ],
+)
+def test_a_calculation_no_link1_job_matches_gets_nothing_from_the_log(db_conn, calc_type, method, basis):
+    with Session(db_conn) as session, session.begin():
+        calc = _g16_calc(session, calc_type, method=method, basis=basis)
+        _read(session, calc, _LINK1_LOG)
+        assert _log_rows(session, calc) == {}
+
+
+def test_a_single_job_g16_log_binds_without_any_tie_break(db_conn):
+    default = (FIXTURES / "gaussian" / "water_default_g16.log").read_text(errors="replace")
+    with Session(db_conn) as session, session.begin():
+        calc = _g16_calc(session, method="B3LYP")
+        _read(session, calc, default)
+        rows = _log_rows(session, calc)
+        assert _scf_keys(rows) == _SCF
+        assert not any(k == "IRadAn" for k, _ in rows)

@@ -72,6 +72,7 @@ from app.services.ess_software_detection import (
 )
 from app.services.parameter_observation import ParserObservation
 from app.services.parameter_reconciliation import (
+    bind_gaussian_job,
     declared_parameter_warnings,
     level_of_theory_warnings,
     merge_artifact_observations,
@@ -261,6 +262,26 @@ def _parse_gaussian_text(text: str) -> dict:
     }
 
 
+def _the_calculations_job(
+    session: Session, calculation: Calculation, software: str, text: str, artifact_kind: ArtifactKind
+) -> tuple[str, bool]:
+    """``(text to read, unbound)``: a Gaussian log is cut to the job that is this calculation (see
+    :func:`app.services.parameter_reconciliation.bind_gaussian_job`).
+
+    When no single job is, the whole text is returned with ``unbound`` set: the caller reads nothing that belongs to a
+    job from it (no echoed request, no reported value), so another job's value never stands in. Decks and the other
+    programs' logs pass through.
+    """
+    if software != "gaussian" or artifact_kind is ArtifactKind.input:
+        return text, False
+    try:
+        session.flush()
+    except Exception:  # pragma: no cover - defensive; the bind reads only stored rows
+        pass
+    job = bind_gaussian_job(session, calculation, text)
+    return (text, True) if job is None else (job, False)
+
+
 def extract_and_store_calculation_parameters(
     session: Session,
     calculation: Calculation,
@@ -312,8 +333,11 @@ def extract_and_store_calculation_parameters(
     """
 
     software = _resolve_software(calculation, artifact_text)
-    parsed = _run_parser(software, artifact_text)
     is_deck = artifact_kind is ArtifactKind.input
+    artifact_text, unbound_log = _the_calculations_job(session, calculation, software, artifact_text, artifact_kind)
+    parsed = _run_parser(software, artifact_text)
+    if unbound_log:
+        parsed = {**parsed, "parameters": []}
 
     # DR-0008: reconcile the declared software_release against the version
     # banner the parser just observed, and persist the outcome on the
@@ -349,7 +373,7 @@ def extract_and_store_calculation_parameters(
         disagreements_before = reported_setting_disagreements(session, calculation, software)
     except Exception:  # pragma: no cover - defensive, never blocks
         disagreements_before = []
-    observations = _observations_of(software, artifact_text, parsed, artifact_kind, calculation)
+    observations = _observations_of(software, "" if unbound_log else artifact_text, parsed, artifact_kind, calculation)
     # What this artifact requests, before the precedence rule drops any of it: the typed-versus-read judgement is
     # made on this, so it does not depend on which artifact of the request was read first. A reported value is not
     # a request and is never judged against what the depositor typed.
@@ -363,7 +387,7 @@ def extract_and_store_calculation_parameters(
     )
     parsed_stamp = parsed.get("parser")
     effective_parser = parser or (ParserStamp(**parsed_stamp) if isinstance(parsed_stamp, dict) else None)
-    snapshot_is_ours = is_deck or calculation.parameters_json is None
+    snapshot_is_ours = is_deck or (calculation.parameters_json is None and not unbound_log)
 
     rows = persist_calculation_parameters(
         session,
@@ -456,9 +480,12 @@ def _parse_stored_artifact(session: Session, calculation: Calculation, artifact:
         content = load_artifact_bytes(artifact.sha256, client=client_box[0])
     text = _decode_text(content)
     software = _resolve_software(calculation, text)
+    text, unbound = _the_calculations_job(session, calculation, software, text, artifact.kind)
     parsed = _run_parser(software, text)
+    if unbound:
+        parsed = {**parsed, "parameters": []}
     stamp = ParserStamp(**parsed["parser"]) if isinstance(parsed.get("parser"), dict) else None
-    return software, _observations_of(software, text, parsed, artifact.kind, calculation), stamp
+    return software, _observations_of(software, "" if unbound else text, parsed, artifact.kind, calculation), stamp
 
 
 def _append_log_observations(session: Session, calculation: Calculation, software, observations, stamp) -> None:

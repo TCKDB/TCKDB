@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.153.0 - 2026-11-04
+
+The route of a Gaussian log is read correctly when it is short. No field, warning or code is added or removed.
+
+- **Fixed:** Gaussian sizes the rows of dashes round the echoed route to the route itself (43 wide for `# sp b3lyp/def2svp`, 70 for a long one). The reader only treated rows of 60 or more as the route's edges, so a short route was never closed: it ran on into the log (one measured route was 5012 characters) and the settings read from it included log text, such as `NAtoms` and `Conv`, as if they had been requested. A row of four or more dashes is now an edge too. Routes of 60 characters or more were never affected.
+
 ## 0.152.0 - 2026-11-04
 
 A deposit can earn one more warning, and the rule for a deck against a log reverses. No field is added or removed.

@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A Gaussian --Link1-- log is read per job (2026-11-04)
+
+- **Client: `tckdb-schemas` 0.152.0 to 0.153.0** (a route-reader fix, no field or code added or removed; `tckdb-client` unchanged). No migration, no new environment variable.
+- **What changed.** A Gaussian log is split into jobs at `Entering Link 1` (a `--Link1--` file prints no second `Entering Gaussian System` banner). The job that is the calculation is found by job type, level of theory and, when several jobs share both, the settings the calculation's input deck or typed rows already request; when no single job is, nothing is read from the log, neither its echoed request nor its reported values. Before, a multi-job Gaussian log reported nothing but still had its first job's echoed route read as the request of every calculation.
+- **Fixed.** A short echoed route (dash rows narrower than 60 characters) was never closed and ran on into the log, so log text was read as requested settings. See `tckdb-schemas` 0.153.0.
+- **Not changed.** IRadAn stays raw and unmapped, and is read only from the `IXCGrd= .. IRadAn=` line, never from the Harris initial-guess lines (they differ from it in 58 fixture logs). No Gaussian requested-versus-reported warning: no source documents the threshold `SCF=VeryTight` stands for.
+
 ## The settings a program reports it used are stored beside the ones requested, and the log outranks the deck (2026-11-04)
 
 - **Client: `tckdb-schemas` 0.151.0 to 0.152.0** (one new warning code, one sentence changed, no field added or removed; `tckdb-client` unchanged). One new Alembic revision, `c8e2a6d1f305`: `calculation_parameter.statement_kind` (nullable, new enum `parameter_statement_kind`: `requested` / `reported`), existing parser rows stamped `requested`, a check constraint that keeps `reported` to output-log rows, and eight vocabulary keys for the numbers a log prints (`grid.integration_accuracy`, `grid.angular_max`, `scf.tol_*`). No identity change; no new environment variable.
