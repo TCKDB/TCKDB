@@ -29,7 +29,7 @@ import hashlib
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tckdb_schemas.fragments.version import ParserStamp
 
@@ -45,7 +45,6 @@ from app.db.models.common import (
     ParameterStatementKind,
 )
 from app.schemas.fragments.artifact import ArtifactIn
-from app.schemas.fragments.calculation import CalculationParameterObservation
 from app.schemas.upload_warning import UploadWarning
 from app.services import (
     gaussian_parameter_parser,
@@ -74,6 +73,7 @@ from app.services.parameter_reconciliation import (
     declared_parameter_warnings,
     level_of_theory_warnings,
     merge_artifact_observations,
+    reported_setting_disagreements,
     reported_setting_warnings,
 )
 from app.services.reported_settings_parser import parse_gaussian_reported, parse_orca_reported
@@ -256,7 +256,7 @@ def extract_and_store_calculation_parameters(
 
     ``artifact_text`` is an input deck (``artifact_kind=input``) or an output log whose echoed input is read
     (``artifact_kind=output_log``). The two are stored side by side and never erase each other; where both
-    state a setting the deck's row is kept (see :mod:`app.services.parameter_reconciliation`). A log skips
+    state a setting the log's echoed row is kept (see :mod:`app.services.parameter_reconciliation`). A log skips
     the software reconciliation, which the output-log hooks already run once per batch, and does not
     overwrite the ``parameters_json`` snapshot a deck wrote.
 
@@ -325,6 +325,12 @@ def extract_and_store_calculation_parameters(
                 exc,
             )
 
+    # Disagreements already in place, so the warning below is given for what this read creates and not again.
+    try:
+        session.flush()
+        disagreements_before = reported_setting_disagreements(session, calculation, software)
+    except Exception:  # pragma: no cover - defensive, never blocks
+        disagreements_before = []
     observations = _observations_of(software, artifact_text, parsed, artifact_kind)
     # What this artifact requests, before the precedence rule drops any of it: the typed-versus-read judgement is
     # made on this, so it does not depend on which artifact of the request was read first. A reported value is not
@@ -361,7 +367,7 @@ def extract_and_store_calculation_parameters(
         try:
             session.flush()
             warnings.extend(conflicts)
-            warnings.extend(reported_setting_warnings(session, calculation, software))
+            warnings.extend(reported_setting_warnings(session, calculation, software, before=disagreements_before))
             warnings.extend(
                 declared_parameter_warnings(
                     session, calculation, observed, parsed_software=software, artifact_kind=artifact_kind
@@ -405,7 +411,8 @@ def _short_timeout_client():
 
 
 def _stored_log_rows_restore_reason(artifact: CalculationArtifact, exc: Exception) -> str:
-    return f"stored output log id={artifact.id} not re-read: {type(exc).__name__}: {exc}"
+    what = "input deck" if artifact.kind is ArtifactKind.input else "output log"
+    return f"stored {what} id={artifact.id} not re-read: {type(exc).__name__}: {exc}"
 
 
 def _stored_artifacts(session: Session, calculation: Calculation, kind: ArtifactKind) -> list[CalculationArtifact]:
@@ -451,21 +458,30 @@ def _append_log_observations(session: Session, calculation: Calculation, softwar
     )
 
 
-def refresh_output_log_rows(session: Session, calculation: Calculation) -> None:
-    """Re-derive the calculation's deck and log rows from its stored artifacts (after a parser fix); all or nothing.
+def refresh_output_log_rows(
+    session: Session, calculation: Calculation, *, deck_artifact: CalculationArtifact | None = None
+) -> None:
+    """Re-derive the calculation's log rows **and its deck rows** from stored artifacts (after a parser fix); all or nothing.
+
+    ``deck_artifact`` is the deck whose rows stand (an operator's ``--artifact-id`` choice); by default it is the
+    most recently stored input artifact, the one an upload's replace-all leaves standing.
 
     Log rows are appended, first statement wins, and carry no source artifact, so a parser improvement cannot
     replace them one by one. A deck row is dropped when a log echoes the same setting (the log outranks the deck),
-    so when the log rows are re-derived the deck rows they had shadowed must come back first. The earliest stored
-    deck and every stored log are read and parsed before anything is changed; if any cannot be, this raises
+    so when the log rows are re-derived the deck rows they had shadowed must come back first. That deck and every
+    stored log are read and parsed before anything is changed; if any cannot be, this raises
     :class:`ParameterExtractionError` having deleted nothing, so an outage never turns two rows into none. Only
     then are the old log rows dropped, the deck rows rebuilt, and the new log rows appended in upload order.
     """
     client_box: list = []
     deck = None
-    decks = _stored_artifacts(session, calculation, ArtifactKind.input)
+    if deck_artifact is None:
+        decks = _stored_artifacts(session, calculation, ArtifactKind.input)
+        deck_artifact = decks[-1] if decks else None
     logs = []
-    for artifact in decks[:1] + _stored_artifacts(session, calculation, ArtifactKind.output_log):
+    for artifact in ([deck_artifact] if deck_artifact is not None else []) + _stored_artifacts(
+        session, calculation, ArtifactKind.output_log
+    ):
         try:
             parsed = _parse_stored_artifact(session, calculation, artifact, client_box)
         except Exception as exc:

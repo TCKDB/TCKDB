@@ -15,7 +15,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models.calculation import Calculation, CalculationArtifact, CalculationParameter
+from app.db.models.calculation import CalculationArtifact, CalculationParameter
 from app.db.models.common import ArtifactKind, CalculationType, ParameterSource, ParameterStatementKind
 from app.schemas.fragments.calculation import (
     CalculationParameterObservation,
@@ -24,7 +24,10 @@ from app.schemas.fragments.calculation import (
 )
 from app.schemas.reads.scientific_calculation import EffectiveSettingState
 from app.services.calculation_parameter_extraction import extract_and_store_calculation_parameters
-from app.services.calculation_resolution import persist_calculation_parameters, resolve_and_persist_calculation_with_results
+from app.services.calculation_resolution import (
+    persist_calculation_parameters,
+    resolve_and_persist_calculation_with_results,
+)
 from app.services.scientific_read.effective_settings import build_effective_settings
 from tests.services.test_calculation_parameter_extraction import _create_species_entry, _next_inchi_key
 
@@ -52,7 +55,7 @@ def _arc_gaussian_default_grid_log() -> str:
     return next(t for t in texts if "Entering Gaussian System" in t and "IRadAn=           0 IRanWt" in t)
 
 
-def _calc(session: Session, *, software: str = "orca", version: str | None = "6.0.0"):
+def _calc(session: Session, *, software: str = "orca", version: str | None = "6.0.0", method: str = "B3LYP"):
     entry_id = _create_species_entry(session, inchi_key=_next_inchi_key("RPTD"))
     release = {"name": software}
     if version is not None:
@@ -60,7 +63,7 @@ def _calc(session: Session, *, software: str = "orca", version: str | None = "6.
     upload = CalculationWithResultsPayload(
         type=CalculationType.opt,
         software_release=release,
-        level_of_theory={"method": "B3LYP", "basis": "def2-TZVP"},
+        level_of_theory={"method": method, "basis": "def2-TZVP"},
         opt_result=OptResultPayload(converged=True),
     )
     return resolve_and_persist_calculation_with_results(session, upload, species_entry_id=entry_id)
@@ -295,16 +298,16 @@ def test_rung_3_with_nothing_stated_the_assumed_default_is_labelled_and_never_st
     with Session(db_conn) as session, session.begin():
         calc = _calc(session, software="orca", version="6.0.0")
         grid = _by_setting(session, calc)["grid"]
-        assert (grid.state, grid.assumed_value) == (EffectiveSettingState.assumed_default_no_output_log, "DefGrid2")
+        assert (grid.state, grid.assumed_value) == (EffectiveSettingState.assumed_default_no_output_log, "defgrid2")
         _attach_log_artifact(session, calc)  # a log exists, but says nothing about the grid
         grid = _by_setting(session, calc)["grid"]
-        assert (grid.state, grid.assumed_value) == (EffectiveSettingState.assumed_default, "DefGrid2")
+        assert (grid.state, grid.assumed_value) == (EffectiveSettingState.assumed_default, "defgrid2")
         assert not _rows(session, calc)  # read-time only: nothing was written
 
 
 @pytest.mark.parametrize(
     ("software", "version", "expected"),
-    [("gaussian", "09", "FineGrid"), ("gaussian", "16", "UltraFine"), ("orca", "5.0.4", "DefGrid2")],
+    [("gaussian", "09", "fine"), ("gaussian", "16", "ultrafine"), ("orca", "5.0.4", "defgrid2")],
 )
 def test_the_assumed_default_follows_program_and_version(db_conn, software, version, expected):
     with Session(db_conn) as session, session.begin():
@@ -326,7 +329,7 @@ def test_a_gaussian_grid_report_is_listed_but_does_not_decide_the_state(db_conn)
         _read(session, calc, _arc_gaussian_default_grid_log())
         grid = _by_setting(session, calc)["grid"]
         assert [(r.key, r.value) for r in grid.reported] == [("IRadAn", "0")]
-        assert grid.state is EffectiveSettingState.assumed_default and grid.assumed_value == "FineGrid"
+        assert grid.state is EffectiveSettingState.assumed_default and grid.assumed_value == "fine"
         # The SCF thresholds of the same log are numbers, and do decide.
         assert _by_setting(session, calc)["scf_convergence"].state is EffectiveSettingState.reported
         # A route that names the grid is the requested value, ranked above the assumed default.
@@ -355,3 +358,148 @@ def test_the_read_ranks_an_echo_above_a_deck_even_when_both_rows_are_stored(db_c
         session.flush()
         grid = _by_setting(session, calc)["grid"]
         assert (grid.requested_value, grid.requested_from) == ("defgrid3", "output_log")
+
+
+@pytest.mark.parametrize("method", ["HF", "MP2", "DLPNO-CCSD(T)", "CCSD(T)-F12"])
+def test_no_assumed_grid_for_a_method_without_a_dft_grid(db_conn, method):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, software="orca", version="5.0.4", method=method)
+        grid = _by_setting(session, calc)["grid"]
+        assert (grid.state, grid.assumed_value) == (EffectiveSettingState.not_stated, None)
+    # ...and the same program and version with a DFT method does show it, so the omission is not vacuous.
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, software="orca", version="5.0.4", method="B3LYP")
+        assert _by_setting(session, calc)["grid"].assumed_value == "defgrid2"
+
+
+def test_a_version_with_the_program_name_in_front_still_parses(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, software="gaussian", version="Gaussian 16")
+        assert _by_setting(session, calc)["grid"].assumed_value == "ultrafine"
+
+
+# ---------------------------------------------------------------------------
+# review fixes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("deck_first", [True, False])
+def test_the_warning_is_given_once_whatever_the_upload_order_and_not_again_later(db_conn, deck_first):
+    deck = _ORCA_DECK.replace("defgrid2", "defgrid3")
+    log = _with_echo(_ORCA_LOG, "defgrid2", "defgrid3")
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        collected = []
+        for text, kind in [(deck, ArtifactKind.input), (log, ArtifactKind.output_log)][:: 1 if deck_first else -1]:
+            collected += _read(session, calc, text, kind=kind)
+        mismatches = [w for w in collected if w.code == "reported_setting_differs_from_requested"]
+        assert [w.context["canonical_key"] for w in mismatches] == ["grid.angular_max"]
+        # An unrelated later upload (a second copy of the deck) repeats nothing.
+        again = _read(session, calc, deck, kind=ArtifactKind.input)
+        assert "reported_setting_differs_from_requested" not in [w.code for w in again]
+
+
+def test_explicit_tolerance_beats_the_keyword_preset_and_raises_no_false_warning(db_conn):
+    explicit = _ORCA_LOG.replace("|  4>     MaxIter 2000", "|  4>     TolE 1e-6\n|  4>     MaxIter 2000", 1)
+    assert "TolE 1e-6" in explicit
+    # The log still reports TolE 1e-8 (TightSCF) against an explicit 1e-6: a real contradiction, so it warns...
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        keys = {w.context["canonical_key"] for w in _read(session, calc, explicit) if w.code == "reported_setting_differs_from_requested"}
+        assert keys == {"scf.tol_energy_eh"}
+    # ...and when the log reports the explicit value, TightSCF's 1e-8 preset is not held against it.
+    honoured = explicit.replace("TolE            ....  1.000e-08 Eh", "TolE            ....  1.000e-06 Eh")
+    assert honoured != explicit
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        assert "reported_setting_differs_from_requested" not in [w.code for w in _read(session, calc, honoured)]
+
+
+def test_crlf_logs_are_read_like_lf_logs():
+    from app.services.reported_settings_parser import parse_orca_reported
+
+    assert parse_orca_reported(_ORCA_LOG.replace("\n", "\r\n")) == parse_orca_reported(_ORCA_LOG)
+    assert parse_orca_reported(_ORCA_LOG)
+
+
+def test_an_orca_file_with_new_job_in_its_echoed_input_reports_nothing():
+    """Synthetic: a `$new_job` section spliced into a real fixture's echoed input (the fixture itself has one job)."""
+    from app.services.reported_settings_parser import parse_orca_reported
+
+    spliced = _ORCA_LOG.replace("|  2> !OPT FREQ", "|  2> $new_job\n|  2> !OPT FREQ", 1)
+    assert spliced != _ORCA_LOG
+    assert parse_orca_reported(_ORCA_LOG) and parse_orca_reported(spliced) == []
+    assert parse_orca_reported(_ORCA_LOG.replace("|  2> !OPT FREQ", "|  2> %compound", 1).replace("%compound", "%Compound")) == []
+
+
+def test_two_logs_with_different_gaussian_grid_codes_disagree(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, software="gaussian", version="09")
+        _read(session, calc, _G09_LOG)
+        other = _G09_LOG.replace("IRadAn=           5 IRanWt", "IRadAn=           0 IRanWt")
+        assert other != _G09_LOG
+        codes = [w.code for w in _read(session, calc, other)]
+        assert "output_log_disagrees_with_earlier_output_log" in codes
+        assert [r.raw_value for r in _rows(session, calc) if r.raw_key == "IRadAn"] == ["5"]
+
+
+def test_a_rung_with_conflicting_values_is_marked_and_does_not_fall_through(db_conn):
+    from app.db.models.calculation import CalculationParameterVocab
+
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        if session.get(CalculationParameterVocab, "grid.quality") is None:
+            session.add(CalculationParameterVocab(canonical_key="grid.quality"))
+            session.flush()
+        for kind, value in ((ArtifactKind.output_log, "defgrid1"), (ArtifactKind.output_log, "defgrid3"), (ArtifactKind.input, "defgrid2")):
+            session.add(
+                CalculationParameter(
+                    calculation_id=calc.id, raw_key="g", raw_value=value, canonical_key="grid.quality", canonical_value=value,
+                    source=ParameterSource.parser, artifact_kind=kind, statement_kind=ParameterStatementKind.requested,
+                )
+            )
+        session.flush()
+        grid = _by_setting(session, calc)["grid"]
+        assert (grid.state, grid.requested_from, grid.requested_value, grid.conflicting) == (
+            EffectiveSettingState.requested, "output_log", None, True,
+        )
+        # Without the conflict the same rung gives a value, so the marker is not vacuous.
+        session.query(CalculationParameter).filter(CalculationParameter.canonical_value == "defgrid1").delete()
+        session.expire_all()
+        grid = _by_setting(session, calc)["grid"]
+        assert (grid.requested_value, grid.conflicting) == ("defgrid3", False)
+
+
+def test_refresh_rebuilds_deck_rows_from_the_deck_the_caller_chose(db_conn, monkeypatch):
+    from app.services import calculation_parameter_extraction as cpe
+
+    store: dict[str, bytes] = {}
+    monkeypatch.setattr(cpe, "load_artifact_bytes", lambda digest, **_: store[digest])
+
+    def add_deck(session, calc, text, name):
+        content = text.encode()
+        sha = hashlib.sha256(content).hexdigest()
+        store[sha] = content
+        artifact = CalculationArtifact(
+            calculation_id=calc.id, kind=ArtifactKind.input, uri=f"s3://t/{sha}", sha256=sha, bytes=len(content), filename=name
+        )
+        session.add(artifact)
+        session.flush()
+        return artifact
+
+    def scf(session, calc):
+        return {r.canonical_value for r in _rows(session, calc) if r.canonical_key == "scf.convergence"}
+
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, software="gaussian", version="16")
+        deck_a = add_deck(session, calc, "#P b3lyp/6-31g(d) opt scf=tight\n", "a.gjf")
+        deck_b = add_deck(session, calc, "#P b3lyp/6-31g(d) opt scf=verytight\n", "b.gjf")
+        _read(session, calc, deck_a.sha256 and store[deck_a.sha256].decode(), kind=ArtifactKind.input)
+        _read(session, calc, store[deck_b.sha256].decode(), kind=ArtifactKind.input)
+        assert scf(session, calc) == {"very_tight"}
+        cpe.refresh_output_log_rows(session, calc, deck_artifact=deck_a)  # the operator chose deck A
+        assert scf(session, calc) == {"tight"}
+        cpe.refresh_output_log_rows(session, calc, deck_artifact=deck_b)
+        assert scf(session, calc) == {"very_tight"}
+        cpe.refresh_output_log_rows(session, calc)  # default: the deck an upload leaves standing, the latest
+        assert scf(session, calc) == {"very_tight"}

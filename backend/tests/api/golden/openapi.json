@@ -17425,6 +17425,11 @@
             ],
             "title": "Assumed Value"
           },
+          "conflicting": {
+            "default": false,
+            "title": "Conflicting",
+            "type": "boolean"
+          },
           "reported": {
             "items": {
               "$ref": "#/components/schemas/ReportedSettingValue"

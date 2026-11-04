@@ -152,9 +152,16 @@ def merge_artifact_observations(
     def is_report(o) -> bool:
         return getattr(o, "statement_kind", None) is reported_kind
 
-    def compare(stored: Sequence[CalculationParameter], new: Sequence, make) -> list[UploadWarning]:
-        stored_values = _values_by_key((r.canonical_key, r.canonical_value) for r in stored)
-        new_values = _values_by_key((o.canonical_key, o.canonical_value) for o in new)
+    def named(x, raw: bool) -> tuple[str | None, str | None]:
+        """The canonical pair, or for a reported row with no canonical key (Gaussian's grid code) its raw pair."""
+        if raw and x.canonical_key is None:
+            # Lower case with a section, the shape a warning's canonical_key must have.
+            return (f"{x.section or 'raw'}.{x.raw_key}").lower(), x.raw_value
+        return x.canonical_key, x.canonical_value
+
+    def compare(stored: Sequence[CalculationParameter], new: Sequence, make, raw: bool = False) -> list[UploadWarning]:
+        stored_values = _values_by_key(named(r, raw) for r in stored)
+        new_values = _values_by_key(named(o, raw) for o in new)
         return [
             make(key, stored_values[key], new_values[key])
             for key in sorted(new_values.keys() & stored_values.keys())
@@ -170,7 +177,9 @@ def merge_artifact_observations(
     if artifact_kind is ArtifactKind.output_log:
         warnings += compare(decks, new_requested, lambda key, stored, new: _conflict_warning(key, software, stored, new))
         warnings += compare(echoes, new_requested, lambda key, stored, new: _log_conflict_warning(key, software, stored, new))
-        warnings += compare(reports, new_reported, lambda key, stored, new: _log_conflict_warning(key, software, stored, new))
+        warnings += compare(
+            reports, new_reported, lambda key, stored, new: _log_conflict_warning(key, software, stored, new), raw=True
+        )
         taken_echo = {ident(r) for r in echoes}
         taken_report = {ident(r) for r in reports}
         kept = [o for o in new_requested if ident(o) not in taken_echo]
@@ -208,7 +217,7 @@ def declared_parameter_warnings(
 ) -> list[UploadWarning]:
     """Warn for each key the depositor typed and the artifact just read (``observed`` pairs) contradict.
 
-    ``observed`` is what the artifact says, whether or not its rows were stored (the deck-wins rule can drop a
+    ``observed`` is what the artifact says, whether or not its rows were stored (the precedence rule can drop a
     log's rows), so the judgement is the same whichever artifact of a request is read first.
     """
     declared = declared_software(calculation)
@@ -452,32 +461,47 @@ def _single(rows: Iterable[CalculationParameter], key: str) -> str | None:
 _SCF_KEYS = ("scf.tol_energy_eh", "scf.tol_orbital_gradient", "scf.tol_orbital_rotation", "scf.tol_diis_error")
 
 
+_EXPLICIT_TOLERANCES = {
+    "tole": "scf.tol_energy_eh",
+    "tolg": "scf.tol_orbital_gradient",
+    "tolx": "scf.tol_orbital_rotation",
+    "tolerr": "scf.tol_diis_error",
+}
+
+
 def orca_preset_disagreements(
-    requested_grid: str | None, requested_scf: str | None, reported: dict[str, str]
+    requested_grid: str | None,
+    requested_scf: str | None,
+    reported: dict[str, str],
+    explicit: dict[str, float] | None = None,
 ) -> list[tuple[str, str, str]]:
-    """``(canonical key, requested value, reported value)`` for each reported value the requested preset contradicts."""
+    """``(canonical key, requested value, reported value)`` for each reported value the request contradicts.
+
+    ``explicit`` holds thresholds the input sets itself (``%scf TolE 1e-6``): an explicit value wins over the
+    keyword's preset for that threshold, so ``!TightSCF`` plus ``TolE 1e-6`` is judged against 1e-6.
+    """
     found: list[tuple[str, str, str]] = []
     expected_points = _ORCA_DEFGRID_ANGULAR_POINTS.get(requested_grid or "")
     got_points = reported.get("grid.angular_max")
     if expected_points is not None and got_points is not None and expected_points != got_points:
         found.append(("grid.angular_max", requested_grid, got_points))
-    preset = _ORCA_SCF_PRESETS.get(requested_scf or "")
-    if preset is not None:
-        for key, expected in preset.items():
-            got = reported.get(key)
-            if got is not None and not _same_number(got, expected):
-                found.append((key, requested_scf, got))
+    expected = dict(_ORCA_SCF_PRESETS.get(requested_scf or "", {}))
+    expected.update(explicit or {})
+    for key, value in expected.items():
+        got = reported.get(key)
+        if got is not None and not _same_number(got, value):
+            found.append((key, requested_scf if key not in (explicit or {}) else "explicit", got))
     return found
 
 
-def reported_setting_warnings(session: Session, calculation: Calculation, software: str) -> list[UploadWarning]:
-    """Warn where the log reports a setting that contradicts a documented requested preset (ORCA only).
+def reported_setting_disagreements(
+    session: Session, calculation: Calculation, software: str
+) -> list[tuple[str, str, str]]:
+    """``(canonical key, requested value, reported value)`` for each stored report a documented preset contradicts.
 
-    Only a requested value with a documented report is judged: a ``DefGrid`` against the angular grid ORCA reports,
-    and an SCF convergence keyword against the thresholds ORCA reports. Silent when either side is absent, when the
-    requested value is not in the tables, and for Gaussian (its grid report is an undocumented internal code, and its
-    1e-8 threshold is both the default and ``Tight``). The requested value is the log's echo, else the deck's: the
-    same order as the read. Both rows are kept.
+    ORCA only. The requested value is the log's echo, else the deck's: the same order as the read. Silent when either
+    side is absent, when the requested value is not in the tables, and for Gaussian (its grid report is an
+    undocumented internal code, and its 1e-8 threshold is both the default and ``Tight``).
     """
     if software != "orca":
         return []
@@ -497,20 +521,52 @@ def reported_setting_warnings(session: Session, calculation: Calculation, softwa
     def request(key: str) -> str | None:
         return _single(echo, key) or _single(deck, key)
 
-    found = orca_preset_disagreements(
+    explicit: dict[str, float] = {}
+    for rows_of in (deck, echo):  # the echo is read last, so it overrides the deck
+        for r in rows_of:
+            key = _EXPLICIT_TOLERANCES.get(r.raw_key.lower()) if (r.section or "").lower() == "scf" else None
+            if key is not None:
+                try:
+                    explicit[key] = float(r.raw_value)
+                except ValueError:
+                    pass
+    return orca_preset_disagreements(
         request("grid.quality"),
         request("scf.convergence"),
         {k: v for k in ("grid.angular_max", *_SCF_KEYS) if (v := _single(reported, k)) is not None},
+        explicit,
     )
-    return [
-        UploadWarning.from_code(
-            field="artifacts",
-            code=W_REPORTED_SETTING_DIFFERS_FROM_REQUESTED,
-            context={
-                "canonical_key": key,
-                "software": software,
-                "depositor_supplied": {"requested_value": requested_value, "reported_value": reported_value},
-            },
+
+
+def reported_setting_warnings(
+    session: Session,
+    calculation: Calculation,
+    software: str,
+    *,
+    before: Sequence[tuple[str, str, str]] = (),
+) -> list[UploadWarning]:
+    """Warn for each disagreement the current read created: present now, absent in ``before``, once per key.
+
+    ``before`` is :func:`reported_setting_disagreements` taken ahead of the read, so a later unrelated upload, or the
+    second of two artifacts that both leave the same disagreement in place, does not repeat a warning that was
+    already given. Both rows are kept.
+    """
+    already = {key for key, _, _ in before}
+    seen: set[str] = set()
+    warnings: list[UploadWarning] = []
+    for key, requested_value, reported_value in reported_setting_disagreements(session, calculation, software):
+        if key in already or key in seen:
+            continue
+        seen.add(key)
+        warnings.append(
+            UploadWarning.from_code(
+                field="artifacts",
+                code=W_REPORTED_SETTING_DIFFERS_FROM_REQUESTED,
+                context={
+                    "canonical_key": key,
+                    "software": software,
+                    "depositor_supplied": {"requested_value": requested_value, "reported_value": reported_value},
+                },
+            )
         )
-        for key, requested_value, reported_value in found
-    ]
+    return warnings

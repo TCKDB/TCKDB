@@ -124,6 +124,7 @@ __all__ = [
     "classify_method_family",
     "infer_hessian_method",
     "is_dft_functional",
+    "major_version",
     "calculation_deck_method",
     "check_calculation_deck_agrees",
     "resolve_tau_for_calculation",
@@ -421,7 +422,7 @@ _ORCA_META_GGA_PREFIXES = (
 
 _ORCA_ANALYTIC_META_GGA_FROM = 5
 
-_VERSION_MAJOR = re.compile(r"^\s*v?(\d+)")
+_VERSION_MAJOR = re.compile(r"^\s*(?:[A-Za-z]+[\s_-]*)?v?(\d+)")
 
 
 #: A leading integer outside this range is not an ORCA major version ("45",
@@ -429,14 +430,23 @@ _VERSION_MAJOR = re.compile(r"^\s*v?(\d+)")
 _ORCA_MAJOR_RANGE = range(1, 21)
 
 
-def _orca_major_version(version: str | None) -> int | None:
+def major_version(version: str | None, valid: range = _ORCA_MAJOR_RANGE) -> int | None:
+    """The leading integer of a version string if it lies in ``valid``, else ``None`` (unknown).
+
+    Accepts a program name or letter in front ("Gaussian 16", "G16", "v6.0.0"). A number outside ``valid`` is a build
+    number or a calendar version, not a major version, and counts as unknown.
+    """
     if version is None:
         return None
     m = _VERSION_MAJOR.match(version)
     if not m:
         return None
     major = int(m.group(1))
-    return major if major in _ORCA_MAJOR_RANGE else None
+    return major if major in valid else None
+
+
+def _orca_major_version(version: str | None) -> int | None:
+    return major_version(version, _ORCA_MAJOR_RANGE)
 
 
 def _orca_functional_class(token: str) -> str:

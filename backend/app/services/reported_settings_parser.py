@@ -35,7 +35,7 @@ def _split(text: str, marker: re.Pattern[str]) -> list[str]:
     starts = [m.start() for m in marker.finditer(text)]
     if not starts:
         return [text]
-    return [text[a:b] for a, b in zip(starts, starts[1:] + [len(text)])]
+    return [text[a:b] for a, b in zip(starts, [*starts[1:], len(text)], strict=True)]
 
 
 def _number(token: str) -> float:
@@ -123,8 +123,19 @@ def _orca_job(job: str) -> dict[str, dict]:
     return rows
 
 
+_ORCA_MULTI_JOB = re.compile(r"^\|\s*\d+>.*(\$new_job|%compound)", re.I | re.M)
+_GAUSSIAN_LINK1 = re.compile(r"^\s*--Link1--\s*$", re.I | re.M)
+
+
 def parse_orca_reported(text: str) -> list[dict]:
-    """Reported grid and SCF rows of an ORCA log; ``[]`` when the log prints none (or its jobs disagree)."""
+    """Reported grid and SCF rows of an ORCA log; ``[]`` when the log prints none (or its jobs disagree).
+
+    An ORCA file with ``$new_job`` or ``%compound`` in its echoed input prints its banner once for several jobs, so a
+    block cannot be bound to one calculation: nothing is reported from such a file.
+    """
+    text = text.replace("\r\n", "\n")
+    if _ORCA_MULTI_JOB.search(text):
+        return []
     return _agree([_orca_job(job) for job in _split(text, _ORCA_BANNER)])
 
 
@@ -156,5 +167,13 @@ def _gaussian_job(job: str) -> dict[str, dict]:
 
 
 def parse_gaussian_reported(text: str) -> list[dict]:
-    """Reported grid and SCF rows of a Gaussian log; ``[]`` when the log prints none (or its jobs disagree)."""
-    return _agree([_gaussian_job(job) for job in _split(text, _GAUSSIAN_JOB)])
+    """Reported grid and SCF rows of a Gaussian log; ``[]`` when the log prints none (or its jobs disagree).
+
+    A log whose echo shows ``--Link1--`` more often than the log splits into jobs cannot be bound to one calculation:
+    nothing is reported from it.
+    """
+    text = text.replace("\r\n", "\n")
+    jobs = _split(text, _GAUSSIAN_JOB)
+    if len(_GAUSSIAN_LINK1.findall(text)) >= len(jobs):
+        return []
+    return _agree([_gaussian_job(job) for job in jobs])

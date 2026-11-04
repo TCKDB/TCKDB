@@ -318,9 +318,12 @@ def _process_one(
 
     if force:
         # Log rows are appended and carry no source artifact, so a parser fix cannot replace them one by one:
-        # --force re-derives all of them from the stored output logs, under the deck-wins rule.
+        # --force re-derives the log rows from the stored output logs and rebuilds the deck rows from the deck
+        # chosen above, under the rule that the log's echoed row outranks the deck's.
         try:
-            refresh_output_log_rows(session, calculation)
+            refresh_output_log_rows(
+                session, calculation, deck_artifact=artifact if artifact.kind is ArtifactKind.input else None
+            )
         except Exception as exc:
             # Nothing was deleted (the refresh reads every log first); discard the deck pass too and report it.
             session.rollback()

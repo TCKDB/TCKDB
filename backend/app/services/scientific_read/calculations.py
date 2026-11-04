@@ -93,7 +93,6 @@ from app.schemas.reads.scientific_calculation import (
     CalculationOptResultSummary,
     CalculationOwnerSummary,
     CalculationParameterSummary,
-    EffectiveSettingSummary,
     CalculationPathSearchResultSummary,
     CalculationPathSearchSummary,
     CalculationResultSummary,
@@ -105,6 +104,7 @@ from app.schemas.reads.scientific_calculation import (
     CalculationSpinDiagnosticSummary,
     CalculationSPResultSummary,
     CalculationWavefunctionDiagnosticSummary,
+    EffectiveSettingSummary,
     ExecutionEnvironmentManifestSummary,
     ImaginaryModeProjectionEntry,
     ImaginaryModeProjectionSummary,
@@ -127,7 +127,6 @@ from app.schemas.reads.scientific_common import (
     WorkflowToolReleaseSummary,
 )
 from app.services.composite_verification import verify_composite_calculation
-from app.services.scientific_read.effective_settings import build_effective_settings
 from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.scientific_read.common import (
@@ -140,6 +139,7 @@ from app.services.scientific_read.common import (
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summary,
 )
+from app.services.scientific_read.effective_settings import build_effective_settings
 from app.services.scientific_read.handles import resolve_calculation_handle
 from app.services.scientific_read.imaginary_mode_projection import (
     build_imaginary_mode_projection,

@@ -1052,6 +1052,9 @@ class EffectiveSettingSummary(BaseModel):
     requested_from: Literal["output_log", "input", "typed"] | None = None
     reported: list[ReportedSettingValue] = Field(default_factory=list)
     assumed_value: str | None = None
+    #: True when the artifact that decides ``requested_value`` states two different values: the value is then
+    #: withheld (``None``) rather than one of them picked, and the state still names that artifact.
+    conflicting: bool = False
 
 
 class CalculationParameterSummary(BaseModel):

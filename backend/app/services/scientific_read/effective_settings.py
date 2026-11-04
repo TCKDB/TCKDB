@@ -48,9 +48,8 @@ _SETTINGS = {
 }
 
 
-def _value(rows: list[CalculationParameter], key: str) -> str | None:
-    values = [r.canonical_value for r in rows if r.canonical_key == key and r.canonical_value is not None]
-    return values[0] if values else None
+def _values(rows: list[CalculationParameter], key: str) -> set[str]:
+    return {r.canonical_value for r in rows if r.canonical_key == key and r.canonical_value is not None}
 
 
 def build_effective_settings(session: Session, calculation: Calculation) -> list[EffectiveSettingSummary]:
@@ -88,17 +87,19 @@ def build_effective_settings(session: Session, calculation: Calculation) -> list
         ] + [ReportedSettingValue(key=r.raw_key, value=r.raw_value) for r in reported_rows if r.raw_key in listed_raw]
         deciding = any(item.key in report_keys for item in listed)
 
-        requested_value, requested_from = None, None
+        requested_value, requested_from, conflicting = None, None, False
         for source, rows_of in (("output_log", echo), ("input", deck), ("typed", typed)):
-            requested_value = _value(rows_of, request_key)
-            if requested_value is not None:
+            values = _values(rows_of, request_key)
+            if values:
                 requested_from = source
+                conflicting = len(values) > 1
+                requested_value = None if conflicting else next(iter(values))
                 break
 
-        assumed = assumed_default_setting(software, version, setting)
+        assumed = assumed_default_setting(software, version, setting, calculation.lot.method if calculation.lot is not None else None)
         if deciding:
             state, assumed_value = EffectiveSettingState.reported, None
-        elif requested_value is not None:
+        elif requested_from is not None:
             state, assumed_value = EffectiveSettingState.requested, None
         elif assumed is not None:
             state = (
@@ -113,6 +114,7 @@ def build_effective_settings(session: Session, calculation: Calculation) -> list
                 state=state,
                 requested_value=requested_value,
                 requested_from=requested_from,
+                conflicting=conflicting,
                 reported=listed,
                 assumed_value=assumed_value,
             )
