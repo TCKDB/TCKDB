@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The settings a program reports it used are stored beside the ones requested, and the log outranks the deck (2026-11-04)
+
+- **Client: `tckdb-schemas` 0.150.0 to 0.151.0** (one new warning code, one sentence changed, no field added or removed; `tckdb-client` unchanged). One new Alembic revision, `c8e2a6d1f305`: `calculation_parameter.statement_kind` (nullable, new enum `parameter_statement_kind`: `requested` / `reported`), existing parser rows stamped `requested`, a check constraint that keeps `reported` to output-log rows, and eight vocabulary keys for the numbers a log prints (`grid.integration_accuracy`, `grid.angular_max`, `scf.tol_*`). No identity change; no new environment variable.
+- **What changed.** An output log is read a second way: for the DFT grid and the SCF thresholds it prints as the ones the program used (ORCA 5/6, Gaussian 03/09/16). They are stored as `reported` rows beside the requested ones, under their own numeric keys; no `grid.quality` or `scf.convergence` value is ever made from a report, and Gaussian's grid is kept as the raw `IRadAn` code it prints. Only grid and SCF convergence are read this way; dispersion, solvation, RI and frozen core are a later change.
+- **Reversed from the previous change.** Where a deck and the input a log echoes state the same setting, the log's row is kept and the deck's is not (upload order does not matter). `include=parameters` now also returns `effective_settings`: for the grid and the SCF convergence, the value used and where it comes from (`reported`, `requested` with the artifact, `assumed_default`, `assumed_default_no_output_log`, `not_stated`). An assumed default is the program's documented default for the declared program and version, computed on read and never stored.
+- **Not changed.** Upload-time tau resolution; the read side of tau now ignores reported rows and selects in stored order.
+
 ## An output log is read for parameters, and what a depositor typed is checked against the deck and the log (2026-11-03)
 
 - **Client: `tckdb-schemas` 0.148.0 to 0.149.0** (three new warning codes, no field added or removed; `tckdb-client` unchanged). One new Alembic revision, `a3d7f1c5b904`: `calculation_parameter.artifact_kind` (nullable, the existing `artifact_kind` enum), existing parser rows stamped `input`, and a check constraint that keeps it to parser rows. No identity change; no new environment variable. Stage 1 of the per-calculation-parameter work (part 2 of 2).

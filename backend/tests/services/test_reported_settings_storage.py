@@ -333,3 +333,25 @@ def test_a_gaussian_grid_report_is_listed_but_does_not_decide_the_state(db_conn)
         other = _calc(session, software="gaussian", version="09")
         _read(session, other, _G09_LOG)
         assert _by_setting(session, other)["grid"].state is EffectiveSettingState.requested
+
+
+def test_the_read_ranks_an_echo_above_a_deck_even_when_both_rows_are_stored(db_conn):
+    """Storage never keeps both for one setting, but the read must not depend on that: rows put there directly."""
+    from app.db.models.calculation import CalculationParameterVocab
+
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        if session.get(CalculationParameterVocab, "grid.quality") is None:
+            session.add(CalculationParameterVocab(canonical_key="grid.quality"))
+            session.flush()
+        for kind, value in ((ArtifactKind.input, "defgrid1"), (ArtifactKind.output_log, "defgrid3")):
+            session.add(
+                CalculationParameter(
+                    calculation_id=calc.id, raw_key="g", raw_value=value, canonical_key="grid.quality",
+                    canonical_value=value, source=ParameterSource.parser, artifact_kind=kind,
+                    statement_kind=ParameterStatementKind.requested,
+                )
+            )
+        session.flush()
+        grid = _by_setting(session, calc)["grid"]
+        assert (grid.requested_value, grid.requested_from) == ("defgrid3", "output_log")

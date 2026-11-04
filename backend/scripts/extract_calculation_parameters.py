@@ -37,8 +37,8 @@ Artifact-selection policy
 -------------------------
 
 A calculation with an input deck is read from its deck; the service then re-reads the calculation's stored output
-logs beside it, deck first, under the precedence rule of ``app/services/parameter_reconciliation.py`` (the deck's
-row wins where both state a setting). A calculation deposited with only an output log is read from its earliest
+logs beside it, deck first, under the precedence rule of ``app/services/parameter_reconciliation.py`` (the log's
+echoed row wins where both state a setting; the numbers the log reports are stored beside them). A calculation deposited with only an output log is read from its earliest
 log, which echoes the input.
 
 When multiple input artifacts exist for one calculation, the backfill

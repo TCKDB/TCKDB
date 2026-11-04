@@ -524,6 +524,11 @@ enum ParameterSource {
   curated
 }
 
+enum ParameterStatementKind {
+  requested
+  reported
+}
+
 enum PathSearchMethod {
   neb
   gsm
@@ -1796,6 +1801,7 @@ Table calculation_parameter {
   parser_name text
   parser_version text
   artifact_kind ArtifactKind
+  statement_kind ParameterStatementKind
   created_at timestamp [not null, default: 'now']
 
   indexes {
@@ -1809,6 +1815,7 @@ Table calculation_parameter {
   checks {
     `artifact_kind IS NULL OR (source = 'parser' AND artifact_kind IN ('input', 'output_log'))` [name: 'ck_calculation_parameter_artifact_kind_parser_input_or_log']
     `parameter_index IS NULL OR parameter_index >= 0` [name: 'ck_calculation_parameter_parameter_index_ge_0']
+    `statement_kind IS NULL OR (source = 'parser' AND (statement_kind = 'requested' OR artifact_kind = 'output_log'))` [name: 'ck_calculation_parameter_statement_kind_reported_from_log']
   }
 
   Note: 'EAV-style parsed parameter from an ESS calculation.'

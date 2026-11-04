@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.151.0 - 2026-11-04
+
+A deposit can earn one more warning, and the rule for a deck against a log reverses. No field is added or removed.
+
+- **Reversed:** where an uploaded input deck and the input a log echoes state the same setting, the **log's value is now kept** and the deck's row for it is not stored (it was the other way round). The log is the record of the run, and a deposit often has nothing else. `input_deck_disagrees_with_output_log` still warns, and its sentence now says the log's value was kept. Reading order for one setting: what the log reports, then the input the log echoes, then the uploaded deck, then a value the depositor typed.
+- New warning `reported_setting_differs_from_requested`. The output log reports a value for a setting that contradicts the documented report of what was requested (an ORCA `DefGrid` against the angular grid ORCA prints, an ORCA SCF convergence keyword against the thresholds ORCA prints). Both rows are kept. `context` has `canonical_key`, `software` and, under `depositor_supplied`, `requested_value` and `reported_value`. Gaussian never earns it: its grid report is an undocumented internal code.
+- New module `tckdb_schemas.program_default_settings`: the documented default grid by program and major version (Gaussian 09 FineGrid, Gaussian 16 UltraFine, ORCA 5 and 6 DefGrid2). Used when a record is read; never stored. No SCF default is listed because none is documented.
+
 ## 0.150.0 - 2026-11-03
 
 An accepted deposit can now earn four more warnings, each about a setting, a deck or a log that disagrees with what was declared. No field is added or removed.
