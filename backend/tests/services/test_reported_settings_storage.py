@@ -329,7 +329,7 @@ def test_the_assumed_default_follows_program_and_version(db_conn, software, vers
         # No sourced default: other ORCA job types, Gaussian 16, an undeclared version.
         ("orca", "6.0.0", "HF", CalculationType.sp, None),
         ("orca", "6.0.0", "B3LYP", CalculationType.freq, None),
-        ("gaussian", "16", "B3LYP", CalculationType.opt, None),
+        ("gaussian", "16", "B3LYP", CalculationType.sp, "tight"),
         ("gaussian", None, "HF", CalculationType.sp, None),
         ("orca", None, "HF", CalculationType.opt, None),
     ],

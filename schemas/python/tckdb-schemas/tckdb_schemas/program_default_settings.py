@@ -24,8 +24,11 @@ not here has no assumed default, and the read says "not stated" rather than gues
     to avoid the buildup of too much numerical noise in the gradients", chunk 13503) and ORCA 6.1 manual 4.1.12
     (same sentence, chunk 16764). The same manuals only say the plain default is "between medium and strong" (chunk
     14109), which is not a named level, so an ORCA single point, frequency or any other job type has no entry.
-  * Not listed, for want of a source in the knowledge base: Gaussian 16 (its logs report 1e-8, which is evidence, not a
-    documented default), Gaussian 03, other programs.
+  * Gaussian 16, any calculation type: ``tight``. No G16 manual line is in the knowledge base; the basis is the G09
+    sentence above (the keyword is unchanged) plus an observed default run accepted by the owner: a G16 Rev C.01
+    ``# sp b3lyp/def2svp`` job with no grid or SCF keyword prints "Requested convergence on RMS density matrix=1.00D-08"
+    (paper/notes/link1_gaussian_test_2026-11-04/water_default.log, 2026-11-04), i.e. Tight.
+  * Not listed, for want of a source: Gaussian 03, other programs.
 
 The grid default applies only to a DFT method; the SCF default does not. The version is the one the calculation declares. It is never guessed from the other fields.
 """
@@ -53,6 +56,7 @@ ASSUMED_DEFAULT_SETTINGS: dict[tuple[str, int], dict[str, str]] = {
 #: The tokens are the canonical ``scf.convergence`` values (``tight``, ``normal``, ...). See the module docstring for sources.
 _ASSUMED_SCF_CONVERGENCE: dict[tuple[str, int], dict[str | None, str]] = {
     ("Gaussian", 9): {None: "tight"},
+    ("Gaussian", 16): {None: "tight"},
     ("ORCA", 5): {"opt": "tight"},
     ("ORCA", 6): {"opt": "tight"},
 }

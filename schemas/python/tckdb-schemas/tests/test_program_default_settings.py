@@ -80,7 +80,7 @@ def test_other_methods_get_none(method):
         ("ORCA", "5.0.4", "B3LYP", "opt", "tight"),
         ("ORCA", "6.0.0", "HF", "sp", None),
         ("ORCA", "6.0.0", "HF", None, None),
-        ("Gaussian", "16", "B3LYP", "opt", None),
+        ("Gaussian", "16", "B3LYP", "opt", "tight"),
         ("Gaussian", "03", "HF", "sp", None),
         ("Gaussian", None, "HF", "sp", None),
         ("Gaussian", "09", None, "sp", None),
