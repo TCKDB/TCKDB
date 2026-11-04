@@ -461,6 +461,24 @@ RENDERED: dict[str, str] = {
         "point, in the coordinate's own unit, not a displacement from the scan's start. Either the values or the "
         "geometries attached to the points are wrong, and this check cannot tell which."
     ),
+    # -- wavefunction reliability diagnostics -----------------------------------------------------------------------
+    "t1_diagnostic_above_closed_shell_threshold": (
+        "The T1 diagnostic of this coupled-cluster calculation, declared as a singlet and so treated as closed shell, "
+        "is above the 0.02 rule of thumb of Lee and Taylor (1989) for single-reference reliability. The energy is "
+        "stored as deposited. The diagnostic measures the size of the single-excitation amplitudes; it does not by "
+        "itself establish multireference character, and it is known to raise alarms for calculations that are "
+        "accurate."
+    ),
+    "spin_contamination_above_conventional_threshold": (
+        "The <S^2> of this calculation differs from the ideal S(S+1) for its declared spin multiplicity by more than "
+        "0.1, the conventional criterion for spin contamination. That criterion is a convention of the field, not a "
+        "finding about this system. The calculation is stored as deposited."
+    ),
+    "spin_expected_contradicts_multiplicity": (
+        "The ideal <S^2> the program printed for this calculation is not the S(S+1) that the declared spin "
+        "multiplicity implies. The calculation was stored as deposited. Either the declared multiplicity or the spin "
+        "state the program ran is wrong; this check cannot tell which."
+    ),
 }
 
 
@@ -905,6 +923,48 @@ def _scan_disagrees(context: Mapping[str, Any]) -> str | None:
         "was accepted as sent. A coordinate value is the internal coordinate itself at that point, in its own unit, "
         "not a displacement from the scan's start. Either the values or the geometries attached to the points are "
         "wrong, and this check cannot tell which."
+    )
+
+
+def _t1_above_closed_shell_threshold(context: Mapping[str, Any]) -> str | None:
+    t1 = _num(context.get("t1_diagnostic"))
+    threshold = _num(context.get("threshold"))
+    if t1 is None or threshold is None:
+        return None
+    return (
+        "The T1 diagnostic of this coupled-cluster calculation, declared as a singlet and so treated as closed shell, "
+        f"is {t1:g}, above the {threshold:g} rule of thumb of Lee and Taylor (1989) for single-reference reliability. "
+        "The energy is stored as deposited. The diagnostic measures the size of the single-excitation amplitudes; it "
+        "does not by itself establish multireference character, and it is known to raise alarms for calculations that "
+        "are accurate."
+    )
+
+
+def _spin_contamination(context: Mapping[str, Any]) -> str | None:
+    value = _num(context.get("s_squared"))
+    ideal = _num(context.get("ideal_s_squared"))
+    multiplicity = _int(context.get("multiplicity"))
+    threshold = _num(context.get("threshold"))
+    if value is None or ideal is None or multiplicity is None or threshold is None:
+        return None
+    return (
+        f"The <S^2> of this calculation is {value:.9g}, against an ideal S(S+1) of {ideal:g} for its declared spin "
+        f"multiplicity of {multiplicity}: a difference of {round(abs(value - ideal), 9):.9g}, which exceeds "
+        f"{threshold:g}, the conventional criterion for spin contamination. That criterion is a convention of the field, not a finding "
+        "about this system. The calculation is stored as deposited."
+    )
+
+
+def _spin_expected_contradicts(context: Mapping[str, Any]) -> str | None:
+    printed = _num(context.get("s_squared_expected"))
+    expected = _num(context.get("expected_from_entry"))
+    multiplicity = _int(context.get("multiplicity"))
+    if printed is None or expected is None or multiplicity is None:
+        return None
+    return (
+        f"The program printed an ideal <S^2> of {printed:g} for this calculation, but the declared spin multiplicity "
+        f"of {multiplicity} implies {expected:g}. The calculation was stored as deposited. Either the declared "
+        "multiplicity or the spin state the program ran is wrong; this check cannot tell which."
     )
 
 
@@ -1844,6 +1904,9 @@ _WITH_CONTEXT: dict[str, Any] = {
     "species_entry_stereo_not_represented": _stereo_not_represented,
     "species_entry_stereo_unresolved": _stereo_unresolved,
     "scan_point_coordinate_disagrees_with_geometry": _scan_disagrees,
+    "t1_diagnostic_above_closed_shell_threshold": _t1_above_closed_shell_threshold,
+    "spin_contamination_above_conventional_threshold": _spin_contamination,
+    "spin_expected_contradicts_multiplicity": _spin_expected_contradicts,
     "hessian_not_stored_unparseable": _hessian_not_stored("hessian_not_stored_unparseable"),
     "hessian_not_stored_failed": _hessian_not_stored("hessian_not_stored_failed"),
     "hessian_not_stored_no_unique_input_geometry": _hessian_not_stored("hessian_not_stored_no_unique_input_geometry"),

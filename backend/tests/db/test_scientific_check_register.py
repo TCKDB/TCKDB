@@ -120,9 +120,23 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # geometry with its SMILES by element and isotope, never by configuration. Reviewed with the whole #835 sweep: of
     # 58 unregistered warning codes and 13 recent refusals this is the only new entry; four warnings widened 12, 22
     # and 25, and the stereo-label, channel-kind and bath-gas refusals stay in the code catalogue.
-    assert 10 <= len(REGISTER) <= 51, (
+    #
+    # Raised 51 -> 52 (2026-11-04) for the wavefunction reliability checks: one entry, three warning codes. They are the
+    # first checks that read a stored wavefunction or spin diagnostic. (1) A closed-shell coupled-cluster T1 above 0.02
+    # (Lee and Taylor 1989): a referee could dispute reporting a rule of thumb that the same literature shows is
+    # mostly a false alarm, and could dispute leaving open-shell T1 and D1 unreported (their definitions differ between
+    # programs and no primary threshold exists). (2) An <S^2> more than 0.1 from S(S+1): 0.1 is a convention of the
+    # field with no primary paper recommending it, so the claim, the absolute-versus-relative form and the use of the
+    # entry's declared multiplicity rather than a printed value are all positions a referee could dispute. (3) A
+    # printed ideal <S^2> that is not S(S+1) of the declared multiplicity: a declaration contradicting what the program
+    # ran, like entry 12's multiplicity_mismatch (and, like it, warn-tier here although ADR 0008 would put it at block).
+    # It is in this entry, not entry 12, because the entry is organised by the data it reads (the stored spin and
+    # wavefunction diagnostics). No existing entry covers any of them:
+    # entry 12 compares a declared state with an output log, these judge a stored diagnostic against a criterion or
+    # against the entry. Different tier from every blocking entry.
+    assert 10 <= len(REGISTER) <= 52, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~51 the inclusion test ('could this check be wrong "
+        "the system; above ~52 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 
@@ -785,6 +799,9 @@ _PINNED_NUMBERS: dict[str, int] = {
     "freq_list_incomplete_for_geometry": 22,
     "network_state_energy_sources_partial": 25,
     "scan_point_coordinate_disagrees_with_geometry": 49,
+    "t1_diagnostic_above_closed_shell_threshold": 52,
+    "spin_contamination_above_conventional_threshold": 52,
+    "spin_expected_contradicts_multiplicity": 52,
 }
 
 
@@ -841,6 +858,7 @@ _OPENINGS: dict[int, str] = {
     49: "A scan point's stored coordinate_value is the inte",
     50: "A calculation that records how its frequency job b",
     51: "A species entry states one stereo configuration: w",
+    52: "A wavefunction reliability diagnostic that a calcu",
 }
 
 

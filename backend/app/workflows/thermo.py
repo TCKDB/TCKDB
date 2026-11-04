@@ -73,6 +73,7 @@ from app.services.upload_reference import (
     W_UNKNOWN_STATMECH_REF,
     unknown_reference,
 )
+from app.services.wavefunction_reliability_warnings import collect_wavefunction_reliability_warnings
 
 logger = logging.getLogger(__name__)
 
@@ -406,6 +407,11 @@ def persist_thermo_upload(
         )
         warnings_out.extend(
             collect_scan_coordinate_warnings(
+                session, [calc.id for calc in calculations_by_key.values()]
+            )
+        )
+        warnings_out.extend(
+            collect_wavefunction_reliability_warnings(
                 session, [calc.id for calc in calculations_by_key.values()]
             )
         )

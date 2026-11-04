@@ -46,6 +46,7 @@ from app.services.statmech_resolution import (
 )
 from app.services.structure_determination_resolution import DeterminationOwner, persist_structure_determinations
 from app.services.transport_resolution import resolve_and_create_transport
+from app.services.wavefunction_reliability_warnings import collect_wavefunction_reliability_warnings
 
 
 @dataclass(frozen=True)
@@ -397,6 +398,12 @@ def persist_conformer_upload(
     )
     energy_warnings.extend(
         collect_scan_coordinate_warnings(
+            session,
+            [calculation.id, *(c.id for c in additional_calcs)],
+        )
+    )
+    energy_warnings.extend(
+        collect_wavefunction_reliability_warnings(
             session,
             [calculation.id, *(c.id for c in additional_calcs)],
         )

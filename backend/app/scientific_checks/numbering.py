@@ -36,6 +36,7 @@ READING_ORDER: tuple[str, ...] = (
     "Scan coordinates",
     "Vibrational frequency provenance",
     "Stereochemistry of a species entry",
+    "Wavefunction reliability diagnostics",
 )
 
 
