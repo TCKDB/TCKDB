@@ -535,7 +535,7 @@ usually responsible for turning tool output into that JSON shape.
 Install it directly from the monorepo without cloning:
 
 ```bash
-pip install "git+https://github.com/calvinp0/tckdbv2.git#subdirectory=clients/python"
+pip install "git+https://github.com/TCKDB/TCKDB.git#subdirectory=clients/python"
 ```
 
 For local editable development:
@@ -546,9 +546,13 @@ pip install -e ./clients/python
 
 `tckdb-client` is intentionally chemistry-free — it knows how to
 authenticate, encode payloads, retry, and handle idempotency, but it
-does not parse SMILES, enumerate conformers, or call RDKit. Any
-higher-level domain builders (a future `tckdb-builder`/`tckdb-sdk`)
-belong in a separate layer above the client.
+does not parse SMILES, enumerate conformers, or call RDKit. The
+builders that turn scientific Python objects (species, calculations,
+thermo, kinetics) into validated upload payloads already ship in the
+same package as `tckdb_client.builders` (public beta); see
+[clients/python/docs/builders.md](clients/python/docs/builders.md).
+Output parsers and producer-specific adapters (ARC, Chemkin, QCSchema)
+sit in separate packages above the client.
 
 ARC is one workflow tool that has been used to exercise TCKDB
 ingestion end-to-end, but it has no special status in the schema or

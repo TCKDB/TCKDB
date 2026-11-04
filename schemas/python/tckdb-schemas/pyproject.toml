@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,6 +9,7 @@ description = "Pure Pydantic wire-contract schemas for TCKDB upload payloads."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "TCKDB" }]
 keywords = [
     "tckdb",
@@ -44,8 +45,11 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/calvinp0/tckdbv2"
-Repository = "https://github.com/calvinp0/tckdbv2"
+Homepage = "https://github.com/TCKDB/TCKDB"
+Repository = "https://github.com/TCKDB/TCKDB"
+Issues = "https://github.com/TCKDB/TCKDB/issues"
+Documentation = "https://github.com/TCKDB/TCKDB/tree/main/schemas/python/tckdb-schemas"
+Changelog = "https://github.com/TCKDB/TCKDB/blob/main/schemas/python/tckdb-schemas/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["."]

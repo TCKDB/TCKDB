@@ -20,7 +20,7 @@ import pytest
 
 _ROOT = Path(__file__).resolve().parents[1]
 _DOCS = _ROOT / "docs"
-_README = _ROOT / "README.md"
+_README = _DOCS / "builders.md"  # the builder section moved out of the package README
 _SPEC = _DOCS / "calculation_note_conventions.md"
 _MVP = _DOCS / "builder_api_mvp.md"
 

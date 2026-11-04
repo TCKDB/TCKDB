@@ -1,14 +1,15 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "tckdb-client"
-version = "0.184.0"
+version = "0.185.0"
 description = "Synchronous Python HTTP client and scientific upload builders for the TCKDB API."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "TCKDB" }]
 keywords = [
     "tckdb",
@@ -73,10 +74,11 @@ tckdb-replay = "tckdb_client.cli:main"
 tckdb = "tckdb_client.cli:main_tckdb"
 
 [project.urls]
-Homepage = "https://github.com/calvinp0/tckdbv2"
-Repository = "https://github.com/calvinp0/tckdbv2"
-Issues = "https://github.com/calvinp0/tckdbv2/issues"
-Documentation = "https://github.com/calvinp0/tckdbv2/tree/main/clients/python"
+Homepage = "https://github.com/TCKDB/TCKDB"
+Repository = "https://github.com/TCKDB/TCKDB"
+Issues = "https://github.com/TCKDB/TCKDB/issues"
+Documentation = "https://github.com/TCKDB/TCKDB/tree/main/clients/python"
+Changelog = "https://github.com/TCKDB/TCKDB/blob/main/clients/python/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]

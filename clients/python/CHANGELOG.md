@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.185.0 - 2026-11-04
+
+Packaging and documentation only; no client code and no wire behaviour changed. The README is now a one-page introduction (what it is, install, read, upload with the builders, adapters), and the rest moved into `docs/` (`configuration.md`, `reads.md`, `uploads_and_idempotency.md`, `errors.md`, `builders.md`, `development.md`). `docs/builder_api_mvp.md` no longer says the builders are unimplemented. Project URLs now point at `github.com/TCKDB/TCKDB`, the licence file ships in the distributions, and the build needs `setuptools>=77` (SPDX licence expression).
+
 ## 0.184.0 - 2026-11-04
 
 A deposit can now return the warnings `t1_diagnostic_above_closed_shell_threshold`, `spin_contamination_above_conventional_threshold` and `spin_expected_contradicts_multiplicity`; see `tckdb-schemas` 0.151.0. The client reads warnings by code and message, so no client code changed.

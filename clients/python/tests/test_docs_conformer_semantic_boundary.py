@@ -22,7 +22,7 @@ import pytest
 
 _ROOT = Path(__file__).resolve().parents[1]
 _DOCS = _ROOT / "docs"
-_README = _ROOT / "README.md"
+_README = _DOCS / "builders.md"  # the builder section moved out of the package README
 _BOUNDARY = _DOCS / "conformer_semantic_boundary.md"
 _OLD_DESIGN = _DOCS / "builder_multi_conformer_design.md"
 _OLD_TEST = _ROOT / "tests" / "test_docs_multi_conformer_design.py"
