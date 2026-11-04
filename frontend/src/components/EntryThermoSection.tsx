@@ -25,6 +25,7 @@ import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { Disclosure } from "./Disclosure"
 import { SectionHeading } from "./PageSections"
+import { SettingsBehindValue } from "./EffectiveSettings"
 import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
 import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
@@ -412,6 +413,11 @@ function ThermoRecordBody({ record, idSuffix = "", showProvenance = true }: {
                     thermoRef={record.thermo_ref}
                     idSuffix={idSuffix}
                 />
+            )}
+            {/* The calculations are this record's own links, so the group's shared body (which hides provenance for the
+                same reason) hides them too. */}
+            {showProvenance && (
+                <SettingsBehindValue block={record.calculation_settings ?? null} recordRef={record.thermo_ref} idSuffix={idSuffix} />
             )}
             <GroupAdditivityBlock groupAdditivity={record.group_additivity ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
         </>

@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { levelOfTheorySchema, productLevelsSchema } from "./scientificSchemas"
+import { roleCalculationSettingsSchema } from "./effectiveSettingsSchema"
 import { listRequestEchoSchema, paginationSchema } from "./listEnvelope"
 import { pageQuery, parsePagedRef, type PageRequest } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
@@ -18,7 +19,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 //   `record.species.species_entry_ref` instead, because this is the same
 //   envelope shape `/statmech/search` uses.
 //
-// - Six public include tokens gate real sections, read off
+// - Seven public include tokens gate real sections (`calculation_settings` is the seventh: the settings behind each level), read off
 //   `STATMECH_RECORD_SECTIONS` in `_response.py` and cross-checked against
 //   `_LEGAL_INCLUDE_TOKENS` in `services/scientific_read/statmech.py`:
 //   `source_calculations`, `torsions`, `electronic_levels`, `frequencies`,
@@ -57,6 +58,7 @@ export const STATMECH_SECTION_TOKENS = [
     "frequencies",
     "conformers",
     "review",
+    "calculation_settings",
 ] as const
 export type StatmechSectionToken = typeof STATMECH_SECTION_TOKENS[number]
 
@@ -255,6 +257,9 @@ const statmechRecordSchema = z.object({
     frequencies: frequenciesSummarySchema.nullable().optional(),
     conformers: z.array(conformerContextItemSchema).nullable().optional(),
     review_history: z.array(reviewEntrySchema).nullable().optional(),
+    // `include=calculation_settings`: the source calculation this record links for its geometry, frequency and
+    // energy, with the grid and SCF convergence each used.
+    calculation_settings: z.array(roleCalculationSettingsSchema).nullable().optional(),
 }).passthrough()
 
 const reviewStatusSummarySchema = z.object({
