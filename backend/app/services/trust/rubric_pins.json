@@ -4,31 +4,31 @@
   "algorithm": 6,
   "pins": {
     "computed_calculation": {
-      "1": "dabe2b116e8dacc3e248735e88d65f363f57acc06088e72ccce83e5875d51ae6"
+      "1": "5074dae715e03b18f9fe96422ae6217992126ca6a5f35f9bd23d596117a01316"
     },
     "computed_kinetics": {
-      "1": "a9a19d427a197ad1c745051837598561805a5ba1a87253bbc90c8d9846bdde43"
+      "1": "598096e821f6f3938f88fadce66435a0d3405c2ab724ab2ec25f7046166284b2"
     },
     "computed_statmech": {
-      "1": "2a4fb78618c63527e0d20963bd6eff30839415300500fe133ab3bb5855d1aba7"
+      "1": "a4e6119f0415056a031ff15ddaefb0cbe0cf47f3a361bf9d5dc9ca36004ebfa7"
     },
     "computed_thermo": {
-      "1": "e7150351c94d126f6218e36093ae566f960110f47f38ba5959dd1fe66b49a868"
+      "1": "82f8f04f05e09c908a6bb5c9de52a46c6a48d3aaf0a12fba35bcf4cb468ea4e9"
     },
     "computed_transition_state": {
-      "2": "134f9594a8eb84027a286a7939a5e0a3b3ef191905420823d5134c1171ac5a68"
+      "2": "6b66d5b913053191a3b24eedeea24c734de4231e8d3893d56c88f253fa16d496"
     },
     "computed_transport": {
-      "1": "76a817519a5a5c88bb06d2e00ca406ea36c9ec89d298dbafab05787496578dcd"
+      "1": "e2cb078150b1b5a8e743a3d36fc079a0900b2e4a28b76685b59b33a6ed1c70ff"
     },
     "computed_ts_statmech": {
-      "1": "65d26afde98949e8ddd85279e553351df7f95348d87d88b1f38f383cb0479a36"
+      "1": "abfe7656ef44ef778c5033164a904ce1e5d2723dde8d88d527fc5896673d7f8a"
     },
     "tckdb_reproducibility": {
-      "1": "adea9360a4ba641340d991217eaab67908ebc0ef4d2fe640aacdacf5a49c4d7b"
+      "1": "d607a9b114ce9a4d316646a724a0ad7f2c648213e7a3e20f7400e4985232c040"
     },
     "tckdb_reproducibility_ts_statmech": {
-      "1": "64ab078fdcd9b76ad6d75959bc7f3e2d37bca7502429c4844d3aadc1451042d6"
+      "1": "96228ba52d6493b4fde46a0c4ec2e4cf49218a486eb272151a4e23623806a038"
     }
   },
   "unbumped_overrides": [
@@ -282,6 +282,51 @@
       "name": "tckdb_reproducibility_ts_statmech",
       "version": 1,
       "reason": "calculation_parameter.artifact_kind joins the columns a snapshot never includes (bookkeeping about which uploaded artifact a parser row was read from); no existing digest or grade moves, and the species statmech frozen digests are unchanged"
+    },
+    {
+      "name": "computed_calculation",
+      "version": 1,
+      "reason": "New nullable calculation_parameter.statement_kind column (enum ParameterStatementKind): the walker follows ORM enum columns of reached models, so the new enum entered the fingerprint. No check, threshold or grading reads it; decides nothing new."
+    },
+    {
+      "name": "computed_kinetics",
+      "version": 1,
+      "reason": "New nullable calculation_parameter.statement_kind column (enum ParameterStatementKind): the walker follows ORM enum columns of reached models, so the new enum entered the fingerprint. No check, threshold or grading reads it; decides nothing new."
+    },
+    {
+      "name": "computed_statmech",
+      "version": 1,
+      "reason": "New nullable calculation_parameter.statement_kind column (enum ParameterStatementKind): the walker follows ORM enum columns of reached models, so the new enum entered the fingerprint. No check, threshold or grading reads it; decides nothing new."
+    },
+    {
+      "name": "computed_thermo",
+      "version": 1,
+      "reason": "New nullable calculation_parameter.statement_kind column (enum ParameterStatementKind): the walker follows ORM enum columns of reached models, so the new enum entered the fingerprint. No check, threshold or grading reads it; decides nothing new."
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "New nullable calculation_parameter.statement_kind column (enum ParameterStatementKind): the walker follows ORM enum columns of reached models, so the new enum entered the fingerprint. No check, threshold or grading reads it; decides nothing new."
+    },
+    {
+      "name": "computed_transport",
+      "version": 1,
+      "reason": "New nullable calculation_parameter.statement_kind column (enum ParameterStatementKind): the walker follows ORM enum columns of reached models, so the new enum entered the fingerprint. No check, threshold or grading reads it; decides nothing new."
+    },
+    {
+      "name": "computed_ts_statmech",
+      "version": 1,
+      "reason": "New nullable calculation_parameter.statement_kind column (enum ParameterStatementKind): the walker follows ORM enum columns of reached models, so the new enum entered the fingerprint. No check, threshold or grading reads it; decides nothing new."
+    },
+    {
+      "name": "tckdb_reproducibility",
+      "version": 1,
+      "reason": "New nullable calculation_parameter.statement_kind column (enum ParameterStatementKind): the walker follows ORM enum columns of reached models, so the new enum entered the fingerprint. No check, threshold or grading reads it; decides nothing new."
+    },
+    {
+      "name": "tckdb_reproducibility_ts_statmech",
+      "version": 1,
+      "reason": "New nullable calculation_parameter.statement_kind column (enum ParameterStatementKind): the walker follows ORM enum columns of reached models, so the new enum entered the fingerprint. No check, threshold or grading reads it; decides nothing new."
     }
   ]
 }

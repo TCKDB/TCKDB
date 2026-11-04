@@ -4798,3 +4798,33 @@ def test_detail_include_all_equivalent_to_full_enumeration(client, db_session):
     # Records are byte-identical except possibly for the request echo
     # — which we already compared explicitly above.
     assert body_all["record"] == body_explicit["record"]
+
+
+def test_detail_include_parameters_carries_effective_settings_and_the_statement_kind(client, db_session):
+    """`effective_settings` rides on `include=parameters`; a reported row is tagged, and it decides the state."""
+    from app.db.models.common import ArtifactKind, ParameterStatementKind
+
+    _, _, calc = _make_species_owned_calc(db_session, calc_type=CalculationType.opt)
+    _ensure_param_vocab_local(db_session, "grid.angular_max")
+    row = CalculationParameter(
+        calculation_id=calc.id,
+        raw_key="AngularGrid",
+        raw_value="4 (Lebedev-302)",
+        canonical_key="grid.angular_max",
+        canonical_value="302",
+        source=ParameterSource.parser,
+        artifact_kind=ArtifactKind.output_log,
+        statement_kind=ParameterStatementKind.reported,
+    )
+    db_session.add(row)
+    db_session.flush()
+
+    record = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}?include=parameters").json()["record"]
+    [parameter] = record["parameters"]
+    assert (parameter["artifact_kind"], parameter["statement_kind"]) == ("output_log", "reported")
+    settings = {s["setting"]: s for s in record["effective_settings"]}
+    assert settings["grid"]["state"] == "reported"
+    assert settings["grid"]["reported"] == [{"key": "grid.angular_max", "value": "302"}]
+    assert settings["scf_convergence"]["state"] == "not_stated"  # no SCF default is documented
+    plain = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}").json()["record"]
+    assert "effective_settings" not in plain

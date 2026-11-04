@@ -735,6 +735,18 @@ class ParameterSource(str, Enum):
     curated = "curated"
 
 
+class ParameterStatementKind(str, Enum):
+    """What a parser-read ``calculation_parameter`` row says about a setting.
+
+    ``requested`` is what the input deck, or the input a log echoes, asked for. ``reported`` is what the program
+    printed in its output log as the value it used, defaults included. Only a log can carry a ``reported`` row.
+    NULL on typed (``upload``) and ``curated`` rows.
+    """
+
+    requested = "requested"
+    reported = "reported"
+
+
 class SoftwareVersionEvidenceKind(str, Enum):
     """What a ``software_version_attestation`` rests on (issue #305, decision (a)).
 

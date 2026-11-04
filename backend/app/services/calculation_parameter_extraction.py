@@ -29,10 +29,12 @@ import hashlib
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tckdb_schemas.fragments.version import ParserStamp
+from tckdb_schemas.program_default_settings import uses_dft_grid
 
+from app.chemistry.method_families import MethodFamily, classify_method
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -42,9 +44,9 @@ from app.db.models.common import (
     ArtifactIntegrityDetectionContext,
     ArtifactKind,
     ParameterSource,
+    ParameterStatementKind,
 )
 from app.schemas.fragments.artifact import ArtifactIn
-from app.schemas.fragments.calculation import CalculationParameterObservation
 from app.schemas.upload_warning import UploadWarning
 from app.services import (
     gaussian_parameter_parser,
@@ -68,11 +70,15 @@ from app.services.ess_software_detection import (
     SoftwareName,
     detect_software_from_text,
 )
+from app.services.parameter_observation import ParserObservation
 from app.services.parameter_reconciliation import (
     declared_parameter_warnings,
     level_of_theory_warnings,
     merge_artifact_observations,
+    reported_setting_disagreements,
+    reported_setting_warnings,
 )
+from app.services.reported_settings_parser import parse_gaussian_reported, parse_orca_reported
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +133,7 @@ def _resolve_software(
     )
 
 
-def _to_observation(parsed: dict) -> CalculationParameterObservation:
+def _to_observation(parsed: dict) -> ParserObservation:
     """Coerce one parser-emitted dict into a Pydantic observation.
 
     The parser modules already emit dicts whose keys line up with
@@ -143,7 +149,8 @@ def _to_observation(parsed: dict) -> CalculationParameterObservation:
     if parameter_index is not None:
         parameter_index = int(parameter_index)
 
-    return CalculationParameterObservation(
+    return ParserObservation(
+        statement_kind=ParameterStatementKind(parsed.get("statement_kind") or "requested"),
         raw_key=str(parsed["raw_key"]),
         raw_value=str(raw_value),
         canonical_key=parsed.get("canonical_key"),
@@ -153,6 +160,34 @@ def _to_observation(parsed: dict) -> CalculationParameterObservation:
         unit=parsed.get("unit"),
         parameter_index=parameter_index,
     )
+
+
+def _grid_is_this_calculations(calculation: Calculation) -> bool:
+    """True when the calculation's own level of theory integrates on a DFT grid (DFT, double hybrid, or a composite).
+
+    A log can hold the grid of a different job (a ``--Link1--`` file whose second job is a coupled-cluster step that
+    prints no grid), so a reported grid is attached only to a calculation whose method has a grid of its own. For a
+    composite the reported grid rows already require every step to agree.
+    """
+    method = calculation.lot.method if calculation.lot is not None else None
+    if not method:
+        return False
+    return classify_method(method).family is MethodFamily.composite or uses_dft_grid(method)
+
+
+def _observations_of(
+    software: SoftwareName, text: str, parsed: dict, artifact_kind: ArtifactKind, calculation: Calculation
+) -> list[ParserObservation]:
+    """The parser's requested rows, and for an output log the rows the log reports as used (Gaussian and ORCA)."""
+    observations = [_to_observation(p) for p in parsed.get("parameters", [])]
+    if artifact_kind is ArtifactKind.output_log:
+        reporter = {"gaussian": parse_gaussian_reported, "orca": parse_orca_reported}.get(software)
+        if reporter is not None:
+            reported = reporter(text)
+            if not _grid_is_this_calculations(calculation):
+                reported = [r for r in reported if r.get("section") != "grid"]
+            observations += [_to_observation(p) for p in reported]
+    return observations
 
 
 def _run_parser(software: SoftwareName, artifact_text: str) -> dict:
@@ -239,7 +274,7 @@ def extract_and_store_calculation_parameters(
 
     ``artifact_text`` is an input deck (``artifact_kind=input``) or an output log whose echoed input is read
     (``artifact_kind=output_log``). The two are stored side by side and never erase each other; where both
-    state a setting the deck's row is kept (see :mod:`app.services.parameter_reconciliation`). A log skips
+    state a setting the log's echoed row is kept (see :mod:`app.services.parameter_reconciliation`). A log skips
     the software reconciliation, which the output-log hooks already run once per batch, and does not
     overwrite the ``parameters_json`` snapshot a deck wrote.
 
@@ -308,23 +343,21 @@ def extract_and_store_calculation_parameters(
                 exc,
             )
 
-    observations = [_to_observation(p) for p in parsed.get("parameters", [])]
-    # What this artifact says, before the deck-wins rule drops any of it: the typed-versus-read judgement is made on
-    # this, so it does not depend on which artifact of the request was read first.
-    observed = [(o.canonical_key, o.canonical_value) for o in observations]
-    # A deck read that replaces earlier deck rows is a re-read; only then can log rows it shadowed need restoring.
-    is_reread = is_deck and (
-        session.scalar(
-            select(func.count())
-            .select_from(CalculationParameter)
-            .where(
-                CalculationParameter.calculation_id == calculation.id,
-                CalculationParameter.source == ParameterSource.parser,
-                CalculationParameter.artifact_kind == ArtifactKind.input,
-            )
-        )
-        or 0
-    ) > 0
+    # Disagreements already in place, so the warning below is given for what this read creates and not again.
+    try:
+        session.flush()
+        disagreements_before = reported_setting_disagreements(session, calculation, software)
+    except Exception:  # pragma: no cover - defensive, never blocks
+        disagreements_before = []
+    observations = _observations_of(software, artifact_text, parsed, artifact_kind, calculation)
+    # What this artifact requests, before the precedence rule drops any of it: the typed-versus-read judgement is
+    # made on this, so it does not depend on which artifact of the request was read first. A reported value is not
+    # a request and is never judged against what the depositor typed.
+    observed = [
+        (o.canonical_key, o.canonical_value)
+        for o in observations
+        if o.statement_kind is ParameterStatementKind.requested
+    ]
     observations, conflicts = merge_artifact_observations(
         session, calculation, observations, artifact_kind=artifact_kind, software=software
     )
@@ -346,14 +379,13 @@ def extract_and_store_calculation_parameters(
         # :mod:`app.services.parameter_reconciliation`).
         replace=is_deck,
     )
-    if is_reread:
-        _restore_log_rows(session, calculation)
 
     if warnings is not None:
         # Best effort: a failure comparing with what the depositor typed must not lose the parameters.
         try:
             session.flush()
             warnings.extend(conflicts)
+            warnings.extend(reported_setting_warnings(session, calculation, software, before=disagreements_before))
             warnings.extend(
                 declared_parameter_warnings(
                     session, calculation, observed, parsed_software=software, artifact_kind=artifact_kind
@@ -397,24 +429,22 @@ def _short_timeout_client():
 
 
 def _stored_log_rows_restore_reason(artifact: CalculationArtifact, exc: Exception) -> str:
-    return f"stored output log id={artifact.id} not re-read: {type(exc).__name__}: {exc}"
+    what = "input deck" if artifact.kind is ArtifactKind.input else "output log"
+    return f"stored {what} id={artifact.id} not re-read: {type(exc).__name__}: {exc}"
 
 
-def _stored_output_logs(session: Session, calculation: Calculation) -> list[CalculationArtifact]:
+def _stored_artifacts(session: Session, calculation: Calculation, kind: ArtifactKind) -> list[CalculationArtifact]:
     return list(
         session.scalars(
             select(CalculationArtifact)
-            .where(
-                CalculationArtifact.calculation_id == calculation.id,
-                CalculationArtifact.kind == ArtifactKind.output_log,
-            )
+            .where(CalculationArtifact.calculation_id == calculation.id, CalculationArtifact.kind == kind)
             .order_by(CalculationArtifact.id)
         )
     )
 
 
-def _parse_stored_log(session: Session, calculation: Calculation, artifact: CalculationArtifact, client_box: list):
-    """``(software, observations, parser stamp)`` for one stored output log; raises when it cannot be read or parsed.
+def _parse_stored_artifact(session: Session, calculation: Calculation, artifact: CalculationArtifact, client_box: list):
+    """``(software, observations, parser stamp)`` for one stored deck or log; raises when it cannot be read or parsed.
 
     Bytes uploaded in this request come from memory; others are read through a short-timeout client (made once and
     kept in ``client_box``).
@@ -428,7 +458,7 @@ def _parse_stored_log(session: Session, calculation: Calculation, artifact: Calc
     software = _resolve_software(calculation, text)
     parsed = _run_parser(software, text)
     stamp = ParserStamp(**parsed["parser"]) if isinstance(parsed.get("parser"), dict) else None
-    return software, [_to_observation(p) for p in parsed.get("parameters", [])], stamp
+    return software, _observations_of(software, text, parsed, artifact.kind, calculation), stamp
 
 
 def _append_log_observations(session: Session, calculation: Calculation, software, observations, stamp) -> None:
@@ -446,46 +476,57 @@ def _append_log_observations(session: Session, calculation: Calculation, softwar
     )
 
 
-def _restore_log_rows(session: Session, calculation: Calculation) -> None:
-    """Re-read the stored output logs so a setting a re-read deck no longer states is not lost.
+def refresh_output_log_rows(
+    session: Session, calculation: Calculation, *, deck_artifact: CalculationArtifact | None = None
+) -> None:
+    """Re-derive the calculation's log rows **and its deck rows** from stored artifacts (after a parser fix); all or nothing.
 
-    A deck read drops the log rows for the settings it states. When the deck is re-read with fewer settings, the
-    dropped log rows are re-derived here from the calculation's stored output logs, in upload order, and appended
-    where no stored row states the setting. Runs only on a deck *re-read*, never on a calculation's first deck.
-    Best effort: an artifact that cannot be read or parsed is skipped with a logged reason and the deck's own rows
-    are kept. Conflicts were reported when the log arrived and are not repeated.
-    """
-    client_box: list = []
-    for artifact in _stored_output_logs(session, calculation):
-        try:
-            software, observations, stamp = _parse_stored_log(session, calculation, artifact, client_box)
-            _append_log_observations(session, calculation, software, observations, stamp)
-        except Exception as exc:  # best effort, never blocks the deck's own rows
-            logger.warning(_stored_log_rows_restore_reason(artifact, exc))
-
-
-def refresh_output_log_rows(session: Session, calculation: Calculation) -> None:
-    """Re-derive the calculation's log rows from its stored output logs (after a parser fix); all or nothing.
+    ``deck_artifact`` is the deck whose rows stand (an operator's ``--artifact-id`` choice); by default it is the
+    most recently stored input artifact, the one an upload's replace-all leaves standing.
 
     Log rows are appended, first statement wins, and carry no source artifact, so a parser improvement cannot
-    replace them one by one. Every stored log is read and parsed first; if any cannot be, this raises
-    :class:`ParameterExtractionError` having deleted nothing, so an outage never turns two rows into none. Only then
-    are the old log rows dropped and the new ones appended, in upload order, under the deck-wins rule.
+    replace them one by one. A deck row is dropped when a log echoes the same setting (the log outranks the deck),
+    so when the log rows are re-derived the deck rows they had shadowed must come back first. That deck and every
+    stored log are read and parsed before anything is changed; if any cannot be, this raises
+    :class:`ParameterExtractionError` having deleted nothing, so an outage never turns two rows into none. Only
+    then are the old log rows dropped, the deck rows rebuilt, and the new log rows appended in upload order.
     """
     client_box: list = []
-    parsed = []
-    for artifact in _stored_output_logs(session, calculation):
+    deck = None
+    if deck_artifact is None:
+        decks = _stored_artifacts(session, calculation, ArtifactKind.input)
+        deck_artifact = decks[-1] if decks else None
+    logs = []
+    for artifact in ([deck_artifact] if deck_artifact is not None else []) + _stored_artifacts(
+        session, calculation, ArtifactKind.output_log
+    ):
         try:
-            parsed.append(_parse_stored_log(session, calculation, artifact, client_box))
+            parsed = _parse_stored_artifact(session, calculation, artifact, client_box)
         except Exception as exc:
             raise ParameterExtractionError(_stored_log_rows_restore_reason(artifact, exc)) from exc
+        if artifact.kind is ArtifactKind.input:
+            deck = parsed
+        else:
+            logs.append(parsed)
     session.query(CalculationParameter).filter(
         CalculationParameter.calculation_id == calculation.id,
         CalculationParameter.source == ParameterSource.parser,
         CalculationParameter.artifact_kind == ArtifactKind.output_log,
     ).delete(synchronize_session=False)
     session.expire_all()
-    for software, observations, stamp in parsed:
+    if deck is not None:
+        software, observations, stamp = deck
+        persist_calculation_parameters(
+            session,
+            calculation,
+            observations,
+            source=ParameterSource.parser,
+            parser=stamp,
+            artifact_kind=ArtifactKind.input,
+            replace=True,
+        )
+        session.flush()
+    for software, observations, stamp in logs:
         _append_log_observations(session, calculation, software, observations, stamp)
 
 

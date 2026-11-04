@@ -10,6 +10,7 @@ through include validation but not yet expanded; see
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field, computed_field
@@ -33,6 +34,7 @@ from app.db.models.common import (
     IRCDirection,
     LegacyCompositeShape,
     ParameterSource,
+    ParameterStatementKind,
     PathSearchMethod,
     RecordReviewStatus,
     ScanCoordinateKind,
@@ -1011,6 +1013,50 @@ class CalculationConstraintSummary(BaseModel):
     target_value: float | None = None
 
 
+class EffectiveSettingState(str, Enum):
+    """Where the value shown for a setting comes from, best evidence first.
+
+    ``reported``: the output log prints the value the program used. ``requested``: the log's echoed input, else the
+    uploaded deck, else a value the depositor typed, asked for it (``requested_from`` says which).
+    ``assumed_default``: the log neither reports nor echoes it, so the program's documented default for the declared
+    program and version is shown, labelled as assumed. ``assumed_default_no_output_log``: the same, with no output log
+    at all. ``not_stated``: nothing says, and no default is documented or the program or version is not declared.
+    """
+
+    reported = "reported"
+    requested = "requested"
+    assumed_default = "assumed_default"
+    assumed_default_no_output_log = "assumed_default_no_output_log"
+    not_stated = "not_stated"
+
+
+class ReportedSettingValue(BaseModel):
+    """One number or code an output log printed for a setting (a canonical key, or the raw key for an undocumented code)."""
+
+    key: str
+    value: str
+
+
+class EffectiveSettingSummary(BaseModel):
+    """What was used for one setting of a calculation, and how we know.
+
+    Computed when the record is read; an assumed default is never stored. ``reported`` lists what the log printed:
+    for ORCA the integration accuracy and the largest angular grid, for the SCF the thresholds. Gaussian's grid is
+    listed as the raw ``IRadAn`` code it prints and does not set ``state``: its correspondence to a named grid is not
+    documented, so the state of a Gaussian grid comes from the echoed or deck value, then the assumed default.
+    """
+
+    setting: Literal["grid", "scf_convergence"]
+    state: EffectiveSettingState
+    requested_value: str | None = None
+    requested_from: Literal["output_log", "input", "typed"] | None = None
+    reported: list[ReportedSettingValue] = Field(default_factory=list)
+    assumed_value: str | None = None
+    #: True when the artifact that decides ``requested_value`` states two different values: the value is then
+    #: withheld (``None``) rather than one of them picked, and the state still names that artifact.
+    conflicting: bool = False
+
+
 class CalculationParameterSummary(BaseModel):
     """One parsed ``calculation_parameter`` row, projected for the
     ``include=parameters`` heavy include.
@@ -1040,6 +1086,11 @@ class CalculationParameterSummary(BaseModel):
     unit: str | None = None
     parameter_index: int | None = None
     source: ParameterSource | None = None
+    #: For a parser row: ``input`` (read from the deck) or ``output_log`` (read from a log).
+    artifact_kind: ArtifactKind | None = None
+    #: For a parser row: ``requested`` (the deck, or the input a log echoes, asked for it) or ``reported`` (the log
+    #: prints it as the value the program used). ``None`` for typed and curated rows.
+    statement_kind: ParameterStatementKind | None = None
     created_at: datetime | None = None
 
 
@@ -1526,6 +1577,8 @@ class ScientificCalculationRecord(BaseModel):
     ) = None
     spin_diagnostic: list[CalculationSpinDiagnosticSummary] | None = None
     parameters: list[CalculationParameterSummary] | None = None
+    #: ``include=parameters``. The grid and SCF convergence this calculation used, each with its evidence.
+    effective_settings: list[EffectiveSettingSummary] | None = None
     constraints: list[CalculationConstraintSummary] | None = None
     review_history: list[CalculationReviewEntry] | None = None
     freq_modes: list[CalculationFreqModeSummary] | None = None

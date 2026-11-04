@@ -29,18 +29,24 @@ Three checks, all non-blocking: each earns a deposit warning built from a code a
 Message and context carry the canonical key and TCKDB tokens only. The values on each side are depositor
 text (a typed value, a deck's spelling) and go under ``depositor_supplied``.
 
-How an input deck and an output log share a calculation
--------------------------------------------------------
-Both are read into ``source='parser'`` rows, tagged with ``artifact_kind``. A re-read replaces only its own
-kind, so neither erases the other. Where both state the same setting the **deck wins** and the log's row is
-not kept: the deck is what was written to run, the log only echoes it, and a reader of
-``calculation_parameter`` must never meet two rows for one setting. The result does not depend on which
-artifact arrived first:
+How an input deck, an output log and a reported value share a calculation
+-------------------------------------------------------------------------
+Parser rows carry two tags: ``artifact_kind`` (the deck, or the log) and ``statement_kind`` (``requested``: the deck,
+or the input a log echoes, asked for it; ``reported``: the log prints it as the value the program used). A re-read
+replaces only its own artifact kind, so neither erases the other.
 
-* deck first, then log: the log's rows for settings the deck states are dropped before they are stored;
-* log first, then deck: the deck's rows are stored and the log's rows for the same settings are deleted.
+Precedence for one setting: **reported, then the input echoed in the log, then the uploaded deck, then a value the
+depositor typed.** The log is the record of the run and a deposit often has nothing else; the deck may not be the
+exact input that produced it. So where a log's echo and a deck state the same setting the **echo wins** and the deck's
+row is not kept (it is dropped, or deleted if it was stored first). A reported row is a different kind of statement
+(a number the program printed, under its own canonical keys), so it is kept beside the requested rows and never
+replaces one; the read side picks which to show. The result does not depend on which artifact arrived first:
 
-Either way the stored rows are the deck's rows plus the log's rows for the settings the deck is silent about.
+* deck first, then log: the deck's rows for the settings the log's echo states are deleted;
+* log first, then deck: the deck's rows for those settings are dropped before they are stored.
+
+Either way the stored requested rows are the log's echo plus the deck's rows for the settings the echo is silent
+about. A first output log's statement stands: a later log never silently replaces it.
 """
 
 from __future__ import annotations
@@ -57,7 +63,7 @@ from app.chemistry.basis_set_names import basis_identity_key
 from app.chemistry.method_families import CLASSIFICATION
 from app.chemistry.method_names import method_identity_key
 from app.db.models.calculation import Calculation, CalculationParameter, CalculationParameterVocab
-from app.db.models.common import ArtifactKind, ParameterSource
+from app.db.models.common import ArtifactKind, ParameterSource, ParameterStatementKind
 from app.schemas.fragments.calculation import CalculationParameterObservation
 from app.services.parameter_closed_values import normalise_typed_value
 
@@ -67,6 +73,7 @@ W_PARAMETER_DISAGREES_WITH_ARTIFACT = "parameter_disagrees_with_artifact"
 W_INPUT_DECK_DISAGREES_WITH_OUTPUT_LOG = "input_deck_disagrees_with_output_log"
 W_LEVEL_OF_THEORY_DISAGREES_WITH_ARTIFACT = "level_of_theory_disagrees_with_artifact"
 W_OUTPUT_LOG_DISAGREES_WITH_EARLIER_OUTPUT_LOG = "output_log_disagrees_with_earlier_output_log"
+W_REPORTED_SETTING_DIFFERS_FROM_REQUESTED = "reported_setting_differs_from_requested"
 
 #: Keys another check owns, or whose value does not name the setting.
 _NOT_RECONCILED_HERE = frozenset({"freq.hessian_method", "internal_option.iop"})
@@ -99,12 +106,15 @@ def _conflict_warning(key: str, software: str, deck_values: set[str], log_values
     )
 
 
-def _log_conflict_warning(key: str, software: str, earlier: set[str], later: set[str]) -> UploadWarning:
+def _log_conflict_warning(
+    key: str, software: str, earlier: set[str], later: set[str], *, raw: bool = False
+) -> UploadWarning:
+    """``raw``: ``key`` is a raw key (a reported value with no canonical key); it goes under ``raw_key``."""
     return UploadWarning.from_code(
         field="artifacts",
         code=W_OUTPUT_LOG_DISAGREES_WITH_EARLIER_OUTPUT_LOG,
         context={
-            "canonical_key": key,
+            ("raw_key" if raw else "canonical_key"): key,
             "software": software,
             "depositor_supplied": {"earlier_value": sorted(earlier), "later_value": sorted(later)},
         },
@@ -119,12 +129,13 @@ def merge_artifact_observations(
     artifact_kind: ArtifactKind,
     software: str,
 ) -> tuple[list[CalculationParameterObservation], list[UploadWarning]]:
-    """Apply the deck-wins rule to a new read; return the observations to store and the conflicts found.
+    """Apply the precedence rule to a new read; return the observations to store and the conflicts found.
 
-    For ``output_log``: observations for settings the stored deck rows or an earlier log's rows already state are
-    dropped (the first statement stands, a later log never silently replaces it) and compared with the stored
-    values. For ``input``: nothing is dropped from the new deck rows, but the stored log rows for the settings
-    the deck states are compared and deleted.
+    For ``output_log``: the new requested (echoed) rows are compared with the stored deck rows and with an earlier
+    log's rows, a setting an earlier log already states is dropped (the first statement stands), and the stored deck
+    rows for the settings the log now states are deleted (the echo outranks the deck). New reported rows are compared
+    with an earlier log's reported rows and dropped where one already states the value.
+    For ``input``: the new deck rows for settings a stored log echo already states are dropped, and compared.
 
     Call before storing the new batch. Flushes nothing it does not delete.
     """
@@ -136,35 +147,59 @@ def merge_artifact_observations(
             )
         )
     )
+    reported_kind = ParameterStatementKind.reported
     decks = [r for r in parser_rows if r.artifact_kind is ArtifactKind.input]
-    logs = [r for r in parser_rows if r.artifact_kind is ArtifactKind.output_log]
-    new_identities = {_identity(o.canonical_key, o.section, o.raw_key, o.parameter_index) for o in observations}
-    new_values = _values_by_key((o.canonical_key, o.canonical_value) for o in observations)
+    echoes = [r for r in parser_rows if r.artifact_kind is ArtifactKind.output_log and r.statement_kind is not reported_kind]
+    reports = [r for r in parser_rows if r.artifact_kind is ArtifactKind.output_log and r.statement_kind is reported_kind]
 
-    def compare(stored: Sequence[CalculationParameter], make) -> list[UploadWarning]:
-        stored_values = _values_by_key((r.canonical_key, r.canonical_value) for r in stored)
+    def is_report(o) -> bool:
+        return getattr(o, "statement_kind", None) is reported_kind
+
+    def named(x, raw: bool) -> tuple[str | None, str | None]:
+        """The canonical pair, or for a reported row with no canonical key (Gaussian's grid code) its raw pair."""
+        if raw and x.canonical_key is None:
+            return f"raw:{x.raw_key}", x.raw_value
+        return x.canonical_key, x.canonical_value
+
+    def compare(stored: Sequence[CalculationParameter], new: Sequence, make, raw: bool = False) -> list[UploadWarning]:
+        stored_values = _values_by_key(named(r, raw) for r in stored)
+        new_values = _values_by_key(named(o, raw) for o in new)
         return [
             make(key, stored_values[key], new_values[key])
             for key in sorted(new_values.keys() & stored_values.keys())
             if new_values[key] != stored_values[key]
         ]
 
-    warnings: list[UploadWarning] = []
-    if artifact_kind is ArtifactKind.output_log:
-        warnings += compare(decks, lambda key, stored, new: _conflict_warning(key, software, stored, new))
-        warnings += compare(logs, lambda key, stored, new: _log_conflict_warning(key, software, stored, new))
-        taken = {_identity(r.canonical_key, r.section, r.raw_key, r.parameter_index) for r in decks + logs}
-        return [
-            o
-            for o in observations
-            if _identity(o.canonical_key, o.section, o.raw_key, o.parameter_index) not in taken
-        ], warnings
+    def ident(x) -> tuple:
+        return _identity(x.canonical_key, x.section, x.raw_key, x.parameter_index)
 
-    warnings += compare(logs, lambda key, stored, new: _conflict_warning(key, software, new, stored))
-    for row in logs:
-        if _identity(row.canonical_key, row.section, row.raw_key, row.parameter_index) in new_identities:
-            session.delete(row)
-    return list(observations), warnings
+    warnings: list[UploadWarning] = []
+    new_reported = [o for o in observations if is_report(o)]
+    new_requested = [o for o in observations if not is_report(o)]
+    if artifact_kind is ArtifactKind.output_log:
+        warnings += compare(decks, new_requested, lambda key, stored, new: _conflict_warning(key, software, stored, new))
+        warnings += compare(echoes, new_requested, lambda key, stored, new: _log_conflict_warning(key, software, stored, new))
+        warnings += compare(
+            reports,
+            new_reported,
+            lambda key, stored, new: _log_conflict_warning(
+                key.removeprefix("raw:"), software, stored, new, raw=key.startswith("raw:")
+            ),
+            raw=True,
+        )
+        taken_echo = {ident(r) for r in echoes}
+        taken_report = {ident(r) for r in reports}
+        kept = [o for o in new_requested if ident(o) not in taken_echo]
+        kept_reported = [o for o in new_reported if ident(o) not in taken_report]
+        stated = {ident(o) for o in kept}
+        for row in decks:
+            if ident(row) in stated:
+                session.delete(row)
+        return kept + kept_reported, warnings
+
+    warnings += compare(echoes, new_requested, lambda key, stored, new: _conflict_warning(key, software, new, stored))
+    taken = {ident(r) for r in echoes}
+    return [o for o in observations if ident(o) not in taken], warnings
 
 
 # ---------------------------------------------------------------------------
@@ -189,7 +224,7 @@ def declared_parameter_warnings(
 ) -> list[UploadWarning]:
     """Warn for each key the depositor typed and the artifact just read (``observed`` pairs) contradict.
 
-    ``observed`` is what the artifact says, whether or not its rows were stored (the deck-wins rule can drop a
+    ``observed`` is what the artifact says, whether or not its rows were stored (the precedence rule can drop a
     log's rows), so the judgement is the same whichever artifact of a request is read first.
     """
     declared = declared_software(calculation)
@@ -394,3 +429,149 @@ def _lot_warning(component: str, software: str, kind: ArtifactKind, declared_tex
             "depositor_supplied": {"declared_value": declared_text, "observed_value": observed_text},
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# reported against requested
+# ---------------------------------------------------------------------------
+
+#: What an ORCA 6 log reports for a requested ``DefGrid``: the largest angular (Lebedev) grid of the SCF XC grid, in
+#: points. Source: ORCA 6.1 manual, "Details on the Numerical Integration Grids", Table 2.48 (angular grid scheme per
+#: DEFGRID: SCF XC grid DEFGRID1 = 3, DEFGRID2 = 4, DEFGRID3 = 6) and section 2.10.5 (AngularGrid 3 = Lebedev194,
+#: 4 = Lebedev302, 6 = Lebedev590). The integration accuracy is not in the table, so it is not compared. Checked on
+#: the fixture logs (`DFT GRID GENERATION`: DEFGRID2 -> Lebedev-302, DEFGRID3 -> Lebedev-590).
+_ORCA_DEFGRID_ANGULAR_POINTS = {"defgrid1": "194", "defgrid2": "302", "defgrid3": "590"}
+
+#: What an ORCA log reports for a requested SCF convergence keyword. Source: ORCA 6.1 manual, "Self-Consistent-Field
+#: (SCF)", Table 2.9 (threshold choices for convergence keywords): TightSCF TolE 1e-8, TolG 1e-5, TolX 1e-5,
+#: TolErr 5e-7; VeryTightSCF 1e-9, 2e-6, 2e-6, 1e-8; LooseSCF 1e-5, 1e-4, 1e-4, 5e-4. Checked on the fixture logs
+#: (`SCF SETTINGS`, `Convergence Tolerance:`: TightSCF -> 1e-8 / 1e-5 / 1e-5 / 5e-7).
+_ORCA_SCF_PRESETS = {
+    "tight": {"scf.tol_energy_eh": 1e-8, "scf.tol_orbital_gradient": 1e-5, "scf.tol_orbital_rotation": 1e-5, "scf.tol_diis_error": 5e-7},
+    "very_tight": {"scf.tol_energy_eh": 1e-9, "scf.tol_orbital_gradient": 2e-6, "scf.tol_orbital_rotation": 2e-6, "scf.tol_diis_error": 1e-8},
+    "loose": {"scf.tol_energy_eh": 1e-5, "scf.tol_orbital_gradient": 1e-4, "scf.tol_orbital_rotation": 1e-4, "scf.tol_diis_error": 5e-4},
+}
+
+
+def _same_number(a: str, b: float) -> bool:
+    try:
+        return abs(float(a) - b) <= 1e-9 * abs(b)
+    except ValueError:
+        return False
+
+
+def _single(rows: Iterable[CalculationParameter], key: str) -> str | None:
+    values = {r.canonical_value for r in rows if r.canonical_key == key and r.canonical_value is not None}
+    return next(iter(values)) if len(values) == 1 else None
+
+
+_SCF_KEYS = ("scf.tol_energy_eh", "scf.tol_orbital_gradient", "scf.tol_orbital_rotation", "scf.tol_diis_error")
+
+
+_EXPLICIT_TOLERANCES = {
+    "tole": "scf.tol_energy_eh",
+    "tolg": "scf.tol_orbital_gradient",
+    "tolx": "scf.tol_orbital_rotation",
+    "tolerr": "scf.tol_diis_error",
+}
+
+
+def orca_preset_disagreements(
+    requested_grid: str | None,
+    requested_scf: str | None,
+    reported: dict[str, str],
+    explicit: dict[str, float] | None = None,
+) -> list[tuple[str, str, str]]:
+    """``(canonical key, requested value, reported value)`` for each reported value the request contradicts.
+
+    ``explicit`` holds thresholds the input sets itself (``%scf TolE 1e-6``): an explicit value wins over the
+    keyword's preset for that threshold, so ``!TightSCF`` plus ``TolE 1e-6`` is judged against 1e-6.
+    """
+    found: list[tuple[str, str, str]] = []
+    expected_points = _ORCA_DEFGRID_ANGULAR_POINTS.get(requested_grid or "")
+    got_points = reported.get("grid.angular_max")
+    if expected_points is not None and got_points is not None and expected_points != got_points:
+        found.append(("grid.angular_max", requested_grid, got_points))
+    expected = dict(_ORCA_SCF_PRESETS.get(requested_scf or "", {}))
+    expected.update(explicit or {})
+    for key, value in expected.items():
+        got = reported.get(key)
+        if got is not None and not _same_number(got, value):
+            found.append((key, requested_scf if key not in (explicit or {}) else "explicit", got))
+    return found
+
+
+def reported_setting_disagreements(
+    session: Session, calculation: Calculation, software: str
+) -> list[tuple[str, str, str]]:
+    """``(canonical key, requested value, reported value)`` for each stored report a documented preset contradicts.
+
+    ORCA only. The requested value is the log's echo, else the deck's: the same order as the read. Silent when either
+    side is absent, when the requested value is not in the tables, and for Gaussian (its grid report is an
+    undocumented internal code, and its 1e-8 threshold is both the default and ``Tight``).
+    """
+    if software != "orca":
+        return []
+    rows = list(
+        session.scalars(
+            select(CalculationParameter).where(
+                CalculationParameter.calculation_id == calculation.id,
+                CalculationParameter.source == ParameterSource.parser,
+            )
+        )
+    )
+    reported = [r for r in rows if r.statement_kind is ParameterStatementKind.reported]
+    requested = [r for r in rows if r.statement_kind is not ParameterStatementKind.reported]
+    echo = [r for r in requested if r.artifact_kind is ArtifactKind.output_log]
+    deck = [r for r in requested if r.artifact_kind is ArtifactKind.input]
+
+    def request(key: str) -> str | None:
+        return _single(echo, key) or _single(deck, key)
+
+    explicit: dict[str, float] = {}
+    for rows_of in (deck, echo):  # the echo is read last, so it overrides the deck
+        for r in rows_of:
+            key = _EXPLICIT_TOLERANCES.get(r.raw_key.lower()) if (r.section or "").lower() == "scf" else None
+            if key is not None:
+                try:
+                    explicit[key] = float(r.raw_value)
+                except ValueError:
+                    pass
+    return orca_preset_disagreements(
+        request("grid.quality"),
+        request("scf.convergence"),
+        {k: v for k in ("grid.angular_max", *_SCF_KEYS) if (v := _single(reported, k)) is not None},
+        explicit,
+    )
+
+
+def reported_setting_warnings(
+    session: Session,
+    calculation: Calculation,
+    software: str,
+    *,
+    before: Sequence[tuple[str, str, str]] = (),
+) -> list[UploadWarning]:
+    """Warn for each disagreement the current read created: present now, absent in ``before``, once per key.
+
+    ``before`` is :func:`reported_setting_disagreements` taken ahead of the read, so a later unrelated upload, or the
+    second of two artifacts that both leave the same disagreement in place, does not repeat a warning that was
+    already given. Both rows are kept.
+    """
+    already = {key for key, _, _ in before}
+    warnings: list[UploadWarning] = []
+    for key, requested_value, reported_value in reported_setting_disagreements(session, calculation, software):
+        if key in already:
+            continue
+        warnings.append(
+            UploadWarning.from_code(
+                field="artifacts",
+                code=W_REPORTED_SETTING_DIFFERS_FROM_REQUESTED,
+                context={
+                    "canonical_key": key,
+                    "software": software,
+                    "depositor_supplied": {"requested_value": requested_value, "reported_value": reported_value},
+                },
+            )
+        )
+    return warnings

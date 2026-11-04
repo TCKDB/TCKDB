@@ -104,6 +104,7 @@ from app.schemas.reads.scientific_calculation import (
     CalculationSpinDiagnosticSummary,
     CalculationSPResultSummary,
     CalculationWavefunctionDiagnosticSummary,
+    EffectiveSettingSummary,
     ExecutionEnvironmentManifestSummary,
     ImaginaryModeProjectionEntry,
     ImaginaryModeProjectionSummary,
@@ -138,6 +139,7 @@ from app.services.scientific_read.common import (
 from app.services.scientific_read.composite_binding import (
     composite_scheme_summary,
 )
+from app.services.scientific_read.effective_settings import build_effective_settings
 from app.services.scientific_read.handles import resolve_calculation_handle
 from app.services.scientific_read.imaginary_mode_projection import (
     build_imaginary_mode_projection,
@@ -456,8 +458,10 @@ def build_record(
         spin_diagnostic_block = _build_spin_diagnostic(session, calc.id)
 
     parameters_block: list[CalculationParameterSummary] | None = None
+    effective_settings_block: list[EffectiveSettingSummary] | None = None
     if "parameters" in includes:
         parameters_block = _build_parameters(session, calc.id)
+        effective_settings_block = build_effective_settings(session, calc)
 
     constraints_block: list[CalculationConstraintSummary] | None = None
     if "constraints" in includes:
@@ -546,6 +550,7 @@ def build_record(
         wavefunction_diagnostic=wavefunction_diagnostic_block,
         spin_diagnostic=spin_diagnostic_block,
         parameters=parameters_block,
+        effective_settings=effective_settings_block,
         constraints=constraints_block,
         review_history=review_history_block,
         freq_modes=freq_modes_block,
@@ -2513,6 +2518,8 @@ def _build_parameters(
             unit=row.unit,
             parameter_index=row.parameter_index,
             source=row.source,
+            artifact_kind=row.artifact_kind,
+            statement_kind=row.statement_kind,
             created_at=row.created_at,
         )
         for row in rows

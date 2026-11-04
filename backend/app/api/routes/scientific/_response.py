@@ -158,7 +158,7 @@ CALCULATION_RECORD_SECTIONS = IncludeGatedSections(
         "scf_stability": ("scf_stability",),
         "wavefunction_diagnostic": ("wavefunction_diagnostic",),
         "spin_diagnostic": ("spin_diagnostic",),
-        "parameters": ("parameters",),
+        "parameters": ("parameters", "effective_settings"),
         "constraints": ("constraints",),
         "review": ("review_history",),
         "freq_modes": ("freq_modes",),

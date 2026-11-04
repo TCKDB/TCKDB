@@ -64,6 +64,7 @@ from app.db.models.common import (
     CompositeAssembly,
     IRCDirection,
     ParameterSource,
+    ParameterStatementKind,
     SoftwareReconciliationStatus,
     SubmissionRecordType,
 )
@@ -1660,6 +1661,11 @@ def persist_calculation_parameters(
             parser_name=row_parser.name if row_parser is not None else None,
             parser_version=row_parser.version if row_parser is not None else None,
             artifact_kind=artifact_kind if source is ParameterSource.parser else None,
+            statement_kind=(
+                getattr(obs, "statement_kind", None) or ParameterStatementKind.requested
+                if source is ParameterSource.parser
+                else None
+            ),
         )
         session.add(row)
         rows.append(row)

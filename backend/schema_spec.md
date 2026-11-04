@@ -815,6 +815,7 @@ Notes:
 - `source` (`parser`, `upload` or `curated`)
 - `parser_name`, `parser_version` (parser rows only)
 - `artifact_kind` (parser rows only: `input` for a deck, `output_log` for the input a log echoes)
+- `statement_kind` (parser rows only: `requested` for what a deck or echoed input asks for, `reported` for a value an output log prints as used; `reported` only on `output_log` rows)
 - `created_at`
 
 `calculation_constraint` fields:
@@ -849,7 +850,7 @@ Notes:
 - `calculation_parameter_vocab` is keyed directly by `canonical_key`
 - `calculation_parameter` is an EAV-style parsed-parameter store with indexes on calculation, raw-key/section, and canonical key/value
 - `parameter_index` must be null or non-negative
-- `artifact_kind` is set only on `source = 'parser'` rows, and only to `input` or `output_log` (check constraint). A re-parse replaces only the parser rows of its own kind. Where a deck and a log state the same setting, the deck's row is the one stored, whichever arrived first (`app/services/parameter_reconciliation.py`).
+- `artifact_kind` is set only on `source = 'parser'` rows, and only to `input` or `output_log` (check constraint). A re-parse replaces only the parser rows of its own kind. Where a deck and a log's echoed input state the same setting, the log's row is the one stored, whichever arrived first (`app/services/parameter_reconciliation.py`). A `reported` row (a number the log prints, under its own `grid.*` / `scf.tol_*` key) is kept beside the requested rows and never replaces one. `statement_kind` is set only on parser rows, and `reported` only with `artifact_kind = 'output_log'` (check constraint).
 - One raw token may emit multiple canonical observations. Gaussian `IOp(5/13=1)` (instructs the SCF to continue when convergence fails) is stored as three rows: a generic `internal_option.iop` row plus two specialized canonicals — `scf.convergence_failure_ignored = true` and `scf.convergence_failure_action = continue`. This is a calculation **trust** flag, not SCF wavefunction stability evidence; it must not populate `calc_scf_stability`. Future high-severity trust flags may be promoted into a dedicated `calculation_diagnostic_flag` / read-warning surface.
 - `calculation_constraint` uses `(calculation_id, constraint_index)` as its composite primary key
 - constraint-arity checks enforce valid atom usage for cartesian, bond, angle, and dihedral/improper constraints

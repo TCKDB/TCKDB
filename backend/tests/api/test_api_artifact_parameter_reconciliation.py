@@ -86,7 +86,7 @@ def test_a_log_that_agrees_with_the_typed_parameter_warns_nothing(client, db_ses
     assert "parameter_disagrees_with_artifact" not in {w["code"] for w in resp.json()["warnings"]}
 
 
-def test_a_deck_attached_after_the_log_replaces_only_the_overlap(client, db_session):
+def test_a_deck_attached_after_the_log_keeps_only_what_the_log_is_silent_about(client, db_session):
     calc = _calc(client, db_session, "log-then-deck")
     _attach(client, calc, "output_log", _log("#P b3lyp/6-31g(d) freq int=ultrafine scf=tight"), "job.log")
     resp = _attach(client, calc, "input", "#P b3lyp/6-31g(d) freq int=ultrafine\n", "job.gjf")
@@ -102,7 +102,8 @@ def test_a_deck_attached_after_the_log_replaces_only_the_overlap(client, db_sess
             )
         )
     }
-    assert kinds["grid.quality"] is ArtifactKind.input
+    # The log echoes both settings, so the log's rows are the ones kept; the deck adds nothing the log already says.
+    assert kinds["grid.quality"] is ArtifactKind.output_log
     assert kinds["scf.convergence"] is ArtifactKind.output_log
 
 

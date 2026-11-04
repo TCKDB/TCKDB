@@ -7533,6 +7533,16 @@
       "CalculationParameterSummary": {
         "description": "One parsed ``calculation_parameter`` row, projected for the\n``include=parameters`` heavy include.\n\nCarries both the raw (software-specific) and canonical (normalized)\nkey/value pairs plus the small bag of parser metadata that's\npublic-safe (``section``, ``value_type``, ``unit``,\n``parameter_index``) and ``source``, which says where the row came from:\n``parser`` (read from an uploaded input deck or output log), ``upload``\n(typed by the depositor) or ``curated``. A reader comparing two rows for\nthe same key needs it to tell a declaration from an observation. The full\nvocab row (descriptions, classification flags) is intentionally not\ninlined; callers that need it can fetch the vocab via a separate read.\n\n``parameter_id`` is subject to the Phase D internal-ID visibility\npolicy and is stripped by the strip helper when the deployment\nforbids exposing internal ids.",
         "properties": {
+          "artifact_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtifactKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "canonical_key": {
             "anyOf": [
               {
@@ -7613,6 +7623,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ParameterSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParameterStatementKind"
               },
               {
                 "type": "null"
@@ -17378,6 +17398,90 @@
         ],
         "title": "DryRunRecordType",
         "type": "string"
+      },
+      "EffectiveSettingState": {
+        "description": "Where the value shown for a setting comes from, best evidence first.\n\n``reported``: the output log prints the value the program used. ``requested``: the log's echoed input, else the\nuploaded deck, else a value the depositor typed, asked for it (``requested_from`` says which).\n``assumed_default``: the log neither reports nor echoes it, so the program's documented default for the declared\nprogram and version is shown, labelled as assumed. ``assumed_default_no_output_log``: the same, with no output log\nat all. ``not_stated``: nothing says, and no default is documented or the program or version is not declared.",
+        "enum": [
+          "reported",
+          "requested",
+          "assumed_default",
+          "assumed_default_no_output_log",
+          "not_stated"
+        ],
+        "title": "EffectiveSettingState",
+        "type": "string"
+      },
+      "EffectiveSettingSummary": {
+        "description": "What was used for one setting of a calculation, and how we know.\n\nComputed when the record is read; an assumed default is never stored. ``reported`` lists what the log printed:\nfor ORCA the integration accuracy and the largest angular grid, for the SCF the thresholds. Gaussian's grid is\nlisted as the raw ``IRadAn`` code it prints and does not set ``state``: its correspondence to a named grid is not\ndocumented, so the state of a Gaussian grid comes from the echoed or deck value, then the assumed default.",
+        "properties": {
+          "assumed_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assumed Value"
+          },
+          "conflicting": {
+            "default": false,
+            "title": "Conflicting",
+            "type": "boolean"
+          },
+          "reported": {
+            "items": {
+              "$ref": "#/components/schemas/ReportedSettingValue"
+            },
+            "title": "Reported",
+            "type": "array"
+          },
+          "requested_from": {
+            "anyOf": [
+              {
+                "enum": [
+                  "output_log",
+                  "input",
+                  "typed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested From"
+          },
+          "requested_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested Value"
+          },
+          "setting": {
+            "enum": [
+              "grid",
+              "scf_convergence"
+            ],
+            "title": "Setting",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/EffectiveSettingState"
+          }
+        },
+        "required": [
+          "setting",
+          "state"
+        ],
+        "title": "EffectiveSettingSummary",
+        "type": "object"
       },
       "ElectronicLevelIn": {
         "additionalProperties": false,
@@ -41045,6 +41149,15 @@
         "title": "ParameterSource",
         "type": "string"
       },
+      "ParameterStatementKind": {
+        "description": "What a parser-read ``calculation_parameter`` row says about a setting.\n\n``requested`` is what the input deck, or the input a log echoes, asked for. ``reported`` is what the program\nprinted in its output log as the value it used, defaults included. Only a log can carry a ``reported`` row.\nNULL on typed (``upload``) and ``curated`` rows.",
+        "enum": [
+          "requested",
+          "reported"
+        ],
+        "title": "ParameterStatementKind",
+        "type": "string"
+      },
       "ParserStamp": {
         "additionalProperties": false,
         "description": "The parser that produced a recorded value: its ``name`` beside its ``version``, as text.\n\nThis is the stamp for a parser the *producer* owns (a client's own log reader, say): its version is somebody\nelse's and is recorded as given, never renumbered, which is why it is text where a :class:`VersionRef` is an\ninteger. A parser TCKDB owns writes the same stamp with its integer version spelled as text. The name never\ncontains the version.",
@@ -46082,6 +46195,25 @@
         "title": "RepeatPolicy",
         "type": "string"
       },
+      "ReportedSettingValue": {
+        "description": "One number or code an output log printed for a setting (a canonical key, or the raw key for an undocumented code).",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "title": "ReportedSettingValue",
+        "type": "object"
+      },
       "ReproducibilityAssessmentRead": {
         "description": "Read projection for one immutable assessment row.",
         "properties": {
@@ -48595,6 +48727,21 @@
             ],
             "title": "Dependencies",
             "x-tckdb-include-gated": "dependencies"
+          },
+          "effective_settings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EffectiveSettingSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Settings",
+            "x-tckdb-include-gated": "parameters"
           },
           "energy_corrections": {
             "anyOf": [
