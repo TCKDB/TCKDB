@@ -238,7 +238,12 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 The route of a Gaussian log is read correctly when it is short. No field, warning or code is added or removed.
 
-- **Fixed:** Gaussian sizes the rows of dashes round the echoed route to the route itself (43 wide for `# sp b3lyp/def2svp`, 70 for a long one). The reader only treated rows of 60 or more as the route's edges, so a short route was never closed: it ran on into the log (one measured route was 5012 characters) and the settings read from it included log text, such as `NAtoms` and `Conv`, as if they had been requested. A row of four or more dashes is now an edge too. Routes of 60 characters or more were never affected.
+- **Fixed:** Gaussian sizes the rows of dashes round the echoed route to the route itself (43 wide for `# sp b3lyp/def2svp`, 70 for a long one). The reader only treated rows of 60 or more as the route's edges, so a short route (under 60 characters, which is common) was never closed: it ran on into the log (one measured route was 5012 characters) and the settings read from it included log text, such as `NAtoms` and `Conv`, as if they had been requested. A row of four or more dashes is now an edge too.
+- **Measured side effects** (every Gaussian text in the test corpus, before and after):
+  - The tau and Hessian-method detection is unchanged on all 521 texts.
+  - 59 ARC payload logs (routes of about 55 characters) no longer store about 197 junk raw rows read from log text. No canonical row changed.
+  - Two Gaussian 03 composite logs, `cbs_qb3_so2oo_g03` and `g3_ethylene_g03`, now read the route the user wrote (`#CBS-QB3 opt freq`) instead of an internal step's. Rows lost: `guess.strategy=read`, `output.verbosity=normal`, `core.frozen=all_electron`. Row gained: `scf.convergence=tight`. The declared-level pair read from the first route, MP2/CBSB3, is now none.
+  - `method_basis_jobs` now lists the internal-step routes of 5 composite logs. That can only drop a level-of-theory warning, never add one.
 
 ### 0.152.0 - 2026-11-04
 

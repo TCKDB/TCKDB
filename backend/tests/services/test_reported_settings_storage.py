@@ -24,7 +24,11 @@ from app.schemas.fragments.calculation import (
     SPResultPayload,
 )
 from app.schemas.reads.scientific_calculation import EffectiveSettingState
-from app.services.calculation_parameter_extraction import extract_and_store_calculation_parameters
+from app.services.calculation_parameter_extraction import (
+    extract_and_store_calculation_parameters,
+    refresh_output_log_rows,
+    remember_artifact_bytes,
+)
 from app.services.calculation_resolution import (
     persist_calculation_parameters,
     resolve_and_persist_calculation_with_results,
@@ -558,6 +562,20 @@ _JOB3_DECK = "%mem=2GB\n# sp wb97xd/def2svp geom=allcheck guess=read\n\nwater\n\
 _SCF = {"scf.tol_rms_density", "scf.tol_max_density", "scf.tol_energy_eh"}
 
 
+def _upload(session, calc, text, kind=ArtifactKind.output_log):
+    """What an upload does: store the artifact row and its bytes, then read it (so a deck can be found again)."""
+    content = text.encode()
+    sha = hashlib.sha256(content).hexdigest()
+    session.add(
+        CalculationArtifact(
+            calculation_id=calc.id, kind=kind, uri=f"s3://t/{sha}", sha256=sha, bytes=len(content), filename="a.txt"
+        )
+    )
+    session.flush()
+    remember_artifact_bytes(session, content)
+    return _read(session, calc, text, kind)
+
+
 def _g16_calc(session, calc_type=CalculationType.sp, method="wB97XD", basis="def2-SVP"):
     return _calc(session, software="gaussian", version="16", method=method, basis=basis, calc_type=calc_type)
 
@@ -591,16 +609,16 @@ def test_link1_job_1_binds_to_the_opt_calculation_by_type_method_and_basis(db_co
 def test_link1_jobs_2_and_3_are_told_apart_by_the_settings_their_deck_requests(db_conn):
     with Session(db_conn) as session, session.begin():
         two = _g16_calc(session)
-        _read(session, two, _JOB2_DECK, ArtifactKind.input)
-        _read(session, two, _LINK1_LOG)
+        _upload(session, two, _JOB2_DECK, ArtifactKind.input)
+        _upload(session, two, _LINK1_LOG)
         rows = _log_rows(session, two)
         assert ("grid.quality", "fine") in rows and ("scf.convergence", "very_tight") in rows
         assert ("grid.quality", "ultrafine") not in rows and ("scf.convergence", "tight") not in rows
         assert _scf_keys(rows) == _SCF
 
         three = _g16_calc(session)
-        _read(session, three, _JOB3_DECK, ArtifactKind.input)
-        _read(session, three, _LINK1_LOG)
+        _upload(session, three, _JOB3_DECK, ArtifactKind.input)
+        _upload(session, three, _LINK1_LOG)
         rows = _log_rows(session, three)
         assert _scf_keys(rows) == _SCF  # its own report...
         # ...and no grid or SCF keyword of job 1 or job 2 stands in for the ones job 3 never wrote.
@@ -642,3 +660,155 @@ def test_a_single_job_g16_log_binds_without_any_tie_break(db_conn):
         rows = _log_rows(session, calc)
         assert _scf_keys(rows) == _SCF
         assert not any(k == "IRadAn" for k, _ in rows)
+
+
+def test_refresh_keeps_the_rows_of_a_correctly_bound_link1_log(db_conn):
+    """deck then log, then a refresh: the refresh must bind the same job from the stored deck, not from rows.
+
+    The log outranks the deck, so once the log has been read the deck's rows are gone; the tie between jobs 2 and 3
+    must still be broken, from the deck artifact. Also fails if the refresh reads the whole log instead of the job.
+    """
+    with Session(db_conn) as session, session.begin():
+        calc = _g16_calc(session)
+        _upload(session, calc, _JOB2_DECK, ArtifactKind.input)
+        _upload(session, calc, _LINK1_LOG)
+        before = _log_rows(session, calc)
+        assert ("grid.quality", "fine") in before and ("scf.convergence", "very_tight") in before
+        refresh_output_log_rows(session, calc)
+        assert _log_rows(session, calc) == before
+        assert ("grid.quality", "ultrafine") not in _log_rows(session, calc)  # job 1's echo never read
+
+
+def test_a_log_that_arrived_before_its_deck_is_bound_by_the_refresh_and_stays_put(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _g16_calc(session)
+        _upload(session, calc, _LINK1_LOG)
+        assert _log_rows(session, calc) == {}  # no deck yet: jobs 2 and 3 cannot be told apart
+        _upload(session, calc, _JOB3_DECK, ArtifactKind.input)
+        refresh_output_log_rows(session, calc)
+        first = _log_rows(session, calc)
+        assert _scf_keys(first) == _SCF and ("guess.strategy", "read") in first
+        assert not {k for k, _ in first} & {"grid.quality", "scf.convergence"}
+        refresh_output_log_rows(session, calc)
+        assert _log_rows(session, calc) == first
+
+
+def test_typed_rows_do_not_break_the_tie(db_conn):
+    """A partial typed set can match a sibling's shorter route and bind the wrong job: typed rows are not used."""
+    with Session(db_conn) as session, session.begin():
+        calc = _g16_calc(session)
+        _typed(session, calc, "guess.strategy", "read")  # job 3's whole route, and a part of job 2's
+        _upload(session, calc, _LINK1_LOG)
+        assert _log_rows(session, calc) == {}
+
+
+def test_a_deck_holding_two_routes_does_not_break_the_tie(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _g16_calc(session)
+        _upload(session, calc, _JOB2_DECK + "\n--Link1--\n" + _JOB3_DECK, ArtifactKind.input)
+        _upload(session, calc, _LINK1_LOG)
+        assert _log_rows(session, calc) == {}
+
+
+def test_a_dispersion_stated_apart_still_binds_the_job(db_conn):
+    """The declared `B3LYP-D3BJ` and a route `b3lyp ... empiricaldispersion=gd3bj` are the same level."""
+    log = _LINK1_LOG.replace("# opt b3lyp/def2svp int=ultrafine scf=tight", "# opt b3lyp/def2svp int=ultrafine scf=tight empiricaldispersion=gd3bj", 1)
+    assert log != _LINK1_LOG
+    with Session(db_conn) as session, session.begin():
+        calc = _g16_calc(session, CalculationType.opt, method="B3LYP-D3BJ")
+        _upload(session, calc, log)
+        assert ("grid.quality", "ultrafine") in _log_rows(session, calc)
+
+
+@pytest.mark.parametrize(
+    ("route", "calc_type", "expected"),
+    [
+        ("# sp b3lyp/def2svp frequency", CalculationType.freq, True),  # `frequency` is `freq`
+        ("# sp b3lyp/def2svp frequency", CalculationType.sp, False),
+        ("#opt b3lyp/def2svp", CalculationType.opt, True),  # `#opt`, no space
+        ("#p opt=(calcfc) freq b3lyp/def2svp", CalculationType.opt, True),
+        ("# b3lyp/def2svp scan", CalculationType.sp, False),
+        ("# b3lyp/def2svp polar", CalculationType.sp, False),
+        ("# b3lyp/def2svp stable=opt", CalculationType.sp, False),
+        ("# b3lyp/def2svp force", CalculationType.sp, False),
+        ("# b3lyp/def2svp", CalculationType.sp, True),
+        ("# b3lyp/def2svp opt", CalculationType.sp, False),
+        ("# b3lyp/def2svp irc=(calcfc)", CalculationType.irc, True),
+    ],
+)
+def test_job_type_is_read_through_the_route_tokeniser(route, calc_type, expected):
+    from app.services.parameter_reconciliation import _job_type_matches
+
+    assert _job_type_matches(calc_type.value, route) is expected
+
+
+# ---------------------------------------------------------------------------
+# Gaussian: a stricter SCF request than `tight` must not report the `tight` threshold (the ordering rule)
+# ---------------------------------------------------------------------------
+
+_DEFAULT_LOG = (FIXTURES / "gaussian" / "water_default_g16.log").read_text(errors="replace")
+_DIFFERS = "reported_setting_differs_from_requested"
+
+
+def _differs(warnings):
+    return [w for w in warnings if w.code == _DIFFERS]
+
+
+def test_link1_job_2_requests_verytight_and_reports_the_tight_threshold_so_it_warns(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _g16_calc(session)
+        _upload(session, calc, _JOB2_DECK, ArtifactKind.input)
+        [warning] = _differs(_upload(session, calc, _LINK1_LOG))
+        assert warning.context["canonical_key"] == "scf.tol_rms_density" and warning.context["software"] == "gaussian"
+        assert warning.context["depositor_supplied"] == {"requested_value": "very_tight", "reported_value": "1e-08"}
+        assert "VeryTight" not in warning.message and "very_tight" not in warning.message  # text from code only
+
+
+def test_link1_job_1_tight_and_job_3_default_and_the_default_log_are_silent(db_conn):
+    with Session(db_conn) as session, session.begin():
+        one = _g16_calc(session, CalculationType.opt, method="B3LYP")
+        assert _differs(_upload(session, one, _LINK1_LOG)) == []
+        three = _g16_calc(session)
+        _upload(session, three, _JOB3_DECK, ArtifactKind.input)
+        assert _differs(_upload(session, three, _LINK1_LOG)) == []
+        default = _g16_calc(session, method="B3LYP")
+        assert _differs(_upload(session, default, _DEFAULT_LOG)) == []
+
+
+@pytest.mark.parametrize(("reported", "warns"), [("1.00D-10", False), ("1.00D-08", True)])
+def test_an_explicit_conver_must_be_reported_as_ten_to_the_minus_n(db_conn, reported, warns):
+    log = _DEFAULT_LOG.replace("# sp b3lyp/def2svp", "# sp b3lyp/def2svp scf=conver=10", 1)
+    log = log.replace("Requested convergence on RMS density matrix=1.00D-08", f"Requested convergence on RMS density matrix={reported}", 1)
+    assert log != _DEFAULT_LOG
+    with Session(db_conn) as session, session.begin():
+        calc = _g16_calc(session, method="B3LYP")
+        found = _differs(_upload(session, calc, log))
+        assert bool(found) is warns
+        if warns:
+            assert found[0].context["depositor_supplied"]["requested_value"] == "conver=10"
+
+
+@pytest.mark.parametrize(
+    ("requested", "conver", "reported", "expected"),
+    [
+        ("very_tight", None, "1e-08", 1),
+        ("very_tight", None, "1e-06", 1),  # looser than tight: contradicts too
+        ("very_tight", None, "1e-09", 0),  # tighter than tight: consistent with a stricter request
+        ("very_tight", None, "1e-10", 0),
+        ("extreme", None, "1e-08", 1),
+        ("tight", None, "1e-08", 0),
+        ("tight", None, "1e-05", 0),  # tight's threshold is not judged below the ordering rule
+        ("loose", None, "1e-08", 0),
+        (None, None, "1e-08", 0),
+        ("very_tight", None, None, 0),  # nothing reported, nothing to compare
+        (None, "10", "1e-10", 0),
+        (None, "10", "1e-08", 1),
+        ("tight", "6", "1e-06", 0),  # Conver=N wins over the keyword
+        ("very_tight", "10", "1e-10", 0),
+        (None, "ten", "1e-10", 0),
+    ],
+)
+def test_the_gaussian_scf_ordering_rule(requested, conver, reported, expected):
+    from app.services.parameter_reconciliation import gaussian_scf_disagreements
+
+    assert len(gaussian_scf_disagreements(requested, conver, reported)) == expected

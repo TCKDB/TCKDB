@@ -75,6 +75,7 @@ from app.services.calculation_ownership import (
     assert_calculation_owned_by,
 )
 from app.services.calculation_parameter_extraction import (
+    inputs_first,
     try_extract_parameters_from_artifact_upload,
 )
 from app.services.calculation_resolution import (
@@ -280,7 +281,7 @@ def _persist_calculation_unattributed(
         as_primary=as_primary or is_conformer_primary,
     )
 
-    for artifact_in in calc_in.artifacts:
+    for artifact_in in inputs_first(calc_in.artifacts):
         persist_artifact(
             session,
             calculation_id=calculation.id,

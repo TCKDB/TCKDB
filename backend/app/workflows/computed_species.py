@@ -77,6 +77,7 @@ from app.services.calculation_ownership import (
     assert_calculation_owned_by,
 )
 from app.services.calculation_parameter_extraction import (
+    inputs_first,
     try_extract_parameters_from_artifact_upload,
 )
 from app.services.calculation_resolution import (
@@ -783,7 +784,7 @@ def persist_computed_species_upload(
                 # against the tool's reported value (fill/mismatch), the
                 # same as the standalone artifacts route.
                 with attribute_warnings(session, upload_warnings, record=(SubmissionRecordType.calculation, calc_row.id)):
-                    for art_in in calc_in.artifacts:
+                    for art_in in inputs_first(calc_in.artifacts):
                         try_extract_parameters_from_artifact_upload(
                             session, calc_row, art_in, warnings=upload_warnings
                         )

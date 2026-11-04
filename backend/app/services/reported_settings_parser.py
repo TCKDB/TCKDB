@@ -35,7 +35,7 @@ REPORTED = "reported"
 
 _ORCA_BANNER = re.compile(r"^\s*\*{3,}\s*\n\s*\*\s+O\s+R\s+C\s+A", re.M)
 _GAUSSIAN_JOB = re.compile(r"Entering Gaussian System")
-_GAUSSIAN_LINK1 = re.compile(r"^ Entering Link 1 =", re.M)
+_GAUSSIAN_LINK1 = re.compile(r"^[ \t]*Entering Link 1 =", re.M)
 
 
 def _split(text: str, marker: re.Pattern[str]) -> list[str]:

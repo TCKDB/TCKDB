@@ -285,37 +285,59 @@ def test_real_multi_step_logs_are_not_suppressed(fixture):
     assert parse_gaussian_reported(_read(fixture))
 
 
-def test_the_guard_fires_on_no_gaussian_fixture_log():
-    """Corpus: every Gaussian log (standalone, composite, ARC payloads) keeps its reported rows."""
-
-
-    logs = []
-    for payload in glob.glob(str(FIXTURES / "arc_runs" / "*" / "tckdb_payloads" / "computed_reaction" / "*.payload.json")):
-        logs += [t for t in _walk_logs(json.loads(Path(payload).read_text())) if "Entering Gaussian System" in t]
-    logs = list(dict.fromkeys(logs))
+def _gaussian_corpus() -> list[tuple[str, str]]:
+    """``(source, text)`` of every Gaussian log: standalone, composite, and every ARC run payload (species and reaction)."""
+    logs: dict[str, str] = {}
+    for payload in glob.glob(str(FIXTURES / "arc_runs" / "*" / "tckdb_payloads*" / "**" / "*.payload.json"), recursive=True):
+        for text in _walk_logs(json.loads(Path(payload).read_text())):
+            if "Entering Gaussian System" in text:
+                logs.setdefault(text, "arc_payload")
     for path in glob.glob(str(FIXTURES / "gaussian" / "*.log")) + glob.glob(str(FIXTURES / "gaussian_composite" / "*.[lo]*")):
         if not path.endswith(".md"):
-            logs.append(Path(path).read_text(errors="replace"))
+            logs[Path(path).read_text(errors="replace")] = str(Path(path).relative_to(FIXTURES))
+    return [(source, text) for text, source in logs.items()]
+
+
+def test_the_split_at_entering_link_1_loses_no_fixture_logs_reports():
+    """Corpus: the split is safe (one `Entering Link 1` per log, opt+freq and composites included) and every job keeps
+    the reports it printed."""
+    logs = _gaussian_corpus()
     assert len(logs) > 100
     with_reports = 0
-    link1 = {"water_link1_g16.log": 3}
-    for path in glob.glob(str(FIXTURES / "gaussian" / "*.log")) + glob.glob(str(FIXTURES / "gaussian_composite" / "*.[lo]*")):
-        if not path.endswith(".md"):
-            # Measured: the split point is safe. Every single-job log, opt+freq and composite included, prints exactly
-            # one `Entering Link 1`; only the --Link1-- fixture prints more.
-            count = len(re.findall(r"^ Entering Link 1 =", Path(path).read_text(errors="replace"), re.M))
-            assert count == link1.get(Path(path).name, 1), path
-    for log in logs:
-        assert len(gaussian_jobs(log)) == (3 if "job 1 of 3" in log else 1)
-    for text in [job for log in logs for job in gaussian_jobs(log)]:
-        # A job that prints a report must keep it: the split may not suppress any real fixture job.
+    for source, log in logs:
+        count = len(re.findall(r"^[ \t]*Entering Link 1 =", log, re.M))
+        assert count == (3 if source == _LINK1 else 1), source
+        assert len(gaussian_jobs(log)) == count
+    for text in [job for _, log in logs for job in gaussian_jobs(log)]:
         codes = set(re.findall(r"IXCGrd=\s*\d+ IRadAn=\s*(\d+)", text))
         scf = set(_G_SCF.findall(text))
         if (codes or scf) and len(codes) <= 1 and len(scf) <= 1:
-            # One value per setting throughout: only the job guard could empty the result.
+            # One value per setting throughout: only the job split could empty the result.
             with_reports += 1
             assert parse_gaussian_reported(text), "a fixture log's reports were suppressed"
     assert with_reports > 100
+
+
+def test_requested_against_reported_scf_disagreements_over_every_gaussian_fixture_job():
+    """Corpus count: the one contradiction is job 2 of the Link1 fixture (`scf=verytight`, reports 1.00D-08).
+
+    Every other job either requests `tight` (125) or nothing about SCF convergence (49), and no log states Conver=N.
+    """
+    from app.services.calculation_parameter_extraction import _parse_gaussian_text
+    from app.services.parameter_reconciliation import gaussian_scf_disagreements
+
+    hits = []
+    for source, log in _gaussian_corpus():
+        for job in gaussian_jobs(log):
+            requested = conver = None
+            for p in _parse_gaussian_text(job)["parameters"]:
+                if p["canonical_key"] == "scf.convergence":
+                    requested = p["canonical_value"]
+                if p["section"] == "scf" and p["raw_key"].lower() == "conver":
+                    conver = p["raw_value"]
+            reported = _canonical(parse_gaussian_reported(job)).get("scf.tol_rms_density")
+            hits += [(source, d) for d in gaussian_scf_disagreements(requested, conver, reported)]
+    assert hits == [(_LINK1, ("scf.tol_rms_density", "very_tight", "1e-08"))]
 
 
 def test_a_job_that_prints_no_value_does_not_borrow_one_from_the_other_job():

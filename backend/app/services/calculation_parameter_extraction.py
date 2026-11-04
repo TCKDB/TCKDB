@@ -263,22 +263,42 @@ def _parse_gaussian_text(text: str) -> dict:
 
 
 def _the_calculations_job(
-    session: Session, calculation: Calculation, software: str, text: str, artifact_kind: ArtifactKind
+    session: Session,
+    calculation: Calculation,
+    software: str,
+    text: str,
+    artifact_kind: ArtifactKind,
+    *,
+    deck: CalculationArtifact | None = None,
+    client_box: list | None = None,
+    strict: bool = False,
 ) -> tuple[str, bool]:
     """``(text to read, unbound)``: a Gaussian log is cut to the job that is this calculation (see
     :func:`app.services.parameter_reconciliation.bind_gaussian_job`).
 
     When no single job is, the whole text is returned with ``unbound`` set: the caller reads nothing that belongs to a
     job from it (no echoed request, no reported value), so another job's value never stands in. Decks and the other
-    programs' logs pass through.
+    programs' logs pass through. Jobs the log cannot tell apart are told apart by the calculation's stored input deck
+    (``deck``, else the most recent one); a deck that cannot be read leaves them untold (``strict``: raises instead).
     """
     if software != "gaussian" or artifact_kind is ArtifactKind.input:
         return text, False
-    try:
-        session.flush()
-    except Exception:  # pragma: no cover - defensive; the bind reads only stored rows
-        pass
-    job = bind_gaussian_job(session, calculation, text)
+    session.flush()
+
+    def deck_text() -> str | None:
+        try:
+            artifact = deck
+            if artifact is None:
+                decks = _stored_artifacts(session, calculation, ArtifactKind.input)
+                artifact = decks[-1] if decks else None
+            return None if artifact is None else _decode_text(_artifact_bytes(session, artifact, client_box))
+        except Exception as exc:
+            if strict:
+                raise
+            logger.warning("deck not read to tell Gaussian jobs apart for calculation id=%s: %s", calculation.id, exc)
+            return None
+
+    job = bind_gaussian_job(calculation, text, deck_text)
     return (text, True) if job is None else (job, False)
 
 
@@ -467,20 +487,35 @@ def _stored_artifacts(session: Session, calculation: Calculation, kind: Artifact
     )
 
 
-def _parse_stored_artifact(session: Session, calculation: Calculation, artifact: CalculationArtifact, client_box: list):
+def _artifact_bytes(session: Session, artifact: CalculationArtifact, client_box: list | None) -> bytes:
+    """A stored artifact's bytes: from memory when uploaded in this request, else through a short-timeout client."""
+    content = session.info.get("parameter_artifact_bytes", {}).get(artifact.sha256)
+    if content is None:
+        if client_box is None:
+            client_box = []
+        if not client_box:
+            client_box.append(_short_timeout_client())
+        content = load_artifact_bytes(artifact.sha256, client=client_box[0])
+    return content
+
+
+def _parse_stored_artifact(
+    session: Session,
+    calculation: Calculation,
+    artifact: CalculationArtifact,
+    client_box: list,
+    deck: CalculationArtifact | None = None,
+):
     """``(software, observations, parser stamp)`` for one stored deck or log; raises when it cannot be read or parsed.
 
     Bytes uploaded in this request come from memory; others are read through a short-timeout client (made once and
     kept in ``client_box``).
     """
-    content = session.info.get("parameter_artifact_bytes", {}).get(artifact.sha256)
-    if content is None:
-        if not client_box:
-            client_box.append(_short_timeout_client())
-        content = load_artifact_bytes(artifact.sha256, client=client_box[0])
-    text = _decode_text(content)
+    text = _decode_text(_artifact_bytes(session, artifact, client_box))
     software = _resolve_software(calculation, text)
-    text, unbound = _the_calculations_job(session, calculation, software, text, artifact.kind)
+    text, unbound = _the_calculations_job(
+        session, calculation, software, text, artifact.kind, deck=deck, client_box=client_box, strict=True
+    )
     parsed = _run_parser(software, text)
     if unbound:
         parsed = {**parsed, "parameters": []}
@@ -528,7 +563,7 @@ def refresh_output_log_rows(
         session, calculation, ArtifactKind.output_log
     ):
         try:
-            parsed = _parse_stored_artifact(session, calculation, artifact, client_box)
+            parsed = _parse_stored_artifact(session, calculation, artifact, client_box, deck_artifact)
         except Exception as exc:
             raise ParameterExtractionError(_stored_log_rows_restore_reason(artifact, exc)) from exc
         if artifact.kind is ArtifactKind.input:
@@ -571,6 +606,15 @@ def _decode_text(content: bytes) -> str:
 
 #: The artifact kinds whose text is read for parameters: a deck, and a log that echoes the deck.
 _PARAMETER_ARTIFACT_KINDS = (ArtifactKind.input, ArtifactKind.output_log)
+
+
+def inputs_first(artifacts):
+    """The artifacts of one request with the input decks first, each group in its listed order.
+
+    A log is read against the decks the calculation already has (a Link1 log's jobs are told apart by the deck), so a
+    request must not let the order a producer listed its artifacts in decide what a log binds to.
+    """
+    return sorted(artifacts, key=lambda a: a.kind != ArtifactKind.input)
 
 
 def try_extract_parameters_from_artifact_upload(
