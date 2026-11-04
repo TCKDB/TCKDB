@@ -46,6 +46,7 @@ from app.db.models.common import (
     ImaginaryModeDisposition,
     IRCDirection,
     ParameterSource,
+    ParameterStatementKind,
     PathSearchMethod,
     ScanCoordinateKind,
     SCFStabilityStatus,
@@ -1901,6 +1902,16 @@ class CalculationParameter(Base, TimestampMixin):
         ),
     )
 
+    statement_kind: Mapped[Optional[ParameterStatementKind]] = mapped_column(
+        SAEnum(ParameterStatementKind, name="parameter_statement_kind"),
+        nullable=True,
+        doc=(
+            "What a parser row says: 'requested' (the deck, or the input a log echoes, asked for it) or "
+            "'reported' (the output log prints it as the value the program used). NULL for upload and curated rows. "
+            "A reported row exists only for an output log."
+        ),
+    )
+
     calculation: Mapped["Calculation"] = relationship(back_populates="parameters")
     vocab: Mapped[Optional["CalculationParameterVocab"]] = relationship(
         back_populates="parameters",
@@ -1931,6 +1942,11 @@ class CalculationParameter(Base, TimestampMixin):
         CheckConstraint(
             "artifact_kind IS NULL OR (source = 'parser' AND artifact_kind IN ('input', 'output_log'))",
             name="artifact_kind_parser_input_or_log",
+        ),
+        CheckConstraint(
+            "statement_kind IS NULL OR (source = 'parser' AND "
+            "(statement_kind = 'requested' OR artifact_kind = 'output_log'))",
+            name="statement_kind_reported_from_log",
         ),
     )
 

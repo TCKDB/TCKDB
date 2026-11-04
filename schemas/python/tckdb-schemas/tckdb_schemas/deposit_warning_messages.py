@@ -213,7 +213,11 @@ RENDERED: dict[str, str] = {
     ),
     "input_deck_disagrees_with_output_log": (
         "The input deck and the output log uploaded for this calculation state different values for the same "
-        "setting. The deck's value was kept and the log's row for it was not stored."
+        "setting. The log's value was kept and the deck's row for it was not stored."
+    ),
+    "reported_setting_differs_from_requested": (
+        "The output log reports a different value for a setting than the one the input requested. Both were "
+        "stored; the value the program reported is the one that ran."
     ),
     "output_log_disagrees_with_earlier_output_log": (
         "Two output logs uploaded for this calculation state different values for the same setting. The earlier "
@@ -1727,8 +1731,18 @@ def _deck_disagrees_with_log(context: Mapping[str, Any]) -> str | None:
     if key is None:
         return None
     return (
-        f"The uploaded {_program(context)}input deck and output log state different values for {key}. The deck's "
-        "value was kept and the log's row for it was not stored."
+        f"The uploaded {_program(context)}input deck and output log state different values for {key}. The log's "
+        "value was kept and the deck's row for it was not stored."
+    )
+
+
+def _reported_differs(context: Mapping[str, Any]) -> str | None:
+    key = _token(context.get("canonical_key"))
+    if key is None:
+        return None
+    return (
+        f"The {_program(context)}output log reports a different value for {key} than the setting the input "
+        "requested. Both were stored; the value the program reported is the one that ran."
     )
 
 
@@ -1793,6 +1807,7 @@ _WITH_CONTEXT: dict[str, Any] = {
     "hessian_method_disagrees_with_stored_tau_basis": _hessian_disagrees,
     "parameter_disagrees_with_artifact": _parameter_disagrees,
     "input_deck_disagrees_with_output_log": _deck_disagrees_with_log,
+    "reported_setting_differs_from_requested": _reported_differs,
     "level_of_theory_disagrees_with_artifact": _lot_disagrees,
     "output_log_disagrees_with_earlier_output_log": _log_disagrees_with_log,
     "n_imag_contradicts_minimum": _n_imag_contradicts_minimum,

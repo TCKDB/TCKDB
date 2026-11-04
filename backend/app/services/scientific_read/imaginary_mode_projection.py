@@ -59,7 +59,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 import numpy as np
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from tckdb_schemas.stationary_point import TAU_PARAMETER_KEYS
 
@@ -85,7 +85,7 @@ from app.db.models.calculation import (
     CalculationHessian,
     CalculationParameter,
 )
-from app.db.models.common import ImaginaryModeDisposition
+from app.db.models.common import ImaginaryModeDisposition, ParameterStatementKind
 from app.db.models.geometry import GeometryAtom
 
 logger = logging.getLogger(__name__)
@@ -419,8 +419,16 @@ def _tau_context(
         select(CalculationParameter.canonical_key, CalculationParameter.canonical_value)
         .where(CalculationParameter.calculation_id == calculation_id)
         .where(CalculationParameter.canonical_key.in_(TAU_PARAMETER_KEYS))
+        # A value an output log reports is not a protocol the depositor requested, and tau does not read it (yet).
+        .where(
+            or_(
+                CalculationParameter.statement_kind.is_(None),
+                CalculationParameter.statement_kind != ParameterStatementKind.reported,
+            )
+        )
+        .order_by(CalculationParameter.id)
     ).all():
-        # Later rows win, matching ``resolve_tau_from_parameters``.
+        # Later rows win, matching ``resolve_tau_from_parameters``; the order is explicit, not the table's.
         recorded[key] = value
 
     ranked = sorted(imaginary, key=lambda mode: (-abs(mode.frequency_cm1), mode.mode_index))
