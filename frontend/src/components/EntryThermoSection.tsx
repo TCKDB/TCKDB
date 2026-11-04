@@ -25,7 +25,7 @@ import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { Disclosure } from "./Disclosure"
 import { SectionHeading } from "./PageSections"
-import { SettingsBehindValue } from "./EffectiveSettings"
+import { SettingsBehindValue, SettingsLegend } from "./EffectiveSettings"
 import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
 import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
@@ -324,6 +324,7 @@ function ThermoList({ response, meta, onPage, conformer, conformers }: {
             ) : (
                 renderThermoRecords(records)
             )}
+            {records.some((record) => (record.calculation_settings?.length ?? 0) > 0) && <SettingsLegend perLevel />}
         </section>
     )
 }

@@ -36,7 +36,12 @@
 .settings-reported {
     font: var(--type-note-font);
     color: var(--ink-2);
-    overflow-wrap: anywhere;
+}
+
+/* A reported number stays whole and stays with the last word of its label; the line may break between the label's
+   other words and between values, never inside a number. */
+.settings-nowrap {
+    white-space: nowrap;
 }
 
 .settings-badges {

@@ -9,6 +9,7 @@ import {
     publicSettingValue,
     reportedEntryText,
     settingStateLabel,
+    settingStateMeaning,
 } from "./effectiveSettings"
 
 describe("settingStateLabel", () => {
@@ -18,6 +19,7 @@ describe("settingStateLabel", () => {
         expect(settingStateLabel("assumed_default")).toBe("Assumed default")
         expect(settingStateLabel("assumed_default_no_output_log")).toBe("Assumed default (no log)")
         expect(settingStateLabel("not_stated")).toBe("Not stated")
+        expect(settingStateMeaning("not_stated")).toBe("Not stated: nothing states it, and no program default can be assumed.")
     })
 
     it("reads an unrecognised state as not stated, never as the raw token", () => {

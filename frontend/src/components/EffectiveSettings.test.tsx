@@ -7,6 +7,10 @@ import { expectNoDepositorText, expectPlanted, plantSentinels } from "../test/de
 
 afterEach(cleanup)
 
+/** A reported value's item: its text is split across a non-breaking space and a nowrap number. */
+const reportedItem = (text: string) => (_content: string, element: Element | null) =>
+    element?.classList.contains("settings-reported-item") === true && element.textContent?.replaceAll("\u00a0", " ") === text
+
 const grid = (over: Partial<EffectiveSetting>): EffectiveSetting => ({ setting: "grid", state: "not_stated", ...over })
 const scf = (over: Partial<EffectiveSetting>): EffectiveSetting => ({ setting: "scf_convergence", state: "not_stated", ...over })
 
@@ -52,7 +56,7 @@ describe("SettingsBehindValue", () => {
         render(<MemoryRouter><SettingsBehindValue block={BLOCK} recordRef="thr_x" /></MemoryRouter>)
         const geometry = rowFor("Geometry")
         expect(within(geometry).getByText("Reported")).toHaveAttribute("data-settings-state", "reported")
-        expect(within(geometry).getByText("largest angular grid 302")).toBeInTheDocument()
+        expect(within(geometry).getByText(reportedItem("largest angular grid 302"))).toBeInTheDocument()
         const assumed = within(geometry).getByText("Assumed default")
         expect(assumed).toHaveAttribute("data-settings-state", "assumed")
         expect(assumed.className).toContain("settings-state--assumed")
@@ -71,6 +75,13 @@ describe("SettingsBehindValue", () => {
     it("says a level has no linked calculation instead of filling it", () => {
         render(<MemoryRouter><SettingsBehindValue block={BLOCK} recordRef="thr_x" /></MemoryRouter>)
         expect(within(rowFor("Energy")).getByText("No calculation linked")).toBeInTheDocument()
+    })
+
+    it("keeps each reported number with its label on one line and prints the legend only where the caller puts it", () => {
+        render(<MemoryRouter><SettingsBehindValue block={BLOCK} recordRef="thr_x" /></MemoryRouter>)
+        const item = screen.getByText(reportedItem("largest angular grid 302"))
+        expect(item.querySelector(".settings-nowrap")?.textContent).toBe("302")
+        expect(screen.queryByText(/Reported: the output log prints/)).toBeNull()
     })
 
     it("lists a level the server left out (its calculations are hidden) as not shown, never filled", () => {

@@ -7,9 +7,13 @@ calculation, its level of theory, release and software, and always asking for wa
 
 from __future__ import annotations
 
+import hashlib
+
+import pytest
 from sqlalchemy import event
 
-from app.db.models.common import CalculationType
+from app.db.models.calculation import CalculationArtifact
+from app.db.models.common import ArtifactKind, CalculationType
 from tests.services.scientific_read._factories import (
     make_calculation,
     make_lot,
@@ -39,7 +43,7 @@ def _statements(db_session, run) -> int:
     return count
 
 
-def test_include_parameters_costs_no_more_than_it_did_before_the_settings_were_batched(client, db_session):
+def _marginal(client, db_session, *, with_log: bool) -> int:
     entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("CPC")))
     release = make_software_release(db_session, name="orca", version="6.0.0")
     calc = make_calculation(
@@ -49,6 +53,15 @@ def test_include_parameters_costs_no_more_than_it_did_before_the_settings_were_b
         lot_id=make_lot(db_session, method="b3lyp", basis="def2tzvp").id,
         software_release_id=release.id,
     )
+    if with_log:
+        # An output log and no rows read from it: the one case that also asks for the unbound-log warning.
+        sha = hashlib.sha256(f"log-{calc.id}".encode()).hexdigest()
+        db_session.add(
+            CalculationArtifact(
+                calculation_id=calc.id, kind=ArtifactKind.output_log, uri=f"s3://t/{sha}", sha256=sha, bytes=3, filename="job.log"
+            )
+        )
+        db_session.flush()
     url = f"/api/v1/scientific/calculations/{calc.public_ref}"
     # Warm anything cached per process so the comparison is of the include, not of first use.
     assert client.get(url, params={"include": "parameters"}).status_code == 200
@@ -56,7 +69,13 @@ def test_include_parameters_costs_no_more_than_it_did_before_the_settings_were_b
     without = _statements(db_session, lambda: client.get(url))
     with_parameters = _statements(db_session, lambda: client.get(url, params={"include": "parameters"}))
     assert with_parameters - without > 0, "the include did nothing; the comparison would prove nothing"
-    assert with_parameters - without <= _PREVIOUS_MARGINAL_COST, (
-        f"include=parameters costs {with_parameters - without} extra statements; it cost {_PREVIOUS_MARGINAL_COST} "
+    return with_parameters - without
+
+
+@pytest.mark.parametrize("with_log", [False, True], ids=["no_log", "log_without_rows"])
+def test_include_parameters_costs_no_more_than_it_did_before_the_settings_were_batched(client, db_session, with_log):
+    marginal = _marginal(client, db_session, with_log=with_log)
+    assert marginal <= _PREVIOUS_MARGINAL_COST, (
+        f"include=parameters costs {marginal} extra statements; it cost {_PREVIOUS_MARGINAL_COST} "
         "before the effective settings were batched"
     )

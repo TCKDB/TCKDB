@@ -35,7 +35,7 @@ import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
 import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
 import { SectionHeading } from "./PageSections"
-import { SettingsBehindValue } from "./EffectiveSettings"
+import { SettingsBehindValue, SettingsLegend } from "./EffectiveSettings"
 import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
 import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
@@ -226,6 +226,9 @@ function StatmechList({ listKey, meta, onPage, response, conformer, conformers }
                     />
                 ) : (
                     renderStatmechRecords(records, conformers, sourceCalcsState, frequenciesState)
+                )}
+                {settingsState.status === "ready" && [...settingsState.dataByRef.values()].some((block) => (block?.length ?? 0) > 0) && (
+                    <SettingsLegend perLevel />
                 )}
             </section>
 

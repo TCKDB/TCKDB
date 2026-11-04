@@ -1077,7 +1077,7 @@ describe("CalculationDetailPage", () => {
         const effective = within(section).getByRole("table", { name: "Effective settings" })
         const gridRow = within(effective).getByRole("row", { name: /DFT grid/ })
         expect(within(gridRow).getByText("Reported")).toBeVisible()
-        expect(within(gridRow).getByText("largest angular grid 302")).toBeVisible()
+        expect(within(gridRow).getByText((_c, el) => el?.classList.contains("settings-reported-item") === true && el.textContent?.replaceAll("\u00a0", " ") === "largest angular grid 302")).toBeVisible()
         const scfRow = within(effective).getByRole("row", { name: /SCF convergence/ })
         const assumed = within(scfRow).getByText("Assumed default (no log)")
         expect(assumed).toHaveAttribute("data-settings-state", "assumed")

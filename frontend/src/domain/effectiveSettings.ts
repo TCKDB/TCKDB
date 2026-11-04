@@ -35,7 +35,7 @@ const STATE_MEANINGS: Record<EffectiveSettingState, string> = {
     assumed_default: "Assumed program default: the log neither reports nor echoes it, so the program's documented default is shown.",
     assumed_default_no_output_log:
         "Assumed program default (no output log): no output log was deposited, so the program's documented default is shown.",
-    not_stated: "Not stated: nothing says, and no default is documented for this program and version.",
+    not_stated: "Not stated: nothing states it, and no program default can be assumed.",
 }
 
 /** The reader-facing name of a state; an unrecognised future state reads "Not stated", never the raw token. */

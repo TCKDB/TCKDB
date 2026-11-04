@@ -55,7 +55,15 @@ function SettingCell({ summary }: { summary: EffectiveSetting | undefined }) {
                 </span>
             )}
             {display.reportedTexts.length > 0 && (
-                <span className="settings-reported">{display.reportedTexts.join("; ")}</span>
+                <span className="settings-reported">
+                    {display.reportedTexts.map((text, index) => (
+                        <span key={text} className="settings-reported-item">
+                            {index > 0 && " "}
+                            <ReportedText text={text} />
+                            {index < display.reportedTexts.length - 1 && ";"}
+                        </span>
+                    ))}
+                </span>
             )}
             <span className="settings-badges">
                 <StateBadge display={display} />
@@ -72,13 +80,17 @@ function calculationTypeTag(type: string | null | undefined): string | null {
     return type && CALCULATION_TYPE_TAGS.has(type) ? type : null
 }
 
-/** What the short pill labels mean. Assumed values are computed when the page is read and never stored. */
-function SettingsLegend() {
+/**
+ * What the short pill labels mean. Rendered once per section (a thermo or statmech section, the calculation summary),
+ * not on every record card. Assumed values are computed when the page is read and never stored.
+ */
+export function SettingsLegend({ perLevel = false }: { perLevel?: boolean }) {
     return (
-        <p className="note">
+        <p className="note settings-legend">
+            {perLevel && "Each row of a settings table is the calculation the record links for that level. "}
             Reported: the output log prints the value the program used. Requested: the input asked for it. Assumed
             default: the program&apos;s documented default, shown when nothing reports or requests a value (computed
-            when the page is read, never stored, and not an observation). Not stated: nothing says.
+            when the page is read, never stored, and not an observation). Not stated: nothing states it.
         </p>
     )
 }
@@ -87,6 +99,22 @@ const SETTING_ORDER = ["grid", "scf_convergence"] as const
 
 function byName(settings: readonly EffectiveSetting[] | null | undefined, name: string): EffectiveSetting | undefined {
     return settings?.find((item) => item.setting === name)
+}
+
+/**
+ * "largest angular grid 302": the label may wrap between its words, but the number is one unbreakable piece (no break
+ * inside "1e-08") and a non-breaking space keeps it with the last word of its label.
+ */
+function ReportedText({ text }: { text: string }) {
+    const match = /^(.*) (\S+)$/.exec(text)
+    if (!match) return <>{text}</>
+    return (
+        <>
+            {match[1]}
+            {"\u00A0"}
+            <span className="settings-nowrap">{match[2]}</span>
+        </>
+    )
 }
 
 /** The calculation page's summary of what was used for the grid and the SCF convergence. */
@@ -166,8 +194,6 @@ export function SettingsBehindValue({ block, idSuffix = "", recordRef }: {
                     </tbody>
                 </table>
             </div>
-            <p className="note">Each row is the calculation this record links for that level.</p>
-            <SettingsLegend />
         </section>
     )
 }
