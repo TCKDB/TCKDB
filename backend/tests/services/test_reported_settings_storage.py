@@ -55,7 +55,7 @@ def _arc_gaussian_default_grid_log() -> str:
     return next(t for t in texts if "Entering Gaussian System" in t and "IRadAn=           0 IRanWt" in t)
 
 
-def _calc(session: Session, *, software: str = "orca", version: str | None = "6.0.0", method: str = "B3LYP"):
+def _calc(session: Session, *, software: str = "orca", version: str | None = "6.0.0", method: str = "B3LYP", ctype=CalculationType.opt):
     entry_id = _create_species_entry(session, inchi_key=_next_inchi_key("RPTD"))
     release = {"name": software}
     if version is not None:
@@ -66,6 +66,13 @@ def _calc(session: Session, *, software: str = "orca", version: str | None = "6.
         level_of_theory={"method": method, "basis": "def2-TZVP"},
         opt_result=OptResultPayload(converged=True),
     )
+    if ctype is not CalculationType.opt:  # a type other than opt carries no opt_result; composite needs its own block
+        from tckdb_schemas.fragments.calculation import CompositeResultPayload
+
+        update = {"type": ctype, "opt_result": None}
+        if ctype is CalculationType.composite:
+            update["composite_result"] = CompositeResultPayload(assembly="program_run")
+        upload = upload.model_copy(update=update)
     return resolve_and_persist_calculation_with_results(session, upload, species_entry_id=entry_id)
 
 
@@ -315,12 +322,63 @@ def test_the_assumed_default_follows_program_and_version(db_conn, software, vers
         assert _by_setting(session, calc)["grid"].assumed_value == expected
 
 
+@pytest.mark.parametrize(
+    ("software", "version", "method", "ctype", "expected"),
+    [
+        # Gaussian 09: Tight for every calculation type and every SCF-based method (manual chunks 11007, 10284).
+        ("gaussian", "09", "HF", CalculationType.sp, "tight"),
+        ("gaussian", "09", "B3LYP", CalculationType.opt, "tight"),
+        ("gaussian", "09", "MP2", CalculationType.freq, "tight"),
+        ("gaussian", "16", "B3LYP", CalculationType.sp, "tight"),
+        # ORCA 5 and 6: TightSCF is the documented default for a geometry optimisation (chunks 13503, 16764).
+        ("orca", "6.0.0", "MP2", CalculationType.opt, "tight"),
+        ("orca", "6.0.0", "DLPNO-CCSD(T)", CalculationType.opt, "tight"),
+        ("orca", "5.0.4", "HF", CalculationType.opt, "tight"),
+        # Gaussian 16: tight (G09 keyword + an observed default run); composite methods run standard SCF steps.
+        ("gaussian", "16", "CBS-QB3", CalculationType.composite, "tight"),
+        ("gaussian", "09", "G4", CalculationType.composite, "tight"),
+        # No default: non-SCF or unrecognised methods, other ORCA job types, an undeclared version.
+        ("gaussian", "16", "UFF", CalculationType.opt, None),
+        ("gaussian", "09", "MNDO", CalculationType.sp, None),
+        ("orca", "6.0.0", "GFN2-xTB", CalculationType.opt, None),
+        ("orca", "6.0.0", "CASSCF", CalculationType.opt, None),
+        ("orca", "6.0.0", "HF", CalculationType.sp, None),
+        ("orca", "6.0.0", "B3LYP", CalculationType.freq, None),
+        ("gaussian", None, "HF", CalculationType.sp, None),
+        ("orca", None, "HF", CalculationType.opt, None),
+    ],
+)
+def test_the_assumed_scf_default_follows_program_version_and_job_type(db_conn, software, version, method, ctype, expected):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, software=software, version=version, method=method, ctype=ctype)
+        scf = _by_setting(session, calc)["scf_convergence"]
+        assert scf.assumed_value == expected
+        assert scf.state is (
+            EffectiveSettingState.assumed_default_no_output_log if expected else EffectiveSettingState.not_stated
+        )
+        assert not _rows(session, calc)  # read-time only
+
+
+def test_an_assumed_scf_default_gives_way_to_a_stated_value_and_to_a_log(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, software="gaussian", version="09", method="HF", ctype=CalculationType.sp)
+        _attach_log_artifact(session, calc)
+        assert _by_setting(session, calc)["scf_convergence"].state is EffectiveSettingState.assumed_default
+        _typed(session, calc, "scf.convergence", "loose")
+        scf = _by_setting(session, calc)["scf_convergence"]
+        assert (scf.state, scf.requested_value, scf.assumed_value) == (EffectiveSettingState.requested, "loose", None)
+        reported = _calc(session, software="orca", version="6.0.0")
+        _read(session, reported, _ORCA_LOG)
+        scf = _by_setting(session, reported)["scf_convergence"]
+        assert (scf.state, scf.assumed_value) == (EffectiveSettingState.reported, None)
+
+
 def test_rung_4_without_a_declared_version_nothing_is_guessed(db_conn):
     with Session(db_conn) as session, session.begin():
         calc = _calc(session, software="gaussian", version=None)
         settings = _by_setting(session, calc)
         assert settings["grid"].state is EffectiveSettingState.not_stated and settings["grid"].assumed_value is None
-        assert settings["scf_convergence"].state is EffectiveSettingState.not_stated  # no SCF default is documented
+        assert settings["scf_convergence"].state is EffectiveSettingState.not_stated  # a program without a declared version has no default
 
 
 def test_a_gaussian_grid_report_is_listed_but_does_not_decide_the_state(db_conn):

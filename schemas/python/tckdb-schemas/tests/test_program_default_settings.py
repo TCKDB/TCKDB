@@ -67,3 +67,60 @@ def test_a_dft_method_gets_the_default_also_with_a_spin_or_ri_prefix(method):
 @pytest.mark.parametrize("method", ["HF", "UHF", "ROHF", "RI-MP2", "DLPNO-CCSD(T)", "APFD", None])
 def test_other_methods_get_none(method):
     assert assumed_default_setting("ORCA", "6.0.0", "grid", method) is None
+
+
+@pytest.mark.parametrize(
+    ("software", "version", "method", "job", "expected"),
+    [
+        ("Gaussian", "09", "HF", "sp", "tight"),
+        ("Gaussian", "09", "CCSD(T)", None, "tight"),
+        ("Gaussian", "09", "B3LYP", "freq", "tight"),
+        ("ORCA", "6.0.0", "MP2", "opt", "tight"),
+        ("ORCA", "6.0.0", "DLPNO-CCSD(T)", "opt", "tight"),
+        ("ORCA", "5.0.4", "B3LYP", "opt", "tight"),
+        ("ORCA", "6.0.0", "HF", "sp", None),
+        ("ORCA", "6.0.0", "HF", None, None),
+        ("Gaussian", "16", "B3LYP", "opt", "tight"),
+        ("Gaussian", "03", "HF", "sp", None),
+        ("Gaussian", None, "HF", "sp", None),
+        ("Gaussian", "09", None, "sp", None),
+        ("Molpro", "2024.1", "HF", "sp", None),
+        (None, "09", "HF", "sp", None),
+    ],
+)
+def test_assumed_scf_convergence(software, version, method, job, expected):
+    assert assumed_default_setting(software, version, "scf_convergence", method, job) == expected
+
+
+def test_the_scf_default_is_not_gated_on_dft_but_the_grid_still_is():
+    assert assumed_default_setting("Gaussian", "09", "scf_convergence", "HF", "sp") == "tight"
+    assert assumed_default_setting("Gaussian", "09", "grid", "HF", "sp") is None
+
+
+@pytest.mark.parametrize(
+    "method",
+    ["B3LYP", "UB3LYP", "wB97X-D", "B2PLYP", "RI-B2PLYP", "HF", "RHF", "UHF", "ROHF", "MP2", "UMP2", "RI-MP2", "MP4",
+     "CCSD", "CCSD(T)", "RCCSD(T)", "HF-3c", "LPNO-CCSD", "EOM-CCSD", "CCD", "BD", "BD(T)", "\u03c9B97X-D", "CCSD(T)-F12", "DLPNO-CCSD(T)", "QCISD(T)", "CIS", "CISD"],
+)
+@pytest.mark.parametrize("software", ["Gaussian", "ORCA"])
+def test_scf_methods_get_the_scf_default(software, method):
+    job = "opt"
+    version = "09" if software == "Gaussian" else "6.0.0"
+    assert assumed_default_setting(software, version, "scf_convergence", method, job) == "tight"
+
+
+@pytest.mark.parametrize(
+    "method",
+    ["UFF", "Amber", "MNDO", "AM1", "PM3", "PM6", "PM7", "MINDO3", "CNDO", "INDO", "ZINDO", "ExtendedHuckel",
+     "GFN2-xTB", "XTB2", "CASSCF", "CASSCF(6,6)", "MRCI", "NEVPT2", "CASPT2", "SomethingNew", "", "APFD", "G2MP4", "G4MP4", "ROCBS-APNO"],
+)
+@pytest.mark.parametrize("software", ["Gaussian", "ORCA"])
+def test_non_scf_and_unrecognised_methods_get_none(software, method):
+    version = "09" if software == "Gaussian" else "6.0.0"
+    assert assumed_default_setting(software, version, "scf_convergence", method, "opt") is None
+
+
+@pytest.mark.parametrize("method", ["CBS-QB3", "ROCBS-QB3", "ROCBS-4M", "CBS-4M", "CBS-APNO", "G2", "G2MP2", "G3", "G4", "G4MP2", "G4(MP2)", "G3B3", "G3MP2B3", "W1U", "W1BD"])
+def test_gaussian_composite_methods_get_the_scf_default(method):
+    assert assumed_default_setting("Gaussian", "16", "scf_convergence", method, "composite") == "tight"
+    assert assumed_default_setting("ORCA", "6.0.0", "scf_convergence", method, "opt") is None  # not an ORCA method

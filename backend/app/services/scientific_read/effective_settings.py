@@ -96,7 +96,13 @@ def build_effective_settings(session: Session, calculation: Calculation) -> list
                 requested_value = None if conflicting else next(iter(values))
                 break
 
-        assumed = assumed_default_setting(software, version, setting, calculation.lot.method if calculation.lot is not None else None)
+        assumed = assumed_default_setting(
+            software,
+            version,
+            setting,
+            calculation.lot.method if calculation.lot is not None else None,
+            calculation.type,
+        )
         if deciding:
             state, assumed_value = EffectiveSettingState.reported, None
         elif requested_from is not None:
