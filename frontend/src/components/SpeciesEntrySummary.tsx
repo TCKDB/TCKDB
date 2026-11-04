@@ -4,7 +4,8 @@ import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
 import type { SpeciesIdentity } from "../domain/recordIdentity"
 import { words } from "../domain/provenanceFormat"
 import { stereoDescription } from "../domain/recordFacets"
-import { publicTermSymbol } from "../domain/publicText"
+import { termSymbolSpoken } from "../domain/electronicState"
+import { publicElectronicStateLabel, publicTermSymbol } from "../domain/publicText"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { Formula } from "./Formula"
 import { RecordIdentityHeader } from "./RecordIdentityHeader"
@@ -106,9 +107,15 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
         <ul className="entry-facts" aria-label="Record facts">
             <FactItem label="Entry kind / state" value={`${displayToken(entry.species_entry_kind)} / ${displayToken(entry.electronic_state_kind)}`} />
             <FactItem label="Archive availability" value={availabilityText(entry)} />
-            {/* No `electronic_state_label`, and `term_symbol` only when it is shaped like one: both are
-                strings a depositor typed (house rule, owner decision 2026-11-03). */}
-            {publicTermSymbol(entry.term_symbol) && <FactItem label="Term symbol" value={publicTermSymbol(entry.term_symbol)!} />}
+            {/* The state label and term symbol only when they are in the grammar the API enforces on write
+                (`electronicState.ts`); anything else is a legacy free-text value and stays hidden (house rule,
+                owner decision 2026-11-03). The term symbol carries a plain-words reading for a screen reader. */}
+            {publicElectronicStateLabel(entry.electronic_state_label) && (
+                <FactItem label="State label" value={publicElectronicStateLabel(entry.electronic_state_label)!} />
+            )}
+            {publicTermSymbol(entry.term_symbol) && (
+                <FactItem label="Term symbol" value={publicTermSymbol(entry.term_symbol)!} spoken={termSymbolSpoken(entry.term_symbol)} />
+            )}
             {stereo && <FactItem label="Stereochemistry" value={stereo} />}
             {entry.stereo_smiles && <FactItem label="Stereo SMILES" value={entry.stereo_smiles} />}
             {entry.isotope_key && <FactItem label="Isotopologue" value={entry.isotope_key} />}
@@ -143,6 +150,7 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
     </header>
 }
 
-function FactItem({ label, value }: { label: string; value: string }) {
-    return <li><span>{label}</span><strong>{value}</strong></li>
+function FactItem({ label, value, spoken }: { label: string; value: string; spoken?: string | null }) {
+    // `spoken` is the value in words for a screen reader (`²Π` is "doublet pi"); the printed symbol stays as stored.
+    return <li><span>{label}</span><strong role={spoken ? "img" : undefined} aria-label={spoken ?? undefined}>{value}</strong></li>
 }

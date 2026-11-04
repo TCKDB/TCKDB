@@ -14,6 +14,18 @@ describe("participantChips", () => {
         expect(participantChips(null)).toEqual([])
     })
 
+    it("shows a grammar-valid state label and term symbol next to the state kind, and a plain ground state keeps its term symbol", () => {
+        expect(participantChips({ species_entry_kind: "minimum", electronic_state_kind: "excited", electronic_state_label: "T1", term_symbol: "³B₁" }))
+            .toEqual(["excited state", "state T1", "³B₁"])
+        expect(participantChips({ species_entry_kind: "minimum", electronic_state_kind: "ground", electronic_state_label: "X", term_symbol: "X ²Π" }))
+            .toEqual(["state X", "X ²Π"])
+    })
+
+    it("hides a state label or term symbol outside the grammar, however it got here", () => {
+        const facets = { species_entry_kind: "minimum", electronic_state_kind: "excited", electronic_state_label: "DEPOSITOR_SENTINEL_label", term_symbol: "DEPOSITOR_SENTINEL_term" }
+        expect(participantChips(facets)).toEqual(["excited state"])
+    })
+
     it("ignores anything that is not a structured facet: a typed R in a state label cannot become 'R enantiomer'", () => {
         const withTyped = { species_entry_kind: "minimum", electronic_state_kind: "ground", electronic_state_label: "R", term_symbol: "R", species_entry_label: "R" }
         expect(participantChips(withTyped)).toEqual([])
@@ -21,6 +33,16 @@ describe("participantChips", () => {
 })
 
 describe("publicStateLabel", () => {
+    it("shows the grammar-valid state of a participant in a network state's one-string spelling", () => {
+        expect(publicStateLabel({
+            participants: [
+                { canonical_smiles: "C=O", stoichiometry: 1, species_entry_kind: "minimum", electronic_state_kind: "excited", electronic_state_label: "T1", term_symbol: "³A″" },
+                { canonical_smiles: "[H][H]", stoichiometry: 1, species_entry_kind: "minimum", electronic_state_kind: "ground", electronic_state_label: "DEPOSITOR_SENTINEL_x" },
+            ],
+            state_label: "ignored",
+        })).toBe("C=O (excited state, state T1, ³A″) + [H][H]")
+    })
+
     const participant = (smiles: string, facets: Record<string, string | null> = {}, stoichiometry = 1) => ({
         canonical_smiles: smiles, stoichiometry, species_entry_kind: "minimum", electronic_state_kind: "ground", ...facets,
     })

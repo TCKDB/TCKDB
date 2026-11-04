@@ -167,3 +167,22 @@ describe("EntryIdentity -- no depositor-typed text (owner decision 2026-11-03)",
         expectNoAdversarialText()
     })
 })
+
+describe("EntryIdentity: electronic-state label and term symbol (grammar-valid only)", () => {
+    it("shows the state label and the canonical term symbol, the latter with a plain-words reading for a screen reader", () => {
+        renderEntry(baseEntry({ electronic_state_kind: "excited", electronic_state_label: "T1", term_symbol: "³Σg⁻" }))
+        const facts = screen.getByRole("list", { name: "Record facts" })
+        expect(within(facts).getByText("State label").nextElementSibling).toHaveTextContent("T1")
+        const term = within(facts).getByText("Term symbol").nextElementSibling as HTMLElement
+        expect(term).toHaveTextContent("³Σg⁻")
+        expect(term).toHaveAttribute("role", "img")
+        expect(term).toHaveAttribute("aria-label", "triplet sigma g minus")
+    })
+
+    it("hides a label or term symbol outside the grammar, however it reached the page (the hide-invalid path)", () => {
+        renderEntry(baseEntry({ electronic_state_label: "R", term_symbol: "DEPOSITOR_SENTINEL_term" }))
+        expect(screen.queryByText("State label")).not.toBeInTheDocument()
+        expect(screen.queryByText("Term symbol")).not.toBeInTheDocument()
+        expect(document.body.innerHTML).not.toContain("DEPOSITOR_SENTINEL")
+    })
+})

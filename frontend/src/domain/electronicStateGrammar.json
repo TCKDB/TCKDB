@@ -1,0 +1,11 @@
+{
+  "_comment": "A copy of the 'source' and 'max_length' of each field in tckdb_schemas/electronic_state_examples.json (the one grammar, tckdb-schemas electronic_state.py). The frontend image builds from frontend/ alone, so the file cannot be imported from schemas/. electronicState.parity.test.ts fails when this copy differs from the shipped file and replays every accepted and rejected example. Copy from the shipped file, do not edit by hand.",
+  "electronic_state_label": {
+    "max_length": 8,
+    "source": "(?:(?:(?:[A-LNOQT-Y]|[a-lnoqt-y])(?:~|̃)?(?:''?|\"|′′?|″)?)|[SDTQ](?:0|[1-9][0-9]?))"
+  },
+  "term_symbol": {
+    "max_length": 64,
+    "source": "(?:(?:(?:[A-LNOQT-Y]|[a-lnoqt-y])(?:~|̃)?(?:''?|\"|′′?|″)?) ?)?(?:\\^\\{[1-9]\\}|\\^?[1-9]|[¹²³⁴-⁹])(?:[SPDFGHIK](?:o|°|\\*)?(?:_\\{(?:[0-9]{1,2}(?:/2)?|[₀-₉]{1,2}(?:[/⁄]₂)?)\\}|_?(?:[0-9]{1,2}(?:/2)?|[₀-₉]{1,2}(?:[/⁄]₂)?))?|(?:Sigma|Pi|Delta|Phi|Gamma|Σ|Π|Δ|Φ|Γ)(?:(?:_?[gu])(?:\\^?[+\\-−⁺⁻])?|(?:\\^?[+\\-−⁺⁻])(?:_?[gu])?)?(?:_\\{(?:[0-9]{1,2}(?:/2)?[+\\-⁺⁻]?|[₀-₉]{1,2}(?:[/⁄]₂)?[+\\-⁺⁻]?)\\}|_?(?:[0-9]{1,2}(?:/2)?[+\\-⁺⁻]?|[₀-₉]{1,2}(?:[/⁄]₂)?[+\\-⁺⁻]?))?|[ABET][1-3₁-₃]?[gu]?(?:''?|\"|′′?|″)?)"
+  }
+}
