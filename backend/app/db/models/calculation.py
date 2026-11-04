@@ -2168,11 +2168,22 @@ class CalculationWavefunctionDiagnostic(Base, TimestampMixin, CreatedByMixin):
     """Parsed coupled-cluster / multireference diagnostics for a calculation.
 
     Carries scalar diagnostics emitted by the ESS at parse time — T1
-    (Lee–Taylor), D1 (Janowski), the norm of the T1 amplitude vector,
+    (Lee–Taylor), D1 (Janssen and Nielsen, 1998), the norm of the T1 amplitude vector,
     and the largest T2 amplitude. The row is producer-supplied evidence
-    about the reliability of the electronic-structure result; it is
-    deliberately not interpreted by the schema (no thresholds, no
-    "good/bad" labels) — readers and curators apply heuristics on top.
+    about the reliability of the electronic-structure result; the table
+    itself carries no thresholds and no "good/bad" labels.
+
+    One advisory reads it (``app.services.wavefunction_reliability_warnings``),
+    reversing the earlier "deliberately not enforced" position for one case:
+    a closed-shell, restricted-reference coupled-cluster calculation (entry
+    multiplicity 1; unrestricted (U) and RO methods are out of scope) whose
+    ``t1_diagnostic`` is strictly above 0.02 (Lee and Taylor, 1989) earns the
+    deposit warning ``t1_diagnostic_above_closed_shell_threshold``. The reasons
+    are closed shell only (the one regime where every program computes the
+    same quantity), a primary source for the number, and wording that does not
+    judge (the sentence says "above the rule of thumb" and that T1 does not by
+    itself establish multireference character). Open-shell and unrestricted
+    T1, and D1, are stored and shown, never thresholded.
 
     Producer contract (not enforced by DB):
 
@@ -2231,9 +2242,19 @@ class CalculationSpinDiagnostic(Base, TimestampMixin, CreatedByMixin):
     calculation — the observed ``<S^2>``, the ideal ``S(S+1)`` for the target
     spin state, and (when the software prints it) the ``<S^2>`` after
     annihilation of the first spin contaminant. The row is producer-supplied
-    evidence about the quality of the electronic-structure result; it is
-    deliberately not interpreted by the schema (no thresholds, no "clean /
-    contaminated" labels) — readers and curators apply heuristics on top.
+    evidence about the quality of the electronic-structure result; the table
+    itself carries no thresholds and no "clean / contaminated" labels.
+
+    Two advisories read it (``app.services.wavefunction_reliability_warnings``),
+    reversing the earlier "deliberately not interpreted" position. Both are
+    deposit warnings on the calculation only; the row is stored as deposited.
+    ``spin_contamination_above_conventional_threshold`` fires when ``s_squared``
+    is strictly more than 0.1 from ``S(S+1)`` with ``S`` taken from the
+    declared multiplicity of the entry (never from a printed value);
+    0.1 is a convention of the field, not a finding and not any paper's
+    recommendation, and the sentence says so. ``spin_expected_contradicts_multiplicity``
+    fires when ``s_squared_expected`` differs from the entry's ``S(S+1)`` by
+    more than 0.001.
 
     Wavefunction diagnostics (T1/D1) said their ``<S^2>`` signals "will land
     in a separate diagnostic table"; this is that table.

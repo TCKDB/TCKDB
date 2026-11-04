@@ -183,6 +183,7 @@ from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
 from app.services.upload_reconciliation import term_symbol_warnings
+from app.services.wavefunction_reliability_warnings import collect_wavefunction_reliability_warnings
 from app.workflows.computed_species import _persist_statmech_block
 from app.workflows.kinetics import (
     persist_interpretation_assignments,
@@ -2292,6 +2293,9 @@ def persist_computed_reaction_upload(
     )
     sp_energy_warnings.extend(
         collect_scan_coordinate_warnings(session, calculation_key_to_id.values())
+    )
+    sp_energy_warnings.extend(
+        collect_wavefunction_reliability_warnings(session, calculation_key_to_id.values())
     )
     sp_energy_warnings.extend(
         collect_frequency_scale_factor_software_mismatch_warnings(

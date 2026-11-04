@@ -1045,7 +1045,7 @@ class WavefunctionDiagnosticPayload(SchemaBase):
     """Optional inline wavefunction diagnostics parsed from a calculation's output.
 
     Carries scalar coupled-cluster / multireference diagnostics — T1
-    (Lee–Taylor), D1 (Janowski), the norm of the T1 amplitude vector,
+    (Lee–Taylor), D1 (Janssen and Nielsen, 1998), the norm of the T1 amplitude vector,
     and the largest T2 amplitude. Spin-contamination ``<S^2>`` signals
     are intentionally NOT included in this first slice.
 
@@ -1055,7 +1055,7 @@ class WavefunctionDiagnosticPayload(SchemaBase):
     calculation; this payload rejects an all-null block with no note.
 
     :param t1_diagnostic: Coupled-cluster T1 diagnostic (Lee–Taylor).
-    :param d1_diagnostic: Janowski D1 diagnostic.
+    :param d1_diagnostic: D1 diagnostic of Janssen and Nielsen (1998).
     :param t1_norm: Norm of the T1 amplitude vector, when reported.
     :param largest_t2_amplitude: Largest T2 amplitude magnitude, when
         reported.

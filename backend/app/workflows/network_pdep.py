@@ -146,6 +146,7 @@ from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
 from app.services.transport_resolution import resolve_and_create_transport
+from app.services.wavefunction_reliability_warnings import collect_wavefunction_reliability_warnings
 from app.workflows.computed_species import _persist_statmech_block
 from app.workflows.reaction import persist_reaction_upload
 
@@ -923,6 +924,7 @@ def persist_network_pdep_upload(
     # Every calculation of the upload is flushed: an opt or sp at a named
     # composite method's level is reported once, as on every other route.
     warning_sink.extend(collect_named_composite_deposit_warnings(session, calculation_key_to_id.values()))
+    warning_sink.extend(collect_wavefunction_reliability_warnings(session, calculation_key_to_id.values()))
 
     refuse_duplicate_state_compositions(request.states, species_key_to_entry)
 
