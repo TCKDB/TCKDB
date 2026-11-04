@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.153.0 - 2026-11-04
+## 0.154.0 - 2026-11-04
 
 The route of a Gaussian log is read correctly when it is short. No field, warning or code is added or removed.
 
@@ -10,6 +10,13 @@ The route of a Gaussian log is read correctly when it is short. No field, warnin
   - 59 ARC payload logs (routes of about 55 characters) no longer store about 197 junk raw rows read from log text. No canonical row changed.
   - Two Gaussian 03 composite logs, `cbs_qb3_so2oo_g03` and `g3_ethylene_g03`, now read the route the user wrote (`#CBS-QB3 opt freq`) instead of an internal step's. Rows lost: `guess.strategy=read`, `output.verbosity=normal`, `core.frozen=all_electron`. Row gained: `scf.convergence=tight`. The declared-level pair read from the first route, MP2/CBSB3, is now none.
   - `method_basis_jobs` now lists the internal-step routes of 5 composite logs. That can only drop a level-of-theory warning, never add one.
+
+## 0.153.0 - 2026-11-04
+
+The assumed SCF convergence is shown where a program documents one. No field is added or removed.
+
+- `tckdb_schemas.program_default_settings` now lists an SCF convergence default, spelled as the `scf.convergence` token (`tight`). It applies to an allowlist of SCF-based methods (DFT, HF, MPn, coupled cluster incl. DLPNO/PNO/F12, QCISD, CIS/CISD, and Gaussian composite methods) and needs a declared method, program and version; molecular mechanics, semi-empirical, xTB, Hueckel, CASSCF/MRCI/NEVPT2 and unrecognised methods get none; the DFT-only limit stays for the grid. Gaussian 09 and 16: `tight` for every calculation type (manual: "In Gaussian 09, SCF=Tight is the default"). ORCA 5 and 6: `tight` for a geometry optimisation only (manual: "TightSCF in the SCF part is set as default"); the manuals give no named default for other ORCA job types, so those stay `not_stated`. Gaussian 16 `tight` rests on the unchanged G09 keyword plus an observed default G16 run (RMS density 1e-8) accepted by the owner; Gaussian 03 is not listed for want of a source. `assumed_default_setting` takes the calculation type as a new optional argument.
+- The module docstring no longer says no SCF default is documented. Used when a record is read; never stored.
 
 ## 0.152.0 - 2026-11-04
 

@@ -24,11 +24,18 @@ dataset must never require a code release.
 
 ## A Gaussian --Link1-- log is read per job (2026-11-04)
 
-- **Client: `tckdb-schemas` 0.152.0 to 0.153.0** (a route-reader fix, no field or code added or removed; `tckdb-client` unchanged). No migration, no new environment variable.
+- **Client: `tckdb-schemas` 0.153.0 to 0.154.0** (a route-reader fix, no field or code added or removed; `tckdb-client` unchanged). No migration, no new environment variable.
 - **What changed.** A Gaussian log is split into jobs at `Entering Link 1` (a `--Link1--` file prints no second `Entering Gaussian System` banner). The job that is the calculation is found by job type and level of theory and, when several jobs share both, by the calculation's stored input deck (the job whose route states exactly the deck's settings); when no single job is, nothing is read from the log, neither its echoed request nor its reported values. Typed rows never break a tie, and a deck with more than one route cannot. Before, a multi-job Gaussian log reported nothing but still had its first job's echoed route read as the request of every calculation. Within one request the input decks are now read before the output logs, in the three places that read artifacts, so the order a producer lists them in does not change what a log binds to.
 - **New Gaussian warning case.** `reported_setting_differs_from_requested` now also fires for Gaussian SCF: when the request is stricter than `tight` (`scf=verytight`) and the log reports a threshold no tighter than `tight`'s 1e-8, or when the deck states `Conver=N` and the log does not report 10^-N. No threshold is invented for `SCF=VeryTight`; the rule is an ordering against the documented `Tight` default and `Conver=N` (G09 SCF keyword page). Grid is never compared for Gaussian.
 - **Fixed.** A short echoed route (dash rows narrower than 60 characters, which is common) was never closed and ran on into the log, so log text was read as requested settings. See `tckdb-schemas` 0.153.0 for the measured side effects.
 - **Not changed.** IRadAn stays raw and unmapped, and is read only from the `IXCGrd= .. IRadAn=` line, never from the Harris initial-guess lines (they differ from it in 58 fixture logs).
+
+## An assumed SCF convergence is shown where a program documents one (2026-11-04)
+
+- **Client: `tckdb-schemas` 0.152.0 to 0.153.0** (no field added or removed; `tckdb-client` unchanged). No migration, no new environment variable.
+- **What was wrong.** `effective_settings` showed `not_stated` for the SCF convergence of every calculation with no log, because the table held a default for the grid only and its docstring said no SCF default was documented. The group knowledge base documents some.
+- **What changed.** Gaussian 09 and 16 show `tight` for every calculation type (G09 manual, "In Gaussian 09, SCF=Tight is the default"). ORCA 5 and 6 show `tight` for an `opt` calculation (manual, "TightSCF in the SCF part is set as default", geometry optimisation notes). It applies to an allowlist of SCF-based methods (DFT, HF, MPn, coupled cluster, QCISD, CIS/CISD, Gaussian composite methods) but not to molecular mechanics, semi-empirical, xTB, Hueckel, CASSCF/MRCI/NEVPT2 or an unrecognised method, and needs a declared method, program and version. The grid stays DFT-only.
+- **Not listed.** ORCA single points, frequencies and other job types (the manual only says "between medium and strong"), Gaussian 03 (no source). They stay `not_stated`. Computed on read, never stored; upload-time tau untouched.
 
 ## The settings a program reports it used are stored beside the ones requested, and the log outranks the deck (2026-11-04)
 
