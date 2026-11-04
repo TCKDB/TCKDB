@@ -27,6 +27,7 @@ function StateBadge({ display }: { display: SettingDisplay }) {
         <span
             className={`settings-state settings-state--${display.conflicting ? "conflict" : display.kind}`}
             data-settings-state={display.kind}
+            title={display.stateMeaning}
             {...(display.conflicting ? { "data-settings-conflict": "" } : {})}
         >
             {display.stateLabel}
@@ -41,7 +42,15 @@ function SettingCell({ summary }: { summary: EffectiveSetting | undefined }) {
     return (
         <div className="settings-cell">
             {display.valueText && (
-                <span className={display.assumed ? "settings-value settings-value--assumed" : "settings-value"}>
+                <span
+                    className={
+                        display.valueIsPlaceholder
+                            ? "settings-placeholder"
+                            : display.assumed
+                              ? "settings-value settings-value--assumed"
+                              : "settings-value"
+                    }
+                >
                     {display.valueText}
                 </span>
             )}
@@ -61,6 +70,17 @@ const CALCULATION_TYPE_TAGS = new Set(["opt", "freq", "sp", "composite", "scan",
 
 function calculationTypeTag(type: string | null | undefined): string | null {
     return type && CALCULATION_TYPE_TAGS.has(type) ? type : null
+}
+
+/** What the short pill labels mean. Assumed values are computed when the page is read and never stored. */
+function SettingsLegend() {
+    return (
+        <p className="note">
+            Reported: the output log prints the value the program used. Requested: the input asked for it. Assumed
+            default: the program&apos;s documented default, shown when nothing reports or requests a value (computed
+            when the page is read, never stored, and not an observation). Not stated: nothing says.
+        </p>
+    )
 }
 
 const SETTING_ORDER = ["grid", "scf_convergence"] as const
@@ -93,10 +113,7 @@ export function EffectiveSettingsSummary({ settings }: { settings: readonly Effe
                     </tbody>
                 </table>
             </div>
-            <p className="note">
-                Assumed values are the program&apos;s documented defaults, computed when the page is read and never
-                stored; they are not observations.
-            </p>
+            <SettingsLegend />
         </div>
     )
 }
@@ -149,10 +166,8 @@ export function SettingsBehindValue({ block, idSuffix = "", recordRef }: {
                     </tbody>
                 </table>
             </div>
-            <p className="note">
-                Each row is the calculation this record links for that level. Assumed values are the program&apos;s
-                documented defaults, not observations.
-            </p>
+            <p className="note">Each row is the calculation this record links for that level.</p>
+            <SettingsLegend />
         </section>
     )
 }

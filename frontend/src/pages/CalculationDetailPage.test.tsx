@@ -1076,10 +1076,10 @@ describe("CalculationDetailPage", () => {
 
         const effective = within(section).getByRole("table", { name: "Effective settings" })
         const gridRow = within(effective).getByRole("row", { name: /DFT grid/ })
-        expect(within(gridRow).getByText("Reported by the program")).toBeVisible()
+        expect(within(gridRow).getByText("Reported")).toBeVisible()
         expect(within(gridRow).getByText("largest angular grid 302")).toBeVisible()
         const scfRow = within(effective).getByRole("row", { name: /SCF convergence/ })
-        const assumed = within(scfRow).getByText("Assumed program default (no output log)")
+        const assumed = within(scfRow).getByText("Assumed default (no log)")
         expect(assumed).toHaveAttribute("data-settings-state", "assumed")
         expect(within(scfRow).getByText("tight")).toHaveClass("settings-value--assumed")
     })

@@ -46,13 +46,12 @@ def make_level_plan(
     )
 
 
-def pick_level_calculations(plan: LevelPlan | None) -> dict[str, tuple[int | None, str | None]]:
+def pick_level_calculations(plan: LevelPlan) -> dict[str, tuple[int | None, str | None]]:
     """Level -> (calculation id, absent reason).
 
     Both ``None`` means the level is omitted because every calculation that supplied it is withheld. The calculation is the
     lowest supplier the review profile shows.
     """
-    plan = plan or LevelPlan()
     out: dict[str, tuple[int | None, str | None]] = {}
     for level in LEVELS:
         source, ids = plan.suppliers.get(level, (None, ()))
@@ -79,7 +78,14 @@ def attach_calculation_settings(session: Any, records: Iterable[Any]) -> None:
     A fixed number of statements whatever the number of records: every calculation the page needs is loaded together.
     """
     records = list(records)
-    picks = [(record, pick_level_calculations(getattr(record, "_level_plan", None))) for record in records]
+    picks = []
+    for record in records:
+        plan = getattr(record, "_level_plan", None)
+        if plan is None:
+            # A record that never went through its builder has no suppliers to resolve; rendering "No calculation
+            # linked" for it would be a false statement.
+            raise RuntimeError("calculation_settings requested for a record built without its level plan")
+        picks.append((record, pick_level_calculations(plan)))
     wanted = {cid for _, pick in picks for cid, _ in pick.values() if cid is not None}
     inputs = load_settings_inputs(session, wanted)
     for record, pick in picks:

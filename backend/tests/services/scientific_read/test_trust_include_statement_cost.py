@@ -633,6 +633,9 @@ def test_species_thermo_calculation_settings_does_not_scale_with_page_size(db_se
     small = _marginal_cost(db_session, search=read, request_for=request_for, limit=_SMALL_PAGE, token="calculation_settings")
     large = _marginal_cost(db_session, search=read, request_for=request_for, limit=_LARGE_PAGE, token="calculation_settings")
     _assert_slope_is_flat("/species-entries/{id}/thermo", small, large, token="calculation_settings")
+    # Attached inside the per-candidate loop, every candidate (20 here) pays whatever ``limit`` is, so the slope is flat
+    # and only an absolute bound sees it.
+    assert small <= 12, f"/species-entries/{{id}}/thermo include=calculation_settings costs {small} extra statements for {_SMALL_PAGE} records"
 
 
 def test_statmech_search_calculation_settings_does_not_scale_with_page_size(db_session, statmech_settings_page):

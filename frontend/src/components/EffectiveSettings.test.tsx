@@ -51,9 +51,9 @@ describe("SettingsBehindValue", () => {
     it("labels every state in words and marks an assumed value as assumed", () => {
         render(<MemoryRouter><SettingsBehindValue block={BLOCK} recordRef="thr_x" /></MemoryRouter>)
         const geometry = rowFor("Geometry")
-        expect(within(geometry).getByText("Reported by the program")).toHaveAttribute("data-settings-state", "reported")
+        expect(within(geometry).getByText("Reported")).toHaveAttribute("data-settings-state", "reported")
         expect(within(geometry).getByText("largest angular grid 302")).toBeInTheDocument()
-        const assumed = within(geometry).getByText("Assumed program default")
+        const assumed = within(geometry).getByText("Assumed default")
         expect(assumed).toHaveAttribute("data-settings-state", "assumed")
         expect(assumed.className).toContain("settings-state--assumed")
         // The value itself carries the assumed styling too: an assumed value is never drawn like an observation.
@@ -110,7 +110,7 @@ describe("EffectiveSettingsSummary", () => {
         ]
         render(<EffectiveSettingsSummary settings={settings} />)
         const gridRow = screen.getByRole("row", { name: /DFT grid/ })
-        expect(within(gridRow).getByText("Assumed program default (no output log)")).toHaveAttribute("data-settings-state", "assumed")
+        expect(within(gridRow).getByText("Assumed default (no log)")).toHaveAttribute("data-settings-state", "assumed")
         expect(within(gridRow).getByText("defgrid2")).toBeInTheDocument()
         const scfRow = screen.getByRole("row", { name: /SCF convergence/ })
         expect(within(scfRow).getByText("echoed in the output log")).toBeInTheDocument()
@@ -130,6 +130,14 @@ describe("EffectiveSettingsSummary", () => {
         render(<EffectiveSettingsSummary settings={planted.value} />)
         expectNoDepositorText()
         expect(screen.getAllByText("recorded").length).toBeGreaterThan(0)
+    })
+
+    it("draws the 'recorded' placeholder as a note, not as a monospace value, and gives each pill its full meaning", () => {
+        render(<EffectiveSettingsSummary settings={[grid({ state: "requested", requested_value: "typed", requested_from: "typed" }), scf({})]} />)
+        const placeholder = screen.getByText("recorded")
+        expect(placeholder).toHaveClass("settings-placeholder")
+        expect(placeholder).not.toHaveClass("settings-value")
+        expect(screen.getByText("Requested")).toHaveAttribute("title", expect.stringMatching(/input asked for this value/))
     })
 
     it("shows not stated plainly and nothing when the section is absent", () => {

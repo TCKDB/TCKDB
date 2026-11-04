@@ -20,17 +20,32 @@ export function settingLabel(setting: string): string {
     return SETTING_LABELS[setting as EffectiveSettingName] ?? "Setting"
 }
 
+// Short labels for the pills; the full meaning is in `STATE_MEANINGS` (the pill's tooltip and the footnote).
 const STATE_LABELS: Record<EffectiveSettingState, string> = {
-    reported: "Reported by the program",
+    reported: "Reported",
     requested: "Requested",
-    assumed_default: "Assumed program default",
-    assumed_default_no_output_log: "Assumed program default (no output log)",
+    assumed_default: "Assumed default",
+    assumed_default_no_output_log: "Assumed default (no log)",
     not_stated: "Not stated",
+}
+
+const STATE_MEANINGS: Record<EffectiveSettingState, string> = {
+    reported: "Reported by the program: its output log prints the value it used.",
+    requested: "Requested: the input asked for this value; the program did not report what it used.",
+    assumed_default: "Assumed program default: the log neither reports nor echoes it, so the program's documented default is shown.",
+    assumed_default_no_output_log:
+        "Assumed program default (no output log): no output log was deposited, so the program's documented default is shown.",
+    not_stated: "Not stated: nothing says, and no default is documented for this program and version.",
 }
 
 /** The reader-facing name of a state; an unrecognised future state reads "Not stated", never the raw token. */
 export function settingStateLabel(state: string): string {
     return STATE_LABELS[state as EffectiveSettingState] ?? STATE_LABELS.not_stated
+}
+
+/** The full sentence behind a pill, for its tooltip. */
+export function settingStateMeaning(state: string): string {
+    return STATE_MEANINGS[state as EffectiveSettingState] ?? STATE_MEANINGS.not_stated
 }
 
 /** `true` for the two states whose value is the program's documented default, not something observed. */
@@ -114,6 +129,10 @@ export interface SettingDisplay {
     stateLabel: string
     /** What was used or asked for, in words; `null` when the state names no value (not stated, a conflict, a report). */
     valueText: string | null
+    /** `true` when `valueText` is the placeholder "recorded" (a value outside the closed set): draw it as a note, not a value. */
+    valueIsPlaceholder: boolean
+    /** The full sentence behind the state pill. */
+    stateMeaning: string
     /** Where a requested value was stated, in words. */
     sourceText: string | null
     /** The numbers a log printed, for a reported state. */
@@ -141,7 +160,12 @@ export function describeSetting(summary: SettingSummaryInput): SettingDisplay {
         kind,
         // Two different requested values: say so in the state itself, with no value to show.
         stateLabel: conflicting && kind === "requested" ? "Conflicting requests" : settingStateLabel(state),
+        stateMeaning:
+            conflicting && kind === "requested"
+                ? "Conflicting requests: the input states two different values, so none is shown."
+                : settingStateMeaning(state),
         valueText,
+        valueIsPlaceholder: valueText === "recorded",
         sourceText: kind === "requested" ? requestedFromLabel(summary.requested_from) : null,
         reportedTexts:
             kind === "reported" ? (summary.reported ?? []).map((item) => reportedEntryText(item.key, item.value)) : [],

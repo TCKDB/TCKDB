@@ -101,8 +101,8 @@ describe("EntryThermoSection -- settings behind each value", () => {
         expect(includes[0]).toContain("calculation_settings")
         const block = within(alpha).getByRole("region", { name: "Settings behind this value" })
         expect(within(block).getByRole("link", { name: "calc_alpha_geometry" })).toHaveAttribute("href", "/calculations/calc_alpha_geometry")
-        expect(within(block).getByText("Assumed program default (no output log)")).toBeInTheDocument()
-        expect(within(block).getByText("Reported by the program")).toBeInTheDocument()
+        expect(within(block).getByText("Assumed default (no log)")).toBeInTheDocument()
+        expect(within(block).getByText("Reported")).toBeInTheDocument()
         const beta = (await screen.findByText("thm_beta")).closest("article") as HTMLElement
         expect(within(beta).queryByRole("link", { name: "calc_alpha_geometry" })).toBeNull()
         expect(within(beta).getAllByText("No calculation linked")).toHaveLength(3)

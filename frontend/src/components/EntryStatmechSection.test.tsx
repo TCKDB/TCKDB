@@ -546,7 +546,7 @@ describe("EntryStatmechSection", () => {
         const first = cards.find((card) => within(card).queryByText("sm_one", { selector: "code" }))!
         expect(within(first).getByRole("link", { name: "calc_for_one" })).toBeInTheDocument()
         expect(within(first).queryByRole("link", { name: "calc_for_two" })).toBeNull()
-        expect(within(first).getByText("Assumed program default")).toBeInTheDocument()
+        expect(within(first).getByText("Assumed default")).toBeInTheDocument()
         expect(within(first).getAllByText("No calculation linked")).toHaveLength(2)
     })
 

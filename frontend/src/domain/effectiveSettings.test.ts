@@ -13,10 +13,10 @@ import {
 
 describe("settingStateLabel", () => {
     it("maps each state the server names to its words", () => {
-        expect(settingStateLabel("reported")).toBe("Reported by the program")
+        expect(settingStateLabel("reported")).toBe("Reported")
         expect(settingStateLabel("requested")).toBe("Requested")
-        expect(settingStateLabel("assumed_default")).toBe("Assumed program default")
-        expect(settingStateLabel("assumed_default_no_output_log")).toBe("Assumed program default (no output log)")
+        expect(settingStateLabel("assumed_default")).toBe("Assumed default")
+        expect(settingStateLabel("assumed_default_no_output_log")).toBe("Assumed default (no log)")
         expect(settingStateLabel("not_stated")).toBe("Not stated")
     })
 
@@ -60,9 +60,9 @@ describe("reportedEntryText", () => {
 describe("describeSetting", () => {
     it("marks an assumed default as assumed and gives it the default's value", () => {
         const shown = describeSetting({ setting: "grid", state: "assumed_default", assumed_value: "defgrid2" })
-        expect(shown).toMatchObject({ kind: "assumed", assumed: true, valueText: "defgrid2", stateLabel: "Assumed program default" })
+        expect(shown).toMatchObject({ kind: "assumed", assumed: true, valueText: "defgrid2", stateLabel: "Assumed default" })
         const noLog = describeSetting({ setting: "scf_convergence", state: "assumed_default_no_output_log", assumed_value: "tight" })
-        expect(noLog).toMatchObject({ kind: "assumed", assumed: true, valueText: "tight", stateLabel: "Assumed program default (no output log)" })
+        expect(noLog).toMatchObject({ kind: "assumed", assumed: true, valueText: "tight", stateLabel: "Assumed default (no log)" })
     })
 
     it("never marks an observation as assumed", () => {

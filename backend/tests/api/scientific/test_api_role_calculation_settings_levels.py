@@ -84,7 +84,8 @@ def test_curated_attaches_a_supplier_of_the_derived_level_not_the_first_shown_ca
 
 def test_a_level_whose_only_suppliers_are_withheld_is_omitted_but_an_unlinked_level_is_listed(client, db_session):
     """Kills: omitting any level when some calculation of the role is hidden (a level nothing was ever linked for must
-    still say 'No calculation linked'), and not omitting one whose every supplier is hidden."""
+    still say 'No calculation linked', including when the only optimisation is hidden and never carried frequencies),
+    and not omitting one whose every supplier is hidden."""
     entry, x, _ = _world(db_session)
     opt = _calc(db_session, entry, CalculationType.opt, x)
     freq = _calc(db_session, entry, CalculationType.freq, x, status=RecordReviewStatus.rejected)
@@ -96,6 +97,13 @@ def test_a_level_whose_only_suppliers_are_withheld_is_omitted_but_an_unlinked_le
     assert list(_by_role(_read(client, with_freq, "exploratory"))) == ["geometry", "frequency", "energy"]
     unlinked = _by_role(_read(client, opt_only, "curated"))
     assert unlinked["frequency"]["absent_reason"] == "not_linked" and unlinked["frequency"]["calculation_ref"] is None
+
+    # A hidden optimisation that never carried frequencies supplied no frequency level, so that level is not omitted.
+    hidden_opt = _calc(db_session, entry, CalculationType.opt, x, status=RecordReviewStatus.rejected)
+    only_hidden = _statmech(db_session, entry, [(hidden_opt, R.opt)])
+    roles = _by_role(_read(client, only_hidden, "curated"))
+    assert "geometry" not in roles
+    assert (roles["frequency"]["calculation_ref"], roles["frequency"]["absent_reason"]) == (None, "not_linked")
 
 
 def test_frequency_comes_from_an_opt_only_when_that_opt_carries_frequencies(client, db_session):

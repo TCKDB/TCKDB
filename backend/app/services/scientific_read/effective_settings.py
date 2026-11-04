@@ -19,7 +19,7 @@ A reported value is never turned into a requested one, and a requested value is 
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -74,23 +74,38 @@ class SettingsInputs:
     log_not_bound: bool
 
 
-def load_settings_inputs(session: Session, calculation_ids: Collection[int]) -> dict[int, SettingsInputs]:
+def load_settings_inputs(
+    session: Session,
+    calculation_ids: Collection[int],
+    *,
+    calculations: Mapping[int, Calculation] | None = None,
+) -> dict[int, SettingsInputs]:
     """Load the calculations (level of theory and software release eagerly), their parameter rows, output-log presence and
-    unbound-log warnings for ``calculation_ids``: four statements whatever the number of calculations."""
+    unbound-log warnings for ``calculation_ids``: at most four statements whatever the number of calculations.
+
+    ``calculations`` are calculations the caller already holds (the calculation read has its own); they are used as they
+    are, not reloaded. The warnings are looked up only for a calculation that has an output log and no row read from one,
+    the only case in which they change the answer.
+    """
     ids = set(calculation_ids)
     if not ids:
         return {}
-    calculations = {
-        c.id: c
-        for c in session.scalars(
-            select(Calculation)
-            .where(Calculation.id.in_(ids))
-            .options(
-                selectinload(Calculation.lot),
-                selectinload(Calculation.software_release).selectinload(SoftwareRelease.software),
-            )
+    held = dict(calculations or {})
+    missing = ids - held.keys()
+    if missing:
+        held.update(
+            {
+                c.id: c
+                for c in session.scalars(
+                    select(Calculation)
+                    .where(Calculation.id.in_(missing))
+                    .options(
+                        selectinload(Calculation.lot),
+                        selectinload(Calculation.software_release).selectinload(SoftwareRelease.software),
+                    )
+                )
+            }
         )
-    }
     rows: dict[int, list[CalculationParameter]] = {}
     for row in session.scalars(
         select(CalculationParameter).where(CalculationParameter.calculation_id.in_(ids)).order_by(CalculationParameter.id)
@@ -103,14 +118,28 @@ def load_settings_inputs(session: Session, calculation_ids: Collection[int]) -> 
             .distinct()
         )
     )
-    unbound = set(
-        session.scalars(
-            select(DepositWarning.record_id).where(
-                DepositWarning.record_type == SubmissionRecordType.calculation,
-                DepositWarning.record_id.in_(ids),
-                DepositWarning.code == W_OUTPUT_LOG_JOB_NOT_BOUND,
+    # A log that was read leaves rows; only a log with none can have been refused as unbound.
+    unread = {
+        cid
+        for cid in with_log
+        if not any(
+            r.source is ParameterSource.parser
+            and (r.statement_kind is ParameterStatementKind.reported or r.artifact_kind is ArtifactKind.output_log)
+            for r in rows.get(cid, ())
+        )
+    }
+    unbound = (
+        set(
+            session.scalars(
+                select(DepositWarning.record_id).where(
+                    DepositWarning.record_type == SubmissionRecordType.calculation,
+                    DepositWarning.record_id.in_(unread),
+                    DepositWarning.code == W_OUTPUT_LOG_JOB_NOT_BOUND,
+                )
             )
         )
+        if unread
+        else set()
     )
     return {
         cid: SettingsInputs(
@@ -119,13 +148,14 @@ def load_settings_inputs(session: Session, calculation_ids: Collection[int]) -> 
             has_log_artifact=cid in with_log,
             log_not_bound=cid in unbound,
         )
-        for cid, calc in calculations.items()
+        for cid, calc in held.items()
+        if cid in ids
     }
 
 
 def build_effective_settings(session: Session, calculation: Calculation) -> list[EffectiveSettingSummary]:
     """The effective settings of one calculation (the calculation read's entry point)."""
-    inputs = load_settings_inputs(session, [calculation.id])[calculation.id]
+    inputs = load_settings_inputs(session, [calculation.id], calculations={calculation.id: calculation})[calculation.id]
     return effective_settings_from(inputs)
 
 
