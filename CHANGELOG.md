@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## An assumed SCF convergence is shown where a program documents one (2026-11-04)
+
+- **Client: `tckdb-schemas` 0.152.0 to 0.153.0** (no field added or removed; `tckdb-client` unchanged). No migration, no new environment variable.
+- **What was wrong.** `effective_settings` showed `not_stated` for the SCF convergence of every calculation with no log, because the table held a default for the grid only and its docstring said no SCF default was documented. The group knowledge base documents some.
+- **What changed.** Gaussian 09 shows `tight` for every calculation type (G09 manual, "In Gaussian 09, SCF=Tight is the default"). ORCA 5 and 6 show `tight` for an `opt` calculation (manual, "TightSCF in the SCF part is set as default", geometry optimisation notes). It applies to any SCF-based method (HF, MP2, coupled cluster, DLPNO as well as DFT) but needs a declared method, program and version. The grid stays DFT-only.
+- **Not listed.** ORCA single points, frequencies and other job types (the manual only says "between medium and strong"), Gaussian 16 and 03 (no source). They stay `not_stated`. Computed on read, never stored; upload-time tau untouched.
+
 ## The settings a program reports it used are stored beside the ones requested, and the log outranks the deck (2026-11-04)
 
 - **Client: `tckdb-schemas` 0.151.0 to 0.152.0** (one new warning code, one sentence changed, no field added or removed; `tckdb-client` unchanged). One new Alembic revision, `c8e2a6d1f305`: `calculation_parameter.statement_kind` (nullable, new enum `parameter_statement_kind`: `requested` / `reported`), existing parser rows stamped `requested`, a check constraint that keeps `reported` to output-log rows, and eight vocabulary keys for the numbers a log prints (`grid.integration_accuracy`, `grid.angular_max`, `scf.tol_*`). No identity change; no new environment variable.

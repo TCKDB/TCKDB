@@ -15,10 +15,19 @@ not here has no assumed default, and the read says "not stated" rather than gues
     ("In Gaussian 09, the default numerical integration grid is the FineGrid").
   * ORCA 5 and 6: DefGrid2 (``defgrid2``). Source: ORCA 6.1 manual, "Numerical Integration" ("the second [DEFGRID2] is the new
     default"); knowledge-base entry "ORCA input essentials and gotchas - DFT defaults that changed".
-* **scf_convergence**: no program's default threshold is documented in the knowledge base or the manual excerpts the
-  group holds, so there is no entry. Do not add one from memory.
+* **scf_convergence** (``scf.convergence`` tokens). Applies to every SCF-based method (HF, DFT, MP2, coupled cluster,
+  DLPNO, ...) but needs a declared method, program and version, and for ORCA the calculation type.
+  * Gaussian 09, any calculation type: ``tight``. Source: Gaussian 09 manual, keyword SCF ("In Gaussian 09, SCF=Tight
+    is the default", knowledge-base chunk 11007) and "Changes between G09 and G03" ("The default SCF accuracy is
+    SCF=Tight for all calculations, including single points", chunk 10284).
+  * ORCA 5 and 6, ``opt`` only: ``tight``. Source: ORCA 5.0.4 manual 8.3.3 ("TightSCF in the SCF part is set as default
+    to avoid the buildup of too much numerical noise in the gradients", chunk 13503) and ORCA 6.1 manual 4.1.12
+    (same sentence, chunk 16764). The same manuals only say the plain default is "between medium and strong" (chunk
+    14109), which is not a named level, so an ORCA single point, frequency or any other job type has no entry.
+  * Not listed, for want of a source in the knowledge base: Gaussian 16 (its logs report 1e-8, which is evidence, not a
+    documented default), Gaussian 03, other programs.
 
-The grid default applies only to a DFT method. The version is the one the calculation declares. It is never guessed from the other fields.
+The grid default applies only to a DFT method; the SCF default does not. The version is the one the calculation declares. It is never guessed from the other fields.
 """
 
 from __future__ import annotations
@@ -38,6 +47,14 @@ ASSUMED_DEFAULT_SETTINGS: dict[tuple[str, int], dict[str, str]] = {
     ("Gaussian", 16): {"grid": "ultrafine"},
     ("ORCA", 5): {"grid": "defgrid2"},
     ("ORCA", 6): {"grid": "defgrid2"},
+}
+
+#: ``(normalised software name, major version) -> {calculation type or None for any type: SCF convergence token}``.
+#: The tokens are the canonical ``scf.convergence`` values (``tight``, ``normal``, ...). See the module docstring for sources.
+_ASSUMED_SCF_CONVERGENCE: dict[tuple[str, int], dict[str | None, str]] = {
+    ("Gaussian", 9): {None: "tight"},
+    ("ORCA", 5): {"opt": "tight"},
+    ("ORCA", 6): {"opt": "tight"},
 }
 
 #: Settings that exist only for a method that integrates on a DFT grid.
@@ -89,18 +106,29 @@ def uses_dft_grid(method: str | None) -> bool:
 
 
 def assumed_default_setting(
-    software: str | None, version: str | None, setting: str, method: str | None = None
+    software: str | None,
+    version: str | None,
+    setting: str,
+    method: str | None = None,
+    calculation_type: str | None = None,
 ) -> str | None:
     """The documented default of ``setting`` for this program and version, or ``None``.
 
     ``None`` when the program or version is not declared, when the pair is not in the table, and, for the grid, when
     ``method`` is not a DFT functional (a Hartree-Fock, MP2, coupled-cluster or composite method has no DFT grid to
-    default). The functional list is the one tau uses; a functional it does not list (``APFD``) gets no default
+    default). ``calculation_type`` (``opt``, ``sp``, ...) matters only to SCF defaults that depend on it. The functional list is the one tau uses; a functional it does not list (``APFD``) gets no default
     rather than a guess, and the list is not extended here because that would move tau.
     """
     major = display_major_version(software, version)
     if major is None or not software:
         return None
+    if setting == "scf_convergence":
+        # Any SCF-based method, but a method must be declared; an ORCA default depends on the job type.
+        if not method or not method.strip():
+            return None
+        by_type = _ASSUMED_SCF_CONVERGENCE.get((normalize_software_name(software), major), {})
+        job = getattr(calculation_type, "value", calculation_type)
+        return by_type.get(job) or by_type.get(None)
     if setting in _DFT_ONLY and not uses_dft_grid(method):
         return None
     return ASSUMED_DEFAULT_SETTINGS.get((normalize_software_name(software), major), {}).get(setting)
