@@ -79,7 +79,12 @@ from app.schemas.reads.scientific_thermo import (
     ThermoTargetBlock,
     ThermoWilhoitBlock,
 )
-from app.services.calculation_levels import RoleCalcInfo, derive_levels, withhold_levels_from_calculations
+from app.services.calculation_levels import (
+    RoleCalcInfo,
+    derive_levels,
+    level_suppliers,
+    withhold_levels_from_calculations,
+)
 from app.services.composite_verification import verify_composite_calculations
 from app.services.deposit_warnings import deposit_warning_envelope
 from app.services.scientific_read.common import (
@@ -122,7 +127,7 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.keyset import Paging
-from app.services.scientific_read.role_settings import build_calculation_settings
+from app.services.scientific_read.role_settings import LevelPlan, attach_calculation_settings, make_level_plan
 from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.selection_filters import filter_by_provenance, source_provenance_kwargs
 from app.services.trust import (
@@ -587,7 +592,7 @@ def get_species_thermo(
         # (per role) the statmech it is LINKED to by ``thermo.statmech_id``.
         # An unlinked thermo with no source calculations has no levels (null).
         own_statmech_sources = record_statmech_sources
-        levels = _build_levels_thermo(
+        levels, level_plan = _build_levels_thermo(
             sources=sources,
             statmech_sources=own_statmech_sources,
             calc_meta=calc_meta,
@@ -690,18 +695,6 @@ def get_species_thermo(
             provenance=provenance,
             levels=levels,
             group_additivity=_build_group_additivity_block(ga_by_thermo.get(t.id)),
-            # Only the calculations this record links (its own sources, then its own statmech's); one builder with
-            # the calculation read.
-            calculation_settings=(
-                build_calculation_settings(
-                    session,
-                    levels=levels,
-                    role_calc_ids=_thermo_role_calc_id_lists(sources, own_statmech_sources),
-                    withheld=withheld_calc_ids,
-                )
-                if "calculation_settings" in includes
-                else None
-            ),
             trust=(
                 build_thermo_trust_fragment(
                     t,
@@ -711,6 +704,7 @@ def get_species_thermo(
                 else None
             ),
         )
+        record._level_plan = level_plan
         records.append(record)
 
     summary = review_summary(badges[t.id] for t, _ in classified)
@@ -744,6 +738,9 @@ def get_species_thermo(
         ),
     )
     returned = page.items
+    # The settings behind each level, for the returned page and for nothing else: a fixed number of statements.
+    if "calculation_settings" in includes:
+        attach_calculation_settings(session, returned)
 
     return ScientificSpeciesThermoResponse(
         request=RequestEcho(
@@ -1477,7 +1474,7 @@ def _build_levels_thermo(
     recipe_level_summaries: dict[int, LevelOfTheorySummary],
     composite_verifications: dict[int, CompositeEnergyVerification],
     withheld_calc_ids: Collection[int] = frozenset(),
-) -> ScientificLevelsSummary:
+) -> tuple[ScientificLevelsSummary, LevelPlan]:
     """R1 for one thermo record: derive its geometry/frequency/energy levels.
 
     The derivation reads every link. A level whose supplying calculations are all in ``withheld_calc_ids`` (the evidence
@@ -1539,6 +1536,7 @@ def _build_levels_thermo(
         importeds=[info for _, info in roles["importeds"]],
         legacy_composites=[info for _, info in roles["legacy_composites"]],
     )
+    plan = make_level_plan(level_suppliers(derived, **roles), withheld_calc_ids)
     derived = withhold_levels_from_calculations(derived, withheld=withheld_calc_ids, **roles)
     shown_composite_ids = [
         cid for cid in role_calc_ids.get("composite", []) if cid in calc_meta and is_composite(cid) and cid not in withheld_calc_ids
@@ -1546,7 +1544,7 @@ def _build_levels_thermo(
     geometry = _lot_summary_from_id(calc_meta_by_lot_id, derived.geometry_lot_id, recipe_level_summaries)
     frequency = _lot_summary_from_id(calc_meta_by_lot_id, derived.frequency_lot_id, recipe_level_summaries)
     energy = _lot_summary_from_id(calc_meta_by_lot_id, derived.energy_lot_id)
-    return ScientificLevelsSummary(
+    levels = ScientificLevelsSummary(
         geometry=geometry,
         frequency=frequency,
         energy=energy,
@@ -1571,6 +1569,7 @@ def _build_levels_thermo(
             energy_source=derived.energy_source,
         ),
     )
+    return levels, plan
 
 
 def _calc_ids_with_freq_result(session: Session, calc_ids: set[int]) -> set[int]:

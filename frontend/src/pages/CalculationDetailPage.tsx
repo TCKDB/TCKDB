@@ -25,7 +25,7 @@ import {
     type CalculationWavefunctionDiagnostic,
     type OnDemandSectionToken,
 } from "../api/calculationApi"
-import { parameterStatement } from "../domain/effectiveSettings"
+import { parameterStatement, parameterValueText } from "../domain/effectiveSettings"
 import { publicParameterValue } from "../domain/publicText"
 import { EffectiveSettingsSummary } from "../components/EffectiveSettings"
 import { ArtifactDownloadButton } from "../components/ArtifactDownloadButton"
@@ -1269,7 +1269,8 @@ function LazySection<T>({
     if (!applicable || !available) return null
     return (
         <Disclosure id={id} summary={heading} onToggle={(open) => { if (open) onOpen() }}>
-            <p className="note" role="status">
+            {/* The "loaded" confirmation is for screen readers only; "Loading" and errors stay visible. */}
+            <p className={state.status === "ready" ? "note section-status-quiet" : "note"} role="status">
                 {state.status === "loading" && "Loading…"}
                 {state.status === "error" && state.message}
                 {state.status === "ready" && `${heading} loaded.`}
@@ -1574,10 +1575,10 @@ function ParametersSection({ calculationRef, available }: { calculationRef: stri
                                                         producer wrote (house rule, owner decision 2026-11-03). The statement
                                                         is a closed label from the row's source, artifact and statement kind. */}
                                                     <td data-label="Key">{row.canonical_key ?? "unrecognised parameter"}</td>
-                                                    <td data-label="Value">{row.canonical_key ? publicParameterValue(row.canonical_value) : "not shown"}</td>
+                                                    <td data-label="Value">{row.canonical_key ? parameterValueText(row.canonical_key, row.canonical_value, publicParameterValue) : "not shown"}</td>
                                                     <td data-label="Statement">
                                                         <span
-                                                            className={`settings-state settings-state--${statement.kind === "reported" ? "reported" : "requested"}`}
+                                                            className={`settings-state settings-state--${statement.pillClass}`}
                                                             data-parameter-statement={statement.kind}
                                                         >
                                                             {statement.label}

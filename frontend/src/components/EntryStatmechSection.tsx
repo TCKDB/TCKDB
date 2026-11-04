@@ -532,7 +532,9 @@ function RecordSettingsBlock({ record }: { record: StatmechRecord }) {
     if (state.status === "idle" || state.status === "loading") {
         return <p className="note">Loading the settings behind this record.</p>
     }
-    if (state.status === "error") return null
+    if (state.status === "error") {
+        return <p className="note" role="status">{state.message}</p>
+    }
     return (
         <SettingsBehindValue
             block={state.dataByRef.get(record.statmech.statmech_ref) ?? null}

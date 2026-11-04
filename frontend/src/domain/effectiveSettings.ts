@@ -139,7 +139,8 @@ export function describeSetting(summary: SettingSummaryInput): SettingDisplay {
         setting: summary.setting,
         settingLabel: settingLabel(summary.setting),
         kind,
-        stateLabel: settingStateLabel(state),
+        // Two different requested values: say so in the state itself, with no value to show.
+        stateLabel: conflicting && kind === "requested" ? "Conflicting requests" : settingStateLabel(state),
         valueText,
         sourceText: kind === "requested" ? requestedFromLabel(summary.requested_from) : null,
         reportedTexts:
@@ -151,6 +152,23 @@ export function describeSetting(summary: SettingSummaryInput): SettingDisplay {
 
 // --- the calculation page's "Parsed parameters" table ------------------------------------------------------------
 
+const SETTING_OF_KEY: Record<string, string> = { "grid.quality": "grid", "scf.convergence": "scf_convergence" }
+
+/**
+ * The Value cell for a recognised parameter key. The grid and SCF-convergence settings print their closed-set token
+ * (safe even when a depositor typed it); anything outside the set reads "recorded". Every other key keeps the rule of
+ * `fallback` (`publicParameterValue`: numbers and booleans only).
+ */
+export function parameterValueText(
+    canonicalKey: string,
+    canonicalValue: string | null | undefined,
+    fallback: (value: string | null | undefined) => string,
+): string {
+    const setting = SETTING_OF_KEY[canonicalKey]
+    if (!setting) return fallback(canonicalValue)
+    return publicSettingValue(setting, canonicalValue) ?? "recorded"
+}
+
 export interface ParameterStatementInput {
     source?: string | null
     artifact_kind?: string | null
@@ -160,19 +178,21 @@ export interface ParameterStatementInput {
 export interface ParameterStatement {
     kind: "reported" | "requested" | "curated" | "unknown"
     label: string
+    /** The pill's modifier: reported and requested statements carry their own; curated and unknown are neutral. */
+    pillClass: "reported" | "requested" | "neutral"
 }
 
 /** Requested or reported, and from where: "Reported · output log", "Requested · input file", "Requested · depositor". */
 export function parameterStatement(row: ParameterStatementInput): ParameterStatement {
-    if (row.statement_kind === "reported") return { kind: "reported", label: "Reported · output log" }
-    if (row.source === "curated") return { kind: "curated", label: "Curated" }
-    if (row.source === "upload") return { kind: "requested", label: "Requested · depositor" }
+    if (row.statement_kind === "reported") return { kind: "reported", label: "Reported · output log", pillClass: "reported" }
+    if (row.source === "curated") return { kind: "curated", label: "Curated", pillClass: "neutral" }
+    if (row.source === "upload") return { kind: "requested", label: "Requested · depositor", pillClass: "requested" }
     if (row.source === "parser") {
-        if (row.artifact_kind === "output_log") return { kind: "requested", label: "Requested · echoed in output log" }
-        if (row.artifact_kind === "input") return { kind: "requested", label: "Requested · input file" }
-        return { kind: "requested", label: "Requested" }
+        if (row.artifact_kind === "output_log") return { kind: "requested", label: "Requested · echoed in output log", pillClass: "requested" }
+        if (row.artifact_kind === "input") return { kind: "requested", label: "Requested · input file", pillClass: "requested" }
+        return { kind: "requested", label: "Requested", pillClass: "requested" }
     }
-    return { kind: "unknown", label: "Source not recorded" }
+    return { kind: "unknown", label: "Source not recorded", pillClass: "neutral" }
 }
 
 // --- thermo and statmech: the three levels ------------------------------------------------------------------------

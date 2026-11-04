@@ -1,134 +1,103 @@
 """The settings behind a thermo or statmech record's geometry, frequency and energy levels (read-time view; nothing is stored).
 
 One question per level: which calculation does this record link for it, and what grid and SCF convergence did that
-calculation use? The calculation is picked from the record's own links, by the source the record's ``levels`` already
-name (``geometry_source``, ``frequency_source``, ``energy_source``), so the settings shown always belong to the
-calculation the level was derived from. The settings come from :func:`build_effective_settings`, the builder the
-calculation read uses; there is no second computation.
+calculation use? The calculation is one of the SUPPLIERS of the level, as :func:`app.services.calculation_levels.level_suppliers`
+defines them (the same rule the evidence rule uses), so the settings shown belong to the calculation the level's level of
+theory was derived from; the priority order is not re-implemented here. The settings come from
+:func:`effective_settings_from`, the computation the calculation read uses.
 
-A level with no linked calculation is listed as absent. It is never filled from a sibling record, an unlinked
-statmech, or any calculation the record does not link.
+A level with no linked calculation is listed as absent. It is never filled from a sibling record, an unlinked statmech,
+or any calculation the record does not link. A level all of whose suppliers the review profile hides is left out.
+
+Cost: the record builders note the suppliers of each level on the record (:class:`LevelPlan`, no query), and
+:func:`attach_calculation_settings` resolves a whole page of records in a fixed number of statements.
 """
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
+from typing import Any
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
-
-from app.db.models.calculation import Calculation
-from app.db.models.common import CalculationType
 from app.schemas.reads.scientific_calculation import RoleCalculationSettings
-from app.schemas.reads.scientific_common import ScientificLevelsSummary
-from app.services.scientific_read.effective_settings import build_effective_settings
+from app.services.scientific_read.effective_settings import effective_settings_from, load_settings_inputs
+
+LEVELS = ("geometry", "frequency", "energy")
 
 
-def pick_level_calculations(
-    levels: ScientificLevelsSummary,
-    role_calc_ids: Mapping[str, Sequence[int]],
-    calculations: Mapping[int, Calculation],
-    withheld: Collection[int] = frozenset(),
-) -> dict[str, tuple[int | None, str | None]]:
-    """Level -> (calculation id, absent reason). Both ``None`` means the level is omitted (its calculations are withheld).
+@dataclass(frozen=True)
+class LevelPlan:
+    """Per level, the source that supplied it and the supplying calculation ids (lowest first), from the record's FULL links.
 
-    ``role_calc_ids`` maps a link role (``opt``, ``freq``, ``sp``, ``composite``, ``imported``) to the record's linked
-    calculation ids, lowest first. The first one the review profile shows is used, as everywhere else.
+    ``withheld`` is the subset of those the review profile hides (the evidence rule).
     """
 
-    def first(role: str, *, composite_typed: bool | None = None) -> int | None:
-        for cid in role_calc_ids.get(role, ()):
-            calc = calculations.get(cid)
-            if calc is None or cid in withheld:
-                continue
-            if composite_typed is not None and (calc.type is CalculationType.composite) != composite_typed:
-                continue
-            return cid
-        return None
+    suppliers: Mapping[str, tuple[str | None, tuple[int, ...]]] = field(default_factory=dict)
+    withheld: frozenset[int] = frozenset()
 
-    def absent(source: str | None, role_set: tuple[str, ...]) -> str | None:
-        """The reason a level shows no calculation, or ``None`` when the level is left out entirely.
 
-        A level whose linked calculations the review profile hides is omitted, not relabelled: removal is how a
-        withholding shows, and a reason that changed value between profiles would not be one.
-        """
-        if source == "composite_recipe":
-            return "composite_recipe"
-        if source is None and any(cid in withheld for role in role_set for cid in role_calc_ids.get(role, ())):
-            return None
-        return "not_linked"
-
-    out: dict[str, tuple[int | None, str | None]] = {}
-
-    geometry = first("opt") if levels.geometry_source == "opt" else None
-    out["geometry"] = (geometry, None) if geometry is not None else (None, absent(levels.geometry_source, ("opt", "composite")))
-
-    if levels.frequency_source == "freq":
-        frequency = first("freq")
-    elif levels.frequency_source == "opt":
-        frequency = first("opt")
-    else:
-        frequency = None
-    out["frequency"] = (
-        (frequency, None) if frequency is not None else (None, absent(levels.frequency_source, ("freq", "opt", "composite")))
+def make_level_plan(
+    suppliers: Mapping[str, tuple[str | None, Sequence[int]]], withheld: Collection[int] = frozenset()
+) -> LevelPlan:
+    ids = {cid for _, level_ids in suppliers.values() for cid in level_ids}
+    return LevelPlan(
+        suppliers={level: (source, tuple(level_ids)) for level, (source, level_ids) in suppliers.items()},
+        withheld=frozenset(ids & set(withheld)),
     )
 
-    source = levels.energy_source
-    if source == "composite":
-        energy = first("composite", composite_typed=True)
-        if energy is None:
-            energy = first("composite", composite_typed=False)
-    elif source in ("sp", "opt", "imported"):
-        energy = first(source)
-    else:
-        energy = None
-    if energy is not None:
-        out["energy"] = (energy, None)
-    elif source == "ambiguous":
-        out["energy"] = (None, "ambiguous")
-    else:
-        out["energy"] = (None, absent(source, ("sp", "opt", "composite", "imported")))
+
+def pick_level_calculations(plan: LevelPlan | None) -> dict[str, tuple[int | None, str | None]]:
+    """Level -> (calculation id, absent reason).
+
+    Both ``None`` means the level is omitted because every calculation that supplied it is withheld. The calculation is the
+    lowest supplier the review profile shows.
+    """
+    plan = plan or LevelPlan()
+    out: dict[str, tuple[int | None, str | None]] = {}
+    for level in LEVELS:
+        source, ids = plan.suppliers.get(level, (None, ()))
+        shown = [cid for cid in ids if cid not in plan.withheld]
+        all_withheld = bool(ids) and not shown
+        if source is None:
+            out[level] = (None, "not_linked")
+        elif all_withheld:
+            out[level] = (None, None)
+        elif source == "composite_recipe":
+            out[level] = (None, "composite_recipe")
+        elif source == "ambiguous":
+            out[level] = (None, "ambiguous")
+        elif shown:
+            out[level] = (shown[0], None)
+        else:
+            out[level] = (None, "not_linked")
     return out
 
 
-def build_calculation_settings(
-    session: Session,
-    *,
-    levels: ScientificLevelsSummary,
-    role_calc_ids: Mapping[str, Sequence[int]],
-    withheld: Collection[int] = frozenset(),
-) -> list[RoleCalculationSettings]:
-    """The three levels, in order geometry / frequency / energy, each with its calculation's effective settings."""
-    wanted = {cid for ids in role_calc_ids.values() for cid in ids}
-    calculations: dict[int, Calculation] = {}
-    if wanted:
-        calculations = {
-            c.id: c
-            for c in session.scalars(
-                select(Calculation)
-                .where(Calculation.id.in_(wanted))
-                .options(
-                    selectinload(Calculation.lot),
-                    selectinload(Calculation.software_release),
+def attach_calculation_settings(session: Any, records: Iterable[Any]) -> None:
+    """Set ``calculation_settings`` on each record of a page, from the plan the record builder noted on it.
+
+    A fixed number of statements whatever the number of records: every calculation the page needs is loaded together.
+    """
+    records = list(records)
+    picks = [(record, pick_level_calculations(getattr(record, "_level_plan", None))) for record in records]
+    wanted = {cid for _, pick in picks for cid, _ in pick.values() if cid is not None}
+    inputs = load_settings_inputs(session, wanted)
+    for record, pick in picks:
+        block: list[RoleCalculationSettings] = []
+        for level in LEVELS:
+            calc_id, reason = pick[level]
+            if calc_id is None and reason is None:
+                continue
+            if calc_id is None or calc_id not in inputs:
+                block.append(RoleCalculationSettings(role=level, absent_reason=reason or "not_linked"))
+                continue
+            loaded = inputs[calc_id]
+            block.append(
+                RoleCalculationSettings(
+                    role=level,
+                    calculation_ref=loaded.calculation.public_ref,
+                    calculation_type=loaded.calculation.type,
+                    settings=effective_settings_from(loaded),
                 )
             )
-        }
-    picked = pick_level_calculations(levels, role_calc_ids, calculations, withheld)
-    out: list[RoleCalculationSettings] = []
-    for role in ("geometry", "frequency", "energy"):
-        calc_id, reason = picked[role]
-        if calc_id is None and reason is None:
-            continue
-        if calc_id is None:
-            out.append(RoleCalculationSettings(role=role, absent_reason=reason))
-            continue
-        calc = calculations[calc_id]
-        out.append(
-            RoleCalculationSettings(
-                role=role,
-                calculation_ref=calc.public_ref,
-                calculation_type=calc.type,
-                settings=build_effective_settings(session, calc),
-            )
-        )
-    return out
+        record.calculation_settings = block

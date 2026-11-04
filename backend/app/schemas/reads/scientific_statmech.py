@@ -23,8 +23,9 @@ See ``backend/docs/specs/scientific_statmech_reads.md``.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from app.db.models.common import (
     CalculationType,
@@ -451,6 +452,8 @@ class ScientificStatmechRecord(BaseModel):
     #: links for that level and the grid and SCF convergence it used, each with its evidence. A level with no linked
     #: calculation is listed as absent.
     calculation_settings: list[RoleCalculationSettings] | None = None
+    #: Filled by the record builder, read by ``attach_calculation_settings``; never on the wire.
+    _level_plan: Any = PrivateAttr(default=None)
     trust: TrustFragment | None = None
     assessments: PublicAssessmentSummary | None = None
 

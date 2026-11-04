@@ -62,7 +62,10 @@ describe("SettingsBehindValue", () => {
         const frequency = rowFor("Frequencies")
         expect(within(frequency).getByText("ultrafine").className).not.toContain("assumed")
         expect(within(frequency).getByText("input file")).toBeInTheDocument()
-        expect(within(frequency).getByText("Conflicting values")).toBeInTheDocument()
+        const conflict = within(frequency).getByText("Conflicting requests")
+        expect(conflict).toHaveAttribute("data-settings-conflict")
+        // One badge says it; there is no second "conflicting" marker and no value beside it.
+        expect(within(frequency).queryByText("Conflicting values")).toBeNull()
     })
 
     it("says a level has no linked calculation instead of filling it", () => {
@@ -75,6 +78,13 @@ describe("SettingsBehindValue", () => {
         expect(screen.getAllByRole("row").slice(1).map((row) => row.getAttribute("data-level-role"))).toEqual(["geometry", "frequency", "energy"])
         expect(within(rowFor("Frequencies")).getByText(/not shown/)).toBeInTheDocument()
         expect(within(rowFor("Frequencies")).queryByRole("link")).toBeNull()
+    })
+
+    it("shows the calculation's type beside its link, from the closed list only", () => {
+        const block = [{ ...BLOCK[0], calculation_type: "DEPOSITOR_SENTINEL_type" }, BLOCK[1], BLOCK[2]]
+        render(<MemoryRouter><SettingsBehindValue block={block} recordRef="thr_x" /></MemoryRouter>)
+        expect(within(rowFor("Frequencies")).getByText("freq")).toHaveClass("settings-calc-type")
+        expectNoDepositorText()
     })
 
     it("renders nothing when the record carries no block", () => {
@@ -103,10 +113,23 @@ describe("EffectiveSettingsSummary", () => {
         expect(within(gridRow).getByText("Assumed program default (no output log)")).toHaveAttribute("data-settings-state", "assumed")
         expect(within(gridRow).getByText("defgrid2")).toBeInTheDocument()
         const scfRow = screen.getByRole("row", { name: /SCF convergence/ })
-        expect(within(scfRow).getByText("Requested")).toBeInTheDocument()
         expect(within(scfRow).getByText("echoed in the output log")).toBeInTheDocument()
-        expect(within(scfRow).getByText("Conflicting values")).toBeInTheDocument()
+        expect(within(scfRow).getByText("Conflicting requests")).toBeInTheDocument()
         expect(screen.getByText(/never stored/)).toBeInTheDocument()
+    })
+
+    it("prints no depositor-typed text from the summary either", () => {
+        const planted = plantSentinels(
+            [
+                grid({ state: "requested", requested_value: "typed", requested_from: "typed", reported: [{ key: "k", value: "v" }] }),
+                scf({ state: "assumed_default", assumed_value: "typed" }),
+            ],
+            ["requested_value", "assumed_value", "key", "value"],
+        )
+        expectPlanted(planted)
+        render(<EffectiveSettingsSummary settings={planted.value} />)
+        expectNoDepositorText()
+        expect(screen.getAllByText("recorded").length).toBeGreaterThan(0)
     })
 
     it("shows not stated plainly and nothing when the section is absent", () => {

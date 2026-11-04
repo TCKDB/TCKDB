@@ -550,6 +550,41 @@ describe("EntryStatmechSection", () => {
         expect(within(first).getAllByText("No calculation linked")).toHaveLength(2)
     })
 
+    it("says so when the calculation_settings fetch fails, instead of silently showing nothing", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            if (new URL(request.url).searchParams.getAll("include").includes("calculation_settings")) {
+                return HttpResponse.json({ detail: "settings unavailable" }, { status: 500 })
+            }
+            return HttpResponse.json(mockResponse())
+        }))
+        page()
+        await screen.findByText("sm_one")
+        expect((await screen.findAllByText("settings unavailable")).length).toBeGreaterThan(0)
+    })
+
+    it("prints no depositor-typed text from the calculation_settings block", async () => {
+        const block = [
+            { role: "geometry", calculation_ref: "calc_for_one", calculation_type: "opt", settings: [
+                { setting: "grid", state: "requested", requested_value: "typed", requested_from: "typed", reported: [{ key: "k", value: "v" }], assumed_value: "typed" },
+            ] },
+            { role: "frequency", calculation_ref: null, absent_reason: "not_linked", settings: [] },
+            { role: "energy", calculation_ref: null, absent_reason: "not_linked", settings: [] },
+        ]
+        const planted = plantSentinels(block, ["requested_value", "assumed_value", "key", "value"])
+        expectPlanted(planted)
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            if (new URL(request.url).searchParams.getAll("include").includes("calculation_settings")) {
+                const [one] = mockRecords()
+                return HttpResponse.json(mockResponse([{ ...(one as Record<string, unknown>), calculation_settings: planted.value }] as unknown as ReturnType<typeof mockRecords>))
+            }
+            return HttpResponse.json(mockResponse())
+        }))
+        page()
+        await screen.findByText("sm_one")
+        await screen.findByText("Settings behind this value")
+        expectNoDepositorText()
+    })
+
     it("states honestly when no statmech records are deposited for this entry, without noise from six separate empty lazy sections", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([]))))
         page()

@@ -19,13 +19,17 @@ A reported value is never turned into a requested one, and a requested value is 
 
 from __future__ import annotations
 
+from collections.abc import Collection
+from dataclasses import dataclass
+
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from tckdb_schemas.program_default_settings import assumed_default_setting
 
 from app.db.models.calculation import Calculation, CalculationArtifact, CalculationParameter
 from app.db.models.common import ArtifactKind, ParameterSource, ParameterStatementKind, SubmissionRecordType
 from app.db.models.deposit_warning import DepositWarning
+from app.db.models.software import SoftwareRelease
 from app.schemas.reads.scientific_calculation import (
     EffectiveSettingState,
     EffectiveSettingSummary,
@@ -55,42 +59,90 @@ def _values(rows: list[CalculationParameter], key: str) -> set[str]:
     return {r.canonical_value for r in rows if r.canonical_key == key and r.canonical_value is not None}
 
 
-def build_effective_settings(session: Session, calculation: Calculation) -> list[EffectiveSettingSummary]:
-    rows = list(
+@dataclass(frozen=True)
+class SettingsInputs:
+    """Everything the effective settings of one calculation are computed from, loaded ahead of the computation.
+
+    Loading is separate from computing so that a page of records loads these for all its calculations in a fixed number
+    of statements (:func:`load_settings_inputs`) and the calculation read loads them for one; both then run the one
+    computation, :func:`effective_settings_from`.
+    """
+
+    calculation: Calculation
+    rows: tuple[CalculationParameter, ...]
+    has_log_artifact: bool
+    log_not_bound: bool
+
+
+def load_settings_inputs(session: Session, calculation_ids: Collection[int]) -> dict[int, SettingsInputs]:
+    """Load the calculations (level of theory and software release eagerly), their parameter rows, output-log presence and
+    unbound-log warnings for ``calculation_ids``: four statements whatever the number of calculations."""
+    ids = set(calculation_ids)
+    if not ids:
+        return {}
+    calculations = {
+        c.id: c
+        for c in session.scalars(
+            select(Calculation)
+            .where(Calculation.id.in_(ids))
+            .options(
+                selectinload(Calculation.lot),
+                selectinload(Calculation.software_release).selectinload(SoftwareRelease.software),
+            )
+        )
+    }
+    rows: dict[int, list[CalculationParameter]] = {}
+    for row in session.scalars(
+        select(CalculationParameter).where(CalculationParameter.calculation_id.in_(ids)).order_by(CalculationParameter.id)
+    ):
+        rows.setdefault(row.calculation_id, []).append(row)
+    with_log = set(
         session.scalars(
-            select(CalculationParameter)
-            .where(CalculationParameter.calculation_id == calculation.id)
-            .order_by(CalculationParameter.id)
+            select(CalculationArtifact.calculation_id)
+            .where(CalculationArtifact.calculation_id.in_(ids), CalculationArtifact.kind == ArtifactKind.output_log)
+            .distinct()
         )
     )
+    unbound = set(
+        session.scalars(
+            select(DepositWarning.record_id).where(
+                DepositWarning.record_type == SubmissionRecordType.calculation,
+                DepositWarning.record_id.in_(ids),
+                DepositWarning.code == W_OUTPUT_LOG_JOB_NOT_BOUND,
+            )
+        )
+    )
+    return {
+        cid: SettingsInputs(
+            calculation=calc,
+            rows=tuple(rows.get(cid, ())),
+            has_log_artifact=cid in with_log,
+            log_not_bound=cid in unbound,
+        )
+        for cid, calc in calculations.items()
+    }
+
+
+def build_effective_settings(session: Session, calculation: Calculation) -> list[EffectiveSettingSummary]:
+    """The effective settings of one calculation (the calculation read's entry point)."""
+    inputs = load_settings_inputs(session, [calculation.id])[calculation.id]
+    return effective_settings_from(inputs)
+
+
+def effective_settings_from(inputs: SettingsInputs) -> list[EffectiveSettingSummary]:
+    calculation = inputs.calculation
+    rows = list(inputs.rows)
     parser = [r for r in rows if r.source is ParameterSource.parser]
     reported_rows = [r for r in parser if r.statement_kind is ParameterStatementKind.reported]
     requested_parser = [r for r in parser if r.statement_kind is not ParameterStatementKind.reported]
     echo = [r for r in requested_parser if r.artifact_kind is ArtifactKind.output_log]
     deck = [r for r in requested_parser if r.artifact_kind is ArtifactKind.input]
     typed = [r for r in rows if r.source is ParameterSource.upload]
-    has_log = (
-        session.scalar(
-            select(CalculationArtifact.id)
-            .where(CalculationArtifact.calculation_id == calculation.id, CalculationArtifact.kind == ArtifactKind.output_log)
-            .limit(1)
-        )
-        is not None
-    ) or bool(echo or reported_rows)
+    has_log = inputs.has_log_artifact or bool(echo or reported_rows)
     # A multi-job log that could not be bound to this calculation was deliberately not read, so "the log neither
     # reports nor echoes it" would be false. Rows always win: once a refresh has read the log, its rows decide.
-    log_not_read = not (echo or reported_rows) and (
-        session.scalar(
-            select(DepositWarning.id)
-            .where(
-                DepositWarning.record_type == SubmissionRecordType.calculation,
-                DepositWarning.record_id == calculation.id,
-                DepositWarning.code == W_OUTPUT_LOG_JOB_NOT_BOUND,
-            )
-            .limit(1)
-        )
-        is not None
-    )
+    log_not_read = not (echo or reported_rows) and inputs.log_not_bound
+
     release = calculation.software_release
     software = release.software.name if release is not None and release.software is not None else None
     version = release.version if release is not None else None

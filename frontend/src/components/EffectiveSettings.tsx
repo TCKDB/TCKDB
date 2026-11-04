@@ -24,14 +24,14 @@ import "../settings-evidence.css"
 
 function StateBadge({ display }: { display: SettingDisplay }) {
     return (
-        <span className={`settings-state settings-state--${display.kind}`} data-settings-state={display.kind}>
+        <span
+            className={`settings-state settings-state--${display.conflicting ? "conflict" : display.kind}`}
+            data-settings-state={display.kind}
+            {...(display.conflicting ? { "data-settings-conflict": "" } : {})}
+        >
             {display.stateLabel}
         </span>
     )
-}
-
-function ConflictMarker() {
-    return <span className="settings-conflict" data-settings-conflict="">Conflicting values</span>
 }
 
 /** The value and its evidence for one setting, as stacked lines (used in table cells and the summary). */
@@ -51,10 +51,16 @@ function SettingCell({ summary }: { summary: EffectiveSetting | undefined }) {
             <span className="settings-badges">
                 <StateBadge display={display} />
                 {display.sourceText && <span className="settings-source">{display.sourceText}</span>}
-                {display.conflicting && <ConflictMarker />}
             </span>
         </div>
     )
+}
+
+// The calculation's own type, from a closed list (a type outside it is not printed).
+const CALCULATION_TYPE_TAGS = new Set(["opt", "freq", "sp", "composite", "scan", "irc", "neb", "imported"])
+
+function calculationTypeTag(type: string | null | undefined): string | null {
+    return type && CALCULATION_TYPE_TAGS.has(type) ? type : null
 }
 
 const SETTING_ORDER = ["grid", "scf_convergence"] as const
@@ -128,6 +134,9 @@ export function SettingsBehindValue({ block, idSuffix = "", recordRef }: {
                                     <>
                                         <td data-label="Calculation">
                                             <Link className="data" to={`/calculations/${item.calculation_ref}`}>{item.calculation_ref}</Link>
+                                            {calculationTypeTag(item.calculation_type) && (
+                                                <span className="settings-calc-type">{calculationTypeTag(item.calculation_type)}</span>
+                                            )}
                                         </td>
                                         <td data-label="DFT grid"><SettingCell summary={byName(item.settings, "grid")} /></td>
                                         <td data-label="SCF convergence"><SettingCell summary={byName(item.settings, "scf_convergence")} /></td>

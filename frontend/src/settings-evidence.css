@@ -49,6 +49,26 @@
     color: var(--muted);
     font: 600 .72rem/1.3 var(--sans);
     letter-spacing: normal;
+    white-space: nowrap;
+}
+
+.settings-state.settings-state--conflict {
+    border-color: var(--notice-border);
+    background: var(--notice-bg);
+    color: var(--notice-text);
+}
+
+.settings-state.settings-state--neutral {
+    border-color: var(--line-2);
+    background: transparent;
+    color: var(--muted);
+}
+
+.settings-calc-type {
+    display: inline-block;
+    margin-left: .5rem;
+    color: var(--muted);
+    font: var(--type-note-font);
 }
 
 .settings-state.settings-state--reported {
@@ -82,16 +102,6 @@
     color: var(--muted);
 }
 
-.settings-conflict {
-    display: inline-block;
-    padding: .15rem .55rem;
-    border: 1px solid var(--notice-border);
-    border-radius: 999px;
-    background: var(--notice-bg);
-    color: var(--notice-text);
-    font: 600 .72rem/1.3 var(--sans);
-}
-
 .settings-absent {
     color: var(--muted);
     font: var(--type-note-font);
@@ -109,8 +119,13 @@
     margin: .5rem 0 0;
 }
 
-/* Phone width: stack each level into a card so nothing scrolls sideways. */
-@media (max-width: 640px) {
+/* Narrow container (a phone, or a card in a narrow column): stack each level so nothing scrolls sideways. The pills do
+   not wrap, so the four columns need about 52rem. */
+.settings-behind {
+    container-type: inline-size;
+}
+
+@container (max-width: 52rem) {
     .settings-behind .data-table,
     .settings-behind .data-table tbody,
     .settings-behind .data-table tr,

@@ -7,8 +7,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from tckdb_schemas.thermo_declarations import StoredThermoProtocolDeclaration
 
 from app.db.models.common import (
@@ -349,6 +350,8 @@ class ThermoRecord(BaseModel):
     #: for that level and the grid and SCF convergence it used, each with its evidence. A level with no linked
     #: calculation is listed as absent. Never filled from an unlinked statmech or a sibling record.
     calculation_settings: list[RoleCalculationSettings] | None = None
+    #: Filled by the record builder, read by ``attach_calculation_settings``; never on the wire.
+    _level_plan: Any = PrivateAttr(default=None)
     trust: TrustFragment | None = None
     assessments: PublicAssessmentSummary | None = None
 

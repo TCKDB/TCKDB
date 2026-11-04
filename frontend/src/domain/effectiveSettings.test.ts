@@ -5,6 +5,7 @@ import {
     isAssumedState,
     levelRoleLabel,
     parameterStatement,
+    parameterValueText,
     publicSettingValue,
     reportedEntryText,
     settingStateLabel,
@@ -73,7 +74,13 @@ describe("describeSetting", () => {
 
     it("withholds the value of a conflicting request and says so", () => {
         const shown = describeSetting({ setting: "grid", state: "requested", requested_value: null, requested_from: "typed", conflicting: true })
-        expect(shown).toMatchObject({ kind: "requested", conflicting: true, valueText: null, sourceText: "stated by the depositor" })
+        expect(shown).toMatchObject({
+            kind: "requested",
+            conflicting: true,
+            valueText: null,
+            sourceText: "stated by the depositor",
+            stateLabel: "Conflicting requests",
+        })
     })
 
     it("says nothing about a value that is not stated", () => {
@@ -92,6 +99,7 @@ describe("parameterStatement", () => {
         expect(parameterStatement({ source: "parser", artifact_kind: "output_log", statement_kind: "reported" })).toEqual({
             kind: "reported",
             label: "Reported · output log",
+            pillClass: "reported",
         })
     })
 
@@ -99,8 +107,23 @@ describe("parameterStatement", () => {
         expect(parameterStatement({ source: "parser", artifact_kind: "output_log", statement_kind: "requested" }).label).toBe("Requested · echoed in output log")
         expect(parameterStatement({ source: "parser", artifact_kind: "input", statement_kind: "requested" }).label).toBe("Requested · input file")
         expect(parameterStatement({ source: "upload" }).label).toBe("Requested · depositor")
-        expect(parameterStatement({ source: "curated" })).toEqual({ kind: "curated", label: "Curated" })
-        expect(parameterStatement({})).toEqual({ kind: "unknown", label: "Source not recorded" })
+        expect(parameterStatement({ source: "curated" })).toEqual({ kind: "curated", label: "Curated", pillClass: "neutral" })
+        expect(parameterStatement({})).toEqual({ kind: "unknown", label: "Source not recorded", pillClass: "neutral" })
+    })
+})
+
+describe("parameterValueText", () => {
+    const fallback = (value: string | null | undefined) => `fallback:${value}`
+
+    it("prints a closed-set grid or convergence token and 'recorded' for anything else", () => {
+        expect(parameterValueText("grid.quality", "ultrafine", fallback)).toBe("ultrafine")
+        expect(parameterValueText("scf.convergence", "very_tight", fallback)).toBe("very tight")
+        expect(parameterValueText("grid.quality", "DEPOSITOR_SENTINEL_value", fallback)).toBe("recorded")
+        expect(parameterValueText("scf.convergence", null, fallback)).toBe("recorded")
+    })
+
+    it("leaves every other key to the fallback", () => {
+        expect(parameterValueText("grid.angular_max", "302", fallback)).toBe("fallback:302")
     })
 })
 
