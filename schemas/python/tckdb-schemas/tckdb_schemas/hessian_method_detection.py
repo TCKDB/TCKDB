@@ -71,7 +71,10 @@ ORCA_FREQ_HESSIAN_KEYWORDS: dict[str, HessianMethod] = {
 # Gaussian route extraction and tokenising (moved from the backend parser)
 # ---------------------------------------------------------------------------
 
-_ROUTE_DELIM = re.compile(r"^[\s-]{60,}$")
+#: A row of dashes round the echoed route. Gaussian sizes the rows to the text they enclose: 70 wide for a long route,
+#: but only as wide as the route itself for a short one (``# sp b3lyp/def2svp`` gets 43). Rows shorter than 60
+#: are therefore delimiters too; without them a short route was never closed and ran on into the log.
+_ROUTE_DELIM = re.compile(r"^(?:[\s-]{60,}|-{4,})$")
 
 def extract_gaussian_route_text(text: str) -> str | None:
     """Return the Gaussian route section from a log echo or raw input file.

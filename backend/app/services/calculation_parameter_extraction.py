@@ -72,6 +72,8 @@ from app.services.ess_software_detection import (
 )
 from app.services.parameter_observation import ParserObservation
 from app.services.parameter_reconciliation import (
+    W_OUTPUT_LOG_JOB_NOT_BOUND,
+    bind_gaussian_job,
     declared_parameter_warnings,
     level_of_theory_warnings,
     merge_artifact_observations,
@@ -261,6 +263,46 @@ def _parse_gaussian_text(text: str) -> dict:
     }
 
 
+def _the_calculations_job(
+    session: Session,
+    calculation: Calculation,
+    software: str,
+    text: str,
+    artifact_kind: ArtifactKind,
+    *,
+    deck: CalculationArtifact | None = None,
+    client_box: list | None = None,
+    strict: bool = False,
+) -> tuple[str, bool]:
+    """``(text to read, unbound)``: a Gaussian log is cut to the job that is this calculation (see
+    :func:`app.services.parameter_reconciliation.bind_gaussian_job`).
+
+    When no single job is, the whole text is returned with ``unbound`` set: the caller reads nothing that belongs to a
+    job from it (no echoed request, no reported value), so another job's value never stands in. Decks and the other
+    programs' logs pass through. Jobs the log cannot tell apart are told apart by the calculation's stored input deck
+    (``deck``, else the most recent one); a deck that cannot be read leaves them untold (``strict``: raises instead).
+    """
+    if software != "gaussian" or artifact_kind is ArtifactKind.input:
+        return text, False
+    session.flush()
+
+    def deck_text() -> str | None:
+        try:
+            artifact = deck
+            if artifact is None:
+                decks = _stored_artifacts(session, calculation, ArtifactKind.input)
+                artifact = decks[-1] if decks else None
+            return None if artifact is None else _decode_text(_artifact_bytes(session, artifact, client_box))
+        except Exception as exc:
+            if strict:
+                raise
+            logger.warning("deck not read to tell Gaussian jobs apart for calculation id=%s: %s", calculation.id, exc)
+            return None
+
+    job = bind_gaussian_job(calculation, text, deck_text)
+    return (text, True) if job is None else (job, False)
+
+
 def extract_and_store_calculation_parameters(
     session: Session,
     calculation: Calculation,
@@ -312,8 +354,11 @@ def extract_and_store_calculation_parameters(
     """
 
     software = _resolve_software(calculation, artifact_text)
-    parsed = _run_parser(software, artifact_text)
     is_deck = artifact_kind is ArtifactKind.input
+    artifact_text, unbound_log = _the_calculations_job(session, calculation, software, artifact_text, artifact_kind)
+    parsed = _run_parser(software, artifact_text)
+    if unbound_log:
+        parsed = {**parsed, "parameters": []}
 
     # DR-0008: reconcile the declared software_release against the version
     # banner the parser just observed, and persist the outcome on the
@@ -349,7 +394,7 @@ def extract_and_store_calculation_parameters(
         disagreements_before = reported_setting_disagreements(session, calculation, software)
     except Exception:  # pragma: no cover - defensive, never blocks
         disagreements_before = []
-    observations = _observations_of(software, artifact_text, parsed, artifact_kind, calculation)
+    observations = _observations_of(software, "" if unbound_log else artifact_text, parsed, artifact_kind, calculation)
     # What this artifact requests, before the precedence rule drops any of it: the typed-versus-read judgement is
     # made on this, so it does not depend on which artifact of the request was read first. A reported value is not
     # a request and is never judged against what the depositor typed.
@@ -363,7 +408,7 @@ def extract_and_store_calculation_parameters(
     )
     parsed_stamp = parsed.get("parser")
     effective_parser = parser or (ParserStamp(**parsed_stamp) if isinstance(parsed_stamp, dict) else None)
-    snapshot_is_ours = is_deck or calculation.parameters_json is None
+    snapshot_is_ours = is_deck or (calculation.parameters_json is None and not unbound_log)
 
     rows = persist_calculation_parameters(
         session,
@@ -385,6 +430,18 @@ def extract_and_store_calculation_parameters(
         try:
             session.flush()
             warnings.extend(conflicts)
+            if unbound_log:
+                # One per log: the same log read twice in a request earns one, two different logs earn two.
+                unbound = UploadWarning.from_code(
+                    field="artifacts",
+                    code=W_OUTPUT_LOG_JOB_NOT_BOUND,
+                    context={
+                        "software": software,
+                        "depositor_supplied": {"log_sha256": hashlib.sha256(artifact_text.encode()).hexdigest()[:16]},
+                    },
+                )
+                if not any(w.code == unbound.code and w.context == unbound.context for w in warnings):
+                    warnings.append(unbound)
             warnings.extend(reported_setting_warnings(session, calculation, software, before=disagreements_before))
             warnings.extend(
                 declared_parameter_warnings(
@@ -443,22 +500,40 @@ def _stored_artifacts(session: Session, calculation: Calculation, kind: Artifact
     )
 
 
-def _parse_stored_artifact(session: Session, calculation: Calculation, artifact: CalculationArtifact, client_box: list):
+def _artifact_bytes(session: Session, artifact: CalculationArtifact, client_box: list | None) -> bytes:
+    """A stored artifact's bytes: from memory when uploaded in this request, else through a short-timeout client."""
+    content = session.info.get("parameter_artifact_bytes", {}).get(artifact.sha256)
+    if content is None:
+        if client_box is None:
+            client_box = []
+        if not client_box:
+            client_box.append(_short_timeout_client())
+        content = load_artifact_bytes(artifact.sha256, client=client_box[0])
+    return content
+
+
+def _parse_stored_artifact(
+    session: Session,
+    calculation: Calculation,
+    artifact: CalculationArtifact,
+    client_box: list,
+    deck: CalculationArtifact | None = None,
+):
     """``(software, observations, parser stamp)`` for one stored deck or log; raises when it cannot be read or parsed.
 
     Bytes uploaded in this request come from memory; others are read through a short-timeout client (made once and
     kept in ``client_box``).
     """
-    content = session.info.get("parameter_artifact_bytes", {}).get(artifact.sha256)
-    if content is None:
-        if not client_box:
-            client_box.append(_short_timeout_client())
-        content = load_artifact_bytes(artifact.sha256, client=client_box[0])
-    text = _decode_text(content)
+    text = _decode_text(_artifact_bytes(session, artifact, client_box))
     software = _resolve_software(calculation, text)
+    text, unbound = _the_calculations_job(
+        session, calculation, software, text, artifact.kind, deck=deck, client_box=client_box, strict=True
+    )
     parsed = _run_parser(software, text)
+    if unbound:
+        parsed = {**parsed, "parameters": []}
     stamp = ParserStamp(**parsed["parser"]) if isinstance(parsed.get("parser"), dict) else None
-    return software, _observations_of(software, text, parsed, artifact.kind, calculation), stamp
+    return software, _observations_of(software, "" if unbound else text, parsed, artifact.kind, calculation), stamp
 
 
 def _append_log_observations(session: Session, calculation: Calculation, software, observations, stamp) -> None:
@@ -501,7 +576,7 @@ def refresh_output_log_rows(
         session, calculation, ArtifactKind.output_log
     ):
         try:
-            parsed = _parse_stored_artifact(session, calculation, artifact, client_box)
+            parsed = _parse_stored_artifact(session, calculation, artifact, client_box, deck_artifact)
         except Exception as exc:
             raise ParameterExtractionError(_stored_log_rows_restore_reason(artifact, exc)) from exc
         if artifact.kind is ArtifactKind.input:
@@ -544,6 +619,15 @@ def _decode_text(content: bytes) -> str:
 
 #: The artifact kinds whose text is read for parameters: a deck, and a log that echoes the deck.
 _PARAMETER_ARTIFACT_KINDS = (ArtifactKind.input, ArtifactKind.output_log)
+
+
+def inputs_first(artifacts):
+    """The artifacts of one request with the input decks first, each group in its listed order.
+
+    A log is read against the decks the calculation already has (a Link1 log's jobs are told apart by the deck), so a
+    request must not let the order a producer listed its artifacts in decide what a log binds to.
+    """
+    return sorted(artifacts, key=lambda a: a.kind != ArtifactKind.input)
 
 
 def try_extract_parameters_from_artifact_upload(

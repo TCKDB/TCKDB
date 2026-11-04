@@ -11,10 +11,16 @@ Rules, all deliberate:
   ``IRadAn`` code), not ``DefGrid2`` or ``UltraFine``. The numbers are stored under their own canonical keys, and
   ``grid.quality`` / ``scf.convergence`` are never set from a report. Gaussian's ``IRadAn`` is stored as a raw row
   with no canonical key, because its correspondence to named grids is not documented.
-* **Each report belongs to its own job.** A file is split into jobs at the program's banner (``Entering Gaussian
-  System`` for Gaussian, the ORCA banner for ORCA). A setting is read from a job only when that job prints one value
-  for it; when the jobs of a file print different values the setting is not reported at all, never taken from one
-  job for another.
+* **Each report belongs to its own job.** An ORCA file is split into jobs at the ORCA banner. A Gaussian file is
+  split at ``Entering Link 1`` (:func:`gaussian_jobs`): ``--Link1--`` jobs print no second ``Entering Gaussian System``
+  banner, and the internal steps of one job (``Proceeding to internal job step``, composites, opt+freq) print no extra
+  ``Entering Link 1``, which every Gaussian fixture log confirms. A setting is read from a job only when that job
+  prints one value for it; when the jobs of a file print different values the setting is not reported at all, never
+  taken from one job for another. Which Gaussian job is a calculation's own is decided by the caller (see
+  :func:`app.services.parameter_reconciliation.bind_gaussian_job`); this parser reads one job's text.
+* **IRadAn is read only from the SCF grid line** (``IXCGrd= .. IRadAn= ..``). The ``IRadAn`` of the Harris initial
+  guess (``ExpMin=``, ``Harris functional``, ``HarFok:``) is a print from the guess step, and differs from the SCF
+  grid's in 58 of the fixture logs, so it is not read.
 * **The COSX grids are not the DFT grid.** Only the block under ``DFT GRID GENERATION`` is read.
 * **The optimiser's thresholds are not the SCF's.** ORCA prints ``Convergence Tolerances:`` (plural, geometry
   optimiser) and ``Convergence Tolerance:`` (SCF); only the SCF block under ``SCF SETTINGS`` is read.
@@ -29,6 +35,7 @@ REPORTED = "reported"
 
 _ORCA_BANNER = re.compile(r"^\s*\*{3,}\s*\n\s*\*\s+O\s+R\s+C\s+A", re.M)
 _GAUSSIAN_JOB = re.compile(r"Entering Gaussian System")
+_GAUSSIAN_LINK1 = re.compile(r"^[ \t]*Entering Link 1 =", re.M)
 
 
 def _split(text: str, marker: re.Pattern[str]) -> list[str]:
@@ -36,6 +43,18 @@ def _split(text: str, marker: re.Pattern[str]) -> list[str]:
     if not starts:
         return [text]
     return [text[a:b] for a, b in zip(starts, [*starts[1:], len(text)], strict=True)]
+
+
+def gaussian_jobs(text: str) -> list[str]:
+    """The job texts of a Gaussian log, split at each ``Entering Link 1`` line; ``[text]`` when it has none.
+
+    The first job also holds the preamble (the ``Entering Gaussian System`` banner).
+    """
+    text = text.replace("\r\n", "\n")
+    starts = [m.start() for m in _GAUSSIAN_LINK1.finditer(text)]
+    if len(starts) <= 1:
+        return [text]
+    return [text[a:b] for a, b in zip([0, *starts[1:]], [*starts[1:], len(text)], strict=True)]
 
 
 def _number(token: str) -> float:
@@ -167,20 +186,18 @@ def _gaussian_job(job: str) -> dict[str, dict]:
 
 
 def parse_gaussian_reported(text: str) -> list[dict]:
-    """Reported grid and SCF rows of a Gaussian log; ``[]`` when the log prints none (or its jobs disagree).
+    """Reported grid and SCF rows of ONE Gaussian job's text; ``[]`` when it prints none.
 
-    Nothing is reported from a log that could hold more than one calculation's report: when it has more than one
-    ``Entering Gaussian System`` (several jobs, e.g. ``--Link1--``), or more echoed route sections than the program
-    announced as internal steps of the one job (``Proceeding to internal job step``) plus one. The guard rests on
-    two lines the fixtures show, not on a ``--Link1--`` line (a log does not print one). True per-job binding for
-    Gaussian waits on a real multi-job fixture.
+    Pass the job's own text (:func:`gaussian_jobs`, then the caller's binding). Text that holds more than one job,
+    more than one ``Entering Link 1`` or ``Entering Gaussian System``, reports nothing: it binds to no one
+    calculation. The same holds when the text echoes more route sections than the program announced as internal steps
+    of the one job (``Proceeding to internal job step``) plus one.
     """
     from app.services.gaussian_parameter_parser import all_route_texts
 
     text = text.replace("\r\n", "\n")
-    jobs = _split(text, _GAUSSIAN_JOB)
-    if len(_GAUSSIAN_JOB.findall(text)) > 1:
+    if len(gaussian_jobs(text)) > 1 or len(_GAUSSIAN_JOB.findall(text)) > 1:
         return []
     if len(all_route_texts(text)) > len(_GAUSSIAN_INTERNAL_STEP.findall(text)) + 1:
         return []
-    return _agree([_gaussian_job(job) for job in jobs])
+    return list(_gaussian_job(text).values())

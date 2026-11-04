@@ -7,8 +7,9 @@ Best evidence first, per setting:
 3. **assumed default**: the program's documented default for the declared program and version
    (:mod:`tckdb_schemas.program_default_settings`), labelled as assumed, because no log reports or echoes it. With no
    output log at all the label is ``assumed_default_no_output_log``.
-4. **not stated**: none of the above, including when the program or version is not declared. A version is never
-   guessed.
+4. **not stated**: none of the above, including when the program or version is not declared, and when the output
+   log holds several jobs and none could be bound to this calculation (the ``output_log_job_not_bound`` warning, with
+   no row from the log): that log was not read, so no default is assumed on its account. A version is never guessed.
 
 Gaussian's grid is the exception to step 1: the log prints an internal code (``IRadAn``) whose correspondence to a
 named grid is not documented, so it is listed but never sets the state.
@@ -23,12 +24,14 @@ from sqlalchemy.orm import Session
 from tckdb_schemas.program_default_settings import assumed_default_setting
 
 from app.db.models.calculation import Calculation, CalculationArtifact, CalculationParameter
-from app.db.models.common import ArtifactKind, ParameterSource, ParameterStatementKind
+from app.db.models.common import ArtifactKind, ParameterSource, ParameterStatementKind, SubmissionRecordType
+from app.db.models.deposit_warning import DepositWarning
 from app.schemas.reads.scientific_calculation import (
     EffectiveSettingState,
     EffectiveSettingSummary,
     ReportedSettingValue,
 )
+from app.services.parameter_reconciliation import W_OUTPUT_LOG_JOB_NOT_BOUND
 
 #: setting -> (requested canonical key, reported canonical keys that set the state, raw keys listed but not deciding)
 _SETTINGS = {
@@ -74,6 +77,20 @@ def build_effective_settings(session: Session, calculation: Calculation) -> list
         )
         is not None
     ) or bool(echo or reported_rows)
+    # A multi-job log that could not be bound to this calculation was deliberately not read, so "the log neither
+    # reports nor echoes it" would be false. Rows always win: once a refresh has read the log, its rows decide.
+    log_not_read = not (echo or reported_rows) and (
+        session.scalar(
+            select(DepositWarning.id)
+            .where(
+                DepositWarning.record_type == SubmissionRecordType.calculation,
+                DepositWarning.record_id == calculation.id,
+                DepositWarning.code == W_OUTPUT_LOG_JOB_NOT_BOUND,
+            )
+            .limit(1)
+        )
+        is not None
+    )
     release = calculation.software_release
     software = release.software.name if release is not None and release.software is not None else None
     version = release.version if release is not None else None
@@ -107,7 +124,7 @@ def build_effective_settings(session: Session, calculation: Calculation) -> list
             state, assumed_value = EffectiveSettingState.reported, None
         elif requested_from is not None:
             state, assumed_value = EffectiveSettingState.requested, None
-        elif assumed is not None:
+        elif assumed is not None and not log_not_read:
             state = (
                 EffectiveSettingState.assumed_default if has_log else EffectiveSettingState.assumed_default_no_output_log
             )
