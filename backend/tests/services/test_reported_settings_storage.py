@@ -344,7 +344,7 @@ def test_the_assumed_default_follows_program_and_version(db_conn, software, vers
         ("orca", "6.0.0", "CASSCF", CalculationType.opt, None),
         ("orca", "6.0.0", "HF", CalculationType.sp, None),
         ("orca", "6.0.0", "B3LYP", CalculationType.freq, None),
-                ("gaussian", None, "HF", CalculationType.sp, None),
+        ("gaussian", None, "HF", CalculationType.sp, None),
         ("orca", None, "HF", CalculationType.opt, None),
     ],
 )

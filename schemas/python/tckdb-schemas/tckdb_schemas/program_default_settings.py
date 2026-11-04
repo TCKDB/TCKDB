@@ -42,7 +42,6 @@ import re
 
 from tckdb_schemas.hessian_method_assumption import (
     MethodFamily,
-    _normalize,
     classify_method_family,
     is_dft_functional,
 )
@@ -104,7 +103,23 @@ def display_major_version(software: str | None, version: str | None) -> int | No
 _SPIN_PREFIXES = ("ro", "u", "r")
 
 #: Gaussian composite methods (they run standard SCF steps): CBS-QB3, CBS-4M, CBS-APNO, G1-G4 and variants, W1 variants.
-_GAUSSIAN_COMPOSITE = re.compile(r"^(cbs-(qb3|4m|apno|q)|g[1-4](mp[2-4]|mp2b3|b3)?|w1(u|bd|ro)?)$")
+#: Gaussian 09 keywords only: (RO)CBS-QB3, (RO)CBS-4M, CBS-APNO, G1, G2, G2MP2, G3, G3MP2, G3B3, G3MP2B3, G4, G4MP2 (also
+#: written G4(MP2)), W1U, W1BD, W1RO. ROCBS-QB3 is in the G09 manual (knowledge-base chunk 10430).
+_GAUSSIAN_COMPOSITE = re.compile(
+    r"^((ro)?cbs-(qb3|4m)|cbs-apno|g1|g2|g2mp2|g3|g3mp2|g3b3|g3mp2b3|g4|g4mp2|g4\(mp2\)|w1(u|bd|ro))$"
+)
+#: Methods the family classifier does not list that are SCF-reference methods: HF-3c, CCD, Brueckner doubles.
+_OTHER_SCF = re.compile(r"^(hf-3c|ccd|bd|bd\(t\))$")
+#: Prefixes that wrap an SCF-based method (resolution of identity, local pair natural orbitals, equation of motion).
+_WRAPPER_PREFIXES = ("ri-", "lpno-", "eom-")
+
+
+def _normalize(value: str | None) -> str | None:
+    """Lower-case, trim, ``_`` to ``-`` and the Greek omega to ``w`` (``ωB97X-D`` is ``wB97X-D``); ``None`` if empty."""
+    if value is None:
+        return None
+    stripped = value.strip().lower().replace("\u03c9", "w")
+    return stripped.replace("_", "-") if stripped else None
 
 
 def uses_dft_grid(method: str | None) -> bool:
@@ -133,11 +148,14 @@ def uses_scf(method: str | None, software: str | None = None) -> bool:
     if software and normalize_software_name(software) == "Gaussian" and _GAUSSIAN_COMPOSITE.match(token):
         return True
     candidates = {token}
-    if token.startswith("ri-"):
-        candidates.add(token[3:])
+    for prefix in _WRAPPER_PREFIXES:
+        if token.startswith(prefix):
+            candidates.add(token[len(prefix) :])
     for base in list(candidates):
         candidates.update(base[len(p) :] for p in _SPIN_PREFIXES if base.startswith(p))
     for candidate in candidates:
+        if _OTHER_SCF.match(candidate):
+            return True
         family = classify_method_family(candidate)
         if family is not None and family != MethodFamily.CASSCF:
             return True
