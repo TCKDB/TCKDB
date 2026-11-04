@@ -2,23 +2,28 @@
 
 A calculation can carry numbers its program printed about how far the result can be trusted:
 ``calc_wavefunction_diagnostic`` (``T1``, ``D1``, the singles norm, the largest ``T2`` amplitude) and
-``calc_spin_diagnostic`` (``<S^2>``). This module reads them back after the calculation is stored and, for the one
-case where the diagnostic has a primary-sourced conventional threshold and one definition across programs, says so.
+``calc_spin_diagnostic`` (``<S^2>``). This module reads them back after the calculation is stored and reports three
+things, each with its source or its absence of one named: a closed-shell T1 above Lee and Taylor's rule of thumb, an
+``<S^2>`` further than the field's conventional 0.1 from S(S+1), and a program's printed ideal ``<S^2>`` that is not
+S(S+1) of the declared multiplicity.
 
-**Nothing is refused and nothing changes.** The result is stored as deposited. The check never alters a value, a
+**Nothing is refused and nothing changes.** The result is stored as deposited. The checks never alter a value, a
 review status, an evidence label or a selection, and a thermochemistry or kinetics record that cites a flagged
-calculation earns no warning of its own: the warning is about the calculation (scope decided 2026-11-04). The tier is
-``warn`` (ADR 0008): a large single-excitation amplitude is a notable property of a correct result, not a contradiction.
+calculation earns no warning of its own: the warning is about the calculation. The tier is ``warn`` (ADR 0008): a
+large single-excitation amplitude or a contaminated determinant is a notable property of a correct result, not a
+contradiction.
 
-What is checked today
----------------------
+What is checked
+---------------
 **Closed-shell T1.** One warning, :data:`W_T1_DIAGNOSTIC_ABOVE_CLOSED_SHELL_THRESHOLD`, when all of these hold:
 
-* the multiplicity of the entry the calculation belongs to is 1 (read from the entry, never inferred from a printed
-  ``<S^2>``);
+* the multiplicity of the entry the calculation belongs to is 1, so it is treated as closed shell (read from the
+  entry, never inferred from a printed ``<S^2>``);
 * ``t1_diagnostic`` is stored (absent is absent: no row, or a row without a T1, earns nothing);
-* the calculation's method is a coupled-cluster method with singles (CCSD, CCSD(T), their F12 and local, DLPNO and
-  PNO variants, CCSDT, CCSDT(Q), QCISD and QCISD(T); see :func:`is_coupled_cluster_method`);
+* the calculation's method is a coupled-cluster method with singles on a restricted reference (CCSD, CCSD(T), their
+  F12 and local, DLPNO and PNO variants, CCSDT, CCSDT(Q), QCISD and QCISD(T); an unrestricted ``U`` method is not in
+  scope, since an unrestricted reference is the case where programs define T1 differently; see
+  :func:`is_coupled_cluster_method`);
 * ``t1_diagnostic`` is strictly above :data:`T1_CLOSED_SHELL_THRESHOLD` (0.02).
 
 The number is Lee and Taylor's: "a large T1 (i.e., >0.02) probably indicates the need for a multireference electron
@@ -46,8 +51,6 @@ and nothing writes a diagnostic after the deposit. So the check runs once per re
 request persisted, after they are flushed, in every workflow that does. A later path that stores a diagnostic must call
 :func:`collect_wavefunction_reliability_warnings` over the calculations it touched.
 
-A second check slots in
------------------------
 **Spin contamination.** :data:`W_SPIN_CONTAMINATION_ABOVE_CONVENTIONAL_THRESHOLD` when the stored ``s_squared`` is
 further from S(S+1) than 0.1, strictly, with S from the entry's declared multiplicity (never inferred from
 ``s_squared`` or ``s_squared_expected``). The threshold is a convention of the field, not a finding, and the sentence
@@ -108,7 +111,8 @@ T1_CLOSED_SHELL_THRESHOLD = 0.02
 #: The warning a calculation earns when its stored ``<S^2>`` is further from S(S+1) than the conventional criterion.
 W_SPIN_CONTAMINATION_ABOVE_CONVENTIONAL_THRESHOLD = "spin_contamination_above_conventional_threshold"
 
-#: The warning a calculation earns when the ideal ``<S^2>`` its program printed is not S(S+1) of the entry's multiplicity.
+#: The warning a calculation earns when the ideal ``<S^2>`` its program printed is not S(S+1) of the entry's
+#: multiplicity.
 W_SPIN_EXPECTED_CONTRADICTS_MULTIPLICITY = "spin_expected_contradicts_multiplicity"
 
 #: The conventional criterion for spin contamination: ``|<S^2> - S(S+1)| > 0.1``. A convention, not a finding: no
@@ -127,19 +131,24 @@ def ideal_s_squared(multiplicity: int) -> float:
     return spin * (spin + 1)
 
 
-#: A coupled-cluster method with singles, after the identity key (lower case, curated aliases): an optional local or
-#: spin prefix, CCSD / CCSDT / CCSDTQ / QCISD, an optional parenthesised perturbative term ``(t)`` ``(t1)`` ``(t*)``
-#: ``(q)`` ``(tq)``, and an optional F12 variant. CCD (no singles), CC2 and CC3 (approximate singles) are not in it.
+#: A coupled-cluster method with singles on a restricted reference, after the identity key (lower case, curated
+#: aliases): an optional ``rhf-`` reference, an optional local prefix (``dlpno-``, ``pno-l``, ``lpno-``, ``l``) or
+#: ``r``,
+#: CCSD / CCSDT / CCSDTQ / QCISD, an optional perturbative term (``(t)`` ``(t0)`` ``(t1)`` ``(t*)`` ``(q)`` ``(tq)`` or
+#: ``[t]``), an optional F12 variant (``-f12``, ``-f12a`` to ``-f12d``) and an optional ``/ri`` or ``/cbs``. An
+#: unrestricted ``u`` prefix is deliberately absent: an unrestricted reference is where programs define T1 differently.
+#: CCD (no singles), CC2 and CC3 (approximate singles), EOM-CCSD, BCCD(T), MP2 and composite recipes are not in it.
 _COUPLED_CLUSTER = re.compile(
-    r"^(?:dlpno-|pno-l|l|u|r|ro)?(?:ccsdtq|ccsdt|ccsd|qcisd)(?:\((?:t|t1|t\*|q|tq)\))?(?:-f12[abc]?)?$"
+    r"^(?:rhf-)?(?:dlpno-|pno-l|lpno-|l|r)?(?:ccsdtq|ccsdt|ccsd|qcisd)"
+    r"(?:\((?:t|t0|t1|t\*|q|tq)\)|\[t\])?(?:-f12[abcd]?)?(?:/(?:ri|cbs))?$"
 )
 
 
 def is_coupled_cluster_method(method: str | None) -> bool:
-    """True when ``method`` names a coupled-cluster (or QCISD) method with singles, so a T1 diagnostic is defined for it.
+    """True when ``method`` is a restricted coupled-cluster (or QCISD) method with singles, where T1 is defined.
 
-    Anything else, including a method the table does not recognise and a composite recipe that contains a CCSD(T) step,
-    is not: absent is absent.
+    Anything else, including an unrestricted method, a method the table does not recognise and a composite recipe that
+    contains a CCSD(T) step, is not: absent is absent.
     """
     if method is None or not method.strip():
         return False
@@ -203,7 +212,7 @@ def _spin_contamination(facts: _CalculationFacts) -> UploadWarning | None:
 
 
 def _spin_expected_contradicts_multiplicity(facts: _CalculationFacts) -> UploadWarning | None:
-    """The program's printed ideal ``<S^2>`` is not S(S+1) of the declared multiplicity. Independent of contamination."""
+    """The program's printed ideal ``<S^2>`` is not S(S+1) of the declared multiplicity (not contamination)."""
     if facts.multiplicity is None or facts.spin is None or facts.spin.s_squared_expected is None:
         return None
     ideal = ideal_s_squared(facts.multiplicity)
@@ -331,8 +340,8 @@ CHECK_WAVEFUNCTION_RELIABILITY_DIAGNOSTICS = ScientificCheck(
     channel=CodeChannel.upload_warning,
     tier_rationale=(
         "A closed-shell CCSD(T) energy whose reference is a poor starting point could be wrong in a scientifically "
-        "interesting way, and the group's own closed-shell transition states do cross 0.02. But the diagnostic is a "
-        "contested rule of thumb: in a 50-molecule atomization-energy test at least 75% of the molecules T1 or D1 "
+        "interesting way, and a closed-shell transition state with bond breaking can cross 0.02. But the diagnostic "
+        "is a contested rule of thumb: in a 50-molecule atomization-energy test at least 75% of the molecules T1 or D1 "
         "flagged had no large error (Sprague and Irikura 2014), and T1 is argued to measure orbital relaxation "
         "rather than multireference character. So it can only be an expectation (ADR 0008): a notable property of a "
         "correct result, reported once and worded as 'above the rule of thumb', never as 'the system is "
@@ -350,7 +359,12 @@ CHECK_WAVEFUNCTION_RELIABILITY_DIAGNOSTICS = ScientificCheck(
         "conventional criterion, not a finding about the system, and the absolute form is used because it does not "
         "grow with S. The comparison between the program's printed ideal <S^2> and the entry's multiplicity needs "
         "no threshold source: it compares two declared quantities, to a tolerance of 1e-3 that is far above print "
-        "noise and far below the gap between spin states."
+        "noise and far below the gap between spin states. That one is a declaration contradicting what the program "
+        "ran, which ADR 0008 would put at the block tier; it is warn-tier here for the same recorded reason as "
+        "entry 12's multiplicity_mismatch: such checks have not yet been run on real data, so their false-positive "
+        "rate is unknown and promoting them first would be unsafe. It is grouped in this entry, not entry 12, "
+        "because the entry is organised by the data it reads (the stored spin diagnostic and wavefunction "
+        "diagnostic), not by the kind of claim."
     ),
     adr="0008",
     enforced_by=(
@@ -360,19 +374,21 @@ CHECK_WAVEFUNCTION_RELIABILITY_DIAGNOSTICS = ScientificCheck(
                 "The write path: run once a request's calculations are flushed, over every calculation the request "
                 "persisted, by every workflow that does (conformer, transition state, computed species, computed "
                 "reaction, thermo, statmech, transport, network). The diagnostics enter only through the producer "
-                "payload and nothing writes one later, so there is no late path. Fires when the entry's multiplicity "
-                "(read from the entry, never inferred) is 1, a T1 is stored, the calculation's method is a "
-                "coupled-cluster method with singles (CCSD, CCSD(T), F12, DLPNO and PNO variants, CCSDT, QCISD) and "
-                "T1 is strictly above 0.02. Absent is absent. Open-shell T1 and D1 are stored and shown, never "
-                "warned on."
+                "payload and nothing writes one later, so there is no late path. Three independent checks, each on a "
+                "stored row. T1: fires when the entry's multiplicity (read from the entry, never inferred) is 1, a "
+                "T1 is stored, the calculation's method is a restricted coupled-cluster method with singles (CCSD, "
+                "CCSD(T), F12, DLPNO and PNO variants, CCSDT, QCISD) and T1 is strictly above 0.02. Spin "
+                "contamination: fires when |s_squared - S(S+1)| is strictly above 0.1, S from the entry's "
+                "multiplicity. Printed ideal value: fires when s_squared_expected differs from the entry's S(S+1) by "
+                "more than 1e-3. Absent is absent. Open-shell T1 and D1 are stored and shown, never warned on."
             ),
         ),
         PythonCheck(
             is_coupled_cluster_method,
             note=(
-                "Scopes the T1 rule to methods whose T1 is Lee and Taylor's: a coupled-cluster method with "
-                "singles. A method the table does not recognise, a composite recipe that contains a CCSD(T) step, "
-                "CCD, CC2 and CC3 are not in it."
+                "Scopes the T1 rule to methods whose T1 is Lee and Taylor's: a restricted coupled-cluster method "
+                "with singles. An unrestricted method, a method the table does not recognise, a composite recipe "
+                "that contains a CCSD(T) step, EOM-CCSD, BCCD(T), CCD, CC2 and CC3 are not in it."
             ),
         ),
         DesignPosition(
@@ -399,14 +415,16 @@ CHECK_WAVEFUNCTION_RELIABILITY_DIAGNOSTICS = ScientificCheck(
         ),
     ),
     escape_hatch=(
-        "None needed -- the check never refuses. A calculation whose T1 is above 0.02 for a reason the depositor "
-        "understands is stored as sent; the warning only reports the value against the rule of thumb."
+        "None needed -- no check here refuses. A calculation whose T1 is above 0.02, or whose <S^2> is more than 0.1 "
+        "from S(S+1), for a reason the depositor understands is stored as sent; the warning only reports the value "
+        "against the conventional criterion. A printed ideal <S^2> that contradicts the declared multiplicity is "
+        "cleared by correcting whichever of the two is wrong."
     ),
     thresholds=(
         ConstantThreshold(
             name="t1_closed_shell_threshold",
             value=T1_CLOSED_SHELL_THRESHOLD,
-            unit="dimensionless (norm of the singles amplitudes over the square root of the number of correlated electrons)",
+            unit="dimensionless (singles norm over the square root of the number of correlated electrons)",
             rationale=(
                 "Lee and Taylor, Int. J. Quantum Chem. 1989, 36 (S23), 199 (doi:10.1002/qua.560360824): 'a large T1 "
                 "(i.e., >0.02) probably indicates the need for a multireference electron correlation procedure'. A "

@@ -121,14 +121,19 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # 58 unregistered warning codes and 13 recent refusals this is the only new entry; four warnings widened 12, 22
     # and 25, and the stereo-label, channel-kind and bath-gas refusals stay in the code catalogue.
     #
-    # Raised 51 -> 52 (2026-11-04) for the closed-shell T1 warning (T1/D1 assessment, Option D). It is the first check that
-    # reads a stored wavefunction diagnostic, and the claim a referee could dispute is exactly the one it makes: that a
-    # conventional rule of thumb (Lee and Taylor's 0.02) is worth reporting for a closed-shell coupled-cluster
-    # calculation although the same literature shows most flagged calculations are accurate, and that open-shell T1 and
-    # D1 are not worth reporting because their definitions differ between programs. No existing entry's claim covers
-    # it: entry 12 compares a declared electronic state with the log, which is definitional, and this one is an
-    # expectation about a result. It is one entry for the whole group on purpose: the <S^2> check, when its threshold
-    # has a primary source, joins it rather than taking a 53rd. Different tier from every blocking entry.
+    # Raised 51 -> 52 (2026-11-04) for the wavefunction reliability checks: one entry, three warning codes. They are the
+    # first checks that read a stored wavefunction or spin diagnostic. (1) A closed-shell coupled-cluster T1 above 0.02
+    # (Lee and Taylor 1989): a referee could dispute reporting a rule of thumb that the same literature shows is
+    # mostly a false alarm, and could dispute leaving open-shell T1 and D1 unreported (their definitions differ between
+    # programs and no primary threshold exists). (2) An <S^2> more than 0.1 from S(S+1): 0.1 is a convention of the
+    # field with no primary paper recommending it, so the claim, the absolute-versus-relative form and the use of the
+    # entry's declared multiplicity rather than a printed value are all positions a referee could dispute. (3) A
+    # printed ideal <S^2> that is not S(S+1) of the declared multiplicity: a declaration contradicting what the program
+    # ran, like entry 12's multiplicity_mismatch (and, like it, warn-tier here although ADR 0008 would put it at block).
+    # It is in this entry, not entry 12, because the entry is organised by the data it reads (the stored spin and
+    # wavefunction diagnostics); the owner decided one new entry for all three. No existing entry covers any of them:
+    # entry 12 compares a declared state with an output log, these judge a stored diagnostic against a criterion or
+    # against the entry. Different tier from every blocking entry.
     assert 10 <= len(REGISTER) <= 52, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
         "the system; above ~52 the inclusion test ('could this check be wrong "

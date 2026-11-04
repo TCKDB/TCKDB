@@ -463,10 +463,11 @@ RENDERED: dict[str, str] = {
     ),
     # -- wavefunction reliability diagnostics -----------------------------------------------------------------------
     "t1_diagnostic_above_closed_shell_threshold": (
-        "The T1 diagnostic of this closed-shell coupled-cluster calculation is above the 0.02 rule of thumb of Lee "
-        "and Taylor (1989) for single-reference reliability. The energy is stored as deposited. The diagnostic "
-        "measures the size of the single-excitation amplitudes; it does not by itself establish multireference "
-        "character, and it is known to raise alarms for calculations that are accurate."
+        "The T1 diagnostic of this coupled-cluster calculation, declared as a singlet and so treated as closed shell, "
+        "is above the 0.02 rule of thumb of Lee and Taylor (1989) for single-reference reliability. The energy is "
+        "stored as deposited. The diagnostic measures the size of the single-excitation amplitudes; it does not by "
+        "itself establish multireference character, and it is known to raise alarms for calculations that are "
+        "accurate."
     ),
     "spin_contamination_above_conventional_threshold": (
         "The <S^2> of this calculation differs from the ideal S(S+1) for its declared spin multiplicity by more than "
@@ -931,10 +932,11 @@ def _t1_above_closed_shell_threshold(context: Mapping[str, Any]) -> str | None:
     if t1 is None or threshold is None:
         return None
     return (
-        f"The T1 diagnostic of this closed-shell coupled-cluster calculation is {t1:g}, above the {threshold:g} rule "
-        "of thumb of Lee and Taylor (1989) for single-reference reliability. The energy is stored as deposited. The "
-        "diagnostic measures the size of the single-excitation amplitudes; it does not by itself establish "
-        "multireference character, and it is known to raise alarms for calculations that are accurate."
+        "The T1 diagnostic of this coupled-cluster calculation, declared as a singlet and so treated as closed shell, "
+        f"is {t1:g}, above the {threshold:g} rule of thumb of Lee and Taylor (1989) for single-reference reliability. "
+        "The energy is stored as deposited. The diagnostic measures the size of the single-excitation amplitudes; it "
+        "does not by itself establish multireference character, and it is known to raise alarms for calculations that "
+        "are accurate."
     )
 
 
@@ -947,7 +949,7 @@ def _spin_contamination(context: Mapping[str, Any]) -> str | None:
         return None
     return (
         f"The <S^2> of this calculation is {value:g}, against an ideal S(S+1) of {ideal:g} for its declared spin "
-        f"multiplicity of {multiplicity}: a difference of {abs(value - ideal):.4g}, which exceeds {threshold:g}, the "
+        f"multiplicity of {multiplicity}: a difference of {round(abs(value - ideal), 9):.9g}, which exceeds {threshold:g}, the "
         "conventional criterion for spin contamination. That criterion is a convention of the field, not a finding "
         "about this system. The calculation is stored as deposited."
     )

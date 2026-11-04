@@ -1,9 +1,12 @@
-"""A closed-shell coupled-cluster T1 above the conventional rule of thumb earns a warning (T1/D1 assessment, Option D).
+"""Wavefunction reliability warnings on a stored calculation: closed-shell T1, <S^2> contamination, printed ideal <S^2>.
 
 ``t1_diagnostic_above_closed_shell_threshold`` is raised for a calculation whose entry has multiplicity 1, whose method
-is coupled cluster with singles, and whose stored ``t1_diagnostic`` is strictly above 0.02 (Lee and Taylor 1989). It is
-a warning on the calculation only: the value, the review status and every selection are untouched, an open-shell T1
-and a D1 earn nothing, and the sentence never says the system *is* multireference.
+is a restricted coupled-cluster method with singles, and whose stored ``t1_diagnostic`` is strictly above 0.02 (Lee and
+Taylor 1989). ``spin_contamination_above_conventional_threshold`` is raised when the stored ``s_squared`` is strictly
+more than 0.1 from S(S+1) of the entry's multiplicity, and ``spin_expected_contradicts_multiplicity`` when the printed
+ideal value is not that S(S+1). All are warnings on the calculation only: the value, the review status, the evidence
+label and every selection are untouched, an open-shell or unrestricted T1 and a D1 earn nothing, and no sentence says
+the system *is* multireference.
 """
 
 from __future__ import annotations
@@ -41,8 +44,10 @@ def _sp(method: str = "CCSD(T)", *, wavefunction: dict | None = None, spin: dict
     return calc
 
 
-def _conformer(calc: dict, *, entry: dict | None = None, xyz: str = _H2_XYZ) -> dict:
+def _conformer(calc: dict, *, entry: dict | None = None, xyz: str = _H2_XYZ, label: str | None = None) -> dict:
     payload = _hydrogen_conformer_payload()
+    if label is not None:
+        payload["label"] = label
     payload["species_entry"] = dict(entry or _H2_ENTRY)
     payload["geometry"] = {"xyz_text": xyz}
     payload["calculation"] = calc
@@ -82,8 +87,15 @@ def test_a_closed_shell_t1_above_the_line_earns_the_warning(client, t1) -> None:
         "CCSD(T)",
         "ccsd(t)-f12",
         "CCSD(T)-F12a",
-        "UCCSD(T)",
         "RCCSD(T)-F12",
+        "RHF-RCCSD(T)",
+        "DLPNO-CCSD(T)-F12D",
+        "CCSD(T)-F12/RI",
+        "LCCSD(T0)",
+        "PNO-LCCSD(T0)",
+        "LPNO-CCSD",
+        "CCSD[T]",
+        "ccsd(t)/cbs",
         "DLPNO-CCSD(T)",
         "dlpno-ccsd(t1)",
         "PNO-LCCSD(T)-F12",
@@ -96,7 +108,28 @@ def test_every_coupled_cluster_spelling_is_in_scope(client, method) -> None:
     assert len(_post(client, _sp(method, wavefunction={"t1_diagnostic": 0.03}))) == 1
 
 
-@pytest.mark.parametrize("method", ["MP2", "B3LYP", "CCD", "CC2", "CISD", "CASSCF", "CBS-QB3", "W1", "HF", "bd(t)"])
+@pytest.mark.parametrize(
+    "method",
+    [
+        "MP2",
+        "B3LYP",
+        "CCD",
+        "CC2",
+        "CC3",
+        "CISD",
+        "CASSCF",
+        "CBS-QB3",
+        "W1",
+        "HF",
+        "bd(t)",
+        "BCCD(T)",
+        "EOM-CCSD",
+        "UCCSD(T)",
+        "UCCSD",
+        "UHF-UCCSD(T)",
+        "ROCCSD(T)",
+    ],
+)
 def test_a_method_that_is_not_coupled_cluster_with_singles_earns_nothing(client, method) -> None:
     """A T1 stored beside another method is a producer's number; it is not Lee and Taylor's quantity."""
     assert _post(client, _sp(method, wavefunction={"t1_diagnostic": 0.5})) == []
@@ -148,6 +181,7 @@ def test_the_sentence_names_its_source_and_does_not_judge(client) -> None:
     (warning,) = _post(client, _sp(wavefunction={"t1_diagnostic": 0.0612}))
     message = warning["message"]
     assert message == render_message(CODE, warning["context"])
+    assert "declared as a singlet and so treated as closed shell" in message
     assert "0.0612" in message and "0.02" in message
     assert "Lee and Taylor (1989)" in message
     assert "does not by itself establish multireference character" in message
@@ -169,13 +203,48 @@ def test_the_stored_value_is_untouched_and_the_warning_sits_on_the_calculation(c
     assert "depositor_supplied" not in (warning["context"] or {})
 
 
-def test_a_flagged_calculation_changes_no_other_response_field(client) -> None:
-    """The same upload with a T1 below the line differs only by the warning."""
-    low = client.post(_CONFORMERS, json=_conformer(_sp(wavefunction={"t1_diagnostic": 0.01}))).json()
-    high = client.post(_CONFORMERS, json=_conformer(_sp(wavefunction={"t1_diagnostic": 0.06}))).json()
-    assert [w["code"] for w in high["warnings"] if w["code"] == CODE] == [CODE]
-    assert not [w for w in low["warnings"] if w["code"] == CODE]
-    assert high.get("status") == low.get("status")
+def _read_without_warnings(client, response) -> dict:
+    """The calculation read for an upload's primary calculation, minus what differs by construction."""
+    ref = response.json()["primary_calculation"]["calculation_ref"]
+    read = client.get(
+        f"/api/v1/scientific/calculations/{ref}", params={"include": "wavefunction_diagnostic,trust,review"}
+    )
+    assert read.status_code == 200, read.text[:500]
+    return read.json()
+
+
+def test_a_flagged_calculation_changes_no_review_status_or_evidence_label(client) -> None:
+    """The same upload with a T1 below and above the line differs by the warning and the T1 value, nothing else."""
+    low_response = client.post(_CONFORMERS, json=_conformer(_sp(wavefunction={"t1_diagnostic": 0.01}), label="low"))
+    high_response = client.post(_CONFORMERS, json=_conformer(_sp(wavefunction={"t1_diagnostic": 0.06}), label="high"))
+    assert [w["code"] for w in high_response.json()["warnings"] if w["code"] == CODE] == [CODE]
+    assert not [w for w in low_response.json()["warnings"] if w["code"] == CODE]
+    low, high = _read_without_warnings(client, low_response), _read_without_warnings(client, high_response)
+
+    # The review status, the evidence label and its checks are the same, and nothing was reviewed or selected.
+    assert low["record"]["trust"]["review_status"] == high["record"]["trust"]["review_status"] == "not_reviewed"
+    assert low["record"]["trust"]["evidence"]["label"] == high["record"]["trust"]["evidence"]["label"]
+    assert low["record"]["trust"]["evidence"]["checks"] == high["record"]["trust"]["evidence"]["checks"]
+    assert (
+        low["review_summary"]
+        == high["review_summary"]
+        == {
+            "approved": 0,
+            "under_review": 0,
+            "not_reviewed": 1,
+            "deprecated": 0,
+            "rejected": 0,
+            "total": 1,
+        }
+    )
+    assert low["record"]["review_history"] == high["record"]["review_history"]
+    assert [row["status"] for row in high["record"]["review_history"]] == ["not_reviewed"]
+    # The stored diagnostic differs only in its value.
+    (low_wfn,), (high_wfn,) = low["record"]["wavefunction_diagnostic"], high["record"]["wavefunction_diagnostic"]
+    assert low_wfn["t1_diagnostic"] == pytest.approx(0.01) and high_wfn["t1_diagnostic"] == pytest.approx(0.06)
+    assert {k: v for k, v in low_wfn.items() if k != "t1_diagnostic"} == {
+        k: v for k, v in high_wfn.items() if k != "t1_diagnostic"
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -486,3 +555,51 @@ def test_every_route_that_persists_a_calculation_runs_the_check(client, route) -
     (row,) = session.scalars(select(DepositWarning).where(DepositWarning.code == CODE)).all()
     assert row.record_type is SubmissionRecordType.calculation
     assert row.record_id in flagged
+
+
+def test_the_difference_in_the_sentence_visibly_exceeds_the_threshold(client) -> None:
+    """0.85001 against 0.75 is 0.10001: the sentence must not read 'a difference of 0.1, which exceeds 0.1'."""
+    (warning,) = _spin_post(client, 2, {"s_squared": 0.85001})[SPIN_CODE]
+    assert "a difference of 0.10001, which exceeds 0.1" in warning["message"]
+
+
+def test_spin_is_judged_against_a_transition_state_entrys_multiplicity(client) -> None:
+    from tests.api.test_api_uploads import _transition_state_payload
+
+    for s_squared, fires in ((0.76, False), (0.86, True)):
+        payload = _transition_state_payload(n_imag=1, imag_freq_cm1=-1500.0, label=f"ts-spin-{s_squared}")
+        assert payload["multiplicity"] == 2
+        payload["additional_calculations"].append(_sp("UB3LYP", spin={"s_squared": s_squared}))
+        response = client.post("/api/v1/uploads/transition-states", json=payload)
+        assert response.status_code in (200, 201), response.text[:500]
+        found = [w for w in response.json()["warnings"] if w["code"] == SPIN_CODE]
+        assert len(found) == int(fires)
+        if fires:
+            assert found[0]["context"]["ideal_s_squared"] == pytest.approx(0.75)
+            assert found[0]["context"]["multiplicity"] == 2
+
+
+def test_the_spin_warnings_are_read_back_with_register_entry_52(client) -> None:
+    entry, xyz = _ENTRIES[2]
+    calc = _sp("UB3LYP", spin={"s_squared": 1.1, "s_squared_expected": 2.0})
+    uploaded = client.post(_CONFORMERS, json=_conformer(calc, entry=entry, xyz=xyz))
+    assert uploaded.status_code == 201, uploaded.text[:500]
+    ref = uploaded.json()["primary_calculation"]["calculation_ref"]
+    read = client.get(f"/api/v1/scientific/calculations/{ref}")
+    assert read.status_code == 200, read.text[:500]
+    (fragment,) = [w for w in read.json()["record_warnings"] if w["record_ref"] == ref]
+    assert fragment["status"] == "recorded"
+    items = {item["code"]: item for item in fragment["items"]}
+    assert set(items) == {SPIN_CODE, EXPECTED_CODE}
+    assert all(item["register_entry"] == 52 for item in items.values())
+    for code, item in items.items():
+        assert item["message"] == render_message(code, item["context"])
+
+
+def test_the_t1_warning_is_read_back_with_register_entry_52(client) -> None:
+    uploaded = client.post(_CONFORMERS, json=_conformer(_sp(wavefunction={"t1_diagnostic": 0.06})))
+    ref = uploaded.json()["primary_calculation"]["calculation_ref"]
+    read = client.get(f"/api/v1/scientific/calculations/{ref}")
+    (fragment,) = [w for w in read.json()["record_warnings"] if w["record_ref"] == ref]
+    (item,) = [i for i in fragment["items"] if i["code"] == CODE]
+    assert item["register_entry"] == 52
