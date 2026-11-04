@@ -178,15 +178,50 @@ def test_gaussian_composite_with_several_internal_steps_reports_only_what_every_
 # ---------------------------------------------------------------------------
 
 
-def test_jobs_that_agree_report_and_jobs_that_differ_report_nothing_for_that_setting():
-    """Two real logs end to end: each report is bound to its own job, and no job lends a value to the other."""
-    five, zero = _arc_log("Entering Gaussian System", "IRadAn=           5 IRanWt"), _arc_log(
-        "Entering Gaussian System", "IRadAn=           0 IRanWt"
-    )
-    assert _by_key(parse_gaussian_reported(five + five))["IRadAn"]["raw_value"] == "5"
-    both = _by_key(parse_gaussian_reported(five + zero))
-    assert "IRadAn" not in both  # the jobs print different codes
-    assert "scf.tol_rms_density" in _canonical(both.values())  # the SCF thresholds they share are still reported
+def test_a_gaussian_log_holding_two_jobs_reports_nothing():
+    """Synthetic: two real single-job logs end to end (a log of a `--Link1--` file, which no fixture is)."""
+    five = _arc_log("Entering Gaussian System", "IRadAn=           5 IRanWt")
+    zero = _arc_log("Entering Gaussian System", "IRadAn=           0 IRanWt")
+    assert parse_gaussian_reported(five)  # the single job reports...
+    assert parse_gaussian_reported(five + zero) == []  # ...two of them bind to no one calculation
+    assert parse_gaussian_reported(five + five) == []
+
+
+def test_an_extra_route_section_the_program_did_not_announce_suppresses_the_report():
+    """Synthetic: a second echoed route spliced into a real single-job log, with no `Proceeding to internal job step`."""
+    text = _read("gaussian/freq_g09.log")
+    route = " ----------------------------------------------------------------------\n #P b3lyp/6-31g(d) sp\n ----------------------------------------------------------------------\n"
+    spliced = text.replace(" Leave Link  101", route + " Leave Link  101", 1)
+    assert spliced != text and parse_gaussian_reported(text)
+    assert parse_gaussian_reported(spliced) == []
+
+
+@pytest.mark.parametrize(
+    "fixture",
+    ["gaussian/opt_g09.log", "gaussian_composite/g4_methanol_g16.out", "gaussian_composite/cbs_qb3_ts_c2h5no2_g16.out"],
+)
+def test_real_multi_step_logs_are_not_suppressed(fixture):
+    """Opt-then-freq and composite logs announce their internal steps, so the guard leaves them alone."""
+    assert parse_gaussian_reported(_read(fixture))
+
+
+def test_the_guard_fires_on_no_gaussian_fixture_log():
+    """Corpus: every Gaussian log (standalone, composite, ARC payloads) keeps its reported rows."""
+    import re
+
+    from app.services.gaussian_parameter_parser import all_route_texts
+
+    logs = []
+    for payload in glob.glob(str(FIXTURES / "arc_runs" / "*" / "tckdb_payloads" / "computed_reaction" / "*.payload.json")):
+        logs += [t for t in _walk_logs(json.loads(Path(payload).read_text())) if "Entering Gaussian System" in t]
+    logs = list(dict.fromkeys(logs))
+    for path in glob.glob(str(FIXTURES / "gaussian" / "*.log")) + glob.glob(str(FIXTURES / "gaussian_composite" / "*.[lo]*")):
+        if not path.endswith(".md"):
+            logs.append(Path(path).read_text(errors="replace"))
+    assert len(logs) > 100
+    for text in logs:
+        assert text.count("Entering Gaussian System") == 1
+        assert len(all_route_texts(text)) <= len(re.findall("Proceeding to internal job step", text)) + 1
 
 
 def test_a_job_that_prints_no_value_does_not_borrow_one_from_the_other_job():

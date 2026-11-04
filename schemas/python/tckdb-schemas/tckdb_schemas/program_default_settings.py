@@ -23,10 +23,12 @@ The grid default applies only to a DFT method. The version is the one the calcul
 
 from __future__ import annotations
 
-from tckdb_schemas.hessian_method_assumption import is_dft_functional, major_version
+import re
+
+from tckdb_schemas.hessian_method_assumption import is_dft_functional
 from tckdb_schemas.software import normalize_software_name
 
-__all__ = ["ASSUMED_DEFAULT_SETTINGS", "assumed_default_setting"]
+__all__ = ["ASSUMED_DEFAULT_SETTINGS", "assumed_default_setting", "display_major_version"]
 
 #: ``(normalised software name, major version) -> {setting: default value}``. Values are the canonical
 #: ``grid.quality`` tokens the parsers emit for a requested grid (``fine``, ``ultrafine``, ``defgrid2``), so an
@@ -41,8 +43,49 @@ ASSUMED_DEFAULT_SETTINGS: dict[tuple[str, int], dict[str, str]] = {
 #: Settings that exist only for a method that integrates on a DFT grid.
 _DFT_ONLY = frozenset({"grid"})
 
-#: A leading integer outside this range is not a Gaussian or ORCA major version.
-_MAJOR_RANGE = range(1, 100)
+#: The only words a version string may start with, per program (case-insensitive); a bare ``v`` is also accepted.
+_OWN_NAMES = {"Gaussian": r"gaussian|g", "ORCA": r"orca"}
+#: A leading integer outside this range is not a major version of that program.
+_MAJOR_RANGE = {"Gaussian": range(1, 100), "ORCA": range(1, 21)}
+
+
+def display_major_version(software: str | None, version: str | None) -> int | None:
+    """The major version of a declared release, for display only: ``None`` when it cannot be read with confidence.
+
+    Accepts the number alone (``"16"``, ``"6.0.0"``, ``"16 C.02"``), ``v`` in front, or the program's **own** name in
+    front (``"Gaussian 16"``, ``"G16 Rev C.01"``, ``"ORCA 6.0.0"``). Any other prefix (``"x86_64"``, ``"release-6"``)
+    and another program's name (a Gaussian release whose version reads ``"ORCA 6.0.0"``) give ``None``.
+
+    This is **not** the parser tau resolution uses. ``hessian_method_assumption`` keeps its own stricter reading so
+    that what tau judges does not move; the two answer different questions.
+    """
+    if not software or not software.strip() or version is None:
+        return None
+    name = normalize_software_name(software)
+    own = _OWN_NAMES.get(name)
+    if own is None:
+        return None
+    match = re.match(rf"^\s*(?:(?:{own})[\s_-]*|v)?(\d+)", version, re.IGNORECASE)
+    if not match:
+        return None
+    major = int(match.group(1))
+    return major if major in _MAJOR_RANGE[name] else None
+
+
+_SPIN_PREFIXES = ("ro", "u", "r")
+
+
+def _uses_dft_grid(method: str | None) -> bool:
+    """True for a DFT functional, also when written with an RI or spin prefix (``RI-B2PLYP``, ``UB3LYP``)."""
+    if not method:
+        return False
+    token = method.strip().lower()
+    candidates = {token}
+    if token.startswith("ri-"):
+        candidates.add(token[3:])
+    for base in list(candidates):
+        candidates.update(base[len(p) :] for p in _SPIN_PREFIXES if base.startswith(p))
+    return any(is_dft_functional(c) for c in candidates)
 
 
 def assumed_default_setting(
@@ -52,11 +95,12 @@ def assumed_default_setting(
 
     ``None`` when the program or version is not declared, when the pair is not in the table, and, for the grid, when
     ``method`` is not a DFT functional (a Hartree-Fock, MP2, coupled-cluster or composite method has no DFT grid to
-    default). The version is parsed by :func:`tckdb_schemas.hessian_method_assumption.major_version`.
+    default). The functional list is the one tau uses; a functional it does not list (``APFD``) gets no default
+    rather than a guess, and the list is not extended here because that would move tau.
     """
-    major = major_version(version, _MAJOR_RANGE)
-    if not software or not software.strip() or major is None:
+    major = display_major_version(software, version)
+    if major is None or not software:
         return None
-    if setting in _DFT_ONLY and not is_dft_functional(method):
+    if setting in _DFT_ONLY and not _uses_dft_grid(method):
         return None
     return ASSUMED_DEFAULT_SETTINGS.get((normalize_software_name(software), major), {}).get(setting)

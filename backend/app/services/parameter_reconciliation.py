@@ -106,12 +106,15 @@ def _conflict_warning(key: str, software: str, deck_values: set[str], log_values
     )
 
 
-def _log_conflict_warning(key: str, software: str, earlier: set[str], later: set[str]) -> UploadWarning:
+def _log_conflict_warning(
+    key: str, software: str, earlier: set[str], later: set[str], *, raw: bool = False
+) -> UploadWarning:
+    """``raw``: ``key`` is a raw key (a reported value with no canonical key); it goes under ``raw_key``."""
     return UploadWarning.from_code(
         field="artifacts",
         code=W_OUTPUT_LOG_DISAGREES_WITH_EARLIER_OUTPUT_LOG,
         context={
-            "canonical_key": key,
+            ("raw_key" if raw else "canonical_key"): key,
             "software": software,
             "depositor_supplied": {"earlier_value": sorted(earlier), "later_value": sorted(later)},
         },
@@ -155,8 +158,7 @@ def merge_artifact_observations(
     def named(x, raw: bool) -> tuple[str | None, str | None]:
         """The canonical pair, or for a reported row with no canonical key (Gaussian's grid code) its raw pair."""
         if raw and x.canonical_key is None:
-            # Lower case with a section, the shape a warning's canonical_key must have.
-            return (f"{x.section or 'raw'}.{x.raw_key}").lower(), x.raw_value
+            return f"raw:{x.raw_key}", x.raw_value
         return x.canonical_key, x.canonical_value
 
     def compare(stored: Sequence[CalculationParameter], new: Sequence, make, raw: bool = False) -> list[UploadWarning]:
@@ -178,7 +180,12 @@ def merge_artifact_observations(
         warnings += compare(decks, new_requested, lambda key, stored, new: _conflict_warning(key, software, stored, new))
         warnings += compare(echoes, new_requested, lambda key, stored, new: _log_conflict_warning(key, software, stored, new))
         warnings += compare(
-            reports, new_reported, lambda key, stored, new: _log_conflict_warning(key, software, stored, new), raw=True
+            reports,
+            new_reported,
+            lambda key, stored, new: _log_conflict_warning(
+                key.removeprefix("raw:"), software, stored, new, raw=key.startswith("raw:")
+            ),
+            raw=True,
         )
         taken_echo = {ident(r) for r in echoes}
         taken_report = {ident(r) for r in reports}
@@ -552,12 +559,10 @@ def reported_setting_warnings(
     already given. Both rows are kept.
     """
     already = {key for key, _, _ in before}
-    seen: set[str] = set()
     warnings: list[UploadWarning] = []
     for key, requested_value, reported_value in reported_setting_disagreements(session, calculation, software):
-        if key in already or key in seen:
+        if key in already:
             continue
-        seen.add(key)
         warnings.append(
             UploadWarning.from_code(
                 field="artifacts",

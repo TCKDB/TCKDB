@@ -573,3 +573,54 @@ class TestOutputLogBackfill:
             )
         ).all()
         assert kept == ["Acc2E"]
+
+
+class TestForceDeckChoice:
+    """``--force`` rebuilds the deck rows from the deck the caller chose, else the one an upload leaves standing."""
+
+    @staticmethod
+    def _two_decks(db_session, store):
+        def deck(route):
+            return f"%mem=1GB\n# {route}\n\nt\n\n0 2\nH 0.0 0.0 0.0\n\n".encode()
+
+        first, second = deck("B3LYP/6-31G(d) opt scf=tight"), deck("B3LYP/6-31G(d) opt scf=verytight")
+        calc_id, first_id = _seed_calc(
+            db_session, artifact_content=first, artifact_sha=hashlib.sha256(first).hexdigest()
+        )
+        sha = hashlib.sha256(second).hexdigest()
+        later = CalculationArtifact(
+            calculation_id=calc_id, kind=ArtifactKind.input, uri=f"s3://t/{sha}", sha256=sha, bytes=len(second), filename="b.gjf"
+        )
+        db_session.add(later)
+        db_session.flush()
+        store[hashlib.sha256(first).hexdigest()] = first
+        store[sha] = second
+        return calc_id, first_id, later.id
+
+    @staticmethod
+    def _scf(db_session, calc_id):
+        return set(
+            db_session.scalars(
+                select(CalculationParameter.canonical_value).where(
+                    CalculationParameter.calculation_id == calc_id, CalculationParameter.canonical_key == "scf.convergence"
+                )
+            )
+        )
+
+    def test_force_with_an_artifact_id_keeps_the_chosen_earlier_deck(self, db_session, stub_load_artifact_bytes):
+        calc_id, first_id, later_id = self._two_decks(db_session, stub_load_artifact_bytes)
+        script_mod.run_backfill(db_session, calculation_id=calc_id, artifact_id=later_id)
+        assert self._scf(db_session, calc_id) == {"very_tight"}
+        script_mod.run_backfill(db_session, calculation_id=calc_id, artifact_id=first_id, force=True)
+        # Rebuilding from the latest deck regardless of the choice would store very_tight here.
+        assert self._scf(db_session, calc_id) == {"tight"}
+
+    def test_force_without_an_artifact_id_uses_the_deck_an_upload_leaves_standing(self, db_session, stub_load_artifact_bytes):
+        calc_id, first_id, later_id = self._two_decks(db_session, stub_load_artifact_bytes)
+        script_mod.run_backfill(db_session, calculation_id=calc_id, artifact_id=first_id)
+        assert self._scf(db_session, calc_id) == {"tight"}
+        script_mod.run_backfill(db_session, calculation_id=calc_id, force=True)
+        assert self._scf(db_session, calc_id) == {"very_tight"}
+        # Without --force the earliest deck is still the default.
+        script_mod.run_backfill(db_session, calculation_id=calc_id)
+        assert self._scf(db_session, calc_id) == {"tight"}

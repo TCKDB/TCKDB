@@ -1747,7 +1747,8 @@ def _reported_differs(context: Mapping[str, Any]) -> str | None:
 
 
 def _log_disagrees_with_log(context: Mapping[str, Any]) -> str | None:
-    key = _token(context.get("canonical_key"))
+    # A reported value with no canonical key (Gaussian's grid code) is named by its raw key instead.
+    key = _token(context.get("canonical_key")) or _token(context.get("raw_key"))
     if key is None:
         return None
     return (
@@ -1925,6 +1926,7 @@ def _closed_values(key: str, code: str) -> Any:
         "coordinate_kind": _SCAN_COORDINATE_KINDS,
         "pattern": _SCAN_PATTERNS,
         "canonical_key": re.compile(r"[a-z0-9_]+(\.[a-z0-9_]+)+"),
+        "raw_key": re.compile(r"[A-Za-z][A-Za-z0-9_]{0,31}"),
         "component": frozenset({"method", "basis"}),
         "observed_in": frozenset(_PARAMETER_ORIGINS),
         "deck_method": _HESSIAN_METHODS,

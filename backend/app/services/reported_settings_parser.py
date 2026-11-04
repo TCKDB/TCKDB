@@ -124,7 +124,7 @@ def _orca_job(job: str) -> dict[str, dict]:
 
 
 _ORCA_MULTI_JOB = re.compile(r"^\|\s*\d+>.*(\$new_job|%compound)", re.I | re.M)
-_GAUSSIAN_LINK1 = re.compile(r"^\s*--Link1--\s*$", re.I | re.M)
+_GAUSSIAN_INTERNAL_STEP = re.compile(r"Proceeding to internal job step")
 
 
 def parse_orca_reported(text: str) -> list[dict]:
@@ -169,11 +169,18 @@ def _gaussian_job(job: str) -> dict[str, dict]:
 def parse_gaussian_reported(text: str) -> list[dict]:
     """Reported grid and SCF rows of a Gaussian log; ``[]`` when the log prints none (or its jobs disagree).
 
-    A log whose echo shows ``--Link1--`` more often than the log splits into jobs cannot be bound to one calculation:
-    nothing is reported from it.
+    Nothing is reported from a log that could hold more than one calculation's report: when it has more than one
+    ``Entering Gaussian System`` (several jobs, e.g. ``--Link1--``), or more echoed route sections than the program
+    announced as internal steps of the one job (``Proceeding to internal job step``) plus one. The guard rests on
+    two lines the fixtures show, not on a ``--Link1--`` line (a log does not print one). True per-job binding for
+    Gaussian waits on a real multi-job fixture.
     """
+    from app.services.gaussian_parameter_parser import all_route_texts
+
     text = text.replace("\r\n", "\n")
     jobs = _split(text, _GAUSSIAN_JOB)
-    if len(_GAUSSIAN_LINK1.findall(text)) >= len(jobs):
+    if len(_GAUSSIAN_JOB.findall(text)) > 1:
+        return []
+    if len(all_route_texts(text)) > len(_GAUSSIAN_INTERNAL_STEP.findall(text)) + 1:
         return []
     return _agree([_gaussian_job(job) for job in jobs])

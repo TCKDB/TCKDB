@@ -104,6 +104,7 @@ def _select_input_artifact(
     calculation_id: int,
     *,
     artifact_id_override: int | None = None,
+    latest_deck: bool = False,
 ) -> CalculationArtifact | None:
     """Pick the input artifact to feed the parser for one calculation.
 
@@ -138,7 +139,7 @@ def _select_input_artifact(
                 CalculationArtifact.calculation_id == calculation_id,
                 CalculationArtifact.kind == kind,
             )
-            .order_by(CalculationArtifact.id.asc())
+            .order_by(CalculationArtifact.id.desc() if (latest_deck and kind is ArtifactKind.input) else CalculationArtifact.id.asc())
             .limit(1)
         )
         if row is not None:
@@ -239,7 +240,7 @@ def _process_one(
         return False
 
     artifact = _select_input_artifact(
-        session, calculation_id, artifact_id_override=artifact_id_override
+        session, calculation_id, artifact_id_override=artifact_id_override, latest_deck=force
     )
     if artifact is None:
         stats.skipped_no_artifact += 1

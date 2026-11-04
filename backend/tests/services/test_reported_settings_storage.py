@@ -440,6 +440,8 @@ def test_two_logs_with_different_gaussian_grid_codes_disagree(db_conn):
         assert other != _G09_LOG
         codes = [w.code for w in _read(session, calc, other)]
         assert "output_log_disagrees_with_earlier_output_log" in codes
+        [warning] = [w for w in _read(session, calc, other.replace("IRadAn=           0", "IRadAn=           4")) if w.code == "output_log_disagrees_with_earlier_output_log"]
+        assert warning.context["raw_key"] == "IRadAn" and "canonical_key" not in warning.context
         assert [r.raw_value for r in _rows(session, calc) if r.raw_key == "IRadAn"] == ["5"]
 
 
