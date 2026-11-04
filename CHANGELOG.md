@@ -22,6 +22,15 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A Gaussian --Link1-- log is read per job (2026-11-04)
+
+- **Client: `tckdb-schemas` 0.153.0 to 0.154.0** (a route-reader fix, no field or code added or removed; `tckdb-client` unchanged). No migration, no new environment variable.
+- **What changed.** A Gaussian log is split into jobs at `Entering Link 1` (a `--Link1--` file prints no second `Entering Gaussian System` banner). The job that is the calculation is found by job type and level of theory and, when several jobs share both, by the calculation's stored input deck (the job whose route states exactly the deck's settings); when no single job is, nothing is read from the log, neither its echoed request nor its reported values. Typed rows never break a tie, and a deck with more than one route cannot. Before, a multi-job Gaussian log reported nothing but still had its first job's echoed route read as the request of every calculation. Within one request the input decks are now read before the output logs, in the three places that read artifacts (artifacts are still saved in the listed order), so the order a producer lists them in does not change what a log binds to.
+- **New Gaussian warning case.** `reported_setting_differs_from_requested` now also fires for Gaussian SCF: when the request is stricter than `tight` (`scf=verytight`) and the log reports a threshold no tighter than `tight`'s 1e-8, or when the input states `Conver=N` (read from the deck, and from the log's echo, where the echo wins) and the log does not report 10^-N. No threshold is invented for `SCF=VeryTight`; the rule is an ordering against the documented `Tight` default and `Conver=N` (G09 SCF keyword page), and only for Gaussian 09 and 16. Grid is never compared for Gaussian.
+- **New warning `output_log_job_not_bound`.** When a log holds several jobs and no single job can be matched to the calculation, the log is not read and this warning is returned. While it stands and the log has produced no rows, the calculation's grid and SCF convergence read as `not_stated`, not as the program's assumed default (the log was not read, so "the log neither reports nor echoes it" would be false). Rows always win: once a refresh has read the log, its rows decide.
+- **Fixed.** A short echoed route (dash rows narrower than 60 characters, which is common) was never closed and ran on into the log, so log text was read as requested settings. See `tckdb-schemas` 0.153.0 for the measured side effects.
+- **Not changed.** IRadAn stays raw and unmapped, and is read only from the `IXCGrd= .. IRadAn=` line, never from the Harris initial-guess lines (they differ from it in 58 fixture logs).
+
 ## An assumed SCF convergence is shown where a program documents one (2026-11-04)
 
 - **Client: `tckdb-schemas` 0.152.0 to 0.153.0** (no field added or removed; `tckdb-client` unchanged). No migration, no new environment variable.

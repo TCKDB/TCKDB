@@ -53,10 +53,11 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.program_default_settings import display_major_version
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.chemistry.basis_set_names import basis_identity_key
@@ -74,6 +75,7 @@ W_INPUT_DECK_DISAGREES_WITH_OUTPUT_LOG = "input_deck_disagrees_with_output_log"
 W_LEVEL_OF_THEORY_DISAGREES_WITH_ARTIFACT = "level_of_theory_disagrees_with_artifact"
 W_OUTPUT_LOG_DISAGREES_WITH_EARLIER_OUTPUT_LOG = "output_log_disagrees_with_earlier_output_log"
 W_REPORTED_SETTING_DIFFERS_FROM_REQUESTED = "reported_setting_differs_from_requested"
+W_OUTPUT_LOG_JOB_NOT_BOUND = "output_log_job_not_bound"
 
 #: Keys another check owns, or whose value does not name the setting.
 _NOT_RECONCILED_HERE = frozenset({"freq.hessian_method", "internal_option.iop"})
@@ -375,6 +377,110 @@ def _effective_methods(methods: list[str]) -> list[str]:
     return correlated or methods
 
 
+#: Route keywords that make a job something other than a single point. ``freq`` and ``frequency`` are one keyword.
+_JOB_KEYWORDS = {
+    "opt": "opt",
+    "freq": "freq",
+    "frequency": "freq",
+    "irc": "irc",
+    "ircmax": "ircmax",
+    "scan": "scan",
+    "polar": "polar",
+    "stable": "stable",
+    "force": "force",
+    "admp": "admp",
+    "bomd": "bomd",
+}
+
+
+def _route_job_keywords(route: str) -> set[str]:
+    """The job keywords a route states, read through the route tokeniser (``#opt`` and ``# opt`` are the same)."""
+    from app.services.gaussian_parameter_parser import _tokenize_route
+
+    found: set[str] = set()
+    for token in _tokenize_route(route):
+        word = re.split(r"[=(]", token.lstrip("#"), maxsplit=1)[0].lower()
+        if word in _JOB_KEYWORDS:
+            found.add(_JOB_KEYWORDS[word])
+    return found
+
+
+def _job_type_matches(calc_type: str, route: str) -> bool:
+    """Whether a route's job keywords fit a calculation type (``opt freq`` fits both an opt and a freq calculation)."""
+    keywords = _route_job_keywords(route)
+    if calc_type in ("opt", "freq", "irc"):
+        return calc_type in keywords
+    if calc_type == "sp":
+        return not keywords
+    return True  # scan, conf, composite, ...: the method and basis alone decide
+
+
+def _route_canonical(route: str) -> tuple[set[tuple[str, str]], frozenset[str]]:
+    """``(canonical (key, value) pairs the route states, the dispersions it states)``."""
+    from app.services.gaussian_parameter_parser import _parse_route_tokens
+
+    pairs = {
+        (p["canonical_key"], p["canonical_value"])
+        for p in _parse_route_tokens(route)
+        if p.get("canonical_key") is not None and p.get("canonical_value") is not None
+    }
+    return pairs, frozenset(v for k, v in pairs if k == "dispersion.correction")
+
+
+def bind_gaussian_job(
+    calculation: Calculation, text: str, deck_text: Callable[[], str | None] = lambda: None
+) -> str | None:
+    """The job of a Gaussian log that is this calculation, or ``None`` when no single job is.
+
+    The rule, in order:
+
+    1. A log with one job (one ``Entering Link 1``) is that job.
+    2. Otherwise the candidates are the jobs whose echoed first route has the calculation's job type (``opt``,
+       ``freq`` or ``irc`` keyword present; ``sp``: no job keyword at all) and its level of theory (route method and
+       basis equal the calculation's, compared as the declared-level check compares them, dispersion included). One
+       candidate is the job.
+    3. Several candidates (``--Link1--`` jobs at one level differing only in keywords, e.g. two single points on
+       different grids) are told apart by the calculation's stored input deck: the job whose route states exactly the
+       settings the deck's route states. A deck that holds more than one route, or no deck, cannot tell them apart.
+       The tie is never broken from stored parameter rows: the log outranks the deck, so a deck's rows are gone once
+       a log has been read, and a typed row can be a partial set that matches a sibling's shorter route.
+    4. No candidate, or several still: ``None``. Nothing is read from the log, and no other job's value stands in.
+
+    ``deck_text`` is called only when step 3 is reached.
+    """
+    from app.services.gaussian_parameter_parser import all_route_texts, parse_method_basis
+    from app.services.reported_settings_parser import gaussian_jobs
+
+    jobs = gaussian_jobs(text)
+    if len(jobs) == 1:
+        return jobs[0]
+    lot = calculation.lot
+    if lot is None or not lot.method:
+        return None
+    calc_type = getattr(calculation.type, "value", calculation.type)
+    matches: list[tuple[str, set[tuple[str, str]]]] = []  # (job text, the canonical settings of its route)
+    for job in jobs:
+        routes = all_route_texts(job)
+        found = parse_method_basis(routes[0]) if routes else None
+        if not found:
+            continue
+        pairs, dispersions = _route_canonical(routes[0])
+        if not (_method_keys(lot.method, dispersions) & _method_keys(found["method"], dispersions)):
+            continue
+        basis = found["basis"]
+        if lot.basis and basis.strip().lower() not in _NO_BASIS and _basis_key(lot.basis) != _basis_key(basis):
+            continue
+        if _job_type_matches(calc_type, routes[0]):
+            matches.append((job, pairs))
+    if len(matches) > 1:
+        deck = deck_text()
+        deck_routes = all_route_texts(deck) if deck else []
+        if len(deck_routes) == 1:
+            known, _ = _route_canonical(deck_routes[0])
+            matches = [m for m in matches if m[1] == known]
+    return matches[0][0] if len(matches) == 1 else None
+
+
 def level_of_theory_warnings(
     calculation: Calculation,
     method_basis: dict | None,
@@ -476,6 +582,46 @@ _EXPLICIT_TOLERANCES = {
 }
 
 
+#: Gaussian's SCF convergence levels from loosest to strictest, as the closed set spells them.
+_GAUSSIAN_SCF_ORDER = ("loose", "normal", "tight", "very_tight", "extreme")
+#: The RMS density threshold of ``SCF=Tight``, which is Gaussian 09/16's default. Source: the G09 SCF keyword page
+#: (knowledge base chunk 11007: "In Gaussian 09, SCF=Tight is the default"), and ``Conver=N`` as 10^-N (chunk 11013,
+#: "Sets the SCF convergence criterion to 10-N ... <10-N RMS change in the density matrix") with Tight being N=8,
+#: the value every Gaussian fixture log reports for it.
+_GAUSSIAN_TIGHT_RMS = 1e-8
+
+
+def gaussian_scf_disagreements(
+    requested_scf: str | None, conver: str | None, reported_rms: str | None
+) -> list[tuple[str, str, str]]:
+    """``(canonical key, requested value, reported value)`` where the RMS density threshold a Gaussian log reports
+    contradicts what the input asked for. The ordering rule, and no number is invented for ``SCF=VeryTight``:
+
+    * the input states ``Conver=N``: the reported threshold must be 10^-N (chunk 11013);
+    * otherwise a request stricter than ``tight`` (``very_tight``, ``extreme``) must report a threshold tighter than
+      ``tight``'s 1e-8. A report of 1e-8 or looser contradicts it.
+
+    ``tight`` itself, ``loose`` and ``normal`` are never judged: nothing documented states their thresholds.
+    """
+    if reported_rms is None:
+        return []
+    key = "scf.tol_rms_density"
+    if conver is not None:
+        try:
+            expected = 10.0 ** -int(conver)
+        except ValueError:
+            return []
+        return [] if _same_number(reported_rms, expected) else [(key, f"conver={conver}", reported_rms)]
+    if requested_scf in _GAUSSIAN_SCF_ORDER and _GAUSSIAN_SCF_ORDER.index(requested_scf) > _GAUSSIAN_SCF_ORDER.index("tight"):
+        try:
+            reported = float(reported_rms)
+        except ValueError:
+            return []
+        if reported >= _GAUSSIAN_TIGHT_RMS * (1 - 1e-9):
+            return [(key, requested_scf, reported_rms)]
+    return []
+
+
 def orca_preset_disagreements(
     requested_grid: str | None,
     requested_scf: str | None,
@@ -506,11 +652,12 @@ def reported_setting_disagreements(
 ) -> list[tuple[str, str, str]]:
     """``(canonical key, requested value, reported value)`` for each stored report a documented preset contradicts.
 
-    ORCA only. The requested value is the log's echo, else the deck's: the same order as the read. Silent when either
-    side is absent, when the requested value is not in the tables, and for Gaussian (its grid report is an
-    undocumented internal code, and its 1e-8 threshold is both the default and ``Tight``).
+    ORCA (grid and SCF presets) and Gaussian (the SCF ordering rule, :func:`gaussian_scf_disagreements`; its grid
+    report is an undocumented internal code and is never compared). The requested value is the log's echo, else the
+    deck's: the same order as the read. Silent when either side is absent or when the requested value is not in the
+    tables.
     """
-    if software != "orca":
+    if software not in ("orca", "gaussian"):
         return []
     rows = list(
         session.scalars(
@@ -537,6 +684,17 @@ def reported_setting_disagreements(
                     explicit[key] = float(r.raw_value)
                 except ValueError:
                     pass
+    if software == "gaussian":
+        # The sources are the Gaussian 09 manual pages; Gaussian 03 and an undeclared version are left out.
+        release = calculation.software_release
+        if display_major_version("gaussian", release.version if release is not None else None) not in (9, 16):
+            return []
+        conver = None
+        for rows_of in (deck, echo):  # the echo is read last, so it overrides the deck
+            for r in rows_of:
+                if (r.section or "").lower() == "scf" and r.raw_key.lower() == "conver":
+                    conver = r.raw_value
+        return gaussian_scf_disagreements(request("scf.convergence"), conver, _single(reported, "scf.tol_rms_density"))
     return orca_preset_disagreements(
         request("grid.quality"),
         request("scf.convergence"),
