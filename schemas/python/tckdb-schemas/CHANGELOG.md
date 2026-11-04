@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.155.0 - 2026-11-04
+
+Packaging only. No field, code or rule is added, changed or removed; every 0.154.0 payload validates unchanged. The distribution now carries what PyPI needs: the project URLs point at `github.com/TCKDB/TCKDB`, the MIT `LICENSE` file ships in the sdist and wheel, and the build requires `setuptools>=77` (SPDX licence expression). Nothing in `tckdb_schemas` itself changed.
+
 ## 0.154.0 - 2026-11-04
 
 The route of a Gaussian log is read correctly when it is short. One warning code is added (`output_log_job_not_bound`); no field is added or removed.
