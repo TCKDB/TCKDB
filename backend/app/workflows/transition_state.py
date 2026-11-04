@@ -54,6 +54,7 @@ from app.services.transition_state_resolution import (
 from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
+from app.services.wavefunction_reliability_warnings import collect_wavefunction_reliability_warnings
 from app.workflows.reaction import persist_reaction_upload
 
 #: Closing sentence of the atom-map absence warning on this path.
@@ -334,6 +335,12 @@ def persist_transition_state_upload(
         )
         warnings.extend(
             collect_scan_coordinate_warnings(
+                session,
+                [primary_calc.id, *(c.id for c in additional_calcs)],
+            )
+        )
+        warnings.extend(
+            collect_wavefunction_reliability_warnings(
                 session,
                 [primary_calc.id, *(c.id for c in additional_calcs)],
             )

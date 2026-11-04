@@ -94,6 +94,7 @@ from app.services import (
     scan_coordinate_conformance,
     species_resolution,
     transition_state_validation,
+    wavefunction_reliability_warnings,
 )
 from app.services import geometry_validation as geometry_validation_service
 from app.services import reaction_atom_map as reaction_atom_map_service
@@ -1448,6 +1449,7 @@ DECLARING_MODULES: tuple[ModuleType, ...] = (
     scan_coordinate_conformance,
     species_resolution,
     transition_state_validation,
+    wavefunction_reliability_warnings,
     sys.modules[__name__],
 )
 

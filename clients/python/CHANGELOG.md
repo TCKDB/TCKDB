@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.184.0 - 2026-11-04
+
+A deposit can now return the warning `t1_diagnostic_above_closed_shell_threshold`; see `tckdb-schemas` 0.151.0. The client reads warnings by code and message, so no client code changed.
+
 ## 0.183.0 - 2026-11-03
 
 Two refusal codes join `RejectionCode`: `ELECTRONIC_STATE_LABEL_INVALID` and `TERM_SYMBOL_INVALID` (both 422). The server now refuses an `electronic_state_label` or `term_symbol` that is not a recognised spectroscopic shape; see `tckdb-schemas` 0.149.0 for the accepted shapes. No client code changed.

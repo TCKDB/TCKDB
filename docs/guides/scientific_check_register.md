@@ -85,22 +85,22 @@ disagree, this one is right by construction.
 | Tier | Entries | Meaning |
 | --- | --- | --- |
 | `block` | 25 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
-| `warn` | 12 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
+| `warn` | 13 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
 | `label` | 1 | Labels a stored record at read time without refusing anything — a `HardFailReason` in the trust evaluator. For facts TCKDB observes about a record after it was accepted, which no upload-time check could have refused because they did not exist yet. |
 | `review` | 8 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
 | `structural` | 5 | Not an ADR 0008 consequence tier. The position is enforced by the shape of the schema, so a record violating it cannot be represented. |
-| **total** | **51** | |
+| **total** | **52** | |
 
 ## Where a check's code reaches a client
 
 | Channel | Entries | What a consumer can do with it |
 | --- | --- | --- |
 | `error_envelope` | 26 | the `code` field of the 422 error body — a client can branch on it |
-| `upload_warning` | 13 | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
+| `upload_warning` | 14 | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
 | `trust_label` | 1 | a read-time trust label (`HardFailReason`), not any refusal |
 | `database_constraint` | 1 | PostgreSQL only, so the refusal is a 409 rather than a 422 — named, where the constraint declares a rejection code |
 | `none` | 10 | *nothing carries a code* |
-| **total** | **51** | |
+| **total** | **52** | |
 
 ## Recorded divergences
 
@@ -1223,6 +1223,34 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   Above this many potential elements the stereoisomer enumeration is skipped: `-` is not deduced, a supplied label is not tested for realisability and `stereo_smiles` is left unset.
 
 **Escape hatch.** State `?` for the element, or omit the label: an unknown element contradicts nothing. If two geometries really are different stereoisomers, deposit the other isomer as its own species entry; one entry states one configuration.
+
+## Wavefunction reliability diagnostics
+
+### 52. A wavefunction reliability diagnostic that a calculation carries is reported when it is past its conventional threshold, with that threshold's source named and without judging what it means: today, the T1 diagnostic of a closed-shell coupled-cluster calculation above 0.02 (Lee and Taylor, 1989). The result is stored as deposited; nothing about the value, the record's review status or any selection changes.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `warn` |
+| **Code** | `t1_diagnostic_above_closed_shell_threshold` |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload, and stored with the record it concerns (or, when no one record could take it, with its submission), which shows it, in TCKDB's own wording, under `record_warnings` or `deposit_warnings` on that record's detail reads and on the per-parent kinetics and thermo reads |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** A closed-shell CCSD(T) energy whose reference is a poor starting point could be wrong in a scientifically interesting way, and the group's own closed-shell transition states do cross 0.02. But the diagnostic is a contested rule of thumb: in a 50-molecule atomization-energy test at least 75% of the molecules T1 or D1 flagged had no large error (Sprague and Irikura 2014), and T1 is argued to measure orbital relaxation rather than multireference character. So it can only be an expectation (ADR 0008): a notable property of a correct result, reported once and worded as 'above the rule of thumb', never as 'the system is multireference'. This reverses the earlier position that T1 and D1 are 'deliberately not enforced or labelled' (scientific_calculation_reads.md); the reasons it is now acceptable are that the scope is closed shell only, the threshold has a primary source, and the sentence does not judge. The scope is the calculation: a thermo or kinetics record citing it earns no warning of its own.
+
+**Enforced at.**
+
+- `collect_wavefunction_reliability_warnings` — `backend/app/services/wavefunction_reliability_warnings.py::collect_wavefunction_reliability_warnings`
+  *The write path: run once a request's calculations are flushed, over every calculation the request persisted, by every workflow that does (conformer, transition state, computed species, computed reaction, thermo, statmech, transport, network). The diagnostics enter only through the producer payload and nothing writes one later, so there is no late path. Fires when the entry's multiplicity (read from the entry, never inferred) is 1, a T1 is stored, the calculation's method is a coupled-cluster method with singles (CCSD, CCSD(T), F12, DLPNO and PNO variants, CCSDT, QCISD) and T1 is strictly above 0.02. Absent is absent. Open-shell T1 and D1 are stored and shown, never warned on.*
+- `is_coupled_cluster_method` — `backend/app/services/wavefunction_reliability_warnings.py::is_coupled_cluster_method`
+  *Scopes the T1 rule to methods whose T1 is Lee and Taylor's: a coupled-cluster method with singles. A method the table does not recognise, a composite recipe that contains a CCSD(T) step, CCD, CC2 and CC3 are not in it.*
+- Open-shell T1 and D1 are deliberately not thresholded. Add an open-shell T1 warning only when all three hold: (1) the producer reads the last 'T1 diagnostic' line of a Molpro open-shell log, not the first (the first is the RMP2-stage value, roughly thirty times too small); (2) TCKDB records the reference type (RHF, UHF or ROHF) next to the diagnostic, because the programs define open-shell T1 differently; (3) an open-shell threshold with a primary source is in hand (the 0.044 figure reached us only through secondary sources). D1 additionally needs a threshold verified in Janssen and Nielsen (1998) or a successor, and a producer that deposits it. The spin-contamination check (<S^2> against S(S+1) from the entry's multiplicity) joins this entry.
+
+**Thresholds.**
+
+- `t1_closed_shell_threshold` = **0.02 dimensionless (norm of the singles amplitudes over the square root of the number of correlated electrons)** — a constant fixed in code.
+  Lee and Taylor, Int. J. Quantum Chem. 1989, 36 (S23), 199 (doi:10.1002/qua.560360824): 'a large T1 (i.e., >0.02) probably indicates the need for a multireference electron correlation procedure'. A rule of thumb with a hedge in its own abstract, used only for closed-shell coupled-cluster calculations, where every program computes the same quantity. Strictly greater than, so 0.0200 is on the line and does not warn.
+
+**Escape hatch.** None needed -- the check never refuses. A calculation whose T1 is above 0.02 for a reason the depositor understands is stored as sent; the warning only reports the value against the rule of thumb.
 
 ---
 

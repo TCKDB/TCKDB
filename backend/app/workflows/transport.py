@@ -37,6 +37,7 @@ from app.services.record_review import (
 from app.services.scan_coordinate_conformance import collect_scan_coordinate_warnings
 from app.services.species_resolution import resolve_species_entry
 from app.services.transport_resolution import resolve_and_create_transport
+from app.services.wavefunction_reliability_warnings import collect_wavefunction_reliability_warnings
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,11 @@ def persist_transport_upload(
         )
         warnings_out.extend(
             collect_scan_coordinate_warnings(
+                session, [calc.id for calc in calculations_by_key.values()]
+            )
+        )
+        warnings_out.extend(
+            collect_wavefunction_reliability_warnings(
                 session, [calc.id for calc in calculations_by_key.values()]
             )
         )

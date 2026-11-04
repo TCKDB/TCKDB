@@ -120,9 +120,18 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # geometry with its SMILES by element and isotope, never by configuration. Reviewed with the whole #835 sweep: of
     # 58 unregistered warning codes and 13 recent refusals this is the only new entry; four warnings widened 12, 22
     # and 25, and the stereo-label, channel-kind and bath-gas refusals stay in the code catalogue.
-    assert 10 <= len(REGISTER) <= 51, (
+    #
+    # Raised 51 -> 52 (2026-11-04) for the closed-shell T1 warning (T1/D1 assessment, Option D). It is the first check that
+    # reads a stored wavefunction diagnostic, and the claim a referee could dispute is exactly the one it makes: that a
+    # conventional rule of thumb (Lee and Taylor's 0.02) is worth reporting for a closed-shell coupled-cluster
+    # calculation although the same literature shows most flagged calculations are accurate, and that open-shell T1 and
+    # D1 are not worth reporting because their definitions differ between programs. No existing entry's claim covers
+    # it: entry 12 compares a declared electronic state with the log, which is definitional, and this one is an
+    # expectation about a result. It is one entry for the whole group on purpose: the <S^2> check, when its threshold
+    # has a primary source, joins it rather than taking a 53rd. Different tier from every blocking entry.
+    assert 10 <= len(REGISTER) <= 52, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~51 the inclusion test ('could this check be wrong "
+        "the system; above ~52 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 
@@ -785,6 +794,7 @@ _PINNED_NUMBERS: dict[str, int] = {
     "freq_list_incomplete_for_geometry": 22,
     "network_state_energy_sources_partial": 25,
     "scan_point_coordinate_disagrees_with_geometry": 49,
+    "t1_diagnostic_above_closed_shell_threshold": 52,
 }
 
 
@@ -841,6 +851,7 @@ _OPENINGS: dict[int, str] = {
     49: "A scan point's stored coordinate_value is the inte",
     50: "A calculation that records how its frequency job b",
     51: "A species entry states one stereo configuration: w",
+    52: "A wavefunction reliability diagnostic that a calcu",
 }
 
 

@@ -157,6 +157,7 @@ from app.services.thermo_declaration_resolution import (
     resolve_thermo_declarations,
 )
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
+from app.services.wavefunction_reliability_warnings import collect_wavefunction_reliability_warnings
 from app.workflows.thermo import assert_enthalpy_reference, assert_thermo_role_matches_calculation_type
 from app.workflows.transport import persist_bundle_transport
 
@@ -1008,6 +1009,7 @@ def persist_computed_species_upload(
         collect_named_composite_deposit_warnings(session, bundle_calc_ids)
     )
     upload_warnings.extend(collect_scan_coordinate_warnings(session, bundle_calc_ids))
+    upload_warnings.extend(collect_wavefunction_reliability_warnings(session, bundle_calc_ids))
 
     return ComputedSpeciesUploadOutcome(
         species_entry_id=species_entry.id,

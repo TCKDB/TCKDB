@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.151.0 - 2026-11-04
+
+An accepted deposit can now earn one more warning, about a coupled-cluster diagnostic stored with a calculation. No field is added or removed.
+
+- New warning `t1_diagnostic_above_closed_shell_threshold`. A closed-shell calculation (the multiplicity of its species or transition-state entry is 1) whose method is coupled cluster with singles (CCSD, CCSD(T), their F12, local, DLPNO and PNO variants, CCSDT, QCISD) and whose `wavefunction_diagnostic.t1_diagnostic` is strictly above 0.02 earns it. 0.02 is the rule of thumb of Lee and Taylor (1989). The calculation is stored as sent and nothing about the value, its review status or any selection changes. `context` has `t1_diagnostic`, `threshold` (0.02) and `multiplicity` (1). The sentence says only that the value is above the rule of thumb and that T1 does not by itself establish multireference character. It is placed on the calculation's record; a thermo or kinetics record that cites the calculation earns no warning of its own.
+- An open-shell T1 and any D1 value earn no warning: programs define open-shell T1 differently and D1 has no verified threshold. Both stay stored and shown.
+- The `d1_diagnostic` description now names Janssen and Nielsen (1998) as the source of D1.
+
 ## 0.150.0 - 2026-11-03
 
 An accepted deposit can now earn four more warnings, each about a setting, a deck or a log that disagrees with what was declared. No field is added or removed.

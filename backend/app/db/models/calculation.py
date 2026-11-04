@@ -2152,11 +2152,21 @@ class CalculationWavefunctionDiagnostic(Base, TimestampMixin, CreatedByMixin):
     """Parsed coupled-cluster / multireference diagnostics for a calculation.
 
     Carries scalar diagnostics emitted by the ESS at parse time — T1
-    (Lee–Taylor), D1 (Janowski), the norm of the T1 amplitude vector,
+    (Lee–Taylor), D1 (Janssen and Nielsen, 1998), the norm of the T1 amplitude vector,
     and the largest T2 amplitude. The row is producer-supplied evidence
-    about the reliability of the electronic-structure result; it is
-    deliberately not interpreted by the schema (no thresholds, no
-    "good/bad" labels) — readers and curators apply heuristics on top.
+    about the reliability of the electronic-structure result; the table
+    itself carries no thresholds and no "good/bad" labels.
+
+    One advisory reads it (``app.services.wavefunction_reliability_warnings``),
+    reversing the earlier "deliberately not enforced" position for one case:
+    a closed-shell coupled-cluster calculation (entry multiplicity 1) whose
+    ``t1_diagnostic`` is strictly above 0.02 (Lee and Taylor, 1989) earns the
+    deposit warning ``t1_diagnostic_above_closed_shell_threshold``. The reasons
+    are closed shell only (the one regime where every program computes the
+    same quantity), a primary source for the number, and wording that does not
+    judge (the sentence says "above the rule of thumb" and that T1 does not by
+    itself establish multireference character). Open-shell T1 and D1 are
+    stored and shown, never thresholded.
 
     Producer contract (not enforced by DB):
 

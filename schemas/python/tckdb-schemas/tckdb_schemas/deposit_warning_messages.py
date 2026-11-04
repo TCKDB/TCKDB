@@ -461,6 +461,13 @@ RENDERED: dict[str, str] = {
         "point, in the coordinate's own unit, not a displacement from the scan's start. Either the values or the "
         "geometries attached to the points are wrong, and this check cannot tell which."
     ),
+    # -- wavefunction reliability diagnostics -----------------------------------------------------------------------
+    "t1_diagnostic_above_closed_shell_threshold": (
+        "The T1 diagnostic of this closed-shell coupled-cluster calculation is above the 0.02 rule of thumb of Lee "
+        "and Taylor (1989) for single-reference reliability. The energy is stored as deposited. The diagnostic "
+        "measures the size of the single-excitation amplitudes; it does not by itself establish multireference "
+        "character, and it is known to raise alarms for calculations that are accurate."
+    ),
 }
 
 
@@ -905,6 +912,19 @@ def _scan_disagrees(context: Mapping[str, Any]) -> str | None:
         "was accepted as sent. A coordinate value is the internal coordinate itself at that point, in its own unit, "
         "not a displacement from the scan's start. Either the values or the geometries attached to the points are "
         "wrong, and this check cannot tell which."
+    )
+
+
+def _t1_above_closed_shell_threshold(context: Mapping[str, Any]) -> str | None:
+    t1 = _num(context.get("t1_diagnostic"))
+    threshold = _num(context.get("threshold"))
+    if t1 is None or threshold is None:
+        return None
+    return (
+        f"The T1 diagnostic of this closed-shell coupled-cluster calculation is {t1:g}, above the {threshold:g} rule "
+        "of thumb of Lee and Taylor (1989) for single-reference reliability. The energy is stored as deposited. The "
+        "diagnostic measures the size of the single-excitation amplitudes; it does not by itself establish "
+        "multireference character, and it is known to raise alarms for calculations that are accurate."
     )
 
 
@@ -1844,6 +1864,7 @@ _WITH_CONTEXT: dict[str, Any] = {
     "species_entry_stereo_not_represented": _stereo_not_represented,
     "species_entry_stereo_unresolved": _stereo_unresolved,
     "scan_point_coordinate_disagrees_with_geometry": _scan_disagrees,
+    "t1_diagnostic_above_closed_shell_threshold": _t1_above_closed_shell_threshold,
     "hessian_not_stored_unparseable": _hessian_not_stored("hessian_not_stored_unparseable"),
     "hessian_not_stored_failed": _hessian_not_stored("hessian_not_stored_failed"),
     "hessian_not_stored_no_unique_input_geometry": _hessian_not_stored("hessian_not_stored_no_unique_input_geometry"),

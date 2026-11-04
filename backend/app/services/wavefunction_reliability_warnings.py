@@ -1,0 +1,311 @@
+"""Wavefunction reliability diagnostics beyond their conventional thresholds are reported, not judged.
+
+A calculation can carry numbers its program printed about how far the result can be trusted:
+``calc_wavefunction_diagnostic`` (``T1``, ``D1``, the singles norm, the largest ``T2`` amplitude) and
+``calc_spin_diagnostic`` (``<S^2>``). This module reads them back after the calculation is stored and, for the one
+case where the diagnostic has a primary-sourced conventional threshold and one definition across programs, says so.
+
+**Nothing is refused and nothing changes.** The result is stored as deposited. The check never alters a value, a
+review status, an evidence label or a selection, and a thermochemistry or kinetics record that cites a flagged
+calculation earns no warning of its own: the warning is about the calculation (scope decided 2026-11-04). The tier is
+``warn`` (ADR 0008): a large single-excitation amplitude is a notable property of a correct result, not a contradiction.
+
+What is checked today
+---------------------
+**Closed-shell T1.** One warning, :data:`W_T1_DIAGNOSTIC_ABOVE_CLOSED_SHELL_THRESHOLD`, when all of these hold:
+
+* the multiplicity of the entry the calculation belongs to is 1 (read from the entry, never inferred from a printed
+  ``<S^2>``);
+* ``t1_diagnostic`` is stored (absent is absent: no row, or a row without a T1, earns nothing);
+* the calculation's method is a coupled-cluster method with singles (CCSD, CCSD(T), their F12 and local, DLPNO and
+  PNO variants, CCSDT, CCSDT(Q), QCISD and QCISD(T); see :func:`is_coupled_cluster_method`);
+* ``t1_diagnostic`` is strictly above :data:`T1_CLOSED_SHELL_THRESHOLD` (0.02).
+
+The number is Lee and Taylor's: "a large T1 (i.e., >0.02) probably indicates the need for a multireference electron
+correlation procedure" (Int. J. Quantum Chem. 1989, 36 (S23), 199, doi:10.1002/qua.560360824). It is a rule of thumb,
+and a contested one: it raises many alarms for calculations that are accurate (Sprague and Irikura, Theor. Chem. Acc.
+2014, 133, 1544; Faulstich et al., J. Phys. Chem. A 2023, 127, 9106), and ORCA's manual argues that T1 measures orbital
+relaxation, not multireference character. The sentence therefore says only that the value is above the rule of thumb,
+names its source and scope, and says that T1 "does not by itself establish multireference character".
+
+**Why closed shell only.** It is the one regime where the definition is the same across programs (Lee and Taylor's
+formula on restricted amplitudes) and where the number has a primary source. For an open-shell calculation the
+programs print different quantities under one name (ORCA the UHF singles norm over sqrt(N); Molpro an undocumented
+ROHF-based value), the commonly quoted open-shell figure (0.044) reached us only through secondary sources, and the
+deposited Molpro value is, for a producer that reads the first ``T1 diagnostic`` line, the RMP2-stage value. No
+open-shell T1 warning is raised, and no ``D1`` warning (``D1`` has no primary-text threshold we could verify and is
+not deposited by the current producers). Both stay stored and shown. Conditions for adding open-shell T1 are recorded
+in the register entry (:data:`CHECK_WAVEFUNCTION_RELIABILITY_DIAGNOSTICS`).
+
+Where it runs
+-------------
+The diagnostics enter only through the producer payload, written in one place
+(``calculation_resolution.persist_calculation_result``); no parser reads a ``T1 diagnostic`` line from an uploaded log,
+and nothing writes a diagnostic after the deposit. So the check runs once per request, as
+:func:`~app.services.scan_coordinate_conformance.collect_scan_coordinate_warnings` does, over every calculation the
+request persisted, after they are flushed, in every workflow that does. A later path that stores a diagnostic must call
+:func:`collect_wavefunction_reliability_warnings` over the calculations it touched.
+
+A second check slots in
+-----------------------
+The spin-contamination check is a second function in :data:`_CHECKS`, judged against S(S+1) from the same entry
+multiplicity. It is not built yet (its threshold has no accepted primary source); it joins this module and the same
+register entry.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.chemistry.method_names import method_identity_key
+from app.db.models.calculation import Calculation, CalculationSpinDiagnostic, CalculationWavefunctionDiagnostic
+from app.db.models.common import SubmissionRecordType
+from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.species import Species, SpeciesEntry
+from app.db.models.transition_state import TransitionStateEntry
+from app.schemas.upload_warning import UploadWarning
+from app.scientific_checks import (
+    CheckTier,
+    CodeChannel,
+    ConstantThreshold,
+    DesignPosition,
+    PythonCheck,
+    ScientificCheck,
+)
+from app.services.deposit_warnings import note_warning_subject
+
+__all__ = [
+    "CHECK_WAVEFUNCTION_RELIABILITY_DIAGNOSTICS",
+    "T1_CLOSED_SHELL_THRESHOLD",
+    "W_T1_DIAGNOSTIC_ABOVE_CLOSED_SHELL_THRESHOLD",
+    "collect_wavefunction_reliability_warnings",
+    "is_coupled_cluster_method",
+]
+
+#: The warning a closed-shell coupled-cluster calculation earns when its T1 is above the conventional rule of thumb.
+W_T1_DIAGNOSTIC_ABOVE_CLOSED_SHELL_THRESHOLD = "t1_diagnostic_above_closed_shell_threshold"
+
+#: Lee and Taylor (1989): a closed-shell T1 above this "probably indicates the need for a multireference electron
+#: correlation procedure". Strictly greater than: a value of exactly 0.02 is on the line, not past it.
+T1_CLOSED_SHELL_THRESHOLD = 0.02
+
+#: A coupled-cluster method with singles, after the identity key (lower case, curated aliases): an optional local or
+#: spin prefix, CCSD / CCSDT / CCSDTQ / QCISD, an optional parenthesised perturbative term ``(t)`` ``(t1)`` ``(t*)``
+#: ``(q)`` ``(tq)``, and an optional F12 variant. CCD (no singles), CC2 and CC3 (approximate singles) are not in it.
+_COUPLED_CLUSTER = re.compile(
+    r"^(?:dlpno-|pno-l|l|u|r|ro)?(?:ccsdtq|ccsdt|ccsd|qcisd)(?:\((?:t|t1|t\*|q|tq)\))?(?:-f12[abc]?)?$"
+)
+
+
+def is_coupled_cluster_method(method: str | None) -> bool:
+    """True when ``method`` names a coupled-cluster (or QCISD) method with singles, so a T1 diagnostic is defined for it.
+
+    Anything else, including a method the table does not recognise and a composite recipe that contains a CCSD(T) step,
+    is not: absent is absent.
+    """
+    if method is None or not method.strip():
+        return False
+    return _COUPLED_CLUSTER.fullmatch(method_identity_key(method)) is not None
+
+
+@dataclass(frozen=True)
+class _CalculationFacts:
+    """What the checks need to know about one persisted calculation, read once."""
+
+    calculation_id: int
+    method: str | None
+    multiplicity: int | None
+    wavefunction: CalculationWavefunctionDiagnostic | None
+    spin: CalculationSpinDiagnostic | None
+
+
+def _t1_closed_shell(facts: _CalculationFacts) -> UploadWarning | None:
+    """The closed-shell T1 warning, or ``None`` when any of its four conditions does not hold."""
+    if facts.multiplicity != 1 or facts.wavefunction is None:
+        return None
+    t1 = facts.wavefunction.t1_diagnostic
+    if t1 is None or not is_coupled_cluster_method(facts.method):
+        return None
+    if not t1 > T1_CLOSED_SHELL_THRESHOLD:
+        return None
+    return UploadWarning.from_code(
+        field="wavefunction_diagnostic.t1_diagnostic",
+        code=W_T1_DIAGNOSTIC_ABOVE_CLOSED_SHELL_THRESHOLD,
+        context={
+            "t1_diagnostic": float(t1),
+            "threshold": T1_CLOSED_SHELL_THRESHOLD,
+            "multiplicity": 1,
+        },
+    )
+
+
+#: The checks run on every calculation, in order. The spin-contamination check joins here.
+_CHECKS: tuple[Callable[[_CalculationFacts], UploadWarning | None], ...] = (_t1_closed_shell,)
+
+
+def _facts(session: Session, calculation_ids: list[int]) -> list[_CalculationFacts]:
+    rows = session.execute(
+        select(
+            Calculation.id,
+            LevelOfTheory.method,
+            Species.multiplicity,
+            TransitionStateEntry.multiplicity,
+        )
+        .outerjoin(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
+        .outerjoin(SpeciesEntry, SpeciesEntry.id == Calculation.species_entry_id)
+        .outerjoin(Species, Species.id == SpeciesEntry.species_id)
+        .outerjoin(TransitionStateEntry, TransitionStateEntry.id == Calculation.transition_state_entry_id)
+        .where(Calculation.id.in_(calculation_ids))
+    ).all()
+    by_id = {row[0]: row for row in rows}
+    wavefunction = {
+        d.calculation_id: d
+        for d in session.scalars(
+            select(CalculationWavefunctionDiagnostic).where(
+                CalculationWavefunctionDiagnostic.calculation_id.in_(calculation_ids)
+            )
+        )
+    }
+    spin = {
+        d.calculation_id: d
+        for d in session.scalars(
+            select(CalculationSpinDiagnostic).where(CalculationSpinDiagnostic.calculation_id.in_(calculation_ids))
+        )
+    }
+    facts: list[_CalculationFacts] = []
+    for calculation_id in calculation_ids:
+        row = by_id.get(calculation_id)
+        if row is None:
+            continue
+        _, method, species_multiplicity, ts_multiplicity = row
+        facts.append(
+            _CalculationFacts(
+                calculation_id=calculation_id,
+                method=method,
+                multiplicity=species_multiplicity if species_multiplicity is not None else ts_multiplicity,
+                wavefunction=wavefunction.get(calculation_id),
+                spin=spin.get(calculation_id),
+            )
+        )
+    return facts
+
+
+def collect_wavefunction_reliability_warnings(
+    session: Session,
+    calculation_ids: Iterable[int],
+) -> list[UploadWarning]:
+    """Warn on every calculation among ``calculation_ids`` whose stored diagnostic is past its conventional threshold.
+
+    Run once a request's calculations are flushed, over every calculation id the request persisted (or reused), by
+    every workflow that persists calculations. **Never refuses** and never changes anything it reads; see the module
+    note. Each warning is placed on its calculation's own record.
+
+    :param session: Active SQLAlchemy session.
+    :param calculation_ids: Every calculation id the request persisted; calculations with no diagnostic row earn
+        nothing.
+    :returns: Warnings in the request's calculation order.
+    """
+    ids = list(dict.fromkeys(calculation_ids))
+    if not ids:
+        return []
+    warnings: list[UploadWarning] = []
+    for facts in _facts(session, ids):
+        if facts.wavefunction is None and facts.spin is None:
+            continue
+        for check in _CHECKS:
+            warning = check(facts)
+            if warning is None:
+                continue
+            note_warning_subject(session, warning, SubmissionRecordType.calculation, facts.calculation_id)
+            warnings.append(warning)
+    return warnings
+
+
+# ---------------------------------------------------------------------------
+# Scientific check registration (see backend/app/scientific_checks)
+# ---------------------------------------------------------------------------
+
+CHECK_WAVEFUNCTION_RELIABILITY_DIAGNOSTICS = ScientificCheck(
+    group="Wavefunction reliability diagnostics",
+    sort_key=1,
+    code=W_T1_DIAGNOSTIC_ABOVE_CLOSED_SHELL_THRESHOLD,
+    asserts=(
+        "A wavefunction reliability diagnostic that a calculation carries is reported when it is past its "
+        "conventional threshold, with that threshold's source named and without judging what it means: today, the T1 "
+        "diagnostic of a closed-shell coupled-cluster calculation above 0.02 (Lee and Taylor, 1989). The result is "
+        "stored as deposited; nothing about the value, the record's review status or any selection changes."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    tier_rationale=(
+        "A closed-shell CCSD(T) energy whose reference is a poor starting point could be wrong in a scientifically "
+        "interesting way, and the group's own closed-shell transition states do cross 0.02. But the diagnostic is a "
+        "contested rule of thumb: in a 50-molecule atomization-energy test at least 75% of the molecules T1 or D1 "
+        "flagged had no large error (Sprague and Irikura 2014), and T1 is argued to measure orbital relaxation "
+        "rather than multireference character. So it can only be an expectation (ADR 0008): a notable property of a "
+        "correct result, reported once and worded as 'above the rule of thumb', never as 'the system is "
+        "multireference'. This reverses the earlier position that T1 and D1 are 'deliberately not enforced or "
+        "labelled' (scientific_calculation_reads.md); the reasons it is now acceptable are that the scope is closed "
+        "shell only, the threshold has a primary source, and the sentence does not judge. The scope is the "
+        "calculation: a thermo or kinetics record citing it earns no warning of its own."
+    ),
+    adr="0008",
+    enforced_by=(
+        PythonCheck(
+            collect_wavefunction_reliability_warnings,
+            note=(
+                "The write path: run once a request's calculations are flushed, over every calculation the request "
+                "persisted, by every workflow that does (conformer, transition state, computed species, computed "
+                "reaction, thermo, statmech, transport, network). The diagnostics enter only through the producer "
+                "payload and nothing writes one later, so there is no late path. Fires when the entry's multiplicity "
+                "(read from the entry, never inferred) is 1, a T1 is stored, the calculation's method is a "
+                "coupled-cluster method with singles (CCSD, CCSD(T), F12, DLPNO and PNO variants, CCSDT, QCISD) and "
+                "T1 is strictly above 0.02. Absent is absent. Open-shell T1 and D1 are stored and shown, never "
+                "warned on."
+            ),
+        ),
+        PythonCheck(
+            is_coupled_cluster_method,
+            note=(
+                "Scopes the T1 rule to methods whose T1 is Lee and Taylor's: a coupled-cluster method with "
+                "singles. A method the table does not recognise, a composite recipe that contains a CCSD(T) step, "
+                "CCD, CC2 and CC3 are not in it."
+            ),
+        ),
+        DesignPosition(
+            where=(
+                "Open-shell T1 and D1 are deliberately not thresholded. Add an open-shell T1 warning only when all "
+                "three hold: (1) the producer reads the last 'T1 diagnostic' line of a Molpro open-shell log, not "
+                "the first (the first is the RMP2-stage value, roughly thirty times too small); (2) TCKDB records the "
+                "reference type (RHF, UHF or ROHF) next to the diagnostic, because the programs define open-shell T1 "
+                "differently; (3) an open-shell threshold with a primary source is in hand (the 0.044 figure reached "
+                "us only through secondary sources). D1 additionally needs a threshold verified in Janssen and "
+                "Nielsen (1998) or a successor, and a producer that deposits it. The spin-contamination check "
+                "(<S^2> against S(S+1) from the entry's multiplicity) joins this entry."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "None needed -- the check never refuses. A calculation whose T1 is above 0.02 for a reason the depositor "
+        "understands is stored as sent; the warning only reports the value against the rule of thumb."
+    ),
+    thresholds=(
+        ConstantThreshold(
+            name="t1_closed_shell_threshold",
+            value=T1_CLOSED_SHELL_THRESHOLD,
+            unit="dimensionless (norm of the singles amplitudes over the square root of the number of correlated electrons)",
+            rationale=(
+                "Lee and Taylor, Int. J. Quantum Chem. 1989, 36 (S23), 199 (doi:10.1002/qua.560360824): 'a large T1 "
+                "(i.e., >0.02) probably indicates the need for a multireference electron correlation procedure'. A "
+                "rule of thumb with a hedge in its own abstract, used only for closed-shell coupled-cluster "
+                "calculations, where every program computes the same quantity. Strictly greater than, so 0.0200 is "
+                "on the line and does not warn."
+            ),
+        ),
+    ),
+)

@@ -127,6 +127,7 @@ REGISTER_ENTRY: dict[str, int] = {
     "reported_network_solve": 37,
     "network_wide_energy_transfer_scope": 38,
     "scan_point_coordinate_disagrees_with_geometry": 49,
+    "t1_diagnostic_above_closed_shell_threshold": 52,
 }
 
 #: Codes whose subject is a shared, deduplicated identity row (a species, a reaction, a literature entry, a ref
