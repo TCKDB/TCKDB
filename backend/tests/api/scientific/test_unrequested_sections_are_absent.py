@@ -754,7 +754,8 @@ def test_the_parametrisation_asserts_its_own_size():
     # fourth field to that same table.
     # 93 after ``include=statmech`` joined TRANSITION_STATE_RECORD_SECTIONS
     # (#621).
-    assert len(sections_under_test) == 93
+    # 94 after ``effective_settings`` joined the ``parameters`` token of CALCULATION_RECORD_SECTIONS.
+    assert len(sections_under_test) == 94
 
 
 # ---------------------------------------------------------------------------

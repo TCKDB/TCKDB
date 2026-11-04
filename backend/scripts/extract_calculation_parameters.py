@@ -42,16 +42,11 @@ echoed row wins where both state a setting; the numbers the log reports are stor
 log, which echoes the input.
 
 When multiple input artifacts exist for one calculation, the backfill
-parser uses the **earliest input artifact by ``calculation_artifact.id``**
-(``ORDER BY id ASC LIMIT 1``).
-
-Rationale: the first input artifact is the one most likely to represent
-the file that actually drove the calculation in normal ARC/TCKDB uploads.
-Later input artifacts are ambiguous without an explicit
-supersession/replacement model — they may be corrections, debug files,
-annotations, or accidental duplicates. Until artifact replacement is
-modeled, deterministic earliest-upload wins is safer than
-last-write-wins.
+parser uses the **latest input artifact by ``calculation_artifact.id``**
+(``ORDER BY id DESC LIMIT 1``), in every mode: it is the deck an upload's
+replace-all leaves standing, so a re-run, with or without ``--force``,
+does not flip a calculation that has several decks. (Before 2026-11-04 the
+earliest deck was used; the two rules disagreed with what an upload stores.)
 
 If an operator needs to point the parser at a different artifact, use
 ``--artifact-id`` (single-calculation mode only) to override the
@@ -104,8 +99,7 @@ def _select_input_artifact(
     calculation_id: int,
     *,
     artifact_id_override: int | None = None,
-    latest_deck: bool = False,
-) -> CalculationArtifact | None:
+    ) -> CalculationArtifact | None:
     """Pick the input artifact to feed the parser for one calculation.
 
     Returns ``None`` if no input artifact exists. With
@@ -113,7 +107,7 @@ def _select_input_artifact(
     is an input artifact attached to ``calculation_id`` — otherwise
     ``None``.
 
-    Selection rule (no override): ``ORDER BY id ASC LIMIT 1`` over
+    Selection rule (no override): ``ORDER BY id DESC LIMIT 1`` over
     ``CalculationArtifact`` rows where ``kind = 'input'`` and
     ``calculation_id = calculation_id``. See module docstring for
     rationale.
@@ -139,7 +133,7 @@ def _select_input_artifact(
                 CalculationArtifact.calculation_id == calculation_id,
                 CalculationArtifact.kind == kind,
             )
-            .order_by(CalculationArtifact.id.desc() if (latest_deck and kind is ArtifactKind.input) else CalculationArtifact.id.asc())
+            .order_by(CalculationArtifact.id.desc() if kind is ArtifactKind.input else CalculationArtifact.id.asc())
             .limit(1)
         )
         if row is not None:
@@ -240,7 +234,7 @@ def _process_one(
         return False
 
     artifact = _select_input_artifact(
-        session, calculation_id, artifact_id_override=artifact_id_override, latest_deck=force
+        session, calculation_id, artifact_id_override=artifact_id_override
     )
     if artifact is None:
         stats.skipped_no_artifact += 1

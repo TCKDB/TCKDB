@@ -28,7 +28,7 @@ import re
 from tckdb_schemas.hessian_method_assumption import is_dft_functional
 from tckdb_schemas.software import normalize_software_name
 
-__all__ = ["ASSUMED_DEFAULT_SETTINGS", "assumed_default_setting", "display_major_version"]
+__all__ = ["ASSUMED_DEFAULT_SETTINGS", "assumed_default_setting", "display_major_version", "uses_dft_grid"]
 
 #: ``(normalised software name, major version) -> {setting: default value}``. Values are the canonical
 #: ``grid.quality`` tokens the parsers emit for a requested grid (``fine``, ``ultrafine``, ``defgrid2``), so an
@@ -75,7 +75,7 @@ def display_major_version(software: str | None, version: str | None) -> int | No
 _SPIN_PREFIXES = ("ro", "u", "r")
 
 
-def _uses_dft_grid(method: str | None) -> bool:
+def uses_dft_grid(method: str | None) -> bool:
     """True for a DFT functional, also when written with an RI or spin prefix (``RI-B2PLYP``, ``UB3LYP``)."""
     if not method:
         return False
@@ -101,6 +101,6 @@ def assumed_default_setting(
     major = display_major_version(software, version)
     if major is None or not software:
         return None
-    if setting in _DFT_ONLY and not _uses_dft_grid(method):
+    if setting in _DFT_ONLY and not uses_dft_grid(method):
         return None
     return ASSUMED_DEFAULT_SETTINGS.get((normalize_software_name(software), major), {}).get(setting)

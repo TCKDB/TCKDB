@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from tckdb_schemas.hessian_method_assumption import infer_hessian_method
 from tckdb_schemas.program_default_settings import assumed_default_setting, display_major_version
 

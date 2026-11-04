@@ -32,7 +32,9 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tckdb_schemas.fragments.version import ParserStamp
+from tckdb_schemas.program_default_settings import uses_dft_grid
 
+from app.chemistry.method_families import MethodFamily, classify_method
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -160,15 +162,31 @@ def _to_observation(parsed: dict) -> ParserObservation:
     )
 
 
+def _grid_is_this_calculations(calculation: Calculation) -> bool:
+    """True when the calculation's own level of theory integrates on a DFT grid (DFT, double hybrid, or a composite).
+
+    A log can hold the grid of a different job (a ``--Link1--`` file whose second job is a coupled-cluster step that
+    prints no grid), so a reported grid is attached only to a calculation whose method has a grid of its own. For a
+    composite the reported grid rows already require every step to agree.
+    """
+    method = calculation.lot.method if calculation.lot is not None else None
+    if not method:
+        return False
+    return classify_method(method).family is MethodFamily.composite or uses_dft_grid(method)
+
+
 def _observations_of(
-    software: SoftwareName, text: str, parsed: dict, artifact_kind: ArtifactKind
+    software: SoftwareName, text: str, parsed: dict, artifact_kind: ArtifactKind, calculation: Calculation
 ) -> list[ParserObservation]:
     """The parser's requested rows, and for an output log the rows the log reports as used (Gaussian and ORCA)."""
     observations = [_to_observation(p) for p in parsed.get("parameters", [])]
     if artifact_kind is ArtifactKind.output_log:
         reporter = {"gaussian": parse_gaussian_reported, "orca": parse_orca_reported}.get(software)
         if reporter is not None:
-            observations += [_to_observation(p) for p in reporter(text)]
+            reported = reporter(text)
+            if not _grid_is_this_calculations(calculation):
+                reported = [r for r in reported if r.get("section") != "grid"]
+            observations += [_to_observation(p) for p in reported]
     return observations
 
 
@@ -331,7 +349,7 @@ def extract_and_store_calculation_parameters(
         disagreements_before = reported_setting_disagreements(session, calculation, software)
     except Exception:  # pragma: no cover - defensive, never blocks
         disagreements_before = []
-    observations = _observations_of(software, artifact_text, parsed, artifact_kind)
+    observations = _observations_of(software, artifact_text, parsed, artifact_kind, calculation)
     # What this artifact requests, before the precedence rule drops any of it: the typed-versus-read judgement is
     # made on this, so it does not depend on which artifact of the request was read first. A reported value is not
     # a request and is never judged against what the depositor typed.
@@ -440,7 +458,7 @@ def _parse_stored_artifact(session: Session, calculation: Calculation, artifact:
     software = _resolve_software(calculation, text)
     parsed = _run_parser(software, text)
     stamp = ParserStamp(**parsed["parser"]) if isinstance(parsed.get("parser"), dict) else None
-    return software, _observations_of(software, text, parsed, artifact.kind), stamp
+    return software, _observations_of(software, text, parsed, artifact.kind, calculation), stamp
 
 
 def _append_log_observations(session: Session, calculation: Calculation, software, observations, stamp) -> None:

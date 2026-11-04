@@ -8,13 +8,14 @@ from __future__ import annotations
 import base64
 import glob
 import json
+import re
 from functools import cache
 from pathlib import Path
 
 import pytest
 
 from app.services.parameter_reconciliation import orca_preset_disagreements
-from app.services.reported_settings_parser import parse_gaussian_reported, parse_orca_reported
+from app.services.reported_settings_parser import _G_SCF, parse_gaussian_reported, parse_orca_reported
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 _ARC_PAYLOAD = next((FIXTURES / "arc_runs" / "rotor_scan_8").glob("tckdb_payloads/computed_reaction/*.payload.json"))
@@ -207,9 +208,7 @@ def test_real_multi_step_logs_are_not_suppressed(fixture):
 
 def test_the_guard_fires_on_no_gaussian_fixture_log():
     """Corpus: every Gaussian log (standalone, composite, ARC payloads) keeps its reported rows."""
-    import re
 
-    from app.services.gaussian_parameter_parser import all_route_texts
 
     logs = []
     for payload in glob.glob(str(FIXTURES / "arc_runs" / "*" / "tckdb_payloads" / "computed_reaction" / "*.payload.json")):
@@ -219,9 +218,16 @@ def test_the_guard_fires_on_no_gaussian_fixture_log():
         if not path.endswith(".md"):
             logs.append(Path(path).read_text(errors="replace"))
     assert len(logs) > 100
+    with_reports = 0
     for text in logs:
-        assert text.count("Entering Gaussian System") == 1
-        assert len(all_route_texts(text)) <= len(re.findall("Proceeding to internal job step", text)) + 1
+        # A log that prints a report must keep it: the guard may not suppress any real single-job fixture.
+        codes = set(re.findall(r"IXCGrd=\s*\d+ IRadAn=\s*(\d+)", text))
+        scf = set(_G_SCF.findall(text))
+        if (codes or scf) and len(codes) <= 1 and len(scf) <= 1:
+            # One value per setting throughout: only the job guard could empty the result.
+            with_reports += 1
+            assert parse_gaussian_reported(text), "a fixture log's reports were suppressed"
+    assert with_reports > 100
 
 
 def test_a_job_that_prints_no_value_does_not_borrow_one_from_the_other_job():

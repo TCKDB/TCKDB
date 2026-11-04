@@ -621,6 +621,8 @@ class TestForceDeckChoice:
         assert self._scf(db_session, calc_id) == {"tight"}
         script_mod.run_backfill(db_session, calculation_id=calc_id, force=True)
         assert self._scf(db_session, calc_id) == {"very_tight"}
-        # Without --force the earliest deck is still the default.
+        # One rule in every mode: the latest deck, with or without --force, so repeated runs do not flip.
         script_mod.run_backfill(db_session, calculation_id=calc_id)
-        assert self._scf(db_session, calc_id) == {"tight"}
+        assert self._scf(db_session, calc_id) == {"very_tight"}
+        script_mod.run_backfill(db_session, calculation_id=calc_id, force=True)
+        assert self._scf(db_session, calc_id) == {"very_tight"}

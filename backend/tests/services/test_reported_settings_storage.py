@@ -505,3 +505,27 @@ def test_refresh_rebuilds_deck_rows_from_the_deck_the_caller_chose(db_conn, monk
         assert scf(session, calc) == {"very_tight"}
         cpe.refresh_output_log_rows(session, calc)  # default: the deck an upload leaves standing, the latest
         assert scf(session, calc) == {"very_tight"}
+
+
+def test_a_reported_grid_attaches_only_to_a_calculation_whose_own_method_has_a_dft_grid(db_conn):
+    """A log can hold another job's grid. Synthetic: a grid line from a DFT fixture spliced into a coupled-cluster log."""
+    line = " IXCGrd= 4 IRadAn=           5 IRanWt=          -1 IRanGd=           0 AccXCQ= 0.00D+00.\n"
+    assert line.split()[2] in _G09_LOG  # the spliced line is verbatim from the DFT fixture
+    cc_log = (FIXTURES / "gaussian_composite" / "g3_ethylene_g03.log").read_text(errors="replace") + "\n" + line
+    from app.services.reported_settings_parser import parse_gaussian_reported
+
+    assert {r["raw_key"] for r in parse_gaussian_reported(cc_log)} >= {"IRadAn"}  # the parser sees it...
+
+    def stored_keys(method, text):
+        with Session(db_conn) as session, session.begin():
+            calc = _calc(session, software="gaussian", version="09", method=method)
+            _read(session, calc, text)
+            return {r.raw_key for r in _rows(session, calc) if r.statement_kind is ParameterStatementKind.reported}
+
+    cc = stored_keys("CCSD(T)", cc_log)
+    assert "IRadAn" not in cc and "rms_density" in cc  # ...the CC calculation gets no grid row, and keeps its SCF rows
+    assert "IRadAn" in stored_keys("B3LYP", _G09_LOG)  # a DFT calculation keeps it
+    assert "IRadAn" in stored_keys("wB97X-D", _G09_LOG)
+    composite = (FIXTURES / "gaussian_composite" / "g4_methanol_g16.out").read_text(errors="replace")
+    assert "IRadAn" in stored_keys("G4", composite)  # a composite keeps it (its steps already had to agree)
+    assert "IRadAn" not in stored_keys("MP2", _G09_LOG)
