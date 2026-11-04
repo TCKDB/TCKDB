@@ -335,6 +335,9 @@ def test_family_and_rung_are_never_an_order_key_a_tie_break_or_a_select_default(
         "api/routes/scientific/transition_states_browse.py",
         "schemas/reads/_method_family.py",
         "schemas/reads/scientific_level_of_theory.py",
+        # Asks one yes/no question: is this calculation's method a composite (or DFT), so that a log's reported grid
+        # rows belong to its own method. It filters, orders and selects no records.
+        "services/calculation_parameter_extraction.py",
         # Asks only whether a stripped prefix or suffix leaves a known method name (a membership test); it filters
         # and orders nothing.
         "services/parameter_reconciliation.py",
