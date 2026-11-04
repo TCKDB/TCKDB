@@ -7,8 +7,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from tckdb_schemas.thermo_declarations import StoredThermoProtocolDeclaration
 
 from app.db.models.common import (
@@ -22,6 +23,7 @@ from app.db.models.common import (
 from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
 from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
+from app.schemas.reads.scientific_calculation import RoleCalculationSettings
 from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
     CursorToken,
@@ -344,6 +346,12 @@ class ThermoRecord(BaseModel):
     # Group-additivity estimation breakdown; null unless the record is an
     # estimated thermo with an attached GA breakdown (DR-0035).
     group_additivity: GroupAdditivityBlock | None = None
+    #: ``include=calculation_settings``. For each of geometry / frequency / energy, the calculation this record links
+    #: for that level and the grid and SCF convergence it used, each with its evidence. A level with no linked
+    #: calculation is listed as absent. Never filled from an unlinked statmech or a sibling record.
+    calculation_settings: list[RoleCalculationSettings] | None = None
+    #: Filled by the record builder, read by ``attach_calculation_settings``; never on the wire.
+    _level_plan: Any = PrivateAttr(default=None)
     trust: TrustFragment | None = None
     assessments: PublicAssessmentSummary | None = None
 

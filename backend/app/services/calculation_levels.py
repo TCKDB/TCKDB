@@ -335,6 +335,74 @@ def derive_levels(
     )
 
 
+def level_suppliers(
+    derived: DerivedLevels,
+    *,
+    opts: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+    freqs: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+    sps: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+    composites: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+    importeds: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+    legacy_composites: "Sequence[tuple[int, RoleCalcInfo]]" = (),
+) -> dict[str, tuple[str | None, list[int]]]:
+    """Which calculations supplied each level ``derived`` reports: ``{level: (source, calculation ids, lowest first)}``.
+
+    ``derived`` is the answer :func:`derive_levels` gave for the record's FULL set of links, and the role lists are the
+    same links with their calculation ids (each lowest id first). The suppliers of a level are the calculations of the
+    supplying role at the derived level (every calculation of the role when the energy is ``"ambiguous"``, since they all
+    disagreed). This is the one place the supplier rule lives: the evidence rule
+    (:func:`withhold_levels_from_calculations`) and the settings behind a level both read it, so they cannot disagree
+    about which calculation a level came from. A level with no source has no suppliers.
+    """
+
+    def at(group: "Sequence[tuple[int, RoleCalcInfo]]", lot_id: int | None) -> "list[tuple[int, RoleCalcInfo]]":
+        return [(cid, info) for cid, info in group if info.lot_id == lot_id]
+
+    geometry_lot = derived.geometry_lot_id
+    if derived.geometry_source == "opt":
+        geometry = at(opts, geometry_lot)
+    elif derived.geometry_source == "composite_recipe":
+        geometry = [
+            (cid, info) for cid, info in composites if info.has_output_geometry and info.recipe_geometry_lot_id == geometry_lot
+        ]
+    else:
+        geometry = []
+
+    frequency_lot = derived.frequency_lot_id
+    if derived.frequency_source == "freq":
+        frequency = at(freqs, frequency_lot)
+    elif derived.frequency_source == "opt":
+        frequency = [(cid, info) for cid, info in at(opts, frequency_lot) if info.carries_frequencies]
+    elif derived.frequency_source == "composite_recipe":
+        frequency = [
+            (cid, info) for cid, info in composites if info.has_output_geometry and info.recipe_frequency_lot_id == frequency_lot
+        ]
+    else:
+        frequency = []
+
+    energy_lot = derived.energy_lot_id
+    source = derived.energy_source
+    if source == "composite":
+        energy = at(composites or legacy_composites, energy_lot)
+    elif source == "sp":
+        energy = at(sps, energy_lot)
+    elif source == "opt":
+        energy = at(opts, energy_lot)
+    elif source == "imported":
+        energy = at(importeds, energy_lot)
+    elif source == "ambiguous":
+        distinct_composite_lots = {info.lot_id for _, info in composites if info.lot_id is not None}
+        energy = list(composites) if len(distinct_composite_lots) > 1 else list(sps)
+    else:
+        energy = []
+
+    return {
+        "geometry": (derived.geometry_source, [cid for cid, _ in geometry]),
+        "frequency": (derived.frequency_source, [cid for cid, _ in frequency]),
+        "energy": (derived.energy_source, [cid for cid, _ in energy]),
+    }
+
+
 def withhold_levels_from_calculations(
     derived: DerivedLevels,
     *,
@@ -356,64 +424,25 @@ def withhold_levels_from_calculations(
     role. A level that a calculation still shown also supplies (another ``sp`` at the same level) is a fact about that
     calculation too, and stays.
 
-    The suppliers of a level are the calculations of the supplying role at the derived level (every calculation of the role
-    when the energy is ``"ambiguous"``, since they all disagreed). With ``withheld`` empty ``derived`` is returned as it is.
+    The suppliers are those of :func:`level_suppliers`. With ``withheld`` empty ``derived`` is returned as it is.
     """
     if not withheld:
         return derived
+    suppliers = level_suppliers(
+        derived, opts=opts, freqs=freqs, sps=sps, composites=composites, importeds=importeds, legacy_composites=legacy_composites
+    )
 
-    def gone(suppliers: "Sequence[tuple[int, RoleCalcInfo]]") -> bool:
-        return bool(suppliers) and all(cid in withheld for cid, _ in suppliers)
-
-    def at(group: "Sequence[tuple[int, RoleCalcInfo]]", lot_id: int | None) -> "list[tuple[int, RoleCalcInfo]]":
-        return [(cid, info) for cid, info in group if info.lot_id == lot_id]
+    def gone(level: str) -> bool:
+        ids = suppliers[level][1]
+        return bool(ids) and all(cid in withheld for cid in ids)
 
     update: dict[str, object] = {}
-
-    geometry_lot = derived.geometry_lot_id
-    if derived.geometry_source == "opt":
-        geometry_suppliers = at(opts, geometry_lot)
-    elif derived.geometry_source == "composite_recipe":
-        geometry_suppliers = [
-            (cid, info) for cid, info in composites if info.has_output_geometry and info.recipe_geometry_lot_id == geometry_lot
-        ]
-    else:
-        geometry_suppliers = []
-    if gone(geometry_suppliers):
+    if gone("geometry"):
         update.update(geometry_lot_id=None, geometry_source=None)
-
-    frequency_lot = derived.frequency_lot_id
-    if derived.frequency_source == "freq":
-        frequency_suppliers = at(freqs, frequency_lot)
-    elif derived.frequency_source == "opt":
-        frequency_suppliers = [(cid, info) for cid, info in at(opts, frequency_lot) if info.carries_frequencies]
-    elif derived.frequency_source == "composite_recipe":
-        frequency_suppliers = [
-            (cid, info) for cid, info in composites if info.has_output_geometry and info.recipe_frequency_lot_id == frequency_lot
-        ]
-    else:
-        frequency_suppliers = []
-    if gone(frequency_suppliers):
+    if gone("frequency"):
         update.update(frequency_lot_id=None, frequency_source=None)
-
-    energy_lot = derived.energy_lot_id
-    source = derived.energy_source
-    if source == "composite":
-        energy_suppliers = at(composites or legacy_composites, energy_lot)
-    elif source == "sp":
-        energy_suppliers = at(sps, energy_lot)
-    elif source == "opt":
-        energy_suppliers = at(opts, energy_lot)
-    elif source == "imported":
-        energy_suppliers = at(importeds, energy_lot)
-    elif source == "ambiguous":
-        distinct_composite_lots = {info.lot_id for _, info in composites if info.lot_id is not None}
-        energy_suppliers = list(composites) if len(distinct_composite_lots) > 1 else list(sps)
-    else:
-        energy_suppliers = []
-    if gone(energy_suppliers):
+    if gone("energy"):
         update.update(energy_lot_id=None, energy_source=None)
-
     return derived._replace(**update) if update else derived
 
 

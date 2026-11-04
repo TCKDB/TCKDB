@@ -51,6 +51,7 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.keyset import Paging
 from app.services.scientific_read.public_assessments import attach_thermo_trust
+from app.services.scientific_read.role_settings import attach_calculation_settings
 from app.services.scientific_read.species import search_species
 from app.services.scientific_read.thermo import get_species_thermo
 
@@ -75,6 +76,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "all",
     "assessments",
     "trust",
+    "calculation_settings",
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments", "trust"}
 
@@ -265,6 +267,11 @@ def search_thermo(
             session,
             [(rec.thermo, rec.thermo.thermo_id) for rec in returned],
         )
+
+    # Likewise the settings behind each level: resolved for the returned page only. Forwarded into
+    # ``get_species_thermo`` they would be built for every candidate the search walked.
+    if "calculation_settings" in includes:
+        attach_calculation_settings(session, [rec.thermo for rec in returned])
 
     summary = review_summary(rec.thermo.review for rec in flat)
 

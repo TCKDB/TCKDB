@@ -1058,6 +1058,28 @@ class EffectiveSettingSummary(BaseModel):
     conflicting: bool = False
 
 
+class RoleCalculationSettings(BaseModel):
+    """The settings behind one level (geometry, frequency or energy) of a thermo or statmech record.
+
+    ``calculation_ref`` is the calculation the record itself links under that level, picked the way the record's
+    ``levels`` are derived; ``settings`` is that calculation's :class:`EffectiveSettingSummary` list, built by the same
+    code as the calculation read. A level the record has no linked calculation for is listed with
+    ``calculation_ref=null`` and an ``absent_reason``; it is never filled from a sibling record or an unlinked
+    calculation. Computed when the record is read; nothing here is stored.
+
+    ``absent_reason``: ``not_linked`` (no linked calculation answers this level), ``ambiguous`` (linked energy
+    calculations disagree on level of theory, so there is no single one), ``composite_recipe`` (the level is the
+    internal level of a composite method, not a calculation anybody deposited). A level whose linked calculations the
+    active review profile hides is left out of the list altogether.
+    """
+
+    role: Literal["geometry", "frequency", "energy"]
+    calculation_ref: str | None = None
+    calculation_type: CalculationType | None = None
+    absent_reason: Literal["not_linked", "ambiguous", "composite_recipe"] | None = None
+    settings: list[EffectiveSettingSummary] = Field(default_factory=list)
+
+
 class CalculationParameterSummary(BaseModel):
     """One parsed ``calculation_parameter`` row, projected for the
     ``include=parameters`` heavy include.

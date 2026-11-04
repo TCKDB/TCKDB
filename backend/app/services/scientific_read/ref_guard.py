@@ -99,6 +99,7 @@ from app.schemas.reads.scientific_calculation import (
     CalculationCompositeInputSummary,
     CalculationConformerSummary,
     CalculationDependencySummary,
+    RoleCalculationSettings,
     TransitionStateEntryOwnerSummary,
 )
 from app.schemas.reads.scientific_common import (
@@ -277,6 +278,8 @@ POINTER_MODELS: frozenset[type[BaseModel]] = frozenset(
         TransitionStateStatmechSummary,
         TransitionStateStatmechSourceCalculation,
         CalculationEvidenceSummary,
+        # The settings behind a thermo or statmech level: a block about the linked calculation.
+        RoleCalculationSettings,
         # PR-2a: the species-side family.
         StatmechTransitionStateContext,
         CalculationCompositeInputSummary,

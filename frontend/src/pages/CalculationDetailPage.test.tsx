@@ -1039,6 +1039,51 @@ describe("CalculationDetailPage", () => {
         ])
     })
 
+    it("labels each parsed parameter requested or reported with its source, and summarises grid and SCF with their evidence state", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            if (!includes.includes("parameters")) return HttpResponse.json({ record: mockRecord() })
+            return HttpResponse.json({
+                record: mockRecord({
+                    parameters: [
+                        { raw_key: "AngularGrid", raw_value: "4", canonical_key: "grid.angular_max", canonical_value: "302", source: "parser", artifact_kind: "output_log", statement_kind: "reported" },
+                        { raw_key: "!", raw_value: "TightSCF", canonical_key: "scf.convergence", canonical_value: "tight", source: "parser", artifact_kind: "input", statement_kind: "requested" },
+                        { raw_key: "typed", raw_value: "x", canonical_key: "grid.quality", canonical_value: "ultrafine", source: "upload", artifact_kind: null, statement_kind: null },
+                        { raw_key: "typed2", raw_value: "x", canonical_key: "scf.convergence", canonical_value: "DEPOSITOR_SENTINEL_value", source: "upload", artifact_kind: null, statement_kind: null },
+                    ],
+                    effective_settings: [
+                        { setting: "grid", state: "reported", requested_value: null, requested_from: null, reported: [{ key: "grid.angular_max", value: "302" }], assumed_value: null, conflicting: false },
+                        { setting: "scf_convergence", state: "assumed_default_no_output_log", requested_value: null, requested_from: null, reported: [], assumed_value: "tight", conflicting: false },
+                    ],
+                }),
+            })
+        }))
+        page()
+        await findLoaded("Frequency")
+        const summary = screen.getByText("Parsed parameters")
+        const section = summary.closest("details") as HTMLElement
+        fireEvent.click(summary)
+
+        const table = await within(section).findByRole("table", { name: "Parsed execution parameters" })
+        const statements = within(table).getAllByText(/^(Reported|Requested)/).map((cell) => cell.textContent)
+        expect(statements).toEqual(["Reported · output log", "Requested · input file", "Requested · depositor", "Requested · depositor"])
+        // A closed-set grid token prints; a typed value outside the set reads "recorded", never the typed string.
+        expect(within(table).getByText("ultrafine")).toBeInTheDocument()
+        expect(document.body.innerHTML).not.toContain("DEPOSITOR_SENTINEL")
+        // "loaded." is announced to screen readers but not drawn.
+        expect(within(section).getByText("Parsed parameters loaded.")).toHaveClass("section-status-quiet")
+        expect(within(table).getByText("Reported · output log")).toHaveAttribute("data-parameter-statement", "reported")
+
+        const effective = within(section).getByRole("table", { name: "Effective settings" })
+        const gridRow = within(effective).getByRole("row", { name: /DFT grid/ })
+        expect(within(gridRow).getByText("Reported")).toBeVisible()
+        expect(within(gridRow).getByText((_c, el) => el?.classList.contains("settings-reported-item") === true && el.textContent?.replaceAll("\u00a0", " ") === "largest angular grid 302")).toBeVisible()
+        const scfRow = within(effective).getByRole("row", { name: /SCF convergence/ })
+        const assumed = within(scfRow).getByText("Assumed default (no log)")
+        expect(assumed).toHaveAttribute("data-settings-state", "assumed")
+        expect(within(scfRow).getByText("tight")).toHaveClass("settings-value--assumed")
+    })
+
     it("gives a failed section fetch its own status message, distinct from every empty state", async () => {
         server.use(http.get(ENDPOINT, ({ request }) => {
             const includes = new URL(request.url).searchParams.getAll("include")

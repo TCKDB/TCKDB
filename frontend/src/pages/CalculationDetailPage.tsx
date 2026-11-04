@@ -16,6 +16,7 @@ import {
     type CalculationIRC,
     type CalculationImaginaryModeProjection,
     type CalculationParameter,
+    type CalculationParametersSection,
     type CalculationPathSearch,
     type CalculationRecord,
     type CalculationSCFStability,
@@ -24,7 +25,9 @@ import {
     type CalculationWavefunctionDiagnostic,
     type OnDemandSectionToken,
 } from "../api/calculationApi"
+import { parameterStatement, parameterValueText } from "../domain/effectiveSettings"
 import { publicParameterValue } from "../domain/publicText"
+import { EffectiveSettingsSummary } from "../components/EffectiveSettings"
 import { ArtifactDownloadButton } from "../components/ArtifactDownloadButton"
 import { CalculationDependencyGraph } from "../components/CalculationDependencyGraph"
 import { CompositeSchemeLink } from "../components/CompositeSchemeLink"
@@ -1266,7 +1269,8 @@ function LazySection<T>({
     if (!applicable || !available) return null
     return (
         <Disclosure id={id} summary={heading} onToggle={(open) => { if (open) onOpen() }}>
-            <p className="note" role="status">
+            {/* The "loaded" confirmation is for screen readers only; "Loading" and errors stay visible. */}
+            <p className={state.status === "ready" ? "note section-status-quiet" : "note"} role="status">
                 {state.status === "loading" && "Loading…"}
                 {state.status === "error" && state.message}
                 {state.status === "ready" && `${heading} loaded.`}
@@ -1549,27 +1553,47 @@ function SpinDiagnosticSection({ calculationRef, available }: { calculationRef: 
 }
 
 function ParametersSection({ calculationRef, available }: { calculationRef: string; available: boolean }) {
-    const [state, open] = useSection<CalculationParameter[] | null>(calculationRef, "parameters")
+    const [state, open] = useSection<CalculationParametersSection>(calculationRef, "parameters")
     return (
         <LazySection id="section-parsed-parameters" heading="Parsed parameters" available={available} state={state} onOpen={open}>
-            {(rows) => (rows?.length ? (
-                <div className="table-scroll">
-                    <table className="data-table" aria-label="Parsed execution parameters">
-                        <thead><tr><th scope="col">Key</th><th scope="col">Value</th></tr></thead>
-                        <tbody>
-                            {rows.map((row, index) => (
-                                <tr key={`param-${index}`}>
-                                    {/* Only a key TCKDB recognised (`canonical_key`, its own vocabulary) is
-                                        printed. `raw_key`, `raw_value`, `section` and `unit` are strings the
-                                        producer wrote (house rule, owner decision 2026-11-03). */}
-                                    <td data-label="Key">{row.canonical_key ?? "unrecognised parameter"}</td>
-                                    <td data-label="Value">{row.canonical_key ? publicParameterValue(row.canonical_value) : "not shown"}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            ) : <p className="empty-projection">The archive returned no parameter rows.</p>)}
+            {(section) => {
+                const rows: CalculationParameter[] | null = section?.rows ?? null
+                return (
+                    <>
+                        <EffectiveSettingsSummary settings={section?.effectiveSettings ?? null} />
+                        {rows?.length ? (
+                            <div className="table-scroll">
+                                <table className="data-table" aria-label="Parsed execution parameters">
+                                    <thead><tr><th scope="col">Key</th><th scope="col">Value</th><th scope="col">Statement</th></tr></thead>
+                                    <tbody>
+                                        {rows.map((row, index) => {
+                                            const statement = parameterStatement(row)
+                                            return (
+                                                <tr key={`param-${index}`}>
+                                                    {/* Only a key TCKDB recognised (`canonical_key`, its own vocabulary) is
+                                                        printed. `raw_key`, `raw_value`, `section` and `unit` are strings the
+                                                        producer wrote (house rule, owner decision 2026-11-03). The statement
+                                                        is a closed label from the row's source, artifact and statement kind. */}
+                                                    <td data-label="Key">{row.canonical_key ?? "unrecognised parameter"}</td>
+                                                    <td data-label="Value">{row.canonical_key ? parameterValueText(row.canonical_key, row.canonical_value, publicParameterValue) : "not shown"}</td>
+                                                    <td data-label="Statement">
+                                                        <span
+                                                            className={`settings-state settings-state--${statement.pillClass}`}
+                                                            data-parameter-statement={statement.kind}
+                                                        >
+                                                            {statement.label}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : <p className="empty-projection">The archive returned no parameter rows.</p>}
+                    </>
+                )
+            }}
         </LazySection>
     )
 }

@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { compositeEnergyVerificationSchema, levelOfTheorySchema, entryFacetFields } from "./scientificSchemas"
+import { effectiveSettingSchema, type EffectiveSetting } from "./effectiveSettingsSchema"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 // ---------------------------------------------------------------------------
@@ -390,6 +391,11 @@ const parameterSchema = z.object({
     canonical_value: z.string().nullable().optional(),
     section: z.string().nullable().optional(),
     unit: z.string().nullable().optional(),
+    // Where the row came from: `parser` / `upload` / `curated`; for a parser row the artifact it was read from
+    // (`input` / `output_log`) and whether it is a request or what the program reported.
+    source: z.string().nullable().optional(),
+    artifact_kind: z.string().nullable().optional(),
+    statement_kind: z.string().nullable().optional(),
 }).passthrough()
 
 const constraintSchema = z.object({
@@ -506,6 +512,8 @@ const calculationRecordSchema = z.object({
     wavefunction_diagnostic: z.array(wavefunctionDiagnosticSchema).nullable().optional(),
     spin_diagnostic: z.array(spinDiagnosticSchema).nullable().optional(),
     parameters: z.array(parameterSchema).nullable().optional(),
+    // Rides on `include=parameters`: the grid and SCF convergence this calculation used, each with its evidence.
+    effective_settings: z.array(effectiveSettingSchema).nullable().optional(),
     constraints: z.array(constraintSchema).nullable().optional(),
     review_history: z.array(reviewEntrySchema).nullable().optional(),
     freq_modes: z.array(freqModeSchema).nullable().optional(),
@@ -532,6 +540,11 @@ export type CalculationSCFStability = z.infer<typeof scfStabilitySchema>
 export type CalculationWavefunctionDiagnostic = z.infer<typeof wavefunctionDiagnosticSchema>
 export type CalculationSpinDiagnostic = z.infer<typeof spinDiagnosticSchema>
 export type CalculationParameter = z.infer<typeof parameterSchema>
+/** What the `parameters` disclosure holds: the parsed rows and the effective-settings summary from the same include. */
+export interface CalculationParametersSection {
+    rows: CalculationParameter[] | null
+    effectiveSettings: EffectiveSetting[] | null
+}
 export type CalculationConstraint = z.infer<typeof constraintSchema>
 export type CalculationFreqMode = z.infer<typeof freqModeSchema>
 export type CalculationScan = z.infer<typeof scanSchema>
@@ -576,5 +589,13 @@ export async function loadCalculationSection(
 
 /** Read the field a resolved on-demand record's token actually populated. */
 export function readSectionField<T>(record: CalculationRecord, token: OnDemandSectionToken): T {
+    if (token === "parameters") {
+        // One include, two fields: the rows and the effective-settings summary built from them.
+        const section: CalculationParametersSection = {
+            rows: record.parameters ?? null,
+            effectiveSettings: record.effective_settings ?? null,
+        }
+        return section as unknown as T
+    }
     return (record as unknown as Record<string, unknown>)[sectionField(token)] as T
 }

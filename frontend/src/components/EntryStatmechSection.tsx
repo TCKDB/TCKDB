@@ -1,6 +1,6 @@
 import { publicPointGroup } from "../domain/publicText"
 import type { ReactNode } from "react"
-import { useEffect } from "react"
+import { createContext, useContext, useEffect } from "react"
 import { Link } from "react-router-dom"
 import "../conformer-group.css"
 import "../entry-science.css"
@@ -35,6 +35,7 @@ import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
 import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
 import { SectionHeading } from "./PageSections"
+import { SettingsBehindValue, SettingsLegend } from "./EffectiveSettings"
 import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
 import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
@@ -125,6 +126,10 @@ export function EntryStatmechSection({ entryRef, conformer, conformers }: {
     )
 }
 
+// The `calculation_settings` include for the whole entry, fetched once (like `source_calculations`) and read by each
+// record's own body, so it does not travel through the five components between the list and the body.
+const SettingsStateContext = createContext<EntryListSectionState<StatmechRecord["calculation_settings"]>>({ status: "idle" })
+
 function useStatmechSection<T>(entryRef: string, token: StatmechSectionToken) {
     return useEntryListSection<StatmechRecord, T, StatmechSectionToken>(
         entryRef,
@@ -152,6 +157,7 @@ function StatmechList({ listKey, meta, onPage, response, conformer, conformers }
     const [frequenciesState, openFrequencies] = useStatmechSection<StatmechRecord["frequencies"]>(listKey, "frequencies")
     const [conformersState, openConformers] = useStatmechSection<StatmechRecord["conformers"]>(listKey, "conformers")
     const [reviewState, openReview] = useStatmechSection<StatmechRecord["review_history"]>(listKey, "review")
+    const [settingsState, openSettings] = useStatmechSection<StatmechRecord["calculation_settings"]>(listKey, "calculation_settings")
 
     // Unlike the six disclosures below (opened only when a reader expands
     // them), a selected conformer needs this same `conformers` include
@@ -185,8 +191,14 @@ function StatmechList({ listKey, meta, onPage, response, conformer, conformers }
         openFrequencies()
     }, [openFrequencies])
 
+    // The settings behind each record's geometry, frequency and energy levels qualify the record's numbers, so they
+    // are fetched up front too, once for every record on the page.
+    useEffect(() => {
+        openSettings()
+    }, [openSettings])
+
     return (
-        <>
+        <SettingsStateContext.Provider value={settingsState}>
             <section className="ledger-section" aria-labelledby="statmech-heading">
                 <div className="ledger-heading">
                     <p className="eyebrow">Deposited evidence</p>
@@ -214,6 +226,9 @@ function StatmechList({ listKey, meta, onPage, response, conformer, conformers }
                     />
                 ) : (
                     renderStatmechRecords(records, conformers, sourceCalcsState, frequenciesState)
+                )}
+                {settingsState.status === "ready" && [...settingsState.dataByRef.values()].some((block) => (block?.length ?? 0) > 0) && (
+                    <SettingsLegend perLevel />
                 )}
             </section>
 
@@ -280,7 +295,7 @@ function StatmechList({ listKey, meta, onPage, response, conformer, conformers }
                 reviewState={reviewState}
                 onOpen={() => { openConformers(); openReview() }}
             />
-        </>
+        </SettingsStateContext.Provider>
     )
 }
 
@@ -492,6 +507,7 @@ function StatmechRecordBody({ record, conformers, sourceCalcsState, frequenciesS
                         <div><dt>Rotor scans</dt><dd>{boolLabel(record.evidence_summary.has_rotor_scans)} ({record.evidence_summary.torsion_count} torsions)</dd></div>
                     </dl>
                     <FrequenciesBlock record={record} state={frequenciesState} />
+                    <RecordSettingsBlock record={record} />
                     <p className="note">
                         Record software:{" "}
                         {softwareLabel(record.software_release) ?? "not recorded"}
@@ -507,6 +523,26 @@ function StatmechRecordBody({ record, conformers, sourceCalcsState, frequenciesS
                 productLevels={productLevels}
             />
         </>
+    )
+}
+
+/**
+ * "Settings behind this value": the grid and SCF convergence of the calculation THIS record links for each level.
+ * Read from the entry-wide `calculation_settings` include by this record's own ref, never another record's.
+ */
+function RecordSettingsBlock({ record }: { record: StatmechRecord }) {
+    const state = useContext(SettingsStateContext)
+    if (state.status === "idle" || state.status === "loading") {
+        return <p className="note">Loading the settings behind this record.</p>
+    }
+    if (state.status === "error") {
+        return <p className="note" role="status">{state.message}</p>
+    }
+    return (
+        <SettingsBehindValue
+            block={state.dataByRef.get(record.statmech.statmech_ref) ?? null}
+            recordRef={record.statmech.statmech_ref}
+        />
     )
 }
 

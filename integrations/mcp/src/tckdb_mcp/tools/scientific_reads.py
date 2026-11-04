@@ -72,7 +72,10 @@ CONFORMER_INCLUDES = frozenset({"observations", "selections", "calculations", "g
 # The backend's legal tokens minus ``internal_ids`` (refused by ``_validate_include``) and ``assessments`` (out of
 # scope). ``trust`` is forwarded only when the caller names it: ``all`` is never expanded to it here or on the backend.
 STATMECH_INCLUDES = frozenset(
-    {"conformers", "frequencies", "source_calculations", "torsions", "electronic_levels", "trust", "review", "all"}
+    {
+        "conformers", "frequencies", "source_calculations", "torsions", "electronic_levels", "calculation_settings",
+        "trust", "review", "all",
+    }
 )
 TRANSPORT_INCLUDES = frozenset({"source_calculations", "review", "all"})
 NETWORK_INCLUDES = frozenset(

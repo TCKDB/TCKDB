@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { levelOfTheorySchema, productLevelsSchema } from "./scientificSchemas"
+import { roleCalculationSettingsSchema } from "./effectiveSettingsSchema"
 import { listRequestEchoSchema, paginationSchema } from "./listEnvelope"
 import { pageQuery, parsePagedRef } from "../domain/paging"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
@@ -254,6 +255,9 @@ const thermoRecordSchema = z.object({
     // missing.
     levels: productLevelsSchema.nullable().optional(),
     source_calculations: z.array(thermoSourceCalculationSchema).nullable().optional(),
+    // `include=calculation_settings` (requested below): the calculation this record links for its geometry,
+    // frequency and energy, with the grid and SCF convergence each used.
+    calculation_settings: z.array(roleCalculationSettingsSchema).nullable().optional(),
     // `include=assessments` (requested below): the reproducibility assessment, with the rubric it was made under.
     assessments: assessmentsSchema.nullable().optional(),
 }).passthrough()
@@ -299,6 +303,7 @@ export async function loadEntryThermo(
     const { ref, request } = parsePagedRef(entryRef)
     const query = request ? pageQuery(request) : new URLSearchParams()
     query.append("include", "assessments")
+    query.append("include", "calculation_settings")
     const endpoint = `/api/v1/scientific/species-entries/${encodeURIComponent(ref)}/thermo?${query}`
     const payload = await requestScientificJson(endpoint, signal, onRateLimited)
     return parseScientificResponse(thermoListResponseSchema, payload, "thermo")

@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A thermo or statmech record can show the settings behind its geometry, frequency and energy levels (2026-11-04)
+
+- **Client: none** (`tckdb-schemas` and `tckdb-client` unchanged). No migration, no new environment variable. The calculation page and the thermo and statmech pages of the web app show the new data.
+- **What changed.** `include=calculation_settings` on the thermo reads (species-entry thermo, `thermo/search`) and the statmech reads adds `calculation_settings`: one entry each for `geometry`, `frequency` and `energy`, naming the calculation the record itself links for that level (the one its `levels` come from) and that calculation's `effective_settings` (grid, SCF convergence, each with its state, value, source and `conflicting`). It is built by the same function as the calculation read; nothing is stored. A level with no linked calculation is listed with `absent_reason` (`not_linked`, `ambiguous`, `composite_recipe`) and no settings. A level whose calculations the review profile hides is left out of the list. The calculation shown for a level is the lowest-id calculation that supplied that level's level of theory and that the profile shows. The block is built for the returned page in a fixed number of statements. A thermo reaches its statmech's calculations only through its own `statmech_id`; no level is filled from a sibling record or an unlinked calculation.
+- **Web app.** The calculation page labels each parsed parameter as requested or reported and where it came from, and summarises grid and SCF with the five states and a conflict marker; assumed values are marked as assumed. The thermo and statmech pages show a "Settings behind this value" block.
+
 ## A Gaussian --Link1-- log is read per job (2026-11-04)
 
 - **Client: `tckdb-schemas` 0.153.0 to 0.154.0** (a route-reader fix, no field or code added or removed; `tckdb-client` unchanged). No migration, no new environment variable.

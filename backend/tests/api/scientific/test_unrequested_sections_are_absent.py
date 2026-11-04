@@ -63,6 +63,7 @@ from app.api.routes.scientific._response import (
     SPECIES_CALCULATIONS_SEARCH_SECTIONS,
     SPECIES_SEARCH_SECTIONS,
     STATMECH_RECORD_SECTIONS,
+    THERMO_RECORD_SECTIONS,
     TRANSITION_STATE_RECORD_SECTIONS,
     TRANSPORT_RECORD_SECTIONS,
     TRUST_SECTION,
@@ -464,6 +465,26 @@ CASES: tuple[Case, ...] = (
         lambda c: f"{_SCI}/species-entries/{c['species_entry_ref']}/statmech",
     ),
     Case(
+        "GET /species-entries/{ref}/thermo",
+        THERMO_RECORD_SECTIONS,
+        SEARCH_SCOPE,
+        lambda c: f"{_SCI}/species-entries/{c['species_entry_ref']}/thermo",
+    ),
+    Case(
+        "GET /thermo/search",
+        THERMO_RECORD_SECTIONS,
+        ANYWHERE_SCOPE,
+        lambda c: f"{_SCI}/thermo/search?species_entry_ref={c['species_entry_ref']}",
+    ),
+    Case(
+        "POST /thermo/search",
+        THERMO_RECORD_SECTIONS,
+        ANYWHERE_SCOPE,
+        lambda c: f"{_SCI}/thermo/search",
+        method="POST",
+        body=lambda c: {"species_entry_ref": c["species_entry_ref"]},
+    ),
+    Case(
         "GET /transport/search",
         TRANSPORT_RECORD_SECTIONS,
         SEARCH_SCOPE,
@@ -724,7 +745,8 @@ def test_the_parametrisation_asserts_its_own_size():
     # 43 unchanged: "networks" joined an existing table; 46 after
     # "level-of-theories" added its own three cases (GET/POST search,
     # GET detail).
-    assert len(CASES) == 46
+    # 49 after the thermo record joined (species-entry route, GET and POST search).
+    assert len(CASES) == 49
 
     sections_under_test = {
         (case.table.surface, token, field_name)
@@ -755,7 +777,8 @@ def test_the_parametrisation_asserts_its_own_size():
     # 93 after ``include=statmech`` joined TRANSITION_STATE_RECORD_SECTIONS
     # (#621).
     # 94 after ``effective_settings`` joined the ``parameters`` token of CALCULATION_RECORD_SECTIONS.
-    assert len(sections_under_test) == 94
+    # 96 after ``calculation_settings`` joined STATMECH_RECORD_SECTIONS and THERMO_RECORD_SECTIONS was declared.
+    assert len(sections_under_test) == 96
 
 
 # ---------------------------------------------------------------------------
