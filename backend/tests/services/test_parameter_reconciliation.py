@@ -171,7 +171,7 @@ _LOG_DIFFERENT = _gaussian_log("#P b3lyp/6-31g(d) opt int=fine scf=tight Empiric
 
 @pytest.mark.parametrize("deck_first", [True, False])
 def test_deck_and_log_end_in_the_same_rows_whichever_arrives_first(db_conn, deck_first):
-    """Deck's rows, plus the log's rows for what the deck is silent about; one row per setting."""
+    """The log's echoed rows, plus the deck's rows for what the log is silent about; one row per setting."""
     with Session(db_conn) as session, session.begin():
         calc = _calc(session)
         steps = [(_DECK, ArtifactKind.input), (_LOG_SAME, ArtifactKind.output_log)]
@@ -179,9 +179,9 @@ def test_deck_and_log_end_in_the_same_rows_whichever_arrives_first(db_conn, deck
             _read(session, calc, text, kind=kind)
         stored = _stored(session, calc)
         assert stored == {
-            ("grid.quality", "ultrafine", ArtifactKind.input),
-            ("scf.convergence", "tight", ArtifactKind.input),
-            ("output.verbosity", "full", ArtifactKind.input),
+            ("grid.quality", "ultrafine", ArtifactKind.output_log),
+            ("scf.convergence", "tight", ArtifactKind.output_log),
+            ("output.verbosity", "full", ArtifactKind.output_log),
             ("dispersion.correction", "d3_bj", ArtifactKind.output_log),
         }
         keys = [r[0] for r in stored]
@@ -189,7 +189,7 @@ def test_deck_and_log_end_in_the_same_rows_whichever_arrives_first(db_conn, deck
 
 
 @pytest.mark.parametrize("deck_first", [True, False])
-def test_deck_and_log_that_disagree_warn_once_and_the_deck_wins(db_conn, deck_first):
+def test_deck_and_log_that_disagree_warn_once_and_the_log_wins(db_conn, deck_first):
     with Session(db_conn) as session, session.begin():
         calc = _calc(session)
         steps = [(_DECK, ArtifactKind.input), (_LOG_DIFFERENT, ArtifactKind.output_log)]
@@ -199,8 +199,8 @@ def test_deck_and_log_that_disagree_warn_once_and_the_deck_wins(db_conn, deck_fi
         [warning] = [w for w in collected if w.code == "input_deck_disagrees_with_output_log"]
         assert warning.context["canonical_key"] == "grid.quality"
         assert warning.context["depositor_supplied"] == {"deck_value": ["ultrafine"], "log_value": ["fine"]}
-        assert ("grid.quality", "ultrafine", ArtifactKind.input) in _stored(session, calc)
-        assert ("grid.quality", "fine", ArtifactKind.output_log) not in _stored(session, calc)
+        assert ("grid.quality", "fine", ArtifactKind.output_log) in _stored(session, calc)
+        assert ("grid.quality", "ultrafine", ArtifactKind.input) not in _stored(session, calc)
 
 
 def test_agreeing_deck_and_log_do_not_warn(db_conn):
@@ -211,15 +211,17 @@ def test_agreeing_deck_and_log_do_not_warn(db_conn):
         assert "input_deck_disagrees_with_output_log" not in _codes(first + second)
 
 
-def test_rereading_a_deck_leaves_the_log_only_rows_alone_and_replaces_its_own(db_conn):
+def test_rereading_a_deck_keeps_the_log_rows_and_replaces_only_its_own_unshadowed_ones(db_conn):
     with Session(db_conn) as session, session.begin():
         calc = _calc(session)
         _read(session, calc, _LOG_SAME, kind=ArtifactKind.output_log)
         _read(session, calc, "#P b3lyp/6-31g(d) opt int=fine\n")
         _read(session, calc, "#P b3lyp/6-31g(d) opt int=superfine\n")
+        # The log echoes the grid, so the deck's grid (either version of it) never shows; the deck's own
+        # verbosity row is replaced, not duplicated.
         assert _stored(session, calc) == {
-            ("grid.quality", "superfine", ArtifactKind.input),
-            ("output.verbosity", "full", ArtifactKind.input),
+            ("grid.quality", "ultrafine", ArtifactKind.output_log),
+            ("output.verbosity", "full", ArtifactKind.output_log),
             ("scf.convergence", "tight", ArtifactKind.output_log),
             ("dispersion.correction", "d3_bj", ArtifactKind.output_log),
         }
@@ -481,20 +483,29 @@ def _store_log(session, monkeypatch, calc, text: str, name: str) -> None:
     monkeypatch.setattr(cpe, "load_artifact_bytes", lambda digest, **_: stored[digest])
 
 
-def test_a_deck_reread_with_fewer_settings_restores_the_log_rows_it_had_shadowed(db_conn, monkeypatch):
+def test_a_deck_never_brings_back_a_setting_the_log_echoes_and_is_not_read_from_storage_again(db_conn, monkeypatch):
+    from app.services import calculation_parameter_extraction as cpe
+
     with Session(db_conn) as session, session.begin():
         calc = _calc(session)
         _read(session, calc, "#P b3lyp/6-31g(d) opt int=ultrafine scf=tight\n")
-        log = _gaussian_log("#P b3lyp/6-31g(d) opt int=ultrafine scf=tight EmpiricalDispersion=GD3BJ")
+        log = _gaussian_log("#P b3lyp/6-31g(d) opt int=fine scf=tight EmpiricalDispersion=GD3BJ")
         _store_log(session, monkeypatch, calc, log, "job.log")
         _read(session, calc, log, kind=ArtifactKind.output_log)
-        assert ("scf.convergence", "tight", ArtifactKind.input) in _stored(session, calc)
-        assert ("scf.convergence", "tight", ArtifactKind.output_log) not in _stored(session, calc)
-
-        _read(session, calc, "#P b3lyp/6-31g(d) opt int=ultrafine\n")
+        # The log's echo outranks the deck: its grid and SCF are the stored rows, the deck's are gone.
         stored = _stored(session, calc)
         assert ("scf.convergence", "tight", ArtifactKind.output_log) in stored
-        assert ("grid.quality", "ultrafine", ArtifactKind.input) in stored
+        assert ("grid.quality", "fine", ArtifactKind.output_log) in stored
+        assert not [row for row in stored if row[2] is ArtifactKind.input and row[0] in ("grid.quality", "scf.convergence")]
+
+        def spy(*args, **kwargs):
+            raise AssertionError("a deck read must not read stored logs: nothing it drops needs restoring")
+
+        monkeypatch.setattr(cpe, "load_artifact_bytes", spy)
+        _read(session, calc, "#P b3lyp/6-31g(d) opt int=ultrafine\n")
+        stored = _stored(session, calc)
+        assert ("grid.quality", "fine", ArtifactKind.output_log) in stored
+        assert ("grid.quality", "ultrafine", ArtifactKind.input) not in stored
         keys = [row[0] for row in stored]
         assert len(keys) == len(set(keys))
 
@@ -556,59 +567,6 @@ def test_the_log_that_a_deck_does_not_shadow_is_judged_the_same_in_either_order(
             for text, kind in steps if deck_first else steps[::-1]:
                 collected += _read(session, calc, text, kind=kind)[1]
             assert _codes(collected).count("parameter_disagrees_with_artifact") == 1, deck_first
-
-
-def test_a_first_deck_never_reads_storage_for_the_logs(db_conn, monkeypatch):
-    from app.services import calculation_parameter_extraction as cpe
-
-    calls = []
-
-    def spy(*args, **kwargs):
-        calls.append(args)
-        raise AssertionError("storage must not be read on a calculation's first deck")
-
-    with Session(db_conn) as session, session.begin():
-        calc = _calc(session)
-        _store_log(session, monkeypatch, calc, _gaussian_log("#P b3lyp/6-31g(d) opt int=fine"), "job.log")
-        monkeypatch.setattr(cpe, "load_artifact_bytes", spy)
-        _read(session, calc, "#P b3lyp/6-31g(d) opt int=ultrafine\n")
-        assert calls == []
-        # A re-read of the deck does read the stored log (the spy proves the path is live, so the empty list above
-        # is not vacuous).
-        _read(session, calc, "#P b3lyp/6-31g(d) opt int=ultrafine\n")
-        assert len(calls) == 1
-
-
-def test_a_reread_uses_bytes_from_this_request_before_storage_and_survives_an_outage(db_conn, monkeypatch, caplog):
-    from app.services import calculation_parameter_extraction as cpe
-    from app.services.artifact_storage import ArtifactStorageUnavailable
-
-    with Session(db_conn) as session, session.begin():
-        calc = _calc(session)
-        _read(session, calc, "#P b3lyp/6-31g(d) opt int=ultrafine scf=tight\n")
-        log = _gaussian_log("#P b3lyp/6-31g(d) opt int=ultrafine scf=tight")
-        _store_log(session, monkeypatch, calc, log, "job.log")
-        _read(session, calc, log, kind=ArtifactKind.output_log)
-
-        def outage(*args, **kwargs):
-            raise ArtifactStorageUnavailable("storage down")
-
-        # In memory for this request: storage is not touched.
-        monkeypatch.setattr(cpe, "load_artifact_bytes", outage)
-        cpe.remember_artifact_bytes(session, log.encode())
-        _read(session, calc, "#P b3lyp/6-31g(d) opt int=ultrafine\n")
-        assert ("scf.convergence", "tight", ArtifactKind.output_log) in _stored(session, calc)
-
-        # Not in memory and storage down: soft failure, the deck's rows stand and a reason is logged.
-        session.info.pop("parameter_artifact_bytes", None)
-        session.query(CalculationParameter).filter(
-            CalculationParameter.calculation_id == calc.id,
-            CalculationParameter.artifact_kind == ArtifactKind.output_log,
-        ).delete()
-        with caplog.at_level("WARNING"):
-            _read(session, calc, "#P b3lyp/6-31g(d) opt int=ultrafine\n")
-        assert ("grid.quality", "ultrafine", ArtifactKind.input) in _stored(session, calc)
-        assert "not re-read" in caplog.text
 
 
 def test_refresh_rederives_every_log_row_from_the_stored_logs(db_conn, monkeypatch):

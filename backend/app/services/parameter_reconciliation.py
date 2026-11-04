@@ -449,6 +449,27 @@ def _single(rows: Iterable[CalculationParameter], key: str) -> str | None:
     return next(iter(values)) if len(values) == 1 else None
 
 
+_SCF_KEYS = ("scf.tol_energy_eh", "scf.tol_orbital_gradient", "scf.tol_orbital_rotation", "scf.tol_diis_error")
+
+
+def orca_preset_disagreements(
+    requested_grid: str | None, requested_scf: str | None, reported: dict[str, str]
+) -> list[tuple[str, str, str]]:
+    """``(canonical key, requested value, reported value)`` for each reported value the requested preset contradicts."""
+    found: list[tuple[str, str, str]] = []
+    expected_points = _ORCA_DEFGRID_ANGULAR_POINTS.get(requested_grid or "")
+    got_points = reported.get("grid.angular_max")
+    if expected_points is not None and got_points is not None and expected_points != got_points:
+        found.append(("grid.angular_max", requested_grid, got_points))
+    preset = _ORCA_SCF_PRESETS.get(requested_scf or "")
+    if preset is not None:
+        for key, expected in preset.items():
+            got = reported.get(key)
+            if got is not None and not _same_number(got, expected):
+                found.append((key, requested_scf, got))
+    return found
+
+
 def reported_setting_warnings(session: Session, calculation: Calculation, software: str) -> list[UploadWarning]:
     """Warn where the log reports a setting that contradicts a documented requested preset (ORCA only).
 
@@ -476,19 +497,11 @@ def reported_setting_warnings(session: Session, calculation: Calculation, softwa
     def request(key: str) -> str | None:
         return _single(echo, key) or _single(deck, key)
 
-    found: list[tuple[str, str, str]] = []
-    grid = request("grid.quality")
-    expected_points = _ORCA_DEFGRID_ANGULAR_POINTS.get(grid or "")
-    got_points = _single(reported, "grid.angular_max")
-    if expected_points is not None and got_points is not None and expected_points != got_points:
-        found.append(("grid.angular_max", grid, got_points))
-    convergence = request("scf.convergence")
-    preset = _ORCA_SCF_PRESETS.get(convergence or "")
-    if preset is not None:
-        for key, expected in preset.items():
-            got = _single(reported, key)
-            if got is not None and not _same_number(got, expected):
-                found.append((key, convergence, got))
+    found = orca_preset_disagreements(
+        request("grid.quality"),
+        request("scf.convergence"),
+        {k: v for k in ("grid.angular_max", *_SCF_KEYS) if (v := _single(reported, k)) is not None},
+    )
     return [
         UploadWarning.from_code(
             field="artifacts",

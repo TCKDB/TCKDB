@@ -793,3 +793,39 @@ def test_a_record_with_nothing_to_judge_carries_no_tau_block(db_session, frequen
     result = build_imaginary_mode_projection(db_session, calc.id)
     assert result.status is not ProjectionStatus.determined
     assert result.tau_context is None
+
+
+def test_tau_context_ignores_a_reported_row_and_takes_the_last_stored_requested_one(db_session):
+    """The recorded protocol that set tau is what was requested, in stored order; a log's report is not read (yet).
+
+    A reported row for a tau key (stored later, so it would win an unordered "later rows win") must not move the
+    value; of two requested rows, the one stored last wins, deterministically.
+    """
+    from app.db.models.common import ArtifactKind, ParameterSource, ParameterStatementKind
+
+    calc = _judged_record_without_a_hessian(
+        db_session,
+        reaction_coordinate_mode_index=1,
+        imaginary_mode_tau_cm1=50.0,
+        imaginary_mode_tau_basis="protocol_not_recorded",
+        imaginary_mode_structural_flag=False,
+    )
+    _seed_parameter(db_session, calculation=calc, canonical_key="grid.quality", canonical_value="fine")
+    _seed_parameter(db_session, calculation=calc, canonical_key="grid.quality", canonical_value="ultrafine")
+    db_session.add(
+        CalculationParameter(
+            calculation_id=calc.id,
+            raw_key="reported-grid",
+            raw_value="coarse",
+            canonical_key="grid.quality",
+            canonical_value="coarse",
+            source=ParameterSource.parser,
+            artifact_kind=ArtifactKind.output_log,
+            statement_kind=ParameterStatementKind.reported,
+        )
+    )
+    db_session.flush()
+
+    tau = build_imaginary_mode_projection(db_session, calc.id).tau_context
+    assert tau is not None
+    assert {p.canonical_key: p.canonical_value for p in tau.protocol_parameters}["grid.quality"] == "ultrafine"
