@@ -122,6 +122,7 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.keyset import Paging
+from app.services.scientific_read.role_settings import build_calculation_settings
 from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.selection_filters import filter_by_provenance, source_provenance_kwargs
 from app.services.trust import (
@@ -140,6 +141,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "all",
     "trust",
     "assessments",
+    "calculation_settings",
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
 _TRUST_EAGER_LOADS = (
@@ -688,6 +690,18 @@ def get_species_thermo(
             provenance=provenance,
             levels=levels,
             group_additivity=_build_group_additivity_block(ga_by_thermo.get(t.id)),
+            # Only the calculations this record links (its own sources, then its own statmech's); one builder with
+            # the calculation read.
+            calculation_settings=(
+                build_calculation_settings(
+                    session,
+                    levels=levels,
+                    role_calc_ids=_thermo_role_calc_id_lists(sources, own_statmech_sources),
+                    withheld=withheld_calc_ids,
+                )
+                if "calculation_settings" in includes
+                else None
+            ),
             trust=(
                 build_thermo_trust_fragment(
                     t,

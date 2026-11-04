@@ -75,6 +75,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "all",
     "assessments",
     "trust",
+    "calculation_settings",
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments", "trust"}
 
@@ -85,7 +86,7 @@ _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments", "trust"}
 # they were removed in favor of returning ``unknown_include_token`` so
 # the include grammar matches its semantics). If a future phase wires
 # either token through, add it back here and to ``_LEGAL_INCLUDE_TOKENS``.
-_THERMO_LEGAL_INCLUDES_PASSTHROUGH = {"provenance", "calculations", "review", "artifacts"}
+_THERMO_LEGAL_INCLUDES_PASSTHROUGH = {"provenance", "calculations", "review", "artifacts", "calculation_settings"}
 
 _DEFAULT_SORT_ECHO = browse_order("review_rank", "created_at", "id")
 

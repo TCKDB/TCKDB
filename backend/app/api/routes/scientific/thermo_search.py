@@ -10,7 +10,9 @@ from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, p
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
     ANYWHERE_SCOPE,
+    THERMO_RECORD_SECTIONS,
     omit_trust_unless_requested,
+    omit_unrequested_sections,
     prepare_assessment_response,
     refuse_check_inputs,
 )
@@ -139,7 +141,8 @@ def thermo_search_get(
     # occurred" passing. The same asymmetry is why ``assessments`` — which
     # hard-codes the payload-wide scope — has always behaved correctly at
     # this exact depth on this exact response.
-    return omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
+    visibility = omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
+    return omit_unrequested_sections(visibility, payload, table=THERMO_RECORD_SECTIONS, scope=ANYWHERE_SCOPE)
 
 
 @router.post("/search", response_model=ScientificThermoSearchResponse, dependencies=[Depends(refuse_check_inputs)])
@@ -170,4 +173,5 @@ def thermo_search_post(
         payload,
         attach_assessments=attach_thermo_assessments,
     )
-    return omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
+    visibility = omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
+    return omit_unrequested_sections(visibility, payload, table=THERMO_RECORD_SECTIONS, scope=ANYWHERE_SCOPE)

@@ -16,7 +16,10 @@ from app.api.deps import get_db
 from app.api.routes.scientific._actor import publish_read_actor
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
+    ANYWHERE_SCOPE,
+    THERMO_RECORD_SECTIONS,
     omit_trust_unless_requested,
+    omit_unrequested_sections,
     prepare_assessment_response,
     require_bounded_input_check,
 )
@@ -128,4 +131,5 @@ def species_thermo(
         attach_assessments=attach_thermo_assessments,
         check_inputs=check_inputs,
     )
-    return omit_trust_unless_requested(visibility, payload, scope="search")
+    visibility = omit_trust_unless_requested(visibility, payload, scope="search")
+    return omit_unrequested_sections(visibility, payload, table=THERMO_RECORD_SECTIONS, scope="search")

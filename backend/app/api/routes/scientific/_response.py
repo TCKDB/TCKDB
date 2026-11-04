@@ -359,7 +359,16 @@ STATMECH_RECORD_SECTIONS = IncludeGatedSections(
         "frequencies": ("frequencies",),
         "conformers": ("conformers",),
         "review": ("review_history",),
+        "calculation_settings": ("calculation_settings",),
     },
+)
+
+# ``/thermo`` records, on the species-entry route and on ``/thermo/search`` (where the record sits one level down,
+# inside the ``thermo`` wrapper, so the strip is applied at ``ANYWHERE_SCOPE``). ``trust`` and ``assessments`` have
+# their own one-entry tables; this one holds the thermo record's heavy include.
+THERMO_RECORD_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/thermo",
+    sections={"calculation_settings": ("calculation_settings",)},
 )
 
 # ``/transport/search``, ``/transport/{ref}``,
@@ -511,6 +520,7 @@ INCLUDE_GATED_COMPONENTS: Mapping[str, Mapping[str, str]] = MappingProxyType(
         "KineticsRecord": MappingProxyType(TRUST_SECTION.fields_by_token()),
         "ThermoRecord": MappingProxyType(
             {
+                **THERMO_RECORD_SECTIONS.fields_by_token(),
                 **TRUST_SECTION.fields_by_token(),
                 **ASSESSMENTS_SECTION.fields_by_token(),
             }
@@ -819,6 +829,7 @@ ALL_INCLUDE_GATED_TABLES: Mapping[str, IncludeGatedSections] = MappingProxyType(
         "SPECIES_BROWSE_SECTIONS": SPECIES_BROWSE_SECTIONS,
         "SPECIES_SEARCH_SECTIONS": SPECIES_SEARCH_SECTIONS,
         "STATMECH_RECORD_SECTIONS": STATMECH_RECORD_SECTIONS,
+        "THERMO_RECORD_SECTIONS": THERMO_RECORD_SECTIONS,
         "TRANSITION_STATE_RECORD_SECTIONS": TRANSITION_STATE_RECORD_SECTIONS,
         "TRANSPORT_RECORD_SECTIONS": TRANSPORT_RECORD_SECTIONS,
         "TRUST_SECTION": TRUST_SECTION,
@@ -851,6 +862,7 @@ __all__ = [
     "SPECIES_CALCULATIONS_SEARCH_SECTIONS",
     "SPECIES_SEARCH_SECTIONS",
     "STATMECH_RECORD_SECTIONS",
+    "THERMO_RECORD_SECTIONS",
     "TRANSITION_STATE_RECORD_SECTIONS",
     "TRANSPORT_RECORD_SECTIONS",
     "TRUST_SECTION",

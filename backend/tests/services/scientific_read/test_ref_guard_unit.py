@@ -640,6 +640,7 @@ def test_the_seeded_pointer_models_are_the_blocks_the_per_surface_tests_pin():
         "TransitionStateStatmechSummary",
         "TransitionStateStatmechSourceCalculation",
         "CalculationEvidenceSummary",
+        "RoleCalculationSettings",
         # PR-2a
         "CalculationCompositeInputSummary",
         "CalculationConformerSummary",

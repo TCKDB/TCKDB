@@ -58,6 +58,7 @@ from app.schemas.reads.scientific_common import (
     SupersessionNotice,
     WorkflowToolReleaseSummary,
 )
+from app.schemas.reads.scientific_calculation import RoleCalculationSettings
 from app.schemas.reads.scientific_statmech import (
     AvailableStatmechSections,
     RequestEcho,
@@ -105,6 +106,7 @@ from app.services.scientific_read.handles import resolve_statmech_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.role_settings import build_calculation_settings
 from app.services.scientific_read.species_identity import (
     ENTRY_FACET_COLUMNS,
     STEREO_DISPLAY,
@@ -146,6 +148,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "frequencies",
     "conformers",
     "review",
+    "calculation_settings",
     "internal_ids",
     "assessments",
     "trust",
@@ -439,6 +442,16 @@ def build_statmech_record(
     if "review" in includes:
         review_block = _build_review_history(session, sm.id)
 
+    calculation_settings_block: list[RoleCalculationSettings] | None = None
+    if "calculation_settings" in includes:
+        # Only this record's own source-calculation links; one builder with the calculation read.
+        links_by_role: dict[str, list[int]] = {}
+        for row in source_rows:
+            links_by_role.setdefault(row.role.value, []).append(row.calculation_id)
+        calculation_settings_block = build_calculation_settings(
+            session, levels=levels, role_calc_ids=links_by_role, withheld=withheld_source_calc_ids
+        )
+
     trust_block: TrustFragment | None = None
     if "trust" in includes:
         trust_block = build_statmech_trust_fragment(
@@ -464,6 +477,7 @@ def build_statmech_record(
         frequencies=frequencies_block,
         conformers=conformers_block,
         review_history=review_block,
+        calculation_settings=calculation_settings_block,
         trust=trust_block,
     )
 

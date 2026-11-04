@@ -35,6 +35,7 @@ from app.db.models.common import (
     TorsionTreatmentKind,
 )
 from app.schemas.reads.scientific_assessment import PublicAssessmentSummary
+from app.schemas.reads.scientific_calculation import RoleCalculationSettings
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     LiteratureSummary,
@@ -446,6 +447,10 @@ class ScientificStatmechRecord(BaseModel):
     frequencies: StatmechFrequenciesSummary | None = None
     conformers: list[StatmechConformerContextItem] | None = None
     review_history: list[StatmechReviewEntry] | None = None
+    #: ``include=calculation_settings``. For each of geometry / frequency / energy, the source calculation this record
+    #: links for that level and the grid and SCF convergence it used, each with its evidence. A level with no linked
+    #: calculation is listed as absent.
+    calculation_settings: list[RoleCalculationSettings] | None = None
     trust: TrustFragment | None = None
     assessments: PublicAssessmentSummary | None = None
 
