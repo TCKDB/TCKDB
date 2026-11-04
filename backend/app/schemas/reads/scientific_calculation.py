@@ -1069,14 +1069,14 @@ class RoleCalculationSettings(BaseModel):
 
     ``absent_reason``: ``not_linked`` (no linked calculation answers this level), ``ambiguous`` (linked energy
     calculations disagree on level of theory, so there is no single one), ``composite_recipe`` (the level is the
-    internal level of a composite method, not a calculation anybody deposited), ``withheld`` (the linked calculation
-    is hidden under the active review profile, so nothing is shown for this level).
+    internal level of a composite method, not a calculation anybody deposited). A level whose linked calculations the
+    active review profile hides is left out of the list altogether.
     """
 
     role: Literal["geometry", "frequency", "energy"]
     calculation_ref: str | None = None
     calculation_type: CalculationType | None = None
-    absent_reason: Literal["not_linked", "ambiguous", "composite_recipe", "withheld"] | None = None
+    absent_reason: Literal["not_linked", "ambiguous", "composite_recipe"] | None = None
     settings: list[EffectiveSettingSummary] = Field(default_factory=list)
 
 

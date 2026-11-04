@@ -47109,7 +47109,7 @@
         "type": "string"
       },
       "RoleCalculationSettings": {
-        "description": "The settings behind one level (geometry, frequency or energy) of a thermo or statmech record.\n\n``calculation_ref`` is the calculation the record itself links under that level, picked the way the record's\n``levels`` are derived; ``settings`` is that calculation's :class:`EffectiveSettingSummary` list, built by the same\ncode as the calculation read. A level the record has no linked calculation for is listed with\n``calculation_ref=null`` and an ``absent_reason``; it is never filled from a sibling record or an unlinked\ncalculation. Computed when the record is read; nothing here is stored.\n\n``absent_reason``: ``not_linked`` (no linked calculation answers this level), ``ambiguous`` (linked energy\ncalculations disagree on level of theory, so there is no single one), ``composite_recipe`` (the level is the\ninternal level of a composite method, not a calculation anybody deposited), ``withheld`` (the linked calculation\nis hidden under the active review profile, so nothing is shown for this level).",
+        "description": "The settings behind one level (geometry, frequency or energy) of a thermo or statmech record.\n\n``calculation_ref`` is the calculation the record itself links under that level, picked the way the record's\n``levels`` are derived; ``settings`` is that calculation's :class:`EffectiveSettingSummary` list, built by the same\ncode as the calculation read. A level the record has no linked calculation for is listed with\n``calculation_ref=null`` and an ``absent_reason``; it is never filled from a sibling record or an unlinked\ncalculation. Computed when the record is read; nothing here is stored.\n\n``absent_reason``: ``not_linked`` (no linked calculation answers this level), ``ambiguous`` (linked energy\ncalculations disagree on level of theory, so there is no single one), ``composite_recipe`` (the level is the\ninternal level of a composite method, not a calculation anybody deposited). A level whose linked calculations the\nactive review profile hides is left out of the list altogether.",
         "properties": {
           "absent_reason": {
             "anyOf": [
@@ -47117,8 +47117,7 @@
                 "enum": [
                   "not_linked",
                   "ambiguous",
-                  "composite_recipe",
-                  "withheld"
+                  "composite_recipe"
                 ],
                 "type": "string"
               },

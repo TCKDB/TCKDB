@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.0 - 2026-11-04
+
+The statmech tools take `include=calculation_settings`.
+
+- `tckdb_statmech_search` and the statmech detail tool accept `calculation_settings`: for the geometry, frequency and energy levels, the
+  source calculation the record links and its grid and SCF convergence, each marked reported, requested or an assumed program default.
+
 ## 0.15.0 - 2026-10-26
 
 The thermo and kinetics select tools take the full provenance filters.

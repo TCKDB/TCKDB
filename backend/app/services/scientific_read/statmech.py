@@ -49,6 +49,7 @@ from app.db.models.statmech import (
 )
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from app.schemas.reads.scientific_calculation import RoleCalculationSettings
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     LiteratureSummary,
@@ -58,7 +59,6 @@ from app.schemas.reads.scientific_common import (
     SupersessionNotice,
     WorkflowToolReleaseSummary,
 )
-from app.schemas.reads.scientific_calculation import RoleCalculationSettings
 from app.schemas.reads.scientific_statmech import (
     AvailableStatmechSections,
     RequestEcho,

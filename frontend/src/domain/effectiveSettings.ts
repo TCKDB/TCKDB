@@ -178,6 +178,7 @@ export function parameterStatement(row: ParameterStatementInput): ParameterState
 // --- thermo and statmech: the three levels ------------------------------------------------------------------------
 
 export type LevelRole = "geometry" | "frequency" | "energy"
+export const LEVEL_ROLES: readonly LevelRole[] = ["geometry", "frequency", "energy"]
 
 const ROLE_LABELS: Record<LevelRole, string> = { geometry: "Geometry", frequency: "Frequencies", energy: "Energy" }
 
@@ -189,7 +190,8 @@ const ABSENT_TEXT: Record<string, string> = {
     not_linked: "No calculation linked",
     ambiguous: "Linked energy calculations disagree on level of theory",
     composite_recipe: "Set by a composite method's recipe, not a deposited calculation",
-    withheld: "Linked calculation not shown",
+    // The server leaves out a level whose calculations the review profile hides; the page says so.
+    not_shown: "Calculation not shown under the current review profile",
 }
 
 export function absentReasonText(reason: string | null | undefined): string {

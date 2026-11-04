@@ -3,6 +3,7 @@ import type { EffectiveSetting, RoleCalculationSettings } from "../api/effective
 import {
     absentReasonText,
     describeSetting,
+    LEVEL_ROLES,
     levelRoleLabel,
     type SettingDisplay,
 } from "../domain/effectiveSettings"
@@ -120,7 +121,7 @@ export function SettingsBehindValue({ block, idSuffix = "", recordRef }: {
                         </tr>
                     </thead>
                     <tbody>
-                        {block.map((item) => (
+                        {LEVEL_ROLES.map((role) => block.find((item) => item.role === role) ?? { role, absent_reason: "not_shown" }).map((item) => (
                             <tr key={item.role} data-level-role={item.role}>
                                 <td data-label="Level">{levelRoleLabel(item.role)}</td>
                                 {item.calculation_ref ? (

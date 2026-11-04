@@ -30,7 +30,7 @@ def pick_level_calculations(
     calculations: Mapping[int, Calculation],
     withheld: Collection[int] = frozenset(),
 ) -> dict[str, tuple[int | None, str | None]]:
-    """Level -> (calculation id, absent reason). Exactly one of the two is ``None``.
+    """Level -> (calculation id, absent reason). Both ``None`` means the level is omitted (its calculations are withheld).
 
     ``role_calc_ids`` maps a link role (``opt``, ``freq``, ``sp``, ``composite``, ``imported``) to the record's linked
     calculation ids, lowest first. The first one the review profile shows is used, as everywhere else.
@@ -46,11 +46,16 @@ def pick_level_calculations(
             return cid
         return None
 
-    def absent(source: str | None, role_set: tuple[str, ...]) -> str:
+    def absent(source: str | None, role_set: tuple[str, ...]) -> str | None:
+        """The reason a level shows no calculation, or ``None`` when the level is left out entirely.
+
+        A level whose linked calculations the review profile hides is omitted, not relabelled: removal is how a
+        withholding shows, and a reason that changed value between profiles would not be one.
+        """
         if source == "composite_recipe":
             return "composite_recipe"
         if source is None and any(cid in withheld for role in role_set for cid in role_calc_ids.get(role, ())):
-            return "withheld"
+            return None
         return "not_linked"
 
     out: dict[str, tuple[int | None, str | None]] = {}
@@ -112,6 +117,8 @@ def build_calculation_settings(
     out: list[RoleCalculationSettings] = []
     for role in ("geometry", "frequency", "energy"):
         calc_id, reason = picked[role]
+        if calc_id is None and reason is None:
+            continue
         if calc_id is None:
             out.append(RoleCalculationSettings(role=role, absent_reason=reason))
             continue

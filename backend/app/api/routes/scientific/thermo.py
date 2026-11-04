@@ -16,7 +16,6 @@ from app.api.deps import get_db
 from app.api.routes.scientific._actor import publish_read_actor
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._response import (
-    ANYWHERE_SCOPE,
     THERMO_RECORD_SECTIONS,
     omit_trust_unless_requested,
     omit_unrequested_sections,

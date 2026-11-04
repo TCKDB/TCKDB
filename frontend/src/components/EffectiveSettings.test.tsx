@@ -70,6 +70,13 @@ describe("SettingsBehindValue", () => {
         expect(within(rowFor("Energy")).getByText("No calculation linked")).toBeInTheDocument()
     })
 
+    it("lists a level the server left out (its calculations are hidden) as not shown, never filled", () => {
+        render(<MemoryRouter><SettingsBehindValue block={[BLOCK[0]]} recordRef="thr_x" /></MemoryRouter>)
+        expect(screen.getAllByRole("row").slice(1).map((row) => row.getAttribute("data-level-role"))).toEqual(["geometry", "frequency", "energy"])
+        expect(within(rowFor("Frequencies")).getByText(/not shown/)).toBeInTheDocument()
+        expect(within(rowFor("Frequencies")).queryByRole("link")).toBeNull()
+    })
+
     it("renders nothing when the record carries no block", () => {
         const { container } = render(<MemoryRouter><SettingsBehindValue block={null} recordRef="thr_x" /></MemoryRouter>)
         expect(container).toBeEmptyDOMElement()
