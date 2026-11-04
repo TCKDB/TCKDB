@@ -1,6 +1,6 @@
 # Configuring the client
 
-Moved from the package README. The README keeps only the two environment variables.
+For hosted or public querying, see [`docs/guides/public_hosted_querying.md`](../../../docs/guides/public_hosted_querying.md).
 
 ## Configure
 
@@ -13,7 +13,7 @@ export TCKDB_API_KEY="tck_replace_me"  # optional for public scientific reads
 
 API keys are minted on the **target instance**. Pointing at a different
 `base_url` does not migrate or sync data — see
-[`docs/clients/generic-client-targeting.md`](../../../docs/clients/generic-client-targeting.md)).
+[`docs/clients/generic-client-targeting.md`](../../../docs/clients/generic-client-targeting.md).
 
 ### When is the API key required?
 

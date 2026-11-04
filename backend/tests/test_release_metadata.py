@@ -223,3 +223,17 @@ def test_known_operational_boundaries_are_recorded_where_a_reader_will_look():
     # posture, not just the accepted-science ones.
     assert "release_selection" in roles
     assert "dataset_release_and_profiles.md" in roles
+
+
+@pytest.mark.parametrize(
+    "package_dir",
+    ["clients/python", "schemas/python/tckdb-schemas"],
+)
+def test_published_package_license_is_the_root_license(package_dir):
+    """Each PyPI package ships its own copy of the root ``LICENSE`` (a build
+    only sees its own directory). The copies must stay byte-identical."""
+    copy = REPO_ROOT / package_dir / "LICENSE"
+    assert copy.is_file(), f"{package_dir}/LICENSE is missing; the wheel would ship no licence"
+    assert copy.read_bytes() == (REPO_ROOT / "LICENSE").read_bytes(), (
+        f"{package_dir}/LICENSE has drifted from the root LICENSE; copy it again"
+    )

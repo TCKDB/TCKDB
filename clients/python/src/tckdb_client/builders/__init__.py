@@ -6,7 +6,8 @@ them to the thin HTTP client at :class:`tckdb_client.TCKDBClient`.
 It does not own HTTP, auth, or any backend state.
 
 It supports computed-species and computed-reaction uploads, with thermo,
-statmech, transport, kinetics and artifacts. See
+statmech, kinetics and artifacts. A ``Transport`` block is accepted and
+validated but not yet sent on either upload route. See
 ``clients/python/docs/builder_api_stability.md`` for the public surface and
 ``clients/python/docs/builder_api_mvp.md`` for the original design spec.
 

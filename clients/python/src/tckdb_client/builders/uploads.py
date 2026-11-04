@@ -197,8 +197,8 @@ class ComputedSpeciesUpload:
             # Forward-compat acceptance: the computed-species bundle
             # schema does not yet carry a ``transport`` field, so this
             # builder validates references locally but does not emit
-            # the block on the wire. See ``transport.py`` and the
-            # README's transport section for the rationale.
+            # the block on the wire. See ``transport.py`` and
+            # ``docs/builders.md`` ("What emits today") for the rationale.
             if not isinstance(self.transport, Transport):
                 raise TCKDBBuilderValidationError(
                     "ComputedSpeciesUpload.transport must be a Transport "

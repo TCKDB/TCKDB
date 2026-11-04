@@ -10,8 +10,14 @@ Python client for the [TCKDB](https://github.com/TCKDB/TCKDB) thermochemistry an
 ## Install
 
 ```bash
-pip install "git+https://github.com/TCKDB/TCKDB.git#subdirectory=schemas/python/tckdb-schemas" \
-            "git+https://github.com/TCKDB/TCKDB.git#subdirectory=clients/python"
+pip install tckdb-client
+```
+
+That also installs `tckdb-schemas`, the wire-contract package. For the unreleased `main`, install the two from Git, schemas first:
+
+```bash
+pip install "git+https://github.com/TCKDB/TCKDB.git#subdirectory=schemas/python/tckdb-schemas"
+pip install "git+https://github.com/TCKDB/TCKDB.git#subdirectory=clients/python"
 ```
 
 Python 3.11 or newer. Editable install from a clone: `pip install -e ./schemas/python/tckdb-schemas -e ./clients/python`.

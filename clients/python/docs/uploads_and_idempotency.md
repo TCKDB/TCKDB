@@ -1,7 +1,5 @@
 # Raw uploads, idempotency keys and contribution bundles
 
-Moved from the package README. This is the payload-in, payload-out path; for builders see `builders.md`.
-
 ## Authenticated upload
 
 `upload()` accepts:

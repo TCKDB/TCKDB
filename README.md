@@ -532,9 +532,17 @@ content: species, calculations, levels of theory, geometries, thermo,
 kinetics, provenance, and links between them. A workflow adapter is
 usually responsible for turning tool output into that JSON shape.
 
-Install it directly from the monorepo without cloning:
+Install it from PyPI:
 
 ```bash
+pip install tckdb-client
+```
+
+Or the unreleased `main`, straight from the monorepo (the client needs
+`tckdb-schemas`, so install that first):
+
+```bash
+pip install "git+https://github.com/TCKDB/TCKDB.git#subdirectory=schemas/python/tckdb-schemas"
 pip install "git+https://github.com/TCKDB/TCKDB.git#subdirectory=clients/python"
 ```
 

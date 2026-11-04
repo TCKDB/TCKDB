@@ -1,7 +1,5 @@
 # Errors and refusal codes
 
-Moved from the package README.
-
 ## Errors
 
 Every HTTP failure raises a structured exception that carries the parsed

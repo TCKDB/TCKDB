@@ -1,7 +1,5 @@
 # Builder layer (public beta)
 
-Moved from the package README. Section headings below the title keep their original names.
-
 The package ships a builder layer under `tckdb_client.builders` that
 constructs upload payloads from scientific Python objects and sends
 them through the existing thin client. The thin HTTP client is
@@ -14,7 +12,7 @@ opt/freq/sp + optional thermo / statmech / transport) and
 computed-reaction upload (reactant/product species + TS + kinetics +
 per-species thermo / statmech / transport).
 
-See [`docs/builder_api_stability.md`](builder_api_stability.md))
+See [`docs/builder_api_stability.md`](builder_api_stability.md)
 for the public-beta API surface, deprecation policy, and the list of
 things that may still change before v1.
 
@@ -23,7 +21,7 @@ things that may still change before v1.
 The builder intentionally models one scientifically meaningful
 conformer/geometry per species upload. It is not intended for
 uploading every conformer candidate a workflow considered. See
-[`docs/conformer_semantic_boundary.md`](conformer_semantic_boundary.md)).
+[`docs/conformer_semantic_boundary.md`](conformer_semantic_boundary.md).
 
 ### Source-calculation ergonomics
 
@@ -59,7 +57,7 @@ entries in insertion order. Use `.add("k-inf", calc)` for role
 tokens that aren't valid Python identifiers.
 
 Full design rationale and rejected alternatives:
-[`docs/source_calculation_ergonomics.md`](source_calculation_ergonomics.md)).
+[`docs/source_calculation_ergonomics.md`](source_calculation_ergonomics.md).
 Explicit lists, dicts, and dict-of-list shapes keep working
 unchanged — the helper is purely additive.
 
@@ -70,7 +68,7 @@ read Gaussian, ORCA, Arkane, or RMG output files; it does not infer
 charge / multiplicity from logs; it does not run RDKit identity
 checks. ESS file parsing is an upper layer above the builders, and
 is intentionally **not** part of the base install. See
-[`docs/parser_validation_boundary.md`](parser_validation_boundary.md))
+[`docs/parser_validation_boundary.md`](parser_validation_boundary.md)
 for the layering between builders, future parser helpers,
 workflow-tool adapters, and the backend.
 
@@ -82,12 +80,12 @@ builder (visible via `upload.iter_calculations()`) but **not emitted
 on the wire** today. Producer conventions for what belongs in a note
 (short one-line *why*, never logs / candidate-conformer narratives /
 machine paths / scratchpad text) live in
-[`docs/calculation_note_conventions.md`](calculation_note_conventions.md)).
+[`docs/calculation_note_conventions.md`](calculation_note_conventions.md).
 
 ### Writing a workflow-tool adapter?
 
 The
-[`docs/adapter_authoring_quickstart.md`](adapter_authoring_quickstart.md))
+[`docs/adapter_authoring_quickstart.md`](adapter_authoring_quickstart.md)
 is the short producer-facing path. One document covers the four-layer
 model (workflow → adapter → builders → client → backend), the three
 boundary rules, the minimal six-step adapter flow, `SourceCalculations`
@@ -118,7 +116,7 @@ The summary is a builder-side **viewer** of upload state; it is
 not a substitute for `upload.to_payload()`, which remains the
 canonical wire representation. Stability layering and the full
 field list (per upload kind) are documented in
-[`docs/builder_summary_design.md`](builder_summary_design.md)).
+[`docs/builder_summary_design.md`](builder_summary_design.md).
 No new dependencies, no impact on `to_payload()` — purely additive.
 
 ### Quickstart
@@ -158,21 +156,21 @@ with TCKDBClient(base_url, api_key=api_key) as client:
 
 End-to-end demos:
 
-- [`examples/builder_computed_species_demo.py`](../examples/builder_computed_species_demo.py))
+- [`examples/builder_computed_species_demo.py`](../examples/builder_computed_species_demo.py)
   — **start here.** Simplest single-species upload: one `Species`,
   one `opt + freq + sp` triple, one `Thermo`, one `Statmech`, one
   `Transport`, two attached artifacts. ~250 lines of fully-typed
   example code with no domain modelling beyond the molecule itself.
-- [`examples/builder_computed_reaction_demo.py`](../examples/builder_computed_reaction_demo.py))
+- [`examples/builder_computed_reaction_demo.py`](../examples/builder_computed_reaction_demo.py)
   — multi-species reaction upload: three `Species` (CH3 + H → CH4),
   a `TransitionState`, modified-Arrhenius `Kinetics` with duplicate
   `reactant_energy` source roles, per-species thermo / statmech /
   transport, and two TS / species-side artifacts. Use this once the
   species demo makes sense.
-- [`examples/builder_computed_reaction_demo.ipynb`](../examples/builder_computed_reaction_demo.ipynb))
+- [`examples/builder_computed_reaction_demo.ipynb`](../examples/builder_computed_reaction_demo.ipynb)
   — Jupyter notebook walk-through of the reaction demo, section
   headings included, ideal for interactive exploration.
-- [`examples/builder_arc_style_dry_run.py`](../examples/builder_arc_style_dry_run.py))
+- [`examples/builder_arc_style_dry_run.py`](../examples/builder_arc_style_dry_run.py)
   — **ARC-style dry-run example.** Workflow-shaped data — four
   species (`CH4 + OH → CH3 + H2O`, H-abstraction), a TS, mixed
   Gaussian-opt / ORCA-SP releases, modified-Arrhenius kinetics
@@ -182,8 +180,8 @@ End-to-end demos:
   `Calculation.opt/freq/sp` for workflow-side context (local-only;
   not emitted on the wire). Uses only public APIs and respects the
   one-conformer-per-species
-  [conformer boundary policy](conformer_semantic_boundary.md)).
-- [`examples/builder_arc_style_dry_run.ipynb`](../examples/builder_arc_style_dry_run.ipynb))
+  [conformer boundary policy](conformer_semantic_boundary.md).
+- [`examples/builder_arc_style_dry_run.ipynb`](../examples/builder_arc_style_dry_run.ipynb)
   — Jupyter notebook walk-through of the ARC-style dry-run, split
   into twelve named sections (imports → workflow mapping → artifact
   plan → optional live upload). Same flow as the `.py` sibling,
@@ -355,10 +353,10 @@ with warnings.catch_warnings():
 ```
 
 The diagnostic codes are stable strings — see
-[`docs/builder_api_stability.md`](builder_api_stability.md)) for
+[`docs/builder_api_stability.md`](builder_api_stability.md) for
 the policy.
 
-### Computed reaction (Phase 2 + 3A)
+### Computed reaction
 
 ```python
 from tckdb_client import TCKDBClient
@@ -405,7 +403,7 @@ with TCKDBClient(base_url, api_key=api_key) as client:
     result = client.upload(upload)
 ```
 
-#### Attaching transport to a computed species (Phase 5)
+#### Attaching transport to a computed species
 
 ```python
 from tckdb_client.builders import Transport
@@ -447,7 +445,7 @@ upload = ComputedSpeciesUpload(
 > client.upload("transport", transport.to_payload())
 > ```
 
-#### Attaching statmech to a computed species (Phase 4)
+#### Attaching statmech to a computed species
 
 ```python
 from tckdb_client.builders import Statmech
@@ -478,7 +476,7 @@ are emitted on the wire** for both endpoints — the backend's
 builder validates that each referenced calc belongs to the same
 species's bucket either way.
 
-#### Attaching thermo to a computed species (Phase 3C)
+#### Attaching thermo to a computed species
 
 ```python
 from tckdb_client.builders import (
@@ -516,14 +514,14 @@ bundle-local key the builder minted for the corresponding
 `(calculation_key, role)` pairs.
 
 > **Per-endpoint distinction.** The same `Thermo` builder is used by
-> `ComputedReactionUpload.species_thermo` (Phase 3B), but the
+> `ComputedReactionUpload.species_thermo`, but the
 > computed-reaction backend's `BundleThermoIn` schema does **not**
 > carry `source_calculations` today. The builder still validates
 > source-calc references locally for the reaction path; they are
 > simply not emitted on the wire there. Only the computed-species
 > path emits them.
 
-#### Attaching reactant / product calculations (Phase 3A)
+#### Attaching reactant / product calculations
 
 Pass `species_calculations` to ship per-species opt / freq / sp records
 in the same upload. Each species gets one conformer anchored on its
@@ -566,9 +564,9 @@ upload = ComputedReactionUpload(
 a `dict[role, list[Calculation]]` (used above for the duplicate
 `reactant_energy`), or a `list[(role, Calculation)]` of explicit pairs.
 The builder supports **one opt per species**, by design — see
-[`docs/conformer_semantic_boundary.md`](conformer_semantic_boundary.md)).
+[`docs/conformer_semantic_boundary.md`](conformer_semantic_boundary.md).
 
-#### Attaching thermo to reactant / product species (Phase 3B)
+#### Attaching thermo to reactant / product species
 
 Pass `species_thermo` to ship per-species thermo blocks. Three flavours
 are supported and map to the backend's `BundleThermoIn` shape:
@@ -620,7 +618,7 @@ to `kJ/mol` automatically.
 `client.upload(builder)` and the long-standing
 `client.upload(endpoint, payload_dict)` stay structurally distinct —
 passing a raw dict into the single-argument form raises `TypeError`
-rather than guessing an endpoint. Thermo, statmech, and artifact
-helpers are deferred to Phase 3; see
-[`docs/builder_api_mvp.md`](builder_api_mvp.md)) for the full
-phased rollout and open design questions.
+rather than guessing an endpoint. Thermo, statmech, transport and
+artifact builders all ship; the table under "What emits today" says which
+blocks reach the wire on which endpoint. The original design spec is
+[`builder_api_mvp.md`](builder_api_mvp.md).

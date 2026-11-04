@@ -1,10 +1,9 @@
 # Tests and non-goals
 
-Moved from the package README.
-
 ## Tests
 
 ```bash
+pip install -e "./clients/python[test]"   # from the repository root
 pytest
 python -m py_compile examples/basic_usage.py examples/upload_json_file.py examples/submit_bundle.py
 ```

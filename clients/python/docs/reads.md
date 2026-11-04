@@ -1,6 +1,14 @@
 # Scientific reads, geometry, artifact download and runnable read examples
 
-Moved from the package README.
+An authenticated client also covers `me()`, uploads and admin calls:
+
+```python
+with TCKDBClient(base_url, api_key=api_key) as client:
+    print(client.me())
+```
+
+For hosted or public querying, see [`docs/guides/public_hosted_querying.md`](../../../docs/guides/public_hosted_querying.md).
+
 
 ## Scientific read/query methods
 
@@ -326,14 +334,14 @@ approved nor one of your own deposits), `1` anything else.
 
 ## Examples
 
-- [`examples/basic_usage.py`](../examples/basic_usage.py))
-- [`examples/upload_json_file.py`](../examples/upload_json_file.py))
-- [`examples/submit_bundle.py`](../examples/submit_bundle.py))
-- [`examples/scientific_reads.py`](../examples/scientific_reads.py))
+- [`examples/basic_usage.py`](../examples/basic_usage.py)
+- [`examples/upload_json_file.py`](../examples/upload_json_file.py)
+- [`examples/submit_bundle.py`](../examples/submit_bundle.py)
+- [`examples/scientific_reads.py`](../examples/scientific_reads.py)
 
 ### Runnable scientific read example
 
-[`examples/scientific_reads.py`](../examples/scientific_reads.py)) exercises every
+[`examples/scientific_reads.py`](../examples/scientific_reads.py) exercises every
 chemistry-first scientific read method against a live TCKDB deployment.
 Empty results are reported with a friendly message; client errors print
 `status_code`, `code`, and `detail` rather than swallowing them.
