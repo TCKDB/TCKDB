@@ -57,6 +57,7 @@ from collections.abc import Callable, Iterable, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.program_default_settings import display_major_version
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.chemistry.basis_set_names import basis_identity_key
@@ -74,6 +75,7 @@ W_INPUT_DECK_DISAGREES_WITH_OUTPUT_LOG = "input_deck_disagrees_with_output_log"
 W_LEVEL_OF_THEORY_DISAGREES_WITH_ARTIFACT = "level_of_theory_disagrees_with_artifact"
 W_OUTPUT_LOG_DISAGREES_WITH_EARLIER_OUTPUT_LOG = "output_log_disagrees_with_earlier_output_log"
 W_REPORTED_SETTING_DIFFERS_FROM_REQUESTED = "reported_setting_differs_from_requested"
+W_OUTPUT_LOG_JOB_NOT_BOUND = "output_log_job_not_bound"
 
 #: Keys another check owns, or whose value does not name the setting.
 _NOT_RECONCILED_HERE = frozenset({"freq.hessian_method", "internal_option.iop"})
@@ -683,6 +685,10 @@ def reported_setting_disagreements(
                 except ValueError:
                     pass
     if software == "gaussian":
+        # The sources are the Gaussian 09 manual pages; Gaussian 03 and an undeclared version are left out.
+        release = calculation.software_release
+        if display_major_version("gaussian", release.version if release is not None else None) not in (9, 16):
+            return []
         conver = None
         for rows_of in (deck, echo):  # the echo is read last, so it overrides the deck
             for r in rows_of:

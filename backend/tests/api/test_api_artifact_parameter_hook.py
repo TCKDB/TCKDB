@@ -374,16 +374,37 @@ def test_a_link1_log_in_an_inline_bundle_binds_whichever_order_it_is_listed(
     assert _grid_and_scf_rows(db_session, calc_id) == {("grid.quality", "fine"), ("scf.convergence", "very_tight")}
 
 
-def test_the_three_extraction_loops_read_input_decks_first():
-    import inspect
+def test_a_link1_log_in_a_reaction_bundle_binds_and_the_artifacts_are_saved_in_the_listed_order(
+    client, db_session, stub_store_artifact
+):
+    from tests.api.test_api_bundle_monatomic_sp_primary import (
+        _h_species,
+        _reaction_payload,
+        _reshape_reaction_atom_to_sp_only,
+    )
 
-    from app.api.routes import calculations
-    from app.services.calculation_parameter_extraction import inputs_first
-    from app.workflows import computed_reaction, computed_species
+    payload = _reshape_reaction_atom_to_sp_only(_reaction_payload("rotor_scan_5"))
+    (conformer,) = _h_species(payload)["conformers"]
+    conformer["calculation"].update(
+        software_release={"name": "Gaussian", "version": "16"},
+        level_of_theory={"method": "wB97XD", "basis": "def2-SVP"},
+        artifacts=_link1_artifacts(log_first=True),
+    )
+    resp = client.post("/api/v1/uploads/computed-reaction", json=payload)
+    assert resp.status_code == 201, resp.text[:800]
+    ids = {a.filename: a for a in db_session.scalars(select(CalculationArtifact))}
+    log, deck = ids["water_link1.log"], ids["job2.gjf"]
+    assert log.id < deck.id  # saved as listed: the log first
+    assert _grid_and_scf_rows(db_session, log.calculation_id) == {
+        ("grid.quality", "fine"),
+        ("scf.convergence", "very_tight"),
+    }  # read decks first, so the log bound to job 2
 
-    for module in (calculations, computed_reaction, computed_species):
-        assert "inputs_first(" in inspect.getsource(module)
+
+def test_inputs_first_orders_only_the_reading():
     from types import SimpleNamespace
+
+    from app.services.calculation_parameter_extraction import inputs_first
 
     listed = [SimpleNamespace(kind=k, n=n) for n, k in enumerate([ArtifactKind.output_log, ArtifactKind.input, ArtifactKind.output_log])]
     assert [(a.kind, a.n) for a in inputs_first(listed)] == [

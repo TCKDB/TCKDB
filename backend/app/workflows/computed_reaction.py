@@ -281,13 +281,16 @@ def _persist_calculation_unattributed(
         as_primary=as_primary or is_conformer_primary,
     )
 
-    for artifact_in in inputs_first(calc_in.artifacts):
+    # Saved in the order the producer listed them; only the reading below is reordered (decks first), because a
+    # log is read against the decks the calculation already has.
+    for artifact_in in calc_in.artifacts:
         persist_artifact(
             session,
             calculation_id=calculation.id,
             artifact_in=artifact_in,
             created_by=created_by,
         )
+    for artifact_in in inputs_first(calc_in.artifacts):
         # Opportunistic per-artifact extraction, both best-effort — never
         # abort the bundle. Input artifacts yield parameter rows; output
         # logs reconcile the single-point energy against the tool's

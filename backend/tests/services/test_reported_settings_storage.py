@@ -834,6 +834,72 @@ def test_link1_job_1_tight_and_job_3_default_and_the_default_log_are_silent(db_c
         assert _differs(_upload(session, default, _DEFAULT_LOG)) == []
 
 
+def _store(session, calc, warnings):
+    """What the artifact route does with the warnings an upload earned: store them against the calculation."""
+    from app.db.models.common import SubmissionRecordType
+    from app.services.deposit_warnings import store_deposit_warnings
+    from app.services.record_review import RecordRef
+
+    store_deposit_warnings(
+        session, None, warnings, targets=[RecordRef(SubmissionRecordType.calculation, calc.id)], mark_checked=False
+    )
+    session.flush()
+
+
+def _states(session, calc):
+    return {s.setting: s.state for s in build_effective_settings(session, calc)}
+
+
+_NOT_BOUND = "output_log_job_not_bound"
+
+
+def test_an_unbound_link1_log_warns_and_shows_not_stated_not_an_assumed_default(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _g16_calc(session)  # job 2 or job 3: both are sp wb97xd/def2svp, and no deck is there to tell them apart
+        warnings = _upload(session, calc, _LINK1_LOG)
+        [warning] = [w for w in warnings if w.code == _NOT_BOUND]
+        assert warning.context["software"] == "gaussian" and "several jobs" in warning.message
+        assert _states(session, calc) == {  # before the warning is stored the log reads as silent: the misleading case
+            "grid": EffectiveSettingState.assumed_default,
+            "scf_convergence": EffectiveSettingState.assumed_default,
+        }
+        _store(session, calc, warnings)
+        assert _states(session, calc) == {
+            "grid": EffectiveSettingState.not_stated,
+            "scf_convergence": EffectiveSettingState.not_stated,
+        }
+
+
+def test_a_bound_link1_log_has_no_not_bound_warning_and_its_rows_decide(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _g16_calc(session)
+        _upload(session, calc, _JOB2_DECK, ArtifactKind.input)
+        warnings = _upload(session, calc, _LINK1_LOG)
+        assert not [w for w in warnings if w.code == _NOT_BOUND]
+        _store(session, calc, warnings)
+        states = _states(session, calc)
+        assert states["scf_convergence"] is EffectiveSettingState.reported
+
+
+def test_a_refresh_after_the_deck_arrives_shows_the_rows_though_the_old_warning_stands(db_conn):
+    with Session(db_conn) as session, session.begin():
+        calc = _g16_calc(session)
+        _store(session, calc, _upload(session, calc, _LINK1_LOG))
+        assert _states(session, calc)["scf_convergence"] is EffectiveSettingState.not_stated
+        _upload(session, calc, _JOB3_DECK, ArtifactKind.input)
+        refresh_output_log_rows(session, calc)
+        assert _states(session, calc)["scf_convergence"] is EffectiveSettingState.reported  # rows always win
+
+
+def test_the_gaussian_scf_rule_is_for_gaussian_09_and_16_only(db_conn):
+    log = _DEFAULT_LOG.replace("# sp b3lyp/def2svp", "# sp b3lyp/def2svp scf=verytight", 1)
+    assert log != _DEFAULT_LOG
+    with Session(db_conn) as session, session.begin():
+        for version, warns in (("16", True), ("09", True), ("03", False)):
+            calc = _calc(session, software="gaussian", version=version, method="B3LYP", basis="def2-SVP", calc_type=CalculationType.sp)
+            assert bool(_differs(_upload(session, calc, log))) is warns, version
+
+
 @pytest.mark.parametrize(("reported", "warns"), [("1.00D-10", False), ("1.00D-08", True)])
 def test_an_explicit_conver_must_be_reported_as_ten_to_the_minus_n(db_conn, reported, warns):
     log = _DEFAULT_LOG.replace("# sp b3lyp/def2svp", "# sp b3lyp/def2svp scf=conver=10", 1)

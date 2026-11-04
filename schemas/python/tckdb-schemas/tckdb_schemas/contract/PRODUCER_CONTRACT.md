@@ -236,13 +236,16 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 ### 0.154.0 - 2026-11-04
 
-The route of a Gaussian log is read correctly when it is short. No field, warning or code is added or removed.
+The route of a Gaussian log is read correctly when it is short. One warning code is added (`output_log_job_not_bound`); no field is added or removed.
 
 - **Fixed:** Gaussian sizes the rows of dashes round the echoed route to the route itself (43 wide for `# sp b3lyp/def2svp`, 70 for a long one). The reader only treated rows of 60 or more as the route's edges, so a short route (under 60 characters, which is common) was never closed: it ran on into the log (one measured route was 5012 characters) and the settings read from it included log text, such as `NAtoms` and `Conv`, as if they had been requested. A row of four or more dashes is now an edge too.
+- New warning `output_log_job_not_bound`. An output log holds several jobs (a `--Link1--` file) and none could be matched to this calculation by job type and level of theory, so the settings in it were not read. A reader shows the calculation's grid and SCF convergence as `not_stated` rather than as the program's default while this warning stands and no row from the log exists.
 - **Measured side effects** (every Gaussian text in the test corpus, before and after):
   - The tau and Hessian-method detection is unchanged on all 521 texts.
   - 59 ARC payload logs (routes of about 55 characters) no longer store about 197 junk raw rows read from log text. No canonical row changed.
-  - Two Gaussian 03 composite logs, `cbs_qb3_so2oo_g03` and `g3_ethylene_g03`, now read the route the user wrote (`#CBS-QB3 opt freq`) instead of an internal step's. Rows lost: `guess.strategy=read`, `output.verbosity=normal`, `core.frozen=all_electron`. Row gained: `scf.convergence=tight`. The declared-level pair read from the first route, MP2/CBSB3, is now none.
+  - Two Gaussian 03 composite logs now read the route the user wrote instead of an internal step's:
+    - `cbs_qb3_so2oo_g03`: the route is `#CBS-QB3 opt freq` (it was `#N Geom=AllCheck Guess=Read SCRF=Check MP2/CBSB3 ...`, pair MP2/CBSB3, now none). Rows lost: `guess.strategy=read`, `output.verbosity=normal`. Rows gained: none.
+    - `g3_ethylene_g03`: the route is `# G3 nosym optcyc=100 scf=tight` (it was `#N Geom=AllCheck Guess=Read SCRF=Check MP2(Full)/6-31G(d) Opt=RCFC ...`, pair MP2(Full)/6-31G(d), now none). Rows lost: `guess.strategy=read`, `output.verbosity=normal`, `core.frozen=all_electron`. Row gained: `scf.convergence=tight`.
   - `method_basis_jobs` now lists the internal-step routes of 5 composite logs. That can only drop a level-of-theory warning, never add one.
 
 ### 0.153.0 - 2026-11-04

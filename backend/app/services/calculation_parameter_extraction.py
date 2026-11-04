@@ -72,6 +72,7 @@ from app.services.ess_software_detection import (
 )
 from app.services.parameter_observation import ParserObservation
 from app.services.parameter_reconciliation import (
+    W_OUTPUT_LOG_JOB_NOT_BOUND,
     bind_gaussian_job,
     declared_parameter_warnings,
     level_of_theory_warnings,
@@ -429,6 +430,12 @@ def extract_and_store_calculation_parameters(
         try:
             session.flush()
             warnings.extend(conflicts)
+            if unbound_log:
+                warnings.append(
+                    UploadWarning.from_code(
+                        field="artifacts", code=W_OUTPUT_LOG_JOB_NOT_BOUND, context={"software": software}
+                    )
+                )
             warnings.extend(reported_setting_warnings(session, calculation, software, before=disagreements_before))
             warnings.extend(
                 declared_parameter_warnings(
