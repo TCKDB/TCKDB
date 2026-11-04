@@ -1018,9 +1018,10 @@ class EffectiveSettingState(str, Enum):
 
     ``reported``: the output log prints the value the program used. ``requested``: the log's echoed input, else the
     uploaded deck, else a value the depositor typed, asked for it (``requested_from`` says which).
-    ``assumed_default``: the log neither reports nor echoes it, so the program's documented default for the declared
-    program and version is shown, labelled as assumed. ``assumed_default_no_output_log``: the same, with no output log
-    at all. ``not_stated``: nothing says, and no default is documented or the program or version is not declared.
+    ``assumed_default``: the log neither reports nor echoes it, so the program's documented default is shown, labelled as
+    assumed. It depends on the declared program, version and method and, for ORCA, the calculation type.
+    ``assumed_default_no_output_log``: the same, with no output log at all. ``not_stated``: nothing says, and no
+    default is documented or the program or version is not declared.
     """
 
     reported = "reported"

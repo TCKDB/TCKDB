@@ -61,11 +61,18 @@ def _calc(session: Session, *, software: str = "orca", version: str | None = "6.
     if version is not None:
         release["version"] = version
     upload = CalculationWithResultsPayload(
-        type=ctype,
+        type=CalculationType.opt,
         software_release=release,
         level_of_theory={"method": method, "basis": "def2-TZVP"},
-        opt_result=OptResultPayload(converged=True) if ctype is CalculationType.opt else None,
+        opt_result=OptResultPayload(converged=True),
     )
+    if ctype is not CalculationType.opt:  # a type other than opt carries no opt_result; composite needs its own block
+        from tckdb_schemas.fragments.calculation import CompositeResultPayload
+
+        update = {"type": ctype, "opt_result": None}
+        if ctype is CalculationType.composite:
+            update["composite_result"] = CompositeResultPayload(assembly="program_run")
+        upload = upload.model_copy(update=update)
     return resolve_and_persist_calculation_with_results(session, upload, species_entry_id=entry_id)
 
 
@@ -322,15 +329,22 @@ def test_the_assumed_default_follows_program_and_version(db_conn, software, vers
         ("gaussian", "09", "HF", CalculationType.sp, "tight"),
         ("gaussian", "09", "B3LYP", CalculationType.opt, "tight"),
         ("gaussian", "09", "MP2", CalculationType.freq, "tight"),
+        ("gaussian", "16", "B3LYP", CalculationType.sp, "tight"),
         # ORCA 5 and 6: TightSCF is the documented default for a geometry optimisation (chunks 13503, 16764).
         ("orca", "6.0.0", "MP2", CalculationType.opt, "tight"),
         ("orca", "6.0.0", "DLPNO-CCSD(T)", CalculationType.opt, "tight"),
         ("orca", "5.0.4", "HF", CalculationType.opt, "tight"),
-        # No sourced default: other ORCA job types, Gaussian 16, an undeclared version.
+        # Gaussian 16: tight (G09 keyword + an observed default run); composite methods run standard SCF steps.
+        ("gaussian", "16", "CBS-QB3", CalculationType.composite, "tight"),
+        ("gaussian", "09", "G4", CalculationType.composite, "tight"),
+        # No default: non-SCF or unrecognised methods, other ORCA job types, an undeclared version.
+        ("gaussian", "16", "UFF", CalculationType.opt, None),
+        ("gaussian", "09", "MNDO", CalculationType.sp, None),
+        ("orca", "6.0.0", "GFN2-xTB", CalculationType.opt, None),
+        ("orca", "6.0.0", "CASSCF", CalculationType.opt, None),
         ("orca", "6.0.0", "HF", CalculationType.sp, None),
         ("orca", "6.0.0", "B3LYP", CalculationType.freq, None),
-        ("gaussian", "16", "B3LYP", CalculationType.sp, "tight"),
-        ("gaussian", None, "HF", CalculationType.sp, None),
+                ("gaussian", None, "HF", CalculationType.sp, None),
         ("orca", None, "HF", CalculationType.opt, None),
     ],
 )
