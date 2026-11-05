@@ -243,6 +243,14 @@ def _calc(session: Session, *, software: str = "orca", **level):
     return resolve_and_persist_calculation_with_results(session, upload, species_entry_id=entry_id)
 
 
+_SENTENCE_NAMES = {
+    "relativistic_hamiltonian": "relativistic Hamiltonian",
+    "pno_truncation": "PNO truncation",
+    "ri_approximation": "RI approximation",
+    "core_treatment": "core treatment",
+}
+
+
 def _deck(keywords: str) -> str:
     return f"! {keywords}\n* xyz 0 1\nH 0 0 0\n*\n"
 
@@ -269,6 +277,7 @@ def test_a_deck_that_contradicts_a_stated_qualifier_warns(db_conn, level, deck, 
         assert warning.context["component"] == component
         assert warning.context["depositor_supplied"] == {"declared_value": declared, "observed_value": observed}
         assert declared not in warning.message and observed not in warning.message
+        assert _SENTENCE_NAMES[component] in warning.message
 
 
 @pytest.mark.parametrize(
@@ -302,9 +311,83 @@ def test_a_level_that_states_no_qualifier_is_not_judged(db_conn):
 
 
 def test_a_qualifier_is_not_judged_against_another_programs_deck(db_conn):
+    # A deck the Gaussian parser really reads: Integral=DKH2 is relativistic.hamiltonian=dkh2, which differs from
+    # the ORCA-declared level's zora. The program guard is what keeps this silent.
     with Session(db_conn) as session, session.begin():
-        calc = _calc(session, software="gaussian", ri_approximation="rijcosx")
-        assert _qualifier_warnings(session, calc, _deck("DLPNO-CCSD(T) cc-pVTZ NoRI")) == []
+        calc = _calc(session, software="orca", relativistic_hamiltonian="zora")
+        warnings: list = []
+        extract_and_store_calculation_parameters(
+            session, calc, "#P CCSD(T)/cc-pVTZ Integral=DKH2 opt\n\ntitle\n\n0 1\nH 0 0 0\n\n",
+            warnings=warnings, artifact_kind=ArtifactKind.input,
+        )
+        assert [w for w in warnings if w.context.get("component") == "relativistic_hamiltonian"] == []
+
+
+def test_the_program_guard_is_what_keeps_another_programs_values_unjudged(db_conn):
+    from app.services.parameter_reconciliation import level_of_theory_qualifier_warnings
+
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, software="orca", ri_approximation="rijcosx")
+        observed = [("ri.approximation", "none")]
+        same = level_of_theory_qualifier_warnings(calc, observed, parsed_software="orca", artifact_kind=ArtifactKind.input)
+        other = level_of_theory_qualifier_warnings(calc, observed, parsed_software="gaussian", artifact_kind=ArtifactKind.input)
+        assert [w.context["component"] for w in same] == ["ri_approximation"]
+        assert other == []
+
+
+_GAUSSIAN_TWO_JOBS = (
+    "#P CCSD(T,{first})/cc-pCVTZ opt\n\ntitle\n\n0 1\nH 0 0 0\n\n--Link1--\n"
+    "#P CCSD(T,{second})/cc-pCVTZ opt\n\ntitle\n\n0 1\nH 0 0 0\n\n"
+)
+
+
+def test_a_gaussian_link1_deck_is_read_job_by_job_not_pooled(db_conn):
+    # The level states a frozen core. Job 1 says Full (all electron), job 2 says FC. Both jobs fit the declared
+    # method and basis, so no single job is this calculation's and nothing is judged: the other job's value must not
+    # stand in, in either direction.
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, software="gaussian", method="CCSD(T)", basis="cc-pCVTZ", core_treatment="frozen_core")
+        both = _qualifier_warnings(session, calc, _GAUSSIAN_TWO_JOBS.format(first="Full", second="FC"))
+        assert both == []
+
+
+def test_a_gaussian_link1_deck_judges_the_one_job_that_fits_the_declared_level(db_conn):
+    deck = (
+        "#P CCSD(T,Full)/cc-pCVTZ opt\n\ntitle\n\n0 1\nH 0 0 0\n\n--Link1--\n"
+        "#P MP2/cc-pVTZ opt\n\ntitle\n\n0 1\nH 0 0 0\n\n"
+    )
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, software="gaussian", method="CCSD(T)", basis="cc-pCVTZ", core_treatment="frozen_core")
+        [warning] = _qualifier_warnings(session, calc, deck)
+        assert warning.context["component"] == "core_treatment"
+        assert warning.context["depositor_supplied"] == {"declared_value": "frozen_core", "observed_value": "all_electron"}
+        agrees = _calc(session, software="gaussian", method="CCSD(T)", basis="cc-pCVTZ", core_treatment="all_electron")
+        assert _qualifier_warnings(session, agrees, deck) == []
+
+
+def test_an_orca_new_job_deck_is_read_job_by_job_not_pooled(db_conn):
+    # Job 1 (a different method) states RIJCOSX; the declared level is job 2's, which states no RI. Pooled, the
+    # level's rijk would be judged against job 1's rijcosx. Per job, job 2 says nothing about RI: silent.
+    deck = _deck("B3LYP def2-SVP RIJCOSX Opt") + "$new_job\n" + _deck("DLPNO-CCSD(T) cc-pVTZ TightPNO")
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, ri_approximation="rijk")
+        assert _qualifier_warnings(session, calc, deck) == []
+        # The qualifier the fitting job does state is still judged.
+        tight = _calc(session, ri_approximation="rijk", pno_truncation="loose")
+        [warning] = _qualifier_warnings(session, tight, deck)
+        assert warning.context["component"] == "pno_truncation"
+        # And a contradiction inside the fitting job warns.
+        own = _deck("B3LYP def2-SVP Opt") + "$new_job\n" + _deck("DLPNO-CCSD(T) cc-pVTZ RIJCOSX")
+        wrong = _calc(session, ri_approximation="rijk")
+        [clash] = _qualifier_warnings(session, wrong, own)
+        assert clash.context["component"] == "ri_approximation"
+
+
+def test_a_multi_job_deck_with_no_single_fitting_job_judges_nothing(db_conn):
+    deck = _deck("DLPNO-CCSD(T) cc-pVTZ RIJCOSX") + "$new_job\n" + _deck("DLPNO-CCSD(T) cc-pVTZ NoRI")
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, ri_approximation="rijk")
+        assert _qualifier_warnings(session, calc, deck) == []
 
 
 def test_each_disagreeing_qualifier_warns_once(db_conn):

@@ -1829,12 +1829,23 @@ _LOT_COMPONENTS = frozenset(
 )
 
 
+#: How each compared part reads in a sentence.
+_LOT_COMPONENT_NAMES = {
+    "method": "method",
+    "basis": "basis",
+    "relativistic_hamiltonian": "relativistic Hamiltonian",
+    "pno_truncation": "PNO truncation",
+    "ri_approximation": "RI approximation",
+    "core_treatment": "core treatment",
+}
+
+
 def _lot_disagrees(context: Mapping[str, Any]) -> str | None:
     component = _token(context.get("component"), _LOT_COMPONENTS)
     origin = _origin(context)
     if component is None or origin is None:
         return None
-    named = component.replace("_", " ")
+    named = _LOT_COMPONENT_NAMES[component]
     return (
         f"The {named} of the declared level of theory differs from the {named} in the uploaded "
         f"{_program(context)}{origin}. The declared level of theory was kept."
@@ -2286,10 +2297,10 @@ __all__ = [
     "NOT_COMPARED_REASONS",
     "RENDERED",
     "STEREO_NOT_REPRESENTED_REASONS",
-    "depositor_supplied_problems",
-    "field_keys",
     "clean_depositor_supplied",
     "context_problems",
+    "depositor_supplied_problems",
+    "field_keys",
     "normalise_field",
     "render_message",
 ]

@@ -3,8 +3,9 @@
 Frozen-core and all-electron CCSD(T)/cc-pCVTZ are different levels of theory
 (their difference is the core-valence term of a focal-point scheme), and until
 this field existed they collapsed to one row. The field is hashed **only when it is set**, so a
-level that does not state it is the level it always was: no existing
-``lot_hash`` changes and no row is re-keyed.
+level that does not state it keeps the hash it has without the field: the field itself
+adds no key and re-keys no row. (Stage 2, the keywords decision, did change every hash by removing the ``keywords``
+key; that is separate from this field.)
 
 What is held here:
 
@@ -50,7 +51,7 @@ _SCRIPT = pathlib.Path(__file__).parents[2] / "scripts" / "ops" / "merge_duplica
 #: (Stage 2: the free-text ``keywords`` key left the payload, so every hash differs from the pre-Stage-2 one by
 #: design; the instance is reseeded, not re-keyed). A change to any of these from here on is a re-key of every
 #: level of theory that spelled itself this way: a migration, not a test edit.
-_PRE_P4_HASHES: list[tuple[dict, str]] = [
+_NO_QUALIFIER_HASHES: list[tuple[dict, str]] = [
     ({"method": "wb97xd", "basis": "def2tzvp"}, "1ba2d643d5757c406f5c28afe2e5f6314ca850a02833b6fbeda4f3347c7baa0d"),
     ({"method": "CCSD(T)", "basis": "cc-pCVTZ"}, "6fa4d7f048b76844d934505442b982faed2dde442ff347ae1013a94d83e3691b"),
     (
@@ -93,7 +94,7 @@ def _old_formula(ref: LevelOfTheoryRef) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
-@pytest.mark.parametrize(("fields", "expected"), _PRE_P4_HASHES)
+@pytest.mark.parametrize(("fields", "expected"), _NO_QUALIFIER_HASHES)
 def test_a_level_with_no_core_treatment_keeps_the_hash_it_had_before_the_field(fields, expected):
     ref = LevelOfTheoryRef(**fields)
     assert ref.core_treatment is None
@@ -103,8 +104,8 @@ def test_a_level_with_no_core_treatment_keeps_the_hash_it_had_before_the_field(f
 
 def test_the_pinned_corpus_is_not_vacuous():
     # A list a refactor emptied would pass every parametrised case above.
-    assert len(_PRE_P4_HASHES) >= 7
-    assert len({h for _f, h in _PRE_P4_HASHES}) == 6  # cbsqb3 and CBS-QB3 are one level
+    assert len(_NO_QUALIFIER_HASHES) >= 7
+    assert len({h for _f, h in _NO_QUALIFIER_HASHES}) == 6  # cbsqb3 and CBS-QB3 are one level
 
 
 def test_frozen_core_all_electron_and_unstated_are_three_levels():
@@ -157,7 +158,7 @@ def merge():
 
 def test_the_stored_row_and_the_merge_script_rehash_to_the_same_value(db_session, merge):
     """Column -> hash (merge script, from stored text) agrees with ref -> hash (resolution)."""
-    for core in (None, "frozen_core", "all_electron"):
+    for core in (None, "frozen_core", "all_electron", "window"):
         ref = LevelOfTheoryRef(method="CCSD(T)", basis="cc-pCVTZ", core_treatment=core)
         row = resolve_level_of_theory_ref(db_session, ref)
         db_session.flush()
@@ -167,6 +168,38 @@ def test_the_stored_row_and_the_merge_script_rehash_to_the_same_value(db_session
             {"i": row.id},
         ).mappings().one()
         assert merge._identity_hash(mapping) == row.lot_hash == _level_of_theory_hash(ref)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("relativistic_hamiltonian", "dkh2"),
+        ("relativistic_hamiltonian", "none"),
+        ("pno_truncation", "tight"),
+        ("ri_approximation", "rijcosx"),
+        ("ri_approximation", "none"),
+        ("core_treatment", "window"),
+    ],
+)
+def test_the_merge_script_rehashes_every_method_qualifier_to_the_stored_hash(db_session, merge, field, value):
+    """Each typed qualifier (explicit ``none`` and ``window`` included) is in the script's identity hash.
+
+    A script that left one out would recompute the unstated level's hash for a stated row and fold the two together.
+    """
+    ref = LevelOfTheoryRef(method="DLPNO-CCSD(T)", basis="cc-pVTZ", **{field: value})
+    row = resolve_level_of_theory_ref(db_session, ref)
+    db_session.flush()
+    mapping = db_session.execute(
+        text("SELECT " + ", ".join(merge._LOT_COLUMNS) + " FROM level_of_theory WHERE id = :i"), {"i": row.id}
+    ).mappings().one()
+    assert merge._identity_hash(mapping) == row.lot_hash == _level_of_theory_hash(ref)
+    unstated = _level_of_theory_hash(LevelOfTheoryRef(method="DLPNO-CCSD(T)", basis="cc-pVTZ"))
+    assert row.lot_hash != unstated
+
+
+def test_the_merge_script_lists_every_method_qualifier_among_the_columns_it_regroups_by(merge):
+    for column in ("core_treatment", "relativistic_hamiltonian", "pno_truncation", "ri_approximation"):
+        assert column in merge._LOT_COLUMNS
 
 
 def test_the_merge_script_lists_core_treatment_among_the_columns_it_regroups_by(merge):

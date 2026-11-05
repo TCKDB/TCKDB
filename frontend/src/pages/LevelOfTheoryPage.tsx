@@ -144,8 +144,8 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                         <Disclosure summary="Level-of-theory hash" defaultOpen={false} className="lot-hash-disclosure">
                             <p className="note">
                                 A content hash over method, basis, auxiliary/CABS basis, dispersion, solvent,
-                                solvent model, spin treatment, and core treatment, relativistic Hamiltonian, PNO truncation and RI approximation (when stated) — two deposits with the same six
-                                displayed facts above but a different hash differ in one of the fields not shown
+                                solvent model, spin treatment, and core treatment, relativistic Hamiltonian, PNO truncation and RI approximation (when stated) — two deposits that read alike above
+                                but have a different hash differ in a field not shown
                                 inline (most often spin treatment). Not an identifier a reader looks up by; shown
                                 for exact-identity comparison only.
                             </p>

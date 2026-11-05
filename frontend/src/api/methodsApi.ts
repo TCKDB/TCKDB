@@ -48,7 +48,7 @@ const literatureSchema = z.object({
 
 // The LOT summary embedded inside an ECS/FSF record -- a DIFFERENT, smaller
 // shape than the LOT core block below (no `aux_basis`/`cabs_basis`/
-// `solvent_model`/`keywords`/`lot_hash`/`created_at`/`level_of_theory_id`).
+// `solvent_model`/`lot_hash`/`created_at`/`level_of_theory_id`).
 // Reuses `levelOfTheorySchema` (`api/scientificSchemas.ts`) -- the same
 // summary shape every other calculation-adjacent surface already parses
 // LOT summaries with -- rather than a fourth bespoke LOT schema in this

@@ -536,12 +536,26 @@ _QUALIFIER_PARAMETERS = {
 }
 
 
+def _job_fits_level(lot, job: dict, dispersions: frozenset[str]) -> bool:
+    """Whether one job of a multi-job artifact is the declared level (the method and basis checks, per job)."""
+    declared_keys = _method_keys(lot.method, dispersions) if lot.method else set()
+    methods = _effective_methods(job.get("methods") or [])
+    if methods and declared_keys and not any(declared_keys & _method_keys(m, dispersions) for m in methods):
+        return False
+    basis = job.get("basis")
+    if basis and lot.basis and basis.strip().lower() not in _NO_BASIS and _basis_key(lot.basis) != _basis_key(basis):
+        return False
+    return True
+
+
 def level_of_theory_qualifier_warnings(
     calculation: Calculation,
     observed: Iterable[tuple[str | None, str | None]],
     *,
     parsed_software: str,
     artifact_kind: ArtifactKind,
+    jobs: list[dict] | None = None,
+    unbound_log: bool = False,
 ) -> list[UploadWarning]:
     """Warn when a method qualifier the level of theory states is contradicted by the deck or log (never refuses).
 
@@ -552,12 +566,36 @@ def level_of_theory_qualifier_warnings(
     not a statement and no program default is inferred. Silent when the calculation's declared program is not
     the parser's program. One warning per disagreeing qualifier, under the existing
     ``level_of_theory_disagrees_with_artifact`` code with ``component`` naming the qualifier.
+
+    **Per job.** A deck can hold several jobs (Gaussian ``--Link1--`` routes, ORCA ``$new_job``) and a setting of one is
+    not a setting of another. With several jobs, only the one that fits the declared method and basis (and, for
+    Gaussian, the calculation's job type) is read, and when no single job fits nothing is judged. A Gaussian log is
+    already cut to this calculation's job (``observed``), or is not bound at all (``unbound_log``): nothing is judged.
+
+    :param jobs: ``parse_qualifier_jobs`` of the artifact: per job, its methods, basis and canonical settings.
     """
     lot = calculation.lot
     declared = declared_software(calculation)
     if lot is None or declared is None or declared != parsed_software.strip().lower():
         return []
-    read = _values_by_key(observed)
+    is_bound_gaussian_log = declared == "gaussian" and artifact_kind is ArtifactKind.output_log
+    if is_bound_gaussian_log and unbound_log:
+        return []
+    pool: Iterable[tuple[str | None, str | None]] = observed
+    if jobs and len(jobs) > 1 and not is_bound_gaussian_log:
+        calc_type = getattr(calculation.type, "value", calculation.type)
+        fitting = []
+        for job in jobs:
+            dispersions = frozenset(v for k, v in job["pairs"] if k == "dispersion.correction")
+            if not _job_fits_level(lot, job, dispersions):
+                continue
+            if job.get("route") is not None and not _job_type_matches(calc_type, job["route"]):
+                continue
+            fitting.append(job)
+        if len(fitting) != 1:
+            return []
+        pool = fitting[0]["pairs"]
+    read = _values_by_key(pool)
     warnings: list[UploadWarning] = []
     for field, key in _QUALIFIER_PARAMETERS.items():
         stated = getattr(lot, field, None)

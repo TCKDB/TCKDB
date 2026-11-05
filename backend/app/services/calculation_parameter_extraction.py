@@ -260,6 +260,7 @@ def _parse_gaussian_text(text: str) -> dict:
         "method_basis": g.parse_method_basis(route),
         # Every job of a ``--Link1--`` file or a multi-step log, for the declared-level check.
         "method_basis_jobs": g.parse_method_basis_jobs(text),
+        "qualifier_jobs": g.parse_qualifier_jobs(text),
         "parser": g.PARSER.stamp().model_dump(),
     }
 
@@ -462,7 +463,12 @@ def extract_and_store_calculation_parameters(
                 )
                 warnings.extend(
                     level_of_theory_qualifier_warnings(
-                        calculation, observed, parsed_software=software, artifact_kind=artifact_kind
+                        calculation,
+                        observed,
+                        parsed_software=software,
+                        artifact_kind=artifact_kind,
+                        jobs=parsed.get("qualifier_jobs"),
+                        unbound_log=unbound_log,
                     )
                 )
         except Exception as exc:  # pragma: no cover - defensive, never blocks

@@ -21,7 +21,9 @@ Four typed fields take over the qualifiers that free text was being used for. Ea
 
 Each value set is the closed set of the parsed parameter of the same meaning (`relativistic.hamiltonian`, `pno.truncation`,
 `ri.approximation`, `core.frozen` in `app/services/parameter_closed_values.py`), so the typed field and the parameter share one
-vocabulary. An explicit `none` is a stated value and a different level from not stating the field.
+vocabulary. An explicit `none` is a stated value and a different level from not stating the field. The values are the
+lowercase tokens only and are case-sensitive, like `spin_treatment` and `core_treatment` (`DKH2` is refused; send
+`dkh2`). That differs from a declared calculation parameter, whose typed value is case-folded before it is compared.
 
 ## What was left out, and why
 
@@ -39,7 +41,8 @@ vocabulary. An explicit `none` is a stated value and a different level from not 
 
 The warning `level_of_theory_disagrees_with_artifact` (already used for method and basis) also compares each stated qualifier
 with the parameter of the same meaning read from the uploaded deck or log, with `context.component` naming the qualifier. It fires
-only when both sides state a value and they differ, for the same program. A deck that is silent about a qualifier is never a
+only when both sides state a value and they differ, for the same program. A multi-job deck (Gaussian `--Link1--`, ORCA `$new_job`) is read per job: only the one job that fits the declared method
+and basis is compared, and nothing is judged when no single job fits. A deck that is silent about a qualifier is never a
 disagreement: no program default is inferred. The declared level is kept.
 
 ## Consequences
