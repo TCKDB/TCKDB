@@ -1613,11 +1613,11 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship,
             note=(
                 "A calculation's recorded freq.hessian_method disagrees with the method its attached "
-                "input deck states (analytic, finite_difference_gradient or finite_difference_energy: "
+                "input deck states, or the input an attached output log echoes (analytic, finite_difference_gradient or finite_difference_energy: "
                 "any two different parsed methods, since their tolerances differ). context.recorded "
                 "and context.input_deck are those HessianMethod tokens, or 'analytic' / 'numerical' "
                 "when the recorded value is a loose spelling; context.calculation_key names the "
-                "bundle calculation."
+                "bundle calculation; context.stated_in is 'input' (a deck) or 'output_log' (a log's echo)."
             )),
     ApiCode("hessian_not_found", 404, Surface.coded_exception,
             "backend/app/api/routes/calculations.py"),

@@ -22,6 +22,16 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The imaginary-mode tolerance follows the Hessian method an output log reports (2026-11-05)
+
+- **Client: `tckdb-schemas` 0.156.0 to 0.157.0.** No migration, no new environment variable, no new warning code. `tckdb-client` is unchanged (its `tckdb-schemas>=0.155,<0.160` window contains 0.157).
+- **What changed.** Tau is now taken, in order, from the Hessian method the inline output logs report (ORCA), the input those logs echo, the recorded `freq.hessian_method` or the deck, the program's assumed default, then `protocol_not_recorded`. A reported or echoed method gets the same tau as the same method recorded; the tau table is unchanged. Before this, an input echoed only in a log was ranked in storage but ignored when tau was decided.
+- **What a log reports.** An ORCA `SCF HESSIAN` section is analytic; an `ORCA NUMERICAL FREQUENCIES` section with displaced-gradient lines is finite differences of gradients. It is read only from the final frequency job (no optimiser step after the last listing, so an optimiser's per-step Hessian listings, or a log cut off during an optimisation, report nothing), only when every listing agrees, never from a file with several jobs (`$new_job`), and not when the job used a numerical gradient (`NumGrad`). Gaussian logs report no method that holds across the logs measured, so Gaussian is unchanged.
+- **The echo is a request like the deck.** A typed `freq.hessian_method` that contradicts the input a log echoes is refused with `hessian_method_contradicts_input_deck`, as for a deck; a contradiction with a REPORT only warns.
+- **Several logs and echoes.** With several inline logs, or a file of several ORCA runs, the method they all agree on is used, and none when they differ. An echo that cannot be bound to one job (ORCA `$new_job`/`%compound`, a Gaussian log with more than one route) reads nothing.
+- **Stored rows and reads.** The reported method is stored as a `freq.hessian_method` row with `statement_kind='reported'`, beside any requested row; nothing stored is relabelled. `tau_context.protocol_parameters` now lists a reported Hessian method (with a new `statement_kind` field on each entry), so a basis decided from a report shows the parameter it rests on (a report the stored basis does not agree with, or that two logs contradict, is not listed). ADR 0012 has a dated amendment.
+- **Warnings.** A reported method that contradicts the request (the echoed input, the deck, or a typed parameter) earns `reported_setting_differs_from_requested`; a log attached after the deposit that reports or echoes a method other than the stored basis earns `hessian_method_disagrees_with_stored_tau_basis` (its context may now carry `reported_method`). Neither changes the stored tau, and no new refusal is added.
+
 ## Excited and spin states are told apart by their state label and term symbol (2026-11-04)
 
 - **Client: `tckdb-schemas` 0.155.0 to 0.156.0** (the trim set for a state label and term symbol is now explicit and the same in Python and JavaScript) **and `tckdb-client` 0.185.0 to 0.186.0** (docstring only). No migration, no new environment variable.

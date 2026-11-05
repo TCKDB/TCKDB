@@ -63263,6 +63263,16 @@
               }
             ],
             "title": "Canonical Value"
+          },
+          "statement_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParameterStatementKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [

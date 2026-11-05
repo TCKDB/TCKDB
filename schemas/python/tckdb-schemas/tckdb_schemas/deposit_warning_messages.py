@@ -102,8 +102,9 @@ RENDERED: dict[str, str] = {
         "quality expectation and not a refusal."
     ),
     "hessian_method_disagrees_with_stored_tau_basis": (
-        "An input deck attached after the deposit states a different Hessian method from the one the tolerance "
-        "stored with this frequency calculation rests on. The stored tolerance was not changed."
+        "An input deck attached after the deposit states, or an output log attached after it reports, a different "
+        "Hessian method from the one the tolerance stored with this frequency calculation rests on. The stored "
+        "tolerance was not changed."
     ),
     "freq_list_incomplete_for_geometry": (
         "The frequency list carries fewer modes than the geometry it is attached to has vibrations. The "
@@ -1760,14 +1761,21 @@ def _charge(context: Mapping[str, Any]) -> str | None:
 
 def _hessian_disagrees(context: Mapping[str, Any]) -> str | None:
     stored, deck = context.get("stored_method"), context.get("deck_method")
+    reported = context.get("reported_method")
     basis = context.get("stored_basis")
-    if stored in _HESSIAN_METHODS and deck in _HESSIAN_METHODS:
+    if stored in _HESSIAN_METHODS and (deck in _HESSIAN_METHODS or reported in _HESSIAN_METHODS):
         why = ""
         if isinstance(basis, str) and basis in _TAU_WHY:
             why = f" ({basis}: {_tau_reason({}, basis)})" if not basis.startswith("assumed_") else f" ({basis})"
+        if reported in _HESSIAN_METHODS:
+            later = f"an output log attached after the deposit reports that the program ran {reported}"
+        elif context.get("stated_in") == "output_log":
+            later = f"the input echoed by an output log attached after the deposit states {deck}"
+        else:
+            later = f"an input deck attached after the deposit states {deck}"
         return (
-            f"The tolerance stored with this frequency calculation rests on the Hessian method {stored}{why}, but an "
-            f"input deck attached after the deposit states {deck}. The stored tolerance was not changed."
+            f"The tolerance stored with this frequency calculation rests on the Hessian method {stored}{why}, but "
+            f"{later}. The stored tolerance was not changed."
         )
     return None
 
@@ -1998,6 +2006,8 @@ def _closed_values(key: str, code: str) -> Any:
         "component": frozenset({"method", "basis"}),
         "observed_in": frozenset(_PARAMETER_ORIGINS),
         "deck_method": _HESSIAN_METHODS,
+        "stated_in": frozenset({"input", "output_log"}),
+        "reported_method": _HESSIAN_METHODS,
         "stored_method": _HESSIAN_METHODS,
         "deduced": _DEDUCED,
         "deposit_path": frozenset(_ATOM_MAP_REMEDY),

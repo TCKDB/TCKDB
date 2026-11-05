@@ -184,6 +184,7 @@ def test_gradient_against_energy_names_both_methods(client, db_session):
         "stored_basis": "assumed_finite_difference_gradient",
         "stored_method": "finite_difference_gradient",
         "deck_method": "finite_difference_energy",
+        "stated_in": "input",
     }
     (item,) = _read_codes(client, calc)
     assert "finite_difference_gradient" in item["message"] and "finite_difference_energy" in item["message"]
@@ -203,3 +204,75 @@ def test_a_failing_check_cannot_fail_the_artifact_upload(client, db_session, mon
     assert _CODE not in {w["code"] for w in body["warnings"]}
     # The session is still usable for the rest of the request / test.
     assert db_session.get(Calculation, calc.id) is not None
+
+
+_ORCA_BANNER = "\n                                 *****************\n                                 * O   R   C   A *\n                                 *****************\n\n"
+_VIB = "-----------------------\nVIBRATIONAL FREQUENCIES\n-----------------------\n"
+_ORCA_LOG_NUMERICAL = (
+    _ORCA_BANNER
+    + "                           ORCA NUMERICAL FREQUENCIES\n----\n"
+    + "\t<< Calculating gradient on displaced geometry  10 (of  52) >>\n"
+    + _VIB
+)
+_ORCA_LOG_ANALYTIC = _ORCA_BANNER + "                               ORCA SCF HESSIAN\n----\n" + _VIB
+
+
+def test_a_late_output_log_reporting_another_method_than_the_stored_basis_warns_in_its_own_words(client, db_session):
+    calc = _freq_calc(
+        client, db_session, imag_freq_cm1=-20.0, label="late-reported", software={"name": "ORCA", "version": "6.1.0"}
+    )
+    before = (calc.freq_result.imaginary_mode_tau_cm1, calc.freq_result.imaginary_mode_tau_basis)
+    assert before == (30.0, "assumed_analytic_default")
+
+    resp = _upload_log(client, calc, _ORCA_LOG_NUMERICAL)
+
+    (warning,) = [w for w in resp.json()["warnings"] if w["code"] == _CODE]
+    assert warning["context"] == {
+        "stored_basis": "assumed_analytic_default",
+        "stored_method": "analytic",
+        "reported_method": "finite_difference_gradient",
+    }
+    db_session.expire_all()
+    stored = db_session.get(CalculationFreqResult, calc.id)
+    assert (stored.imaginary_mode_tau_cm1, stored.imaginary_mode_tau_basis) == before
+    (item,) = _read_codes(client, calc)
+    assert "output log attached after the deposit reports" in item["message"]
+    assert "finite_difference_gradient" in item["message"] and "ORCA" not in item["message"]
+
+
+def test_a_late_log_applies_the_same_reader_rules_as_validation(client, db_session):
+    """An echo that cannot be bound to one job (`$new_job`) reads nothing; the same echo without it warns."""
+    single = _ORCA_BANNER + "INPUT FILE\n|  1> ! B3LYP def2-SVP NumFreq\n****END OF INPUT****\n"
+    multi = _ORCA_BANNER + "INPUT FILE\n|  1> ! B3LYP def2-SVP NumFreq\n|  2> $new_job\n****END OF INPUT****\n"
+    orca = {"name": "ORCA", "version": "6.1.0"}
+    quiet = _freq_calc(client, db_session, imag_freq_cm1=-20.0, label="late-multi", software=orca)
+    assert _CODE not in {w["code"] for w in _upload_log(client, quiet, multi).json()["warnings"]}
+    loud = _freq_calc(client, db_session, imag_freq_cm1=-20.0, label="late-single", software=orca)
+    assert _CODE in {w["code"] for w in _upload_log(client, loud, single).json()["warnings"]}
+
+
+def test_a_late_log_whose_echo_disagrees_says_so_in_its_own_words_and_a_deck_still_says_deck(client, db_session):
+    echo = _ORCA_BANNER + "INPUT FILE\n|  1> ! B3LYP def2-SVP NumFreq\n****END OF INPUT****\n"
+    orca = {"name": "ORCA", "version": "6.1.0"}
+    from_log = _freq_calc(client, db_session, imag_freq_cm1=-20.0, label="late-echo-words", software=orca)
+    resp = _upload_log(client, from_log, echo)
+    (warning,) = [w for w in resp.json()["warnings"] if w["code"] == _CODE]
+    assert warning["context"]["stated_in"] == "output_log"
+    (item,) = _read_codes(client, from_log)
+    assert "echoed by an output log" in item["message"] and "input deck" not in item["message"]
+
+    from_deck = _freq_calc(client, db_session, imag_freq_cm1=-20.0, label="late-deck-words", software=orca)
+    resp = _upload_deck(client, from_deck, "! B3LYP def2-SVP NumFreq\n", "late.in")
+    (warning,) = [w for w in resp.json()["warnings"] if w["code"] == _CODE]
+    assert warning["context"]["stated_in"] == "input"
+    (item,) = _read_codes(client, from_deck)
+    assert "input deck attached after the deposit" in item["message"]
+
+
+def test_a_late_output_log_reporting_the_stored_method_warns_nothing(client, db_session):
+    calc = _freq_calc(
+        client, db_session, imag_freq_cm1=-20.0, label="late-reported-agrees", software={"name": "ORCA", "version": "6.1.0"}
+    )
+    resp = _upload_log(client, calc, _ORCA_LOG_ANALYTIC)
+    assert _CODE not in {w["code"] for w in resp.json()["warnings"]}
+    assert _read_codes(client, calc) == []

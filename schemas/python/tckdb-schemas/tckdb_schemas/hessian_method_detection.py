@@ -9,8 +9,9 @@ had said nothing. This module is the **single owner** of what a deck says
 about the frequency job's Hessian, and both sides use it:
 
 * upload validation reads an inline deck through :func:`detect_hessian_method`
-  / :func:`deck_hessian_method` (``tckdb_schemas.hessian_method_assumption``
-  ranks the result above any assumption);
+  / :func:`deck_hessian_method`, and the input an inline output log echoes
+  through :func:`echo_hessian_method` (``tckdb_schemas.hessian_method_assumption``
+  ranks the echo above the deck and both above any assumption);
 * the backend parameter parsers import the route / input-block extractors and
   the keyword tables below, so the ``freq.hessian_method`` row the workflow
   later stores comes from the same text, the same tokenising and the same
@@ -35,6 +36,7 @@ from typing import Protocol
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.enums import HessianMethod
 from tckdb_schemas.ess_software_detection import SoftwareName, detect_software_from_text
+from tckdb_schemas.hessian_method_reported import ORCA_MULTI_JOB, agreed_method, split_orca_runs
 
 #: Refusal code: the recorded ``freq.hessian_method`` and the attached input
 #: deck state different Hessian methods.
@@ -47,6 +49,7 @@ __all__ = [
     "ORCA_FREQ_HESSIAN_KEYWORDS",
     "deck_hessian_method",
     "detect_hessian_method",
+    "echo_hessian_method",
     "extract_gaussian_route_text",
     "gaussian_freq_hessian_option",
     "hessian_method_class",
@@ -469,6 +472,50 @@ def deck_hessian_method(
     return result
 
 
+def _gaussian_echoed_route_count(text: str) -> int:
+    """How many route blocks (dash-delimited, starting with ``#``) a Gaussian log echoes."""
+    lines = text.splitlines()
+    dashes = [i for i, line in enumerate(lines) if _ROUTE_DELIM.match(line.strip())]
+    return sum(
+        "".join(_echo_text(lines[j]) for j in range(first + 1, second)).startswith("#")
+        for first, second in zip(dashes, dashes[1:])
+    )
+
+
+def echo_hessian_method(declared_software: str | None, artifacts: Iterable[_ArtifactLike]) -> HessianMethod | None:
+    """The Hessian method the input echoed in the inline ``output_log`` artifacts requests.
+
+    An output log echoes the input it ran, and the backend stores that echo as the calculation's requested rows,
+    ranked above an uploaded deck, so validation reads it too. A log whose echo cannot be bound to one job reads
+    nothing: an ORCA echo with ``$new_job`` or ``%compound`` merges every job's ``!`` lines, and a Gaussian log that
+    echoes more than one route (``--Link1--`` jobs) would be read from its first route only. When several logs state
+    a method they must agree; otherwise nothing is read.
+
+    :param declared_software: The calculation's declared software name.
+    """
+    declared = (declared_software or "").strip().lower() or None
+    found: list[HessianMethod | None] = []
+    for artifact in artifacts:
+        kind = getattr(artifact.kind, "value", artifact.kind)
+        if kind != "output_log":
+            continue
+        try:
+            text = base64.b64decode(artifact.content_base64, validate=True).decode("utf-8", errors="replace")
+        except (binascii.Error, ValueError):
+            continue
+        program: SoftwareName | None = detect_software_from_text(text)
+        if program is None and declared is not None:
+            program = _PARSED_PROGRAMS.get(declared)
+        if program == "orca" and not ORCA_MULTI_JOB.search(text):
+            # A file of several runs (concatenated, without $new_job) echoes one input per run: every run must state
+            # the same method, as for the report. One run that is silent, or that differs, reads nothing.
+            runs = {detect_hessian_method("orca", run) for run in split_orca_runs(text)}
+            found.append(next(iter(runs)) if len(runs) == 1 else None)
+        elif program == "gaussian" and _gaussian_echoed_route_count(text) == 1:
+            found.append(detect_hessian_method("gaussian", text))
+    return agreed_method(found)
+
+
 def hessian_method_class(value: str | None) -> str | None:
     """``"analytic"`` or ``"numerical"`` for a recorded value, ``None`` if unreadable.
 
@@ -497,8 +544,13 @@ def check_recorded_method_agrees_with_deck(
     deck_method: HessianMethod | None,
     *,
     calculation_key: str | None = None,
+    stated_in: str = "input",
 ) -> None:
-    """Refuse a recorded ``freq.hessian_method`` that the input deck contradicts.
+    """Refuse a recorded ``freq.hessian_method`` that the input deck (or the input a log echoes) contradicts.
+
+    ``stated_in`` says where the contradicting method was stated: ``"input"`` (an attached input deck) or
+    ``"output_log"`` (the input an attached output log echoes). It is carried in ``context`` and selects the wording,
+    so a depositor who sent only a log is not told about a deck.
 
     Two statements of the same fact that disagree cannot both be right, and
     judging a mode against either would be a guess. A deck with no frequency
@@ -536,14 +588,26 @@ def check_recorded_method_agrees_with_deck(
     context: dict[str, object] = {
         "recorded": recorded_token,
         "input_deck": deck_token,
+        "stated_in": stated_in,
     }
     if calculation_key is not None:
         context["calculation_key"] = calculation_key
+    if stated_in == "output_log":
+        message = (
+            f"the recorded freq.hessian_method says the Hessian method was {recorded_token} but "
+            f"the input echoed by the output log attached to the same calculation says {deck_token}. "
+            "Both are statements about how the second derivatives were built and they "
+            "cannot both be right; correct the recorded value, or omit it and let the log speak."
+        )
+    else:
+        message = (
+            f"the recorded freq.hessian_method says the Hessian method was {recorded_token} but "
+            f"the input deck attached to the same calculation says {deck_token}. "
+            "Both are statements about how the second derivatives were built and they "
+            "cannot both be right; correct the recorded value or the deck."
+        )
     raise CodedValidationError(
         W_HESSIAN_METHOD_CONTRADICTS_INPUT_DECK,
-        f"the recorded freq.hessian_method says the Hessian method was {recorded_token} but "
-        f"the input deck attached to the same calculation says {deck_token}. "
-        "Both are statements about how the second derivatives were built and they "
-        "cannot both be right; correct the recorded value or the deck.",
+        message,
         context=context,
     )

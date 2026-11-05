@@ -2740,6 +2740,7 @@ def _build_imaginary_mode_projections(session: Session, calculation_id: int) -> 
                     TauProtocolParameterEntry(
                         canonical_key=parameter.canonical_key,
                         canonical_value=parameter.canonical_value,
+                        statement_kind=parameter.statement_kind,
                     )
                     for parameter in result.tau_context.protocol_parameters
                 ],
