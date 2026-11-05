@@ -17,6 +17,8 @@ function toEquationParticipants(participants: ReactionBrowseRecord["reactants"])
         stereo_descriptor: participant.stereo_descriptor,
         stereo_resolution: participant.stereo_resolution,
         isotope_key: participant.isotope_key,
+        electronic_state_label: participant.electronic_state_label,
+        term_symbol: participant.term_symbol,
         smiles: participant.smiles,
         formula: participant.formula,
         stoichiometry: participant.stoichiometry,

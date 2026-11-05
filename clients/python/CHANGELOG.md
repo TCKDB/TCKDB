@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.186.0 - 2026-11-05
+
+The structure-search record's `electronic_state_label` and `term_symbol` are `None` when the stored value does not satisfy the write-time grammar (a row stored before `tckdb-schemas` 0.151.0's check), and are served in their canonical spelling otherwise. Docstring only; no client code changed.
+
 ## 0.185.0 - 2026-11-04
 
 Packaging and documentation only; no client code and no wire behaviour changed. The README is now a one-page introduction (what it is, install, read, upload with the builders, adapters), and the rest moved into `docs/` (`configuration.md`, `reads.md`, `uploads_and_idempotency.md`, `errors.md`, `builders.md`, `development.md`). `docs/builder_api_mvp.md` no longer says the builders are unimplemented. Project URLs now point at `github.com/TCKDB/TCKDB`, the licence file ships in the distributions, and the build needs `setuptools>=77` (SPDX licence expression). The `tckdb-schemas` requirement is now a rolling window, `>=0.155,<0.160` (it was `>=0.145.0` with no ceiling); see `docs/development.md`.

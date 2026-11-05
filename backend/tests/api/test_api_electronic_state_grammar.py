@@ -216,8 +216,11 @@ def test_a_stored_row_outside_the_grammar_still_reads_back(client, db_session) -
 @pytest.mark.parametrize(
     ("stereo", "kind", "label", "expected"),
     [
-        (None, SpeciesEntryStateKind.ground, "R", "state R"),
-        ("R", SpeciesEntryStateKind.ground, "S", "R state S"),
+        (None, SpeciesEntryStateKind.ground, "E", "state E"),
+        ("R", SpeciesEntryStateKind.ground, "T1", "R state T1"),
+        # A legacy label outside the grammar is left out of the joined label, never joined as text.
+        (None, SpeciesEntryStateKind.ground, "R", None),
+        ("R", SpeciesEntryStateKind.ground, "S", "R"),
         (None, SpeciesEntryStateKind.excited, "A", "excited state A"),
         ("Z", SpeciesEntryStateKind.ground, None, "Z"),
     ],

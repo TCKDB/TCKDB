@@ -480,7 +480,7 @@ def test_derivation_covers_the_whole_unique_constraint():
                 "term_symbol": "3Sigma-g",
                 "isotope_key": "[2H]C([2H])([2H])O",
             },
-            "S 3Sigma-g [2H]C([2H])([2H])O",
+            "S \u00b3\u03a3g\u207b [2H]C([2H])([2H])O",
         ),
     ],
     ids=["all-null", "stereo-only", "excited-state", "every-component"],
@@ -488,3 +488,61 @@ def test_derivation_covers_the_whole_unique_constraint():
 def test_label_derivation_cases(kwargs, expected):
     """``ground`` is omitted as the default; a bare entry is None, not ''."""
     assert species_entry_label(**kwargs) == expected
+
+
+# ---------------------------------------------------------------------------
+# Rows stored before the state-label grammar: read as the grammar allows
+# ---------------------------------------------------------------------------
+
+#: (label, term) as stored, then as served. ``R`` and the sentinel fail the grammar; ``2Pi`` is valid but not canonical.
+_LEGACY_STATES = [
+    (("R", None), (None, None)),
+    ((None, "DEPOSITOR_SENTINEL"), (None, None)),
+    (("X", "2Pi"), ("X", "\u00b2\u03a0")),
+]
+
+
+@pytest.fixture
+def legacy_states(db_session):
+    species = make_species(db_session, smiles="CCO", inchi_key=next_inchi_key("LGST"), stereo_kind=StereoKind.achiral)
+    entries = {}
+    for (label, term), served in _LEGACY_STATES:
+        entry = make_species_entry(
+            db_session,
+            species,
+            electronic_state_kind=SpeciesEntryStateKind.excited,
+            electronic_state_label=label,
+            term_symbol=term,
+        )
+        entries[entry.public_ref] = served
+    return {"species": species, "served": entries}
+
+
+def _assert_legacy_served(rows, legacy_states):
+    assert set(rows) == set(legacy_states["served"])
+    for ref, (label, term) in legacy_states["served"].items():
+        assert (rows[ref]["electronic_state_label"], rows[ref]["term_symbol"]) == (label, term)
+        assert "DEPOSITOR_SENTINEL" not in str(rows[ref])
+    # The joined label is built from the same validated parts.
+    assert rows[next(r for r, v in legacy_states["served"].items() if v[0] == "X")]["species_entry_label"] == (
+        "excited state X \u00b2\u03a0"
+    )
+
+
+def test_species_search_serves_legacy_state_text_only_when_it_satisfies_the_grammar(client, legacy_states):
+    body = client.get(
+        "/api/v1/scientific/species/search", params={"species_ref": legacy_states["species"].public_ref}
+    ).json()
+    record = _species_record(body, legacy_states["species"].public_ref)
+    _assert_legacy_served({e["species_entry_ref"]: e for e in record["entries"]}, legacy_states)
+
+
+def test_structure_search_serves_legacy_state_text_only_when_it_satisfies_the_grammar(client, legacy_states):
+    resp = client.get("/api/v1/scientific/species/structure-search?query_smiles=CCO&mode=substructure")
+    assert resp.status_code == 200
+    rows = {
+        r["species_entry_ref"]: r
+        for r in resp.json()["records"]
+        if r["species_ref"] == legacy_states["species"].public_ref
+    }
+    _assert_legacy_served(rows, legacy_states)

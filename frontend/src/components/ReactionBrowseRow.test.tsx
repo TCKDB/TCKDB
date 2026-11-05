@@ -428,3 +428,18 @@ describe("ReactionBrowseRow: design-system primitive adoption", () => {
         expect(row).toHaveClass("browse-row")
     })
 })
+
+describe("ReactionBrowseRow: electronic-state facets reach the equation chips", () => {
+    it("shows a participant's grammar-valid state label and term symbol, and hides one outside the grammar", () => {
+        const base = record()
+        const { container } = renderRow(record({
+            reactants: [
+                { ...base.reactants[0], species_entry_kind: "minimum", electronic_state_kind: "excited", electronic_state_label: "T1", term_symbol: "\u00b3B\u2081" },
+                { ...base.reactants[1], species_entry_kind: "minimum", electronic_state_kind: "excited", electronic_state_label: "R", term_symbol: "DEPOSITOR_SENTINEL" },
+            ],
+        }))
+        const text = container.textContent ?? ""
+        expect(text).toContain("excited state, state T1, \u00b3B\u2081")
+        expect(text).not.toMatch(/state R|DEPOSITOR_SENTINEL/)
+    })
+})

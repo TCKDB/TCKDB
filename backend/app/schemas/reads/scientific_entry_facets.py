@@ -13,9 +13,12 @@ species surface (``SpeciesEntryScientificRecord``) names them, so a client that
 renders species pages renders these blocks with the same code. Every one is
 ``None`` when the column is ``NULL``, never ``""``.
 
-``electronic_state_label`` and ``term_symbol`` are deliberately NOT served here.
-They are typed text; a strict grammar for them is being added separately, and
-they join these blocks only after that.
+``electronic_state_label`` and ``term_symbol`` are typed text. They are served
+here only when they satisfy the write-time grammar
+(``tckdb_schemas.electronic_state``), in their canonical NFC spelling (``T1``,
+``X ²Π``); a value that fails it (a row stored before the grammar was enforced)
+reads ``None``. They are for the display of excited and spin states and are
+never to be parsed as stereo descriptors.
 """
 
 from __future__ import annotations
@@ -37,3 +40,7 @@ class EntryFacetFields(BaseModel):
     stereo_descriptor: str | None = None
     stereo_resolution: StereoResolution | None = None
     isotope_key: str | None = None
+    #: ``S1``, ``T1``, ``X``, ``Ã``...: the grammar-valid label, canonical spelling; ``None`` when absent or invalid.
+    electronic_state_label: str | None = None
+    #: ``²Π``, ``X ¹A₁``...: the grammar-valid term symbol, canonical spelling; ``None`` when absent or invalid.
+    term_symbol: str | None = None

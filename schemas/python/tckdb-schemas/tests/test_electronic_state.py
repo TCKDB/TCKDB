@@ -211,3 +211,33 @@ def test_the_payload_refuses_with_the_code_and_ignores_the_raw_term() -> None:
 def test_a_blank_raw_does_not_block_the_copy_of_the_typed_spelling(blank) -> None:
     entry = _entry(term_symbol="2Pi", term_symbol_raw=blank)
     assert (entry.term_symbol, entry.term_symbol_raw) == ("\u00b2\u03a0", "2Pi")
+
+
+def _every_isspace_codepoint() -> list[str]:
+    return [chr(cp) for cp in range(0x110000) if chr(cp).isspace()]
+
+
+def test_trim_chars_is_exactly_what_str_strip_removes_and_is_shipped() -> None:
+    assert set(es.TRIM_CHARS) == set(_every_isspace_codepoint())
+    assert len(es.TRIM_CHARS) == len(set(es.TRIM_CHARS)) == 29
+    assert EXAMPLES["trim"] == es.TRIM_CHARS
+    assert "﻿" not in es.TRIM_CHARS
+
+
+@pytest.mark.parametrize("space", _every_isspace_codepoint(), ids=lambda ch: f"U+{ord(ch):04X}")
+def test_write_acceptance_is_unchanged_by_the_explicit_trim_set(space: str) -> None:
+    """Every character ``str.strip()`` removes still pads an accepted value, and a whitespace-only value is still blank."""
+
+    for check, value, canonical in (
+        (es.check_electronic_state_label, "T1", "T1"),
+        (es.check_term_symbol, "2Pi", "²Π"),
+    ):
+        assert check(f"{space}{value}{space}") == canonical
+    for check in (es.check_electronic_state_label, es.check_term_symbol):
+        assert check(space * 2) == space * 2  # blank: returned untouched, as before
+
+
+def test_a_byte_order_mark_is_not_trimmed_on_either_side() -> None:
+    for check in (es.check_electronic_state_label, es.check_term_symbol):
+        with pytest.raises(es.CodedValidationError):
+            check("﻿X")

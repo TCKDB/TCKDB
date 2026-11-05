@@ -138,8 +138,18 @@
 
 .entry-card-heading {
     display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    min-width: 0;
+    max-width: 100%;
     justify-content: space-between;
     gap: .8rem;
+}
+
+/* The review pill keeps its one-line shape; the heading wraps around it instead of squashing it. */
+.entry-card-heading > span {
+    flex: none;
+    white-space: nowrap;
 }
 
 .entry-card h4 {
@@ -175,6 +185,8 @@
    step rather than its own one-off .62rem run. */
 .entry-card code {
     flex: 1 0 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
     margin: 0;
     overflow-wrap: anywhere;
     color: var(--muted);

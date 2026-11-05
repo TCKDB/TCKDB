@@ -25,6 +25,7 @@ this guarantee the day it is written rather than the day someone notices.
 from __future__ import annotations
 
 from sqlalchemy import case, literal
+from tckdb_schemas.electronic_state import canonical_electronic_state_label, canonical_term_symbol
 
 from app.db.models.common import SpeciesEntryStateKind, StereoResolution
 from app.db.models.species import SpeciesEntry
@@ -128,13 +129,16 @@ def species_entry_label(
         and electronic_state_kind != SpeciesEntryStateKind.ground
     ):
         parts.append(electronic_state_kind.value)
-    if electronic_state_label:
-        # Marked, never bare: a stored state label may not read as a stereo descriptor
-        # (``R``/``S``/``E``/``Z``). New uploads cannot carry one
-        # (``tckdb_schemas.electronic_state``), but rows stored before that rule can.
-        parts.append(f"{STATE_LABEL_MARKER} {electronic_state_label}")
-    if term_symbol:
-        parts.append(term_symbol)
+    # Only text that satisfies the write-time grammar is joined in, in its canonical spelling: a row stored before
+    # that grammar can hold any text, and this label is shown on public pages. An invalid part is left out, so two
+    # legacy entries that differ only in invalid text can read the same.
+    state_label = public_electronic_state_label(electronic_state_label)
+    if state_label:
+        # Marked, never bare, so a state label cannot read as a stereo descriptor (``E``, ``Z``).
+        parts.append(f"{STATE_LABEL_MARKER} {state_label}")
+    term = public_term_symbol(term_symbol)
+    if term:
+        parts.append(term)
     if isotope_key:
         parts.append(isotope_key)
     return " ".join(parts) if parts else None
@@ -189,12 +193,38 @@ def derived_stereo_label(descriptor: str | None, resolution) -> str | None:
     return descriptor
 
 
+def public_electronic_state_label(value: str | None) -> str | None:
+    """The stored spelling of an electronic-state label that satisfies the write-time grammar, else ``None``.
+
+    Uses ``tckdb_schemas.electronic_state`` (the one definition of the grammar and of the canonical form). Never
+    raises: a row stored before the grammar was enforced can hold any text, and it reads as no label at all.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return canonical_electronic_state_label(value)
+    except ValueError:
+        return None
+
+
+def public_term_symbol(value: str | None) -> str | None:
+    """The canonical spelling of a term symbol that satisfies the write-time grammar, else ``None``. Never raises."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return canonical_term_symbol(value)
+    except ValueError:
+        return None
+
+
 def entry_facets_of(entry) -> dict:
     """The computed facets of a species entry, as keyword arguments for an ``EntryFacetFields`` block.
 
     Takes a loaded ``SpeciesEntry`` or a ``Row`` that selected :data:`ENTRY_FACET_COLUMNS` and
     ``electronic_state_kind`` / ``isotope_key``. ``stereo_label`` is derived from the descriptor and resolution, never
-    the raw column. ``electronic_state_label`` and ``term_symbol`` are typed text and are never part of this.
+    the raw column. ``electronic_state_label`` and ``term_symbol`` are typed text: they are served only when they
+    satisfy the write-time grammar (in their canonical spelling), and read ``None`` otherwise, so a row stored
+    before the grammar existed never puts free text on a public page.
     """
     return {
         "species_entry_kind": entry.entry_kind if hasattr(entry, "entry_kind") else entry.kind,
@@ -203,6 +233,8 @@ def entry_facets_of(entry) -> dict:
         "stereo_descriptor": entry.stereo_descriptor,
         "stereo_resolution": entry.stereo_resolution,
         "isotope_key": entry.isotope_key,
+        "electronic_state_label": public_electronic_state_label(entry.electronic_state_label),
+        "term_symbol": public_term_symbol(entry.term_symbol),
     }
 
 
@@ -211,6 +243,8 @@ __all__ = [
     "IDENTITY_COLUMNS",
     "derived_stereo_label",
     "entry_facets_of",
+    "public_electronic_state_label",
+    "public_term_symbol",
     "species_entry_label",
     "species_entry_label_for",
 ]

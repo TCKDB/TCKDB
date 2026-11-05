@@ -1,5 +1,5 @@
 import { words } from "./provenanceFormat"
-import { publicTermSymbol } from "./publicText"
+import { publicElectronicStateLabel, publicTermSymbol } from "./publicText"
 
 /**
  * The four orthogonal axes that make one species entry chemically
@@ -32,12 +32,26 @@ function kindChip(kind: string): string {
     return KIND_LABELS[kind] ?? words(kind) ?? kind
 }
 
-function stateChip(kind: string, termSymbol?: string | null): string {
-    const base = kind === "ground" ? "ground state" : kind === "excited" ? "excited state" : `${words(kind) ?? kind} state`
-    // `electronic_state_label` is never printed, and `term_symbol` only when it is shaped like one:
-    // both are depositor-typed (house rule, owner decision 2026-11-03).
-    const extra = publicTermSymbol(termSymbol)
-    return extra ? `${base} · ${extra}` : base
+function stateChip(kind: string): string {
+    return kind === "ground" ? "ground state" : kind === "excited" ? "excited state" : `${words(kind) ?? kind} state`
+}
+
+/**
+ * The chips for the typed electronic-state label (`state T1`) and term symbol (`²Π`), each its own chip and each
+ * only when it is in the grammar the API enforces on write (`electronicState.ts`); anything else is hidden (house
+ * rule: no depositor free text on a public page). The label chip carries the word `state` so a bare `E` or `S1`
+ * can never be read as a stereo descriptor.
+ */
+function stateDetailChips(entry: Pick<EntryFacetAxes, "electronic_state_label" | "term_symbol">): string[] {
+    const label = publicElectronicStateLabel(entry.electronic_state_label)
+    const term = publicTermSymbol(entry.term_symbol)
+    // A term symbol that leads with the same letter (`X ³Σg⁻` under label `X`) already says it: one chip, not
+    // `state X` beside `X ³Σg⁻`. An ordinal (`T1`) never prefixes a term symbol, so it stays two chips.
+    if (label && term && term.startsWith(`${label} `)) return [`state ${term}`]
+    const chips: string[] = []
+    if (label) chips.push(`state ${label}`)
+    if (term) chips.push(term)
+    return chips
 }
 
 // Exported: reused by `SpeciesEntrySummary.tsx`'s `EntryIdentity` to print
@@ -129,12 +143,8 @@ function isotopeChip(key: string): string {
 export function facetChips(entry: EntryFacetAxes, options?: { includeState?: boolean }): string[] {
     const includeState = options?.includeState ?? true
     const chips = [kindChip(entry.species_entry_kind)]
-    if (includeState) {
-        chips.push(stateChip(entry.electronic_state_kind, entry.term_symbol))
-    } else {
-        const extra = publicTermSymbol(entry.term_symbol)
-        if (extra) chips.push(extra)
-    }
+    if (includeState) chips.push(stateChip(entry.electronic_state_kind))
+    chips.push(...stateDetailChips(entry))
     // An achiral entry contributes no chip: "achiral" on every ordinary card is noise, and its
     // absence misleads nobody. Every other case -- including an unresolved one, whose display
     // `stereo_label` is NULL -- is said.

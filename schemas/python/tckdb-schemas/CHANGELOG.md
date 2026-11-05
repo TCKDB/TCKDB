@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.156.0 - 2026-11-05
+
+The characters trimmed from a state label or term symbol before matching are now one explicit set (`TRIM_CHARS`, shipped as `trim` in `electronic_state_examples.json`): exactly the 29 characters Python's `str.strip()` removes (every `str.isspace()` code point), which is what the write path has always trimmed, so what a deposit accepts does not change. JavaScript's `trim()` differs (it also strips U+FEFF, and not the `\x1c`-`\x1f` and `\x85` that Python does), so a frontend now trims with the same explicit set. U+FEFF stays untrimmed on both sides. No field or code added or removed.
+
 ## 0.155.0 - 2026-11-04
 
 Packaging only. No field, code or rule is added, changed or removed; every 0.154.0 payload validates unchanged. The distribution now carries what PyPI needs: the project URLs point at `github.com/TCKDB/TCKDB`, the MIT `LICENSE` file ships in the sdist and wheel, and the build requires `setuptools>=77` (SPDX licence expression). Nothing in `tckdb_schemas` itself changed.

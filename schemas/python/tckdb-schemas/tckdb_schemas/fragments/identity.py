@@ -27,6 +27,7 @@ from tckdb_schemas.electronic_state import (
     check_electronic_state_label,
     check_term_symbol,
     is_valid_term_symbol,
+    TRIM_CHARS,
 )
 from tckdb_schemas.enums import (
     MoleculeKind,
@@ -88,7 +89,7 @@ class SpeciesEntryIdentityWriteValidatorMixin:
         # A blank raw is "not given": it would be cleared to None, losing the typed spelling.
         if not isinstance(typed, str) or (isinstance(raw, str) and raw.strip()) or (raw is not None and not isinstance(raw, str)):
             return data
-        typed = typed.strip()
+        typed = typed.strip(TRIM_CHARS)
         if typed and is_valid_term_symbol(typed) and canonical_term_symbol(typed) != typed:
             return {**data, "term_symbol_raw": typed}
         return data

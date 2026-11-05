@@ -103,6 +103,8 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.keyset import Page, Paging
 from app.services.scientific_read.species_identity import (
+    public_electronic_state_label,
+    public_term_symbol,
     species_entry_label_for,
 )
 from app.services.scientific_read.sql_review import (
@@ -1761,8 +1763,8 @@ def _build_entry_record(
         stereo_resolution=entry.stereo_resolution,
         stereo_smiles=entry.stereo_smiles,
         stereo_not_represented=_stereo_not_represented(entry),
-        electronic_state_label=entry.electronic_state_label,
-        term_symbol=entry.term_symbol,
+        electronic_state_label=public_electronic_state_label(entry.electronic_state_label),
+        term_symbol=public_term_symbol(entry.term_symbol),
         isotope_key=entry.isotope_key,
         species_entry_label=species_entry_label_for(entry),
         review=badge,

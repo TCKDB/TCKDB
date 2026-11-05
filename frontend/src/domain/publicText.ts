@@ -9,16 +9,24 @@
 // The API keeps returning these fields, in their marked places. This module
 // holds the few places where the frontend has to look inside a server string
 // that MIXES computed and typed parts, and keep only the computed ones.
+//
+// Exception (owner goal, 2026-11-04): an electronic-state label and a term symbol that satisfy the strict grammar
+// the API enforces on write (`electronicState.ts`) are a closed vocabulary (`T1`, `²Π`), not free text, and are
+// shown so a reader can tell excited and spin states apart. Anything outside the grammar stays hidden.
 
-// A term symbol in a recognisable shape: multiplicity, letter, optional g/u,
-// +/- or J subscript or prime (`3Σg-`, `2P3/2`, `^3P`, `3B1`, `2A'`). Anything else is typed text.
-const TERM_SYMBOL = /^[¹²³⁴⁵⁶⁷^]?[1-9]\d?[A-HSPDFIΣΠΔΦΓ](?:[_]?\d\/\d|\d|[gu]|[+\-−'′″"]){0,4}$/
+import { validStateLabel, validTermSymbol } from "./electronicState"
 
-/** A term symbol, or `null` when what was typed is not shaped like one. */
+/**
+ * A term symbol, or `null` when it is not in the grammar the API enforces on write (`electronicState.ts`: the one
+ * rule, shared with tckdb-schemas). A row stored before that grammar can hold any text.
+ */
 export function publicTermSymbol(value: string | null | undefined): string | null {
-    if (!value) return null
-    const trimmed = value.trim()
-    return TERM_SYMBOL.test(trimmed) ? trimmed : null
+    return validTermSymbol(value)
+}
+
+/** An electronic-state label (`S1`, `T1`, `X`, `Ã`), or `null` when it is not in the grammar the API enforces on write. */
+export function publicElectronicStateLabel(value: string | null | undefined): string | null {
+    return validStateLabel(value)
 }
 
 /**

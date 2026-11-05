@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import { ParticipantChips } from "./ParticipantChips"
 import { SpeciesFace } from "./Formula"
 import { participantChips, type ParticipantFacets } from "../domain/participantFacets"
 
@@ -29,7 +30,7 @@ export function SpeciesEntryLink({ speciesEntryRef, smiles, formula, facets }: {
     return (
         <Link to={`/species-entries/${speciesEntryRef}`}>
             {base}
-            {chips.length > 0 && <> · {chips.join(", ")}</>}
+            <ParticipantChips chips={chips} />
         </Link>
     )
 }

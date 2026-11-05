@@ -1139,3 +1139,36 @@ describe("ReactionEntryPage -- kinetics literature (depositor text guard)", () =
         expect(row).toBe("RESOLVED_TITLE")
     })
 })
+
+describe("ReactionEntryPage -- electronic-state labels and term symbols", () => {
+    const withState = (facets: Record<string, unknown>) => {
+        const base = mockFull()
+        const [first, ...rest] = base.species.reactants
+        return mockFull({
+            species: {
+                reactants: [{ ...first, species_entry_kind: "minimum", electronic_state_kind: "excited", ...facets }, ...rest],
+                products: base.species.products,
+            },
+        })
+    }
+
+    it("shows a grammar-valid state label and term symbol beside the participant (T1, X ²Π)", async () => {
+        handleFull(withState({ electronic_state_label: "T1", term_symbol: "X ²Π" }))
+        page()
+        await screen.findByText("kin_test1")
+        const row = screen.getAllByText("spe_water").map((node) => node.closest("tr")).find(Boolean) as HTMLElement
+        expect(row).toHaveTextContent("excited state, state T1, X ²Π")
+        // The word `state` keeps a bare state letter from reading as a stereo descriptor.
+        expect(document.body.textContent).not.toMatch(/\bT1 (isomer|enantiomer)/)
+    })
+
+    it("hides a label or term symbol outside the grammar, including a typed stereo letter (the hide-invalid path)", async () => {
+        handleFull(withState({ electronic_state_label: "R", term_symbol: "DEPOSITOR_SENTINEL_term" }))
+        page()
+        await screen.findByText("kin_test1")
+        const row = screen.getAllByText("spe_water").map((node) => node.closest("tr")).find(Boolean) as HTMLElement
+        expect(row).toHaveTextContent("excited state")
+        expect(row.textContent).not.toMatch(/state R|enantiomer/)
+        expectNoDepositorText()
+    })
+})
