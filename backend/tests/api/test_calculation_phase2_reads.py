@@ -142,7 +142,7 @@ class TestScanCoordinates:
         assert coords[1]["coordinate_index"] == 2
 
     def test_scan_result_points_carry_geometry(self, client, db_session):
-        from app.db.models.geometry import Geometry  # noqa: PLC0415
+        from app.db.models.geometry import Geometry
 
         calc_id = _get_calc_id(client, db_session, calc_type="scan")
         geom_id = db_session.scalars(select(Geometry.id)).first()
@@ -194,7 +194,7 @@ class TestScanPoints:
 
     def test_with_and_without_geometry(self, client, db_session):
         """A point carrying a geometry must serialise through the response model."""
-        from app.db.models.geometry import Geometry  # noqa: PLC0415
+        from app.db.models.geometry import Geometry
 
         calc_id = _get_calc_id(client, db_session, calc_type="scan")
         geom_id = db_session.scalars(select(Geometry.id)).first()
