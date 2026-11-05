@@ -190,6 +190,7 @@ enum CoordinateUnit {
 enum CoreTreatment {
   frozen_core
   all_electron
+  window
 }
 
 enum DatasetReleaseStatus {
@@ -544,6 +545,12 @@ enum PhaseKind {
   aqueous
 }
 
+enum PnoTruncation {
+  loose
+  normal
+  tight
+}
+
 enum PressureContext {
   high_p_limit
   apparent_at_pressure
@@ -578,6 +585,17 @@ enum RecordReviewStatus {
   deprecated
 }
 
+enum RelativisticHamiltonian {
+  none
+  dkh0
+  dkh2
+  dkhso
+  resc
+  x2c
+  zora
+  iora
+}
+
 enum ReleaseArtifactKind {
   selected_records
   candidate_records
@@ -601,6 +619,14 @@ enum ReproducibilityGrade {
   described
   auditable
   rerunnable
+}
+
+enum RiApproximation {
+  none
+  rij
+  rijcosx
+  rijk
+  rijonx
 }
 
 enum RightsBasisKind {
@@ -2658,9 +2684,11 @@ Table level_of_theory {
   dispersion text
   solvent text
   solvent_model text
-  keywords text
   spin_treatment SpinTreatment
   core_treatment CoreTreatment
+  relativistic_hamiltonian RelativisticHamiltonian
+  pno_truncation PnoTruncation
+  ri_approximation RiApproximation
   lot_hash varchar(64) [not null]
   created_at timestamp [not null, default: 'now']
   public_ref string [not null]

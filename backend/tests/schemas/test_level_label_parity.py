@@ -3,7 +3,7 @@
 The notation of a record's levels is built from ``LevelOfTheorySummary``; the ML-dataset export's ``label`` is
 built from the ``LevelOfTheory`` row. Both call :func:`app.chemistry.level_label.render_level_label`, and these
 tests hold them to it: the same level renders identically through both, every part of the identity the renderer
-writes changes the label, and raw ``keywords`` are deliberately not part of it.
+writes changes the label (the typed method qualifiers included; a level carries no free-text keywords).
 """
 
 from __future__ import annotations
@@ -11,7 +11,13 @@ from __future__ import annotations
 import pytest
 
 from app.chemistry.level_label import render_level_label
-from app.db.models.common import CoreTreatment, SpinTreatment
+from app.db.models.common import (
+    CoreTreatment,
+    PnoTruncation,
+    RelativisticHamiltonian,
+    RiApproximation,
+    SpinTreatment,
+)
 from app.db.models.level_of_theory import LevelOfTheory
 from app.schemas.reads.scientific_common import LevelOfTheorySummary, level_label, levels_notation
 from app.services.scientific_read.ml_dataset import _lot_label
@@ -30,6 +36,10 @@ SPREAD = [
     {**BASE, "spin_treatment": SpinTreatment.restricted},
     {**BASE, "core_treatment": CoreTreatment.frozen_core},
     {**BASE, "core_treatment": CoreTreatment.all_electron},
+    {**BASE, "core_treatment": CoreTreatment.window},
+    {**BASE, "relativistic_hamiltonian": RelativisticHamiltonian.dkh2},
+    {**BASE, "pno_truncation": PnoTruncation.tight},
+    {**BASE, "ri_approximation": RiApproximation.rijcosx},
     {"method": "CCSD(T)-F12", "basis": "cc-pVTZ-F12", "cabs_basis": "cc-pVTZ-F12-CABS"},
     {"method": "CCSD(T)-F12", "basis": "cc-pVTZ-F12", "aux_basis": "cc-pVTZ-F12/C"},
     {
@@ -42,6 +52,9 @@ SPREAD = [
         "solvent_model": "smd",
         "spin_treatment": SpinTreatment.restricted_open,
         "core_treatment": CoreTreatment.frozen_core,
+        "relativistic_hamiltonian": RelativisticHamiltonian.x2c,
+        "pno_truncation": PnoTruncation.normal,
+        "ri_approximation": RiApproximation.rijk,
     },
 ]
 
@@ -64,7 +77,7 @@ def test_the_rendering_is_exactly_this():
     full = SPREAD[-1]
     expected = (
         "DLPNO-CCSD(T)/cc-pVTZ (aux=cc-pVTZ/C, cabs=cabs, disp=D3BJ, solvent=smd:water, "
-        "spin=restricted_open, core=frozen_core)"
+        "spin=restricted_open, core=frozen_core, rel=x2c, pno=normal, ri=rijk)"
     )
     assert level_label(_summary(full)) == expected
     assert _lot_label(_row(full)) == expected
@@ -82,6 +95,12 @@ def test_the_rendering_is_exactly_this():
         {"solvent": "water"},
         {"core_treatment": CoreTreatment.frozen_core},
         {"core_treatment": CoreTreatment.all_electron},
+        {"core_treatment": CoreTreatment.window},
+        {"relativistic_hamiltonian": RelativisticHamiltonian.dkh2},
+        {"relativistic_hamiltonian": RelativisticHamiltonian.none},
+        {"pno_truncation": PnoTruncation.loose},
+        {"ri_approximation": RiApproximation.rijcosx},
+        {"ri_approximation": RiApproximation.none},
         {"cabs_basis": "cabs-a"},
         {"cabs_basis": "cabs-b"},
         {"aux_basis": "aux-a"},
@@ -102,6 +121,10 @@ def test_variants_of_one_part_differ_from_each_other():
     for part, a, b in (
         ("spin_treatment", SpinTreatment.restricted, SpinTreatment.unrestricted),
         ("core_treatment", CoreTreatment.frozen_core, CoreTreatment.all_electron),
+        ("core_treatment", CoreTreatment.frozen_core, CoreTreatment.window),
+        ("relativistic_hamiltonian", RelativisticHamiltonian.dkh2, RelativisticHamiltonian.zora),
+        ("pno_truncation", PnoTruncation.loose, PnoTruncation.tight),
+        ("ri_approximation", RiApproximation.rij, RiApproximation.rijcosx),
     ):
         assert level_label(_summary({**plain, part: a})) != level_label(_summary({**plain, part: b}))
     smd = {**plain, "solvent": "water", "solvent_model": "smd"}
@@ -124,9 +147,9 @@ def test_unrestricted_and_restricted_levels_of_one_method_read_differently_in_a_
     )
 
 
-def test_raw_keywords_are_not_part_of_the_label():
-    with_keywords = {**BASE, "keywords": "tightscf grid=ultrafine"}
-    assert _lot_label(_row(with_keywords)) == _lot_label(_row(BASE)) == "B3LYP/def2-TZVP"
+def test_a_level_of_theory_has_no_keywords_to_write():
+    assert not hasattr(LevelOfTheory, "keywords")
+    assert "keywords" not in LevelOfTheorySummary.model_fields
 
 
 def test_an_unstated_part_is_omitted_not_defaulted_and_empty_strings_count_as_unstated():

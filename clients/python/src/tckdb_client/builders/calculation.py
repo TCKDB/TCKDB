@@ -57,7 +57,14 @@ class LevelOfTheory:
     dispersion: str | None = None
     solvent: str | None = None
     solvent_model: str | None = None
-    keywords: str | None = None
+    #: Method qualifiers, sent only when the run states them (they join the level's identity only when set).
+    #: Closed values: ``core_treatment`` frozen_core / all_electron / window; ``relativistic_hamiltonian`` none, dkh0,
+    #: dkh2, dkhso, resc, x2c, zora, iora; ``pno_truncation`` loose / normal / tight; ``ri_approximation`` none,
+    #: rij, rijcosx, rijk, rijonx. The server refuses any other value. There is no free-text ``keywords``.
+    core_treatment: str | None = None
+    relativistic_hamiltonian: str | None = None
+    pno_truncation: str | None = None
+    ri_approximation: str | None = None
     label: str | None = None
     _validated: bool = field(default=False, init=False, repr=False)
 
@@ -70,7 +77,10 @@ class LevelOfTheory:
             "dispersion",
             "solvent",
             "solvent_model",
-            "keywords",
+            "core_treatment",
+            "relativistic_hamiltonian",
+            "pno_truncation",
+            "ri_approximation",
             "label",
         ):
             setattr(
@@ -90,7 +100,10 @@ class LevelOfTheory:
             "dispersion",
             "solvent",
             "solvent_model",
-            "keywords",
+            "core_treatment",
+            "relativistic_hamiltonian",
+            "pno_truncation",
+            "ri_approximation",
         ):
             value = getattr(self, attr)
             if value is not None:

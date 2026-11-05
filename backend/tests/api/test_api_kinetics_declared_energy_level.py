@@ -169,6 +169,32 @@ def test_the_declared_level_survives_an_export_and_re_import(client, db_session)
     assert copy.energy_level_of_theory_id == original.energy_level_of_theory_id
 
 
+def test_the_method_qualifiers_of_a_declared_level_survive_an_export_and_re_import(client, db_session):
+    """Kills: the export's qualifier loop emptied, or a qualifier dropped from it (explicit ``none`` included)."""
+    level = {
+        "method": "DLPNO-CCSD(T)",
+        "basis": "cc-pVTZ",
+        "core_treatment": "window",
+        "relativistic_hamiltonian": "none",
+        "pno_truncation": "tight",
+        "ri_approximation": "rijcosx",
+    }
+    resp = client.post(_REACTION, json=_reaction_bundle(kinetics=[_bundle_kinetics(energy_level_of_theory=level)]))
+    assert resp.status_code == 201, resp.text[:800]
+    original = _latest(db_session)
+
+    bundle, imported = _round_trip(db_session, [original.id])
+
+    exported = bundle.records.kinetics_uploads[0].energy_level_of_theory
+    assert exported.core_treatment.value == "window"
+    assert exported.relativistic_hamiltonian.value == "none"
+    assert exported.pno_truncation.value == "tight"
+    assert exported.ri_approximation.value == "rijcosx"
+    (copy,) = imported
+    # The same level: the re-import resolved to the row the original declared, hash and all.
+    assert copy.energy_level_of_theory_id == original.energy_level_of_theory_id
+
+
 def test_an_undeclared_record_exports_without_a_level(client, db_session):
     resp = client.post(_REACTION, json=_reaction_bundle(kinetics=[_bundle_kinetics()]))
     assert resp.status_code == 201, resp.text[:800]

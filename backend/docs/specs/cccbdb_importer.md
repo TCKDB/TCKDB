@@ -296,7 +296,7 @@ CCCBDB experimental geometry
 
 ```text
 CCCBDB computed method/basis
-  -> level_of_theory   (normalized method + basis + keywords)
+  -> level_of_theory   (normalized method + basis)
        resolved/created by the existing LoT resolution service.
 
 CCCBDB computed geometry / energy / frequencies
@@ -698,7 +698,7 @@ computed calculation:
     page kind is treated as the run identifier.
 
 level_of_theory:
-  (normalized_method, normalized_basis, normalized_keywords_hash)
+  (normalized_method, normalized_basis)
   - resolved through existing LoT service.
 ```
 

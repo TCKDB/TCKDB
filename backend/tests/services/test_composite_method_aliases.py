@@ -133,7 +133,6 @@ def test_the_alias_hash_is_the_hash_the_canonical_spelling_always_had():
             "dispersion": None,
             "solvent": None,
             "solvent_model": None,
-            "keywords": None,
             "spin_treatment": "unknown",
         }
         expected = hashlib.sha256(

@@ -165,7 +165,8 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
     curated aliases (``gd3bj``, ``EmpiricalDispersion=GD3BJ``), and a
     recognised dispersion folded into the method (``b3lyp-d3bj``) moves into
     the dispersion key (issue #630, :func:`~app.chemistry.dispersion_names.level_identity_keys`).
-    The row still stores every name verbatim. ``keywords`` is free-form text and is hashed as written.
+    The row still stores every name verbatim. There is no free-text ``keywords`` in the identity: the four method
+    qualifiers (core treatment, relativistic Hamiltonian, PNO truncation, RI approximation) join it only when stated.
 
     A user-built composite scheme has no hash here: its hash is over the
     scheme's definition, which needs the input levels resolved
@@ -182,6 +183,10 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
+
+
+#: Typed method qualifiers that join the hash only when stated (``core_treatment`` is handled beside them).
+_METHOD_QUALIFIERS = ("relativistic_hamiltonian", "pno_truncation", "ri_approximation")
 
 
 def _level_of_theory_payload(ref: LevelOfTheoryRef) -> dict[str, object]:
@@ -206,7 +211,6 @@ def _level_of_theory_payload(ref: LevelOfTheoryRef) -> dict[str, object]:
         "dispersion": dispersion_key,
         "solvent": component_identity_key(ref.solvent),
         "solvent_model": component_identity_key(ref.solvent_model),
-        "keywords": ref.keywords,
         # DR-0034: spin treatment is part of LOT identity. NULL folds to
         # "unknown" in the hash so a row that omits it and a row that says
         # "unknown" are the same level of theory.
@@ -222,6 +226,11 @@ def _level_of_theory_payload(ref: LevelOfTheoryRef) -> dict[str, object]:
     core_treatment = getattr(ref.core_treatment, "value", ref.core_treatment)
     if core_treatment is not None:
         payload["core_treatment"] = core_treatment
+    # The other method qualifiers follow the same rule: a stated value is identity, NULL adds no key.
+    for name in _METHOD_QUALIFIERS:
+        value = getattr(getattr(ref, name), "value", getattr(ref, name))
+        if value is not None:
+            payload[name] = value
     return payload
 
 
@@ -318,9 +327,11 @@ def resolve_level_of_theory_ref(
                     dispersion=ref.dispersion,
                     solvent=ref.solvent,
                     solvent_model=ref.solvent_model,
-                    keywords=ref.keywords,
                     spin_treatment=ref.spin_treatment,
                     core_treatment=ref.core_treatment,
+                    relativistic_hamiltonian=ref.relativistic_hamiltonian,
+                    pno_truncation=ref.pno_truncation,
+                    ri_approximation=ref.ri_approximation,
                     lot_hash=lot_hash,
                 )
                 session.add(level_of_theory)

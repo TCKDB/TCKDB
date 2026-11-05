@@ -26,7 +26,9 @@ key was dropped from ``upstream_dependency_snapshot`` (the dependency graph is a
 checks did not change either time. The digest of
 ``declaration_with_members_and_sources`` was re-captured a third time when an ensemble member's relative energy gained
 its stated convention: the scenario's member carries an energy, so its row now carries the convention too (a member
-with no energy keeps its digest, see ``snapshot_defaults``). Grade and checks did not change. Otherwise these literals are
+with no energy keeps its digest, see ``snapshot_defaults``). Grade and checks did not change. All twelve were re-captured a fourth time when ``level_of_theory.keywords`` was dropped: a snapshot holds every
+mapped column of a level of theory, so removing a column removes its key from every digest (a *removed* column cannot
+be listed in ``snapshot_defaults``, which covers added ones). Grades and checks did not change. Otherwise these literals are
 expected to stay byte-identical when the owner-scoped rubric lands. If one of them changes,
 species grading changed: that is the failure this file exists to catch, not a literal to refresh.
 """
@@ -635,7 +637,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "80f41451b05110abf85d4337692f09d4ee3aec19395194335d082bd5d0045de2",
+        "digest": "bce5a4c754c879dd8947c52612e41d3bf398da454fa39c2261f3b30596303b26",
     },
     "computed_no_sources": {
         "grade": "insufficient",
@@ -673,7 +675,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "41a0ca84b7fa9ee632e39460978b2d39b32579b8dacd6f56f3f9eecb09fea5fc",
+        "digest": "21f7293ca99a98696bc7ea5ea680c292a56b6eec7af162188aaa39c1c7d07ee6",
     },
     "custody_break_on_source_artifact": {
         "grade": "described",
@@ -692,7 +694,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'missing'],
         ],
-        "digest": "012df1cc5b9760a4cf3a44c873af7441e1eefeecc02d1e3d7f06023f3c7bed75",
+        "digest": "471ea39555456fc7faffe19c5defac945b0d0e3c9fa284241b4d9642bb3155d4",
     },
     "declaration_with_members_and_sources": {
         "grade": "described",
@@ -711,7 +713,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "38ccd020bba40a481cc034f9b7105dd1c9e25c168a018157ce80de54173cbe22",
+        "digest": "81b4f8eb98d02003887b1baf421c73ad7989bf3c978dc17260384a8af314556b",
     },
     "dependency_edges": {
         "grade": "described",
@@ -730,7 +732,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "0075f63b4ab087945a841c5aa25118418ce2428660d9d2eaefa8e92257434767",
+        "digest": "58e3c29bb360e1820828eb5131b8ace2fe07bbdec988e83230ec1bf170f893be",
     },
     "estimated_with_literature": {
         "grade": "described",
@@ -825,7 +827,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "92714fa2c11c736574185a1c5cda95b6dc858a431c8bd4f907bb83c62d4af6a4",
+        "digest": "4991e9946c565dba17b6dc4b86b4582c3c9b01293c5983455727e344f1f06763",
     },
     "object_missing_break_on_source_artifact": {
         "grade": "described",
@@ -844,7 +846,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'missing'],
         ],
-        "digest": "1b6615772716e1545a4bc543ea9a14dd094ec9bd6915f9a8934b2d09db9e8b69",
+        "digest": "4b7d4769688ab4872075ac53264b374c2e958d26dd773a1a5dbc7e78f1ec7bb6",
     },
     "point_group_only": {
         "grade": "described",
@@ -863,7 +865,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "800e04580f40aa83ca3f751ce30f8459e67cbb870949e927a8e7e3473722d570",
+        "digest": "ad061614703ae66030be3609498daa00d244fe32e102eb53d466df5b2cd8dd71",
     },
     "scan_source_with_result": {
         "grade": "described",
@@ -882,7 +884,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "9ed111fd94a9cd7b4c3d89a29bdef7be3a60cf539f530501297a1c0d8b57e6ae",
+        "digest": "77262b449faf141eac7723328a897e55fc1f64308f398f10030fd98cdb1fe2d1",
     },
     "source_geometries_and_parameters": {
         "grade": "described",
@@ -901,7 +903,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "84b4213da76465e1c96c36fce2b1354d2766811be509d03438f16660da524367",
+        "digest": "ab93dd2570a70270304e3360040f5c988c3fe604c0341cff29be127627098a8b",
     },
     "sparse": {
         "grade": "insufficient",
@@ -939,7 +941,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "61089bd029c6c7842cb0d4c99f40223249f80a486d97849fbf0c2fcf80ff31f9",
+        "digest": "b12f0c8d256e60a266b9fb7606008e3c795830532c97778af79b6effc6bc0912",
     },
     "with_model_declaration": {
         "grade": "described",
@@ -958,7 +960,7 @@ FROZEN: dict[str, dict] = {
             ['upstream_dependency_snapshot', 'rerunnable', 'missing'],
             ['evidence_warnings_clear', 'rerunnable', 'passed'],
         ],
-        "digest": "1bd8300b9d91003894270e7a5f330f69d40483e8af957538a3f74ee885dcf6a1",
+        "digest": "5e648227532b96a02fd1dad2e9c9772d69fcba4b1e8d941286176604ac528e11",
     },
 }
 

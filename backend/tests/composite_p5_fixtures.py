@@ -129,7 +129,7 @@ FC = {"method": "CCSD(T)", "basis": "cc-pCVTZ", "core_treatment": "frozen_core"}
 AE = {"method": "CCSD(T)", "basis": "cc-pCVTZ", "core_treatment": "all_electron"}
 TQ_HIGH = {"method": "CCSDT(Q)", "basis": "cc-pVDZ"}
 TQ_LOW = {"method": "CCSD(T)", "basis": "cc-pVDZ"}
-REL_HIGH = {"method": "CCSD(T)", "basis": "cc-pVTZ-DK", "keywords": "DKH2"}
+REL_HIGH = {"method": "CCSD(T)", "basis": "cc-pVTZ-DK", "relativistic_hamiltonian": "dkh2"}
 REL_LOW = {"method": "CCSD(T)", "basis": "cc-pVTZ"}
 DBOC_LOT = {"method": "HF", "basis": "cc-pVDZ"}
 

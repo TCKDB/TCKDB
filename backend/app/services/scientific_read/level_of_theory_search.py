@@ -92,6 +92,9 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "dft_rung_max",
     "spin_treatment",
     "core_treatment",
+    "relativistic_hamiltonian",
+    "pno_truncation",
+    "ri_approximation",
     "has_correction_schemes",
     "has_frequency_scale_factors",
 )
@@ -244,6 +247,12 @@ def _run_lot_query(
         stmt = stmt.where(LevelOfTheory.spin_treatment == request.spin_treatment)
     if request.core_treatment is not None:
         stmt = stmt.where(LevelOfTheory.core_treatment == request.core_treatment)
+    if request.relativistic_hamiltonian is not None:
+        stmt = stmt.where(LevelOfTheory.relativistic_hamiltonian == request.relativistic_hamiltonian)
+    if request.pno_truncation is not None:
+        stmt = stmt.where(LevelOfTheory.pno_truncation == request.pno_truncation)
+    if request.ri_approximation is not None:
+        stmt = stmt.where(LevelOfTheory.ri_approximation == request.ri_approximation)
     if request.has_correction_schemes is not None:
         ex = exists().where(
             EnergyCorrectionScheme.level_of_theory_id == LevelOfTheory.id

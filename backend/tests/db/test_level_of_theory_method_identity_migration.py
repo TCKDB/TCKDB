@@ -33,15 +33,10 @@ import json
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.orm import Session
-from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
 from app.chemistry.basis_set_names import basis_identity_key
-from app.services.calculation_resolution import (
-    _level_of_theory_hash,
-    resolve_level_of_theory_ref,
-)
 from app.services.public_refs import make_content_ref
+from tests._frozen_lot_hash import frozen_level_of_theory_hash
 from tests.db._migration_chain import revision_under_test
 from tests.db.test_level_of_theory_basis_identity_migration import _Harness
 
@@ -84,7 +79,7 @@ def _prior_hash(method, basis, *, verbatim_basis: bool = False) -> str:
 
 
 def _keyed_hash(method, basis) -> str:
-    return _level_of_theory_hash(LevelOfTheoryRef(method=method, basis=basis))
+    return frozen_level_of_theory_hash(method=method, basis=basis)
 
 
 @pytest.fixture
@@ -205,25 +200,11 @@ def test_upgrade_rekeys_without_touching_refs_names_or_calculations(harness):
     assert before[ids["orca"]][0] in completed.stdout
     assert before[ids["alias"]][0] not in completed.stdout
 
-    # The upload path now finds the existing rows under any case.
-    # The resolver is application code and reads the current ``level_of_theory``
-    # columns, which ``e5b2d8a4c613`` extended; bring the scratch database to the
-    # head schema before asking it a question (the revision under test has
-    # already been applied and checked above).
-    harness.run("upgrade", "head")
-    with Session(harness.engine) as session:
-        for method, basis, key in (
-            ("CCSD(T)-F12", "cc-pVTZ-F12", "arc"),
-            ("ccsd(t)-f12", "cc-pvtz-f12", "arc"),
-            ("b3lyp", "6-31G(d)", "lone_upper"),
-            ("pbe0", "def2-svp", "alias_holder"),
-            ("hf", None, "no_basis"),
-        ):
-            lot = resolve_level_of_theory_ref(
-                session, LevelOfTheoryRef(method=method, basis=basis)
-            )
-            assert lot.id == ids[key], (method, basis)
-        session.rollback()
+    # Stage 2 (keywords decision): the upload path is not asked here whether it finds these re-keyed rows.
+    # The application's hash formula no longer has the ``keywords`` key this revision's rows were hashed with,
+    # so a resolver run against them would (by design) make new rows; the instance is reseeded, not re-keyed
+    # (``d5f2b8c1a704`` refuses to run over them). The frozen rules are held to the application's identity
+    # keys in tests/services/ instead.
 
 
 def test_downgrade_restores_every_hash_and_upgrade_again_converges(harness):
@@ -293,90 +274,9 @@ def _stale(n: int) -> str:
     return hashlib.sha256(f"stale:{n}".encode()).hexdigest()
 
 
-def test_upgrade_merge_script_then_downgrade_succeeds_and_is_exact(harness):
-    """The review's lifecycle: a blocked #582 group, upgrade, ``--commit``, downgrade.
-
-    ``L15`` (``MP2/cc-pVDZ``) is older and carries an approved calculation, so
-    the #582 script could not merge it into ``L16`` (``MP2/cc-pvdz``), which
-    holds the pre-#585 key. The re-key must give the new key to ``L16`` (the
-    previous holder), not to the older row: otherwise the script merges the
-    holder into ``L15`` and the downgrade needs the hash the merged row kept.
-    A second, unblocked group gives the script something to merge.
-    """
-    import subprocess
-    from datetime import datetime
-
-    from app.db.models.app_user import AppUser
-    from app.db.models.common import AppUserRole, RecordReviewStatus, SubmissionRecordType
-    from app.db.models.record_review import RecordReview
-
-    harness.run("upgrade", _MIGRATION.parent)
-    with harness.engine.begin() as conn:
-        species_id = conn.scalar(
-            text(
-                "INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity, stereo_kind) "
-                "VALUES (CAST('molecule' AS molecule_kind), 'O', "
-                "'XLYOFNOQVPJJNP-UHFFFAOYSA-N', 0, 1, CAST('unspecified' AS stereo_kind)) "
-                "RETURNING id"
-            )
-        )
-        entry_id = conn.scalar(
-            text("INSERT INTO species_entry (species_id) VALUES (:s) RETURNING id"),
-            {"s": species_id},
-        )
-        older = _insert(conn, "l15", "MP2", "cc-pVDZ", _stale(15))
-        holder = _insert(conn, "l16", "MP2", "cc-pvdz", _prior_hash("MP2", "cc-pvdz"))
-        dup = _insert(conn, "x1", "CCSD", "cc-pVDZ", _stale(1))
-        keeper = _insert(conn, "x2", "CCSD", "cc-pvdz", _prior_hash("CCSD", "cc-pvdz"))
-        calcs = {}
-        for name, lot in (("older", older), ("holder", holder), ("dup", dup), ("keeper", keeper)):
-            calcs[name] = conn.scalar(
-                text(
-                    "INSERT INTO calculation (type, species_entry_id, lot_id) "
-                    "VALUES (CAST('sp' AS calc_type), :e, :l) RETURNING id"
-                ),
-                {"e": entry_id, "l": lot},
-            )
-    with Session(harness.engine) as session:
-        curator = AppUser(username="rekey-curator", role=AppUserRole.curator)
-        session.add(curator)
-        session.flush()
-        when = datetime(2026, 9, 1)
-        session.add(
-            RecordReview(
-                record_type=SubmissionRecordType.calculation,
-                record_id=calcs["older"],
-                status=RecordReviewStatus.approved,
-                reviewed_by=curator.id,
-                reviewed_at=when,
-                first_approved_at=when,
-            )
-        )
-        session.commit()
-    original = _snapshot(harness.engine)
-
-    harness.run("upgrade", _MIGRATION.revision)
-    after_upgrade = _snapshot(harness.engine)
-    # The previous holder takes the key, not the older row.
-    assert after_upgrade[holder][1] == _keyed_hash("MP2", "cc-pvdz")
-    assert after_upgrade[older][1] == original[older][1]
-
-    merged = subprocess.run(
-        [
-            "conda", "run", "-n", "tckdb_env", "python",
-            "scripts/ops/merge_duplicate_levels_of_theory.py", "--commit",
-        ],
-        cwd=harness.root, env=harness.env, capture_output=True, text=True, check=False,
-    )
-    assert merged.returncode == 0, merged.stderr[-3000:]
-    with harness.engine.connect() as conn:
-        pairs = set(
-            conn.execute(
-                text("SELECT merged_lot_id, into_lot_id FROM level_of_theory_merge")
-            ).all()
-        )
-    # The unblocked group merged; the approved calculation blocked the other.
-    assert pairs == {(dup, keeper)}, merged.stdout[-3000:]
-
-    harness.run("downgrade", _MIGRATION.parent)
-    assert _snapshot(harness.engine) == original
+# The end-to-end "run the merge script between upgrade and downgrade" test that was here is retired (Stage 2,
+# keywords decision). The script groups rows by the application's *current* hash formula and needs a row that holds
+# it to keep; the rows a historical revision leaves hold that revision's formula, which has since lost its
+# ``keywords`` key, so no row holds the key and every group is (correctly) blocked. The script is held to the
+# current formula by tests/scripts/test_merge_duplicate_levels_of_theory.py, and this revision's re-keying and
+# downgrade by the other tests in this file.

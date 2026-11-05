@@ -20,6 +20,9 @@ from tckdb_schemas.enums import (
     CoreTreatment,
     EnergyComponentKind,
     FrequencyScaleKind,
+    PnoTruncation,
+    RelativisticHamiltonian,
+    RiApproximation,
     SpinTreatment,
 )
 from tckdb_schemas.literature import LiteratureUploadRequest
@@ -521,12 +524,20 @@ class OrdinaryLevelOfTheoryRef(SchemaBase):
     dispersion: str | None = None
     solvent: str | None = None
     solvent_model: str | None = None
-    keywords: str | None = None
     spin_treatment: SpinTreatment | None = None
     #: Frozen-core or all-electron (ADR 0021). State it only when the run
     #: says so; leave it out otherwise. It joins the level's identity only
     #: when given, so a payload that omits it is the level it always was.
     core_treatment: CoreTreatment | None = None
+    #: The method qualifiers below join the level's identity only when stated,
+    #: like ``core_treatment``: a payload that omits them is the level it always
+    #: was. ``none`` is a stated value (a non-relativistic or no-RI run), a
+    #: different level from leaving the field out. There is no free-text
+    #: ``keywords`` field: the settings a deck or log states are read from the
+    #: uploaded artifact and stored as calculation parameters.
+    relativistic_hamiltonian: RelativisticHamiltonian | None = None
+    pno_truncation: PnoTruncation | None = None
+    ri_approximation: RiApproximation | None = None
 
     # Bookkeeping, as on ``SoftwareReleaseRef``: not wire fields, read back
     # through ``method_warning()``.
@@ -578,7 +589,6 @@ class OrdinaryLevelOfTheoryRef(SchemaBase):
         self.dispersion = normalize_optional_text(self.dispersion)
         self.solvent = normalize_optional_text(self.solvent)
         self.solvent_model = normalize_optional_text(self.solvent_model)
-        self.keywords = normalize_optional_text(self.keywords)
         return self
 
     @model_validator(mode="after")

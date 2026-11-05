@@ -60,7 +60,15 @@ def test_the_core_treatment_walk_sees_the_same_sites_as_the_composite_scheme_wal
 #: The identity parts the notation of a record's levels writes (``app.chemistry.level_label``). Each defaults to
 #: ``None``, which reads as "not stated", so a builder that forgot one would silently drop it from every notation
 #: built from its summary. Passed explicitly at every site, even as ``None`` by design (P7a).
-_NOTATION_PARTS = ("aux_basis", "cabs_basis", "solvent_model", "spin_treatment")
+_NOTATION_PARTS = (
+    "aux_basis",
+    "cabs_basis",
+    "solvent_model",
+    "spin_treatment",
+    "relativistic_hamiltonian",
+    "pno_truncation",
+    "ri_approximation",
+)
 
 
 def test_every_construction_site_passes_every_part_the_notation_writes():

@@ -230,7 +230,8 @@ RENDERED: dict[str, str] = {
         "deposit a log that holds only this job."
     ),
     "level_of_theory_disagrees_with_artifact": (
-        "The method or the basis set of the declared level of theory differs from the one an uploaded input "
+        "The method, the basis set, or a method qualifier (relativistic Hamiltonian, PNO truncation, RI "
+        "approximation, core treatment) of the declared level of theory differs from the one an uploaded input "
         "deck or output log states. The declared level of theory was kept; correct whichever of the two is wrong."
     ),
     "software_release_identity_corrected_from_artifact": (
@@ -1830,13 +1831,31 @@ def _log_disagrees_with_log(context: Mapping[str, Any]) -> str | None:
     )
 
 
+#: The parts of a declared level of theory an uploaded deck or log is compared against.
+_LOT_COMPONENTS = frozenset(
+    {"method", "basis", "relativistic_hamiltonian", "pno_truncation", "ri_approximation", "core_treatment"}
+)
+
+
+#: How each compared part reads in a sentence.
+_LOT_COMPONENT_NAMES = {
+    "method": "method",
+    "basis": "basis",
+    "relativistic_hamiltonian": "relativistic Hamiltonian",
+    "pno_truncation": "PNO truncation",
+    "ri_approximation": "RI approximation",
+    "core_treatment": "core treatment",
+}
+
+
 def _lot_disagrees(context: Mapping[str, Any]) -> str | None:
-    component = _token(context.get("component"), frozenset({"method", "basis"}))
+    component = _token(context.get("component"), _LOT_COMPONENTS)
     origin = _origin(context)
     if component is None or origin is None:
         return None
+    named = _LOT_COMPONENT_NAMES[component]
     return (
-        f"The {component} of the declared level of theory differs from the {component} in the uploaded "
+        f"The {named} of the declared level of theory differs from the {named} in the uploaded "
         f"{_program(context)}{origin}. The declared level of theory was kept."
     )
 
@@ -2003,7 +2022,7 @@ def _closed_values(key: str, code: str) -> Any:
         "pattern": _SCAN_PATTERNS,
         "canonical_key": re.compile(r"[a-z0-9_]+(\.[a-z0-9_]+)+"),
         "raw_key": re.compile(r"[A-Za-z][A-Za-z0-9_]{0,31}"),
-        "component": frozenset({"method", "basis"}),
+        "component": _LOT_COMPONENTS,
         "observed_in": frozenset(_PARAMETER_ORIGINS),
         "deck_method": _HESSIAN_METHODS,
         "stated_in": frozenset({"input", "output_log"}),
@@ -2288,10 +2307,10 @@ __all__ = [
     "NOT_COMPARED_REASONS",
     "RENDERED",
     "STEREO_NOT_REPRESENTED_REASONS",
-    "depositor_supplied_problems",
-    "field_keys",
     "clean_depositor_supplied",
     "context_problems",
+    "depositor_supplied_problems",
+    "field_keys",
     "normalise_field",
     "render_message",
 ]

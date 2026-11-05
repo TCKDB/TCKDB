@@ -1155,6 +1155,38 @@ def parse_method_basis_jobs(text: str) -> list[dict]:
     return out
 
 
+def parse_qualifier_jobs(text: str) -> list[dict]:
+    """One entry per job of the deck: its methods, basis and the canonical settings the job states.
+
+    ``{"methods": [...], "basis": basis, "pairs": {(canonical_key, canonical_value), ...}}``. ``$new_job`` starts the
+    next job, so a setting of one job is never read as another's.
+    """
+    jobs: list[list[str]] = [[]]
+    for line in _extract_input_block(text):
+        if _NEW_JOB.match(line):
+            jobs.append([])
+        else:
+            jobs[-1].append(line)
+    out = []
+    for lines in jobs:
+        found = _method_basis_of_lines(lines)
+        params = _resolve_dkh_order(_resolve_smd_over_cpcm(_parse_keyword_lines(lines) + _parse_block_sections(lines)))
+        pairs = {
+            (p["canonical_key"], p["canonical_value"])
+            for p in params
+            if p.get("canonical_key") is not None and p.get("canonical_value") is not None
+        }
+        if found or pairs:
+            out.append(
+                {
+                    "methods": found["methods"] if found else [],
+                    "basis": found["basis"] if found else None,
+                    "pairs": pairs,
+                }
+            )
+    return out
+
+
 def parse_method_basis(text: str) -> dict | None:
     """Extract method and basis from ORCA ! keyword line.
 
@@ -1295,6 +1327,7 @@ def parse_orca_log(
         "charge_multiplicity": parse_charge_multiplicity(text),
         "method_basis": parse_method_basis(text),
         "method_basis_jobs": parse_method_basis_jobs(text),
+        "qualifier_jobs": parse_qualifier_jobs(text),
         "parser": PARSERS.get("orca_parameters").stamp().model_dump(),
     }
 

@@ -119,7 +119,12 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                                     <div><dt>Core treatment</dt><dd>{lot.core_treatment ? words(lot.core_treatment) : "not recorded"}</dd></div>
                                     {lot.aux_basis && <div><dt>Auxiliary basis</dt><dd>{lot.aux_basis}</dd></div>}
                                     {lot.cabs_basis && <div><dt>CABS basis</dt><dd>{lot.cabs_basis}</dd></div>}
-                                    {lot.keywords && <div><dt>Keywords</dt><dd>{lot.keywords}</dd></div>}
+                                    {/* Method qualifiers are shown only when the deposit states them: there is
+                                        no "not recorded" row for each, so a plain level stays short. They
+                                        are the program's own tokens (dkh2, rijcosx), so they print as stored. */}
+                                    {lot.relativistic_hamiltonian && <div><dt>Relativistic Hamiltonian</dt><dd>{lot.relativistic_hamiltonian}</dd></div>}
+                                    {lot.pno_truncation && <div><dt>PNO truncation</dt><dd>{lot.pno_truncation}</dd></div>}
+                                    {lot.ri_approximation && <div><dt>RI approximation</dt><dd>{lot.ri_approximation}</dd></div>}
                                     {lot.composite_scheme && (
                                         <div>
                                             <dt>Composite recipe</dt>
@@ -139,8 +144,8 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                         <Disclosure summary="Level-of-theory hash" defaultOpen={false} className="lot-hash-disclosure">
                             <p className="note">
                                 A content hash over method, basis, auxiliary/CABS basis, dispersion, solvent,
-                                solvent model, keywords, spin treatment, and core treatment (when stated) — two deposits with the same six
-                                displayed facts above but a different hash differ in one of the fields not shown
+                                solvent model, spin treatment, and core treatment, relativistic Hamiltonian, PNO truncation and RI approximation (when stated) — two deposits that read alike above
+                                but have a different hash differ in a field not shown
                                 inline (most often spin treatment). Not an identifier a reader looks up by; shown
                                 for exact-identity comparison only.
                             </p>

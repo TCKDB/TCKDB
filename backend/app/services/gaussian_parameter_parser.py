@@ -802,6 +802,31 @@ def parse_method_basis_jobs(text: str) -> list[dict]:
     return jobs
 
 
+def parse_qualifier_jobs(text: str) -> list[dict]:
+    """One entry per job route of the text: its method, basis and the canonical settings its route states.
+
+    ``{"methods": [method], "basis": basis, "route": route, "pairs": {(canonical_key, canonical_value), ...}}``.
+    Lets a check that compares a declared setting read one job's settings and not another's.
+    """
+    jobs = []
+    for route in all_route_texts(text):
+        found = parse_method_basis(route)
+        pairs = {
+            (p["canonical_key"], p["canonical_value"])
+            for p in _parse_route_tokens(route)
+            if p.get("canonical_key") is not None and p.get("canonical_value") is not None
+        }
+        jobs.append(
+            {
+                "methods": [found["method"]] if found else [],
+                "basis": found["basis"] if found else None,
+                "route": route,
+                "pairs": pairs,
+            }
+        )
+    return jobs
+
+
 # ---------------------------------------------------------------------------
 # Value type guessing
 # ---------------------------------------------------------------------------

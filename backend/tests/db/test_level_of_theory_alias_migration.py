@@ -36,20 +36,14 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
-import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.orm import Session
-from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
-from app.services.calculation_resolution import (
-    _level_of_theory_hash,
-    resolve_level_of_theory_ref,
-)
 from app.services.public_refs import make_content_ref
+from tests._frozen_lot_hash import frozen_level_of_theory_hash
 from tests.db._migration_chain import revision_under_test
 from tests.db.test_level_of_theory_basis_identity_migration import _Harness
 
@@ -258,25 +252,11 @@ def test_upgrade_rekeys_without_touching_refs_names_or_calculations(harness):
     assert before[ids["orca_d3"]][0] not in completed.stdout
     assert "duplicate group(s)" in completed.stdout
 
-    # The upload path now finds the existing rows under every spelling.
-    # The resolver is application code and reads the current ``level_of_theory``
-    # columns, which ``e5b2d8a4c613`` extended; bring the scratch database to the
-    # head schema before asking it a question (the revision under test has
-    # already been applied and checked above).
-    harness.run("upgrade", "head")
-    with Session(harness.engine) as session:
-        for method, basis, extra, key in (
-            ("wb97x-d", _BASIS, {}, "wb97xd"),
-            ("WB97XD", _BASIS, {}, "wb97xd"),
-            ("m062x", _BASIS, {}, "m062x_holder"),
-            ("b3lyp", _BASIS, {"dispersion": "d3BJ"}, "d3bj_lower"),
-            ("b3lyp", _BASIS, {"solvent": "WATER", "solvent_model": "Smd"}, "water_upper"),
-        ):
-            lot = resolve_level_of_theory_ref(
-                session, LevelOfTheoryRef(method=method, basis=basis, **extra)
-            )
-            assert lot.id == ids[key], (method, extra)
-        session.rollback()
+    # Stage 2 (keywords decision): the upload path is not asked here whether it finds these re-keyed rows.
+    # The application's hash formula no longer has the ``keywords`` key this revision's rows were hashed with,
+    # so a resolver run against them would (by design) make new rows; the instance is reseeded, not re-keyed
+    # (``d5f2b8c1a704`` refuses to run over them). The frozen rules are held to the application's identity
+    # keys in tests/services/ instead.
 
 
 def test_downgrade_restores_every_hash_and_upgrade_again_converges(harness):
@@ -308,7 +288,7 @@ def test_rows_already_in_key_form_are_left_alone(harness):
     harness.run("upgrade", _MIGRATION.parent)
     with harness.engine.begin() as conn:
         for method, basis in (("wb97xd", _BASIS), ("m062x", _BASIS), ("b3lyp", "cc-pvdz")):
-            h = _level_of_theory_hash(LevelOfTheoryRef(method=method, basis=basis))
+            h = frozen_level_of_theory_hash(method=method, basis=basis)
             conn.execute(
                 text(
                     "INSERT INTO level_of_theory (method, basis, lot_hash, public_ref) "
@@ -322,74 +302,9 @@ def test_rows_already_in_key_form_are_left_alone(harness):
     assert "0 row(s) re-hashed, 0 duplicate group(s)" in completed.stdout
 
 
-def test_upgrade_merge_script_then_downgrade_succeeds_and_is_exact(harness):
-    """Run the merge script end to end, as the deploy steps say.
-
-    ``wb97x-d`` (older, carrying an approved calculation) is a duplicate of
-    ``wb97xd``: the script must refuse to move approved science and leave the
-    group. ``D3BJ`` / ``d3bj`` carries none: it merges. The downgrade then
-    succeeds and restores every hash.
-    """
-    from datetime import datetime
-
-    from app.db.models.app_user import AppUser
-    from app.db.models.common import AppUserRole, RecordReviewStatus, SubmissionRecordType
-    from app.db.models.record_review import RecordReview
-
-    harness.run("upgrade", _MIGRATION.parent)
-    with harness.engine.begin() as conn:
-        ids = _seed(conn)
-        # The folded rows are a duplicate group under the application's current
-        # formula (#630) that this revision does not make; they belong to
-        # f3b8d5a1c702 (tests/db/test_level_of_theory_dispersion_migration.py).
-        for key in ("folded_a", "folded_b"):
-            conn.execute(text("DELETE FROM calculation WHERE lot_id = :l"), {"l": ids[key]})
-            conn.execute(text("DELETE FROM level_of_theory WHERE id = :l"), {"l": ids[key]})
-    with Session(harness.engine) as session:
-        curator = AppUser(username="alias-curator", role=AppUserRole.curator)
-        session.add(curator)
-        session.flush()
-        when = datetime(2026, 9, 1)
-        session.add(
-            RecordReview(
-                record_type=SubmissionRecordType.calculation,
-                record_id=ids["calc_wb97x_d"],
-                status=RecordReviewStatus.approved,
-                reviewed_by=curator.id,
-                reviewed_at=when,
-                first_approved_at=when,
-            )
-        )
-        session.commit()
-    original = _snapshot(harness.engine)
-
-    harness.run("upgrade", _MIGRATION.revision)
-
-    for args in ((), ("--commit",)):
-        merged = subprocess.run(
-            [
-                "conda", "run", "-n", "tckdb_env", "python",
-                "scripts/ops/merge_duplicate_levels_of_theory.py", *args,
-            ],
-            cwd=harness.root, env=harness.env, capture_output=True, text=True, check=False,
-        )
-        assert merged.returncode == 0, merged.stderr[-3000:]
-    with harness.engine.connect() as conn:
-        pairs = set(
-            conn.execute(
-                text("SELECT merged_lot_id, into_lot_id FROM level_of_theory_merge")
-            ).all()
-        )
-    # Pre-existing merge, plus the unblocked groups. The approved calculation
-    # blocks wb97x-d; the kw_a / kw_b and orca_d3 rows were never a group.
-    assert (ids["alias"], ids["alias_holder"]) in pairs
-    assert (ids["d3bj_upper"], ids["d3bj_lower"]) in pairs
-    assert (ids["m062x_stale"], ids["m062x_holder"]) in pairs
-    assert (ids["water_lower"], ids["water_upper"]) in pairs
-    assert (ids["wb97x_d"], ids["wb97xd"]) not in pairs, merged.stdout[-3000:]
-    assert all(ids["orca_d3"] not in pair for pair in pairs)
-    assert all(ids["kw_a"] not in pair and ids["kw_b"] not in pair for pair in pairs)
-    assert "BLOCKED" in merged.stdout
-
-    harness.run("downgrade", _MIGRATION.parent)
-    assert _snapshot(harness.engine) == original
+# The end-to-end "run the merge script between upgrade and downgrade" test that was here is retired (Stage 2,
+# keywords decision). The script groups rows by the application's *current* hash formula and needs a row that holds
+# it to keep; the rows a historical revision leaves hold that revision's formula, which has since lost its
+# ``keywords`` key, so no row holds the key and every group is (correctly) blocked. The script is held to the
+# current formula by tests/scripts/test_merge_duplicate_levels_of_theory.py, and this revision's re-keying and
+# downgrade by the other tests in this file.

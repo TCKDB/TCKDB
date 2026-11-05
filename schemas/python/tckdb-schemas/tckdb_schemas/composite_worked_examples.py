@@ -129,7 +129,7 @@ def worked_payload_c() -> dict:
     cv_ae = {"method": "CCSD(T)", "basis": "cc-pCVTZ", "core_treatment": "all_electron"}
     tq_high = {"method": "CCSDT(Q)", "basis": "cc-pVDZ"}
     tq_low = {"method": "CCSD(T)", "basis": "cc-pVDZ"}
-    rel_high = {"method": "CCSD(T)", "basis": "cc-pVTZ-DK", "keywords": "DKH2"}
+    rel_high = {"method": "CCSD(T)", "basis": "cc-pVTZ-DK", "relativistic_hamiltonian": "dkh2"}
     rel_low = {"method": "CCSD(T)", "basis": "cc-pVTZ"}
     dboc_level = {"method": "HF", "basis": "cc-pVDZ"}
     e_base, e_ae, e_fc = -76.375, -76.40, -76.39

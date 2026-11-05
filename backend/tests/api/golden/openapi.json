@@ -11751,21 +11751,40 @@
             ],
             "title": "Dispersion"
           },
-          "keywords": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Keywords"
-          },
           "method": {
             "minLength": 1,
             "title": "Method",
             "type": "string"
+          },
+          "pno_truncation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PnoTruncation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "relativistic_hamiltonian": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelativisticHamiltonian"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ri_approximation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiApproximation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "solvent": {
             "anyOf": [
@@ -16633,10 +16652,11 @@
         "type": "string"
       },
       "CoreTreatment": {
-        "description": "Which electrons a post-SCF method correlates (ADR 0021, plan decision 8).\n\n``frozen_core``: the chemical core is held uncorrelated. ``all_electron``:\nevery electron is correlated. CCSD(T)/cc-pCVTZ frozen-core and all-electron\nare different levels (their difference is the core-valence term of a\nfocal-point scheme). Part of the level identity only when stated: a level\nthat does not say stays ``NULL`` and keeps the hash it always had.\n\nTwo members on purpose. A partial treatment (Gaussian ``FC=1`` /\n``FreezeInnerNobleGasCore``, an ORCA ``FC_EWIN`` energy window, an explicit\norbital range) is real but has no agreed name across codes; it is left\n``NULL`` and described in ``keywords`` until a producer needs it named.",
+        "description": "Which electrons a post-SCF method correlates (ADR 0021, plan decision 8).\n\n``frozen_core``: the chemical core is held uncorrelated. ``all_electron``:\nevery electron is correlated. CCSD(T)/cc-pCVTZ frozen-core and all-electron\nare different levels (their difference is the core-valence term of a\nfocal-point scheme). Part of the level identity only when stated: a level\nthat does not say stays ``NULL`` and keeps the hash it always had.\n\n``window``: a partial treatment (a Gaussian ``Window=(m,n)`` orbital range,\nan ORCA ``FC_EWIN`` energy window). It is one value on purpose: the\nspecific window has no agreed form across codes and stays on the\ncalculation's ``core.frozen`` parameter rows, so two different windows are\none level of theory.",
         "enum": [
           "frozen_core",
-          "all_electron"
+          "all_electron",
+          "window"
         ],
         "title": "CoreTreatment",
         "type": "string"
@@ -28440,7 +28460,7 @@
         "type": "object"
       },
       "LevelOfTheoryCoreBlock": {
-        "description": "Direct ``level_of_theory`` row metadata.\n\n``lot_hash`` is served plainly rather than gated behind\n``include=internal_ids``: it is already a public, documented filter on\n``/scientific/calculations/search`` (``lot_hash=``), so hiding it here\nwhile accepting it there would gate nothing real. Unlike\n``level_of_theory_id`` it names no database row, so it carries none of\nthe enumeration risk internal ids exist to withhold.\n\n``aux_basis``/``cabs_basis``/``keywords`` are part of ``lot_hash``'s\nidentity inputs (DR-0034) alongside the fields already served\nelsewhere; a page whose whole point is showing what distinguishes one\nlevel of theory from another should not silently drop three of the\nnine. There is no ``label`` field: the ORM row carries no such column\n(unlike ``LevelOfTheorySummary.label``, which is a cross-record\npresentation field every existing builder sets to ``None`` for lack of\na stored value) -- inventing one here would fabricate a field the API\ncannot back.",
+        "description": "Direct ``level_of_theory`` row metadata.\n\n``lot_hash`` is served plainly rather than gated behind\n``include=internal_ids``: it is already a public, documented filter on\n``/scientific/calculations/search`` (``lot_hash=``), so hiding it here\nwhile accepting it there would gate nothing real. Unlike\n``level_of_theory_id`` it names no database row, so it carries none of\nthe enumeration risk internal ids exist to withhold.\n\n``aux_basis``/``cabs_basis`` are part of ``lot_hash``'s\nidentity inputs (DR-0034) alongside the fields already served\nelsewhere; a page whose whole point is showing what distinguishes one\nlevel of theory from another should not silently drop two of them. There is no ``label`` field: the ORM row carries no such column\n(unlike ``LevelOfTheorySummary.label``, which is a cross-record\npresentation field every existing builder sets to ``None`` for lack of\na stored value) -- inventing one here would fabricate a field the API\ncannot back.",
         "properties": {
           "aux_basis": {
             "anyOf": [
@@ -28524,17 +28544,6 @@
             ],
             "title": "Dispersion"
           },
-          "keywords": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Keywords"
-          },
           "label": {
             "description": "The level written in full, for display (ADR 0021, P7b).\n\nThe same text as ``LevelOfTheorySummary.label``: ``method/basis`` then each stated part of\nthe level's identity, from :func:`app.chemistry.level_label.render_level_label`. Derived, never\nstored, never accepted on input. It is what the methods index prints, so two levels that differ\nonly in core treatment (all-electron and frozen-core ``CCSD(T)/cc-pCVTZ``) never read alike.",
             "readOnly": true,
@@ -28574,6 +28583,36 @@
             "$ref": "#/components/schemas/MethodFamily",
             "description": "The kind of method this is, derived from ``method`` (``unclassified`` when the table does not name it).\n\nA classification, not a measure of accuracy. See :mod:`app.chemistry.method_families`.",
             "readOnly": true
+          },
+          "pno_truncation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PnoTruncation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "relativistic_hamiltonian": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelativisticHamiltonian"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ri_approximation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiApproximation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "solvent": {
             "anyOf": [
@@ -28804,17 +28843,6 @@
             "title": "Id",
             "type": "integer"
           },
-          "keywords": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Keywords"
-          },
           "lot_hash": {
             "title": "Lot Hash",
             "type": "string"
@@ -28823,6 +28851,36 @@
             "minLength": 1,
             "title": "Method",
             "type": "string"
+          },
+          "pno_truncation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PnoTruncation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "relativistic_hamiltonian": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelativisticHamiltonian"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ri_approximation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiApproximation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "solvent": {
             "anyOf": [
@@ -28934,17 +28992,6 @@
             ],
             "title": "Dispersion"
           },
-          "keywords": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Keywords"
-          },
           "method": {
             "anyOf": [
               {
@@ -28956,6 +29003,36 @@
               }
             ],
             "title": "Method"
+          },
+          "pno_truncation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PnoTruncation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "relativistic_hamiltonian": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelativisticHamiltonian"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ri_approximation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiApproximation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "solvent": {
             "anyOf": [
@@ -29179,6 +29256,36 @@
             "title": "Offset",
             "type": "integer"
           },
+          "pno_truncation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PnoTruncation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "relativistic_hamiltonian": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelativisticHamiltonian"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ri_approximation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiApproximation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "solvent": {
             "anyOf": [
               {
@@ -29362,6 +29469,36 @@
           "method": {
             "title": "Method",
             "type": "string"
+          },
+          "pno_truncation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PnoTruncation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "relativistic_hamiltonian": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelativisticHamiltonian"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ri_approximation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiApproximation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "solvent": {
             "anyOf": [
@@ -42004,6 +42141,16 @@
         "title": "PlogKineticsIn",
         "type": "object"
       },
+      "PnoTruncation": {
+        "description": "The DLPNO truncation preset a level of theory was run with.\n\nSource: ORCA 6.1 manual, DLPNO \"Basic Usage\": the ``LoosePNO``,\n``NormalPNO`` and ``TightPNO`` keywords are the recommended way to control\naccuracy. A hand-set numeric threshold is not representable here and stays\na parameter row. Part of the level identity only when stated.",
+        "enum": [
+          "loose",
+          "normal",
+          "tight"
+        ],
+        "title": "PnoTruncation",
+        "type": "string"
+      },
       "PointGeometryLink": {
         "description": "Lightweight geometry-link projection shared by every per-point\npath-data endpoint (``/scan``, ``/irc``, future ``/path-search``).\n\nUsed when ``include_geometries=true``. Carries ``geometry_ref``\nplus the cheap metadata the geometry table can hand back without\ninlining XYZ coordinates. Full coordinate data lives behind\n``GET /scientific/geometries/{geometry_ref}`` — this schema\ndeliberately stops short of inlining ``xyz_text``, atom rows, or\ncoordinate arrays.",
         "properties": {
@@ -45951,6 +46098,21 @@
         "title": "RelativisticFact",
         "type": "object"
       },
+      "RelativisticHamiltonian": {
+        "description": "Scalar-relativistic Hamiltonian a level of theory was run with.\n\nOne vocabulary with the parsed parameter ``relativistic.hamiltonian``\n(``app/services/parameter_closed_values.py``). ``none`` is a stated\nnon-relativistic run and is a different level from not stating it.\nSources: ORCA 6.1 manual Table 2.54 (DKH2/DKH, ZORA, IORA, X2C);\nGaussian 09 ``Integral`` (DKH/DKH2, DKH0, DKHSO, RESC, NoDKH).\nPart of the level identity only when stated.",
+        "enum": [
+          "none",
+          "dkh0",
+          "dkh2",
+          "dkhso",
+          "resc",
+          "x2c",
+          "zora",
+          "iora"
+        ],
+        "title": "RelativisticHamiltonian",
+        "type": "string"
+      },
       "RelativisticTreatment": {
         "description": "The scalar-relativistic Hamiltonian: none (non-relativistic), Douglas-Kroll-Hess, X2C or ZORA.",
         "enum": [
@@ -47029,6 +47191,18 @@
         ],
         "title": "ReviewVisibilityEcho",
         "type": "object"
+      },
+      "RiApproximation": {
+        "description": "The resolution-of-the-identity approximation of the SCF step.\n\nOne vocabulary with the parsed parameter ``ri.approximation``. ``none`` is\na stated no-RI run. RI inside a method name (``RI-MP2``) is the method's own\nand is not stated here. Part of the level identity only when stated.",
+        "enum": [
+          "none",
+          "rij",
+          "rijcosx",
+          "rijk",
+          "rijonx"
+        ],
+        "title": "RiApproximation",
+        "type": "string"
       },
       "RightsAttestationActor": {
         "description": "Who made an attestation -- by name and ORCID, never by row id.",
@@ -85645,6 +85819,54 @@
           },
           {
             "in": "query",
+            "name": "relativistic_hamiltonian",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RelativisticHamiltonian"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relativistic Hamiltonian"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pno_truncation",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PnoTruncation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pno Truncation"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ri_approximation",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RiApproximation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ri Approximation"
+            }
+          },
+          {
+            "in": "query",
             "name": "lot_hash",
             "required": false,
             "schema": {
@@ -98612,6 +98834,54 @@
           },
           {
             "in": "query",
+            "name": "relativistic_hamiltonian",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RelativisticHamiltonian"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relativistic Hamiltonian"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pno_truncation",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PnoTruncation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pno Truncation"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ri_approximation",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RiApproximation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ri Approximation"
+            }
+          },
+          {
+            "in": "query",
             "name": "has_correction_schemes",
             "required": false,
             "schema": {
@@ -99001,6 +99271,54 @@
                 }
               ],
               "title": "Core Treatment"
+            }
+          },
+          {
+            "in": "query",
+            "name": "relativistic_hamiltonian",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RelativisticHamiltonian"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Relativistic Hamiltonian"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pno_truncation",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PnoTruncation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pno Truncation"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ri_approximation",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RiApproximation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ri Approximation"
             }
           },
           {

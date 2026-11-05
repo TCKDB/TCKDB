@@ -13,7 +13,12 @@ from app.api.routes._legacy_reads import (
     LegacyReadRoute,
     entity_page,
 )
-from app.db.models.common import CoreTreatment
+from app.db.models.common import (
+    CoreTreatment,
+    PnoTruncation,
+    RelativisticHamiltonian,
+    RiApproximation,
+)
 from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
 from app.schemas.entities.level_of_theory import LevelOfTheoryRead
 from app.services.scientific_read.handles import canonical_level_of_theory_id
@@ -36,6 +41,9 @@ def list_levels_of_theory(
     dispersion: str | None = Query(None),
     solvent: str | None = Query(None),
     core_treatment: CoreTreatment | None = Query(None),
+    relativistic_hamiltonian: RelativisticHamiltonian | None = Query(None),
+    pno_truncation: PnoTruncation | None = Query(None),
+    ri_approximation: RiApproximation | None = Query(None),
     lot_hash: str | None = Query(None),
 ):
     # A merged row (#574) is another spelling of a listed row; it is not a
@@ -53,6 +61,12 @@ def list_levels_of_theory(
         base = base.where(solvent_matches(solvent))
     if core_treatment is not None:
         base = base.where(LevelOfTheory.core_treatment == core_treatment)
+    if relativistic_hamiltonian is not None:
+        base = base.where(LevelOfTheory.relativistic_hamiltonian == relativistic_hamiltonian)
+    if pno_truncation is not None:
+        base = base.where(LevelOfTheory.pno_truncation == pno_truncation)
+    if ri_approximation is not None:
+        base = base.where(LevelOfTheory.ri_approximation == ri_approximation)
     if lot_hash is not None:
         base = base.where(LevelOfTheory.lot_hash == lot_hash)
 

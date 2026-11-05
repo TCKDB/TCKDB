@@ -619,7 +619,7 @@ same `public_ref`-untouched rules as `c8424fe82997`.
   `wb97x-d` is keyed as `wb97xd`, `m06-2x` as `m062x`, a trailing `-d3(bj)` or
   `-gd3bj` as `-d3bj`. Gaussian `wB97XD` and ORCA `wB97X-D3` stay two levels.
 - **Dispersion, solvent and solvent-model case**: keyed by strip and
-  lower-case. `keywords` stays verbatim.
+  lower-case. (`keywords` stayed verbatim until revision `d5f2b8c1a704` removed it; see "Level-of-theory keywords removed" below.)
 
 **What the upgrade prints.** One summary line
 (`level_of_theory alias/component re-key: N row(s) re-hashed, M duplicate
@@ -954,6 +954,31 @@ Narrow with `--ref lit_...`, `--limit N`, `--since YYYY-MM-DD`. Notes:
 - It commits every 50 rows; an interrupted run keeps its progress and a re-run only picks up what is still unverified.
 - The summary counts upgrades whose registry title does not match the stored title (normalised as the deposit-time warning does). Check those refs: the deposited DOI/ISBN may be the wrong one, and the row would now read as verified.
 - For an ISBN, "resolved" means a third-party catalogue (OpenLibrary, which is user-editable) said so: the same trust as at deposit time.
+
+## Level-of-theory keywords removed (revision `d5f2b8c1a704`)
+
+The revision drops `level_of_theory.keywords` and adds the typed method qualifiers (`relativistic_hamiltonian`,
+`pno_truncation`, `ri_approximation`, and `core_treatment = window`). The hash formula lost its `keywords` key, so
+**every stored `lot_hash` is stale** under it. The revision does not re-key or merge: it **refuses to upgrade (and to
+downgrade) while `level_of_theory` holds any row**, with a message that names the reseed.
+
+An instance that already holds data is reseeded:
+
+1. **Back up** the whole database (`pg_dump -Fc`). Keep it: the refusal is the only thing standing between a stale
+   hash and a silent wrong match.
+2. **Save the users and API keys** so people keep their access:
+   `pg_dump --data-only -t app_user -t api_key <database> > users_and_keys.sql`. A data-only dump of those tables
+   carries the sequence `setval` calls, so new ids continue after the restored ones.
+3. **Recreate the database** (drop and create it empty, with the same owner and runtime-role grants as before, and the
+   RDKit extension available).
+4. **Apply the migrations** to the empty database: `alembic upgrade head`.
+5. **Restore the users and keys**: `psql <database> < users_and_keys.sql`.
+6. **Deposit the data again** from its sources. Stored reviews, assessments and public refs of the old data are gone
+   with it; nothing is carried across.
+
+A database with no `level_of_theory` rows (a fresh install) upgrades normally. Downgrading the revision is refused for
+the same reason in reverse, and the value `window` stays in the `core_treatment` type afterwards (an enum value
+cannot be dropped).
 
 ## Self-hosted / Raspberry Pi note
 
