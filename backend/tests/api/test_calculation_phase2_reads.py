@@ -146,6 +146,7 @@ class TestScanCoordinates:
 
         calc_id = _get_calc_id(client, db_session, calc_type="scan")
         geom_id = db_session.scalars(select(Geometry.id)).first()
+        assert geom_id is not None
         db_session.add(CalculationScanResult(
             calculation_id=calc_id, dimension=1, is_relaxed=True,
         ))
