@@ -56,6 +56,7 @@ from tckdb_schemas.stationary_point import (
 )
 from tckdb_schemas.hessian_method_assumption import (
     calculation_deck_method,
+    calculation_reported_method,
     check_calculation_deck_agrees,
     resolve_tau_for_calculation,
 )
@@ -299,7 +300,8 @@ def tau_resolution_of(calc_in: "CalculationIn") -> TauResolution:
     """ADR 0012's tau for a bundle-local calculation.
 
     The bundle twin of :meth:`CalculationWithResultsPayload.tau_resolution`:
-    recorded ``freq.hessian_method`` first, then the method the calculation's
+    method its inline output log reports, then the recorded
+    ``freq.hessian_method``, then the method the calculation's
     own inline input deck states, then the producing program's assumed default
     from its software and level-of-theory method, then ``protocol_not_recorded``.
     """
@@ -474,6 +476,7 @@ def calculation_in_to_with_results_payload(
         parameters_extracted_at=calc_in.parameters_extracted_at,
     )
     payload._deck_hessian_method = calculation_deck_method(calc_in)
+    payload._reported_hessian_method = calculation_reported_method(calc_in)
     return payload
 
 

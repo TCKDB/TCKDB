@@ -1571,6 +1571,11 @@ class CalculationWithResultsPayload(CalculationPayload):
     #: so the stored tau is the tau the deposit was judged at.
     _deck_hessian_method: HessianMethod | None = PrivateAttr(default=None)
 
+    #: The method the calculation's inline output log REPORTS the frequency job
+    #: ran, carried the same way as ``_deck_hessian_method`` and ranked above
+    #: every request.
+    _reported_hessian_method: HessianMethod | None = PrivateAttr(default=None)
+
     def tau_resolution(self) -> TauResolution:
         """ADR 0012's τ for this calculation: recorded, else assumed, else conservative.
 
@@ -1592,6 +1597,7 @@ class CalculationWithResultsPayload(CalculationPayload):
             self.level_of_theory.method,
             self.software_release.version if self.software_release is not None else None,
             self._deck_hessian_method,
+            self._reported_hessian_method,
         )
 
     @model_validator(mode="after")

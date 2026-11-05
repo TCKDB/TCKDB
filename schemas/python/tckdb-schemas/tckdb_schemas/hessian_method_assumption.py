@@ -101,14 +101,18 @@ allowlist, not a classifier that tries to cover everything.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import re
 from collections.abc import Iterable
 
 from tckdb_schemas.enums import HessianMethod
+from tckdb_schemas.ess_software_detection import detect_software_from_text
 from tckdb_schemas.hessian_method_detection import (
     check_recorded_method_agrees_with_deck,
     deck_hessian_method,
 )
+from tckdb_schemas.hessian_method_reported import reported_hessian_method
 from tckdb_schemas.software import normalize_software_name
 from tckdb_schemas.stationary_point import (
     TAU_ANALYTIC_DEFAULT_CM1,
@@ -385,8 +389,8 @@ _ORCA_FINITE_DIFFERENCE_GRADIENT = frozenset({
 #   Structure Methods"; no Gaussian 16 keyword pages) name analytic frequencies
 #   for HF, DFT, MP2, CIS and CASSCF and say nothing that settles double
 #   hybrids, so Gaussian double hybrids (the prefix list below) get no
-#   assumption. ARC treats B2PLYP and mPW2PLYP as analytic; that needs a
-#   documentation citation before the table can say so.
+#   assumption. Some workflow tools treat B2PLYP and mPW2PLYP as analytic; the
+#   table needs a documentation citation before it can say so.
 #
 # Name lists are explicit and conservative; a name in no list is a plain
 # GGA/hybrid only if the family classifier already calls it DFT. Overlaps take
@@ -653,12 +657,20 @@ def resolve_tau_with_assumption(
     lot_method: str | None,
     software_version: str | None = None,
     deck_method: HessianMethod | None = None,
+    reported_method: HessianMethod | None = None,
 ) -> TauResolution:
-    """Resolve tau for one calculation: recorded, deck, assumed, conservative.
+    """Resolve tau for one calculation: reported, recorded, deck, assumed, conservative.
 
     The single resolution every validation adapter and the persistence step
     share, so what a deposit is judged at is what is stored.
 
+    0. The method an attached output log REPORTS the frequency job ran
+       (:mod:`tckdb_schemas.hessian_method_reported`) wins over every request:
+       it is what ran, and the recorded parameter, the deck and the echoed
+       input only say what was asked for. It refines nothing and invents
+       nothing: it is read only from a header the log prints, and its tau is the
+       same number a recorded statement of that method gets. A reported method
+       that contradicts a request is warned about when the log is read.
     1. A recorded ``freq.hessian_method`` (and the grid / convergence
        parameters that refine it) resolves through
        :func:`~tckdb_schemas.stationary_point.resolve_tau_from_parameters`,
@@ -682,8 +694,11 @@ def resolve_tau_with_assumption(
     :param lot_method: The calculation's level-of-theory method.
     :param software_version: The software release's version string.
     :param deck_method: The method the inline input deck states, if any.
+    :param reported_method: The method an inline output log reports, if any.
     """
     pairs = list(parameters)
+    if reported_method is not None:
+        return resolve_tau_from_parameters([*pairs, ("freq.hessian_method", reported_method.value)])
     resolved = resolve_tau_from_parameters(pairs)
     if resolved.basis is not TauBasis.protocol_not_recorded:
         return resolved
@@ -709,6 +724,28 @@ def calculation_deck_method(calc) -> HessianMethod | None:
     )
 
 
+def calculation_reported_method(calc) -> HessianMethod | None:
+    """The Hessian method the calculation's inline output log REPORTS, or ``None``.
+
+    Mirrors what the backend stores as a ``reported`` row, so validation and
+    storage agree. Only a calculation with exactly one inline output log is
+    read: with several, which one belongs to the frequency job is not known, and
+    nothing is taken from one for another. A program with no reader reports
+    nothing.
+    """
+    release = calc.software_release
+    declared = normalize_software_name(release.name) if release is not None else None
+    logs = [a for a in (getattr(calc, "artifacts", None) or ()) if getattr(a.kind, "value", a.kind) == "output_log"]
+    if len(logs) != 1:
+        return None
+    try:
+        text = base64.b64decode(logs[0].content_base64, validate=True).decode("utf-8", errors="replace")
+    except (binascii.Error, ValueError):
+        return None
+    program = detect_software_from_text(text) or declared
+    return reported_hessian_method(program, text)
+
+
 def resolve_tau_for_calculation(calc) -> TauResolution:
     """:func:`resolve_tau_with_assumption` for a bundle calculation payload.
 
@@ -727,6 +764,7 @@ def resolve_tau_for_calculation(calc) -> TauResolution:
         calc.level_of_theory.method,
         release.version if release is not None else None,
         calculation_deck_method(calc),
+        calculation_reported_method(calc),
     )
 
 

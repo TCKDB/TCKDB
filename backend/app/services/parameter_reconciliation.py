@@ -57,6 +57,7 @@ from collections.abc import Callable, Iterable, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.enums import HessianMethod
 from tckdb_schemas.program_default_settings import display_major_version
 from tckdb_schemas.upload_warning import UploadWarning
 
@@ -647,6 +648,23 @@ def orca_preset_disagreements(
     return found
 
 
+def hessian_method_disagreements(reported: str | None, requested: str | None) -> list[tuple[str, str, str]]:
+    """``("freq.hessian_method", requested, reported)`` when the log reports a Hessian method the request contradicts.
+
+    Both sides are TCKDB method tokens (the deck's and the log's rows are written from the same vocabulary), compared
+    exactly: a reported analytic Hessian against a requested numerical one is a disagreement, and so is a reported
+    finite difference of gradients against a requested one of energies. A request TCKDB cannot read (a depositor's
+    free-text value) is not compared, and silence on either side is not a disagreement.
+    """
+    if reported is None or requested is None:
+        return []
+    try:
+        requested_method, reported_method = HessianMethod(requested), HessianMethod(reported)
+    except ValueError:
+        return []
+    return [] if requested_method is reported_method else [("freq.hessian_method", requested, reported)]
+
+
 def reported_setting_disagreements(
     session: Session, calculation: Calculation, software: str
 ) -> list[tuple[str, str, str]]:
@@ -695,12 +713,25 @@ def reported_setting_disagreements(
                 if (r.section or "").lower() == "scf" and r.raw_key.lower() == "conver":
                     conver = r.raw_value
         return gaussian_scf_disagreements(request("scf.convergence"), conver, _single(reported, "scf.tol_rms_density"))
-    return orca_preset_disagreements(
+    found = orca_preset_disagreements(
         request("grid.quality"),
         request("scf.convergence"),
         {k: v for k in ("grid.angular_max", *_SCF_KEYS) if (v := _single(reported, k)) is not None},
         explicit,
     )
+    typed = session.scalars(
+        select(CalculationParameter).where(
+            CalculationParameter.calculation_id == calculation.id,
+            CalculationParameter.source == ParameterSource.upload,
+            CalculationParameter.canonical_key == "freq.hessian_method",
+        )
+    )
+    # The request, in the order of the read: the log's echo, the deck, then what the depositor typed.
+    found += hessian_method_disagreements(
+        _single(reported, "freq.hessian_method"),
+        request("freq.hessian_method") or _single(typed, "freq.hessian_method"),
+    )
+    return found
 
 
 def reported_setting_warnings(

@@ -1,4 +1,4 @@
-"""Warn when a deck uploaded later states a Hessian method the stored tolerance does not rest on.
+"""Warn when a deck (or a log's report) uploaded later states a Hessian method the stored tolerance does not rest on.
 
 A deck (or an output log, which echoes the deck it ran) attached with the deposit is read before the deposit is judged. One
 attached afterwards through the artifact route is not, so a calculation can
@@ -17,11 +17,14 @@ The message is built from the code and TCKDB's own values, never from deck text.
 
 from __future__ import annotations
 
+import base64
+import binascii
 from types import SimpleNamespace
 
 from sqlalchemy.orm import Session
 from tckdb_schemas.enums import HessianMethod
 from tckdb_schemas.hessian_method_detection import deck_hessian_method
+from tckdb_schemas.hessian_method_reported import reported_hessian_method
 from tckdb_schemas.software import normalize_software_name
 from tckdb_schemas.upload_warning import UploadWarning
 
@@ -71,6 +74,25 @@ def _disagreement(calculation: Calculation, artifact_in: ArtifactIn) -> UploadWa
         return None
     release = calculation.software_release
     declared = normalize_software_name(release.software.name) if release is not None else None
+    if artifact_in.kind is ArtifactKind.output_log:
+        # What a log reports the program ran outranks what it echoes (and what any deck asked for).
+        try:
+            log_text = base64.b64decode(artifact_in.content_base64, validate=True).decode("utf-8", errors="replace")
+        except (binascii.Error, ValueError):
+            log_text = ""
+        reported = reported_hessian_method(declared, log_text)
+        if reported is not None:
+            if reported is stored:
+                return None
+            return UploadWarning.from_code(
+                field="artifacts",
+                code=W_HESSIAN_METHOD_DISAGREES_WITH_STORED_TAU_BASIS,
+                context={
+                    "stored_basis": freq.imaginary_mode_tau_basis,
+                    "stored_method": stored.value,
+                    "reported_method": reported.value,
+                },
+            )
     # An output log echoes the deck it ran, so it states the same Hessian method; read it as a deck.
     as_deck = SimpleNamespace(kind="input", content_base64=artifact_in.content_base64)
     deck = deck_hessian_method(declared, [as_deck])
