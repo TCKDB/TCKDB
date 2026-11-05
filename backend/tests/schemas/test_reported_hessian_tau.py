@@ -203,6 +203,41 @@ def test_several_logs_must_agree_on_the_echo() -> None:
     assert calculation_echo_method(_calc(log=numfreq, more_logs=[_orca_echo("! B3LYP AnFreq")])) is None
 
 
+def test_a_typed_method_that_contradicts_the_echo_is_refused_like_one_that_contradicts_a_deck() -> None:
+    from pydantic import ValidationError
+
+    numfreq_echo = _orca_echo("! B3LYP def2-SVP NumFreq")
+    with pytest.raises(ValidationError, match="hessian_method_contradicts_input_deck"):
+        _calc(log=numfreq_echo, recorded="analytic")
+    # The same text as a deck is refused (the existing rule), and an agreeing typed value is accepted both ways.
+    with pytest.raises(ValidationError, match="hessian_method_contradicts_input_deck"):
+        _calc(deck="! B3LYP def2-SVP NumFreq\n", recorded="analytic")
+    assert _calc(log=numfreq_echo, recorded="finite_difference_gradient") is not None
+    assert _calc(log=numfreq_echo, recorded="numerical") is not None
+    # A typed value against what a log REPORTS is a warning at read time, never a refusal at validation.
+    assert _calc(log=_LOG_ANALYTIC, recorded="finite_difference_gradient") is not None
+    # No echo, nothing to contradict.
+    assert _calc(log=_BANNER_ONLY, recorded="analytic") is not None
+
+
+_BANNER_ONLY = "\n                                 *****************\n                                 * O   R   C   A *\n"
+
+
+def test_a_file_of_several_orca_runs_echoes_a_method_only_when_every_run_agrees() -> None:
+    from tckdb_schemas.hessian_method_assumption import calculation_echo_method
+
+    run = lambda *lines: _BANNER_ONLY + _orca_echo(*lines)  # noqa: E731
+    both_numerical = run("! B3LYP NumFreq") + run("! B3LYP NumFreq")
+    assert calculation_echo_method(_calc(log=both_numerical)) is _FD
+    # Run 1 asks for NumFreq and dies; run 2 asks for AnFreq: the first echo must not decide the file.
+    assert calculation_echo_method(_calc(log=run("! B3LYP NumFreq") + run("! B3LYP AnFreq"))) is None
+    # A silent run is not an agreeing run.
+    assert calculation_echo_method(_calc(log=run("! B3LYP NumFreq") + run("! B3LYP Freq"))) is None
+    # ...so the analytic job is judged at the program's assumed default (30), not at the first run's 50.
+    resolved = resolve_tau_for_calculation(_calc(log=run("! B3LYP NumFreq") + run("! B3LYP AnFreq")))
+    assert resolved.basis is TauBasis.assumed_analytic_default
+
+
 def test_a_program_with_no_reader_reports_nothing() -> None:
     gaussian = " Entering Gaussian System, Link 0=g09\n Gaussian 09, Revision D.01,\n" + _LOG_NUMERICAL
     assert calculation_reported_method(_calc(log=gaussian, software="Gaussian")) is None

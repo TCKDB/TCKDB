@@ -772,9 +772,12 @@ def resolve_tau_for_calculation(calc) -> TauResolution:
 
 
 def check_calculation_deck_agrees(calc) -> None:
-    """Refuse a bundle calculation whose recorded method contradicts its deck."""
-    check_recorded_method_agrees_with_deck(
-        ((o.canonical_key, o.canonical_value) for o in (calc.parameters or ())),
-        calculation_deck_method(calc),
-        calculation_key=getattr(calc, "key", None),
-    )
+    """Refuse a bundle calculation whose recorded method contradicts its deck or the input its log echoes.
+
+    The input a log echoes is a request exactly as a deck is, so a typed ``freq.hessian_method`` that contradicts
+    either is refused with the same code. A method a log REPORTS is not checked here: that contradiction only warns.
+    """
+    parameters = [(o.canonical_key, o.canonical_value) for o in (calc.parameters or ())]
+    key = getattr(calc, "key", None)
+    check_recorded_method_agrees_with_deck(parameters, calculation_deck_method(calc), calculation_key=key)
+    check_recorded_method_agrees_with_deck(parameters, calculation_echo_method(calc), calculation_key=key)

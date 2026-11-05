@@ -36,7 +36,7 @@ from typing import Protocol
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.enums import HessianMethod
 from tckdb_schemas.ess_software_detection import SoftwareName, detect_software_from_text
-from tckdb_schemas.hessian_method_reported import ORCA_MULTI_JOB, agreed_method
+from tckdb_schemas.hessian_method_reported import ORCA_MULTI_JOB, agreed_method, split_orca_runs
 
 #: Refusal code: the recorded ``freq.hessian_method`` and the attached input
 #: deck state different Hessian methods.
@@ -507,7 +507,10 @@ def echo_hessian_method(declared_software: str | None, artifacts: Iterable[_Arti
         if program is None and declared is not None:
             program = _PARSED_PROGRAMS.get(declared)
         if program == "orca" and not ORCA_MULTI_JOB.search(text):
-            found.append(detect_hessian_method("orca", text))
+            # A file of several runs (concatenated, without $new_job) echoes one input per run: every run must state
+            # the same method, as for the report. One run that is silent, or that differs, reads nothing.
+            runs = {detect_hessian_method("orca", run) for run in split_orca_runs(text)}
+            found.append(next(iter(runs)) if len(runs) == 1 else None)
         elif program == "gaussian" and _gaussian_echoed_route_count(text) == 1:
             found.append(detect_hessian_method("gaussian", text))
     return agreed_method(found)

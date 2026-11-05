@@ -52,6 +52,7 @@ __all__ = [
     "ORCA_MULTI_JOB",
     "ReportedHessianMethod",
     "agreed_method",
+    "split_orca_runs",
     "orca_reported_hessian",
     "orca_reported_hessian_method",
     "reported_hessian_method",
@@ -82,6 +83,11 @@ def _split(text: str) -> list[str]:
     if not starts:
         return [text]
     return [text[a:b] for a, b in zip(starts, [*starts[1:], len(text)], strict=True)]
+
+
+def split_orca_runs(text: str) -> list[str]:
+    """The text of each ORCA run in a file (split at the ORCA banner); ``[text]`` when it has no banner."""
+    return _split(text.replace("\r\n", "\n"))
 
 
 def _listing(segment: str) -> ReportedHessianMethod | None:

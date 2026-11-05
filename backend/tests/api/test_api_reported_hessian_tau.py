@@ -206,6 +206,30 @@ def test_computed_reaction_stores_the_tau_a_reported_or_echoed_method_was_judged
     assert ("finite_difference_gradient", kind) in rows
 
 
+def _typed(value: str) -> list[dict]:
+    return [{"raw_key": "freq", "raw_value": value, "canonical_key": "freq.hessian_method", "canonical_value": value}]
+
+
+def test_a_typed_method_that_contradicts_the_echo_is_refused_and_an_agreeing_one_accepted(client):
+    contradicting = _payload(0.31, log=_ORCA_ECHO_NUMFREQ)
+    contradicting["conformers"][0]["additional_calculations"][0]["parameters"] = _typed("analytic")
+    resp = client.post("/api/v1/uploads/computed-species", json=contradicting)
+    assert resp.status_code == 422, resp.text[:600]
+    assert resp.json()["code"] == "hessian_method_contradicts_input_deck"
+
+    agreeing = _payload(0.32, log=_ORCA_ECHO_NUMFREQ)
+    agreeing["conformers"][0]["additional_calculations"][0]["parameters"] = _typed("finite_difference_gradient")
+    assert client.post("/api/v1/uploads/computed-species", json=agreeing).status_code == 201
+
+
+def test_a_typed_method_that_contradicts_only_a_report_is_accepted_and_warned_about_at_read(client):
+    payload = _payload(0.33, log=_LOG_NUMERICAL)
+    payload["conformers"][0]["additional_calculations"][0]["parameters"] = _typed("analytic")
+    resp = client.post("/api/v1/uploads/computed-species", json=payload)
+    assert resp.status_code == 201, resp.text[:600]
+    assert "reported_setting_differs_from_requested" in {w["code"] for w in resp.json()["warnings"]}
+
+
 def test_computed_reaction_without_a_log_is_refused_at_the_assumed_tau(client):
     resp = client.post("/api/v1/uploads/computed-reaction", json=_reaction_bundle_with_log(_BANNER + "nothing\n", "none"))
     assert resp.status_code == 422, resp.text[:600]

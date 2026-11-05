@@ -866,3 +866,70 @@ def test_tau_context_lists_a_reported_hessian_method_ahead_of_the_requested_one_
         "reported",
     )
     assert by_key["grid.quality"].statement_kind is None
+
+
+def _reported_row(db_session, calc, value):
+    from app.db.models.common import ArtifactKind, ParameterSource, ParameterStatementKind
+
+    db_session.add(
+        CalculationParameter(
+            calculation_id=calc.id,
+            raw_key="hessian_method",
+            raw_value="SCF HESSIAN",
+            canonical_key="freq.hessian_method",
+            canonical_value=value,
+            source=ParameterSource.parser,
+            artifact_kind=ArtifactKind.output_log,
+            statement_kind=ParameterStatementKind.reported,
+        )
+    )
+    db_session.flush()
+
+
+def _hessian_parameter(db_session, calc):
+    tau = build_imaginary_mode_projection(db_session, calc.id).tau_context
+    assert tau is not None
+    return {p.canonical_key: p for p in tau.protocol_parameters}["freq.hessian_method"]
+
+
+def test_a_report_the_stored_basis_does_not_rest_on_is_not_listed_as_its_support(db_session):
+    """A log attached after the deposit, reporting numerical onto an assumed analytic basis, decided nothing."""
+    calc = _judged_record_without_a_hessian(
+        db_session,
+        reaction_coordinate_mode_index=1,
+        imaginary_mode_tau_cm1=30.0,
+        imaginary_mode_tau_basis="assumed_analytic_default",
+        imaginary_mode_structural_flag=False,
+    )
+    _reported_row(db_session, calc, "finite_difference_gradient")
+    shown = _hessian_parameter(db_session, calc)
+    assert (shown.canonical_value, shown.statement_kind) == (None, None)
+
+
+def test_an_assumed_basis_shows_no_hessian_method_even_when_a_later_report_agrees(db_session):
+    calc = _judged_record_without_a_hessian(
+        db_session,
+        reaction_coordinate_mode_index=1,
+        imaginary_mode_tau_cm1=30.0,
+        imaginary_mode_tau_basis="assumed_analytic_default",
+        imaginary_mode_structural_flag=False,
+    )
+    _reported_row(db_session, calc, "analytic")
+    assert _hessian_parameter(db_session, calc).canonical_value is None
+
+
+def test_logs_that_disagree_list_no_report_and_a_recorded_basis_keeps_its_requested_row(db_session):
+    calc = _judged_record_without_a_hessian(
+        db_session,
+        reaction_coordinate_mode_index=1,
+        imaginary_mode_tau_cm1=50.0,
+        imaginary_mode_tau_basis="finite_difference_gradient",
+        imaginary_mode_structural_flag=False,
+    )
+    _seed_parameter(
+        db_session, calculation=calc, canonical_key="freq.hessian_method", canonical_value="finite_difference_gradient"
+    )
+    _reported_row(db_session, calc, "finite_difference_gradient")
+    _reported_row(db_session, calc, "analytic")
+    shown = _hessian_parameter(db_session, calc)
+    assert (shown.canonical_value, shown.statement_kind) == ("finite_difference_gradient", None)

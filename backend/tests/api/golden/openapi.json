@@ -63267,13 +63267,12 @@
           "statement_kind": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/ParameterStatementKind"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Statement Kind"
+            ]
           }
         },
         "required": [
