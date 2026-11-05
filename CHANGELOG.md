@@ -22,6 +22,10 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Scan-point reads no longer fail when a point carries a geometry (2026-11-05)
+
+`GET /calculations/{id}/scan-points` and the `points` of `/scan-result` returned 422 whenever a scan point had a geometry, because the read model inherited the upload payload's inline `geometry` field. The read model now reports `geometry_id` only; the inline `geometry` field is gone from the response schema.
+
 ## A level of theory has typed method qualifiers instead of free-text keywords (2026-11-05)
 
 - **What changed:** `keywords` is gone from a level of theory (the upload field, the stored column and the read shape). A payload that sends it is refused like any unknown field. Four typed fields replace what it was used for: `relativistic_hamiltonian`, `pno_truncation`, `ri_approximation`, and `window` as a third `core_treatment` value for a partial frozen core. Each is part of the level's identity only when stated.

@@ -14,7 +14,6 @@ from tckdb_schemas.fragments.scan import (
     CalculationScanPointCoordinateValueCreate,
     CalculationScanPointCoordinateValuePayload,
     CalculationScanPointCreate,
-    CalculationScanPointPayload,
     CalculationScanResultCreate,
     CalculationScanResultPayload,
 )
@@ -386,8 +385,21 @@ class CalculationScanPointUpdate(SchemaBase):
     note: str | None = None
 
 
-class CalculationScanPointRead(CalculationScanPointPayload, ORMBaseSchema):
+class CalculationScanPointRead(ORMBaseSchema):
+    """A stored scan point.
+
+    Deliberately not derived from ``CalculationScanPointPayload``: the payload's
+    inline ``geometry`` is a write-side input, while the stored row's
+    ``geometry`` is an ORM relationship that the payload model rejects. A read
+    reports the resolved ``geometry_id`` only.
+    """
+
     calculation_id: int
+    point_index: int
+    electronic_energy_hartree: float | None = None
+    relative_energy_kj_mol: float | None = None
+    geometry_id: int | None = None
+    note: str | None = None
     coordinate_values: list[CalculationScanPointCoordinateValueRead] = Field(
         default_factory=list
     )

@@ -9302,6 +9302,7 @@
         "type": "object"
       },
       "CalculationScanPointRead": {
+        "description": "A stored scan point.\n\nDeliberately not derived from ``CalculationScanPointPayload``: the payload's\ninline ``geometry`` is a write-side input, while the stored row's\n``geometry`` is an ORM relationship that the payload model rejects. A read\nreports the resolved ``geometry_id`` only.",
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
@@ -9324,16 +9325,6 @@
               }
             ],
             "title": "Electronic Energy Hartree"
-          },
-          "geometry": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/GeometryPayload"
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "geometry_id": {
             "anyOf": [
@@ -9358,7 +9349,6 @@
             "title": "Note"
           },
           "point_index": {
-            "minimum": 1.0,
             "title": "Point Index",
             "type": "integer"
           },
@@ -9375,8 +9365,8 @@
           }
         },
         "required": [
-          "point_index",
-          "calculation_id"
+          "calculation_id",
+          "point_index"
         ],
         "title": "CalculationScanPointRead",
         "type": "object"
