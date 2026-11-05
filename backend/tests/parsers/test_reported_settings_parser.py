@@ -79,6 +79,8 @@ def test_orca_610_dft_grid_and_scf_block():
         "scf.tol_orbital_gradient": "1e-05",
         "scf.tol_orbital_rotation": "1e-05",
         "scf.tol_diis_error": "5e-07",
+        # The `!OPT FREQ` job's frequency listing follows an `SCF HESSIAN` section (see test_reported_hessian_method).
+        "freq.hessian_method": "analytic",
     }
     assert rows["AngularGrid"]["raw_value"] == "4 (Lebedev-302)"
     assert rows["GridPruning"]["raw_value"] == "4 (adaptive)" and rows["GridPruning"]["canonical_key"] is None

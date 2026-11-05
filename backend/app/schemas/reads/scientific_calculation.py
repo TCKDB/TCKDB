@@ -599,6 +599,10 @@ class TauProtocolParameterEntry(BaseModel):
 
     canonical_key: str
     canonical_value: str | None = None
+    #: ``reported`` (an output log reports the program used it, and the stored basis rests on that method),
+    #: ``requested`` (the log's echo or a deck), or null (typed by the depositor, or absent). A report the stored basis
+    #: does not agree with is not listed here.
+    statement_kind: ParameterStatementKind | None = None
 
 
 class TauRankedModeEntry(BaseModel):

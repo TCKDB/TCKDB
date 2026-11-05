@@ -232,13 +232,17 @@ def test_the_snapshot_digest_ignores_a_null_qualifier_and_sees_a_stated_one():
 # ---------------------------------------------------------------------------
 
 
-def _calc(session: Session, *, software: str = "orca", **level):
+def _calc(session: Session, *, software: str = "orca", _type=CalculationType.opt, **level):
     entry_id = _create_species_entry(session, inchi_key=_next_inchi_key("LQ"))
+    result = {
+        CalculationType.freq: {"freq_result": {"n_imag": 0}},
+        CalculationType.sp: {"sp_result": {"electronic_energy_hartree": -1.0}},
+    }.get(_type, {"opt_result": OptResultPayload(converged=True)})
     upload = CalculationWithResultsPayload(
-        type=CalculationType.opt,
+        type=_type,
         software_release={"name": software, "version": "6.0", "revision": "C.02"},
         level_of_theory={**BASE, **level},
-        opt_result=OptResultPayload(converged=True),
+        **result,
     )
     return resolve_and_persist_calculation_with_results(session, upload, species_entry_id=entry_id)
 
@@ -310,16 +314,21 @@ def test_a_level_that_states_no_qualifier_is_not_judged(db_conn):
         assert _qualifier_warnings(session, calc, _deck("DLPNO-CCSD(T) cc-pVTZ NoRI LoosePNO ZORA")) == []
 
 
-def test_a_qualifier_is_not_judged_against_another_programs_deck(db_conn):
-    # A deck the Gaussian parser really reads: Integral=DKH2 is relativistic.hamiltonian=dkh2, which differs from
-    # the ORCA-declared level's zora. The program guard is what keeps this silent.
+def test_a_qualifier_is_not_judged_against_another_programs_log(db_conn):
+    # A Gaussian log with its banner (so the program is Gaussian, not the declared ORCA) that states DKH2, against
+    # an ORCA-declared level that says zora. The program guard keeps this silent.
+    log = (
+        " Gaussian 16:  ES64L-G16RevC.01 3-Jul-2019\n ----------------------------------------\n"
+        " #P CCSD(T)/cc-pVTZ Integral=DKH2 opt\n ----------------------------------------\n"
+    )
     with Session(db_conn) as session, session.begin():
         calc = _calc(session, software="orca", relativistic_hamiltonian="zora")
         warnings: list = []
-        extract_and_store_calculation_parameters(
-            session, calc, "#P CCSD(T)/cc-pVTZ Integral=DKH2 opt\n\ntitle\n\n0 1\nH 0 0 0\n\n",
-            warnings=warnings, artifact_kind=ArtifactKind.input,
+        rows = extract_and_store_calculation_parameters(
+            session, calc, log, warnings=warnings, artifact_kind=ArtifactKind.output_log
         )
+        # Not vacuous: the Gaussian parser did read the DKH2 request.
+        assert any(r.canonical_key == "relativistic.hamiltonian" and r.canonical_value == "dkh2" for r in rows)
         assert [w for w in warnings if w.context.get("component") == "relativistic_hamiltonian"] == []
 
 
@@ -381,6 +390,57 @@ def test_an_orca_new_job_deck_is_read_job_by_job_not_pooled(db_conn):
         wrong = _calc(session, ri_approximation="rijk")
         [clash] = _qualifier_warnings(session, wrong, own)
         assert clash.context["component"] == "ri_approximation"
+
+
+def test_an_orca_job_that_names_no_method_is_not_a_job_of_the_level(db_conn):
+    # Job 2 (``! NoRI``) names no method; it must not inherit the declared DLPNO level and judge its RI.
+    deck = _deck("B3LYP def2-SVP Opt") + "$new_job\n" + _deck("NoRI")
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, ri_approximation="rijcosx")
+        assert _qualifier_warnings(session, calc, deck) == []
+
+
+def test_a_gaussian_job_that_names_no_method_is_not_a_job_of_the_level(db_conn):
+    deck = (
+        "#P B3LYP/def2TZVP opt\n\ntitle\n\n0 1\nH 0 0 0\n\n--Link1--\n"
+        "#P Integral=DKH2 Geom=Check Guess=Read\n\ntitle\n\n0 1\nH 0 0 0\n\n"
+    )
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(
+            session, software="gaussian", method="CCSD(T)", basis="cc-pVTZ", relativistic_hamiltonian="none",
+            _type=CalculationType.sp,
+        )
+        assert _qualifier_warnings(session, calc, deck) == []
+
+
+def test_two_gaussian_jobs_at_one_level_are_told_apart_by_job_type(db_conn):
+    # The calculation is the freq job (``_calc`` builds an opt; build a freq here). Only the freq job is judged.
+    deck = (
+        "#P CCSD(T,Full)/cc-pCVTZ opt\n\ntitle\n\n0 1\nH 0 0 0\n\n--Link1--\n"
+        "#P CCSD(T,FC)/cc-pCVTZ freq\n\ntitle\n\n0 1\nH 0 0 0\n\n"
+    )
+    with Session(db_conn) as session, session.begin():
+        freq = _calc(
+            session, software="gaussian", method="CCSD(T)", basis="cc-pCVTZ", core_treatment="frozen_core",
+            _type=CalculationType.freq,
+        )
+        assert _qualifier_warnings(session, freq, deck) == []
+        clash = _calc(
+            session, software="gaussian", method="CCSD(T)", basis="cc-pCVTZ", core_treatment="all_electron",
+            _type=CalculationType.freq,
+        )
+        [warning] = _qualifier_warnings(session, clash, deck)
+        assert warning.context["depositor_supplied"]["observed_value"] == "frozen_core"
+
+
+def test_two_orca_jobs_at_one_method_are_told_apart_by_basis(db_conn):
+    deck = _deck("DLPNO-CCSD(T) cc-pVDZ TightPNO") + "$new_job\n" + _deck("DLPNO-CCSD(T) cc-pVTZ LoosePNO")
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session, pno_truncation="loose")
+        assert _qualifier_warnings(session, calc, deck) == []
+        clash = _calc(session, pno_truncation="tight")
+        [warning] = _qualifier_warnings(session, clash, deck)
+        assert warning.context["depositor_supplied"]["observed_value"] == "loose"
 
 
 def test_a_multi_job_deck_with_no_single_fitting_job_judges_nothing(db_conn):

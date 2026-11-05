@@ -1,8 +1,9 @@
 """Read the grid and SCF settings an output log prints as the ones the program used.
 
 A request (what a deck or an echoed input asks for) says what the depositor wanted; a program prints the settings
-it applied, defaults included. This module reads only the second kind, and only the DFT integration grid and the SCF
-convergence thresholds. Every pattern below was confirmed on a fixture log (excerpts are in the tests).
+it applied, defaults included. This module reads only the second kind: the DFT integration grid, the SCF convergence
+thresholds, and (ORCA only) the Hessian method a frequency listing was built with
+(:mod:`tckdb_schemas.hessian_method_reported`, which owns that reading). Every pattern below was confirmed on a fixture log (excerpts are in the tests).
 
 Rules, all deliberate:
 
@@ -29,6 +30,8 @@ Rules, all deliberate:
 from __future__ import annotations
 
 import re
+
+from tckdb_schemas.hessian_method_reported import orca_reported_hessian
 
 #: Statement kind carried on every row this module returns.
 REPORTED = "reported"
@@ -147,7 +150,7 @@ _GAUSSIAN_INTERNAL_STEP = re.compile(r"Proceeding to internal job step")
 
 
 def parse_orca_reported(text: str) -> list[dict]:
-    """Reported grid and SCF rows of an ORCA log; ``[]`` when the log prints none (or its jobs disagree).
+    """Reported grid, SCF and Hessian-method rows of an ORCA log; ``[]`` when the log prints none (or its jobs disagree).
 
     An ORCA file with ``$new_job`` or ``%compound`` in its echoed input prints its banner once for several jobs, so a
     block cannot be bound to one calculation: nothing is reported from such a file.
@@ -155,7 +158,13 @@ def parse_orca_reported(text: str) -> list[dict]:
     text = text.replace("\r\n", "\n")
     if _ORCA_MULTI_JOB.search(text):
         return []
-    return _agree([_orca_job(job) for job in _split(text, _ORCA_BANNER)])
+    rows = _agree([_orca_job(job) for job in _split(text, _ORCA_BANNER)])
+    hessian = orca_reported_hessian(text)
+    if hessian is not None:
+        rows.append(
+            _row("hessian_method", hessian.header, "freq.hessian_method", hessian.method.value, "freq", "enum")
+        )
+    return rows
 
 
 # ---------------------------------------------------------------------------

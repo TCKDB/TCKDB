@@ -59,7 +59,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 import numpy as np
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tckdb_schemas.stationary_point import TAU_PARAMETER_KEYS
 
@@ -89,6 +89,14 @@ from app.db.models.common import ImaginaryModeDisposition, ParameterStatementKin
 from app.db.models.geometry import GeometryAtom
 
 logger = logging.getLogger(__name__)
+
+#: The Hessian method a recorded (not ``assumed_*``) tau basis rests on.
+_RECORDED_BASIS_METHOD = {
+    "analytic_tight": "analytic",
+    "analytic_default": "analytic",
+    "finite_difference_gradient": "finite_difference_gradient",
+    "finite_difference_energy": "finite_difference_energy",
+}
 
 __all__ = [
     "TAU_INTERPRETATION_LIMIT",
@@ -232,10 +240,16 @@ class TauProtocolParameter:
     :param canonical_key: The canonical parameter key.
     :param canonical_value: What the record says, or ``None`` when the
         parameter was never recorded for this calculation.
+    :param statement_kind: ``"reported"`` when the value is one an output log
+        reports the program used and the stored basis rests on it (a report the
+        basis does not agree with, or that two logs contradict, is not listed),
+        ``"requested"`` for the log's echo or a deck, ``None`` for a value the
+        depositor typed or when the parameter is absent.
     """
 
     canonical_key: str
     canonical_value: str | None
+    statement_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -415,21 +429,37 @@ def _tau_context(
     designated = freq_result.reaction_coordinate_mode_index if freq_result is not None else None
 
     recorded: dict[str, str | None] = {}
-    for key, value in session.execute(
-        select(CalculationParameter.canonical_key, CalculationParameter.canonical_value)
+    kinds: dict[str, str | None] = {}
+    rows = session.execute(
+        select(
+            CalculationParameter.canonical_key,
+            CalculationParameter.canonical_value,
+            CalculationParameter.statement_kind,
+        )
         .where(CalculationParameter.calculation_id == calculation_id)
         .where(CalculationParameter.canonical_key.in_(TAU_PARAMETER_KEYS))
-        # A value an output log reports is not a protocol the depositor requested, and tau does not read it (yet).
-        .where(
-            or_(
-                CalculationParameter.statement_kind.is_(None),
-                CalculationParameter.statement_kind != ParameterStatementKind.reported,
-            )
-        )
         .order_by(CalculationParameter.id)
-    ).all():
-        # Later rows win, matching ``resolve_tau_from_parameters``; the order is explicit, not the table's.
+    ).all()
+    # Later rows win, matching ``resolve_tau_from_parameters``; the order is explicit, not the table's.
+    for key, value, kind in rows:
+        if kind is ParameterStatementKind.reported:
+            continue
         recorded[key] = value
+        kinds[key] = kind.value if kind is not None else None
+    # A value an output log REPORTS the program used decides tau ahead of any request (ADR 0012, amendment
+    # 2026-11-05). It is listed first only when that is true of this record: the stored basis is a recorded one (an
+    # ``assumed_*`` basis rests on no parameter), the method it rests on is the reported method, and the logs do not
+    # report different methods. A log attached after the deposit that reports another method, or two inline logs
+    # that disagree, did not decide the stored basis, so no report is listed.
+    reported_methods = {
+        value
+        for key, value, kind in rows
+        if key == "freq.hessian_method" and kind is ParameterStatementKind.reported and value is not None
+    }
+    basis = freq_result.imaginary_mode_tau_basis if freq_result is not None else None
+    if len(reported_methods) == 1 and _RECORDED_BASIS_METHOD.get(basis) == next(iter(reported_methods)):
+        recorded["freq.hessian_method"] = next(iter(reported_methods))
+        kinds["freq.hessian_method"] = ParameterStatementKind.reported.value
 
     ranked = sorted(imaginary, key=lambda mode: (-abs(mode.frequency_cm1), mode.mode_index))
     return TauContext(
@@ -449,7 +479,7 @@ def _tau_context(
             for mode in ranked
         ),
         protocol_parameters=tuple(
-            TauProtocolParameter(canonical_key=key, canonical_value=recorded.get(key))
+            TauProtocolParameter(canonical_key=key, canonical_value=recorded.get(key), statement_kind=kinds.get(key))
             for key in TAU_PARAMETER_KEYS
         ),
     )

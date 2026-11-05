@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.157.0 - 2026-11-05
+## 0.158.0 - 2026-11-05
 
 A level of theory no longer has a free-text `keywords` field; four typed fields take over what it was used to carry. A payload that sends `keywords` is refused like any unknown field, on every path that carries a level (an upload, a composite scheme's input level, a bundle). Nothing is mapped from it into parameters: the settings a deck or log states are read from the uploaded artifact and stored as calculation parameters.
 
@@ -16,6 +16,10 @@ A level of theory no longer has a free-text `keywords` field; four typed fields 
 - **Changed:** the warning `level_of_theory_disagrees_with_artifact` now also fires for these four fields, with `context.component` one of `relativistic_hamiltonian`, `pno_truncation`, `ri_approximation`, `core_treatment` (as well as `method` and `basis`). It fires only when the level and the uploaded deck or log both state a value and they differ (per job for a multi-job deck: the one job that fits the declared method and basis is read, and none is judged when no single job fits); a deck that says nothing about a qualifier is never a disagreement.
 - **Identity:** the `"keywords"` key left the level-of-theory hash payload, so every level's `lot_hash` differs from the one a server before this version computed. A deployment is reseeded rather than re-keyed; the server's migration refuses to run on a database that already holds levels of theory.
 - The producer contract's focal-point example now states its relativistic term as `relativistic_hamiltonian: dkh2`.
+
+## 0.157.0 - 2026-11-05
+
+The imaginary-mode tolerance (tau) now follows what an inline output log says about the Hessian, ahead of the recorded `freq.hessian_method` and the deck. Order: the method the logs REPORT the frequency job ran (ORCA only), then the input the logs ECHO, then the recorded parameter or the deck, then the program's assumed default, then `protocol_not_recorded`; a reported or echoed method gets the same tau as the same method recorded, and a recorded value that contradicts the deck, or the input a log echoes, is refused with `hessian_method_contradicts_input_deck`. A log reports a method only through a header it prints (`SCF HESSIAN` is analytic; `ORCA NUMERICAL FREQUENCIES` with displaced-gradient lines is finite differences of gradients), only from the final frequency job (no optimiser step after the last listing), only when every listing agrees, never from a file that holds several jobs, and not for a numerical gradient (`NumGrad`). An echo that cannot be bound to one job (ORCA `$new_job`/`%compound`, a Gaussian log with more than one route) reads nothing. With several logs, or a file of several ORCA runs, the method they all agree on is used. Gaussian logs report no method. New: `tckdb_schemas.hessian_method_reported`, `echo_hessian_method`, `calculation_reported_method`, `calculation_echo_method`, and `reported_method` / `echo_method` arguments on `resolve_tau_with_assumption`. The `hessian_method_disagrees_with_stored_tau_basis` warning (same code) can now carry `reported_method` in its context. No field or code added or removed; a payload with no inline output log is judged exactly as before.
 
 ## 0.156.0 - 2026-11-05
 

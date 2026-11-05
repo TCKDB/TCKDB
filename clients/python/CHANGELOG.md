@@ -2,7 +2,7 @@
 
 ## 0.187.0 - 2026-11-05
 
-The `LevelOfTheory` builder drops `keywords` (the server no longer has such a field; see `tckdb-schemas` 0.157.0) and gains `core_treatment`, `relativistic_hamiltonian`, `pno_truncation` and `ri_approximation`, each sent only when set. The `tckdb-schemas` window moves to `>=0.157,<0.162`: an older schemas would still accept `keywords`, which the server now refuses.
+The `LevelOfTheory` builder drops `keywords` (the server no longer has such a field; see `tckdb-schemas` 0.158.0) and gains `core_treatment`, `relativistic_hamiltonian`, `pno_truncation` and `ri_approximation`, each sent only when set. The `tckdb-schemas` window moves to `>=0.158,<0.163`: an older schemas would still accept `keywords`, which the server now refuses.
 
 ## 0.186.0 - 2026-11-05
 

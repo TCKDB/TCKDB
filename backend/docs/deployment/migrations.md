@@ -969,7 +969,8 @@ An instance that already holds data is reseeded:
 2. **Save the users and API keys** so people keep their access:
    `pg_dump --data-only -t app_user -t api_key <database> > users_and_keys.sql`. A data-only dump of those tables
    carries the sequence `setval` calls, so new ids continue after the restored ones.
-3. **Recreate the database** (drop and create it empty, with the RDKit extension available as before).
+3. **Recreate the database** (drop and create it empty, with the same owner and runtime-role grants as before, and the
+   RDKit extension available).
 4. **Apply the migrations** to the empty database: `alembic upgrade head`.
 5. **Restore the users and keys**: `psql <database> < users_and_keys.sql`.
 6. **Deposit the data again** from its sources. Stored reviews, assessments and public refs of the old data are gone
