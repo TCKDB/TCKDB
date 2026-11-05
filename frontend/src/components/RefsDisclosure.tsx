@@ -71,6 +71,12 @@ type CopyState = "idle" | "copied" | "unavailable"
 // about.
 const VISUALLY_HIDDEN_STYLE: CSSProperties = {
     position: "absolute",
+    // Anchor explicitly: with auto offsets the span sits at its static
+    // position, and because no ancestor is positioned its containing block
+    // is the page, so inside a `.table-scroll` it escapes the scroller and
+    // widens the document.
+    top: 0,
+    left: 0,
     width: "1px",
     height: "1px",
     padding: 0,
