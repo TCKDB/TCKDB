@@ -450,3 +450,35 @@ describe("species overview -- no depositor-typed text (owner decision 2026-11-03
         expectNoAdversarialText()
     })
 })
+
+describe("species overview -- electronic-state labels and term symbols tell excited states apart", () => {
+    const s1Ref = "spe_singletfirstexcitedabcdefghij"
+    const t1Ref = "spe_tripletfirstexcitedabcdefghij"
+    const stateEntry = (ref: string, label: string, term: string) => ({
+        ...excitedEntry(), species_entry_ref: ref, electronic_state_label: label, term_symbol: term,
+    })
+
+    it("shows S1 and T1 as their own chips in each card's heading, with the canonical term symbol", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload([
+            groundEntry(), stateEntry(s1Ref, "S1", "¹B₁"), stateEntry(t1Ref, "T1", "³B₁"),
+        ]))))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        const s1 = await cardFor(s1Ref)
+        const t1 = await cardFor(t1Ref)
+        expect(within(s1).getByRole("link")).toHaveTextContent("minimum · state S1 · ¹B₁")
+        expect(within(t1).getByRole("link")).toHaveTextContent("minimum · state T1 · ³B₁")
+    })
+
+    it("hides a legacy label or term symbol outside the grammar (the hide-invalid path)", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload([
+            groundEntry(), stateEntry(s1Ref, "R", "DEPOSITOR_SENTINEL_term"),
+        ]))))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        const card = await cardFor(s1Ref)
+        expect(within(card).getByRole("link")).toHaveTextContent(/^minimum$/)
+        expect(document.body.textContent).not.toMatch(/state R|enantiomer/)
+        expectNoDepositorText()
+    })
+})

@@ -143,4 +143,7 @@ export const entryFacetFields = {
     stereo_descriptor: z.string().nullable().optional(),
     stereo_resolution: z.string().nullable().optional(),
     isotope_key: z.string().nullable().optional(),
+    /** Served only when in the grammar the API enforces on write; `null` otherwise. */
+    electronic_state_label: z.string().nullable().optional(),
+    term_symbol: z.string().nullable().optional(),
 }

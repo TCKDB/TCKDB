@@ -78,6 +78,7 @@
 
 .entry-state-groups {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1.6rem;
 }
 
@@ -121,6 +122,7 @@
    16px apart at 1920px for what reads as one divider. */
 .entry-rows {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .entry-card {
@@ -134,8 +136,18 @@
 
 .entry-card-heading {
     display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    min-width: 0;
+    max-width: 100%;
     justify-content: space-between;
     gap: .8rem;
+}
+
+/* The review pill keeps its one-line shape; the heading wraps around it instead of squashing it. */
+.entry-card-heading > span {
+    flex: none;
+    white-space: nowrap;
 }
 
 .entry-card h4 {
@@ -171,6 +183,8 @@
    step rather than its own one-off .62rem run. */
 .entry-card code {
     flex: 1 0 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
     margin: 0;
     color: var(--muted);
 }

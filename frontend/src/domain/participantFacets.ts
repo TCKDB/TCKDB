@@ -3,7 +3,8 @@ import { facetChips, type EntryFacetAxes } from "./recordFacets"
 /**
  * The computed identity facets the API serves on every block that names a species entry (a reaction participant, a
  * network state participant, a record's species context). They are the same fields the species pages get, so the
- * same `facetChips` renders them. `electronic_state_label` and `term_symbol` are typed text and are not among them.
+ * same `facetChips` renders them. `electronic_state_label` and `term_symbol` are served only when they are in the
+ * grammar the API enforces on write; `facetChips` checks that again and shows them as their own chips (`state T1`, `²Π`).
  */
 export interface ParticipantFacets {
     species_entry_kind?: string | null
@@ -12,6 +13,8 @@ export interface ParticipantFacets {
     stereo_descriptor?: string | null
     stereo_resolution?: string | null
     isotope_key?: string | null
+    electronic_state_label?: string | null
+    term_symbol?: string | null
 }
 
 /**
@@ -28,6 +31,8 @@ export function participantChips(facets: ParticipantFacets | null | undefined): 
         stereo_descriptor: facets.stereo_descriptor,
         stereo_resolution: facets.stereo_resolution,
         isotope_key: facets.isotope_key,
+        electronic_state_label: facets.electronic_state_label,
+        term_symbol: facets.term_symbol,
     }
     return facetChips(axes).filter((chip) => chip !== "minimum" && chip !== "ground state")
 }

@@ -15045,6 +15045,17 @@
               }
             ]
           },
+          "electronic_state_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Electronic State Label"
+          },
           "formula": {
             "anyOf": [
               {
@@ -15173,6 +15184,17 @@
                 "type": "null"
               }
             ]
+          },
+          "term_symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Symbol"
           }
         },
         "required": [
@@ -21810,6 +21832,17 @@
               }
             ]
           },
+          "electronic_state_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Electronic State Label"
+          },
           "formula": {
             "anyOf": [
               {
@@ -21910,6 +21943,17 @@
                 "type": "null"
               }
             ]
+          },
+          "term_symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Symbol"
           }
         },
         "required": [
@@ -39510,6 +39554,17 @@
               }
             ]
           },
+          "electronic_state_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Electronic State Label"
+          },
           "inchi_key": {
             "anyOf": [
               {
@@ -39607,6 +39662,17 @@
                 "type": "null"
               }
             ]
+          },
+          "term_symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Symbol"
           }
         },
         "required": [
@@ -39684,6 +39750,17 @@
               }
             ]
           },
+          "electronic_state_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Electronic State Label"
+          },
           "isotope_key": {
             "anyOf": [
               {
@@ -39760,6 +39837,17 @@
             "minimum": 1.0,
             "title": "Stoichiometry",
             "type": "integer"
+          },
+          "term_symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Symbol"
           }
         },
         "required": [
@@ -42981,6 +43069,17 @@
               }
             ]
           },
+          "electronic_state_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Electronic State Label"
+          },
           "formula": {
             "anyOf": [
               {
@@ -43079,6 +43178,17 @@
           "stoichiometry": {
             "title": "Stoichiometry",
             "type": "integer"
+          },
+          "term_symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Symbol"
           }
         },
         "required": [
@@ -43112,6 +43222,17 @@
                 "type": "null"
               }
             ]
+          },
+          "electronic_state_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Electronic State Label"
           },
           "formula": {
             "anyOf": [
@@ -43208,6 +43329,17 @@
           "stoichiometry": {
             "title": "Stoichiometry",
             "type": "integer"
+          },
+          "term_symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Symbol"
           }
         },
         "required": [
@@ -55311,6 +55443,17 @@
           "electronic_state_kind": {
             "$ref": "#/components/schemas/SpeciesEntryStateKind"
           },
+          "electronic_state_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Electronic State Label"
+          },
           "formula": {
             "anyOf": [
               {
@@ -55404,6 +55547,17 @@
                 "type": "null"
               }
             ]
+          },
+          "term_symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Symbol"
           }
         },
         "required": [
@@ -59043,6 +59197,17 @@
               }
             ]
           },
+          "electronic_state_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Electronic State Label"
+          },
           "inchi_key": {
             "anyOf": [
               {
@@ -59160,6 +59325,17 @@
                 "type": "null"
               }
             ]
+          },
+          "term_symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Symbol"
           }
         },
         "required": [
@@ -72018,6 +72194,17 @@
               }
             ]
           },
+          "electronic_state_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Electronic State Label"
+          },
           "inchi_key": {
             "anyOf": [
               {
@@ -72135,6 +72322,17 @@
                 "type": "null"
               }
             ]
+          },
+          "term_symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Symbol"
           }
         },
         "required": [

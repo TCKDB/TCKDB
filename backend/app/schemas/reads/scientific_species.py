@@ -368,6 +368,8 @@ class SpeciesEntryScientificRecord(BaseModel):
     #: stereo-bearing arms at one end). Empty for every other entry, so a ``?`` in the descriptor
     #: with this empty means "not yet supplied": a geometry or a stereo_label would settle it.
     stereo_not_represented: list[str] = Field(default_factory=list)
+    #: Served only when it satisfies the write-time grammar (canonical spelling); ``None`` otherwise,
+    #: including a legacy row whose stored text does not.
     electronic_state_label: str | None = None
     term_symbol: str | None = None
     isotope_key: str | None = None

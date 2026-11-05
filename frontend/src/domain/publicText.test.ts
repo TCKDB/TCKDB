@@ -5,12 +5,26 @@ import {
     publicChemistryKey,
     publicParameterValue,
     publicPointGroup,
+    publicElectronicStateLabel,
     publicTermSymbol,
 } from "./publicText"
 
+describe("publicElectronicStateLabel", () => {
+    it("accepts the label grammar the API enforces on write and rejects anything else", () => {
+        for (const label of ["X", "A", "E", "Ã", "A″", "S1", "T1", "D0"]) expect(publicElectronicStateLabel(label)).toBe(label)
+        for (const label of ["R", "S", "Z", "ground", "excited R,S", "DEPOSITOR_SENTINEL_label", "S100", "<b>", "", "  "]) {
+            expect(publicElectronicStateLabel(label)).toBeNull()
+        }
+        expect(publicElectronicStateLabel(null)).toBeNull()
+        expect(publicElectronicStateLabel(undefined)).toBeNull()
+    })
+})
+
 describe("publicTermSymbol", () => {
-    it("accepts a term symbol shape and rejects anything else", () => {
+    it("accepts the term-symbol grammar the API enforces on write and rejects anything else", () => {
         expect(publicTermSymbol("3Σg-")).toBe("3Σg-")
+        expect(publicTermSymbol("²Π")).toBe("²Π")
+        expect(publicTermSymbol("X ²Π")).toBe("X ²Π")
         expect(publicTermSymbol("2P")).toBe("2P")
         expect(publicTermSymbol("3B1")).toBe("3B1")
         expect(publicTermSymbol("T1")).toBeNull()

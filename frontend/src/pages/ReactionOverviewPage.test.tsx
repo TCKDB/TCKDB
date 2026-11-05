@@ -301,3 +301,20 @@ describe("ReactionOverviewPage -- no depositor-typed text (owner decision 2026-1
         expectNoAdversarialText()
     })
 })
+
+describe("ReactionOverviewPage -- electronic-state labels and term symbols", () => {
+    it("shows S1 and T1 chips beside the participants, and hides a label outside the grammar", async () => {
+        const value = searchResponse()
+        const products = value.records[0].products as Record<string, unknown>[]
+        Object.assign(products[0], { electronic_state_kind: "excited", electronic_state_label: "S1", term_symbol: "¹A₁" })
+        Object.assign(products[1], { electronic_state_kind: "excited", electronic_state_label: "R", term_symbol: "DEPOSITOR_SENTINEL_term" })
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(value)))
+        page(REACTION_REF)
+        expect(await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })).toBeVisible()
+        const text = document.body.textContent ?? ""
+        expect(text).toContain("state S1")
+        expect(text).toContain("¹A₁")
+        expect(text).not.toMatch(/state R|DEPOSITOR_SENTINEL/)
+        expectNoDepositorText()
+    })
+})

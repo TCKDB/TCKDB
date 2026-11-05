@@ -80,6 +80,8 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.keyset import InvalidCursorError, Page, Paging, check_key_values
 from app.services.scientific_read.species_identity import (
+    public_electronic_state_label,
+    public_term_symbol,
     species_entry_label_for,
 )
 from app.services.scientific_read.sql_review import review_rank_case_sql
@@ -725,8 +727,8 @@ def _build_record(
             if entry.stereo_descriptor is not None and "?" in entry.stereo_descriptor
             else []
         ),
-        electronic_state_label=entry.electronic_state_label,
-        term_symbol=entry.term_symbol,
+        electronic_state_label=public_electronic_state_label(entry.electronic_state_label),
+        term_symbol=public_term_symbol(entry.term_symbol),
         isotope_key=entry.isotope_key,
         species_entry_label=species_entry_label_for(entry),
         match=StructureMatchSummary(

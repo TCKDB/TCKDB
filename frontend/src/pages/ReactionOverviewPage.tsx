@@ -1,4 +1,5 @@
 import { Link, Navigate, useParams } from "react-router-dom"
+import { ParticipantChips } from "../components/ParticipantChips"
 import "../conformer-group.css"
 import "../record-identity-header.css"
 import "../reaction-entry.css"
@@ -251,7 +252,7 @@ function ParticipantCell({ participant, separator }: { participant: ReactionOver
                 participant cell ("H2 ... · H2N2 ... · Z isomer"). Round-2
                 review finding: parentheses keep the chip visually bound
                 to the participant it immediately follows. */}
-            {participantChips(participant).length > 0 && <> ({participantChips(participant).join(", ")})</>}
+            <ParticipantChips chips={participantChips(participant)} style="paren" />
         </span>
     )
 }

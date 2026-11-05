@@ -1221,3 +1221,52 @@ describe("NetworkEntryPage -- literature title (depositor text guard)", () => {
         expect(screen.getByText("Literature", { selector: "dt" }).nextElementSibling?.textContent).toBe("RESOLVED_TITLE")
     })
 })
+
+describe("NetworkEntryPage -- electronic-state labels and term symbols tell excited states apart", () => {
+    const stateWith = (hash: string, ref: string, facets: Record<string, unknown>) => ({
+        composition_hash: hash, kind: "well", label: null, participant_count: 1,
+        composition: {
+            participants: [{
+                species_entry_ref: ref, species_ref: "sp_ch2o", canonical_smiles: "C=O", stoichiometry: 1,
+                species_entry_label: "joined DEPOSITOR_SENTINEL_joined", species_entry_kind: "minimum", electronic_state_kind: "excited", ...facets,
+            }],
+            participant_count_total: 1, participants_truncated: false, state_label: "C=O (excited DEPOSITOR_SENTINEL_joined)",
+        },
+    })
+
+    it("labels the S1 and T1 states from the participants' structured facets", async () => {
+        handleEverything({
+            record: {
+                states: [
+                    stateWith("hash_s1", "spe_s1", { electronic_state_label: "S1", term_symbol: "¹A″" }),
+                    stateWith("hash_t1", "spe_t1", { electronic_state_label: "T1", term_symbol: "³A″" }),
+                ],
+                channels: [],
+            },
+            thermoCounts: { spe_s1: 0, spe_t1: 0 },
+        })
+        page()
+        await screen.findByText(NETWORK_REF)
+        const table = await screen.findByRole("table", { name: "States in this network" })
+        const text = table.textContent ?? ""
+        expect(text).toContain("C=O (excited state, state S1, ¹A″)")
+        expect(text).toContain("C=O (excited state, state T1, ³A″)")
+        expectNoDepositorText()
+    })
+
+    it("hides a label or term symbol outside the grammar (the hide-invalid path)", async () => {
+        handleEverything({
+            record: {
+                states: [stateWith("hash_bad", "spe_bad", { electronic_state_label: "R", term_symbol: "DEPOSITOR_SENTINEL_term" })],
+                channels: [],
+            },
+            thermoCounts: { spe_bad: 0 },
+        })
+        page()
+        await screen.findByText(NETWORK_REF)
+        const table = await screen.findByRole("table", { name: "States in this network" })
+        expect(table.textContent).toContain("C=O (excited state)")
+        expect(table.textContent).not.toMatch(/state R/)
+        expectNoDepositorText()
+    })
+})

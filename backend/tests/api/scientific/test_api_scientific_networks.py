@@ -242,13 +242,15 @@ def _assert_public_state_composition(state, composition_hash: str) -> None:
         "canonical_smiles",
         "species_entry_label",
         "stoichiometry",
-        # The computed facets of the entry; never the typed electronic_state_label / term_symbol.
+        # The computed facets of the entry, and the grammar-valid state label and term symbol (None when absent or invalid).
         "species_entry_kind",
         "electronic_state_kind",
         "stereo_label",
         "stereo_descriptor",
         "stereo_resolution",
         "isotope_key",
+        "electronic_state_label",
+        "term_symbol",
     }
     assert all(set(item) == public_keys for item in composition["participants"])
     # A truncated state must say so in its label too: a label that quietly
@@ -2494,6 +2496,8 @@ def test_nkin_detail_channel_context_has_public_compositions(client, db_session)
         "stereo_descriptor": None,
         "stereo_resolution": None,
         "isotope_key": None,
+        "electronic_state_label": None,
+        "term_symbol": None,
     }
     # The rendered side carries the stoichiometry the participants declare.
     assert "2 [OH]" in source["state_label"]
