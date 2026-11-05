@@ -23,6 +23,7 @@ from types import SimpleNamespace
 
 from sqlalchemy.orm import Session
 from tckdb_schemas.enums import HessianMethod
+from tckdb_schemas.ess_software_detection import detect_software_from_text
 from tckdb_schemas.hessian_method_detection import deck_hessian_method
 from tckdb_schemas.hessian_method_reported import reported_hessian_method
 from tckdb_schemas.software import normalize_software_name
@@ -74,13 +75,13 @@ def _disagreement(calculation: Calculation, artifact_in: ArtifactIn) -> UploadWa
         return None
     release = calculation.software_release
     declared = normalize_software_name(release.software.name) if release is not None else None
-    if artifact_in.kind is ArtifactKind.output_log:
+    if artifact_in.kind == ArtifactKind.output_log:
         # What a log reports the program ran outranks what it echoes (and what any deck asked for).
         try:
             log_text = base64.b64decode(artifact_in.content_base64, validate=True).decode("utf-8", errors="replace")
         except (binascii.Error, ValueError):
             log_text = ""
-        reported = reported_hessian_method(declared, log_text)
+        reported = reported_hessian_method(detect_software_from_text(log_text) or declared, log_text)
         if reported is not None:
             if reported is stored:
                 return None

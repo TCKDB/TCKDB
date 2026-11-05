@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.157.0 - 2026-11-05
+
+The imaginary-mode tolerance (tau) now follows the Hessian method an ORCA output log reports the frequency job ran, ahead of what was requested. Order: reported, then the recorded `freq.hessian_method` or the deck, then the program's assumed default, then `protocol_not_recorded`; a reported method gets the same tau as the same method recorded. A log reports a method only through a header it prints (`SCF HESSIAN` is analytic; `ORCA NUMERICAL FREQUENCIES` with displaced-gradient lines is finite differences of gradients), only when every frequency listing in the file agrees, and never from a file that holds several jobs; Gaussian logs report no method. New: `tckdb_schemas.hessian_method_reported`, `calculation_reported_method`, and a `reported_method` argument on `resolve_tau_with_assumption`. The `hessian_method_disagrees_with_stored_tau_basis` warning (same code) can now carry `reported_method` in its context and say that an output log reported the method. No field or code added or removed; a payload with no inline output log is judged exactly as before.
+
 ## 0.156.0 - 2026-11-05
 
 The characters trimmed from a state label or term symbol before matching are now one explicit set (`TRIM_CHARS`, shipped as `trim` in `electronic_state_examples.json`): exactly the 29 characters Python's `str.strip()` removes (every `str.isspace()` code point), which is what the write path has always trimmed, so what a deposit accepts does not change. JavaScript's `trim()` differs (it also strips U+FEFF, and not the `\x1c`-`\x1f` and `\x85` that Python does), so a frontend now trims with the same explicit set. U+FEFF stays untrimmed on both sides. No field or code added or removed.

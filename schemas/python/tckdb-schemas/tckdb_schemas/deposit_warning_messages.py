@@ -2004,6 +2004,7 @@ def _closed_values(key: str, code: str) -> Any:
         "component": frozenset({"method", "basis"}),
         "observed_in": frozenset(_PARAMETER_ORIGINS),
         "deck_method": _HESSIAN_METHODS,
+        "reported_method": _HESSIAN_METHODS,
         "stored_method": _HESSIAN_METHODS,
         "deduced": _DEDUCED,
         "deposit_path": frozenset(_ATOM_MAP_REMEDY),
