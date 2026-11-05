@@ -47,10 +47,11 @@ dependencies = [
     # `CalculationPayload`. A resolver was free to pick any of them and the
     # client would import cleanly and fail at upload time instead.
     #
-    # No upper bound here on purpose: whether these two packages should be
-    # pinned in lockstep is the coupling question tracked in #112, and
-    # guessing at it in a dependency line is how the 0.10.0 floor survived.
-    "tckdb-schemas>=0.145.0",
+    # Rolling window (owner decision 2026-11-05, #112): the floor is the
+    # schemas release this client release was built and tested with; the
+    # ceiling is five minors above it. Each client release moves the window.
+    # See clients/python/docs/development.md ("The tckdb-schemas window").
+    "tckdb-schemas>=0.155,<0.160",
 ]
 
 [project.optional-dependencies]

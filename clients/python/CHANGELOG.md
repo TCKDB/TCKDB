@@ -2,7 +2,7 @@
 
 ## 0.185.0 - 2026-11-04
 
-Packaging and documentation only; no client code and no wire behaviour changed. The README is now a one-page introduction (what it is, install, read, upload with the builders, adapters), and the rest moved into `docs/` (`configuration.md`, `reads.md`, `uploads_and_idempotency.md`, `errors.md`, `builders.md`, `development.md`). `docs/builder_api_mvp.md` no longer says the builders are unimplemented. Project URLs now point at `github.com/TCKDB/TCKDB`, the licence file ships in the distributions, and the build needs `setuptools>=77` (SPDX licence expression).
+Packaging and documentation only; no client code and no wire behaviour changed. The README is now a one-page introduction (what it is, install, read, upload with the builders, adapters), and the rest moved into `docs/` (`configuration.md`, `reads.md`, `uploads_and_idempotency.md`, `errors.md`, `builders.md`, `development.md`). `docs/builder_api_mvp.md` no longer says the builders are unimplemented. Project URLs now point at `github.com/TCKDB/TCKDB`, the licence file ships in the distributions, and the build needs `setuptools>=77` (SPDX licence expression). The `tckdb-schemas` requirement is now a rolling window, `>=0.155,<0.160` (it was `>=0.145.0` with no ceiling); see `docs/development.md`.
 
 ## 0.184.0 - 2026-11-04
 
