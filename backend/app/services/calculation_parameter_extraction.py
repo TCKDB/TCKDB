@@ -75,6 +75,7 @@ from app.services.parameter_reconciliation import (
     W_OUTPUT_LOG_JOB_NOT_BOUND,
     bind_gaussian_job,
     declared_parameter_warnings,
+    level_of_theory_qualifier_warnings,
     level_of_theory_warnings,
     merge_artifact_observations,
     reported_setting_disagreements,
@@ -457,6 +458,11 @@ def extract_and_store_calculation_parameters(
                         parsed_software=software,
                         artifact_kind=artifact_kind,
                         dispersions={v for k, v in observed if k == "dispersion.correction" and v},
+                    )
+                )
+                warnings.extend(
+                    level_of_theory_qualifier_warnings(
+                        calculation, observed, parsed_software=software, artifact_kind=artifact_kind
                     )
                 )
         except Exception as exc:  # pragma: no cover - defensive, never blocks

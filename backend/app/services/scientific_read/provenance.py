@@ -853,6 +853,9 @@ def _build_calculations_section(
             LevelOfTheory.cabs_basis,
             LevelOfTheory.solvent_model,
             LevelOfTheory.spin_treatment,
+            LevelOfTheory.relativistic_hamiltonian,
+            LevelOfTheory.pno_truncation,
+            LevelOfTheory.ri_approximation,
         )
         .join(
             TransitionStateEntry,
@@ -912,6 +915,9 @@ def _build_calculations_section(
                     cabs_basis=row[17],
                     solvent_model=row[18],
                     spin_treatment=row[19],
+                    relativistic_hamiltonian=row[20],
+                    pno_truncation=row[21],
+                    ri_approximation=row[22],
                     composite_scheme=schemes.get(row[3]),
                 )
                 if row[3] is not None

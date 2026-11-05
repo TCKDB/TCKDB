@@ -960,7 +960,7 @@ def _add_declared_energy_level(payload: dict[str, Any], kinetics: Kinetics) -> l
             "portable bundle cannot carry, so it was left out."
         ]
     declared: dict[str, Any] = {"method": lot.method}
-    for name in ("basis", "aux_basis", "cabs_basis", "dispersion", "solvent", "solvent_model", "keywords"):
+    for name in ("basis", "aux_basis", "cabs_basis", "dispersion", "solvent", "solvent_model"):
         value = getattr(lot, name)
         if value is not None:
             declared[name] = value
@@ -968,6 +968,10 @@ def _add_declared_energy_level(payload: dict[str, Any], kinetics: Kinetics) -> l
         declared["spin_treatment"] = lot.spin_treatment.value
     if lot.core_treatment is not None:
         declared["core_treatment"] = lot.core_treatment.value
+    for name in ("relativistic_hamiltonian", "pno_truncation", "ri_approximation"):
+        value = getattr(lot, name)
+        if value is not None:
+            declared[name] = value.value
     payload["energy_level_of_theory"] = declared
     return []
 

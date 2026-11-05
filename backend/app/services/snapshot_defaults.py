@@ -29,6 +29,12 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
     # either (ADR 0021). A level that states frozen_core or all_electron
     # includes the column, so its digest differs, as its identity does.
     ("level_of_theory", "core_treatment"): None,
+    # level_of_theory.relativistic_hamiltonian / pno_truncation / ri_approximation: same shape
+    # as core_treatment. A level that does not state one is NULL, and a NULL adds no key to
+    # its hash either. A level that states one includes the column, so its digest differs.
+    ("level_of_theory", "relativistic_hamiltonian"): None,
+    ("level_of_theory", "pno_truncation"): None,
+    ("level_of_theory", "ri_approximation"): None,
     # thermo.thermodynamic_target_kind / target_conformer_group_id /
     # protocol_declaration: a thermo row stored before the columns existed
     # declared no target and no protocol, which is NULL. A record that states

@@ -12,7 +12,13 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.db.models.common import CoreTreatment, SpinTreatment
+from app.db.models.common import (
+    CoreTreatment,
+    PnoTruncation,
+    RelativisticHamiltonian,
+    RiApproximation,
+    SpinTreatment,
+)
 from app.schemas.reads._field_bounds import (
     MAX_BASIS_LENGTH as _MAX_BASIS_LENGTH,
 )
@@ -78,6 +84,9 @@ class LevelOfTheorySearchRequest(BaseModel):
     #: Frozen-core or all-electron (ADR 0021). Matches only levels that *state* it; a level whose
     #: producer did not say is never "frozen core by default", so it matches neither value.
     core_treatment: CoreTreatment | None = None
+    relativistic_hamiltonian: RelativisticHamiltonian | None = None
+    pno_truncation: PnoTruncation | None = None
+    ri_approximation: RiApproximation | None = None
 
     # --- evidence filters ----------------------------------------------------
     has_correction_schemes: bool | None = None
@@ -141,6 +150,9 @@ class LevelOfTheoryBrowseRequest(BaseModel):
     #: Frozen-core or all-electron (ADR 0021). Matches only levels that *state* it; a level whose
     #: producer did not say is never "frozen core by default", so it matches neither value.
     core_treatment: CoreTreatment | None = None
+    relativistic_hamiltonian: RelativisticHamiltonian | None = None
+    pno_truncation: PnoTruncation | None = None
+    ri_approximation: RiApproximation | None = None
 
     # --- evidence filters ----------------------------------------------------
     has_correction_schemes: bool | None = None

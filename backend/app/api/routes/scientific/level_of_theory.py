@@ -35,7 +35,13 @@ from app.api.routes.scientific._response import (
     omit_unrequested_sections,
 )
 from app.chemistry.method_families import MethodFamily
-from app.db.models.common import CoreTreatment, SpinTreatment
+from app.db.models.common import (
+    CoreTreatment,
+    PnoTruncation,
+    RelativisticHamiltonian,
+    RiApproximation,
+    SpinTreatment,
+)
 from app.schemas.reads.scientific_level_of_theory import (
     ScientificLevelOfTheoryDetailResponse,
 )
@@ -71,6 +77,9 @@ def scientific_level_of_theory_search_get(
     dft_rung_max: int | None = Query(None, ge=1, le=5),
     spin_treatment: SpinTreatment | None = Query(None),
     core_treatment: CoreTreatment | None = Query(None),
+    relativistic_hamiltonian: RelativisticHamiltonian | None = Query(None),
+    pno_truncation: PnoTruncation | None = Query(None),
+    ri_approximation: RiApproximation | None = Query(None),
     has_correction_schemes: bool | None = Query(None),
     has_frequency_scale_factors: bool | None = Query(None),
     include_rejected: bool = Query(False),
@@ -101,6 +110,9 @@ def scientific_level_of_theory_search_get(
         dft_rung_max=dft_rung_max,
         spin_treatment=spin_treatment,
         core_treatment=core_treatment,
+        relativistic_hamiltonian=relativistic_hamiltonian,
+        pno_truncation=pno_truncation,
+        ri_approximation=ri_approximation,
         has_correction_schemes=has_correction_schemes,
         has_frequency_scale_factors=has_frequency_scale_factors,
         include_rejected=include_rejected,

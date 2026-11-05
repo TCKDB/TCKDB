@@ -185,6 +185,9 @@ def _build(
         LevelOfTheory.cabs_basis,
         LevelOfTheory.solvent_model,
         LevelOfTheory.spin_treatment,
+        LevelOfTheory.relativistic_hamiltonian,
+        LevelOfTheory.pno_truncation,
+        LevelOfTheory.ri_approximation,
     ).select_from(Calculation)
     if join is not None:
         target, onclause = join
@@ -218,6 +221,9 @@ def _build(
             dispersion=row.dispersion,
             solvent=row.solvent,
             core_treatment=row.core_treatment,
+            relativistic_hamiltonian=row.relativistic_hamiltonian,
+            pno_truncation=row.pno_truncation,
+            ri_approximation=row.ri_approximation,
             aux_basis=row.aux_basis,
             cabs_basis=row.cabs_basis,
             solvent_model=row.solvent_model,

@@ -24,7 +24,9 @@ Three checks, all non-blocking: each earns a deposit warning built from a code a
 3. **Method and basis** (:func:`level_of_theory_warnings`). The method and basis the parser read from the
    route line or keyword line are compared with the declared level of theory through the same identity
    keys the level of theory is deduplicated by, plus the two spellings the route line adds (a spin prefix,
-   a frozen-core option on the method).
+   a frozen-core option on the method). The typed method qualifiers of the level (relativistic Hamiltonian,
+   PNO truncation, RI approximation, core treatment) are compared with the parameter of the same meaning by
+   :func:`level_of_theory_qualifier_warnings`, under the same warning code.
 
 Message and context carry the canonical key and TCKDB tokens only. The values on each side are depositor
 text (a typed value, a deck's spelling) and go under ``depositor_supplied``.
@@ -522,6 +524,51 @@ def level_of_theory_warnings(
         return [_lot_warning("method", declared, artifact_kind, lot.method, observed)]
     observed = next((job["basis"] for job in all_jobs if job.get("basis")), "")
     return [_lot_warning("basis", declared, artifact_kind, lot.basis, observed)]
+
+
+#: The typed method qualifiers of a level of theory and the canonical parameter key whose value means the same thing.
+#: One vocabulary on both sides (``parameter_closed_values.CLOSED_VALUES`` and the level's enums).
+_QUALIFIER_PARAMETERS = {
+    "relativistic_hamiltonian": "relativistic.hamiltonian",
+    "pno_truncation": "pno.truncation",
+    "ri_approximation": "ri.approximation",
+    "core_treatment": "core.frozen",
+}
+
+
+def level_of_theory_qualifier_warnings(
+    calculation: Calculation,
+    observed: Iterable[tuple[str | None, str | None]],
+    *,
+    parsed_software: str,
+    artifact_kind: ArtifactKind,
+) -> list[UploadWarning]:
+    """Warn when a method qualifier the level of theory states is contradicted by the deck or log (never refuses).
+
+    The qualifiers are the typed fields of a level of theory that replaced its free-text keywords: the
+    relativistic Hamiltonian, the DLPNO truncation preset, the RI approximation and the core treatment. Each is
+    compared with the canonical parameter of the same meaning read from the artifact. Silent unless both sides
+    state a value: a deck that says nothing about RI agrees with a level that says RIJCOSX, because absence is
+    not a statement and no program default is inferred. Silent when the calculation's declared program is not
+    the parser's program. One warning per disagreeing qualifier, under the existing
+    ``level_of_theory_disagrees_with_artifact`` code with ``component`` naming the qualifier.
+    """
+    lot = calculation.lot
+    declared = declared_software(calculation)
+    if lot is None or declared is None or declared != parsed_software.strip().lower():
+        return []
+    read = _values_by_key(observed)
+    warnings: list[UploadWarning] = []
+    for field, key in _QUALIFIER_PARAMETERS.items():
+        stated = getattr(lot, field, None)
+        seen = read.get(key)
+        if stated is None or not seen:
+            continue
+        stated_value = getattr(stated, "value", stated)
+        if stated_value in seen:
+            continue
+        warnings.append(_lot_warning(field, declared, artifact_kind, stated_value, ",".join(sorted(seen))))
+    return warnings
 
 
 def _lot_warning(component: str, software: str, kind: ArtifactKind, declared_text: str, observed_text: str) -> UploadWarning:

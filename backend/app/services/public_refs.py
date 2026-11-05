@@ -241,7 +241,6 @@ def _canonical_lot(obj: Any) -> str:
         ("dispersion", obj.dispersion or ""),
         ("solvent", obj.solvent or ""),
         ("solvent_model", obj.solvent_model or ""),
-        ("keywords", obj.keywords or ""),
     ]
     return "lot:" + "|".join(f"{k}={v}" for k, v in parts)
 

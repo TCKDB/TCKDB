@@ -16,6 +16,7 @@ CLOSED_VALUES: dict[str, frozenset[str]] = {
     "solvation.model": frozenset({"smd", "cpcm", "iefpcm", "cosmo", "alpb"}),
     "ri.approximation": frozenset({"none", "rij", "rijcosx", "rijk", "rijonx"}),
     "core.frozen": frozenset({"frozen_core", "all_electron", "window"}),
+    "pno.truncation": frozenset({"loose", "normal", "tight"}),
     "relativistic.hamiltonian": frozenset({"none", "dkh0", "dkh2", "dkhso", "resc", "x2c", "zora", "iora"}),
     "basis.d_function_type": frozenset({"spherical", "cartesian"}),
     "basis.f_function_type": frozenset({"spherical", "cartesian"}),

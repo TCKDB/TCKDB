@@ -23,9 +23,12 @@ from app.db.models.common import (
     CoreTreatment,
     LegacyCompositeShape,
     LiteratureTitleSource,
+    PnoTruncation,
     ProfileRecommendation,
     ReadProfile,
     RecordReviewStatus,
+    RelativisticHamiltonian,
+    RiApproximation,
     SpinTreatment,
 )
 
@@ -409,6 +412,11 @@ class LevelOfTheorySummary(BaseModel):
     #: when set. Every builder passes it explicitly
     #: (``tests/invariants/test_level_summary_carries_composite_scheme.py``).
     core_treatment: CoreTreatment | None = None
+    #: Method qualifiers (relativistic Hamiltonian, DLPNO truncation, RI approximation); ``None`` = not stated.
+    #: Each is part of the level's identity only when set. Every builder passes them explicitly.
+    relativistic_hamiltonian: RelativisticHamiltonian | None = None
+    pno_truncation: PnoTruncation | None = None
+    ri_approximation: RiApproximation | None = None
     #: The auxiliary (RI) and CABS basis sets, the solvent model and (with ``dispersion`` and ``solvent``) the
     #: spin and core treatment are the parts of the level's identity, beside ``method`` and ``basis``, that
     #: ``notation`` writes. ``None`` means not stated. Every builder passes them explicitly
@@ -566,8 +574,8 @@ def level_label(level: LevelOfTheorySummary) -> str:
     ``display`` is method and basis only, so B3LYP-D3BJ/def2-TZVP and plain B3LYP/def2-TZVP both render
     ``B3LYP/def2-TZVP``. The notation of a record's levels is a headline people read, so it uses the one shared
     renderer (:func:`app.chemistry.level_label.render_level_label`, also behind the ML export's ``label``): auxiliary
-    and CABS basis, dispersion, solvent with its model, spin treatment and core treatment, each only when stated.
-    Raw ``keywords`` are not written; see that module.
+    and CABS basis, dispersion, solvent with its model, spin treatment, core treatment and the relativistic Hamiltonian, PNO truncation and RI approximation, each only
+    when stated.
     """
     return render_level_label(
         method=level.method,
@@ -579,6 +587,9 @@ def level_label(level: LevelOfTheorySummary) -> str:
         solvent_model=level.solvent_model,
         spin_treatment=level.spin_treatment,
         core_treatment=level.core_treatment,
+        relativistic_hamiltonian=level.relativistic_hamiltonian,
+        pno_truncation=level.pno_truncation,
+        ri_approximation=level.ri_approximation,
     )
 
 

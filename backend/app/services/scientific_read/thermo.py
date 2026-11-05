@@ -1032,6 +1032,9 @@ def _calc_lot_meta(session: Session, calc_ids: set[int]) -> dict[int, dict]:
             LevelOfTheory.cabs_basis,
             LevelOfTheory.solvent_model,
             LevelOfTheory.spin_treatment,
+            LevelOfTheory.relativistic_hamiltonian,
+            LevelOfTheory.pno_truncation,
+            LevelOfTheory.ri_approximation,
         )
         .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id, isouter=True)
         .join(
@@ -1074,6 +1077,9 @@ def _calc_lot_meta(session: Session, calc_ids: set[int]) -> dict[int, dict]:
             "lot_cabs_basis": row[16],
             "lot_solvent_model": row[17],
             "lot_spin_treatment": row[18],
+            "lot_relativistic_hamiltonian": row[19],
+            "lot_pno_truncation": row[20],
+            "lot_ri_approximation": row[21],
         }
         for row in rows
     }
@@ -1400,6 +1406,9 @@ def _lot_summary(meta: dict) -> LevelOfTheorySummary | None:
         cabs_basis=meta["lot_cabs_basis"],
         solvent_model=meta["lot_solvent_model"],
         spin_treatment=meta["lot_spin_treatment"],
+        relativistic_hamiltonian=meta["lot_relativistic_hamiltonian"],
+        pno_truncation=meta["lot_pno_truncation"],
+        ri_approximation=meta["lot_ri_approximation"],
         composite_scheme=meta.get("composite_scheme"),
     )
 

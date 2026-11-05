@@ -229,7 +229,8 @@ RENDERED: dict[str, str] = {
         "deposit a log that holds only this job."
     ),
     "level_of_theory_disagrees_with_artifact": (
-        "The method or the basis set of the declared level of theory differs from the one an uploaded input "
+        "The method, the basis set, or a method qualifier (relativistic Hamiltonian, PNO truncation, RI "
+        "approximation, core treatment) of the declared level of theory differs from the one an uploaded input "
         "deck or output log states. The declared level of theory was kept; correct whichever of the two is wrong."
     ),
     "software_release_identity_corrected_from_artifact": (
@@ -1822,13 +1823,20 @@ def _log_disagrees_with_log(context: Mapping[str, Any]) -> str | None:
     )
 
 
+#: The parts of a declared level of theory an uploaded deck or log is compared against.
+_LOT_COMPONENTS = frozenset(
+    {"method", "basis", "relativistic_hamiltonian", "pno_truncation", "ri_approximation", "core_treatment"}
+)
+
+
 def _lot_disagrees(context: Mapping[str, Any]) -> str | None:
-    component = _token(context.get("component"), frozenset({"method", "basis"}))
+    component = _token(context.get("component"), _LOT_COMPONENTS)
     origin = _origin(context)
     if component is None or origin is None:
         return None
+    named = component.replace("_", " ")
     return (
-        f"The {component} of the declared level of theory differs from the {component} in the uploaded "
+        f"The {named} of the declared level of theory differs from the {named} in the uploaded "
         f"{_program(context)}{origin}. The declared level of theory was kept."
     )
 

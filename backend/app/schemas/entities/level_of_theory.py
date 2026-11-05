@@ -1,6 +1,12 @@
 from pydantic import BaseModel, Field
 
-from app.db.models.common import CoreTreatment, SpinTreatment
+from app.db.models.common import (
+    CoreTreatment,
+    PnoTruncation,
+    RelativisticHamiltonian,
+    RiApproximation,
+    SpinTreatment,
+)
 from app.schemas.common import SchemaBase, TimestampedReadSchema
 
 
@@ -14,7 +20,6 @@ class LevelOfTheoryBase(BaseModel):
     dispersion: str | None = None
     solvent: str | None = None
     solvent_model: str | None = None
-    keywords: str | None = None
 
 
 class LevelOfTheoryCreate(LevelOfTheoryBase, SchemaBase):
@@ -33,7 +38,6 @@ class LevelOfTheoryUpdate(SchemaBase):
     dispersion: str | None = None
     solvent: str | None = None
     solvent_model: str | None = None
-    keywords: str | None = None
 
 
 class LevelOfTheoryRead(LevelOfTheoryBase, TimestampedReadSchema):
@@ -46,3 +50,7 @@ class LevelOfTheoryRead(LevelOfTheoryBase, TimestampedReadSchema):
     #: Frozen-core or all-electron (ADR 0021). ``None`` means the producer did not state it, never
     #: "frozen core by default". Part of the level's identity only when set.
     core_treatment: CoreTreatment | None = None
+    #: Method qualifiers; ``None`` means not stated, and a stated value is part of the level's identity.
+    relativistic_hamiltonian: RelativisticHamiltonian | None = None
+    pno_truncation: PnoTruncation | None = None
+    ri_approximation: RiApproximation | None = None

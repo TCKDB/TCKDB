@@ -478,14 +478,66 @@ class CoreTreatment(str, Enum):
     focal-point scheme). Part of the level identity only when stated: a level
     that does not say stays ``NULL`` and keeps the hash it always had.
 
-    Two members on purpose. A partial treatment (Gaussian ``FC=1`` /
-    ``FreezeInnerNobleGasCore``, an ORCA ``FC_EWIN`` energy window, an explicit
-    orbital range) is real but has no agreed name across codes; it is left
-    ``NULL`` and described in ``keywords`` until a producer needs it named.
+    ``window``: a partial treatment (a Gaussian ``Window=(m,n)`` orbital range,
+    an ORCA ``FC_EWIN`` energy window). It is one value on purpose: the
+    specific window has no agreed form across codes and stays on the
+    calculation's ``core.frozen`` parameter rows, so two different windows are
+    one level of theory.
     """
 
     frozen_core = "frozen_core"
     all_electron = "all_electron"
+    window = "window"
+
+
+class RelativisticHamiltonian(str, Enum):
+    """Scalar-relativistic Hamiltonian a level of theory was run with.
+
+    One vocabulary with the parsed parameter ``relativistic.hamiltonian``
+    (``app/services/parameter_closed_values.py``). ``none`` is a stated
+    non-relativistic run and is a different level from not stating it.
+    Sources: ORCA 6.1 manual Table 2.54 (DKH2/DKH, ZORA, IORA, X2C);
+    Gaussian 09 ``Integral`` (DKH/DKH2, DKH0, DKHSO, RESC, NoDKH).
+    Part of the level identity only when stated.
+    """
+
+    none = "none"
+    dkh0 = "dkh0"
+    dkh2 = "dkh2"
+    dkhso = "dkhso"
+    resc = "resc"
+    x2c = "x2c"
+    zora = "zora"
+    iora = "iora"
+
+
+class PnoTruncation(str, Enum):
+    """The DLPNO truncation preset a level of theory was run with.
+
+    Source: ORCA 6.1 manual, DLPNO "Basic Usage": the ``LoosePNO``,
+    ``NormalPNO`` and ``TightPNO`` keywords are the recommended way to control
+    accuracy. A hand-set numeric threshold is not representable here and stays
+    a parameter row. Part of the level identity only when stated.
+    """
+
+    loose = "loose"
+    normal = "normal"
+    tight = "tight"
+
+
+class RiApproximation(str, Enum):
+    """The resolution-of-the-identity approximation of the SCF step.
+
+    One vocabulary with the parsed parameter ``ri.approximation``. ``none`` is
+    a stated no-RI run. RI inside a method name (``RI-MP2``) is the method's own
+    and is not stated here. Part of the level identity only when stated.
+    """
+
+    none = "none"
+    rij = "rij"
+    rijcosx = "rijcosx"
+    rijk = "rijk"
+    rijonx = "rijonx"
 
 
 class EnergyComponentKind(str, Enum):
@@ -848,6 +900,9 @@ __all__ = (
     "ConstraintKind",
     "CoordinateUnit",
     "CoreTreatment",
+    "PnoTruncation",
+    "RelativisticHamiltonian",
+    "RiApproximation",
     "EnergyComponentKind",
     "EnergyCorrectionApplicationRole",
     "EnergyCorrectionConvention",
