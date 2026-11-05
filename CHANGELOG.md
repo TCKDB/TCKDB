@@ -22,6 +22,11 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The Python client and schemas are ready for PyPI, and the client README is one page (2026-11-04)
+
+- **Client: `tckdb-client` 0.184.0 to 0.185.0, `tckdb-schemas` 0.154.0 to 0.155.0** (packaging and documentation only; no field, code or rule changed, every 0.154.0 payload validates unchanged). No migration, no new environment variable, no server change.
+- **What changed.** Both packages carry the metadata PyPI needs (project URLs at `github.com/TCKDB/TCKDB`, the licence file, `setuptools>=77` for the SPDX licence expression) and build as an sdist and a wheel that pass `twine check`. Nothing has been uploaded. The client README went from 1,341 lines to a one-page introduction; the rest lives in `clients/python/docs/`. The root README and `builder_api_mvp.md` no longer say the builders are future work.
+
 ## A thermo or statmech record can show the settings behind its geometry, frequency and energy levels (2026-11-04)
 
 - **Client: none** (`tckdb-schemas` and `tckdb-client` unchanged). No migration, no new environment variable. The calculation page and the thermo and statmech pages of the web app show the new data.

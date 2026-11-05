@@ -1,6 +1,9 @@
 # Builder API — MVP Spec
 
-Status: **Phase 0 — design only.** No code in this spec is implemented yet.
+Status: **implemented (public beta).** The builders ship in `tckdb_client.builders`
+(see [`builder_api_stability.md`](builder_api_stability.md) for the public surface and what may
+still change). This document is the original design spec; where it and the code disagree, the
+code and `builder_api_stability.md` win. Section 16 records which phases shipped.
 Audience: TCKDB client maintainers and workflow-tool authors who want to
 contribute scientific data without learning the raw upload payload shape.
 
@@ -1076,17 +1079,22 @@ shorter on-ramp.
 
 ## 16. Implementation phases
 
-Recommend a four-phase rollout. Every phase is independently shippable;
+Status as of `tckdb-client` 0.185: phases 0-3 shipped. Of phase 4, the worked
+examples shipped (`examples/builder_*`, `adapter_authoring_quickstart.md`); the
+cclib/Arkane converters did not and are not planned in this package, because that
+conversion belongs in the producer adapter. The list below is the original plan.
+
+The rollout was four phases. Every phase is independently shippable;
 no consumer code breaks at any phase boundary because the thin client
 contract is unchanged throughout.
 
-### Phase 0 — design only (this document)
+### Phase 0 — design only (this document; shipped)
 
 - spec lives at `clients/python/docs/builder_api_mvp.md`
 - linked from `clients/python/README.md`
 - no code changes beyond docs
 
-### Phase 1 — core species pipeline
+### Phase 1 — core species pipeline (shipped)
 
 - `tckdb_client/builders/` package skeleton
 - `BuilderObject` / `Upload` protocol in `builders/base.py`
@@ -1099,21 +1107,21 @@ contract is unchanged throughout.
 - unit vocabulary in `builders/validation.py`
 - tests (see §17)
 
-### Phase 2 — reactions
+### Phase 2 — reactions (shipped)
 
 - `ChemReaction`, `TransitionState`
 - `Kinetics.modified_arrhenius` (+ source-calculation wiring)
 - `ComputedReactionUpload.to_payload()`
 - snapshot tests against current backend payload shape
 
-### Phase 3 — depth
+### Phase 3 — depth (shipped: thermo, statmech, transport, artifacts, two-phase upload)
 
 - `Thermo` builder (NASA9, HFn(T))
 - artifact helpers, two-phase upload glue (or replay sidecar)
 - statmech, transport builders if demand exists
 - richer validation (e.g. negative-frequency count in TS freq)
 
-### Phase 4 — adapter ergonomics
+### Phase 4 — adapter ergonomics (examples shipped; converters not planned here)
 
 - worked examples for common external producers
 - migration cookbook for ARC users who want to use builders in place of
