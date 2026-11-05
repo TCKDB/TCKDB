@@ -19,7 +19,8 @@ instance.
 - The floor is the schemas release the client release was built and tested with.
 - The ceiling is five minors above the floor. `tckdb-schemas` is 0.x and a minor may break, so the window is a promise about releases we have not seen, not a guarantee.
 - Every client release moves the window up with the schemas line it was tested against.
-- A schemas minor that breaks the client must not fall inside a window that is already published. If one would, the client is released with a ceiling below it first, or the break waits for a major.
+- A published client keeps its ceiling forever; pip metadata cannot be edited after upload. So a schemas minor that breaks the client must not fall inside the window of any published client release. If one would, either yank the client releases whose window covers it, or hold the break until those windows have passed. Releasing a new client with a lower ceiling only helps new installs; existing releases still accept the breaking schemas.
+- `backend/tests/test_release_metadata.py` fails when the in-repo schemas version reaches the ceiling or drops below the floor, so the window gets moved in the same change that bumps schemas.
 
 ## Non-goals (v0)
 
