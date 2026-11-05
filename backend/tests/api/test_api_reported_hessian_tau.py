@@ -217,6 +217,20 @@ def test_a_typed_method_that_contradicts_the_echo_is_refused_and_an_agreeing_one
     assert resp.status_code == 422, resp.text[:600]
     assert resp.json()["code"] == "hessian_method_contradicts_input_deck"
 
+    body = resp.json()
+    assert body["context"]["stated_in"] == "output_log"
+    text = (body.get("detail") or "") if isinstance(body.get("detail"), str) else " ".join(
+        str(item.get("msg", "")) for item in body.get("detail", [])
+    )
+    text = text.lower().replace("hessian_method_contradicts_input_deck", "")
+    assert "output log" in text and "let the log speak" in text and "deck" not in text
+
+    deck_case = _payload(0.34, deck="! B3LYP def2-SVP NumFreq\n* xyz 0 1\nC 0 0 0\n*\n")
+    deck_case["conformers"][0]["additional_calculations"][0]["parameters"] = _typed("analytic")
+    resp = client.post("/api/v1/uploads/computed-species", json=deck_case)
+    assert resp.status_code == 422 and resp.json()["context"]["stated_in"] == "input"
+    assert "input deck attached" in str(resp.json()).lower()
+
     agreeing = _payload(0.32, log=_ORCA_ECHO_NUMFREQ)
     agreeing["conformers"][0]["additional_calculations"][0]["parameters"] = _typed("finite_difference_gradient")
     assert client.post("/api/v1/uploads/computed-species", json=agreeing).status_code == 201

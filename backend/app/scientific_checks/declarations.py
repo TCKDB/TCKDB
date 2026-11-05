@@ -739,7 +739,8 @@ CHECK_RECORDED_HESSIAN_METHOD_AGREES_WITH_THE_INPUT_DECK = ScientificCheck(
     asserts=(
         "A calculation that records how its frequency job built the Hessian "
         "(``freq.hessian_method``) and also attaches the input deck that ran "
-        "it states the same method in both."
+        "it, or an output log that echoes that input, states the same method "
+        "in both."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
@@ -753,7 +754,8 @@ CHECK_RECORDED_HESSIAN_METHOD_AGREES_WITH_THE_INPUT_DECK = ScientificCheck(
         "either would be a guess, and the record would carry both statements "
         "forever with nothing saying which was meant. The check makes no claim "
         "about chemistry and refuses no calculation: it refuses a deposit that "
-        "cannot say what it did. Only a method the input deck states with an "
+        "cannot say what it did. Only a method the input deck (or the input an "
+        "output log echoes) states with an "
         "explicit directive counts (Gaussian ``Freq=Numer`` or ``EnOnly``, ORCA "
         "``NumFreq`` or ``AnFreq``); a deck with no such directive says nothing "
         "and contradicts nothing, and a recorded value TCKDB cannot read is not "
@@ -765,7 +767,10 @@ CHECK_RECORDED_HESSIAN_METHOD_AGREES_WITH_THE_INPUT_DECK = ScientificCheck(
             check_recorded_method_agrees_with_deck,
             note=(
                 "Runs on the bundle calculation payloads that carry an inline "
-                "``input`` artifact (computed-species, computed-reaction and "
+                "``input`` artifact, or an inline ``output_log`` whose echoed input "
+                "states a method, with ``context.stated_in`` saying which "
+                "(``input`` or ``output_log``) and the message naming the log, never a deck, "
+                "when it was the log (computed-species, computed-reaction and "
                 "network bundles). The standalone calculation, conformer and "
                 "transition-state payloads have no ``artifacts`` field, and a "
                 "deck uploaded later through the artifact route is not seen at "
@@ -781,8 +786,8 @@ CHECK_RECORDED_HESSIAN_METHOD_AGREES_WITH_THE_INPUT_DECK = ScientificCheck(
     ),
     escape_hatch=(
         "Correct whichever of the two is wrong, or omit the recorded "
-        "``freq.hessian_method`` and let the deck speak. A deposit that sends "
-        "only a deck is never refused by this check; the deck is read before "
+        "``freq.hessian_method`` and let the deck (or the log) speak. A deposit that sends "
+        "only a deck or a log is never refused by this check; both are read before "
         "the deposit is judged."
     ),
 )

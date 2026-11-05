@@ -91,8 +91,10 @@ def _disagreement(calculation: Calculation, artifact_in: ArtifactIn) -> UploadWa
                 },
             )
         deck = echo_hessian_method(declared, [as_log])
+        stated_in = "output_log"
     else:
         deck = deck_hessian_method(declared, [SimpleNamespace(kind="input", content_base64=artifact_in.content_base64)])
+        stated_in = "input"
     if deck is None or deck is stored:
         return None
     # TCKDB's own method tokens, so a gradient-versus-energy disagreement reads as one.
@@ -103,5 +105,6 @@ def _disagreement(calculation: Calculation, artifact_in: ArtifactIn) -> UploadWa
             "stored_basis": freq.imaginary_mode_tau_basis,
             "stored_method": stored.value,
             "deck_method": deck.value,
+            "stated_in": stated_in,
         },
     )

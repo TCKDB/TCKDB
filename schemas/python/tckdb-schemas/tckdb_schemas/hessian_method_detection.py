@@ -544,8 +544,13 @@ def check_recorded_method_agrees_with_deck(
     deck_method: HessianMethod | None,
     *,
     calculation_key: str | None = None,
+    stated_in: str = "input",
 ) -> None:
-    """Refuse a recorded ``freq.hessian_method`` that the input deck contradicts.
+    """Refuse a recorded ``freq.hessian_method`` that the input deck (or the input a log echoes) contradicts.
+
+    ``stated_in`` says where the contradicting method was stated: ``"input"`` (an attached input deck) or
+    ``"output_log"`` (the input an attached output log echoes). It is carried in ``context`` and selects the wording,
+    so a depositor who sent only a log is not told about a deck.
 
     Two statements of the same fact that disagree cannot both be right, and
     judging a mode against either would be a guess. A deck with no frequency
@@ -583,14 +588,26 @@ def check_recorded_method_agrees_with_deck(
     context: dict[str, object] = {
         "recorded": recorded_token,
         "input_deck": deck_token,
+        "stated_in": stated_in,
     }
     if calculation_key is not None:
         context["calculation_key"] = calculation_key
+    if stated_in == "output_log":
+        message = (
+            f"the recorded freq.hessian_method says the Hessian method was {recorded_token} but "
+            f"the input echoed by the output log attached to the same calculation says {deck_token}. "
+            "Both are statements about how the second derivatives were built and they "
+            "cannot both be right; correct the recorded value, or omit it and let the log speak."
+        )
+    else:
+        message = (
+            f"the recorded freq.hessian_method says the Hessian method was {recorded_token} but "
+            f"the input deck attached to the same calculation says {deck_token}. "
+            "Both are statements about how the second derivatives were built and they "
+            "cannot both be right; correct the recorded value or the deck."
+        )
     raise CodedValidationError(
         W_HESSIAN_METHOD_CONTRADICTS_INPUT_DECK,
-        f"the recorded freq.hessian_method says the Hessian method was {recorded_token} but "
-        f"the input deck attached to the same calculation says {deck_token}. "
-        "Both are statements about how the second derivatives were built and they "
-        "cannot both be right; correct the recorded value or the deck.",
+        message,
         context=context,
     )

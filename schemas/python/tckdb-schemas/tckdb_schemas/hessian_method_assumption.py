@@ -780,4 +780,6 @@ def check_calculation_deck_agrees(calc) -> None:
     parameters = [(o.canonical_key, o.canonical_value) for o in (calc.parameters or ())]
     key = getattr(calc, "key", None)
     check_recorded_method_agrees_with_deck(parameters, calculation_deck_method(calc), calculation_key=key)
-    check_recorded_method_agrees_with_deck(parameters, calculation_echo_method(calc), calculation_key=key)
+    check_recorded_method_agrees_with_deck(
+        parameters, calculation_echo_method(calc), calculation_key=key, stated_in="output_log"
+    )

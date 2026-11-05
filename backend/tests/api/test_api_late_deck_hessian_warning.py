@@ -184,6 +184,7 @@ def test_gradient_against_energy_names_both_methods(client, db_session):
         "stored_basis": "assumed_finite_difference_gradient",
         "stored_method": "finite_difference_gradient",
         "deck_method": "finite_difference_energy",
+        "stated_in": "input",
     }
     (item,) = _read_codes(client, calc)
     assert "finite_difference_gradient" in item["message"] and "finite_difference_energy" in item["message"]
@@ -248,6 +249,24 @@ def test_a_late_log_applies_the_same_reader_rules_as_validation(client, db_sessi
     assert _CODE not in {w["code"] for w in _upload_log(client, quiet, multi).json()["warnings"]}
     loud = _freq_calc(client, db_session, imag_freq_cm1=-20.0, label="late-single", software=orca)
     assert _CODE in {w["code"] for w in _upload_log(client, loud, single).json()["warnings"]}
+
+
+def test_a_late_log_whose_echo_disagrees_says_so_in_its_own_words_and_a_deck_still_says_deck(client, db_session):
+    echo = _ORCA_BANNER + "INPUT FILE\n|  1> ! B3LYP def2-SVP NumFreq\n****END OF INPUT****\n"
+    orca = {"name": "ORCA", "version": "6.1.0"}
+    from_log = _freq_calc(client, db_session, imag_freq_cm1=-20.0, label="late-echo-words", software=orca)
+    resp = _upload_log(client, from_log, echo)
+    (warning,) = [w for w in resp.json()["warnings"] if w["code"] == _CODE]
+    assert warning["context"]["stated_in"] == "output_log"
+    (item,) = _read_codes(client, from_log)
+    assert "echoed by an output log" in item["message"] and "input deck" not in item["message"]
+
+    from_deck = _freq_calc(client, db_session, imag_freq_cm1=-20.0, label="late-deck-words", software=orca)
+    resp = _upload_deck(client, from_deck, "! B3LYP def2-SVP NumFreq\n", "late.in")
+    (warning,) = [w for w in resp.json()["warnings"] if w["code"] == _CODE]
+    assert warning["context"]["stated_in"] == "input"
+    (item,) = _read_codes(client, from_deck)
+    assert "input deck attached after the deposit" in item["message"]
 
 
 def test_a_late_output_log_reporting_the_stored_method_warns_nothing(client, db_session):

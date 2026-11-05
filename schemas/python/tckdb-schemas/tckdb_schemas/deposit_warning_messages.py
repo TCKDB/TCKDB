@@ -1769,6 +1769,8 @@ def _hessian_disagrees(context: Mapping[str, Any]) -> str | None:
             why = f" ({basis}: {_tau_reason({}, basis)})" if not basis.startswith("assumed_") else f" ({basis})"
         if reported in _HESSIAN_METHODS:
             later = f"an output log attached after the deposit reports that the program ran {reported}"
+        elif context.get("stated_in") == "output_log":
+            later = f"the input echoed by an output log attached after the deposit states {deck}"
         else:
             later = f"an input deck attached after the deposit states {deck}"
         return (
@@ -2004,6 +2006,7 @@ def _closed_values(key: str, code: str) -> Any:
         "component": frozenset({"method", "basis"}),
         "observed_in": frozenset(_PARAMETER_ORIGINS),
         "deck_method": _HESSIAN_METHODS,
+        "stated_in": frozenset({"input", "output_log"}),
         "reported_method": _HESSIAN_METHODS,
         "stored_method": _HESSIAN_METHODS,
         "deduced": _DEDUCED,
