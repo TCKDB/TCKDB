@@ -22,6 +22,14 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The imaginary-mode tolerance follows the Hessian method an ORCA log reports (2026-11-05)
+
+- **Client: `tckdb-schemas` 0.156.0 to 0.157.0.** No migration, no new environment variable, no new warning code. `tckdb-client` is unchanged (its `tckdb-schemas>=0.155,<0.160` window contains 0.157).
+- **What changed.** An ORCA output log prints which routine built the Hessian behind a frequency listing: an `SCF HESSIAN` section (analytic) or an `ORCA NUMERICAL FREQUENCIES` section with displaced-gradient lines (finite differences of gradients). When a deposit carries one inline output log, tau is now taken from that report first, then from the recorded `freq.hessian_method` or the deck, then from the program's assumed default, then `protocol_not_recorded`. A reported method gets the same tau as the same method recorded; the tau table is unchanged.
+- **What is deliberately not read.** A Hessian computed for an optimiser or an IRC (no frequency listing follows it), a file whose listings disagree, a file with several jobs (`$new_job`), and ORCA 5 numerical frequencies on a numerical gradient (the log does not say what was differenced). Gaussian logs report no method that holds across the logs measured, so Gaussian is unchanged.
+- **Stored rows.** The reported method is stored as a `freq.hessian_method` row with `statement_kind='reported'`, beside any requested row. Nothing stored is relabelled.
+- **Warnings.** A reported method that contradicts the request (the echoed input, the deck, or a typed parameter) earns `reported_setting_differs_from_requested`; a log attached after the deposit that reports a method other than the stored basis earns `hessian_method_disagrees_with_stored_tau_basis` (its context may now carry `reported_method`). Neither changes the stored tau.
+
 ## Excited and spin states are told apart by their state label and term symbol (2026-11-04)
 
 - **Client: `tckdb-schemas` 0.155.0 to 0.156.0** (the trim set for a state label and term symbol is now explicit and the same in Python and JavaScript) **and `tckdb-client` 0.185.0 to 0.186.0** (docstring only). No migration, no new environment variable.

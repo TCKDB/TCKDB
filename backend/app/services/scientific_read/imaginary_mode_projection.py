@@ -419,7 +419,8 @@ def _tau_context(
         select(CalculationParameter.canonical_key, CalculationParameter.canonical_value)
         .where(CalculationParameter.calculation_id == calculation_id)
         .where(CalculationParameter.canonical_key.in_(TAU_PARAMETER_KEYS))
-        # A value an output log reports is not a protocol the depositor requested, and tau does not read it (yet).
+        # A value an output log reports is not a protocol the depositor requested. Tau was decided from a reported
+        # Hessian method at upload and stored with its basis; this list shows only what was requested.
         .where(
             or_(
                 CalculationParameter.statement_kind.is_(None),

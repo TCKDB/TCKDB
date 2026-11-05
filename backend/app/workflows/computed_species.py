@@ -262,9 +262,9 @@ def _to_calc_with_results_payload(
         parameters_extracted_at=calc_in.parameters_extracted_at,
         constraints=calc_in.constraints,
     )
-    # The inline input deck is not part of the shared payload; carry what it
-    # states about the Hessian method so persistence stores the tau that
-    # validation judged.
+    # The inline input deck and output log are not part of the shared payload;
+    # carry what the deck states and the log reports about the Hessian method
+    # so persistence stores the tau that validation judged.
     payload._deck_hessian_method = calculation_deck_method(calc_in)
     payload._reported_hessian_method = calculation_reported_method(calc_in)
     return payload
