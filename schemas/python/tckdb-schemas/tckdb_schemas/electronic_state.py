@@ -112,6 +112,7 @@ __all__ = [
     "TERM_SYMBOL_MAX_LENGTH",
     "TERM_SYMBOL_PATTERN",
     "TERM_SYMBOL_SOURCE",
+    "TRIM_CHARS",
     "canonical_electronic_state_label",
     "canonical_term_symbol",
     "check_electronic_state_label",
@@ -120,6 +121,11 @@ __all__ = [
     "is_valid_term_symbol",
     "load_examples",
 ]
+
+#: The characters trimmed from both ends before matching: ASCII space, tab, newline, carriage return, form feed and
+#: vertical tab. An explicit set, because ``str.strip()`` and JavaScript's ``trim()`` strip different extras (``\x1c``-``\x1f``
+#: and ``\x85`` only in Python, U+FEFF only in JavaScript), which would make the two sides disagree on the same text.
+TRIM_CHARS = " \t\n\r\f\v"
 
 #: Refusal codes (422).
 ELECTRONIC_STATE_LABEL_INVALID = "electronic_state_label_invalid"
@@ -304,7 +310,7 @@ def canonical_electronic_state_label(value: str) -> str:
     :raises ValueError: ``value`` is not an accepted label.
     """
 
-    text = value.strip()
+    text = value.strip(TRIM_CHARS)
     if not is_valid_electronic_state_label(text):
         raise ValueError("not an accepted electronic-state label")
     nfd = _nfd(text)
@@ -322,7 +328,7 @@ def canonical_term_symbol(value: str) -> str:
     :raises ValueError: ``value`` is not an accepted term symbol.
     """
 
-    text = value.strip()
+    text = value.strip(TRIM_CHARS)
     if not is_valid_term_symbol(text):
         raise ValueError("not an accepted term symbol")
     return unicodedata.normalize("NFC", _canonical_term(_nfd(text)))
@@ -346,9 +352,9 @@ def check_electronic_state_label(value: Any) -> Any:
     :raises CodedValidationError: ``electronic_state_label_invalid``.
     """
 
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str) or not value.strip(TRIM_CHARS):
         return value
-    if not is_valid_electronic_state_label(value.strip()):
+    if not is_valid_electronic_state_label(value.strip(TRIM_CHARS)):
         raise _refusal(
             ELECTRONIC_STATE_LABEL_INVALID,
             "electronic_state_label",
@@ -364,9 +370,9 @@ def check_term_symbol(value: Any) -> Any:
     :raises CodedValidationError: ``term_symbol_invalid``.
     """
 
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str) or not value.strip(TRIM_CHARS):
         return value
-    if not is_valid_term_symbol(value.strip()):
+    if not is_valid_term_symbol(value.strip(TRIM_CHARS)):
         raise _refusal(
             TERM_SYMBOL_INVALID,
             "term_symbol",

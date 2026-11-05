@@ -803,8 +803,10 @@ class SpeciesStructureRecord(TypedDict, total=False):
     ``electronic_state_kind``, ``electronic_state_label``, ``term_symbol``
     and ``isotope_key`` are the entry's own and are what tell those rows
     apart; ``species_entry_label`` is the same five rendered as one short
-    string. Each is ``None`` when the entry carries no such label -- never
-    an empty string.
+    string. Each is ``None`` when the entry carries no such label, and
+    ``electronic_state_label`` and ``term_symbol`` are also ``None`` when the
+    stored value does not satisfy the write-time grammar (a row stored before
+    it) -- never an empty string. A served value is in its canonical spelling.
     """
 
     species_ref: Required[str]

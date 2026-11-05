@@ -111,8 +111,9 @@ def test_a_legacy_state_label_and_term_symbol_outside_the_grammar_read_as_none(c
     db_session.flush()
 
     participant = _search(client, ref)["reactants"][0]
-    assert participant["species_entry_label"] == "state R DEPOSITOR_SENTINEL"  # the joined label cannot be taken apart...
-    _assert_no_state_facets(participant)  # ...which is why the facets are served separately
+    assert participant["species_entry_label"] is None  # the joined label leaves invalid parts out too
+    _assert_no_state_facets(participant)
+    assert "DEPOSITOR_SENTINEL" not in str(_full(client, ref)["species"])
     full = _full(client, ref)["species"]["reactants"][0]
     assert (full["electronic_state_label"], full["term_symbol"]) == (None, None)
 
@@ -127,4 +128,6 @@ def test_a_legacy_noncanonical_but_valid_term_symbol_is_served_canonical(client,
     db_session.execute(update(SpeciesEntry).where(SpeciesEntry.electronic_state_label == "X").values(term_symbol="2Pi"))
     db_session.flush()
 
-    assert _search(client, ref)["reactants"][0]["term_symbol"] == "\u00b2\u03a0"
+    participant = _search(client, ref)["reactants"][0]
+    assert participant["term_symbol"] == "\u00b2\u03a0"
+    assert participant["species_entry_label"] == "state X \u00b2\u03a0"  # the joined label is canonical too

@@ -15,9 +15,21 @@ import grammar from "./electronicStateGrammar.json"
 const LABEL = new RegExp(`^(?:${grammar.electronic_state_label.source})$`, "u")
 const TERM = new RegExp(`^(?:${grammar.term_symbol.source})$`, "u")
 
+// The exact set of characters trimmed from both ends (`trim` in the shipped examples file). Not `String.trim()`,
+// which also strips U+FEFF and, unlike Python's `str.strip()`, not `\x1c`-`\x1f` or `\x85`: the two sides must agree.
+const TRIM_SET = new Set(Array.from(grammar.trim))
+
+function trimGrammarWhitespace(value: string): string {
+    let start = 0
+    let end = value.length
+    while (start < end && TRIM_SET.has(value[start])) start += 1
+    while (end > start && TRIM_SET.has(value[end - 1])) end -= 1
+    return value.slice(start, end)
+}
+
 function accepted(value: string | null | undefined, pattern: RegExp, maxLength: number): string | null {
     if (typeof value !== "string") return null
-    const nfc = value.trim().normalize("NFC")
+    const nfc = trimGrammarWhitespace(value).normalize("NFC")
     if (nfc.length === 0 || nfc.length > maxLength) return null
     return pattern.test(nfc.normalize("NFD")) ? nfc : null
 }

@@ -43,10 +43,13 @@ function stateChip(kind: string): string {
  * can never be read as a stereo descriptor.
  */
 function stateDetailChips(entry: Pick<EntryFacetAxes, "electronic_state_label" | "term_symbol">): string[] {
-    const chips: string[] = []
     const label = publicElectronicStateLabel(entry.electronic_state_label)
-    if (label) chips.push(`state ${label}`)
     const term = publicTermSymbol(entry.term_symbol)
+    // A term symbol that leads with the same letter (`X ³Σg⁻` under label `X`) already says it: one chip, not
+    // `state X` beside `X ³Σg⁻`. An ordinal (`T1`) never prefixes a term symbol, so it stays two chips.
+    if (label && term && term.startsWith(`${label} `)) return [`state ${term}`]
+    const chips: string[] = []
+    if (label) chips.push(`state ${label}`)
     if (term) chips.push(term)
     return chips
 }

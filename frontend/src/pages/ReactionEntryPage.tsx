@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { ParticipantChips } from "../components/ParticipantChips"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 // `record-identity-header.css` -- this page hand-builds its identity
@@ -370,7 +371,7 @@ function ParticipantsTable({ label, participants }: {
                                         <SpeciesFace smiles={participant.smiles} formula={participant.formula} />
                                     </Link>
                                     {participantChips(participant).length > 0 && (
-                                        <span className="reaction-equation-chip"> · {participantChips(participant).join(", ")}</span>
+                                        <span className="reaction-equation-chip"><ParticipantChips chips={participantChips(participant)} /></span>
                                     )}
                                 </td>
                                 <td data-label="Ref">

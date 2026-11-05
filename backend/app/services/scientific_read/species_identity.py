@@ -129,13 +129,16 @@ def species_entry_label(
         and electronic_state_kind != SpeciesEntryStateKind.ground
     ):
         parts.append(electronic_state_kind.value)
-    if electronic_state_label:
-        # Marked, never bare: a stored state label may not read as a stereo descriptor
-        # (``R``/``S``/``E``/``Z``). New uploads cannot carry one
-        # (``tckdb_schemas.electronic_state``), but rows stored before that rule can.
-        parts.append(f"{STATE_LABEL_MARKER} {electronic_state_label}")
-    if term_symbol:
-        parts.append(term_symbol)
+    # Only text that satisfies the write-time grammar is joined in, in its canonical spelling: a row stored before
+    # that grammar can hold any text, and this label is shown on public pages. An invalid part is left out, so two
+    # legacy entries that differ only in invalid text can read the same.
+    state_label = public_electronic_state_label(electronic_state_label)
+    if state_label:
+        # Marked, never bare, so a state label cannot read as a stereo descriptor (``E``, ``Z``).
+        parts.append(f"{STATE_LABEL_MARKER} {state_label}")
+    term = public_term_symbol(term_symbol)
+    if term:
+        parts.append(term)
     if isotope_key:
         parts.append(isotope_key)
     return " ".join(parts) if parts else None
@@ -230,8 +233,8 @@ def entry_facets_of(entry) -> dict:
         "stereo_descriptor": entry.stereo_descriptor,
         "stereo_resolution": entry.stereo_resolution,
         "isotope_key": entry.isotope_key,
-        "electronic_state_label": public_electronic_state_label(getattr(entry, "electronic_state_label", None)),
-        "term_symbol": public_term_symbol(getattr(entry, "term_symbol", None)),
+        "electronic_state_label": public_electronic_state_label(entry.electronic_state_label),
+        "term_symbol": public_term_symbol(entry.term_symbol),
     }
 
 

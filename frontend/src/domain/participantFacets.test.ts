@@ -18,7 +18,7 @@ describe("participantChips", () => {
         expect(participantChips({ species_entry_kind: "minimum", electronic_state_kind: "excited", electronic_state_label: "T1", term_symbol: "³B₁" }))
             .toEqual(["excited state", "state T1", "³B₁"])
         expect(participantChips({ species_entry_kind: "minimum", electronic_state_kind: "ground", electronic_state_label: "X", term_symbol: "X ²Π" }))
-            .toEqual(["state X", "X ²Π"])
+            .toEqual(["state X ²Π"])
     })
 
     it("hides a state label or term symbol outside the grammar, however it got here", () => {

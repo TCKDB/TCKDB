@@ -512,6 +512,11 @@
  * Note -- a short muted explanatory line, capped to the (now narrower)
  * note measure rather than running the full page width.
  * ------------------------------------------------------------------- */
+/* One chip of a participant's facet chips (`ParticipantChips`): wraps only between chips, never inside one. */
+.chip-nowrap {
+    white-space: nowrap;
+}
+
 .note {
     max-width: var(--measure-note);
     color: var(--muted);

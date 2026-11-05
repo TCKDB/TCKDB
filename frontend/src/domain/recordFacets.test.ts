@@ -155,3 +155,24 @@ describe("facetChips: includeState (grouped-card redundancy)", () => {
             .toEqual(["minimum", "ground state"])
     })
 })
+
+describe("facetChips: a term symbol that leads with the label letter is one chip", () => {
+    const base = { species_entry_kind: "minimum", electronic_state_kind: "ground" }
+
+    it("says `state X \u00b3\u03a3g\u207b` once, not `state X` beside `X \u00b3\u03a3g\u207b`", () => {
+        expect(facetChips({ ...base, electronic_state_label: "X", term_symbol: "X \u00b3\u03a3g\u207b" }))
+            .toEqual(["minimum", "ground state", "state X \u00b3\u03a3g\u207b"])
+        expect(facetChips({ ...base, electronic_state_label: "X\u0303", term_symbol: "X\u0303 \u00b9A\u2081" }))
+            .toContain("state X\u0303 \u00b9A\u2081")
+    })
+
+    it("keeps two chips when the term symbol does not lead with the label, and for an ordinal label", () => {
+        expect(facetChips({ ...base, electronic_state_label: "A", term_symbol: "X \u00b2\u03a0" }))
+            .toEqual(["minimum", "ground state", "state A", "X \u00b2\u03a0"])
+        expect(facetChips({ ...base, electronic_state_label: "T1", term_symbol: "\u00b3B\u2081" }))
+            .toEqual(["minimum", "ground state", "state T1", "\u00b3B\u2081"])
+        // A label that is only the start of another label's letters is not "the same letter".
+        expect(facetChips({ ...base, electronic_state_label: "X", term_symbol: "\u00b2\u03a0" }))
+            .toEqual(["minimum", "ground state", "state X", "\u00b2\u03a0"])
+    })
+})

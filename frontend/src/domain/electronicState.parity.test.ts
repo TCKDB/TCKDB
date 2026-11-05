@@ -17,6 +17,7 @@ interface FieldExamples {
     canonical: Record<string, string>
 }
 interface ShippedExamples {
+    trim: string
     electronic_state_label: FieldExamples
     term_symbol: FieldExamples
 }
@@ -61,5 +62,18 @@ describe("termSymbolSpoken", () => {
     it("has no reading for text outside the grammar", () => {
         expect(termSymbolSpoken("DEPOSITOR_SENTINEL")).toBeNull()
         expect(termSymbolSpoken(null)).toBeNull()
+    })
+})
+
+describe("trimming parity with Python", () => {
+    it("trims exactly the shipped set: ASCII whitespace yes; U+FEFF, U+0085, U+001C, NBSP no", () => {
+        expect(grammar.trim).toBe(shipped.trim)
+        expect(validStateLabel(" \tX\n")).toBe("X")
+        expect(validTermSymbol("\f\u00b2\u03a0\v")).toBe("\u00b2\u03a0")
+        for (const stray of ["\ufeff", "\u0085", "\u001c", "\u00a0"]) {
+            expect(validStateLabel(`${stray}X`), JSON.stringify(stray)).toBeNull()
+            expect(validStateLabel(`X${stray}`), JSON.stringify(stray)).toBeNull()
+            expect(validTermSymbol(`${stray}2Pi`), JSON.stringify(stray)).toBeNull()
+        }
     })
 })
