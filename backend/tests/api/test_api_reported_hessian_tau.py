@@ -109,3 +109,103 @@ def test_the_refusal_of_a_recorded_method_the_deck_contradicts_is_unchanged(clie
     resp = client.post("/api/v1/uploads/computed-species", json=payload)
     assert resp.status_code == 422, resp.text[:600]
     assert resp.json()["code"] == "hessian_method_contradicts_input_deck"
+
+
+# ---------------------------------------------------------------------------
+# the echoed input, several logs, and the computed-reaction adapter
+# ---------------------------------------------------------------------------
+
+_ORCA_ECHO_NUMFREQ = (
+    _BANNER + "INPUT FILE\n|  1> ! B3LYP def2-SVP NumFreq\n|  2> * xyz 0 1\n|  3> C 0 0 0\n|  4> *\n****END OF INPUT****\n"
+)
+_DASHES = " " + "-" * 70
+_GAUSSIAN_ECHO_NUMER = (
+    " Entering Gaussian System, Link 0=g16\n Gaussian 16:  ES64L-G16RevC.01 3-Jul-2019\n"
+    f"{_DASHES}\n #p freq=numer b3lyp/def2tzvp\n{_DASHES}\n"
+)
+
+
+def test_a_log_that_only_echoes_a_numerical_request_is_judged_at_the_numerical_tau(client, db_session):
+    refused = client.post("/api/v1/uploads/computed-species", json=_payload(0.21, log=_BANNER + "no input echo\n"))
+    assert refused.status_code == 422
+    resp = client.post("/api/v1/uploads/computed-species", json=_payload(0.22, log=_ORCA_ECHO_NUMFREQ))
+    assert resp.status_code == 201, resp.text[:600]
+    freq, rows = _stored(db_session)
+    assert (freq.imaginary_mode_tau_cm1, freq.imaginary_mode_tau_basis) == (50.0, "finite_difference_gradient")
+    assert ("finite_difference_gradient", ParameterStatementKind.requested) in rows
+
+
+def test_a_gaussian_log_that_only_echoes_freq_numer_is_judged_like_the_same_route_as_a_deck(client, db_session):
+    payload = _computed_species_with_soft_freq("Gaussian", 0.23)
+    payload["conformers"][0]["additional_calculations"][0]["artifacts"] = [
+        _artifact("output_log", _GAUSSIAN_ECHO_NUMER, "job.log")
+    ]
+    resp = client.post("/api/v1/uploads/computed-species", json=payload)
+    assert resp.status_code == 201, resp.text[:600]
+    freq, _ = _stored(db_session)
+    assert (freq.imaginary_mode_tau_cm1, freq.imaginary_mode_tau_basis) == (50.0, "finite_difference_gradient")
+
+
+def test_a_gaussian_log_that_echoes_two_routes_reads_nothing(client):
+    two = _GAUSSIAN_ECHO_NUMER + f"{_DASHES}\n #p sp b3lyp/def2tzvp\n{_DASHES}\n"
+    payload = _computed_species_with_soft_freq("Gaussian", 0.24)
+    payload["conformers"][0]["additional_calculations"][0]["artifacts"] = [_artifact("output_log", two, "job.log")]
+    assert client.post("/api/v1/uploads/computed-species", json=payload).status_code == 422
+
+
+def test_two_logs_that_report_the_same_method_decide_and_two_that_differ_do_not(client, db_session):
+    payload = _payload(0.25, log=_LOG_NUMERICAL)
+    payload["conformers"][0]["additional_calculations"][0]["artifacts"].append(
+        _artifact("output_log", _LOG_NUMERICAL, "second.out")
+    )
+    assert client.post("/api/v1/uploads/computed-species", json=payload).status_code == 201
+    freq, _ = _stored(db_session)
+    assert freq.imaginary_mode_tau_basis == "finite_difference_gradient"
+
+    differ = _payload(0.26, log=_LOG_NUMERICAL)
+    differ["conformers"][0]["additional_calculations"][0]["artifacts"].append(
+        _artifact("output_log", _LOG_ANALYTIC, "second.out")
+    )
+    refused = client.post("/api/v1/uploads/computed-species", json=differ)
+    assert refused.status_code == 422 and refused.json()["code"] == "n_imag_contradicts_minimum"
+
+
+def _reaction_bundle_with_log(log: str, label: str) -> dict:
+    from tests.api.test_api_bundle_provenance_warnings import _reaction_bundle
+
+    bundle = _reaction_bundle()
+    bundle["species"][0]["calculations"].append(
+        {
+            "key": f"h-freq-{label}",
+            "type": "freq",
+            "geometry_key": "h-geom",
+            "software_release": {"name": "ORCA", "version": "6.1.0"},
+            "level_of_theory": {"method": "B3LYP", "basis": "def2-SVP"},
+            "freq_n_imag": 1,
+            "freq_imag_freq_cm1": -40.0,
+            "artifacts": [_artifact("output_log", log, "job.out")],
+        }
+    )
+    return bundle
+
+
+@pytest.mark.parametrize(("log", "label"), [(_LOG_NUMERICAL, "rep"), (_ORCA_ECHO_NUMFREQ, "echo")])
+def test_computed_reaction_stores_the_tau_a_reported_or_echoed_method_was_judged_at(client, db_session, log, label):
+    """The reaction bundle adapter carries the report and the echo to persistence."""
+    resp = client.post("/api/v1/uploads/computed-reaction", json=_reaction_bundle_with_log(log, label))
+    assert resp.status_code == 201, resp.text[:600]
+    freq = db_session.scalars(select(CalculationFreqResult).where(CalculationFreqResult.n_imag == 1)).one()
+    assert (freq.imaginary_mode_tau_cm1, freq.imaginary_mode_tau_basis) == (50.0, "finite_difference_gradient")
+    rows = db_session.execute(
+        select(CalculationParameter.canonical_value, CalculationParameter.statement_kind).where(
+            CalculationParameter.calculation_id == freq.calculation_id,
+            CalculationParameter.canonical_key == "freq.hessian_method",
+        )
+    ).all()
+    kind = ParameterStatementKind.reported if label == "rep" else ParameterStatementKind.requested
+    assert ("finite_difference_gradient", kind) in rows
+
+
+def test_computed_reaction_without_a_log_is_refused_at_the_assumed_tau(client):
+    resp = client.post("/api/v1/uploads/computed-reaction", json=_reaction_bundle_with_log(_BANNER + "nothing\n", "none"))
+    assert resp.status_code == 422, resp.text[:600]

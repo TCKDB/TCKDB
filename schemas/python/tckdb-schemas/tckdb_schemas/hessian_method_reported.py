@@ -6,25 +6,30 @@ evidence for the tolerance (ADR 0012): it is what ran. This module is the single
 validation (``tckdb_schemas.hessian_method_assumption``) and the backend's reported-settings parser
 (``app.services.reported_settings_parser``) cannot disagree.
 
-Every pattern below was confirmed on a real log (excerpts are in ``backend/tests/parsers/test_reported_hessian_method.py``):
+Every pattern below was confirmed on a real log (excerpts, spliced from lines of those logs, are in ``backend/tests/parsers/test_reported_hessian_method.py``):
 
 * analytic: a ``SCF HESSIAN`` section header. ORCA 4.1.2 and 5.0.4 print it as ``ORCA SCF HESSIAN`` between rules;
   ORCA 6.1.0 prints ``SCF HESSIAN`` between short rules.
 * numerical: an ``ORCA NUMERICAL FREQUENCIES`` section header, and displaced-geometry lines that say what was
   differentiated. ORCA 6.1.0 prints ``<< Calculating gradient on displaced geometry N (of M) >>``: finite differences
-  of gradients. ORCA 5.0.4 with a numerical gradient (``NumGrad``, coupled cluster) prints ``<< Calculating on
+  of gradients. An ORCA 5.0.4 job with a numerical gradient (``NumGrad``, coupled cluster) prints ``<< Calculating on
   displaced geometry ...``, which does not say whether gradients or energies were differenced, so it is not read.
 
 Rules, all deliberate:
 
 * **Observations only.** A method is returned only for a header the log prints. Absence is never a report, and
   nothing is derived from the manual.
-* **Only a Hessian that fed a frequency listing counts.** An analytic or numerical Hessian is also computed for an
-  optimiser's or an IRC's starting point; those sections are not followed by ``VIBRATIONAL FREQUENCIES``, and a
-  header is bound to a listing only when it is the last Hessian header before it with no optimiser step between.
-* **All listings must agree.** A log with several listings (``OptTS`` with ``NumFreq`` prints one per optimiser
-  step) is read only when each one has a method and they are the same. Disagreement, or a listing with no bindable
-  method, reports nothing: a value is never taken from one listing for another.
+* **Only the final frequency job counts.** A Hessian is also computed for an optimiser's or an IRC's starting point,
+  and ORCA prints a ``VIBRATIONAL FREQUENCIES`` listing after each optimiser Hessian (``OptTS`` with ``NumFreq`` prints
+  one per optimiser step; ``ts_opt_orca.out`` prints five). So a method is reported only when no ``ORCA GEOMETRY
+  RELAXATION STEP`` follows the last listing: the listing is then the one after convergence. A log cut off during an
+  optimisation, or a scan whose optimiser Hessians print listings, reports nothing.
+* **All listings must agree.** A header is bound to a listing only when it is the last Hessian header before it with
+  no optimiser step between. A log with several listings is read only when each one has a method and they are the
+  same. Disagreement, or a listing with no bindable method, reports nothing: a value is never taken from one listing
+  for another.
+* **A numerical gradient is not read.** When the job echoes ``NumGrad`` or prints an ``ORCA NUMERICAL GRADIENT``
+  section, a numerical Hessian is not reported: what was differenced is not measured for that case.
 * **Several jobs in one file report nothing.** ``$new_job`` and ``%compound`` print one banner for several jobs, so a
   listing cannot be bound to one calculation. Several banners (concatenated runs) must each report the same method.
 
@@ -33,12 +38,25 @@ DB-free and Pydantic-free: text in, :class:`HessianMethod` out.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import re
+from collections.abc import Iterable
 from typing import NamedTuple
 
 from tckdb_schemas.enums import HessianMethod
+from tckdb_schemas.ess_software_detection import detect_software_from_text
+from tckdb_schemas.software import normalize_software_name
 
-__all__ = ["ReportedHessianMethod", "orca_reported_hessian", "orca_reported_hessian_method", "reported_hessian_method"]
+__all__ = [
+    "ORCA_MULTI_JOB",
+    "ReportedHessianMethod",
+    "agreed_method",
+    "orca_reported_hessian",
+    "orca_reported_hessian_method",
+    "reported_hessian_method",
+    "reported_method_of_artifacts",
+]
 
 
 class ReportedHessianMethod(NamedTuple):
@@ -55,6 +73,8 @@ _ANALYTIC = re.compile(r"^[ \t]*(?:ORCA )?SCF HESSIAN[ \t]*$", re.M)
 _NUMERICAL = re.compile(r"^[ \t]*ORCA NUMERICAL FREQUENCIES[ \t]*$", re.M)
 _OPTIMISER_STEP = re.compile(r"ORCA GEOMETRY RELAXATION STEP")
 _DISPLACED_GRADIENT = re.compile(r"<< Calculating gradient on displaced geometry")
+_NUMERICAL_GRADIENT_HEADER = re.compile(r"^[ \t]*ORCA NUMERICAL GRADIENT[ \t]*$", re.M)
+_NUMGRAD_ECHO = re.compile(r"^\|\s*\d+>\s*!.*\bnumgrad\b", re.I | re.M)
 
 
 def _split(text: str) -> list[str]:
@@ -95,7 +115,17 @@ def _job(job: str) -> ReportedHessianMethod | None:
         previous = vib.end()
     if not found or len({f.method for f in found}) != 1:
         return None
+    # The listing must be the one after convergence: an optimiser step after the last listing means it fed a step.
+    if _OPTIMISER_STEP.search(job[previous:]):
+        return None
+    if found[-1].method is not HessianMethod.analytic and (
+        _NUMERICAL_GRADIENT_HEADER.search(job) or _NUMGRAD_ECHO.search(job)
+    ):
+        return None
     return found[-1]
+
+
+ORCA_MULTI_JOB = _ORCA_MULTI_JOB
 
 
 def orca_reported_hessian(text: str) -> ReportedHessianMethod | None:
@@ -122,3 +152,35 @@ def reported_hessian_method(software: str | None, text: str) -> HessianMethod | 
     compute a Hessian), so nothing is reported for it.
     """
     return orca_reported_hessian_method(text) if software == "orca" else None
+
+
+def agreed_method(methods: Iterable[HessianMethod | None]) -> HessianMethod | None:
+    """The one method every stating source agrees on; ``None`` when none states one or two of them differ."""
+    stated = {m for m in methods if m is not None}
+    return next(iter(stated)) if len(stated) == 1 else None
+
+
+def log_texts(artifacts: Iterable[object]) -> list[str]:
+    """The decoded text of each inline ``output_log`` artifact (undecodable ones are skipped)."""
+    texts = []
+    for artifact in artifacts:
+        if getattr(getattr(artifact, "kind", None), "value", getattr(artifact, "kind", None)) != "output_log":
+            continue
+        try:
+            raw = base64.b64decode(artifact.content_base64, validate=True)  # type: ignore[attr-defined]
+        except (binascii.Error, ValueError):
+            continue
+        texts.append(raw.decode("utf-8", errors="replace"))
+    return texts
+
+
+def reported_method_of_artifacts(declared_software: str | None, artifacts: Iterable[object]) -> HessianMethod | None:
+    """The method the inline output logs report: the one every log that reports one agrees on, else ``None``.
+
+    Storage keeps a reported row from every log, so validation uses the report when the logs that report agree and
+    none when they differ. Each log is read by the program its own banner names (the declared software is the fallback).
+    """
+    declared = normalize_software_name(declared_software) if declared_software else None
+    return agreed_method(
+        reported_hessian_method(detect_software_from_text(text) or declared, text) for text in log_texts(artifacts)
+    )

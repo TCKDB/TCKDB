@@ -9,8 +9,9 @@ had said nothing. This module is the **single owner** of what a deck says
 about the frequency job's Hessian, and both sides use it:
 
 * upload validation reads an inline deck through :func:`detect_hessian_method`
-  / :func:`deck_hessian_method` (``tckdb_schemas.hessian_method_assumption``
-  ranks the result above any assumption);
+  / :func:`deck_hessian_method`, and the input an inline output log echoes
+  through :func:`echo_hessian_method` (``tckdb_schemas.hessian_method_assumption``
+  ranks the echo above the deck and both above any assumption);
 * the backend parameter parsers import the route / input-block extractors and
   the keyword tables below, so the ``freq.hessian_method`` row the workflow
   later stores comes from the same text, the same tokenising and the same
@@ -35,6 +36,7 @@ from typing import Protocol
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.enums import HessianMethod
 from tckdb_schemas.ess_software_detection import SoftwareName, detect_software_from_text
+from tckdb_schemas.hessian_method_reported import ORCA_MULTI_JOB, agreed_method
 
 #: Refusal code: the recorded ``freq.hessian_method`` and the attached input
 #: deck state different Hessian methods.
@@ -47,6 +49,7 @@ __all__ = [
     "ORCA_FREQ_HESSIAN_KEYWORDS",
     "deck_hessian_method",
     "detect_hessian_method",
+    "echo_hessian_method",
     "extract_gaussian_route_text",
     "gaussian_freq_hessian_option",
     "hessian_method_class",
@@ -467,6 +470,47 @@ def deck_hessian_method(
             continue
         result = detect_hessian_method(program, text)
     return result
+
+
+def _gaussian_echoed_route_count(text: str) -> int:
+    """How many route blocks (dash-delimited, starting with ``#``) a Gaussian log echoes."""
+    lines = text.splitlines()
+    dashes = [i for i, line in enumerate(lines) if _ROUTE_DELIM.match(line.strip())]
+    return sum(
+        "".join(_echo_text(lines[j]) for j in range(first + 1, second)).startswith("#")
+        for first, second in zip(dashes, dashes[1:])
+    )
+
+
+def echo_hessian_method(declared_software: str | None, artifacts: Iterable[_ArtifactLike]) -> HessianMethod | None:
+    """The Hessian method the input echoed in the inline ``output_log`` artifacts requests.
+
+    An output log echoes the input it ran, and the backend stores that echo as the calculation's requested rows,
+    ranked above an uploaded deck, so validation reads it too. A log whose echo cannot be bound to one job reads
+    nothing: an ORCA echo with ``$new_job`` or ``%compound`` merges every job's ``!`` lines, and a Gaussian log that
+    echoes more than one route (``--Link1--`` jobs) would be read from its first route only. When several logs state
+    a method they must agree; otherwise nothing is read.
+
+    :param declared_software: The calculation's declared software name.
+    """
+    declared = (declared_software or "").strip().lower() or None
+    found: list[HessianMethod | None] = []
+    for artifact in artifacts:
+        kind = getattr(artifact.kind, "value", artifact.kind)
+        if kind != "output_log":
+            continue
+        try:
+            text = base64.b64decode(artifact.content_base64, validate=True).decode("utf-8", errors="replace")
+        except (binascii.Error, ValueError):
+            continue
+        program: SoftwareName | None = detect_software_from_text(text)
+        if program is None and declared is not None:
+            program = _PARSED_PROGRAMS.get(declared)
+        if program == "orca" and not ORCA_MULTI_JOB.search(text):
+            found.append(detect_hessian_method("orca", text))
+        elif program == "gaussian" and _gaussian_echoed_route_count(text) == 1:
+            found.append(detect_hessian_method("gaussian", text))
+    return agreed_method(found)
 
 
 def hessian_method_class(value: str | None) -> str | None:

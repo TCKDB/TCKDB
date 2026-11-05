@@ -239,6 +239,17 @@ def test_a_late_output_log_reporting_another_method_than_the_stored_basis_warns_
     assert "finite_difference_gradient" in item["message"] and "ORCA" not in item["message"]
 
 
+def test_a_late_log_applies_the_same_reader_rules_as_validation(client, db_session):
+    """An echo that cannot be bound to one job (`$new_job`) reads nothing; the same echo without it warns."""
+    single = _ORCA_BANNER + "INPUT FILE\n|  1> ! B3LYP def2-SVP NumFreq\n****END OF INPUT****\n"
+    multi = _ORCA_BANNER + "INPUT FILE\n|  1> ! B3LYP def2-SVP NumFreq\n|  2> $new_job\n****END OF INPUT****\n"
+    orca = {"name": "ORCA", "version": "6.1.0"}
+    quiet = _freq_calc(client, db_session, imag_freq_cm1=-20.0, label="late-multi", software=orca)
+    assert _CODE not in {w["code"] for w in _upload_log(client, quiet, multi).json()["warnings"]}
+    loud = _freq_calc(client, db_session, imag_freq_cm1=-20.0, label="late-single", software=orca)
+    assert _CODE in {w["code"] for w in _upload_log(client, loud, single).json()["warnings"]}
+
+
 def test_a_late_output_log_reporting_the_stored_method_warns_nothing(client, db_session):
     calc = _freq_calc(
         client, db_session, imag_freq_cm1=-20.0, label="late-reported-agrees", software={"name": "ORCA", "version": "6.1.0"}

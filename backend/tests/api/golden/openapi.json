@@ -63263,6 +63263,17 @@
               }
             ],
             "title": "Canonical Value"
+          },
+          "statement_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statement Kind"
           }
         },
         "required": [

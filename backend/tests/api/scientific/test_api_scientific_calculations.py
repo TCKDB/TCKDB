@@ -2469,9 +2469,9 @@ def test_detail_imaginary_mode_projections_no_hessian_still_carries_the_tau_judg
         False,
     ]
     assert tau["protocol_parameters"] == [
-        {"canonical_key": "freq.hessian_method", "canonical_value": "analytic"},
-        {"canonical_key": "grid.quality", "canonical_value": None},
-        {"canonical_key": "opt.convergence", "canonical_value": None},
+        {"canonical_key": "freq.hessian_method", "canonical_value": "analytic", "statement_kind": None},
+        {"canonical_key": "grid.quality", "canonical_value": None, "statement_kind": None},
+        {"canonical_key": "opt.convergence", "canonical_value": None, "statement_kind": None},
     ]
     assert "spurious" in tau["interpretation_limit"]
 

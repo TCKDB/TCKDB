@@ -59,7 +59,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 import numpy as np
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tckdb_schemas.stationary_point import TAU_PARAMETER_KEYS
 
@@ -232,10 +232,15 @@ class TauProtocolParameter:
     :param canonical_key: The canonical parameter key.
     :param canonical_value: What the record says, or ``None`` when the
         parameter was never recorded for this calculation.
+    :param statement_kind: ``"reported"`` when the value is one an output log
+        reports the program used (it decided tau ahead of any request),
+        ``"requested"`` for the log's echo or a deck, ``None`` for a value the
+        depositor typed or when the parameter is absent.
     """
 
     canonical_key: str
     canonical_value: str | None
+    statement_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -415,22 +420,30 @@ def _tau_context(
     designated = freq_result.reaction_coordinate_mode_index if freq_result is not None else None
 
     recorded: dict[str, str | None] = {}
-    for key, value in session.execute(
-        select(CalculationParameter.canonical_key, CalculationParameter.canonical_value)
+    kinds: dict[str, str | None] = {}
+    rows = session.execute(
+        select(
+            CalculationParameter.canonical_key,
+            CalculationParameter.canonical_value,
+            CalculationParameter.statement_kind,
+        )
         .where(CalculationParameter.calculation_id == calculation_id)
         .where(CalculationParameter.canonical_key.in_(TAU_PARAMETER_KEYS))
-        # A value an output log reports is not a protocol the depositor requested. Tau was decided from a reported
-        # Hessian method at upload and stored with its basis; this list shows only what was requested.
-        .where(
-            or_(
-                CalculationParameter.statement_kind.is_(None),
-                CalculationParameter.statement_kind != ParameterStatementKind.reported,
-            )
-        )
         .order_by(CalculationParameter.id)
-    ).all():
-        # Later rows win, matching ``resolve_tau_from_parameters``; the order is explicit, not the table's.
+    ).all()
+    # Later rows win, matching ``resolve_tau_from_parameters``; the order is explicit, not the table's. A value an
+    # output log REPORTS the program used decides tau ahead of any request (ADR 0012, amendment 2026-11-05), so a
+    # reported row is listed in preference to a requested or typed one, and says so in ``statement_kind``.
+    for key, value, kind in rows:
+        if kind is ParameterStatementKind.reported:
+            continue
         recorded[key] = value
+        kinds[key] = kind.value if kind is not None else None
+    for key, value, kind in rows:
+        # Only the Hessian method is ever reported in a form tau reads; no other tau key is taken from a report.
+        if kind is ParameterStatementKind.reported and key == "freq.hessian_method":
+            recorded[key] = value
+            kinds[key] = kind.value
 
     ranked = sorted(imaginary, key=lambda mode: (-abs(mode.frequency_cm1), mode.mode_index))
     return TauContext(
@@ -450,7 +463,7 @@ def _tau_context(
             for mode in ranked
         ),
         protocol_parameters=tuple(
-            TauProtocolParameter(canonical_key=key, canonical_value=recorded.get(key))
+            TauProtocolParameter(canonical_key=key, canonical_value=recorded.get(key), statement_kind=kinds.get(key))
             for key in TAU_PARAMETER_KEYS
         ),
     )

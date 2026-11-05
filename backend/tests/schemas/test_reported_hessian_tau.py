@@ -65,6 +65,13 @@ def test_a_reported_method_beats_a_deck_and_an_unrecognised_recorded_value() -> 
     assert tau.basis is TauBasis.analytic_default
 
 
+def test_an_echoed_method_beats_a_recorded_one_and_a_deck_but_not_a_report() -> None:
+    args = (_recorded("analytic"), "ORCA", "B3LYP", "6.1.0")
+    assert resolve_tau_with_assumption(*args, echo_method=_FD).basis is TauBasis.finite_difference_gradient
+    assert resolve_tau_with_assumption(*args, deck_method=_ANALYTIC, echo_method=_FD).basis is TauBasis.finite_difference_gradient
+    assert resolve_tau_with_assumption(*args, echo_method=_FD, reported_method=_ANALYTIC).basis is TauBasis.analytic_default
+
+
 def test_a_deck_still_beats_the_assumed_default_and_a_recorded_value_still_beats_a_deck() -> None:
     assert resolve_tau_with_assumption([], "ORCA", "B3LYP", "6.1.0", deck_method=_FD).basis is TauBasis.finite_difference_gradient
     tau = resolve_tau_with_assumption(_recorded("analytic"), "ORCA", "B3LYP", "6.1.0", deck_method=_FD)
@@ -89,7 +96,9 @@ def test_a_reported_method_applies_where_no_default_is_assumed() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _calc(*, log: str | None = None, deck: str | None = None, recorded: str | None = None, logs: int = 1, software="ORCA"):
+def _calc(
+    *, log: str | None = None, deck: str | None = None, recorded: str | None = None, logs: int = 1, software="ORCA", more_logs=()
+):
     artifacts = []
     if deck is not None:
         artifacts.append({"kind": "input", "filename": "job.in", "content_base64": base64.b64encode(deck.encode()).decode()})
@@ -98,6 +107,8 @@ def _calc(*, log: str | None = None, deck: str | None = None, recorded: str | No
             artifacts.append(
                 {"kind": "output_log", "filename": f"job{i}.out", "content_base64": base64.b64encode(log.encode()).decode()}
             )
+    for i, text in enumerate(more_logs):
+        artifacts.append({"kind": "output_log", "filename": f"more{i}.out", "content_base64": base64.b64encode(text.encode()).decode()})
     extra = {"artifacts": artifacts}
     if recorded is not None:
         extra["parameters"] = [
@@ -128,13 +139,72 @@ def test_the_bundle_tau_follows_the_log_over_the_deck_and_the_recorded_parameter
         _calc(log=_LOG_ANALYTIC, deck="! B3LYP NumFreq\n", recorded="analytic")
 
 
-def test_several_output_logs_report_nothing_because_none_is_known_to_be_the_frequency_job() -> None:
-    assert calculation_reported_method(_calc(log=_LOG_NUMERICAL, logs=2)) is None
-    assert resolve_tau_for_calculation(_calc(log=_LOG_NUMERICAL, logs=2)).basis is TauBasis.assumed_analytic_default
+def test_several_logs_use_the_report_they_agree_on_and_none_when_they_differ() -> None:
+    # Storage keeps a reported row from every log; validation uses the report when the logs that report agree.
+    assert calculation_reported_method(_calc(log=_LOG_NUMERICAL, logs=2)) is _FD
+    assert calculation_reported_method(_calc(log=_LOG_NUMERICAL, more_logs=["no listing here\n"])) is _FD
+    assert resolve_tau_for_calculation(_calc(log=_LOG_NUMERICAL, logs=2)).basis is TauBasis.finite_difference_gradient
+    differ = _calc(log=_LOG_NUMERICAL, more_logs=[_LOG_ANALYTIC])
+    assert calculation_reported_method(differ) is None
+    assert resolve_tau_for_calculation(differ).basis is TauBasis.assumed_analytic_default
+
+
+# ---------------------------------------------------------------------------
+# the echoed input
+# ---------------------------------------------------------------------------
+
+_DASHES = " " + "-" * 70
+
+
+def _orca_echo(*lines: str) -> str:
+    return "INPUT FILE\n" + "\n".join(f"|{i + 1:>3}> {line}" for i, line in enumerate(lines)) + "\n****END OF INPUT****\n"
+
+
+def _gaussian_echo(*routes: str) -> str:
+    return " Entering Gaussian System, Link 0=g16\n" + "".join(f"{_DASHES}\n {r}\n{_DASHES}\n" for r in routes)
+
+
+def test_the_input_a_log_echoes_is_read_ahead_of_the_deck_and_the_assumed_default() -> None:
+    from tckdb_schemas.hessian_method_assumption import calculation_echo_method
+
+    orca = _calc(log=_orca_echo("! B3LYP def2-SVP NumFreq", "* xyz 0 1", "H 0 0 0", "*"))
+    assert calculation_echo_method(orca) is _FD
+    assert resolve_tau_for_calculation(orca).basis is TauBasis.finite_difference_gradient
+    # Echo outranks the deck.
+    both = _calc(log=_orca_echo("! B3LYP def2-SVP NumFreq"), deck="! B3LYP def2-SVP AnFreq\n")
+    assert resolve_tau_for_calculation(both).basis is TauBasis.finite_difference_gradient
+    # Without the echo, the deck decides (the twin).
+    assert resolve_tau_for_calculation(_calc(deck="! B3LYP def2-SVP AnFreq\n")).basis is TauBasis.analytic_default
+    gaussian = _calc(log=_gaussian_echo("#p freq=numer b3lyp/def2tzvp"), software="Gaussian")
+    assert calculation_echo_method(gaussian) is _FD
+    assert resolve_tau_for_calculation(gaussian).basis is TauBasis.finite_difference_gradient
+
+
+def test_a_report_outranks_the_echo() -> None:
+    log = _orca_echo("! B3LYP def2-SVP NumFreq") + _LOG_ANALYTIC
+    assert resolve_tau_for_calculation(_calc(log=log)).basis is TauBasis.analytic_default
+
+
+def test_an_echo_that_cannot_be_bound_to_one_job_reads_nothing() -> None:
+    from tckdb_schemas.hessian_method_assumption import calculation_echo_method
+
+    assert calculation_echo_method(_calc(log=_orca_echo("! B3LYP NumFreq", "$new_job", "! B3LYP AnFreq"))) is None
+    assert calculation_echo_method(_calc(log=_orca_echo("! B3LYP NumFreq", "%compound x.cmp"))) is None
+    two_routes = _gaussian_echo("#p freq=numer b3lyp/def2tzvp", "#p sp b3lyp/def2tzvp")
+    assert calculation_echo_method(_calc(log=two_routes, software="Gaussian")) is None
+    assert calculation_echo_method(_calc(log=_gaussian_echo("#p freq=numer b3lyp/def2tzvp"), software="Gaussian")) is _FD
+
+
+def test_several_logs_must_agree_on_the_echo() -> None:
+    from tckdb_schemas.hessian_method_assumption import calculation_echo_method
+
+    numfreq = _orca_echo("! B3LYP NumFreq")
+    assert calculation_echo_method(_calc(log=numfreq, logs=2)) is _FD
+    assert calculation_echo_method(_calc(log=numfreq, more_logs=[_orca_echo("! B3LYP AnFreq")])) is None
 
 
 def test_a_program_with_no_reader_reports_nothing() -> None:
     gaussian = " Entering Gaussian System, Link 0=g09\n Gaussian 09, Revision D.01,\n" + _LOG_NUMERICAL
     assert calculation_reported_method(_calc(log=gaussian, software="Gaussian")) is None
-    # The program is the one the log's own banner names, as for a deck.
+    # With no banner in the text the declared program is the fallback, so these ORCA section headers are read.
     assert calculation_reported_method(_calc(log=_LOG_NUMERICAL, software="Gaussian")) is _FD

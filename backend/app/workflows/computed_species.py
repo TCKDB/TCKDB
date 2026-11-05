@@ -12,7 +12,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
-from tckdb_schemas.hessian_method_assumption import calculation_deck_method, calculation_reported_method
+from tckdb_schemas.hessian_method_assumption import (
+    calculation_deck_method,
+    calculation_echo_method,
+    calculation_reported_method,
+)
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.chemistry.geometry import parse_xyz
@@ -267,6 +271,7 @@ def _to_calc_with_results_payload(
     # so persistence stores the tau that validation judged.
     payload._deck_hessian_method = calculation_deck_method(calc_in)
     payload._reported_hessian_method = calculation_reported_method(calc_in)
+    payload._echo_hessian_method = calculation_echo_method(calc_in)
     return payload
 
 

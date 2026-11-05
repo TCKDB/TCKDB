@@ -796,7 +796,7 @@ def test_a_record_with_nothing_to_judge_carries_no_tau_block(db_session, frequen
 
 
 def test_tau_context_ignores_a_reported_row_and_takes_the_last_stored_requested_one(db_session):
-    """The recorded protocol that set tau is what was requested, in stored order; a log's report is not read (yet).
+    """A reported value for a key other than the Hessian method is not read; of two requested rows the last stored wins.
 
     A reported row for a tau key (stored later, so it would win an unordered "later rows win") must not move the
     value; of two requested rows, the one stored last wins, deterministically.
@@ -829,3 +829,40 @@ def test_tau_context_ignores_a_reported_row_and_takes_the_last_stored_requested_
     tau = build_imaginary_mode_projection(db_session, calc.id).tau_context
     assert tau is not None
     assert {p.canonical_key: p.canonical_value for p in tau.protocol_parameters}["grid.quality"] == "ultrafine"
+
+
+def test_tau_context_lists_a_reported_hessian_method_ahead_of_the_requested_one_and_says_so(db_session):
+    """A basis decided from a log's report traces to the report (ADR 0012, amendment 2026-11-05)."""
+    from app.db.models.common import ArtifactKind, ParameterSource, ParameterStatementKind
+
+    calc = _judged_record_without_a_hessian(
+        db_session,
+        reaction_coordinate_mode_index=1,
+        imaginary_mode_tau_cm1=30.0,
+        imaginary_mode_tau_basis="analytic_default",
+        imaginary_mode_structural_flag=False,
+    )
+    _seed_parameter(
+        db_session, calculation=calc, canonical_key="freq.hessian_method", canonical_value="finite_difference_gradient"
+    )
+    db_session.add(
+        CalculationParameter(
+            calculation_id=calc.id,
+            raw_key="hessian_method",
+            raw_value="SCF HESSIAN",
+            canonical_key="freq.hessian_method",
+            canonical_value="analytic",
+            source=ParameterSource.parser,
+            artifact_kind=ArtifactKind.output_log,
+            statement_kind=ParameterStatementKind.reported,
+        )
+    )
+    db_session.flush()
+    tau = build_imaginary_mode_projection(db_session, calc.id).tau_context
+    assert tau is not None
+    by_key = {p.canonical_key: p for p in tau.protocol_parameters}
+    assert (by_key["freq.hessian_method"].canonical_value, by_key["freq.hessian_method"].statement_kind) == (
+        "analytic",
+        "reported",
+    )
+    assert by_key["grid.quality"].statement_kind is None

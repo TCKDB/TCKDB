@@ -1,9 +1,10 @@
 """Warn when a deck (or a log's report) uploaded later states a Hessian method the stored tolerance does not rest on.
 
-A deck (or an output log, which echoes the deck it ran) attached with the deposit is read before the deposit is judged. One
+A deck, and an inline output log (what it reports the program ran, else the input it echoes), attached with the
+deposit are read before the deposit is judged, in the order reported, echoed, deck. One
 attached afterwards through the artifact route is not, so a calculation can
 already carry a tau and basis that were decided without it. Stored rows are
-append-only, so nothing is relabelled: when the later deck states a method whose
+append-only, so nothing is relabelled: when the later deck or log states a method whose
 method (analytic, or finite differences of gradients or of energies) differs from the method the
 stored basis rests on, a warning is appended to the calculation.
 
@@ -17,15 +18,12 @@ The message is built from the code and TCKDB's own values, never from deck text.
 
 from __future__ import annotations
 
-import base64
-import binascii
 from types import SimpleNamespace
 
 from sqlalchemy.orm import Session
 from tckdb_schemas.enums import HessianMethod
-from tckdb_schemas.ess_software_detection import detect_software_from_text
-from tckdb_schemas.hessian_method_detection import deck_hessian_method
-from tckdb_schemas.hessian_method_reported import reported_hessian_method
+from tckdb_schemas.hessian_method_detection import deck_hessian_method, echo_hessian_method
+from tckdb_schemas.hessian_method_reported import reported_method_of_artifacts
 from tckdb_schemas.software import normalize_software_name
 from tckdb_schemas.upload_warning import UploadWarning
 
@@ -75,13 +73,11 @@ def _disagreement(calculation: Calculation, artifact_in: ArtifactIn) -> UploadWa
         return None
     release = calculation.software_release
     declared = normalize_software_name(release.software.name) if release is not None else None
+    # The same reader rules as validation: a log reports a method (the one outranking), else its echoed input is
+    # read, and a log that cannot be bound to one job reads nothing.
     if artifact_in.kind == ArtifactKind.output_log:
-        # What a log reports the program ran outranks what it echoes (and what any deck asked for).
-        try:
-            log_text = base64.b64decode(artifact_in.content_base64, validate=True).decode("utf-8", errors="replace")
-        except (binascii.Error, ValueError):
-            log_text = ""
-        reported = reported_hessian_method(detect_software_from_text(log_text) or declared, log_text)
+        as_log = SimpleNamespace(kind="output_log", content_base64=artifact_in.content_base64)
+        reported = reported_method_of_artifacts(declared, [as_log])
         if reported is not None:
             if reported is stored:
                 return None
@@ -94,9 +90,9 @@ def _disagreement(calculation: Calculation, artifact_in: ArtifactIn) -> UploadWa
                     "reported_method": reported.value,
                 },
             )
-    # An output log echoes the deck it ran, so it states the same Hessian method; read it as a deck.
-    as_deck = SimpleNamespace(kind="input", content_base64=artifact_in.content_base64)
-    deck = deck_hessian_method(declared, [as_deck])
+        deck = echo_hessian_method(declared, [as_log])
+    else:
+        deck = deck_hessian_method(declared, [SimpleNamespace(kind="input", content_base64=artifact_in.content_base64)])
     if deck is None or deck is stored:
         return None
     # TCKDB's own method tokens, so a gradient-versus-energy disagreement reads as one.

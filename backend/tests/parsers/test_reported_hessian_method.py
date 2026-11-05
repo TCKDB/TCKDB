@@ -1,7 +1,8 @@
 """The Hessian method an ORCA output log reports, read from real logs.
 
-Each pattern is confirmed on a log; the excerpts for ORCA 4.1.2 and 5.0.4 are verbatim lines from the logs they name
-(copied here, not referenced), and ORCA 6.1.0 is read from the fixtures in the repository. Every "None" case has a twin
+Each pattern is confirmed on a log. The excerpts for ORCA 4.1.2 and 5.0.4 are spliced from lines of the logs of the
+jobs named beside them (copied here, not referenced), not contiguous text; ORCA 6.1.0 is read from the fixtures in the
+repository. Every "None" case has a twin
 that reports, so a reader that always answers ``None`` cannot pass.
 """
 
@@ -20,7 +21,7 @@ ORCA = FIXTURES / "orca"
 
 _VIB = "-----------------------\nVIBRATIONAL FREQUENCIES\n-----------------------\n\n   0:         0.00 cm**-1\n"
 
-# ORCA 4.1.2 and 5.0.4 (ARC's freq test logs orca_example_freq.log and orca_neg_freq_ts.out, B3LYP and wB97X-D3 Freq jobs).
+# Lines from an ORCA 4.1.2 `! RKS B3LYP/G SV(P) TightSCF AnFreq` job and an ORCA 5.0.4 `!uKS wb97x-d3 def2-tzvp Freq` job.
 _ANALYTIC_ORCA_4_5 = (
     "-------------------------------------------------------------------------------\n"
     "                               ORCA SCF HESSIAN\n"
@@ -30,7 +31,7 @@ _ANALYTIC_ORCA_4_5 = (
     "Maximum memory used throughout the entire SCFHESS-calculation: 171.4 MB\n\n"
 )
 
-# ORCA 6.1.0 numerical block (ts_opt_orca.out: OptTS NumFreq).
+# Lines from the ORCA 6.1.0 numerical block of an `OptTS NumFreq` job (ts_opt_orca.out).
 _NUMERICAL_ORCA_6 = (
     "----------------------------------------------------------------------------\n"
     "                           ORCA NUMERICAL FREQUENCIES\n"
@@ -40,8 +41,8 @@ _NUMERICAL_ORCA_6 = (
     "\t<< Calculating gradient on displaced geometry  10 (of  52) >>\n"
 )
 
-# ORCA 5.0.4 numerical block with a numerical gradient (rotor_scans/orca/cc.txt: uHF CCSD(T) NumGrad): it says
-# "Calculating on displaced geometry", which does not say what was differenced.
+# Lines from an ORCA 5.0.4 `!uHF ccsd(t) numgrad` optimiser scan: its numerical Hessian is an optimiser Hessian inside
+# the scan, not a NumFreq job. It says "Calculating on displaced geometry", which does not say what was differenced.
 _NUMERICAL_ORCA_5_NUMGRAD = (
     "----------------------------------------------------------------------------\n"
     "                           ORCA NUMERICAL FREQUENCIES\n"
@@ -159,3 +160,37 @@ def test_the_reported_row_carries_the_header_and_the_canonical_method() -> None:
     assert (row["raw_key"], row["raw_value"]) == ("hessian_method", "ORCA NUMERICAL FREQUENCIES")
     assert (row["canonical_value"], row["section"], row["value_type"]) == ("finite_difference_gradient", "freq", "enum")
     assert not [r for r in parse_orca_reported(_read("scan_bond_orca.out")) if r["canonical_key"] == "freq.hessian_method"]
+
+
+# ---------------------------------------------------------------------------
+# the final frequency job, and numerical gradients
+# ---------------------------------------------------------------------------
+
+
+def test_a_log_cut_off_during_an_optimisation_reports_nothing_and_its_full_twin_reports() -> None:
+    full = _read("ts_opt_orca.out")
+    cut = "\n".join(full.split("\n")[:7700])
+    # ORCA prints a VIBRATIONAL FREQUENCIES listing after every optimiser Hessian of this OptTS NumFreq job; the cut
+    # log ends after the converged optimisation, before the final frequency job.
+    assert cut.count("VIBRATIONAL FREQUENCIES") == 4 and "THE OPTIMIZATION HAS CONVERGED" in cut
+    assert orca_reported_hessian(cut) is None
+    twin = orca_reported_hessian(full)
+    assert twin is not None and twin.method is HessianMethod.finite_difference_gradient
+
+
+def test_a_listing_followed_by_an_optimiser_step_is_not_the_final_job_but_a_closing_listing_is() -> None:
+    step = "                         ORCA GEOMETRY RELAXATION STEP\n"
+    assert orca_reported_hessian(_ANALYTIC_ORCA_4_5 + _VIB + step) is None
+    assert orca_reported_hessian(_ANALYTIC_ORCA_4_5 + _VIB + step + _ANALYTIC_ORCA_4_5 + _VIB) is not None
+
+
+def test_a_numerical_hessian_on_a_numerical_gradient_is_not_reported() -> None:
+    block = _NUMERICAL_ORCA_6 + _VIB
+    assert orca_reported_hessian(block) is not None
+    echoed = "INPUT FILE\n|  1> ! B3LYP def2-SVP NumFreq NumGrad\n****END OF INPUT****\n" + block
+    assert orca_reported_hessian(echoed) is None
+    header = block + "                           ORCA NUMERICAL GRADIENT\n"
+    assert orca_reported_hessian(header) is None
+    # An analytic Hessian is not affected by a numerical gradient elsewhere in the job.
+    prefix = "INPUT FILE\n|  1> ! B3LYP def2-SVP AnFreq NumGrad\n****END OF INPUT****\n"
+    assert orca_reported_hessian(prefix + _ANALYTIC_ORCA_4_5 + _VIB) is not None

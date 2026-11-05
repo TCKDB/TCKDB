@@ -121,6 +121,8 @@ def test_only_input_decks_count_and_a_later_deck_replaces_an_earlier_one() -> No
     numfreq = "! B3LYP NumFreq\n"
     plain = "! B3LYP Freq\n"
     assert deck_hessian_method("ORCA", [_art(numfreq)]) is _FD
+    # An output log is not a deck: the input it echoes is a separate, higher rung read by echo_hessian_method
+    # (the stored rows rank the log's echo above the deck), so deck_hessian_method itself reads `input` only.
     assert deck_hessian_method("ORCA", [_art(numfreq, "output_log")]) is None
     assert deck_hessian_method("ORCA", [_art(numfreq), _art(plain)]) is None
     assert deck_hessian_method("ORCA", [_art(plain), _art(numfreq)]) is _FD

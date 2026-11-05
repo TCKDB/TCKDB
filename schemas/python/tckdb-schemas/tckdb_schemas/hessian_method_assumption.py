@@ -101,18 +101,16 @@ allowlist, not a classifier that tries to cover everything.
 
 from __future__ import annotations
 
-import base64
-import binascii
 import re
 from collections.abc import Iterable
 
 from tckdb_schemas.enums import HessianMethod
-from tckdb_schemas.ess_software_detection import detect_software_from_text
 from tckdb_schemas.hessian_method_detection import (
     check_recorded_method_agrees_with_deck,
     deck_hessian_method,
+    echo_hessian_method,
 )
-from tckdb_schemas.hessian_method_reported import reported_hessian_method
+from tckdb_schemas.hessian_method_reported import reported_method_of_artifacts
 from tckdb_schemas.software import normalize_software_name
 from tckdb_schemas.stationary_point import (
     TAU_ANALYTIC_DEFAULT_CM1,
@@ -658,8 +656,9 @@ def resolve_tau_with_assumption(
     software_version: str | None = None,
     deck_method: HessianMethod | None = None,
     reported_method: HessianMethod | None = None,
+    echo_method: HessianMethod | None = None,
 ) -> TauResolution:
-    """Resolve tau for one calculation: reported, recorded, deck, assumed, conservative.
+    """Resolve tau for one calculation: reported, echo, recorded, deck, assumed, conservative.
 
     The single resolution every validation adapter and the persistence step
     share, so what a deposit is judged at is what is stored.
@@ -671,6 +670,9 @@ def resolve_tau_with_assumption(
        nothing: it is read only from a header the log prints, and its tau is the
        same number a recorded statement of that method gets. A reported method
        that contradicts a request is warned about when the log is read.
+    0b. Else the method the input a log echoes requests
+       (:func:`~tckdb_schemas.hessian_method_detection.echo_hessian_method`),
+       which the stored rows also rank above the deck.
     1. A recorded ``freq.hessian_method`` (and the grid / convergence
        parameters that refine it) resolves through
        :func:`~tckdb_schemas.stationary_point.resolve_tau_from_parameters`,
@@ -694,11 +696,15 @@ def resolve_tau_with_assumption(
     :param lot_method: The calculation's level-of-theory method.
     :param software_version: The software release's version string.
     :param deck_method: The method the inline input deck states, if any.
-    :param reported_method: The method an inline output log reports, if any.
+    :param reported_method: The method the inline output logs report, if any.
+    :param echo_method: The method the input echoed in the inline output logs requests, if any.
     """
     pairs = list(parameters)
-    if reported_method is not None:
-        return resolve_tau_from_parameters([*pairs, ("freq.hessian_method", reported_method.value)])
+    # The log's report, then the input the log echoes, outrank the recorded parameter and the deck: the same order
+    # the stored rows are ranked in (:mod:`app.services.parameter_reconciliation`).
+    for method in (reported_method, echo_method):
+        if method is not None:
+            return resolve_tau_from_parameters([*pairs, ("freq.hessian_method", method.value)])
     resolved = resolve_tau_from_parameters(pairs)
     if resolved.basis is not TauBasis.protocol_not_recorded:
         return resolved
@@ -725,25 +731,21 @@ def calculation_deck_method(calc) -> HessianMethod | None:
 
 
 def calculation_reported_method(calc) -> HessianMethod | None:
-    """The Hessian method the calculation's inline output log REPORTS, or ``None``.
+    """The Hessian method the calculation's inline output logs REPORT, or ``None``.
 
-    Mirrors what the backend stores as a ``reported`` row, so validation and
-    storage agree. Only a calculation with exactly one inline output log is
-    read: with several, which one belongs to the frequency job is not known, and
-    nothing is taken from one for another. A program with no reader reports
-    nothing.
+    Mirrors what the backend stores as ``reported`` rows (one per log that reports): the method every inline log that
+    reports one agrees on, and ``None`` when they disagree or none does. A program with no reader reports nothing.
     """
     release = calc.software_release
-    declared = normalize_software_name(release.name) if release is not None else None
-    logs = [a for a in (getattr(calc, "artifacts", None) or ()) if getattr(a.kind, "value", a.kind) == "output_log"]
-    if len(logs) != 1:
-        return None
-    try:
-        text = base64.b64decode(logs[0].content_base64, validate=True).decode("utf-8", errors="replace")
-    except (binascii.Error, ValueError):
-        return None
-    program = detect_software_from_text(text) or declared
-    return reported_hessian_method(program, text)
+    return reported_method_of_artifacts(
+        release.name if release is not None else None, getattr(calc, "artifacts", None) or ()
+    )
+
+
+def calculation_echo_method(calc) -> HessianMethod | None:
+    """The Hessian method the input echoed in the calculation's inline output logs REQUESTS, or ``None``."""
+    release = calc.software_release
+    return echo_hessian_method(release.name if release is not None else None, getattr(calc, "artifacts", None) or ())
 
 
 def resolve_tau_for_calculation(calc) -> TauResolution:
@@ -765,6 +767,7 @@ def resolve_tau_for_calculation(calc) -> TauResolution:
         release.version if release is not None else None,
         calculation_deck_method(calc),
         calculation_reported_method(calc),
+        calculation_echo_method(calc),
     )
 
 

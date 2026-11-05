@@ -106,6 +106,18 @@ def test_a_typed_parameter_that_the_log_contradicts_warns(db_conn):
         assert _warnings(session, calc, _ANALYTIC_LOG) == []
 
 
+def test_the_echo_outranks_a_typed_value_when_the_two_differ(db_conn):
+    """Typed says analytic (the log reports analytic too); the echo says NumFreq. The request is the echo's."""
+    with Session(db_conn) as session, session.begin():
+        calc = _calc(session)
+        _typed(session, calc, "freq.hessian_method", "analytic")
+        [warning] = _warnings(session, calc, _echoing(_ANALYTIC_LOG, "FREQ", "NumFreq"))
+        assert warning.context["depositor_supplied"] == {
+            "requested_value": "finite_difference_gradient",
+            "reported_value": "analytic",
+        }
+
+
 def test_a_deck_that_arrives_after_the_log_warns_too_and_once(db_conn):
     deck = "!B3LYP DEF2-TZVP D3BJ\n!OPT NumFreq TightOPT\n* xyz 0 1\nH 0 0 0\n*\n"
     with Session(db_conn) as session, session.begin():

@@ -1576,6 +1576,10 @@ class CalculationWithResultsPayload(CalculationPayload):
     #: every request.
     _reported_hessian_method: HessianMethod | None = PrivateAttr(default=None)
 
+    #: The method the input echoed in the calculation's inline output logs requests; ranked below the report and
+    #: above the deck.
+    _echo_hessian_method: HessianMethod | None = PrivateAttr(default=None)
+
     def tau_resolution(self) -> TauResolution:
         """ADR 0012's τ for this calculation: recorded, else assumed, else conservative.
 
@@ -1598,6 +1602,7 @@ class CalculationWithResultsPayload(CalculationPayload):
             self.software_release.version if self.software_release is not None else None,
             self._deck_hessian_method,
             self._reported_hessian_method,
+            self._echo_hessian_method,
         )
 
     @model_validator(mode="after")
