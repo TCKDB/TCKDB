@@ -171,11 +171,13 @@ def test_a_program_run_at_an_inline_scheme_stores_its_breakdown_at_the_canonical
             select(CalculationCompositeTerm).where(CalculationCompositeTerm.calculation_id == composite.id)
         )
     }
-    # Canonical order of scheme (c): base, dboc (a value term), then the three differences, dtq, drel, dcv.
+    # Canonical order of scheme (c): base, dboc (a value term), then the three differences. Ties among them are
+    # broken by their inputs' canonical JSON, so the relativistic term (its level now carries the typed
+    # ``relativistic_hamiltonian`` key instead of free-text ``keywords``) sorts before the higher-order one.
     assert stored == {
         0: value["base"],
         1: value["dboc"],
-        2: value["dtq"],
-        3: value["drel"],
+        2: value["drel"],
+        3: value["dtq"],
         4: value["dcv"],
     }
