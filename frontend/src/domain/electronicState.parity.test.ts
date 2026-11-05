@@ -66,14 +66,28 @@ describe("termSymbolSpoken", () => {
 })
 
 describe("trimming parity with Python", () => {
-    it("trims exactly the shipped set: ASCII whitespace yes; U+FEFF, U+0085, U+001C, NBSP no", () => {
+    // Every code point Python's `str.isspace()` accepts (so `str.strip()` removes it): the 29 characters the shipped `trim` lists.
+    const SPACES = [
+        0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x85, 0xa0, 0x1680,
+        ...Array.from({ length: 11 }, (_, i) => 0x2000 + i), 0x2028, 0x2029, 0x202f, 0x205f, 0x3000,
+    ].map((cp) => String.fromCodePoint(cp))
+
+    it("trims exactly the shipped set, which is the 29 characters str.strip() removes", () => {
         expect(grammar.trim).toBe(shipped.trim)
-        expect(validStateLabel(" \tX\n")).toBe("X")
-        expect(validTermSymbol("\f\u00b2\u03a0\v")).toBe("\u00b2\u03a0")
-        for (const stray of ["\ufeff", "\u0085", "\u001c", "\u00a0"]) {
-            expect(validStateLabel(`${stray}X`), JSON.stringify(stray)).toBeNull()
-            expect(validStateLabel(`X${stray}`), JSON.stringify(stray)).toBeNull()
-            expect(validTermSymbol(`${stray}2Pi`), JSON.stringify(stray)).toBeNull()
+        expect(Array.from(shipped.trim).sort()).toEqual([...SPACES].sort())
+    })
+
+    it("accepts a value padded with any of them, and refuses a whitespace-only value", () => {
+        for (const space of SPACES) {
+            expect(validStateLabel(`${space}X${space}`), `U+${space.codePointAt(0)!.toString(16)}`).toBe("X")
+            expect(validTermSymbol(`${space}\u00b2\u03a0${space}`)).toBe("\u00b2\u03a0")
+            expect(validStateLabel(space + space)).toBeNull()
         }
+    })
+
+    it("does not trim U+FEFF, which JavaScript's trim() would", () => {
+        expect(validStateLabel("\ufeffX")).toBeNull()
+        expect(validStateLabel("X\ufeff")).toBeNull()
+        expect(validTermSymbol("\ufeff2Pi")).toBeNull()
     })
 })

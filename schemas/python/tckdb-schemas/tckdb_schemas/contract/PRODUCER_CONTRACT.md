@@ -236,7 +236,7 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 ### 0.156.0 - 2026-11-05
 
-The characters trimmed from a state label or term symbol before matching are now one explicit set (`TRIM_CHARS`: space, tab, newline, carriage return, form feed, vertical tab), shipped as `trim` in `electronic_state_examples.json`. Before, Python's `str.strip()` also trimmed `\x1c`-`\x1f` and `\x85`, and JavaScript's `trim()` also trimmed U+FEFF, so the two sides disagreed on the same text. A value with one of those at an end is now refused on both. No field or code added or removed.
+The characters trimmed from a state label or term symbol before matching are now one explicit set (`TRIM_CHARS`, shipped as `trim` in `electronic_state_examples.json`): exactly the 29 characters Python's `str.strip()` removes (every `str.isspace()` code point), which is what the write path has always trimmed, so what a deposit accepts does not change. JavaScript's `trim()` differs (it also strips U+FEFF, and not the `\x1c`-`\x1f` and `\x85` that Python does), so a frontend now trims with the same explicit set. U+FEFF stays untrimmed on both sides. No field or code added or removed.
 
 ### 0.155.0 - 2026-11-04
 

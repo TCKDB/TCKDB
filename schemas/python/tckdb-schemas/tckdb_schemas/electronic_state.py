@@ -122,10 +122,11 @@ __all__ = [
     "load_examples",
 ]
 
-#: The characters trimmed from both ends before matching: ASCII space, tab, newline, carriage return, form feed and
-#: vertical tab. An explicit set, because ``str.strip()`` and JavaScript's ``trim()`` strip different extras (``\x1c``-``\x1f``
-#: and ``\x85`` only in Python, U+FEFF only in JavaScript), which would make the two sides disagree on the same text.
-TRIM_CHARS = " \t\n\r\f\v"
+#: The characters trimmed from both ends before matching: exactly the 29 characters Python's ``str.strip()`` removes
+#: (every ``str.isspace()`` code point: ASCII whitespace, ``\x1c``-``\x1f``, ``\x85``, NBSP, U+1680, U+2000-U+200A,
+#: U+2028/2029, U+202F, U+205F, U+3000). This is what the write path has always trimmed; the explicit set lets JavaScript,
+#: whose ``trim()`` differs (it also strips U+FEFF, which stays untrimmed here), trim the same characters.
+TRIM_CHARS = "\x09\x0a\x0b\x0c\x0d\x1c\x1d\x1e\x1f\x20\x85\xa0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"
 
 #: Refusal codes (422).
 ELECTRONIC_STATE_LABEL_INVALID = "electronic_state_label_invalid"

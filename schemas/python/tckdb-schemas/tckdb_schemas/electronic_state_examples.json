@@ -1,5 +1,5 @@
 {
-  "_comment": "Shipped with tckdb-schemas. Inputs are already trimmed of surrounding whitespace. Matching: NFD of the input against 'source' anchored as new RegExp('^(?:' + source + ')$', 'u'), and the trimmed NFC length against max_length. 'canonical' maps every accepted input to the one stored (NFC) spelling. A frontend parity test must reproduce accepted, rejected and canonical exactly. 'trim' is the exact set of characters trimmed from both ends before matching, in Python and in JavaScript (not str.strip() / String.trim(), which differ).",
+  "_comment": "Shipped with tckdb-schemas. Inputs are already trimmed of surrounding whitespace. Matching: NFD of the input against 'source' anchored as new RegExp('^(?:' + source + ')$', 'u'), and the trimmed NFC length against max_length. 'canonical' maps every accepted input to the one stored (NFC) spelling. A frontend parity test must reproduce accepted, rejected and canonical exactly. 'trim' is the exact set of characters trimmed from both ends before matching, in Python and in JavaScript: every character Python's str.isspace() accepts (so str.strip() and this set agree), and not U+FEFF (which JavaScript's String.trim() would strip).",
   "electronic_state_label": {
     "max_length": 8,
     "source": "(?:(?:(?:[A-LNOQT-Y]|[a-lnoqt-y])(?:~|̃)?(?:''?|\"|′′?|″)?)|[SDTQ](?:0|[1-9][0-9]?))",
@@ -86,10 +86,7 @@
       "2E''",
       "2Pi_g",
       "S",
-      "\u001cX",
-      "X",
-      "﻿X",
-      " X"
+      "﻿X"
     ],
     "canonical": {
       "X": "X",
@@ -220,10 +217,7 @@
       "X  1A1",
       "R 2Pi",
       "S 2Pi",
-      "\u001c2Pi",
-      "2Pi",
-      "﻿2Pi",
-      " 2Pi"
+      "﻿2Pi"
     ],
     "canonical": {
       "2P_{3/2}": "²P₃⁄₂",
@@ -282,5 +276,5 @@
       "E~ 2A'": "Ẽ ²A′"
     }
   },
-  "trim": " \t\n\r\f\u000b"
+  "trim": "\t\n\u000b\f\r\u001c\u001d\u001e\u001f                  　"
 }

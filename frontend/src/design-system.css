@@ -508,15 +508,22 @@
    `.review-badge`, `.tse-trust-badge`, `.evidence-chip`,
    `.browse-entry-chip`, `.identifier-chip-label`. */
 
+/* One chip of a participant's facet chips (`ParticipantChips`). An inline-block is atomic: the chip moves to the
+   next line as a unit when it fits there, and wraps inside itself (anywhere, so a long isotopologue SMILES cannot
+   push the page wider) only when it is wider than the line. `text-decoration: inherit` keeps a link's underline
+   under the chip, which an inline-block would otherwise not take from its ancestor. */
+.chip-unit {
+    display: inline-block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    text-decoration: inherit;
+    vertical-align: baseline;
+}
+
 /* ---------------------------------------------------------------------
  * Note -- a short muted explanatory line, capped to the (now narrower)
  * note measure rather than running the full page width.
  * ------------------------------------------------------------------- */
-/* One chip of a participant's facet chips (`ParticipantChips`): wraps only between chips, never inside one. */
-.chip-nowrap {
-    white-space: nowrap;
-}
-
 .note {
     max-width: var(--measure-note);
     color: var(--muted);
