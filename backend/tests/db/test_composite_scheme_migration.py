@@ -101,6 +101,24 @@ def _seed(conn) -> dict[str, int]:
     return ids
 
 
+def _rehash_to_current_formula(engine) -> None:
+    """Give every seeded level the hash the application computes today, except the deliberately stale one.
+
+    The revision under test leaves the seeded rows with the pre-Stage-2 formula's hashes, which the merge script
+    (it groups by the current formula and keeps the row that holds it) cannot use. This stands in for a reseed.
+    """
+    from tckdb_schemas.fragments.refs import LevelOfTheoryRef
+
+    from app.services.calculation_resolution import _level_of_theory_hash
+
+    with engine.begin() as conn:
+        for row in conn.execute(text("SELECT id, method, basis, lot_hash FROM level_of_theory")).all():
+            if row.lot_hash == "f" * 64:
+                continue
+            h = _level_of_theory_hash(LevelOfTheoryRef(method=row.method, basis=row.basis))
+            conn.execute(text("UPDATE level_of_theory SET lot_hash = :h WHERE id = :i"), {"h": h, "i": row.id})
+
+
 def _levels(engine) -> dict[int, tuple]:
     with engine.connect() as conn:
         rows = conn.execute(text("SELECT id, public_ref, lot_hash, method, basis FROM level_of_theory")).all()
@@ -284,6 +302,7 @@ def test_merge_script_gives_the_holder_the_duplicates_binding_when_only_the_dupl
     with harness.engine.begin() as conn:
         ids = _seed(conn)
     harness.run("upgrade", _MIGRATION.revision)
+    _rehash_to_current_formula(harness.engine)
     with harness.engine.begin() as conn:
         conn.execute(
             text("DELETE FROM level_of_theory_composite WHERE level_of_theory_id = :h"), {"h": ids["cbs_qb3"]}
@@ -305,6 +324,7 @@ def test_merge_script_blocks_a_group_whose_levels_are_bound_to_different_schemes
     with harness.engine.begin() as conn:
         ids = _seed(conn)
     harness.run("upgrade", _MIGRATION.revision)
+    _rehash_to_current_formula(harness.engine)
     with harness.engine.begin() as conn:
         conn.execute(
             text(
@@ -330,6 +350,7 @@ def test_merge_script_moves_a_duplicates_binding_to_the_holder(harness):
     with harness.engine.begin() as conn:
         ids = _seed(conn)
     harness.run("upgrade", _MIGRATION.revision)
+    _rehash_to_current_formula(harness.engine)
     assert ids["cbs_qb3"] in _bindings(harness.engine) and ids["cbsqb3_stale"] in _bindings(harness.engine)
 
     for args in ((), ("--commit",)):

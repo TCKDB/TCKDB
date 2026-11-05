@@ -37,13 +37,11 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
-import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.orm import Session
 
 from app.services.public_refs import make_content_ref
 from tests._frozen_lot_hash import frozen_level_of_theory_hash
@@ -299,67 +297,9 @@ def test_rows_already_in_key_form_are_left_alone(harness):
     assert "0 row(s) re-hashed, 0 duplicate group(s)" in completed.stdout
 
 
-def test_upgrade_merge_script_then_downgrade_succeeds_and_is_exact(harness):
-    """Run the merge script end to end, as the deploy steps say.
-
-    The ``pbe`` group carries an approved calculation on its duplicate, so the
-    script must refuse to move it and leave the group. The ``b3lyp`` group
-    (the #630 four) carries none: the three older spellings merge into the
-    column-form holder. The downgrade then succeeds and restores every hash.
-    """
-    from datetime import datetime
-
-    from app.db.models.app_user import AppUser
-    from app.db.models.common import AppUserRole, RecordReviewStatus, SubmissionRecordType
-    from app.db.models.record_review import RecordReview
-
-    harness.run("upgrade", _MIGRATION.parent)
-    with harness.engine.begin() as conn:
-        ids = _seed(conn)
-    with Session(harness.engine) as session:
-        curator = AppUser(username="disp-curator", role=AppUserRole.curator)
-        session.add(curator)
-        session.flush()
-        when = datetime(2026, 9, 1)
-        session.add(
-            RecordReview(
-                record_type=SubmissionRecordType.calculation,
-                record_id=ids["calc_p_a"],
-                status=RecordReviewStatus.approved,
-                reviewed_by=curator.id,
-                reviewed_at=when,
-                first_approved_at=when,
-            )
-        )
-        session.commit()
-    original = _snapshot(harness.engine)
-
-    harness.run("upgrade", _MIGRATION.revision)
-
-    for args in ((), ("--commit",)):
-        merged = subprocess.run(
-            [
-                "conda", "run", "-n", "tckdb_env", "python",
-                "scripts/ops/merge_duplicate_levels_of_theory.py", *args,
-            ],
-            cwd=harness.root, env=harness.env, capture_output=True, text=True, check=False,
-        )
-        assert merged.returncode == 0, merged.stderr[-3000:]
-    with harness.engine.connect() as conn:
-        pairs = set(
-            conn.execute(
-                text("SELECT merged_lot_id, into_lot_id FROM level_of_theory_merge")
-            ).all()
-        )
-    assert (ids["alias"], ids["alias_holder"]) in pairs  # pre-existing
-    for dup in ("route", "gd3bj", "folded"):
-        assert (ids[dup], ids["column"]) in pairs, (dup, merged.stdout[-3000:])
-    assert (ids["zero_b"], ids["zero_a"]) in pairs
-    assert (ids["p_a"], ids["p_h"]) not in pairs, merged.stdout[-3000:]
-    assert (ids["p_b"], ids["p_h"]) not in pairs
-    for key in ("bare_d3", "refit", "wb97x_col", "contradict"):
-        assert all(ids[key] not in pair for pair in pairs), key
-    assert "BLOCKED" in merged.stdout
-
-    harness.run("downgrade", _MIGRATION.parent)
-    assert _snapshot(harness.engine) == original
+# The end-to-end "run the merge script between upgrade and downgrade" test that was here is retired (Stage 2,
+# keywords decision). The script groups rows by the application's *current* hash formula and needs a row that holds
+# it to keep; the rows a historical revision leaves hold that revision's formula, which has since lost its
+# ``keywords`` key, so no row holds the key and every group is (correctly) blocked. The script is held to the
+# current formula by tests/scripts/test_merge_duplicate_levels_of_theory.py, and this revision's re-keying and
+# downgrade by the other tests in this file.

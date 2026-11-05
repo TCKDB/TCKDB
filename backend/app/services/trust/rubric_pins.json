@@ -4,31 +4,31 @@
   "algorithm": 6,
   "pins": {
     "computed_calculation": {
-      "1": "5074dae715e03b18f9fe96422ae6217992126ca6a5f35f9bd23d596117a01316"
+      "1": "47d7776a900e64280990d9f6bb261f128443cf2e1a61d4a5d831b46d88db90bb"
     },
     "computed_kinetics": {
-      "1": "598096e821f6f3938f88fadce66435a0d3405c2ab724ab2ec25f7046166284b2"
+      "1": "dab1de92a3f70fa8d2c68553e9fb1aeb8f0348640cfc6ae495bc077f6d3d8782"
     },
     "computed_statmech": {
-      "1": "a4e6119f0415056a031ff15ddaefb0cbe0cf47f3a361bf9d5dc9ca36004ebfa7"
+      "1": "b7d7d39fe51d691e4cf36ec0e6949e31c80ed8a02b3decb7d56d137eed52496d"
     },
     "computed_thermo": {
-      "1": "82f8f04f05e09c908a6bb5c9de52a46c6a48d3aaf0a12fba35bcf4cb468ea4e9"
+      "1": "428069c231f6f078027c12abd54508d577b6863baf5b4f3af244c71b741990d1"
     },
     "computed_transition_state": {
-      "2": "6b66d5b913053191a3b24eedeea24c734de4231e8d3893d56c88f253fa16d496"
+      "2": "ab715bd1410899abf8bd9dc32e62fc9b709ecadc32babe0c1a2c0ec69b0c8901"
     },
     "computed_transport": {
-      "1": "e2cb078150b1b5a8e743a3d36fc079a0900b2e4a28b76685b59b33a6ed1c70ff"
+      "1": "82c1fe52d41fa620c5a3163a2938b9cd2d67d77e552f9f76f2c0c2649b6a5bc5"
     },
     "computed_ts_statmech": {
-      "1": "abfe7656ef44ef778c5033164a904ce1e5d2723dde8d88d527fc5896673d7f8a"
+      "1": "ae7692c79ee3ccdf01fd847deb62262b385a54fb3e537eca140557b4032fa06a"
     },
     "tckdb_reproducibility": {
-      "1": "d607a9b114ce9a4d316646a724a0ad7f2c648213e7a3e20f7400e4985232c040"
+      "1": "3cc3d2ec8d6cd2fd15bad327fdb690c18e7ba04b6865d8593328464dd1067097"
     },
     "tckdb_reproducibility_ts_statmech": {
-      "1": "96228ba52d6493b4fde46a0c4ec2e4cf49218a486eb272151a4e23623806a038"
+      "1": "dee0973888ffa5d152a8e927918703f752da5d5d5f1477bd74656f65b89ac26b"
     }
   },
   "unbumped_overrides": [
@@ -327,6 +327,51 @@
       "name": "tckdb_reproducibility_ts_statmech",
       "version": 1,
       "reason": "New nullable calculation_parameter.statement_kind column (enum ParameterStatementKind): the walker follows ORM enum columns of reached models, so the new enum entered the fingerprint. No check, threshold or grading reads it; decides nothing new."
+    },
+    {
+      "name": "computed_calculation",
+      "version": 1,
+      "reason": "level_of_theory loses its free-text keywords column and gains nullable relativistic_hamiltonian, pno_truncation and ri_approximation enum columns, and core_treatment gains the window member: the walker follows ORM enum columns of reached models, so the new enums entered the fingerprint. No check, threshold or grading reads them; decides nothing new. The new columns are listed in snapshot_defaults (NULL), so no stored digest moves."
+    },
+    {
+      "name": "computed_kinetics",
+      "version": 1,
+      "reason": "level_of_theory loses its free-text keywords column and gains nullable relativistic_hamiltonian, pno_truncation and ri_approximation enum columns, and core_treatment gains the window member: the walker follows ORM enum columns of reached models, so the new enums entered the fingerprint. No check, threshold or grading reads them; decides nothing new. The new columns are listed in snapshot_defaults (NULL), so no stored digest moves."
+    },
+    {
+      "name": "computed_statmech",
+      "version": 1,
+      "reason": "level_of_theory loses its free-text keywords column and gains nullable relativistic_hamiltonian, pno_truncation and ri_approximation enum columns, and core_treatment gains the window member: the walker follows ORM enum columns of reached models, so the new enums entered the fingerprint. No check, threshold or grading reads them; decides nothing new. The new columns are listed in snapshot_defaults (NULL), so no stored digest moves."
+    },
+    {
+      "name": "computed_thermo",
+      "version": 1,
+      "reason": "level_of_theory loses its free-text keywords column and gains nullable relativistic_hamiltonian, pno_truncation and ri_approximation enum columns, and core_treatment gains the window member: the walker follows ORM enum columns of reached models, so the new enums entered the fingerprint. No check, threshold or grading reads them; decides nothing new. The new columns are listed in snapshot_defaults (NULL), so no stored digest moves."
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "level_of_theory loses its free-text keywords column and gains nullable relativistic_hamiltonian, pno_truncation and ri_approximation enum columns, and core_treatment gains the window member: the walker follows ORM enum columns of reached models, so the new enums entered the fingerprint. No check, threshold or grading reads them; decides nothing new. The new columns are listed in snapshot_defaults (NULL), so no stored digest moves."
+    },
+    {
+      "name": "computed_transport",
+      "version": 1,
+      "reason": "level_of_theory loses its free-text keywords column and gains nullable relativistic_hamiltonian, pno_truncation and ri_approximation enum columns, and core_treatment gains the window member: the walker follows ORM enum columns of reached models, so the new enums entered the fingerprint. No check, threshold or grading reads them; decides nothing new. The new columns are listed in snapshot_defaults (NULL), so no stored digest moves."
+    },
+    {
+      "name": "computed_ts_statmech",
+      "version": 1,
+      "reason": "level_of_theory loses its free-text keywords column and gains nullable relativistic_hamiltonian, pno_truncation and ri_approximation enum columns, and core_treatment gains the window member: the walker follows ORM enum columns of reached models, so the new enums entered the fingerprint. No check, threshold or grading reads them; decides nothing new. The new columns are listed in snapshot_defaults (NULL), so no stored digest moves."
+    },
+    {
+      "name": "tckdb_reproducibility",
+      "version": 1,
+      "reason": "level_of_theory loses its free-text keywords column and gains nullable relativistic_hamiltonian, pno_truncation and ri_approximation enum columns, and core_treatment gains the window member: the walker follows ORM enum columns of reached models, so the new enums entered the fingerprint. No check, threshold or grading reads them; decides nothing new. The new columns are listed in snapshot_defaults (NULL), so no stored digest moves."
+    },
+    {
+      "name": "tckdb_reproducibility_ts_statmech",
+      "version": 1,
+      "reason": "level_of_theory loses its free-text keywords column and gains nullable relativistic_hamiltonian, pno_truncation and ri_approximation enum columns, and core_treatment gains the window member: the walker follows ORM enum columns of reached models, so the new enums entered the fingerprint. No check, threshold or grading reads them; decides nothing new. The new columns are listed in snapshot_defaults (NULL), so no stored digest moves."
     }
   ]
 }
