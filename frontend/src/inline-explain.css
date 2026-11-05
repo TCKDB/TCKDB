@@ -15,7 +15,9 @@
     top: calc(100% + .35rem);
     left: 0;
     width: max-content;
-    max-width: 20rem;
+    /* Never wider than the viewport allows: the closed note is still in
+       layout (opacity 0) and would otherwise widen the page at 320px. */
+    max-width: min(20rem, calc(100vw - 4rem));
     margin: 0;
     padding: .55rem .7rem;
     border: 1px solid var(--line);

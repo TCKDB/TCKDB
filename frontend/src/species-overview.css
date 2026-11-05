@@ -78,6 +78,8 @@
 
 .entry-state-groups {
     display: grid;
+    /* minmax(0, ...): an implicit `auto` track will not shrink below its
+       widest nowrap child, which pushed the page past a 320px viewport. */
     grid-template-columns: minmax(0, 1fr);
     gap: 1.6rem;
 }

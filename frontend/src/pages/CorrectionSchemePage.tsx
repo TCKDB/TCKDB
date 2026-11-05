@@ -96,7 +96,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                             <h1 className="t-display-1 record-identity-title">
                                 {title}
                                 {record.level_of_theory && (
-                                    <> <span className="value-pill"><LevelOfTheoryLink levelOfTheory={record.level_of_theory} /></span></>
+                                    <> <span className="value-pill record-identity-title-pill"><LevelOfTheoryLink levelOfTheory={record.level_of_theory} /></span></>
                                 )}
                             </h1>
                             <div className="record-identity-known">
