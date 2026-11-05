@@ -49,7 +49,6 @@ function baseRecord(overrides: Record<string, unknown> = {}) {
             dispersion: null,
             solvent: null,
             solvent_model: null,
-            keywords: null,
             spin_treatment: null,
             lot_hash: "hash-b3lyp",
             created_at: "2026-07-21T11:59:29Z",
@@ -448,6 +447,27 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         expect(await screen.findByRole("heading", { level: 1, name: "CCSD(T)/cc-pCVTZ (core=all_electron)" })).toBeInTheDocument()
         const crumb = screen.getByRole("navigation", { name: "Breadcrumb" })
         expect(crumb.querySelector("[aria-current='page']")?.textContent).toBe("CCSD(T)/cc-pCVTZ (core=all_electron)")
+    })
+
+    it("shows each stated method qualifier, and prints no row for one that is not stated", async () => {
+        const record = baseRecord()
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse({
+            ...record,
+            level_of_theory: {
+                ...record.level_of_theory,
+                core_treatment: "window",
+                relativistic_hamiltonian: "dkh2",
+                ri_approximation: "rijcosx",
+            },
+        }))))
+        page()
+        expect(await screen.findByText("Relativistic Hamiltonian")).toBeVisible()
+        expect(screen.getByText("dkh2")).toBeVisible()
+        expect(screen.getByText("RI approximation")).toBeVisible()
+        expect(screen.getByText("rijcosx")).toBeVisible()
+        expect(screen.getByText("window")).toBeVisible()
+        expect(screen.queryByText("PNO truncation")).toBeNull()
+        expect(screen.queryByText("Keywords")).toBeNull()
     })
 
     it("keeps method/basis as the title when the payload carries no label", async () => {

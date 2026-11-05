@@ -524,9 +524,11 @@ the gap.
 | `dispersion` | TEXT | yes | — | — | — | not documented |
 | `solvent` | TEXT | yes | — | — | — | not documented |
 | `solvent_model` | TEXT | yes | — | — | — | not documented |
-| `keywords` | TEXT | yes | — | — | — | not documented |
 | `spin_treatment` | SpinTreatment (enum) | yes | — | — | `restricted`, `unrestricted`, `restricted_open`, `unknown` | not documented |
-| `core_treatment` | CoreTreatment (enum) | yes | — | — | `frozen_core`, `all_electron` | not documented |
+| `core_treatment` | CoreTreatment (enum) | yes | — | — | `frozen_core`, `all_electron`, `window` | not documented |
+| `relativistic_hamiltonian` | RelativisticHamiltonian (enum) | yes | — | — | `none`, `dkh0`, `dkh2`, `dkhso`, `resc`, `x2c`, `zora`, `iora` | not documented |
+| `pno_truncation` | PnoTruncation (enum) | yes | — | — | `loose`, `normal`, `tight` | not documented |
+| `ri_approximation` | RiApproximation (enum) | yes | — | — | `none`, `rij`, `rijcosx`, `rijk`, `rijonx` | not documented |
 | `lot_hash` | CHAR(64) | no | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |

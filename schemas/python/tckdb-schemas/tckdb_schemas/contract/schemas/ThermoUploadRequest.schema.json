@@ -1422,22 +1422,43 @@
           "default": null,
           "title": "Dispersion"
         },
-        "keywords": {
+        "method": {
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "pno_truncation": {
           "anyOf": [
             {
-              "type": "string"
+              "$ref": "#/$defs/PnoTruncation"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Keywords"
+          "default": null
         },
-        "method": {
-          "minLength": 1,
-          "title": "Method",
-          "type": "string"
+        "relativistic_hamiltonian": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelativisticHamiltonian"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ri_approximation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiApproximation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "solvent": {
           "anyOf": [
@@ -1728,10 +1749,11 @@
       "type": "string"
     },
     "CoreTreatment": {
-      "description": "Which electrons a post-SCF method correlates (ADR 0021, plan decision 8).\n\n``frozen_core``: the chemical core is held uncorrelated. ``all_electron``:\nevery electron is correlated. CCSD(T)/cc-pCVTZ frozen-core and all-electron\nare different levels (their difference is the core-valence term of a\nfocal-point scheme). Part of the level identity only when stated: a level\nthat does not say stays ``NULL`` and keeps the hash it always had.\n\nTwo members on purpose. A partial treatment (Gaussian ``FC=1`` /\n``FreezeInnerNobleGasCore``, an ORCA ``FC_EWIN`` energy window, an explicit\norbital range) is real but has no agreed name across codes; it is left\n``NULL`` and described in ``keywords`` until a producer needs it named.",
+      "description": "Which electrons a post-SCF method correlates (ADR 0021, plan decision 8).\n\n``frozen_core``: the chemical core is held uncorrelated. ``all_electron``:\nevery electron is correlated. CCSD(T)/cc-pCVTZ frozen-core and all-electron\nare different levels (their difference is the core-valence term of a\nfocal-point scheme). Part of the level identity only when stated: a level\nthat does not say stays ``NULL`` and keeps the hash it always had.\n\n``window``: a partial treatment (a Gaussian ``Window=(m,n)`` orbital range,\nan ORCA ``FC_EWIN`` energy window). It is one value on purpose: the\nspecific window has no agreed form across codes and stays on the\ncalculation's ``core.frozen`` parameter rows, so two different windows are\none level of theory.",
       "enum": [
         "frozen_core",
-        "all_electron"
+        "all_electron",
+        "window"
       ],
       "title": "CoreTreatment",
       "type": "string"
@@ -3143,18 +3165,6 @@
           "default": null,
           "title": "Dispersion"
         },
-        "keywords": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Keywords"
-        },
         "method": {
           "anyOf": [
             {
@@ -3167,6 +3177,39 @@
           ],
           "default": null,
           "title": "Method"
+        },
+        "pno_truncation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PnoTruncation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "relativistic_hamiltonian": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelativisticHamiltonian"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ri_approximation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RiApproximation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "solvent": {
           "anyOf": [
@@ -3830,6 +3873,16 @@
       "title": "PhaseKind",
       "type": "string"
     },
+    "PnoTruncation": {
+      "description": "The DLPNO truncation preset a level of theory was run with.\n\nSource: ORCA 6.1 manual, DLPNO \"Basic Usage\": the ``LoosePNO``,\n``NormalPNO`` and ``TightPNO`` keywords are the recommended way to control\naccuracy. A hand-set numeric threshold is not representable here and stays\na parameter row. Part of the level identity only when stated.",
+      "enum": [
+        "loose",
+        "normal",
+        "tight"
+      ],
+      "title": "PnoTruncation",
+      "type": "string"
+    },
     "RelativisticFact": {
       "additionalProperties": false,
       "description": "The scalar-relativistic treatment.",
@@ -3855,6 +3908,21 @@
       "title": "RelativisticFact",
       "type": "object"
     },
+    "RelativisticHamiltonian": {
+      "description": "Scalar-relativistic Hamiltonian a level of theory was run with.\n\nOne vocabulary with the parsed parameter ``relativistic.hamiltonian``\n(``app/services/parameter_closed_values.py``). ``none`` is a stated\nnon-relativistic run and is a different level from not stating it.\nSources: ORCA 6.1 manual Table 2.54 (DKH2/DKH, ZORA, IORA, X2C);\nGaussian 09 ``Integral`` (DKH/DKH2, DKH0, DKHSO, RESC, NoDKH).\nPart of the level identity only when stated.",
+      "enum": [
+        "none",
+        "dkh0",
+        "dkh2",
+        "dkhso",
+        "resc",
+        "x2c",
+        "zora",
+        "iora"
+      ],
+      "title": "RelativisticHamiltonian",
+      "type": "string"
+    },
     "RelativisticTreatment": {
       "description": "The scalar-relativistic Hamiltonian: none (non-relativistic), Douglas-Kroll-Hess, X2C or ZORA.",
       "enum": [
@@ -3864,6 +3932,18 @@
         "zora"
       ],
       "title": "RelativisticTreatment",
+      "type": "string"
+    },
+    "RiApproximation": {
+      "description": "The resolution-of-the-identity approximation of the SCF step.\n\nOne vocabulary with the parsed parameter ``ri.approximation``. ``none`` is\na stated no-RI run. RI inside a method name (``RI-MP2``) is the method's own\nand is not stated here. Part of the level identity only when stated.",
+      "enum": [
+        "none",
+        "rij",
+        "rijcosx",
+        "rijk",
+        "rijonx"
+      ],
+      "title": "RiApproximation",
       "type": "string"
     },
     "SCFStabilityPayload": {

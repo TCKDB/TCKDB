@@ -225,11 +225,14 @@ const levelOfTheoryCoreSchema = z.object({
     dispersion: z.string().nullable().optional(),
     solvent: z.string().nullable().optional(),
     solvent_model: z.string().nullable().optional(),
-    keywords: z.string().nullable().optional(),
     spin_treatment: z.string().nullable().optional(),
-    // ADR 0021 / P7a: `frozen_core`/`all_electron`, or `null` when the
+    // ADR 0021 / P7a: `frozen_core`/`all_electron`/`window`, or `null` when the
     // deposit does not state it (never defaulted to either).
     core_treatment: z.string().nullable().optional(),
+    // Method qualifiers: part of the level's identity only when stated, `null` otherwise.
+    relativistic_hamiltonian: z.string().nullable().optional(),
+    pno_truncation: z.string().nullable().optional(),
+    ri_approximation: z.string().nullable().optional(),
     // The composite recipe this level is bound to, or `null`.
     composite_scheme: compositeSchemeSummarySchema.nullable().optional(),
     // The level written in full by the server (`method/basis (core=...)`), so

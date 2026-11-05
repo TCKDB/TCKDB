@@ -79,7 +79,7 @@ def test_resolving_the_same_definition_twice_is_one_scheme_one_level_one_binding
 def test_the_definition_hash_is_pinned(db_session):
     """Changing the canonical form re-keys every declared level and scheme ref: this must be deliberate."""
     scheme = _scheme_row(db_session, _resolve(db_session, f.SCHEME_B))
-    assert scheme.definition_hash == "5806fd74684c03e4bc39f93473a101f944e8a177251deb17d52ca7a91bb1b307"
+    assert scheme.definition_hash == "ec2f315e40f84a6df68f72c1aac89bcc093973dda388053bdc51f82759f5ecee"
 
 
 def test_term_keys_are_not_identity_but_formula_exponent_and_cardinals_are(db_session):
@@ -201,7 +201,7 @@ def test_a_declared_payload_has_no_method_key_and_every_normal_payload_has_one()
         LevelOfTheoryRef(method="CCSD(T)", basis="cc-pVQZ", core_treatment="frozen_core"),
         # A hostile method that *looks like* a declared payload is still a value under "method".
         LevelOfTheoryRef(method='{"composite_scheme":"' + "a" * 64 + '"}'),
-        LevelOfTheoryRef(method="composite_scheme", keywords="composite_scheme"),
+        LevelOfTheoryRef(method="composite_scheme", ri_approximation="rijcosx"),
     ]
     for ref in refs:
         payload = _level_of_theory_payload(ref)
@@ -225,10 +225,11 @@ def test_the_method_hash_function_refuses_a_ref_that_names_a_scheme():
 def test_normal_level_hashes_are_unchanged_by_this_phase():
     """Pinned: a plain level keeps the hash it had before declared schemes existed.
 
-    The value was computed with ``main``'s own ``_level_of_theory_hash`` (7404d9b5), not this branch's.
+    Re-pinned by the keywords decision (Stage 2): the free-text ``keywords`` key left every payload, so every hash
+    changed by design; the instance is reseeded, not re-keyed.
     """
     assert _level_of_theory_hash(LevelOfTheoryRef(method="b3lyp", basis="def2-tzvp")) == (
-        "f755381642e0a50e8f9d992317cea9ae39e03284a3e993fa5004025b52098f30"
+        "7f386e705fd675c5f1069df4d2a1e823de14b1f479f357e4e2243c4758a1851c"
     )
 
 
@@ -244,8 +245,8 @@ def test_the_two_worked_labels(db_session):
     assert c == (
         "Additive[base CCSD(T)/cc-pVQZ"
         " + DBOC:HF/cc-pVDZ"
+        " + dE:CCSD(T)/cc-pVTZ-DK (rel=dkh2) - CCSD(T)/cc-pVTZ"
         " + dE:CCSDT(Q)/cc-pVDZ - CCSD(T)/cc-pVDZ"
-        " + dE:CCSD(T)/cc-pVTZ-DK (kw=DKH2) - CCSD(T)/cc-pVTZ"
         " + dE:CCSD(T)/cc-pCVTZ ae - CCSD(T)/cc-pCVTZ fc]"
     )
 

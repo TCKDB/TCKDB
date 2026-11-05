@@ -118,7 +118,7 @@ def test_worked_payload_b_is_stored_with_its_inputs_edges_and_the_deposited_tota
     # The level is the generated label, bound to a declared extrapolation scheme.
     level = db_session.get(LevelOfTheory, composite.lot_id)
     assert level.method == f.LABEL_B
-    assert (level.basis, level.aux_basis, level.dispersion, level.keywords, level.core_treatment) == (None,) * 5
+    assert (level.basis, level.aux_basis, level.dispersion, level.core_treatment) == (None,) * 4
     binding = db_session.get(LevelOfTheoryComposite, level.id)
     assert binding.binding_source is CompositeBindingSource.declared
     scheme = db_session.get(CompositeScheme, binding.scheme_id)

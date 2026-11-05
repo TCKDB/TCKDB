@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.157.0 - 2026-11-05
+
+A level of theory no longer has a free-text `keywords` field; four typed fields take over what it was used to carry. A payload that sends `keywords` is refused like any unknown field, on every path that carries a level (an upload, a composite scheme's input level, a bundle). Nothing is mapped from it into parameters: the settings a deck or log states are read from the uploaded artifact and stored as calculation parameters.
+
+- **Removed:** `keywords` on `LevelOfTheoryRef` and `CompositeSchemeInputLevel`.
+- **Added**, each optional and part of the level's identity only when stated (a payload that omits them is the level it always was, apart from the removed key below):
+  - `relativistic_hamiltonian`: `none`, `dkh0`, `dkh2`, `dkhso`, `resc`, `x2c`, `zora`, `iora`.
+  - `pno_truncation`: `loose`, `normal`, `tight` (the DLPNO presets; a numeric threshold is not representable and stays a parameter).
+  - `ri_approximation`: `none`, `rij`, `rijcosx`, `rijk`, `rijonx`.
+  - `core_treatment` gains `window` (a partial frozen core). Which window stays on the calculation's parameters, so two different windows are one level.
+  - `none` is a stated value (non-relativistic, no RI), a different level from leaving the field out. Each set is the closed value set of the parsed parameter of the same meaning (`relativistic.hamiltonian`, `pno.truncation`, `ri.approximation`, `core.frozen`).
+  - Next to a `composite_scheme` they are refused like the other method fields.
+- **Changed:** the warning `level_of_theory_disagrees_with_artifact` now also fires for these four fields, with `context.component` one of `relativistic_hamiltonian`, `pno_truncation`, `ri_approximation`, `core_treatment` (as well as `method` and `basis`). It fires only when the level and the uploaded deck or log both state a value and they differ; a deck that says nothing about a qualifier is never a disagreement.
+- **Identity:** the `"keywords"` key left the level-of-theory hash payload, so every level's `lot_hash` differs from the one a server before this version computed. A deployment is reseeded rather than re-keyed; the server's migration refuses to run on a database that already holds levels of theory.
+- The producer contract's focal-point example now states its relativistic term as `relativistic_hamiltonian: dkh2`.
+
 ## 0.156.0 - 2026-11-05
 
 The characters trimmed from a state label or term symbol before matching are now one explicit set (`TRIM_CHARS`, shipped as `trim` in `electronic_state_examples.json`): exactly the 29 characters Python's `str.strip()` removes (every `str.isspace()` code point), which is what the write path has always trimmed, so what a deposit accepts does not change. JavaScript's `trim()` differs (it also strips U+FEFF, and not the `\x1c`-`\x1f` and `\x85` that Python does), so a frontend now trims with the same explicit set. U+FEFF stays untrimmed on both sides. No field or code added or removed.

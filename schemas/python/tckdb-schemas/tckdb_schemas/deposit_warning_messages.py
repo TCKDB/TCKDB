@@ -2003,7 +2003,7 @@ def _closed_values(key: str, code: str) -> Any:
         "pattern": _SCAN_PATTERNS,
         "canonical_key": re.compile(r"[a-z0-9_]+(\.[a-z0-9_]+)+"),
         "raw_key": re.compile(r"[A-Za-z][A-Za-z0-9_]{0,31}"),
-        "component": frozenset({"method", "basis"}),
+        "component": _LOT_COMPONENTS,
         "observed_in": frozenset(_PARAMETER_ORIGINS),
         "deck_method": _HESSIAN_METHODS,
         "stored_method": _HESSIAN_METHODS,

@@ -22,6 +22,14 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A level of theory has typed method qualifiers instead of free-text keywords (2026-11-05)
+
+- **What changed:** `keywords` is gone from a level of theory (the upload field, the stored column and the read shape). A payload that sends it is refused like any unknown field. Four typed fields replace what it was used for: `relativistic_hamiltonian`, `pno_truncation`, `ri_approximation`, and `window` as a third `core_treatment` value for a partial frozen core. Each is part of the level's identity only when stated.
+- **Reconciliation:** the warning `level_of_theory_disagrees_with_artifact` now also compares these with the setting an uploaded deck or log states, and fires only when both sides state a value and differ.
+- **Schema and migration:** revision `d5f2b8c1a704` drops `level_of_theory.keywords` and adds three enum columns and `core_treatment = window`. Every stored `lot_hash` changes, so the revision refuses to run (upgrade and downgrade) while `level_of_theory` has rows. A deployment is reseeded, not re-keyed.
+- **Versions:** `tckdb-schemas` 0.157.0, `tckdb-client` 0.187.0 (window `>=0.157,<0.162`).
+- Decision record: `docs/adr/0024-a-level-of-theory-has-typed-method-qualifiers-not-free-text-keywords.md`.
+
 ## Excited and spin states are told apart by their state label and term symbol (2026-11-04)
 
 - **Client: `tckdb-schemas` 0.155.0 to 0.156.0** (the trim set for a state label and term symbol is now explicit and the same in Python and JavaScript) **and `tckdb-client` 0.185.0 to 0.186.0** (docstring only). No migration, no new environment variable.

@@ -40,6 +40,7 @@ from app.services.scientific_read.lot_identity_filters import (
     basis_key_sql,
     method_key_sql,
 )
+from tests._frozen_lot_hash import frozen_level_of_theory_hash
 from tests.services.test_basis_identity_key import _all_spellings
 
 #: (method, [(program, spelling), ...], exact identity key)
@@ -274,7 +275,6 @@ def test_a_lower_case_method_hashes_as_it_always_did():
         "dispersion": None,
         "solvent": None,
         "solvent_model": None,
-        "keywords": None,
         "spin_treatment": "unknown",
     }
     pre_585 = hashlib.sha256(
@@ -282,11 +282,6 @@ def test_a_lower_case_method_hashes_as_it_always_did():
     ).hexdigest()
     assert _hash("b3lyp", basis="def2-tzvp") == pre_585
     assert _hash("B3LYP", basis="def2-tzvp") == pre_585
-
-
-def test_keywords_are_still_hashed_as_written():
-    # Free-form route text can hold case-sensitive quoted strings (#602).
-    assert _hash("b3lyp", keywords="Opt") != _hash("b3lyp", keywords="opt")
 
 
 def test_dispersion_and_solvent_case_is_no_longer_identity():
@@ -439,7 +434,8 @@ def test_migration_hash_matches_the_case_only_formula(migration, method):
         "spin_treatment": "unrestricted",
     }
     row = SimpleNamespace(_mapping=fields)
-    app_hash = _level_of_theory_hash(LevelOfTheoryRef(**fields))
+    # The revision's frozen copy hashes the pre-Stage-2 payload (with ``keywords``), so compare it with the frozen helper.
+    app_hash = frozen_level_of_theory_hash(**fields)
     if level_identity_keys(method, "d3bj") == (_case_only(method), "d3bj"):
         assert migration._lot_hash(row, keyed_method=True) == app_hash
     else:

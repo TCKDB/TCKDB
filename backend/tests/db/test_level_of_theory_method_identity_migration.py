@@ -34,14 +34,10 @@ import json
 import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
 from app.chemistry.basis_set_names import basis_identity_key
-from app.services.calculation_resolution import (
-    _level_of_theory_hash,
-    resolve_level_of_theory_ref,
-)
 from app.services.public_refs import make_content_ref
+from tests._frozen_lot_hash import frozen_level_of_theory_hash
 from tests.db._migration_chain import revision_under_test
 from tests.db.test_level_of_theory_basis_identity_migration import _Harness
 
@@ -84,7 +80,7 @@ def _prior_hash(method, basis, *, verbatim_basis: bool = False) -> str:
 
 
 def _keyed_hash(method, basis) -> str:
-    return _level_of_theory_hash(LevelOfTheoryRef(method=method, basis=basis))
+    return frozen_level_of_theory_hash(method=method, basis=basis)
 
 
 @pytest.fixture
@@ -205,25 +201,11 @@ def test_upgrade_rekeys_without_touching_refs_names_or_calculations(harness):
     assert before[ids["orca"]][0] in completed.stdout
     assert before[ids["alias"]][0] not in completed.stdout
 
-    # The upload path now finds the existing rows under any case.
-    # The resolver is application code and reads the current ``level_of_theory``
-    # columns, which ``e5b2d8a4c613`` extended; bring the scratch database to the
-    # head schema before asking it a question (the revision under test has
-    # already been applied and checked above).
-    harness.run("upgrade", "head")
-    with Session(harness.engine) as session:
-        for method, basis, key in (
-            ("CCSD(T)-F12", "cc-pVTZ-F12", "arc"),
-            ("ccsd(t)-f12", "cc-pvtz-f12", "arc"),
-            ("b3lyp", "6-31G(d)", "lone_upper"),
-            ("pbe0", "def2-svp", "alias_holder"),
-            ("hf", None, "no_basis"),
-        ):
-            lot = resolve_level_of_theory_ref(
-                session, LevelOfTheoryRef(method=method, basis=basis)
-            )
-            assert lot.id == ids[key], (method, basis)
-        session.rollback()
+    # Stage 2 (keywords decision): the upload path is not asked here whether it finds these re-keyed rows.
+    # The application's hash formula no longer has the ``keywords`` key this revision's rows were hashed with,
+    # so a resolver run against them would (by design) make new rows; the instance is reseeded, not re-keyed
+    # (``d5f2b8c1a704`` refuses to run over them). The frozen rules are held to the application's identity
+    # keys in tests/services/ instead.
 
 
 def test_downgrade_restores_every_hash_and_upgrade_again_converges(harness):

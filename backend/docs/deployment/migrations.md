@@ -619,7 +619,7 @@ same `public_ref`-untouched rules as `c8424fe82997`.
   `wb97x-d` is keyed as `wb97xd`, `m06-2x` as `m062x`, a trailing `-d3(bj)` or
   `-gd3bj` as `-d3bj`. Gaussian `wB97XD` and ORCA `wB97X-D3` stay two levels.
 - **Dispersion, solvent and solvent-model case**: keyed by strip and
-  lower-case. `keywords` stays verbatim.
+  lower-case. (`keywords` stayed verbatim until revision `d5f2b8c1a704` removed it; see below.)
 
 **What the upgrade prints.** One summary line
 (`level_of_theory alias/component re-key: N row(s) re-hashed, M duplicate

@@ -45,13 +45,9 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
-from app.services.calculation_resolution import (
-    _level_of_theory_hash,
-    resolve_level_of_theory_ref,
-)
 from app.services.public_refs import make_content_ref
+from tests._frozen_lot_hash import frozen_level_of_theory_hash
 from tests.db._migration_chain import revision_under_test
 from tests.db.test_level_of_theory_basis_identity_migration import _Harness
 
@@ -118,7 +114,7 @@ def _start_hash(key: str) -> str:
 
 
 def _keyed_hash(key: str) -> str:
-    return _level_of_theory_hash(LevelOfTheoryRef(**_fields(key)))
+    return frozen_level_of_theory_hash(**_fields(key))
 
 
 @pytest.fixture
@@ -277,24 +273,11 @@ def test_upgrade_rekeys_without_touching_refs_names_or_calculations(harness):
         assert before[ids[key]][0] not in completed.stdout, key
     assert "duplicate group(s)" in completed.stdout
 
-    # The upload path now finds the existing rows under every spelling. Resolving a
-    # catalogued method also binds it to its composite scheme (ADR 0021, P2), whose
-    # tables a later revision creates, so go to the head of the scratch database
-    # first. Nothing here depends on that revision: it re-hashes nothing.
-    harness.run("upgrade", "head")
-    with Session(harness.engine) as session:
-        for method, basis, key in (
-            ("cbsqb3", None, "cbs_qb3"),
-            ("CBSQB3", None, "cbs_qb3"),
-            ("g4mp2", "def2-svp", "alias_holder"),
-            ("G4(MP2)", None, "g4mp2_holder"),
-            ("rocbs-qb3", None, "rocbs_upper"),
-            ("G3(MP2)B3", None, "g3b3_kw"),
-            ("w1-bd", None, "w1_bd"),
-        ):
-            lot = resolve_level_of_theory_ref(session, LevelOfTheoryRef(method=method, basis=basis))
-            assert lot.id == ids[key], (method, basis)
-        session.rollback()
+    # Stage 2 (keywords decision): the upload path is not asked here whether it finds these re-keyed rows.
+    # The application's hash formula no longer has the ``keywords`` key this revision's rows were hashed with,
+    # so a resolver run against them would (by design) make new rows; the instance is reseeded, not re-keyed
+    # (``d5f2b8c1a704`` refuses to run over them). The frozen rules are held to the application's identity
+    # keys in tests/services/ instead.
 
 
 def test_downgrade_restores_every_hash_and_upgrade_again_converges(harness):
@@ -326,7 +309,7 @@ def test_rows_already_in_key_form_are_left_alone(harness):
     harness.run("upgrade", _MIGRATION.parent)
     with harness.engine.begin() as conn:
         for method, basis in (("cbs-qb3", None), ("g4mp2", None), ("wb97xd", "def2-tzvp")):
-            h = _level_of_theory_hash(LevelOfTheoryRef(method=method, basis=basis))
+            h = frozen_level_of_theory_hash(method=method, basis=basis)
             conn.execute(
                 text(
                     "INSERT INTO level_of_theory (method, basis, lot_hash, public_ref) "

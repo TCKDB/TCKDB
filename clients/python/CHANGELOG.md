@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.187.0 - 2026-11-05
+
+The `LevelOfTheory` builder drops `keywords` (the server no longer has such a field; see `tckdb-schemas` 0.157.0) and gains `core_treatment`, `relativistic_hamiltonian`, `pno_truncation` and `ri_approximation`, each sent only when set. The `tckdb-schemas` window moves to `>=0.157,<0.162`: an older schemas would still accept `keywords`, which the server now refuses.
+
 ## 0.186.0 - 2026-11-05
 
 The structure-search record's `electronic_state_label` and `term_symbol` are `None` when the stored value does not satisfy the write-time grammar (a row stored before `tckdb-schemas` 0.151.0's check), and are served in their canonical spelling otherwise. Docstring only; no client code changed.

@@ -30,14 +30,9 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session
-from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
-from app.services.calculation_resolution import (
-    _level_of_theory_hash,
-    resolve_level_of_theory_ref,
-)
 from app.services.public_refs import make_content_ref
+from tests._frozen_lot_hash import frozen_level_of_theory_hash
 from tests.db._migration_chain import revision_under_test
 
 _MIGRATION = revision_under_test("38b06819f099")
@@ -72,9 +67,7 @@ def _pre_574_hash(method, basis, aux_basis) -> str:
 
 
 def _keyed_hash(method, basis, aux_basis) -> str:
-    return _level_of_theory_hash(
-        LevelOfTheoryRef(method=method, basis=basis, aux_basis=aux_basis)
-    )
+    return frozen_level_of_theory_hash(method=method, basis=basis, aux_basis=aux_basis)
 
 
 class _Harness:
@@ -234,25 +227,11 @@ def test_upgrade_rekeys_without_touching_refs_names_or_calculations(harness):
     assert "2 duplicate group(s)" in completed.stdout
     assert before[ids["gaussian"]][0] in completed.stdout
 
-    # The upload path now finds the existing rows under any spelling.
-    # The resolver is application code and reads the current ``level_of_theory``
-    # columns, which ``e5b2d8a4c613`` extended; bring the scratch database to the
-    # head schema before asking it a question (the revision under test has
-    # already been applied and checked above).
-    harness.run("upgrade", "head")
-    with Session(harness.engine) as session:
-        for spelling, key in (
-            ("Def2TZVP", "psi4"),
-            ("def2tzvp", "psi4"),
-            ("def2-SVP", "svp_upper"),
-            ("cc-pvtz", "molpro_upper"),
-        ):
-            method = _SEED[key][0]
-            lot = resolve_level_of_theory_ref(
-                session, LevelOfTheoryRef(method=method, basis=spelling)
-            )
-            assert lot.id == ids[key], spelling
-        session.rollback()
+    # Stage 2 (keywords decision): the upload path is not asked here whether it finds these re-keyed rows.
+    # The application's hash formula no longer has the ``keywords`` key this revision's rows were hashed with,
+    # so a resolver run against them would (by design) make new rows; the instance is reseeded, not re-keyed
+    # (``d5f2b8c1a704`` refuses to run over them). The frozen rules are held to the application's identity
+    # keys in tests/services/ instead.
 
 
 def test_downgrade_restores_every_hash_and_upgrade_again_converges(harness):

@@ -140,7 +140,6 @@ def test_a_lower_case_component_hashes_as_it_always_did():
         "dispersion": "d3bj",
         "solvent": "water",
         "solvent_model": "smd",
-        "keywords": None,
         "spin_treatment": "unknown",
     }
     pre_602 = hashlib.sha256(
@@ -148,10 +147,6 @@ def test_a_lower_case_component_hashes_as_it_always_did():
     ).hexdigest()
     assert _hash(dispersion="d3bj", solvent="water", solvent_model="smd") == pre_602
     assert _hash(dispersion="D3BJ", solvent="Water", solvent_model="SMD") == pre_602
-
-
-def test_keywords_stay_verbatim():
-    assert _hash(keywords="Opt") != _hash(keywords="opt")
 
 
 def test_the_upload_path_resolves_case_variants_to_one_row(db_session):

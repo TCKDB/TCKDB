@@ -44,13 +44,9 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
-from app.services.calculation_resolution import (
-    _level_of_theory_hash,
-    resolve_level_of_theory_ref,
-)
 from app.services.public_refs import make_content_ref
+from tests._frozen_lot_hash import frozen_level_of_theory_hash
 from tests.db._migration_chain import revision_under_test
 from tests.db.test_level_of_theory_basis_identity_migration import _Harness
 
@@ -111,7 +107,7 @@ def _start_hash(key: str) -> str:
 
 
 def _keyed_hash(key: str) -> str:
-    return _level_of_theory_hash(LevelOfTheoryRef(**_fields(key)))
+    return frozen_level_of_theory_hash(**_fields(key))
 
 
 @pytest.fixture
@@ -253,28 +249,11 @@ def test_upgrade_rekeys_without_touching_refs_names_or_calculations(harness):
         assert before[ids[key]][0] not in completed.stdout
     assert "duplicate group(s)" in completed.stdout
 
-    # The upload path now finds the existing rows under every spelling.
-    # The resolver is application code and reads the current ``level_of_theory``
-    # columns, which ``e5b2d8a4c613`` extended; bring the scratch database to the
-    # head schema before asking it a question (the revision under test has
-    # already been applied and checked above).
-    harness.run("upgrade", "head")
-    with Session(harness.engine) as session:
-        for method, extra, key in (
-            ("b3lyp", {"dispersion": "d3bj"}, "column"),
-            ("b3lyp", {"dispersion": "EmpiricalDispersion=(GD3BJ)"}, "column"),
-            ("B3LYP-GD3BJ", {}, "column"),
-            ("pbe", {"dispersion": "D3(BJ)"}, "p_h"),
-            ("b3lyp", {"dispersion": "GD3"}, "zero_a"),
-            ("b3lyp-d3zero", {}, "zero_a"),
-            ("b3lyp", {"dispersion": "d3"}, "bare_d3"),
-            ("wb97x-d3(bj)", {}, "refit"),
-        ):
-            lot = resolve_level_of_theory_ref(
-                session, LevelOfTheoryRef(method=method, basis=_BASIS, **extra)
-            )
-            assert lot.id == ids[key], (method, extra)
-        session.rollback()
+    # Stage 2 (keywords decision): the upload path is not asked here whether it finds these re-keyed rows.
+    # The application's hash formula no longer has the ``keywords`` key this revision's rows were hashed with,
+    # so a resolver run against them would (by design) make new rows; the instance is reseeded, not re-keyed
+    # (``d5f2b8c1a704`` refuses to run over them). The frozen rules are held to the application's identity
+    # keys in tests/services/ instead.
 
 
 def test_downgrade_restores_every_hash_and_upgrade_again_converges(harness):
@@ -306,9 +285,7 @@ def test_rows_already_in_key_form_are_left_alone(harness):
     harness.run("upgrade", _MIGRATION.parent)
     with harness.engine.begin() as conn:
         for method, dispersion in (("b3lyp", "d3bj"), ("b3lyp", None), ("wb97x-d3bj", None)):
-            h = _level_of_theory_hash(
-                LevelOfTheoryRef(method=method, basis=_BASIS, dispersion=dispersion)
-            )
+            h = frozen_level_of_theory_hash(method=method, basis=_BASIS, dispersion=dispersion)
             conn.execute(
                 text(
                     "INSERT INTO level_of_theory (method, basis, dispersion, lot_hash, public_ref) "
