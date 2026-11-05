@@ -606,7 +606,12 @@ span.browse-row-title {
         grid-template-columns: 1fr 1fr;
     }
 
-    /* Right-hand column: grow the note leftwards. Left-anchored it ran off
+    /* Positional assumption: this grid is `1fr 1fr` here, so every even
+       child sits in the right-hand column. (A per-field modifier class was
+       considered, but the fields are emitted conditionally from several
+       components, so a hand-set class would drift from where the grid
+       actually places them.)
+       Right-hand column: grow the note leftwards. Left-anchored it ran off
        the viewport (the closed note is still in layout) and made the whole
        page scroll sideways at 320px. */
     .browse-filter-field:nth-child(even) .inline-explain-note {

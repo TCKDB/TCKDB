@@ -188,7 +188,6 @@
     min-width: 0;
     overflow-wrap: anywhere;
     margin: 0;
-    overflow-wrap: anywhere;
     color: var(--muted);
 }
 
