@@ -78,6 +78,9 @@
 
 .entry-state-groups {
     display: grid;
+    /* minmax(0, ...): an implicit `auto` track will not shrink below its
+       widest nowrap child, which pushed the page past a 320px viewport. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 1.6rem;
 }
 
@@ -121,6 +124,7 @@
    16px apart at 1920px for what reads as one divider. */
 .entry-rows {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .entry-card {
@@ -172,6 +176,7 @@
 .entry-card code {
     flex: 1 0 100%;
     margin: 0;
+    overflow-wrap: anywhere;
     color: var(--muted);
 }
 

@@ -605,4 +605,12 @@ span.browse-row-title {
     .browse-filter-grid {
         grid-template-columns: 1fr 1fr;
     }
+
+    /* Right-hand column: grow the note leftwards. Left-anchored it ran off
+       the viewport (the closed note is still in layout) and made the whole
+       page scroll sideways at 320px. */
+    .browse-filter-field:nth-child(even) .inline-explain-note {
+        left: auto;
+        right: 0;
+    }
 }
