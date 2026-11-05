@@ -1,8 +1,12 @@
 # Changelog
 
-## 0.155.0 - 2026-11-05
+## 0.156.0 - 2026-11-05
 
 The characters trimmed from a state label or term symbol before matching are now one explicit set (`TRIM_CHARS`: space, tab, newline, carriage return, form feed, vertical tab), shipped as `trim` in `electronic_state_examples.json`. Before, Python's `str.strip()` also trimmed `\x1c`-`\x1f` and `\x85`, and JavaScript's `trim()` also trimmed U+FEFF, so the two sides disagreed on the same text. A value with one of those at an end is now refused on both. No field or code added or removed.
+
+## 0.155.0 - 2026-11-04
+
+Packaging only. No field, code or rule is added, changed or removed; every 0.154.0 payload validates unchanged. The distribution now carries what PyPI needs: the project URLs point at `github.com/TCKDB/TCKDB`, the MIT `LICENSE` file ships in the sdist and wheel, and the build requires `setuptools>=77` (SPDX licence expression). Nothing in `tckdb_schemas` itself changed.
 
 ## 0.154.0 - 2026-11-04
 

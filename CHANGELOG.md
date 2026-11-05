@@ -24,9 +24,14 @@ dataset must never require a code release.
 
 ## Excited and spin states are told apart by their state label and term symbol (2026-11-04)
 
-- **Client: none** (`tckdb-schemas` and `tckdb-client` unchanged; the typed client does not model the participant facets). No migration, no new environment variable.
+- **Client: `tckdb-schemas` 0.155.0 to 0.156.0** (the trim set for a state label and term symbol is now explicit and the same in Python and JavaScript) **and `tckdb-client` 0.185.0 to 0.186.0** (docstring only). No migration, no new environment variable.
 - **What changed.** Every block that names a species entry (reaction and network participants, conformer, statmech, transport, geometry and calculation contexts) now also serves `electronic_state_label` and `term_symbol` in `EntryFacetFields`, and the species-entry and structure-search records serve them under the same names. A value is served only when it satisfies the write-time grammar (`tckdb_schemas.electronic_state`), in its canonical spelling (`2Pi` reads `²Π`); a row stored before the grammar that fails it reads `null`, never an error. The joined `species_entry_label` is unchanged.
 - **Web app.** A valid label shows as its own chip (`state T1`), and a valid term symbol as another (`²Π`, `X ²Π`), next to the state-kind chip on the species-entry, species overview, reaction, reaction-entry and network pages. The species-entry page adds "State label" and "Term symbol" facts, the latter with a plain-words reading for screen readers. The frontend checks the same grammar again (`electronicStateGrammar.json`, a copy of the shipped `electronic_state_examples.json`, with a parity test that fails on drift); a value outside it stays hidden.
+
+## The Python client and schemas are ready for PyPI, and the client README is one page (2026-11-04)
+
+- **Client: `tckdb-client` 0.184.0 to 0.185.0, `tckdb-schemas` 0.154.0 to 0.155.0** (packaging and documentation only; no field, code or rule changed, every 0.154.0 payload validates unchanged). No migration, no new environment variable, no server change.
+- **What changed.** Both packages carry the metadata PyPI needs (project URLs at `github.com/TCKDB/TCKDB`, the licence file, `setuptools>=77` for the SPDX licence expression) and build as an sdist and a wheel that pass `twine check`. Nothing has been uploaded. The client README went from 1,341 lines to a one-page introduction; the rest lives in `clients/python/docs/`. The root README and `builder_api_mvp.md` no longer say the builders are future work.
 
 ## A thermo or statmech record can show the settings behind its geometry, frequency and energy levels (2026-11-04)
 

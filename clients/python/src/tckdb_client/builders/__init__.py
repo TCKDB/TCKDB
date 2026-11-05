@@ -5,9 +5,11 @@ Python objects (``Species``, ``Calculation.opt(...)``, …) and hands
 them to the thin HTTP client at :class:`tckdb_client.TCKDBClient`.
 It does not own HTTP, auth, or any backend state.
 
-Phase 1 supports computed-species uploads only. See
-``clients/python/docs/builder_api_mvp.md`` for the full spec and
-phased roadmap.
+It supports computed-species and computed-reaction uploads, with thermo,
+statmech, kinetics and artifacts. A ``Transport`` block is accepted and
+validated but not yet sent on either upload route. See
+``clients/python/docs/builder_api_stability.md`` for the public surface and
+``clients/python/docs/builder_api_mvp.md`` for the original design spec.
 
 Importing this subpackage must remain backend-free — no ``app.*``,
 ``backend.*``, SQLAlchemy, FastAPI, RDKit, or pydantic-settings

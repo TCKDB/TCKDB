@@ -452,5 +452,5 @@ hosted querying.
 - [scientific_query_cookbook.md](scientific_query_cookbook.md) — recipe walkthrough.
 - [workflow_tool_scientific_reads.md](workflow_tool_scientific_reads.md) — workflow-tool integration patterns.
 - [scientific_read_demo_data.md](scientific_read_demo_data.md) — demo data setup.
-- [`clients/python/README.md`](../../clients/python/README.md) — client install, configure, auth matrix.
+- [`clients/python/docs/configuration.md`](../../clients/python/docs/configuration.md) — client configuration and the auth matrix.
 - [internal_ids_visibility_policy.md](../specs/internal_ids_visibility_policy.md) — internal-IDs contract.

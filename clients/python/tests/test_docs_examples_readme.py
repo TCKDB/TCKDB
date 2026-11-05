@@ -125,3 +125,41 @@ def test_design_doc_back_links_adapter_quickstart(doc):
         f"{doc} must back-link the adapter authoring quickstart so "
         "the design-doc → quickstart navigation closes."
     )
+
+
+# ---------------------------------------------------------------------
+# Docs split out of the package README: links must be well formed
+# ---------------------------------------------------------------------
+
+_SPLIT_DOCS = [
+    "configuration.md",
+    "reads.md",
+    "uploads_and_idempotency.md",
+    "errors.md",
+    "builders.md",
+    "development.md",
+]
+
+
+@pytest.mark.parametrize("name", _SPLIT_DOCS)
+def test_split_docs_have_no_doubled_closing_paren_after_a_link(name):
+    import re
+
+    text = (_ROOT / "docs" / name).read_text(encoding="utf-8")
+    bad = [m.group(0) for m in re.finditer(r"\]\([^)\s]+\)\)", text)]
+    assert not bad, f"{name}: stray ')' after a link: {bad}"
+
+
+@pytest.mark.parametrize("name", _SPLIT_DOCS)
+def test_split_docs_relative_links_resolve(name):
+    import re
+
+    path = _ROOT / "docs" / name
+    missing = []
+    for m in re.finditer(r"\]\(([^)\s#]+)(?:#[^)\s]*)?\)", path.read_text(encoding="utf-8")):
+        target = m.group(1)
+        if target.startswith(("http://", "https://", "mailto:")):
+            continue
+        if not (path.parent / target).resolve().exists():
+            missing.append(target)
+    assert not missing, f"{name}: links to files that do not exist: {missing}"
