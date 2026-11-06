@@ -262,11 +262,14 @@ server {
 
     location /api/ {
         # nginx refuses bodies over 1 MiB by default, before TCKDB sees them.
-        # Sit just above the API's bundle cap (BUNDLE_MAX_BODY_BYTES, 5 MiB);
-        # routes that carry ESS logs inline (/api/v1/uploads/, /api/v1/jobs/,
-        # /api/v1/calculations/<ref>/artifacts) need a larger limit in their
-        # own location -- see frontend/nginx.conf.
-        client_max_body_size 6m;
+        # Sit above the caps the API enforces itself (5 MiB bundles,
+        # BUNDLE_MAX_BODY_BYTES; 9 MiB network export manifests). Upload and
+        # job routes, which can carry ESS logs, need a larger limit in a
+        # second location, e.g. `location ~ ^/api/v1/(uploads|jobs)/ {
+        # client_max_body_size 100m; proxy_pass http://127.0.0.1:8010; ... }`.
+        # A regex location's proxy_pass may not carry a URI part; the request
+        # path already starts with /api/. See frontend/nginx.conf.
+        client_max_body_size 10m;
 
         proxy_pass http://127.0.0.1:8010/api/;
         proxy_set_header Host              $host;

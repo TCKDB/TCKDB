@@ -24,7 +24,7 @@ dataset must never require a code release.
 
 ## The frontend proxy passes uploads larger than 1 MiB to the API (2026-11-07)
 
-The frontend image's nginx refused any request body over its 1 MiB default with a bare 413, before TCKDB saw it. `/api/` now takes up to 6 MiB, just above the 5 MiB bundle cap, so an oversized bundle gets TCKDB's own `bundle_too_large` error. The routes that carry ESS logs inline (`/api/v1/uploads/`, `/api/v1/jobs/`, `/api/v1/calculations/<ref>/artifacts`) take up to 100 MiB. The rest of `/api/` stays small because the API parses a body before it checks credentials.
+The frontend image's nginx refused any request body over its 1 MiB default with a bare 413, before TCKDB saw it. `/api/` now takes up to 10 MiB, above the two caps the API enforces before parsing (5 MiB bundles, 9 MiB network export manifests), so a request over either gets TCKDB's own coded error. Upload and job routes (several carry ESS logs inline) and `/api/v1/calculations/<ref>/artifacts` take up to 100 MiB. The rest of `/api/` stays smaller because the API parses a body before it checks credentials.
 
 ## Scan-point reads no longer fail when a point carries a geometry (2026-11-05)
 
