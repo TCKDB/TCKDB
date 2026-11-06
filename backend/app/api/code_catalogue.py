@@ -973,6 +973,18 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "check_inputs=true compares the inputs of the assessments include=assessments returns; it needs "
                 "include=assessments."
             )),
+    ApiCode("anonymous_body_too_large", 413, Surface.response_literal,
+            "backend/app/api/anonymous_body_limit.py",
+            shape=Shape.relationship,
+            note=(
+                "Any POST/PUT/PATCH under /api/ from a caller with no valid credential (no API key, or an unknown or "
+                "revoked one; no live session cookie) whose body is over settings.anonymous_max_body_bytes. Written by "
+                "AnonymousBodyLimitMiddleware, an ASGI middleware, because the refusal has to come before the body is "
+                "read: FastAPI parses a body before authentication runs. The message tells the caller to authenticate; "
+                "a valid credential lifts the allowance. context carries max_bytes and, when the request declared a "
+                "Content-Length, given_bytes. Not applied to the selected-network-export route, which keeps "
+                "network_export_body_too_large."
+            )),
     ApiCode("bundle_too_large", 413, Surface.response_literal,
             "backend/app/api/bundle_limits.py",
             shape=Shape.relationship,

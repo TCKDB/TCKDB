@@ -804,6 +804,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 
 | Code | Names |
 | --- | --- |
+| `anonymous_body_too_large` | a relationship — read `context` |
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
 

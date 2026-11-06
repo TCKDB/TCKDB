@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.159.0 - 2026-11-07
+
+One refusal code is added: `anonymous_body_too_large` (413). A request without a valid credential whose body is over the anonymous allowance (1 MiB by default) is refused before the body is read; authenticate with an API key or a session to send a larger one. No model or payload shape changed.
+
 ## 0.158.0 - 2026-11-05
 
 A level of theory no longer has a free-text `keywords` field; four typed fields take over what it was used to carry. A payload that sends `keywords` is refused like any unknown field, on every path that carries a level (an upload, a composite scheme's input level, a bundle). Nothing is mapped from it into parameters: the settings a deck or log states are read from the uploaded artifact and stored as calculation parameters.

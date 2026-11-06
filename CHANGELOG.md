@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A request with no valid credential may not make the API read a large body (2026-11-07)
+
+- **What changed:** a `POST`/`PUT`/`PATCH` under `/api/` whose body is over `ANONYMOUS_MAX_BODY_BYTES` (default 1 MiB) is refused `413 anonymous_body_too_large` before the body is read, unless it carries a valid API key or session cookie. Before, FastAPI read and parsed the whole body (up to the proxy's 100 MiB) before the 401. The selected-network-export route keeps its own cap and code.
+- **Schema and migration:** none.
+- **Versions:** `tckdb-schemas` 0.159.0, `tckdb-client` 0.188.0.
+
 ## The frontend proxy passes uploads larger than 1 MiB to the API (2026-11-07)
 
 The frontend image's nginx refused any request body over its 1 MiB default with a bare 413, before TCKDB saw it. `/api/` now takes up to 10 MiB, above the two caps the API enforces before parsing (5 MiB bundles, 9 MiB network export manifests), so a request over either gets TCKDB's own coded error. Upload and job routes (several carry ESS logs inline) and `/api/v1/calculations/<ref>/artifacts` take up to 100 MiB. The rest of `/api/` stays smaller because the API parses a body before it checks credentials.

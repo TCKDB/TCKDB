@@ -118,6 +118,34 @@ class Settings(BaseSettings):
     bundle_max_body_bytes: int = Field(5 * 1024 * 1024, ge=0)
     bundle_max_records: int = Field(500, ge=0)
 
+    # Largest request body a caller with NO valid credential may send to any
+    # body-carrying route (POST/PUT/PATCH under /api/), refused with
+    # ``413 anonymous_body_too_large`` before the body is read
+    # (``app.api.anonymous_body_limit``). FastAPI reads and parses a whole
+    # body before authentication runs, so without this an unauthenticated
+    # caller could make the API buffer and parse the nginx limit (100 MiB on
+    # uploads) per request. A valid API key or session cookie lifts it.
+    #
+    # The default is the largest body any route that accepts ANONYMOUS
+    # callers legitimately needs, other than the one with its own cap:
+    #   * auth/register, auth/login, auth/logout: well under 1 KiB (username,
+    #     password, label <= 200 chars).
+    #   * scientific searches and selections: filters and at most 500 refs of
+    #     <= 64 characters (relative-energy member_refs, selection refs):
+    #     about 40 KB.
+    #   * species structure-search: three strings of <= 4096 characters: 12 KB.
+    #   * networks/{ref}/kinetics/evaluate: two number lists with no
+    #     schema bound; 1 MiB holds about 50 thousand grid points.
+    # 1 MiB is therefore about twenty-five times the biggest bounded one.
+    # ``POST .../networks/{ref}/kinetics/export-selected`` is the exception
+    # and is NOT subject to this allowance: it takes a whole selection
+    # manifest (up to 9 MiB) and keeps its own cap and coded error
+    # (``app.api.export_limits``). Routes that need a credential
+    # (uploads, jobs, bundles, artifacts, curation) are not anonymous
+    # routes at all, so 1 MiB costs a legitimate caller nothing.
+    # ``0`` disables the allowance; negative is refused at startup.
+    anonymous_max_body_bytes: int = Field(1024 * 1024, ge=0)
+
     # When set, the middleware reads the client IP from this header.
     # Only enable when the deployment terminates TLS behind a trusted
     # reverse proxy that overwrites the header. With this unset the
