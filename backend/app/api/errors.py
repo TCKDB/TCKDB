@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
-from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DBAPIError, IntegrityError, NoResultFound, OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -215,6 +215,38 @@ def _data_integrity_error_handler(
         status_code=500,
         content=error_envelope(
             str(exc), fallback_code="data_integrity_error"
+        ),
+    )
+
+
+def _response_validation_error_handler(
+    request: Request, exc: ResponseValidationError
+) -> JSONResponse:
+    """500 ``data_integrity_error``: the server failed its own response model.
+
+    ``ResponseValidationError`` is raised when what a route *returned* does
+    not fit its ``response_model``. The caller sent nothing wrong, so this is
+    never a 422, and without a handler it reached the client as a
+    ``text/plain`` "Internal Server Error". The validation errors can carry
+    ORM object reprs and field inputs, so the body is fixed text; the full
+    errors go to the server log with the method and route path (the
+    ``request_id`` log field and ``X-Request-ID`` header tie the two).
+    """
+    route = request.scope.get("route")
+    logger.error(
+        "response model validation failed on %s %s: %s",
+        request.method,
+        getattr(route, "path", request.url.path),
+        exc.errors(),
+        exc_info=exc,
+    )
+    return JSONResponse(
+        status_code=500,
+        content=error_envelope(
+            "The server could not build a valid response for this request. "
+            "Nothing in the request was wrong; report it to the operator.",
+            code="data_integrity_error",
+            fallback_code="data_integrity_error",
         ),
     )
 
@@ -884,6 +916,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     """Attach all custom exception handlers to *app*."""
     app.add_exception_handler(StarletteHTTPException, _http_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RequestValidationError, _request_validation_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(ResponseValidationError, _response_validation_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ValueError, _value_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(DomainError, _domain_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RecordReviewConflict, _record_review_conflict_handler)  # type: ignore[arg-type]
