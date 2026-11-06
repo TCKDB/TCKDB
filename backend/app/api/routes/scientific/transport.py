@@ -31,6 +31,7 @@ from app.api.routes.scientific._response import (
     prepare_assessment_response,
     refuse_check_inputs,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import (
     RecordReviewStatus,
     ScientificOriginKind,
@@ -48,7 +49,7 @@ from app.services.scientific_read.public_assessments import (
 from app.services.scientific_read.transport import get_transport
 from app.services.scientific_read.transport_search import search_transport
 
-router = APIRouter(prefix="/transport")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/transport")
 
 
 # The router-level ``?profile=`` dependency puts these two keys on every
@@ -92,7 +93,8 @@ def scientific_transport_search_get(
     meaningful — see
     ``backend/docs/specs/scientific_transport_reads.md``.
     """
-    request_obj = TransportSearchRequest(
+    request_obj = caller_input(
+        TransportSearchRequest,
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,
         transport_ref=transport_ref,

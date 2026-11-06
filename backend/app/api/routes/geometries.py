@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     EntityListResponse,
     LegacyReadRoute,
@@ -45,7 +44,7 @@ def list_geometries(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [build_read(GeometryRead, r) for r in rows],
+        [GeometryRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -61,4 +60,4 @@ def get_geometry(geometry_id: int, session: Session = Depends(get_db)):
     )
     if row is None:
         raise NotFoundError("Geometry not found")
-    return build_read(GeometryRead, row)
+    return GeometryRead.model_validate(row)

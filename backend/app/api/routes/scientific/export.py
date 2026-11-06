@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_curator_or_admin
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.app_user import AppUser
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.removed_parameters import RemovedParameters
@@ -58,7 +59,7 @@ from app.services.scientific_read.ml_dataset import (
     iter_ml_species_ndjson,
 )
 
-router = APIRouter(prefix="/export")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/export")
 
 #: An export never picks a record. ``collapse`` / ``selection_policy`` asked it to; both are refused by name.
 _NO_PICKING = RemovedParameters(
@@ -187,7 +188,8 @@ def export_chemkin(
         kinetics_refs=body.kinetics_refs,
         include_transport=body.include_transport,
     )
-    options = ChemkinOptions(
+    options = caller_input(
+        ChemkinOptions,
         energy_units=body.energy_units,
         include_transport=body.include_transport,
         naming_policy=body.naming_policy,
@@ -280,7 +282,8 @@ def export_ml_species(
     :raises ValueError: 422 for an empty/unresolvable seed, an unknown
         ``lot_ref``, or an ``all`` request over the export cap.
     """
-    filters = MLFilters(
+    filters = caller_input(
+        MLFilters,
         min_review_status=min_review_status,
         lot_ref=lot_ref,
         elements=(
@@ -343,7 +346,8 @@ def export_ml_reactions(
     :raises ValueError: 422 for an empty/unresolvable seed or an ``all``
         request over the export cap.
     """
-    filters = MLFilters(
+    filters = caller_input(
+        MLFilters,
         min_review_status=min_review_status,
         limit=limit,
         offset=offset,

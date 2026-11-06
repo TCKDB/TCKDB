@@ -37,6 +37,7 @@ from app.api.routes.scientific._response import (
     SEARCH_SCOPE,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import EnergyCorrectionSchemeKind, FrequencyScaleKind
 from app.schemas.reads.scientific_energy_correction_scheme import (
     ScientificEnergyCorrectionSchemeDetailResponse,
@@ -68,8 +69,8 @@ from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
 
-fsf_router = APIRouter(prefix="/frequency-scale-factors")
-ecs_router = APIRouter(prefix="/energy-correction-schemes")
+fsf_router = APIRouter(route_class=ServerFaultRoute, prefix="/frequency-scale-factors")
+ecs_router = APIRouter(route_class=ServerFaultRoute, prefix="/energy-correction-schemes")
 
 
 # The router-level ``?profile=`` dependency puts these two keys on every
@@ -118,7 +119,8 @@ def scientific_frequency_scale_factor_search_get(
     meaningful — see
     ``backend/docs/specs/scientific_correction_reads.md``.
     """
-    request_obj = FrequencyScaleFactorSearchRequest(
+    request_obj = caller_input(
+        FrequencyScaleFactorSearchRequest,
         frequency_scale_factor_ref=frequency_scale_factor_ref,
         value=value,
         value_min=value_min,
@@ -249,7 +251,8 @@ def scientific_energy_correction_scheme_search_get(
     is required. Declared filters without an enforceable backing path
     fail closed with 422 ``unsupported_filter``.
     """
-    request_obj = EnergyCorrectionSchemeSearchRequest(
+    request_obj = caller_input(
+        EnergyCorrectionSchemeSearchRequest,
         energy_correction_scheme_ref=energy_correction_scheme_ref,
         name=name,
         version=version,

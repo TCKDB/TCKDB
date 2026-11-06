@@ -20,6 +20,7 @@ from app.api.routes.scientific._response import (
     omit_trust_unless_requested,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_provenance import (
     ReactionFullReadRequest,
@@ -32,7 +33,7 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.provenance import get_reaction_full
 
-router = APIRouter(prefix="/reaction-entries")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/reaction-entries")
 
 
 @router.get(
@@ -63,7 +64,8 @@ def reaction_full(
     resolved_reaction_entry_id = resolve_reaction_entry_handle(
         session, reaction_entry_id
     )
-    request = ReactionFullReadRequest(
+    request = caller_input(
+        ReactionFullReadRequest,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,

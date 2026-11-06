@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.client_version import require_supported_tckdb_client
 from app.api.deps import PaginationParams, get_db, get_write_db, require_curator_or_admin
-from app.api.read_models import build_read
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.common import StructureFindingScope, SubmissionRecordType
 from app.schemas.entities.reproducibility_assessment import ReproducibilityAssessmentRead
@@ -29,7 +29,7 @@ from app.services.structure_evidence_finding import (
     present_findings,
 )
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 
 
 @router.post(
@@ -50,7 +50,7 @@ def evaluate_reproducibility(
         record_type=record_type,
         record_id=record_id,
     )
-    return build_read(ReproducibilityAssessmentRead, row)
+    return ReproducibilityAssessmentRead.model_validate(row)
 
 
 @router.get(
@@ -71,7 +71,7 @@ def read_latest_reproducibility_assessment(
     )
     if row is None:
         raise HTTPException(status_code=404, detail="No reproducibility assessment found for this record.")
-    return build_read(ReproducibilityAssessmentRead, row)
+    return ReproducibilityAssessmentRead.model_validate(row)
 
 
 @router.post(
@@ -94,7 +94,7 @@ def create_scientific_record_supersession(
         actor=actor,
         reason=body.reason,
     )
-    return build_read(ScientificRecordSupersessionRead, edge)
+    return ScientificRecordSupersessionRead.model_validate(edge)
 
 
 @router.post(
@@ -127,7 +127,7 @@ def create_structure_evidence_finding(
         supersedes_finding_ref=body.supersedes_finding_ref,
     )
     (row,) = present_findings(session, [finding], body.subject_ref)
-    return build_read(StructureEvidenceFindingRead, row)
+    return StructureEvidenceFindingRead.model_validate(row)
 
 
 @router.get(
@@ -147,7 +147,7 @@ def list_structure_evidence_findings(
     )
     return StructureEvidenceFindingPageRead(
         subject_ref=subject_ref,
-        findings=[build_read(StructureEvidenceFindingRead, r) for r in rows],
+        findings=[StructureEvidenceFindingRead.model_validate(r) for r in rows],
         offset=pagination.skip,
         limit=pagination.limit,
     )

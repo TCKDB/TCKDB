@@ -21,7 +21,7 @@ from app.api.error_contract import (
     validation_detail_code,
     validation_detail_context,
 )
-from app.api.read_models import ServerReadModelError
+from app.api.server_faults import ServerFaultError
 from app.services.artifact_storage import (
     ArtifactIntegrityError,
     ArtifactStorageUnavailable,
@@ -220,30 +220,41 @@ def _data_integrity_error_handler(
     )
 
 
-def _response_validation_error_handler(
-    request: Request, exc: ResponseValidationError | ServerReadModelError
-) -> JSONResponse:
-    """500 ``data_integrity_error``: the server failed its own response model.
+#: Most validation errors a server fault logs; the total is always logged.
+_LOGGED_VALIDATION_ERRORS = 20
 
-    Two routes lead here. ``ResponseValidationError`` is raised when what a
-    route *returned* does not fit its ``response_model``; before this it
-    reached the client as ``text/plain``. :class:`ServerReadModelError` is
-    raised by :func:`app.api.read_models.build_read` when a route builds a
-    read model from a row and the row does not fit; before this it was a
-    pydantic ``ValidationError`` (a ``ValueError``) and read as a 422 that
-    blamed the caller. Neither is the caller's fault, and the errors can carry
-    ORM object reprs, so the body is fixed text; the full errors go to the
-    server log with the method and route path (the ``request_id`` log field
-    and ``X-Request-ID`` header tie the two).
+
+def _response_validation_error_handler(
+    request: Request, exc: ResponseValidationError | ServerFaultError
+) -> JSONResponse:
+    """500 ``server_response_invalid``: the server failed its own response model.
+
+    Two sources lead here, and neither is the caller's fault.
+    ``ResponseValidationError`` is raised when what a route *returned* does
+    not fit its ``response_model``; before this it reached the client as
+    ``text/plain``. :class:`ServerFaultError` is raised by
+    :class:`app.api.server_faults.ServerFaultRoute` when a pydantic
+    ``ValidationError`` escapes an endpoint (a read model built from a row
+    that does not fit it); before this it was a ``ValueError`` and read as a
+    422 that blamed the caller. Errors can carry ORM object reprs and response
+    values, so the body is fixed text. The log gets the errors without their
+    ``input`` (a secret in a response does not reach the log), capped, with the
+    total, the method and the route path; ``request_id`` ties it to the response.
     """
     route = request.scope.get("route")
-    model = getattr(getattr(exc, "model", None), "__name__", None)
+    errors = [
+        {key: value for key, value in error.items() if key not in {"input", "url", "ctx"}}
+        for error in exc.errors()
+    ]
+    model = getattr(exc, "model", None)
     logger.error(
-        "response model validation failed on %s %s%s: %s",
+        "response model validation failed on %s %s%s: %d error(s), first %d: %s",
         request.method,
         getattr(route, "path", request.url.path),
         f" ({model})" if model else "",
-        exc.errors(),
+        len(errors),
+        _LOGGED_VALIDATION_ERRORS,
+        errors[:_LOGGED_VALIDATION_ERRORS],
         exc_info=exc,
     )
     return JSONResponse(
@@ -251,8 +262,8 @@ def _response_validation_error_handler(
         content=error_envelope(
             "The server could not build a valid response for this request. "
             "Nothing in the request was wrong; report it to the operator.",
-            code="data_integrity_error",
-            fallback_code="data_integrity_error",
+            code="server_response_invalid",
+            fallback_code="server_response_invalid",
         ),
     )
 
@@ -923,7 +934,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(StarletteHTTPException, _http_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RequestValidationError, _request_validation_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ResponseValidationError, _response_validation_error_handler)  # type: ignore[arg-type]
-    app.add_exception_handler(ServerReadModelError, _response_validation_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(ServerFaultError, _response_validation_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ValueError, _value_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(DomainError, _domain_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RecordReviewConflict, _record_review_conflict_handler)  # type: ignore[arg-type]

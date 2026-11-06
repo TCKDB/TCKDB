@@ -247,6 +247,7 @@ def build_response(
     disclosures = manifest.get("disclosures", {})
     lifted = _passed_only_by_override(manifest)
     return NetworkSelectionResponse(
+        # Stored, server-built: a ValidationError here is a server fault (ServerFaultRoute -> 500), not a 422.
         request=NetworkSelectionRequestEcho.model_validate(manifest["request"]),
         review=NetworkSelectionReview(effective_floor=floor, effective_statuses=statuses),
         policy=NetworkSelectionPolicyInfo(

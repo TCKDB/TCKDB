@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     EntityListResponse,
     Gate,
@@ -63,7 +62,7 @@ def list_thermo(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [build_read(ThermoRead, r) for r in rows],
+        [ThermoRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -76,4 +75,4 @@ def get_thermo(thermo_id: int, session: Session = Depends(get_db)):
     thermo = session.get(Thermo, thermo_id)
     if thermo is None:
         raise NotFoundError("Thermo not found")
-    return build_read(ThermoRead, thermo)
+    return ThermoRead.model_validate(thermo)

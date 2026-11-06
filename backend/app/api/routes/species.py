@@ -14,7 +14,6 @@ from app.api.deps import (
     require_curator_or_admin,
 )
 from app.api.errors import NotFoundError
-from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     MERGED_FROM_HEADER,
     EntityListResponse,
@@ -24,6 +23,7 @@ from app.api.routes._legacy_reads import (
     entity_page,
     sub_response,
 )
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     MoleculeKind,
@@ -103,7 +103,7 @@ def list_species(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [build_read(SpeciesRead, r) for r in rows],
+        [SpeciesRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -119,7 +119,7 @@ def get_species(species_id: int, session: Session = Depends(get_db), marker=Depe
     if species.merged_into_species_id is not None:
         marker.headers[MERGED_FROM_HEADER] = species.public_ref
         species = session.get(Species, species.merged_into_species_id)
-    return build_read(SpeciesRead, species)
+    return SpeciesRead.model_validate(species)
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +128,7 @@ def get_species(species_id: int, session: Session = Depends(get_db), marker=Depe
 
 entries_router = APIRouter(route_class=LegacyReadRoute)
 #: The write route of the species-entries path: no read profile applies to it.
-entries_write_router = APIRouter()
+entries_write_router = APIRouter(route_class=ServerFaultRoute)
 
 
 def _forward_entry(session: Session, entry: SpeciesEntry, response: Response) -> SpeciesEntry:
@@ -190,7 +190,7 @@ def get_species_entry(
     entry = _forward_entry(session, entry, marker)
     entry_id = entry.id
     # Entries are scoping parents: never gated here (nor on their sub-routes, filters or pointers).
-    read = build_read(SpeciesEntryRead, entry)
+    read = SpeciesEntryRead.model_validate(entry)
     read.conformer_summary = _species_entry_conformer_summary(session, entry_id, visibility)
     return read
 
@@ -248,7 +248,7 @@ def list_conformer_groups_for_entry(
 
     groups: list[ConformerGroupSummaryRead] = [
         ConformerGroupSummaryRead(
-            **build_read(ConformerGroupRead, group).model_dump(),
+            **ConformerGroupRead.model_validate(group).model_dump(),
             observation_count=int(obs_count),
         )
         for group, obs_count in rows
@@ -299,7 +299,7 @@ def list_conformers_for_entry(
             SubmissionRecordType.conformer_group,
         ).order_by(ConformerObservation.id)
     ).all()
-    return [build_read(ConformerObservationRead, o) for o in observations]
+    return [ConformerObservationRead.model_validate(o) for o in observations]
 
 
 @entries_router.get(
@@ -330,7 +330,7 @@ def list_thermo_for_entry(
             SubmissionRecordType.thermo,
         ).order_by(Thermo.id)
     ).all()
-    return [build_read(ThermoRead, r) for r in rows]
+    return [ThermoRead.model_validate(r) for r in rows]
 
 
 @entries_router.get(
@@ -361,7 +361,7 @@ def list_statmech_for_entry(
             SubmissionRecordType.statmech,
         ).order_by(Statmech.id)
     ).all()
-    return [build_read(StatmechRead, r) for r in rows]
+    return [StatmechRead.model_validate(r) for r in rows]
 
 
 @entries_router.get(
@@ -393,7 +393,7 @@ def list_transport_for_entry(
             SubmissionRecordType.transport,
         ).order_by(Transport.id)
     ).all()
-    return [build_read(TransportRead, r) for r in rows]
+    return [TransportRead.model_validate(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -428,7 +428,7 @@ def create_species_entry_review_endpoint(
         role=body.role,
         note=body.note,
     )
-    return build_read(SpeciesEntryReviewRead, review)
+    return SpeciesEntryReviewRead.model_validate(review)
 
 
 @entries_router.get(
@@ -443,4 +443,4 @@ def list_species_entry_reviews_endpoint(
     reviews = list_species_entry_reviews(
         session, species_entry_id=species_entry_id
     )
-    return [build_read(SpeciesEntryReviewRead, r) for r in reviews]
+    return [SpeciesEntryReviewRead.model_validate(r) for r in reviews]

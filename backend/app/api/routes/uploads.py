@@ -18,6 +18,7 @@ from tckdb_schemas.coded_error import CodedValidationError
 
 from app.api.deps import get_current_user, get_write_db
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import Calculation
 from app.db.models.common import ScientificOriginKind, SubmissionKind
@@ -109,7 +110,7 @@ from app.workflows.thermo import persist_thermo_upload
 from app.workflows.transition_state import persist_transition_state_upload
 from app.workflows.transport import persist_transport_upload
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 
 
 # ---------------------------------------------------------------------------

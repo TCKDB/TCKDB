@@ -15,7 +15,6 @@ from app.api.deps import (
     require_curator_or_admin,
 )
 from app.api.errors import NotFoundError
-from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     EntityListResponse,
     Gate,
@@ -23,6 +22,7 @@ from app.api.routes._legacy_reads import (
     entity_page,
     legacy_route_class,
 )
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.common import ConformerSelectionKind, ScientificOriginKind, SubmissionRecordType
 from app.db.models.species import ConformerGroup, ConformerObservation
@@ -42,7 +42,7 @@ groups_router = APIRouter(
     )
 )
 #: The write route of the conformer groups path: no read profile applies to it.
-groups_write_router = APIRouter()
+groups_write_router = APIRouter(route_class=ServerFaultRoute)
 observations_router = APIRouter(
     route_class=legacy_route_class(
         {
@@ -95,7 +95,7 @@ def list_conformer_groups(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [build_read(ConformerGroupRead, r) for r in rows],
+        [ConformerGroupRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -135,9 +135,9 @@ def get_conformer_group(
     )
     observations = [obs for obs in row.observations if obs.id in shown]
     return ConformerGroupDetailRead(
-        **build_read(ConformerGroupRead, row).model_dump(),
+        **ConformerGroupRead.model_validate(row).model_dump(),
         observation_count=len(observations),
-        observations=[build_read(ConformerObservationRead, obs) for obs in observations],
+        observations=[ConformerObservationRead.model_validate(obs) for obs in observations],
     )
 
 
@@ -153,7 +153,7 @@ def list_conformer_group_selections(
     group = session.get(ConformerGroup, group_id)
     if group is None:
         raise NotFoundError("ConformerGroup not found")
-    return [build_read(ConformerSelectionRead, s) for s in group.selections]
+    return [ConformerSelectionRead.model_validate(s) for s in group.selections]
 
 
 @groups_write_router.post(
@@ -182,7 +182,7 @@ def create_conformer_group_selection(
         note=body.note,
         created_by=current_user.id,
     )
-    return build_read(ConformerSelectionRead, selection)
+    return ConformerSelectionRead.model_validate(selection)
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +231,7 @@ def list_conformer_observations(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [build_read(ConformerObservationRead, r) for r in rows],
+        [ConformerObservationRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -248,4 +248,4 @@ def get_conformer_observation(
     row = session.get(ConformerObservation, observation_id)
     if row is None:
         raise NotFoundError("ConformerObservation not found")
-    return build_read(ConformerObservationRead, row)
+    return ConformerObservationRead.model_validate(row)

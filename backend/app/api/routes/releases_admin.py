@@ -29,6 +29,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_write_db, require_curator_or_admin
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.dataset_release import DatasetRelease, ReleaseSelection
 from app.schemas.reads.scientific_release import (
@@ -63,7 +64,7 @@ from app.services.scientific_read.releases import (
     resolve_release,
 )
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 
 
 def _refusal_status(exc: ReleaseCurationError | ReleaseStateError) -> int:

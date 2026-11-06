@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     MERGED_FROM_HEADER,
     EntityListResponse,
@@ -61,7 +60,7 @@ def list_reactions(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [build_read(ChemReactionRead, r) for r in rows],
+        [ChemReactionRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -77,7 +76,7 @@ def get_reaction(reaction_id: int, session: Session = Depends(get_db), marker=De
     if reaction.merged_into_chem_reaction_id is not None:
         marker.headers[MERGED_FROM_HEADER] = reaction.public_ref
         reaction = session.get(ChemReaction, reaction.merged_into_chem_reaction_id)
-    return build_read(ChemReactionRead, reaction)
+    return ChemReactionRead.model_validate(reaction)
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +92,7 @@ def get_reaction_entry(entry_id: int, session: Session = Depends(get_db)):
     if entry is None:
         raise NotFoundError("ReactionEntry not found")
     # Entries are scoping parents: never gated here (nor on their sub-routes, filters or pointers).
-    return build_read(ReactionEntryRead, entry)
+    return ReactionEntryRead.model_validate(entry)
 
 
 @entries_router.get(
@@ -122,7 +121,7 @@ def list_kinetics_for_entry(
             SubmissionRecordType.kinetics,
         ).order_by(Kinetics.id)
     ).all()
-    return [build_read(KineticsRead, r) for r in rows]
+    return [KineticsRead.model_validate(r) for r in rows]
 
 
 @entries_router.get(
@@ -153,4 +152,4 @@ def list_transition_states_for_entry(
             SubmissionRecordType.transition_state,
         ).order_by(TransitionState.id)
     ).all()
-    return [build_read(TransitionStateRead, r) for r in rows]
+    return [TransitionStateRead.model_validate(r) for r in rows]

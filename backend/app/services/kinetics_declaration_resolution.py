@@ -67,6 +67,7 @@ from tckdb_schemas.kinetics_declarations import (
 from tckdb_schemas.local_key_codes import W_CALCULATION_KEY_UNDECLARED
 
 from app.api.error_contract import CodedValueError
+from app.api.server_faults import caller_input
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     KineticsDeterminationTargetKind,
@@ -514,7 +515,7 @@ def _resolve_applicability(
     wire = (
         applicability
         if isinstance(applicability, KineticsApplicabilityDeclaration)
-        else KineticsApplicabilityDeclaration.model_validate(applicability)
+        else caller_input(KineticsApplicabilityDeclaration.model_validate, applicability)
     )
     raw = wire.model_dump(mode="json", exclude_none=True)
     raw.pop("colliders", None)
@@ -538,7 +539,7 @@ def _resolve_applicability(
         stored_colliders.append(stored)
     if stored_colliders:
         raw["colliders"] = stored_colliders
-    stored_wire = StoredKineticsApplicabilityDeclaration.model_validate(raw)
+    stored_wire = caller_input(StoredKineticsApplicabilityDeclaration.model_validate, raw)
     return stored_wire.model_dump(mode="json", exclude_none=True, exclude_defaults=True)
 
 
@@ -627,7 +628,7 @@ def _resolve_protocol(
     wire = (
         protocol
         if isinstance(protocol, KineticsProtocolDeclaration)
-        else KineticsProtocolDeclaration.model_validate(protocol)
+        else caller_input(KineticsProtocolDeclaration.model_validate, protocol)
     )
     participants = _participant_species_entry_ids(session, reaction_entry.id)
     stored_calcs: list[dict[str, str]] = []
@@ -671,7 +672,7 @@ def _stored_protocol(wire: KineticsProtocolDeclaration, calcs: list[dict[str, st
     raw.pop("supporting_calculations", None)
     if calcs:
         raw["supporting_calculations"] = calcs
-    stored = StoredKineticsProtocolDeclaration.model_validate(raw)
+    stored = caller_input(StoredKineticsProtocolDeclaration.model_validate, raw)
     return stored.model_dump(mode="json", exclude_none=True, exclude_defaults=True)
 
 

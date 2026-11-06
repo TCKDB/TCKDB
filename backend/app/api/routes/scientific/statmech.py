@@ -31,6 +31,7 @@ from app.api.routes.scientific._response import (
     prepare_assessment_response,
     refuse_check_inputs,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import (
     RecordReviewStatus,
     ScientificOriginKind,
@@ -49,7 +50,7 @@ from app.services.scientific_read.public_assessments import (
 from app.services.scientific_read.statmech import get_statmech
 from app.services.scientific_read.statmech_search import search_statmech
 
-router = APIRouter(prefix="/statmech")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/statmech")
 
 
 # The router-level ``?profile=`` dependency puts these two keys on every
@@ -116,7 +117,8 @@ def scientific_statmech_search_get(
                 "an unrecognised key is refused rather than ignored."
             ),
         )
-    request_obj = StatmechSearchRequest(
+    request_obj = caller_input(
+        StatmechSearchRequest,
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,
         statmech_ref=statmech_ref,

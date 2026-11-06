@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     EntityListResponse,
     LegacyReadRoute,
@@ -82,7 +81,7 @@ def list_levels_of_theory(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [build_read(LevelOfTheoryRead, r) for r in rows],
+        [LevelOfTheoryRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -96,4 +95,4 @@ def get_level_of_theory(lot_id: int, session: Session = Depends(get_db)):
     row = session.get(LevelOfTheory, canonical_level_of_theory_id(session, lot_id))
     if row is None:
         raise NotFoundError("LevelOfTheory not found")
-    return build_read(LevelOfTheoryRead, row)
+    return LevelOfTheoryRead.model_validate(row)

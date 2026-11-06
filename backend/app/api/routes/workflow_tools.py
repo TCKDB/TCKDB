@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     EntityListResponse,
     LegacyReadRoute,
@@ -68,7 +67,7 @@ def list_workflow_tools(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [build_read(WorkflowToolRead, r) for r in rows],
+        [WorkflowToolRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -90,7 +89,7 @@ def get_workflow_tool(
         .order_by(*_release_ordering())
     ).all()
 
-    return build_read(WorkflowToolDetailRead,
+    return WorkflowToolDetailRead.model_validate(
         {
             "id": tool.id,
             "name": tool.name,
@@ -144,7 +143,7 @@ def list_workflow_tool_releases(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [build_read(WorkflowToolReleaseDetailRead, r) for r in rows],
+        [WorkflowToolReleaseDetailRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -168,4 +167,4 @@ def get_workflow_tool_release(
         raise NotFoundError(
             "WorkflowToolRelease not found"
         )
-    return build_read(WorkflowToolReleaseDetailRead, row)
+    return WorkflowToolReleaseDetailRead.model_validate(row)

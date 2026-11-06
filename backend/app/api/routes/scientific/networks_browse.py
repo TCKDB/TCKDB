@@ -48,6 +48,7 @@ from app.api.routes.scientific._response import (
     SEARCH_SCOPE,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_network_search import (
     NetworkBrowseRequest,
@@ -56,7 +57,7 @@ from app.schemas.reads.scientific_network_search import (
 from app.services.scientific_read.internal_ids import apply_internal_ids_visibility
 from app.services.scientific_read.networks_search import browse_networks
 
-router = APIRouter(prefix="/networks")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/networks")
 
 
 @router.get("/browse", response_model=ScientificNetworkSearchResponse)
@@ -113,7 +114,8 @@ def scientific_networks_browse(
     rejected with 422 (``client_sort_not_supported``), matching the
     sibling endpoint.
     """
-    request = NetworkBrowseRequest(
+    request = caller_input(
+        NetworkBrowseRequest,
         network_ref=network_ref,
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,

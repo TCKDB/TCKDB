@@ -36,6 +36,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads._field_bounds import (
     MAX_PARTICIPANTS_PER_REACTION as _MAX_PARTICIPANTS_PER_REACTION,
@@ -50,7 +51,7 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.reactions import browse_reactions
 
-router = APIRouter(prefix="/reactions")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/reactions")
 
 
 def _drop_blank_smiles(values: list[str] | None) -> list[str]:
@@ -212,7 +213,8 @@ def scientific_reactions_browse(
     set; ``matched_direction`` on each record still reports which
     orientation matched.
     """
-    request = ReactionsBrowseRequest(
+    request = caller_input(
+        ReactionsBrowseRequest,
         family=family,
         reactant_smiles=_drop_blank_smiles(reactant_smiles),
         product_smiles=_drop_blank_smiles(product_smiles),

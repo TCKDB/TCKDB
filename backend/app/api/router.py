@@ -44,8 +44,9 @@ from app.api.routes import (
 )
 from app.api.routes.scientific import scientific_router
 from app.api.routes.scientific._profile import resolve_profile_dependency
+from app.api.server_faults import ServerFaultRoute
 
-api_router = APIRouter()
+api_router = APIRouter(route_class=ServerFaultRoute)
 
 # Write/upload routers are gated on tckdb-client compatibility. A
 # request that identifies itself as ``tckdb-client`` via the

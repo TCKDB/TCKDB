@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
+from app.api.server_faults import ServerFaultRoute
 from app.schemas.reads.scientific_calculation_paths import (
     ScientificCalculationIRCResponse,
     ScientificCalculationPathSearchResponse,
@@ -41,7 +42,7 @@ from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
 
-router = APIRouter(prefix="/calculations")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/calculations")
 
 
 @router.get(

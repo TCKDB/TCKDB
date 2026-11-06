@@ -14,6 +14,7 @@ from app.api.routes.scientific._response import (
     prepare_assessment_response,
     refuse_check_inputs,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.chemistry.method_families import MethodFamily
 from app.db.models.common import KineticsModelKind, RecordReviewStatus, ScientificOriginKind
 from app.schemas.reads.removed_parameters import KINETICS as _REMOVED_PARAMETERS
@@ -31,7 +32,7 @@ from app.services.scientific_read.public_assessments import (
     attach_kinetics_assessments,
 )
 
-router = APIRouter(prefix="/kinetics")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/kinetics")
 
 # The router-level ``?profile=`` dependency puts these two keys on every
 # scientific operation, POSTs included, so they must be allowed through the
@@ -102,7 +103,8 @@ def kinetics_search_get(
     "give me one".
     """
     reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
-    request = KineticsSearchRequest(
+    request = caller_input(
+        KineticsSearchRequest,
         reactants=reactants or [],
         products=products or [],
         direction=direction,

@@ -48,6 +48,7 @@ from app.api.routes.scientific._response import (
     prepare_assessment_response,
     refuse_check_inputs,
 )
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.removed_parameters import STATMECH as _STATMECH_REMOVED
 from app.schemas.reads.removed_parameters import TRANSPORT as _TRANSPORT_REMOVED
@@ -75,7 +76,7 @@ from app.services.scientific_read.species_transport import (
     get_species_transport,
 )
 
-router = APIRouter(prefix="/species-entries")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/species-entries")
 
 
 @router.get(

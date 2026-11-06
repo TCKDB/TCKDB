@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.removed_parameters import REACTIONS as _REMOVED_PARAMETERS
 from app.schemas.reads.removed_parameters import reject_removed_query_params
@@ -22,7 +23,7 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.reactions import search_reactions
 
-router = APIRouter(prefix="/reactions")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/reactions")
 
 
 @router.get("/search", response_model=ScientificReactionSearchResponse)
@@ -57,7 +58,8 @@ def reaction_search_get(
     ``docs/specs/browse_order.md`` §Endpoint 2.
     """
     reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
-    request = ReactionSearchRequest(
+    request = caller_input(
+        ReactionSearchRequest,
         reactants=reactants or [],
         products=products or [],
         direction=direction,

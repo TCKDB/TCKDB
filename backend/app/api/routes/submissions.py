@@ -34,7 +34,7 @@ from app.api.deps import (
     get_write_db,
     require_curator_or_admin,
 )
-from app.api.read_models import build_read
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser, AppUserRole
 from app.db.models.common import SubmissionStatus
 from app.db.models.submission import Submission
@@ -74,7 +74,7 @@ from app.services.submission import (
     supersede_submission,
 )
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
@@ -144,7 +144,7 @@ def list_mine(
     rows = list_my_submissions(
         session, user_id=current_user.id, statuses=statuses, offset=offset, limit=limit
     )
-    return [build_read(SubmissionRead, r) for r in rows]
+    return [SubmissionRead.model_validate(r) for r in rows]
 
 
 @router.get("/for-review", response_model=list[SubmissionRead])
@@ -157,7 +157,7 @@ def list_for_review(
 ) -> list[SubmissionRead]:
     """List submissions awaiting curator review (curator/admin only)."""
     rows = list_submissions_for_review(session, statuses=statuses, offset=offset, limit=limit)
-    return [build_read(SubmissionRead, r) for r in rows]
+    return [SubmissionRead.model_validate(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ def read_submission(
     """Read a single submission. Visible to its creator and curators/admins."""
     submission = get_submission(session, submission_id)
     _require_view_permission(submission, current_user)
-    return build_read(SubmissionRead, submission)
+    return SubmissionRead.model_validate(submission)
 
 
 @router.get(
@@ -192,7 +192,7 @@ def read_audit_events(
     submission = get_submission(session, submission_id)
     _require_view_permission(submission, current_user)
     events = list_audit_events(session, submission_id=submission_id, offset=offset, limit=limit)
-    return [build_read(SubmissionAuditEventRead, e) for e in events]
+    return [SubmissionAuditEventRead.model_validate(e) for e in events]
 
 
 @router.get(
@@ -230,7 +230,7 @@ def read_record_links(
     submission = get_submission(session, submission_id)
     _require_view_permission(submission, current_user)
     links = list_record_links(session, submission_id=submission_id, offset=offset, limit=limit)
-    return [build_read(SubmissionRecordLinkRead, link) for link in links]
+    return [SubmissionRecordLinkRead.model_validate(link) for link in links]
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +254,7 @@ def approve(
     submission = approve_submission(
         session, submission_id=submission_id, actor=actor, summary=summary
     )
-    return build_read(SubmissionRead, submission)
+    return SubmissionRead.model_validate(submission)
 
 
 @router.post(
@@ -277,7 +277,7 @@ def reject(
         summary=body.summary,
         correction_due_at=body.correction_due_at,
     )
-    return build_read(SubmissionRead, submission)
+    return SubmissionRead.model_validate(submission)
 
 
 @router.post(
@@ -322,7 +322,7 @@ def supersede(
         # 403, as for every other submission on this router the caller has
         # no business with (``_require_view_permission``).
         raise HTTPException(status_code=403, detail=str(exc)) from exc
-    return build_read(SubmissionRead, old)
+    return SubmissionRead.model_validate(old)
 
 
 # ---------------------------------------------------------------------------

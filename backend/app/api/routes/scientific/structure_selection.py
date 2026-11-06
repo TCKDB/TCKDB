@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_snapshot_db
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.server_faults import ServerFaultRoute
 from app.schemas.reads.scientific_structure_selection import (
     CalculationSelectionRequest,
     ConformerSelectionRequest,
@@ -48,8 +49,8 @@ from app.services.structure_selection.public import (
     run_selection,
 )
 
-species_router = APIRouter(prefix="/species-entries")
-tse_router = APIRouter(prefix="/transition-state-entries")
+species_router = APIRouter(route_class=ServerFaultRoute, prefix="/species-entries")
+tse_router = APIRouter(route_class=ServerFaultRoute, prefix="/transition-state-entries")
 
 _ALLOWED_QS_KEYS: set[str] = set(PROFILE_QUERY_KEYS)
 

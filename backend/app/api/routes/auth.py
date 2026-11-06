@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.api.config import settings
 from app.api.deps import get_current_user, get_db, get_write_db, require_session_user
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.api_key import ApiKey
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
@@ -39,7 +40,7 @@ from app.services.auth import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 
 #: The ``app_user`` uniqueness rules registration can trip, mapped to the
 #: refusal each one produces, keyed on the name PostgreSQL reports for the

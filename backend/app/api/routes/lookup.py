@@ -53,6 +53,7 @@ from app.api.deps import get_db
 from app.api.error_contract import CodedValueError
 from app.api.errors import NotFoundError
 from app.api.routes._legacy_reads import LegacyVisibility
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.chemistry.basis_set_names import basis_identity_key
 from app.chemistry.dispersion_names import level_identity_keys, method_matches_level
 from app.chemistry.reaction_family_display import reaction_family_display_name
@@ -91,7 +92,7 @@ from app.services.scientific_read.lot_identity_filters import basis_matches, met
 from app.services.scientific_read.profile import current_read_profile
 from app.services.scientific_read.sql_review import join_review, review_rank_expr
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 
 
 # ---------------------------------------------------------------------------
@@ -859,7 +860,7 @@ def lookup_species(
     left out unless included; ``profile=curated`` counts approved records only (a list-level floor)).
     """
     inputs = {"smiles": smiles, "charge": charge, "multiplicity": multiplicity}
-    query = LookupQuery(kind="species", inputs=inputs)
+    query = caller_input(LookupQuery, kind="species", inputs=inputs)
     mb = _MatchBuilder()
 
     payload = SpeciesEntryIdentityPayload(
@@ -987,7 +988,7 @@ def lookup_calculations(
         inputs["basis"] = basis
     if selection != "all":
         inputs["selection"] = selection
-    query_echo = LookupQuery(kind="calculations", inputs=inputs)
+    query_echo = caller_input(LookupQuery, kind="calculations", inputs=inputs)
     mb = _MatchBuilder()
 
     entry = session.get(SpeciesEntry, species_entry_id)
@@ -1049,7 +1050,8 @@ def lookup_thermo(
     session: Session = Depends(get_db),
 ):
     """Find thermo records for a species entry, in the display order."""
-    query_echo = LookupQuery(
+    query_echo = caller_input(
+        LookupQuery,
         kind="thermo",
         inputs={"species_entry_id": species_entry_id},
     )
@@ -1148,7 +1150,7 @@ def lookup_species_calculation(
         inputs["basis"] = basis
     if selection != "all":
         inputs["selection"] = selection
-    query_echo = LookupQuery(kind="species_calculation", inputs=inputs)
+    query_echo = caller_input(LookupQuery, kind="species_calculation", inputs=inputs)
     mb = _MatchBuilder()
 
     # Step 1: resolve species identity
@@ -1307,7 +1309,8 @@ def lookup_reaction(
     r_mults = reactant_multiplicities or [1] * len(reactants)
     p_mults = product_multiplicities or [1] * len(products)
 
-    query_echo = LookupQuery(
+    query_echo = caller_input(
+        LookupQuery,
         kind="reaction",
         inputs={"reactants": reactants, "products": products, "reversible": reversible},
     )
@@ -1358,7 +1361,7 @@ def lookup_kinetics(
     inputs: dict[str, Any] = {"reaction_entry_id": reaction_entry_id}
     if model_kind:
         inputs["model_kind"] = model_kind
-    query_echo = LookupQuery(kind="kinetics", inputs=inputs)
+    query_echo = caller_input(LookupQuery, kind="kinetics", inputs=inputs)
     mb = _MatchBuilder()
 
     entry = session.get(ReactionEntry, reaction_entry_id)
@@ -1424,7 +1427,7 @@ def lookup_reaction_kinetics(
     }
     if model_kind:
         inputs["model_kind"] = model_kind
-    query_echo = LookupQuery(kind="reaction_kinetics", inputs=inputs)
+    query_echo = caller_input(LookupQuery, kind="reaction_kinetics", inputs=inputs)
     mb = _MatchBuilder()
 
     chem_rxn, results = _resolve_reaction(
@@ -1509,7 +1512,7 @@ def lookup_geometry(
     canonicalization may be added later; see ``lookup-expansion-spec.md``.
     ``calculation_output_count`` counts the calculations the request shows.
     """
-    query_echo = LookupQuery(kind="geometry", inputs={"geom_hash": geom_hash})
+    query_echo = caller_input(LookupQuery, kind="geometry", inputs={"geom_hash": geom_hash})
     mb = _MatchBuilder()
 
     geom = session.scalar(
@@ -1595,7 +1598,8 @@ def lookup_statmech(
     Append-only: multiple records for the same species entry are all
     returned, not collapsed into one ``preferred`` row, in the display order.
     """
-    query_echo = LookupQuery(
+    query_echo = caller_input(
+        LookupQuery,
         kind="statmech",
         inputs={"species_entry_id": species_entry_id},
     )
@@ -1672,7 +1676,8 @@ def lookup_transport(
     Append-only: multiple records for the same species entry are all
     returned, not collapsed into one ``preferred`` row, in the display order.
     """
-    query_echo = LookupQuery(
+    query_echo = caller_input(
+        LookupQuery,
         kind="transport",
         inputs={"species_entry_id": species_entry_id},
     )
@@ -1732,7 +1737,7 @@ def lookup_network(
     Networks are listed in the display order.
     """
     inputs: dict[str, Any] = {"species_entry_ids": list(species_entry_ids)}
-    query_echo = LookupQuery(kind="network", inputs=inputs)
+    query_echo = caller_input(LookupQuery, kind="network", inputs=inputs)
     mb = _MatchBuilder()
 
     requested = list(dict.fromkeys(species_entry_ids))

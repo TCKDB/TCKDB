@@ -15,7 +15,6 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import DataIntegrityError, NotFoundError
-from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     EntityListResponse,
     Gate,
@@ -185,7 +184,7 @@ def _state_energy_reads(
         )
     reads: list[NetworkSolveStateEnergyRead] = []
     for row in rows:
-        read = build_read(NetworkSolveStateEnergyRead, row)
+        read = NetworkSolveStateEnergyRead.model_validate(row)
         sources = listed.get(row.state_id, [])
         if not sources and row.source_calculation_id is not None:
             # The older single slot covers the participant whose calculation it is, only.
@@ -207,15 +206,15 @@ def _state_energy_reads(
 
 
 def _literature_read(lit) -> LiteratureRead | None:
-    return None if lit is None else build_read(LiteratureRead, lit)
+    return None if lit is None else LiteratureRead.model_validate(lit)
 
 
 def _software_release_read(sr) -> SoftwareReleaseRead | None:
-    return None if sr is None else build_read(SoftwareReleaseRead, sr)
+    return None if sr is None else SoftwareReleaseRead.model_validate(sr)
 
 
 def _workflow_tool_release_read(wtr) -> WorkflowToolReleaseRead | None:
-    return None if wtr is None else build_read(WorkflowToolReleaseRead, wtr)
+    return None if wtr is None else WorkflowToolReleaseRead.model_validate(wtr)
 
 
 def _kinetics_with_payloads(
@@ -282,15 +281,15 @@ def _kinetics_with_payloads(
                 note=k.note,
                 created_at=k.created_at,
                 chebyshev=(
-                    build_read(NetworkKineticsChebyshevRead, cheb_by_k[k.id])
+                    NetworkKineticsChebyshevRead.model_validate(cheb_by_k[k.id])
                     if has_cheb
                     else None
                 ),
                 plog_entries=[
-                    build_read(NetworkKineticsPlogRead, r) for r in plog_list
+                    NetworkKineticsPlogRead.model_validate(r) for r in plog_list
                 ],
                 points=[
-                    build_read(NetworkKineticsPointRead, r) for r in point_list
+                    NetworkKineticsPointRead.model_validate(r) for r in point_list
                 ],
             )
         )
@@ -492,10 +491,10 @@ def get_network(
             network.workflow_tool_release
         ),
         species=[
-            build_read(NetworkSpeciesLinkRead, link) for link in species_links
+            NetworkSpeciesLinkRead.model_validate(link) for link in species_links
         ],
         reactions=[
-            build_read(NetworkReactionLinkRead, link) for link in reaction_links
+            NetworkReactionLinkRead.model_validate(link) for link in reaction_links
         ],
         states=[
             NetworkStateRead(
@@ -505,13 +504,13 @@ def get_network(
                 composition_hash=s.composition_hash,
                 label=s.label,
                 participants=[
-                    build_read(NetworkStateParticipantRead, p)
+                    NetworkStateParticipantRead.model_validate(p)
                     for p in s.participants
                 ],
             )
             for s in states
         ],
-        channels=[build_read(NetworkChannelRead, c) for c in channels],
+        channels=[NetworkChannelRead.model_validate(c) for c in channels],
         solve_count=solve_count,
     )
 
@@ -635,7 +634,7 @@ def get_network_solve(
         .order_by(NetworkSolveEnergyTransfer.id)
     ).all()
     energy_transfer = (
-        build_read(NetworkSolveEnergyTransferRead, energy_transfer_rows[0])
+        NetworkSolveEnergyTransferRead.model_validate(energy_transfer_rows[0])
         if len(energy_transfer_rows) == 1
         else None
     )
@@ -686,15 +685,15 @@ def get_network_solve(
         workflow_tool_release=_workflow_tool_release_read(
             solve.workflow_tool_release
         ),
-        bath_gases=[build_read(NetworkSolveBathGasRead, bg) for bg in bath_gases],
+        bath_gases=[NetworkSolveBathGasRead.model_validate(bg) for bg in bath_gases],
         energy_transfer=energy_transfer,
         energy_transfers=[
-            build_read(NetworkSolveEnergyTransferRead, row)
+            NetworkSolveEnergyTransferRead.model_validate(row)
             for row in energy_transfer_rows
         ],
         state_energies=_state_energy_reads(session, solve_id, list(state_energies)),
         source_calculations=[
-            build_read(NetworkSolveSourceCalculationRead, sc) for sc in source_calcs
+            NetworkSolveSourceCalculationRead.model_validate(sc) for sc in source_calcs
         ],
         kinetics=kinetics,
     )

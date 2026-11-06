@@ -2467,6 +2467,22 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("selection_no_longer_approved", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py"),
+    ApiCode("server_response_invalid", 500, Surface.response_literal,
+            "backend/app/api/errors.py",
+            note=(
+                "The server failed its own response model; the request was "
+                "not at fault. Two sources, one handler: FastAPI's "
+                "ResponseValidationError (what a route returned does not fit "
+                "its response_model) and ServerFaultRoute, the route class "
+                "that turns a pydantic ValidationError escaping an endpoint "
+                "(a read model built from a row that does not fit it) into "
+                "ServerFaultError. Before this a ResponseValidationError was "
+                "a text/plain 500 and a route-built read model a 422 that "
+                "blamed the caller. Fixed text, empty context; the errors go "
+                "to the server log. data_integrity_error keeps its own "
+                "meaning: a stored row combination the serializer cannot "
+                "represent."
+            )),
     ApiCode("smiles_too_long", 422, Surface.coded_exception,
             "backend/app/schemas/reads/scientific_kinetics_search.py",
             shape=Shape.relationship,

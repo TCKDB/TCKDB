@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     EntityListResponse,
     Gate,
@@ -86,7 +85,7 @@ def list_statmech(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [build_read(StatmechRead, r) for r in rows],
+        [StatmechRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -109,4 +108,4 @@ def get_statmech(statmech_id: int, session: Session = Depends(get_db)):
     )
     if row is None:
         raise NotFoundError("Statmech not found")
-    return build_read(StatmechRead, row)
+    return StatmechRead.model_validate(row)

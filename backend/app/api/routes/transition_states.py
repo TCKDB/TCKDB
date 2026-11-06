@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
-from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     EntityListResponse,
     Gate,
@@ -61,7 +60,7 @@ def list_transition_states(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [build_read(TransitionStateRead, r) for r in rows],
+        [TransitionStateRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -76,7 +75,7 @@ def get_transition_state(
     ts = session.get(TransitionState, ts_id)
     if ts is None:
         raise NotFoundError("TransitionState not found")
-    return build_read(TransitionStateRead, ts)
+    return TransitionStateRead.model_validate(ts)
 
 
 @router.get(
@@ -89,4 +88,4 @@ def get_transition_state_entry(
     entry = session.get(TransitionStateEntry, entry_id)
     if entry is None:
         raise NotFoundError("TransitionStateEntry not found")
-    return build_read(TransitionStateEntryRead, entry)
+    return TransitionStateEntryRead.model_validate(entry)

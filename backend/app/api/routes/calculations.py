@@ -21,7 +21,6 @@ from app.api.deps import (
 )
 from app.api.errors import NotFoundError, not_found
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
-from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     EntityListResponse,
     Gate,
@@ -29,6 +28,7 @@ from app.api.routes._legacy_reads import (
     entity_page,
     legacy_route_class,
 )
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import (
     Calculation,
@@ -133,7 +133,7 @@ router = APIRouter(
 )
 
 #: The write routes of the calculations path: no read profile applies to them.
-write_router = APIRouter()
+write_router = APIRouter(route_class=ServerFaultRoute)
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +272,7 @@ def list_calculations(
         ).all()
 
     return entity_page(
-        [build_read(CalculationRead, r) for r in rows],
+        [CalculationRead.model_validate(r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -283,7 +283,7 @@ def list_calculations(
 @router.get("/{calculation_id}", response_model=CalculationRead)
 def get_calculation(calculation_id: int, session: Session = Depends(get_db)):
     calc = _get_calculation_or_404(calculation_id, session)
-    return build_read(CalculationRead, calc)
+    return CalculationRead.model_validate(calc)
 
 
 # ---------------------------------------------------------------------------
@@ -303,7 +303,7 @@ def get_sp_result(calculation_id: int, session: Session = Depends(get_db)):
         raise NotFoundError(
             "SP result not found for the calculation"
         )
-    return build_read(CalculationSPResultRead, row)
+    return CalculationSPResultRead.model_validate(row)
 
 
 @router.get("/{calculation_id}/opt-result", response_model=CalculationOptResultRead)
@@ -318,7 +318,7 @@ def get_opt_result(calculation_id: int, session: Session = Depends(get_db)):
         raise NotFoundError(
             "Optimization result not found for the calculation"
         )
-    return build_read(CalculationOptResultRead, row)
+    return CalculationOptResultRead.model_validate(row)
 
 
 @router.get("/{calculation_id}/freq-result", response_model=CalculationFreqResultRead)
@@ -333,7 +333,7 @@ def get_freq_result(calculation_id: int, session: Session = Depends(get_db)):
         raise NotFoundError(
             "Frequency result not found for the calculation"
         )
-    return build_read(CalculationFreqResultRead, row)
+    return CalculationFreqResultRead.model_validate(row)
 
 
 @router.get("/{calculation_id}/hessian", response_model=CalculationHessianRead)
@@ -358,7 +358,7 @@ def get_hessian(calculation_id: int, session: Session = Depends(get_db)):
         raise NotFoundError(
             "Hessian not found for the calculation", code="hessian_not_found"
         )
-    return build_read(CalculationHessianRead, row)
+    return CalculationHessianRead.model_validate(row)
 
 
 # ---------------------------------------------------------------------------
@@ -380,7 +380,7 @@ def list_input_geometries(
         .options(joinedload(CalculationInputGeometry.geometry).selectinload(Geometry.atoms))
         .order_by(CalculationInputGeometry.input_order)
     ).unique().all()
-    return [build_read(CalculationInputGeometryDetailRead, r) for r in rows]
+    return [CalculationInputGeometryDetailRead.model_validate(r) for r in rows]
 
 
 @router.get(
@@ -397,7 +397,7 @@ def list_output_geometries(
         .options(joinedload(CalculationOutputGeometry.geometry).selectinload(Geometry.atoms))
         .order_by(CalculationOutputGeometry.output_order)
     ).unique().all()
-    return [build_read(CalculationOutputGeometryDetailRead, r) for r in rows]
+    return [CalculationOutputGeometryDetailRead.model_validate(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -460,7 +460,7 @@ def list_constraints(
         .where(CalculationConstraint.calculation_id == calculation_id)
         .order_by(CalculationConstraint.constraint_index)
     ).all()
-    return [build_read(CalculationConstraintRead, r) for r in rows]
+    return [CalculationConstraintRead.model_validate(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -486,7 +486,7 @@ def get_scan_result(calculation_id: int, session: Session = Depends(get_db)):
         raise NotFoundError(
             "Scan result not found for the calculation"
         )
-    return build_read(CalculationScanResultRead, row)
+    return CalculationScanResultRead.model_validate(row)
 
 
 @router.get(
@@ -502,7 +502,7 @@ def list_scan_coordinates(
         .where(CalculationScanCoordinate.calculation_id == calculation_id)
         .order_by(CalculationScanCoordinate.coordinate_index.asc())
     ).all()
-    return [build_read(CalculationScanCoordinateRead, r) for r in rows]
+    return [CalculationScanCoordinateRead.model_validate(r) for r in rows]
 
 
 @router.get(
@@ -519,7 +519,7 @@ def list_scan_points(
         .options(selectinload(CalculationScanPoint.coordinate_values))
         .order_by(CalculationScanPoint.point_index.asc())
     ).all()
-    return [build_read(CalculationScanPointRead, r) for r in rows]
+    return [CalculationScanPointRead.model_validate(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -539,7 +539,7 @@ def get_irc_result(calculation_id: int, session: Session = Depends(get_db)):
         raise NotFoundError(
             "IRC result not found for the calculation"
         )
-    return build_read(CalculationIRCResultRead, row)
+    return CalculationIRCResultRead.model_validate(row)
 
 
 @router.get(
@@ -555,7 +555,7 @@ def list_irc_points(
         .where(CalculationIRCPoint.calculation_id == calculation_id)
         .order_by(CalculationIRCPoint.point_index.asc())
     ).all()
-    return [build_read(CalculationIRCPointRead, r) for r in rows]
+    return [CalculationIRCPointRead.model_validate(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -580,7 +580,7 @@ def get_path_search_result(
         raise NotFoundError(
             "Path-search result not found for the calculation"
         )
-    return build_read(CalculationPathSearchResultRead, row)
+    return CalculationPathSearchResultRead.model_validate(row)
 
 
 @router.get(
@@ -596,7 +596,7 @@ def list_path_search_points(
         .where(CalculationPathSearchPoint.calculation_id == calculation_id)
         .order_by(CalculationPathSearchPoint.point_index.asc())
     ).all()
-    return [build_read(CalculationPathSearchPointRead, r) for r in rows]
+    return [CalculationPathSearchPointRead.model_validate(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -620,7 +620,7 @@ def list_parameters(
             CalculationParameter.id.asc(),
         )
     ).all()
-    return [build_read(CalculationParameterRead, r) for r in rows]
+    return [CalculationParameterRead.model_validate(r) for r in rows]
 
 
 @router.get(
@@ -636,7 +636,7 @@ def list_artifacts(
         .where(CalculationArtifact.calculation_id == calculation_id)
         .order_by(CalculationArtifact.id.asc())
     ).all()
-    return [build_read(CalculationArtifactRead, r) for r in rows]
+    return [CalculationArtifactRead.model_validate(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -872,7 +872,7 @@ def upload_calculation_artifacts(
     result = ArtifactsUploadResult(
         calculation_id=calc_pk,
         calculation_ref=calculation.public_ref,
-        artifacts=[build_read(CalculationArtifactRead, r) for r in rows],
+        artifacts=[CalculationArtifactRead.model_validate(r) for r in rows],
         warnings=warnings,
     )
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
@@ -911,7 +911,7 @@ def get_geometry_validation(
         raise NotFoundError(
             "Geometry validation not found for the calculation"
         )
-    return build_read(CalculationGeometryValidationRead, row)
+    return CalculationGeometryValidationRead.model_validate(row)
 
 
 @router.get(
@@ -939,7 +939,7 @@ def get_scf_stability(
             calculation_id=calculation_id,
             status="not_checked",
         )
-    return build_read(CalculationSCFStabilityRead, row)
+    return CalculationSCFStabilityRead.model_validate(row)
 
 
 @router.get(
@@ -970,4 +970,4 @@ def get_wavefunction_diagnostic(
         raise NotFoundError(
             "Wavefunction diagnostic not found for the calculation"
         )
-    return build_read(CalculationWavefunctionDiagnosticRead, row)
+    return CalculationWavefunctionDiagnosticRead.model_validate(row)
