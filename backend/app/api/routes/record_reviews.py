@@ -20,6 +20,7 @@ from app.api.deps import (
     get_write_db,
     require_curator_or_admin,
 )
+from app.api.read_models import build_read
 from app.db.models.app_user import AppUser
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.db.models.record_review import RecordReview
@@ -67,7 +68,7 @@ def _read(
     is not addressable by a client, and the schema promises the two are null
     together.
     """
-    return RecordReviewRead.model_validate(row).model_copy(
+    return build_read(RecordReviewRead, row).model_copy(
         update={
             "record_public_ref": record_public_ref,
             "container_type": container.container_type if container else None,

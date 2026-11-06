@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
+from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     EntityListResponse,
     Gate,
@@ -89,7 +90,7 @@ def list_energy_correction_schemes(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [EnergyCorrectionSchemeRead.model_validate(r) for r in rows],
+        [build_read(EnergyCorrectionSchemeRead, r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -111,7 +112,7 @@ def get_energy_correction_scheme(
     )
     if row is None:
         raise NotFoundError("EnergyCorrectionScheme not found")
-    return EnergyCorrectionSchemeRead.model_validate(row)
+    return build_read(EnergyCorrectionSchemeRead, row)
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +165,7 @@ def list_frequency_scale_factors(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [FrequencyScaleFactorRead.model_validate(r) for r in rows],
+        [build_read(FrequencyScaleFactorRead, r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -178,7 +179,7 @@ def get_frequency_scale_factor(
     row = session.get(FrequencyScaleFactor, fsf_id)
     if row is None:
         raise NotFoundError("FrequencyScaleFactor not found")
-    return FrequencyScaleFactorRead.model_validate(row)
+    return build_read(FrequencyScaleFactorRead, row)
 
 
 # ---------------------------------------------------------------------------
@@ -236,7 +237,7 @@ def list_applied_energy_corrections(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [AppliedEnergyCorrectionRead.model_validate(r) for r in rows],
+        [build_read(AppliedEnergyCorrectionRead, r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -259,4 +260,4 @@ def get_applied_energy_correction(
         raise NotFoundError(
             "AppliedEnergyCorrection not found"
         )
-    return AppliedEnergyCorrectionRead.model_validate(row)
+    return build_read(AppliedEnergyCorrectionRead, row)

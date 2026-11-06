@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
+from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     EntityListResponse,
     LegacyReadRoute,
@@ -64,7 +65,7 @@ def list_literature(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [LiteratureRead.model_validate(r) for r in rows],
+        [build_read(LiteratureRead, r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -80,4 +81,4 @@ def get_literature(literature_id: int, session: Session = Depends(get_db)):
     )
     if row is None:
         raise NotFoundError("Literature not found")
-    return LiteratureRead.model_validate(row)
+    return build_read(LiteratureRead, row)

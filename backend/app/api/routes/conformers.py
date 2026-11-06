@@ -15,6 +15,7 @@ from app.api.deps import (
     require_curator_or_admin,
 )
 from app.api.errors import NotFoundError
+from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     EntityListResponse,
     Gate,
@@ -94,7 +95,7 @@ def list_conformer_groups(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [ConformerGroupRead.model_validate(r) for r in rows],
+        [build_read(ConformerGroupRead, r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -134,9 +135,9 @@ def get_conformer_group(
     )
     observations = [obs for obs in row.observations if obs.id in shown]
     return ConformerGroupDetailRead(
-        **ConformerGroupRead.model_validate(row).model_dump(),
+        **build_read(ConformerGroupRead, row).model_dump(),
         observation_count=len(observations),
-        observations=[ConformerObservationRead.model_validate(obs) for obs in observations],
+        observations=[build_read(ConformerObservationRead, obs) for obs in observations],
     )
 
 
@@ -152,7 +153,7 @@ def list_conformer_group_selections(
     group = session.get(ConformerGroup, group_id)
     if group is None:
         raise NotFoundError("ConformerGroup not found")
-    return [ConformerSelectionRead.model_validate(s) for s in group.selections]
+    return [build_read(ConformerSelectionRead, s) for s in group.selections]
 
 
 @groups_write_router.post(
@@ -181,7 +182,7 @@ def create_conformer_group_selection(
         note=body.note,
         created_by=current_user.id,
     )
-    return ConformerSelectionRead.model_validate(selection)
+    return build_read(ConformerSelectionRead, selection)
 
 
 # ---------------------------------------------------------------------------
@@ -230,7 +231,7 @@ def list_conformer_observations(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [ConformerObservationRead.model_validate(r) for r in rows],
+        [build_read(ConformerObservationRead, r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -247,4 +248,4 @@ def get_conformer_observation(
     row = session.get(ConformerObservation, observation_id)
     if row is None:
         raise NotFoundError("ConformerObservation not found")
-    return ConformerObservationRead.model_validate(row)
+    return build_read(ConformerObservationRead, row)

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
+from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     EntityListResponse,
     LegacyReadRoute,
@@ -46,7 +47,7 @@ def list_software(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [SoftwareRead.model_validate(r) for r in rows],
+        [build_read(SoftwareRead, r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -58,7 +59,7 @@ def get_software(software_id: int, session: Session = Depends(get_db)):
     row = session.get(Software, software_id)
     if row is None:
         raise NotFoundError("Software not found")
-    return SoftwareRead.model_validate(row)
+    return build_read(SoftwareRead, row)
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +97,7 @@ def list_software_releases(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [SoftwareReleaseRead.model_validate(r) for r in rows],
+        [build_read(SoftwareReleaseRead, r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -108,4 +109,4 @@ def get_software_release(release_id: int, session: Session = Depends(get_db)):
     row = session.get(SoftwareRelease, release_id)
     if row is None:
         raise NotFoundError("SoftwareRelease not found")
-    return SoftwareReleaseRead.model_validate(row)
+    return build_read(SoftwareReleaseRead, row)

@@ -24,7 +24,7 @@ dataset must never require a code release.
 
 ## A response the server cannot build is a logged 500, not a bare error (2026-11-07)
 
-When a route returned something its own response model rejects, the client got a `text/plain` "Internal Server Error". It now gets a JSON 500 with code `data_integrity_error` and fixed text: no validation detail, object repr or id. The full validation errors are logged at ERROR with the method and route path. A malformed request is unchanged: still 422 with its detail.
+When a route returned something its own response model rejects, the client got a `text/plain` "Internal Server Error". It now gets a JSON 500 with code `data_integrity_error` and fixed text: no validation detail, object repr or id. The full validation errors are logged at ERROR with the method and route path. The same holds when a route builds a read model from a database row and the row does not fit it: that used to be a 422 that blamed the caller and echoed an object repr, and is now the same 500. Routes build read models with `app.api.read_models.build_read`, and a test fails if one calls `<X>Read.model_validate` directly. A malformed request is unchanged: still 422 with its detail.
 
 ## The frontend proxy passes uploads larger than 1 MiB to the API (2026-11-07)
 

@@ -21,6 +21,7 @@ from app.api.error_contract import (
     validation_detail_code,
     validation_detail_context,
 )
+from app.api.read_models import ServerReadModelError
 from app.services.artifact_storage import (
     ArtifactIntegrityError,
     ArtifactStorageUnavailable,
@@ -220,23 +221,28 @@ def _data_integrity_error_handler(
 
 
 def _response_validation_error_handler(
-    request: Request, exc: ResponseValidationError
+    request: Request, exc: ResponseValidationError | ServerReadModelError
 ) -> JSONResponse:
     """500 ``data_integrity_error``: the server failed its own response model.
 
-    ``ResponseValidationError`` is raised when what a route *returned* does
-    not fit its ``response_model``. The caller sent nothing wrong, so this is
-    never a 422, and without a handler it reached the client as a
-    ``text/plain`` "Internal Server Error". The validation errors can carry
-    ORM object reprs and field inputs, so the body is fixed text; the full
-    errors go to the server log with the method and route path (the
-    ``request_id`` log field and ``X-Request-ID`` header tie the two).
+    Two routes lead here. ``ResponseValidationError`` is raised when what a
+    route *returned* does not fit its ``response_model``; before this it
+    reached the client as ``text/plain``. :class:`ServerReadModelError` is
+    raised by :func:`app.api.read_models.build_read` when a route builds a
+    read model from a row and the row does not fit; before this it was a
+    pydantic ``ValidationError`` (a ``ValueError``) and read as a 422 that
+    blamed the caller. Neither is the caller's fault, and the errors can carry
+    ORM object reprs, so the body is fixed text; the full errors go to the
+    server log with the method and route path (the ``request_id`` log field
+    and ``X-Request-ID`` header tie the two).
     """
     route = request.scope.get("route")
+    model = getattr(getattr(exc, "model", None), "__name__", None)
     logger.error(
-        "response model validation failed on %s %s: %s",
+        "response model validation failed on %s %s%s: %s",
         request.method,
         getattr(route, "path", request.url.path),
+        f" ({model})" if model else "",
         exc.errors(),
         exc_info=exc,
     )
@@ -917,6 +923,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(StarletteHTTPException, _http_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RequestValidationError, _request_validation_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ResponseValidationError, _response_validation_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(ServerReadModelError, _response_validation_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ValueError, _value_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(DomainError, _domain_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RecordReviewConflict, _record_review_conflict_handler)  # type: ignore[arg-type]

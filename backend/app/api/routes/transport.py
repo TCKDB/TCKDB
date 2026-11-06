@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
+from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     EntityListResponse,
     Gate,
@@ -67,7 +68,7 @@ def list_transport(
     ).all()
 
     return entity_page(
-        [TransportRead.model_validate(r) for r in rows],
+        [build_read(TransportRead, r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -84,4 +85,4 @@ def get_transport(transport_id: int, session: Session = Depends(get_db)):
     )
     if row is None:
         raise NotFoundError("Transport not found")
-    return TransportRead.model_validate(row)
+    return build_read(TransportRead, row)

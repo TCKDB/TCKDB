@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
+from app.api.read_models import build_read
 from app.api.routes._legacy_reads import (
     EntityListResponse,
     Gate,
@@ -65,7 +66,7 @@ def list_kinetics(
         .limit(pagination.limit)
     ).all()
     return entity_page(
-        [KineticsRead.model_validate(r) for r in rows],
+        [build_read(KineticsRead, r) for r in rows],
         total=total,
         skip=pagination.skip,
         limit=pagination.limit,
@@ -78,4 +79,4 @@ def get_kinetics(kinetics_id: int, session: Session = Depends(get_db)):
     kinetics = session.get(Kinetics, kinetics_id)
     if kinetics is None:
         raise NotFoundError("Kinetics not found")
-    return KineticsRead.model_validate(kinetics)
+    return build_read(KineticsRead, kinetics)

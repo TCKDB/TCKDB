@@ -34,6 +34,7 @@ from app.api.deps import (
     get_write_db,
     require_curator_or_admin,
 )
+from app.api.read_models import build_read
 from app.db.models.app_user import AppUser, AppUserRole
 from app.db.models.common import SubmissionStatus
 from app.db.models.submission import Submission
@@ -143,7 +144,7 @@ def list_mine(
     rows = list_my_submissions(
         session, user_id=current_user.id, statuses=statuses, offset=offset, limit=limit
     )
-    return [SubmissionRead.model_validate(r) for r in rows]
+    return [build_read(SubmissionRead, r) for r in rows]
 
 
 @router.get("/for-review", response_model=list[SubmissionRead])
@@ -156,7 +157,7 @@ def list_for_review(
 ) -> list[SubmissionRead]:
     """List submissions awaiting curator review (curator/admin only)."""
     rows = list_submissions_for_review(session, statuses=statuses, offset=offset, limit=limit)
-    return [SubmissionRead.model_validate(r) for r in rows]
+    return [build_read(SubmissionRead, r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -173,7 +174,7 @@ def read_submission(
     """Read a single submission. Visible to its creator and curators/admins."""
     submission = get_submission(session, submission_id)
     _require_view_permission(submission, current_user)
-    return SubmissionRead.model_validate(submission)
+    return build_read(SubmissionRead, submission)
 
 
 @router.get(
@@ -191,7 +192,7 @@ def read_audit_events(
     submission = get_submission(session, submission_id)
     _require_view_permission(submission, current_user)
     events = list_audit_events(session, submission_id=submission_id, offset=offset, limit=limit)
-    return [SubmissionAuditEventRead.model_validate(e) for e in events]
+    return [build_read(SubmissionAuditEventRead, e) for e in events]
 
 
 @router.get(
@@ -229,7 +230,7 @@ def read_record_links(
     submission = get_submission(session, submission_id)
     _require_view_permission(submission, current_user)
     links = list_record_links(session, submission_id=submission_id, offset=offset, limit=limit)
-    return [SubmissionRecordLinkRead.model_validate(link) for link in links]
+    return [build_read(SubmissionRecordLinkRead, link) for link in links]
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +254,7 @@ def approve(
     submission = approve_submission(
         session, submission_id=submission_id, actor=actor, summary=summary
     )
-    return SubmissionRead.model_validate(submission)
+    return build_read(SubmissionRead, submission)
 
 
 @router.post(
@@ -276,7 +277,7 @@ def reject(
         summary=body.summary,
         correction_due_at=body.correction_due_at,
     )
-    return SubmissionRead.model_validate(submission)
+    return build_read(SubmissionRead, submission)
 
 
 @router.post(
@@ -321,7 +322,7 @@ def supersede(
         # 403, as for every other submission on this router the caller has
         # no business with (``_require_view_permission``).
         raise HTTPException(status_code=403, detail=str(exc)) from exc
-    return SubmissionRead.model_validate(old)
+    return build_read(SubmissionRead, old)
 
 
 # ---------------------------------------------------------------------------

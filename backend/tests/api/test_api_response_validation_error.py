@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import logging
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
 from app.api.errors import register_exception_handlers
+from app.api.read_models import build_read, read_many
 
 
 class _Payload(BaseModel):
@@ -41,6 +43,18 @@ def _client() -> TestClient:
     @app.get("/broken", response_model=_Out)
     def _broken():
         return {"geometry": _InternalObject()}
+
+    @app.get("/row")
+    def _row():
+        return build_read(_Out, {"geometry": _InternalObject()})
+
+    @app.get("/rows")
+    def _rows():
+        return read_many(_Out, [{"geometry": {"x": 1}}, {"geometry": _InternalObject()}])
+
+    @app.get("/ok-row")
+    def _ok_row():
+        return build_read(_Out, {"geometry": {"x": 1}})
 
     @app.post("/echo")
     def _echo(body: _In):
@@ -95,3 +109,38 @@ def test_the_handler_is_what_makes_it_json(monkeypatch) -> None:
     resp = TestClient(app, raise_server_exceptions=False).get("/broken")
     assert resp.status_code == 500
     assert not resp.headers["content-type"].startswith("application/json")
+
+
+@pytest.mark.parametrize("path", ["/row", "/rows"])
+def test_a_read_model_built_from_server_data_is_a_coded_500(caplog, path) -> None:
+    """The original shape: the route validates its own row (a ValueError, so a 422 before)."""
+    with caplog.at_level(logging.ERROR, logger="app.api.errors"):
+        resp = _client().get(path)
+
+    assert resp.status_code == 500, resp.text
+    body = resp.json()
+    assert body["code"] == "data_integrity_error", body
+    assert body["context"] == {}
+    rendered = repr(body)
+    for leak in ("_InternalObject", "object at 0x", "geometry", "Input should", "type="):
+        assert leak not in rendered, f"{leak!r} reached the client: {body}"
+    messages = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+    assert any(f"GET {path}" in m and "(_Out)" in m and "model_type" in m for m in messages), caplog.text
+
+
+def test_build_read_returns_the_model_on_success() -> None:
+    resp = _client().get("/ok-row")
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"geometry": {"x": 1}}
+
+
+def test_a_bare_model_validate_on_server_data_is_the_422_this_replaces() -> None:
+    """Premise pin: the pre-helper pattern read as the caller's fault."""
+    app = FastAPI()
+    register_exception_handlers(app)
+
+    @app.get("/bare")
+    def _bare():
+        return _Out.model_validate({"geometry": _InternalObject()})
+
+    assert TestClient(app, raise_server_exceptions=False).get("/bare").status_code == 422
