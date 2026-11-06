@@ -27,10 +27,10 @@ from __future__ import annotations
 
 import re
 
+from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.config import settings
