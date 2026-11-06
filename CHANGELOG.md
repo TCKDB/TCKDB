@@ -22,6 +22,10 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## The frontend proxy passes uploads larger than 1 MiB to the API (2026-11-07)
+
+The frontend image's nginx refused any request body over its 1 MiB default with a bare 413, before TCKDB saw it. `/api/` now takes up to 10 MiB, above the two caps the API enforces before parsing (5 MiB bundles, 9 MiB network export manifests), so a request over either gets TCKDB's own coded error. Upload and job routes (several carry ESS logs inline) and `/api/v1/calculations/<ref>/artifacts` take up to 100 MiB. The rest of `/api/` stays smaller because the API parses a body before it checks credentials.
+
 ## Scan-point reads no longer fail when a point carries a geometry (2026-11-05)
 
 `GET /calculations/{id}/scan-points` and the `points` of `/scan-result` returned 422 whenever a scan point had a geometry, because the read model inherited the upload payload's inline `geometry` field. The read model now reports `geometry_id` only; the inline `geometry` field is gone from the response schema.
