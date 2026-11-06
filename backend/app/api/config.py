@@ -118,6 +118,34 @@ class Settings(BaseSettings):
     bundle_max_body_bytes: int = Field(5 * 1024 * 1024, ge=0)
     bundle_max_records: int = Field(500, ge=0)
 
+    # Largest request body a caller with NO valid credential may send to any
+    # body-carrying route (POST/PUT/PATCH under /api/), refused with
+    # ``413 anonymous_body_too_large`` before the body is read
+    # (``app.api.anonymous_body_limit``). FastAPI reads and parses a whole
+    # body before authentication runs, so without this an unauthenticated
+    # caller could make the API buffer and parse the nginx limit (100 MiB on
+    # uploads) per request. A valid API key or session cookie lifts it.
+    #
+    # The 1 MiB default rests on two sources. (a) The largest legitimate
+    # anonymous body measured from the schemas is about 40 KB: 500 refs of at
+    # most 64 characters (relative-energy ``member_refs``, selection refs); the
+    # other anonymous bodies are smaller still (auth under 1 KiB, structure
+    # search three strings of at most 4096 characters, a network ``evaluate``
+    # grid capped at ``len(T) * len(P) <= EVALUATE_GRID_POINT_CAP`` =
+    # ``public_max_limit`` = 200 points, about 5 KB). (b) 1 MiB is nginx's
+    # documented default ``client_max_body_size`` ("Default: 1m",
+    # nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size),
+    # which this deployment's frontend used for ``/api/`` until #867, so no
+    # anonymous caller loses anything it could send before.
+    # ``POST .../networks/{ref}/kinetics/export-selected`` is the exception
+    # and is NOT subject to this allowance: it takes a whole selection
+    # manifest (up to 9 MiB) and keeps its own cap and coded error
+    # (``app.api.export_limits``). Routes that need a credential
+    # (uploads, jobs, bundles, artifacts, curation) are not anonymous
+    # routes at all.
+    # ``0`` disables the allowance; negative is refused at startup.
+    anonymous_max_body_bytes: int = Field(1024 * 1024, ge=0)
+
     # When set, the middleware reads the client IP from this header.
     # Only enable when the deployment terminates TLS behind a trusted
     # reverse proxy that overwrites the header. With this unset the
