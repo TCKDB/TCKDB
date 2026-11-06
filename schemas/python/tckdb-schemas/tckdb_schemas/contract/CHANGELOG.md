@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.160.0 - 2026-11-07
+
+One refusal code is added: `server_response_invalid` (500). The server failed its own response model, so the request was not at fault; nothing in it needs changing. Before this, that failure reached a client as a bare `text/plain` 500, or as a 422 that blamed the request. No model or payload shape changed.
+
 ## 0.159.0 - 2026-11-07
 
 One refusal code is added: `anonymous_body_too_large` (413). A request without a valid credential whose body is over the anonymous allowance (1 MiB by default) is refused before the body is read; authenticate with an API key or a session to send a larger one. No model or payload shape changed.

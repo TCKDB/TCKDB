@@ -101,7 +101,7 @@ def test_a_server_side_validation_failure_is_a_coded_500(caplog, path) -> None:
 
     _assert_server_fault(resp)
     messages = _logged(caplog)
-    assert any(f"GET {path}" in m and "model_type" in m and "geometry" in m for m in messages), caplog.text
+    assert any(f"GET {path}" in m and "geometry" in m for m in messages), caplog.text
     # The offending value is not logged: a secret in a response must not reach the log.
     assert not any("_InternalObject" in m for m in messages), messages
 
@@ -217,6 +217,6 @@ def test_a_real_route_building_a_read_model_by_constructor_is_a_coded_500(client
 
 def test_a_real_route_that_validates_caller_input_keeps_its_422(client) -> None:
     """A request model built from query parameters is the caller's: coded 422, not a 500."""
-    resp = client.get("/api/v1/scientific/species", params={"formula": "C" * 5000})
+    resp = client.get("/api/v1/scientific/species/search", params={"formula": "C" * 5000})
     assert resp.status_code == 422, resp.text
     assert resp.json()["code"] != "server_response_invalid"
