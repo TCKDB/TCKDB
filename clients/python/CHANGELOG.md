@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.188.0 - 2026-11-07
+
+`RejectionCode.ANONYMOUS_BODY_TOO_LARGE` (413) joins the refusal codes: the server refuses a request with no valid credential whose body is over its anonymous allowance, before reading it. The client always sends its credential, so it meets this only when the key is missing, unknown or revoked. No other client code changed.
+
 ## 0.187.0 - 2026-11-05
 
 The `LevelOfTheory` builder drops `keywords` (the server no longer has such a field; see `tckdb-schemas` 0.158.0) and gains `core_treatment`, `relativistic_hamiltonian`, `pno_truncation` and `ri_approximation`, each sent only when set. The `tckdb-schemas` window moves to `>=0.158,<0.163`: an older schemas would still accept `keywords`, which the server now refuses.

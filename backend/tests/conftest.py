@@ -208,6 +208,23 @@ def _disable_rate_limit_by_default():
 
 
 @pytest.fixture(autouse=True)
+def _disable_anonymous_body_limit_by_default():
+    """Lift the anonymous request-body allowance for every test by default.
+
+    The TestClient replaces authentication with a dependency override, so its
+    requests carry no credential the middleware can see, and the ARC corpus
+    payloads are larger than the 1 MiB allowance. Tests of the allowance itself
+    set it back (``tests/api/test_api_anonymous_body_limit.py``).
+    """
+    previous = settings.anonymous_max_body_bytes
+    settings.anonymous_max_body_bytes = 0
+    try:
+        yield
+    finally:
+        settings.anonymous_max_body_bytes = previous
+
+
+@pytest.fixture(autouse=True)
 def _security_phase2_test_defaults():
     """Relax Phase 2 production-only defaults for the test suite.
 

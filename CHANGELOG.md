@@ -22,9 +22,18 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
-## A response the server cannot build is a logged 500, not a bare error (2026-11-07)
+## A response the server cannot build is a logged 500, not a bare error or a 422 (2026-11-07)
 
-When a route returned something its own response model rejects, the client got a `text/plain` "Internal Server Error". It now gets a JSON 500 with code `data_integrity_error` and fixed text: no validation detail, object repr or id. The full validation errors are logged at ERROR with the method and route path. The same holds when a route builds a read model from a database row and the row does not fit it: that used to be a 422 that blamed the caller and echoed an object repr, and is now the same 500. Routes build read models with `app.api.read_models.build_read`, and a test fails if one calls `<X>Read.model_validate` directly. A malformed request is unchanged: still 422 with its detail.
+- **What changed:** when the server fails its own response model it now returns a JSON 500 with the new code `server_response_invalid` and fixed text (no validation detail, object repr or id). Two cases lead there: a route whose returned object fails its `response_model` (it used to be a `text/plain` "Internal Server Error"), and a pydantic `ValidationError` escaping an endpoint, e.g. a read model built from a database row that does not fit it (it used to be a 422 that blamed the caller and echoed an object repr). Every router now uses `ServerFaultRoute`, and a test fails for a route that does not.
+- **Logged:** the validation errors, without their input values, capped at 20 plus the total, with the method and route path.
+- **Caller input is unchanged:** a request model built from query parameters, and the declarations a caller sends, go through `caller_input` and keep their 422 and code.
+- **Schema and migration:** none.
+
+## A request with no valid credential may not make the API read a large body (2026-11-07)
+
+- **What changed:** a `POST`/`PUT`/`PATCH` under `/api/` whose body is over `ANONYMOUS_MAX_BODY_BYTES` (default 1 MiB) is refused `413 anonymous_body_too_large` before the body is read, unless it carries a valid API key or session cookie. Before, FastAPI read and parsed the whole body (up to the proxy's 100 MiB) before the 401. The selected-network-export route keeps its own cap and code.
+- **Schema and migration:** none.
+- **Versions:** `tckdb-schemas` 0.159.0, `tckdb-client` 0.188.0.
 
 ## The frontend proxy passes uploads larger than 1 MiB to the API (2026-11-07)
 

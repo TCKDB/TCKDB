@@ -84,6 +84,7 @@ class RejectionCode(str, Enum):
     """
 
     AMBIGUOUS_CONFORMER_SELECTION_LOCATOR = "ambiguous_conformer_selection_locator"
+    ANONYMOUS_BODY_TOO_LARGE = "anonymous_body_too_large"
     APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH = "applied_energy_correction_source_calculation_owner_mismatch"
     APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED = "applied_energy_correction_source_key_undeclared"
     ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH = "arrhenius_a_units_molecularity_mismatch"
@@ -780,6 +781,7 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
 #: both, at two different statuses.
 REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.AMBIGUOUS_CONFORMER_SELECTION_LOCATOR: frozenset({422}),
+    RejectionCode.ANONYMOUS_BODY_TOO_LARGE: frozenset({413}),
     RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH: frozenset({422}),
