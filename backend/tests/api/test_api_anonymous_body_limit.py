@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import delete
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.api.anonymous_body_limit import CODE_ANONYMOUS_BODY_TOO_LARGE
@@ -267,3 +268,90 @@ def test_export_keeps_its_own_cap_and_code_for_everyone(client, monkeypatch) -> 
 def test_export_is_not_subject_to_the_anonymous_allowance(client) -> None:
     resp = _post(client, route=EXPORT)  # anonymous, over the allowance, under the export cap
     assert not _refused(resp)
+
+
+# --- the credential lookup ----------------------------------------------------------------------------------------
+
+
+def test_the_credential_lookup_runs_off_the_event_loop(client, monkeypatch) -> None:
+    import threading
+
+    from app.api import anonymous_body_limit
+
+    loop_thread = threading.get_ident()  # _drive runs the app on this thread
+    seen = []
+
+    def _spy(scope):
+        seen.append(threading.get_ident())
+        return True
+
+    monkeypatch.setattr(anonymous_body_limit, "has_valid_credential", _spy)
+    _drive(client.app, chunks=[JUNK], headers=[("content-type", "application/json"), ("content-length", str(len(JUNK)))])
+    assert seen and seen[0] != loop_thread
+
+
+class _Orig(Exception):
+    def __init__(self, sqlstate):
+        super().__init__("driver text that must not reach the client")
+        self.sqlstate = sqlstate
+
+
+def _failing(exc):
+    def _raise(_scope):
+        raise exc
+
+    return _raise
+
+
+@pytest.mark.parametrize("chunked", [False, True], ids=["declared", "chunked"])
+@pytest.mark.parametrize(
+    ("exc", "code"),
+    [
+        (OperationalError("SELECT secret", {}, _Orig("08006")), "database_unavailable"),
+        (OperationalError("SELECT secret", {}, _Orig("57014")), "query_timeout"),
+        (OSError("connection refused"), "database_unavailable"),
+    ],
+    ids=["unavailable", "statement_timeout", "oserror"],
+)
+def test_a_database_failure_during_the_lookup_is_a_coded_503(client, monkeypatch, chunked, exc, code) -> None:
+    from app.api import anonymous_body_limit
+
+    monkeypatch.setattr(anonymous_body_limit, "has_valid_credential", _failing(exc))
+    resp = _post(client, chunked=chunked, headers={"X-API-Key": TEST_KEY})
+    assert resp.status_code == 503, resp.text
+    assert resp.json()["code"] == code
+    assert "secret" not in resp.text and "driver text" not in resp.text
+
+
+def test_a_chunked_lookup_failure_stops_reading(client, monkeypatch) -> None:
+    from app.api import anonymous_body_limit
+
+    monkeypatch.setattr(
+        anonymous_body_limit, "has_valid_credential", _failing(OperationalError("s", {}, _Orig("08006")))
+    )
+    status, body, pulled = _drive(
+        client.app, chunks=list(_chunks(b"x" * 5000)), headers=[("content-type", "application/json")]
+    )
+    assert status == 503 and b"database_unavailable" in body
+    assert pulled <= 8, pulled
+
+
+def test_a_chunked_lookup_failure_tells_the_app_the_client_is_gone(monkeypatch) -> None:
+    from app.api import anonymous_body_limit
+    from app.api.anonymous_body_limit import AnonymousBodyLimitMiddleware
+
+    monkeypatch.setattr(
+        anonymous_body_limit, "has_valid_credential", _failing(OperationalError("s", {}, _Orig("08006")))
+    )
+    received = []
+
+    async def inner(scope, receive, send):
+        while True:
+            message = await receive()
+            received.append(message["type"])
+            if message["type"] == "http.disconnect":
+                return
+
+    _drive(AnonymousBodyLimitMiddleware(inner), chunks=list(_chunks(b"x" * 5000)), headers=[])
+    assert received[-1] == "http.disconnect"
+    assert received.count("http.request") == 5  # the chunk that crossed the allowance was withheld

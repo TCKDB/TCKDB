@@ -126,23 +126,23 @@ class Settings(BaseSettings):
     # caller could make the API buffer and parse the nginx limit (100 MiB on
     # uploads) per request. A valid API key or session cookie lifts it.
     #
-    # The default is the largest body any route that accepts ANONYMOUS
-    # callers legitimately needs, other than the one with its own cap:
-    #   * auth/register, auth/login, auth/logout: well under 1 KiB (username,
-    #     password, label <= 200 chars).
-    #   * scientific searches and selections: filters and at most 500 refs of
-    #     <= 64 characters (relative-energy member_refs, selection refs):
-    #     about 40 KB.
-    #   * species structure-search: three strings of <= 4096 characters: 12 KB.
-    #   * networks/{ref}/kinetics/evaluate: two number lists with no
-    #     schema bound; 1 MiB holds about 50 thousand grid points.
-    # 1 MiB is therefore about twenty-five times the biggest bounded one.
+    # The 1 MiB default rests on two sources. (a) The largest legitimate
+    # anonymous body measured from the schemas is about 40 KB: 500 refs of at
+    # most 64 characters (relative-energy ``member_refs``, selection refs); the
+    # other anonymous bodies are smaller still (auth under 1 KiB, structure
+    # search three strings of at most 4096 characters, a network ``evaluate``
+    # grid capped at ``len(T) * len(P) <= EVALUATE_GRID_POINT_CAP`` =
+    # ``public_max_limit`` = 200 points, about 5 KB). (b) 1 MiB is nginx's
+    # documented default ``client_max_body_size`` ("Default: 1m",
+    # nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size),
+    # which this deployment's frontend used for ``/api/`` until #867, so no
+    # anonymous caller loses anything it could send before.
     # ``POST .../networks/{ref}/kinetics/export-selected`` is the exception
     # and is NOT subject to this allowance: it takes a whole selection
     # manifest (up to 9 MiB) and keeps its own cap and coded error
     # (``app.api.export_limits``). Routes that need a credential
     # (uploads, jobs, bundles, artifacts, curation) are not anonymous
-    # routes at all, so 1 MiB costs a legitimate caller nothing.
+    # routes at all.
     # ``0`` disables the allowance; negative is refused at startup.
     anonymous_max_body_bytes: int = Field(1024 * 1024, ge=0)
 

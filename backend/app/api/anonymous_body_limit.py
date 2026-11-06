@@ -30,10 +30,12 @@ import re
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api.config import settings
 from app.api.error_contract import error_envelope
+from app.api.errors import _database_error_handler, _operational_error_handler
 from app.services.auth import (
     API_KEY_HEADER,
     SESSION_COOKIE_NAME,
@@ -81,6 +83,29 @@ def _refusal(limit: int, given: int | None) -> JSONResponse:
     )
 
 
+def lookup_failure_response(scope: Scope, exc: Exception) -> JSONResponse:
+    """The app's own coded answer to a database failure met while checking the credential (fail closed).
+
+    Classified by the application's handlers, not here: an ``OperationalError`` is a 503 ``database_unavailable`` or,
+    for a statement timeout, ``query_timeout``; any other driver error is their 500 ``database_request_failed``; a
+    connection failure that never became a driver error (``OSError``) is a 503 ``database_unavailable``.
+    """
+    request = Request(scope)
+    if isinstance(exc, OperationalError):
+        response = _operational_error_handler(request, exc)
+    elif isinstance(exc, DBAPIError):
+        response = _database_error_handler(request, exc)
+    else:
+        response = _operational_error_handler(request, OperationalError("credential lookup", {}, exc))
+    response.headers["Connection"] = "close"
+    return response
+
+
+class _LookupFailed(Exception):
+    def __init__(self, response: JSONResponse) -> None:
+        self.response = response
+
+
 class AnonymousBodyLimitMiddleware:
     """Refuse a large request body from a caller with no valid credential, before it is read."""
 
@@ -111,11 +136,19 @@ class AnonymousBodyLimitMiddleware:
         async def credentialed() -> bool:
             nonlocal verdict
             if verdict is None:
-                verdict = await run_in_threadpool(has_valid_credential, scope)
+                try:
+                    verdict = await run_in_threadpool(has_valid_credential, scope)
+                except (SQLAlchemyError, OSError) as exc:
+                    raise _LookupFailed(lookup_failure_response(scope, exc)) from exc
             return verdict
 
         if declared is not None and declared > limit:
-            if await credentialed():
+            try:
+                allowed = await credentialed()
+            except _LookupFailed as failed:
+                await failed.response(scope, receive, send)
+                return
+            if allowed:
                 await self.app(scope, receive, send)
                 return
             await _refusal(limit, declared)(scope, receive, send)
@@ -131,7 +164,15 @@ class AnonymousBodyLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request" and verdict is not True:
                 seen += len(message.get("body", b""))
-                if seen > limit and not await credentialed():
+                if seen > limit:
+                    try:
+                        allowed = await credentialed()
+                    except _LookupFailed as failed:
+                        refused = True
+                        await failed.response(scope, receive, send)
+                        return {"type": "http.disconnect"}
+                    if allowed:
+                        return message
                     refused = True
                     await _refusal(limit, None)(scope, receive, send)
                     # The app is still waiting on its body: tell it the client is gone, so it stops reading.
