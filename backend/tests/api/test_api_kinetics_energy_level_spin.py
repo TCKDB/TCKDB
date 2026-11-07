@@ -400,8 +400,12 @@ def _linked_calcs(db_session, kinetics_id: int):
     ).all()
 
 
-def _assert_stored_without_sources(db_session, row, warnings) -> None:
+def _assert_stored_without_sources(db_session, row, warnings, reason: str) -> None:
     assert [w.code for w in warnings] == ["energy_level_stored_without_source_calculations"]
+    assert warnings[0].context == {"reason": reason}
+    if reason == "contradiction":
+        # Found, but contradictory: the sentence must not claim that nothing exists.
+        assert "contradict" in warnings[0].message and "no single calculation" not in warnings[0].message
     assert row.energy_level_of_theory_id is not None
     assert _linked_calcs(db_session, row.id) == []
 
@@ -425,13 +429,13 @@ def test_bundle_mode_mixed_open_shell_references_store_the_level_without_sources
     """Bundle mode downgrades a violation exactly like 'no sources found'."""
     _deposit_ch3_h_ch4(client, ch3=_calc("restricted_open"), h=_calc("unrestricted"), ch4=_calc("restricted"))
     row, warnings = _bundle_mode(db_session, dict(_LEVEL))
-    _assert_stored_without_sources(db_session, row, warnings)
+    _assert_stored_without_sources(db_session, row, warnings, "contradiction")
 
 
 def test_bundle_mode_a_radical_without_the_declared_spin_stores_the_level_without_sources(client, db_session):
     _deposit_ch3_h_ch4(client, ch3=_calc("restricted_open"), h=_calc("unrestricted"), ch4=_calc("restricted"))
     row, warnings = _bundle_mode(db_session, {**_LEVEL, "spin_treatment": "unrestricted"})
-    _assert_stored_without_sources(db_session, row, warnings)
+    _assert_stored_without_sources(db_session, row, warnings, "none")
 
 
 def test_standalone_a_consistent_deposit_links_and_a_declared_open_shell_reference_serves_closed_shell(
@@ -643,3 +647,31 @@ def test_the_check_runs_on_the_deduplicated_links(client):
         client.post(_STANDALONE, json=_h_plus_h_payload(dict(_LEVEL))), "open_shell_reference_mixed"
     )
     assert len(body["context"]["energy_calculation_refs"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# An unrestricted singlet with no stored <S^2> counts as open-shell, and the refusal says so
+# ---------------------------------------------------------------------------
+
+
+def test_a_singlet_counted_open_shell_for_want_of_s_squared_is_named_and_asked_for(client):
+    """RO hydrogen with an unrestricted H2 and no <S^2>: refused, the flag lists only the singlet."""
+    resp = client.post(_REACTION, json=_bundle(dict(_BASE), h=[_RO, _RO], h2=[_U]))
+    body = _assert_refused(resp, "open_shell_reference_mixed")
+    assert len(body["context"]["s_squared_missing_for"]) == 1
+    assert set(body["context"]["s_squared_missing_for"]) <= set(body["context"]["energy_calculation_refs"])
+    assert "spin_diagnostic.s_squared" in body["detail"]
+    assert body["context"]["s_squared_missing_for"][0] in body["detail"]
+
+
+def test_supplying_s_squared_for_the_singlet_makes_it_closed_shell(client):
+    resp = client.post(_REACTION, json=_bundle(dict(_BASE), h=[_RO, _RO], h2=[{**_U, "s2": 0.0}]))
+    assert resp.status_code == 201, resp.text[:800]
+
+
+def test_the_flag_is_absent_when_no_singlet_is_counted_for_want_of_s_squared(client):
+    body = _assert_refused(
+        client.post(_REACTION, json=_bundle(dict(_BASE), h=[_U, _RO], h2=[_R])), "open_shell_reference_mixed"
+    )
+    assert "s_squared_missing_for" not in body["context"]
+    assert "spin_diagnostic.s_squared" not in body["detail"]

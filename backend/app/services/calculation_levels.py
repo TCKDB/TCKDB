@@ -1360,6 +1360,7 @@ def kinetics_energy_level_violation(
         return None
 
     facts = kinetics_spin_facts(session, [c.id for c in energies])
+    no_s_squared: set[int] = set()
     open_shell: dict[str, list[Calculation]] = {}
     all_known: dict[str, list[Calculation]] = {}
     for calc in energies:
@@ -1371,23 +1372,38 @@ def kinetics_energy_level_violation(
         if multiplicity is None or kinetics_closed_shell_exempt(multiplicity, spin, s_squared):
             continue
         open_shell.setdefault(spin, []).append(calc)
+        if multiplicity == 1 and spin == "unrestricted" and s_squared is None:
+            no_s_squared.add(calc.id)
 
     def spin_context(reason: str, calcs: list[Calculation]) -> dict[str, object]:
-        return {
+        context: dict[str, object] = {
             "declared_level_of_theory_ref": declared.public_ref,
             "energy_calculation_refs": sorted({c.public_ref for c in calcs}),
             "reason": reason,
         }
+        missing = sorted({c.public_ref for c in calcs if c.id in no_s_squared})
+        if missing:
+            context["s_squared_missing_for"] = missing
+        return context
+
+    def s_squared_clause(calcs: list[Calculation]) -> str:
+        """Why an unrestricted singlet counts as open-shell here, and what would change that."""
+        missing = sorted({c.public_ref for c in calcs if c.id in no_s_squared})
+        if not missing:
+            return ""
+        return (
+            f" The unrestricted singlet energies ({', '.join(missing)}) count as open-shell because no "
+            "spin_diagnostic.s_squared is stored for them; supply it for those calculations."
+        )
 
     if len(open_shell) > 1:
+        mixed = [c for group in open_shell.values() for c in group]
         return CodedValueError(
             W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
             "kinetics: the open-shell participants' energies were computed with different spin treatments "
             f"({', '.join(sorted(open_shell))}); they must share one reference (unrestricted or "
-            "restricted-open).",
-            context=spin_context(
-                REASON_OPEN_SHELL_REFERENCE_MIXED, [c for group in open_shell.values() for c in group]
-            ),
+            f"restricted-open).{s_squared_clause(mixed)}",
+            context=spin_context(REASON_OPEN_SHELL_REFERENCE_MIXED, mixed),
             message_prefix=False,
         )
     declared_spin = level_spin_value(declared)
@@ -1401,7 +1417,8 @@ def kinetics_energy_level_violation(
         return CodedValueError(
             W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
             f"kinetics: the declared spin treatment ({declared_spin}) differs from the open-shell participants' "
-            f"({', '.join(sorted(reference))}). Declare the open-shell reference, or no spin treatment.",
+            f"({', '.join(sorted(reference))}). Declare the open-shell reference, or no spin treatment."
+            f"{s_squared_clause(wrong)}",
             context=spin_context(REASON_DECLARED_SPIN_DIFFERS, wrong),
             message_prefix=False,
         )

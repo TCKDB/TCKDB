@@ -1196,7 +1196,7 @@ def persist_kinetics_upload(
             if violation is not None:
                 if require_energy_sources:
                     raise violation
-                unlinked_reason = "none"
+                unlinked_reason = "contradiction"
         if unlinked_reason is not None:
             links = []
             warning_sink.append(

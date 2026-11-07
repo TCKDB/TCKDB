@@ -1201,8 +1201,13 @@ def _message_near_code(tree: ast.AST, code: str, namespace: dict[str, object]) -
     return next(iter(_messages_near_code(tree, code, namespace)), None)
 
 
-def _messages_near_code(tree: ast.AST, code: str, namespace: dict[str, object]) -> list[str]:
-    """Every string expression written beside ``code`` in ``tree``, in source order, distinct."""
+def _messages_near_code(
+    tree: ast.AST, code: str, namespace: dict[str, object], *, ordered: bool = False
+) -> list[str]:
+    """Every string expression written beside ``code`` in ``tree``, distinct.
+
+    ``ordered`` walks in source order (line, column); the default keeps ``ast.walk``'s order.
+    """
     found: list[str] = []
 
     def is_code(node: ast.AST) -> bool:
@@ -1217,7 +1222,12 @@ def _messages_near_code(tree: ast.AST, code: str, namespace: dict[str, object]) 
         for child in ast.iter_child_nodes(parent):
             parents[child] = parent
 
-    for node in ast.walk(tree):
+    nodes = (
+        sorted(ast.walk(tree), key=lambda n: (getattr(n, 'lineno', 0), getattr(n, 'col_offset', 0)))
+        if ordered
+        else ast.walk(tree)
+    )
+    for node in nodes:
         text: str | None = None
         if isinstance(node, (ast.Constant, ast.JoinedStr)):
             rendered = _render_str_expr(node)
@@ -1260,8 +1270,11 @@ def _messages_near_code(tree: ast.AST, code: str, namespace: dict[str, object]) 
 ALL_MESSAGES_CODES = frozenset({"kinetics_energy_level_contradiction"})
 
 
-def code_extra_messages(code: str, entries: list[ApiCode], first: str | None) -> list[str]:
-    """The other distinct sentences written beside ``code`` in its defining module (``ALL_MESSAGES_CODES`` only)."""
+def code_all_messages(code: str, entries: list[ApiCode]) -> list[str]:
+    """Every distinct sentence written beside ``code`` in its defining module, in source order.
+
+    Only for ``ALL_MESSAGES_CODES``; the first is the headline and the rest are listed under "Also".
+    """
     if code not in ALL_MESSAGES_CODES:
         return []
     out: list[str] = []
@@ -1270,8 +1283,8 @@ def code_extra_messages(code: str, entries: list[ApiCode], first: str | None) ->
         path = REPO_ROOT / entry.origin
         if module is None or not path.exists():
             continue
-        for text in _messages_near_code(ast.parse(path.read_text()), code, vars(module)):
-            if text != first and text not in out:
+        for text in _messages_near_code(ast.parse(path.read_text()), code, vars(module), ordered=True):
+            if text not in out:
                 out.append(text)
     return out
 
@@ -2702,8 +2715,10 @@ class ContractBuilder:
                 out.append("- The body's `context` names the things involved.")
             if any(e.is_replay_futile for e in entries):
                 out.append("- Never succeeds on replay; do not retry the identical request.")
-            out.append(f"- Message: {facts.message!r}" if facts.message else "- Message: not found by the static search.")
-            for extra in code_extra_messages(code, entries, facts.message):
+            every = code_all_messages(code, entries)
+            headline = every[0] if every else facts.message
+            out.append(f"- Message: {headline!r}" if headline else "- Message: not found by the static search.")
+            for extra in every[1:]:
                 out.append(f"- Also: {extra!r}")
             for note in sorted({e.note for e in entries if e.note}):
                 out.append(f"- Note: {_first_sentence(note)}")
