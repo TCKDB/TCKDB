@@ -24,9 +24,9 @@ dataset must never require a code release.
 
 ## A response the server cannot build is a logged 500, not a bare error or a 422 (2026-11-07)
 
-- **What changed:** when the server fails its own response model it now returns a JSON 500 with the new code `server_response_invalid` and fixed text (no validation detail, object repr or id). Two cases lead there: a route whose returned object fails its `response_model` (it used to be a `text/plain` "Internal Server Error"), and a pydantic `ValidationError` escaping an endpoint, e.g. a read model built from a database row that does not fit it (it used to be a 422 that blamed the caller and echoed an object repr). Every router now uses `ServerFaultRoute`, and a test fails for a route that does not.
+- **What changed:** when the server fails its own response or read model it now returns a JSON 500 with the new code `server_response_invalid` and fixed text (no validation detail, object repr or id). Two cases lead there: a route whose returned object fails its `response_model` (it used to be a `text/plain` "Internal Server Error"), and a response or read model that fails while a route builds it from a database row (it used to be a 422 that blamed the caller and echoed an object repr).
+- **The rule:** a failing response or read model is a 500; anything else keeps its 422. `ServerFaultRoute` (on every router) classifies a pydantic failure escaping an endpoint by the failing model's name: the models the routes return (walked through nested fields and generic envelopes), every class in `app/schemas/reads`, and every `*Read` class. Request models, upload payloads and workflow re-validations are none of those, so lookup parameters, upload payloads and declarations keep their 422 and their bodies unchanged. `caller_input` pins a caller-input site to 422 even if its model shares a name with a response model. `/bundles/dry-run` classifies a raw failure the same way.
 - **Logged:** the validation errors, without their input values, capped at 20 plus the total, with the method and route path.
-- **Caller input is unchanged:** a request model built from query parameters, and the declarations a caller sends, go through `caller_input` and keep their 422 and code.
 - **Schema and migration:** none.
 
 ## A request with no valid credential may not make the API read a large body (2026-11-07)
