@@ -1182,7 +1182,10 @@ def persist_kinetics_upload(
                     calc = _find_energy_calculation_for_species(
                         session, species_entry_id=species_entry.id, lot_id=lot.id
                     )
-                    links.append((calc, role))
+                    # H + H names one species twice: a (calculation, role) is linked once. The
+                    # stoichiometry stays on the reaction's participants, not on the links.
+                    if all((calc.id, role) != (other.id, other_role) for other, other_role in links):
+                        links.append((calc, role))
         except EnergySourceLookupError as error:
             if require_energy_sources:
                 raise

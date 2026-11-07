@@ -571,3 +571,75 @@ def test_a_catalogued_composite_binding_follows_the_ordinary_rule(db_session):
     ids = declared_scheme_level_ids(db_session, [catalogued.id, other.id])
     assert ids == set()
     assert kinetics_level_fields_match(catalogued, other, scheme_ids=ids) is True
+
+
+# ---------------------------------------------------------------------------
+# A repeated species (H + H -> H2) links its single point once per role
+# ---------------------------------------------------------------------------
+
+
+def _h_plus_h_payload(level: dict) -> dict:
+    payload = _standalone_payload(level)
+    h = {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}}
+    payload["reaction"]["reactants"] = [h, dict(h)]
+    payload["reaction"]["products"] = [{"species_entry": {"smiles": "[H][H]", "charge": 0, "multiplicity": 1}}]
+    return payload
+
+
+def _deposit_h_h2(client) -> None:
+    from tests.api.test_api_composite_kinetics_energy_level import _H_ATOM, _deposit
+
+    _deposit(client, _H_ATOM, primary=_calc("unrestricted"))
+    _deposit(client, ("[H][H]", 1, "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74"), primary=_calc("restricted"))
+
+
+def _roles(db_session, kinetics_id: int):
+    from sqlalchemy import select
+
+    from app.db.models.kinetics import KineticsSourceCalculation
+
+    rows = db_session.scalars(
+        select(KineticsSourceCalculation).where(KineticsSourceCalculation.kinetics_id == kinetics_id)
+    ).all()
+    return sorted(((r.calculation_id, r.role.value) for r in rows), key=lambda link: link[1])
+
+
+def test_standalone_a_repeated_reactant_links_its_single_point_once(client, db_session):
+    """Reproduced on the previous head: the second H hit pk_kinetics_source_calculation."""
+    _deposit_h_h2(client)
+    resp = client.post(_STANDALONE, json=_h_plus_h_payload(dict(_LEVEL)))
+    assert resp.status_code == 201, resp.text[:600]
+    links = _roles(db_session, resp.json()["id"])
+    assert [role for _id, role in links] == ["product_energy", "reactant_energy"]
+    assert len({calc_id for calc_id, _role in links}) == 2
+
+
+def test_bundle_mode_a_repeated_reactant_links_its_single_point_once(client, db_session):
+    from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
+    from app.workflows.kinetics import persist_kinetics_upload
+
+    _deposit_h_h2(client)
+    warnings: list = []
+    row = persist_kinetics_upload(
+        db_session,
+        KineticsUploadRequest.model_validate(_h_plus_h_payload(dict(_LEVEL))),
+        warnings=warnings,
+        require_energy_sources=False,
+    )
+    assert warnings == []
+    assert [role for _id, role in _roles(db_session, row.id)] == ["product_energy", "reactant_energy"]
+
+
+def test_the_check_runs_on_the_deduplicated_links(client):
+    """Hydrogen restricted-open, H2 an unrestricted singlet with no stored <S^2> (counted as unrestricted): mixed.
+
+    The hydrogen single point is named once, not once per occurrence in the reaction.
+    """
+    from tests.api.test_api_composite_kinetics_energy_level import _H_ATOM, _deposit
+
+    _deposit(client, _H_ATOM, primary=_calc("restricted_open"))
+    _deposit(client, ("[H][H]", 1, "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74"), primary=_calc("unrestricted"))
+    body = _assert_refused(
+        client.post(_STANDALONE, json=_h_plus_h_payload(dict(_LEVEL))), "open_shell_reference_mixed"
+    )
+    assert len(body["context"]["energy_calculation_refs"]) == 2
