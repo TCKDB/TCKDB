@@ -691,7 +691,7 @@ def _resolve_species_list(
     """
     species_rows: list[Species] = []
     for i, (smi, chg, mult) in enumerate(zip(smiles_list, charges, multiplicities, strict=False)):
-        payload = SpeciesEntryIdentityPayload(smiles=smi, charge=chg, multiplicity=mult)
+        payload = caller_input(SpeciesEntryIdentityPayload, smiles=smi, charge=chg, multiplicity=mult)
         try:
             _csmi, inchi_key = canonical_species_identity(payload)
         except ValueError as e:
@@ -863,7 +863,8 @@ def lookup_species(
     query = caller_input(LookupQuery, kind="species", inputs=inputs)
     mb = _MatchBuilder()
 
-    payload = SpeciesEntryIdentityPayload(
+    payload = caller_input(
+        SpeciesEntryIdentityPayload,
         smiles=smiles, charge=charge, multiplicity=multiplicity,
     )
     try:
@@ -1154,7 +1155,8 @@ def lookup_species_calculation(
     mb = _MatchBuilder()
 
     # Step 1: resolve species identity
-    payload = SpeciesEntryIdentityPayload(
+    payload = caller_input(
+        SpeciesEntryIdentityPayload,
         smiles=smiles, charge=charge, multiplicity=multiplicity,
     )
     try:

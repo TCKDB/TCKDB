@@ -20,11 +20,15 @@ alone.
 
 from __future__ import annotations
 
+import importlib
+import inspect
+import pkgutil
+import typing
 from collections.abc import Callable
 from typing import Any, TypeVar
 
 from fastapi.routing import APIRoute
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 T = TypeVar("T")
 
@@ -68,8 +72,72 @@ def caller_input(build: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
         raise CallerInputError(exc) from exc
 
 
+_SCHEMA_PACKAGE = "app.schemas"
+_READS_PACKAGE = "app.schemas.reads"
+
+
+def _collect(annotation: Any, found: set[str], seen: set[int]) -> None:
+    """Add every pydantic model reachable from a type annotation."""
+    if inspect.isclass(annotation) and issubclass(annotation, BaseModel):
+        if id(annotation) in seen:
+            return
+        seen.add(id(annotation))
+        found.add(annotation.__name__)
+        origin = annotation.__pydantic_generic_metadata__.get("origin")
+        if origin is not None:
+            found.add(origin.__name__)
+        for field in annotation.model_fields.values():
+            _collect(field.annotation, found, seen)
+        return
+    for arg in typing.get_args(annotation):
+        _collect(arg, found, seen)
+
+
+def _schema_classes() -> set[str]:
+    """Every class defined in ``app.schemas.reads`` and every ``*Read`` in ``app.schemas``."""
+    found: set[str] = set()
+    package = importlib.import_module(_SCHEMA_PACKAGE)
+    for info in pkgutil.walk_packages(package.__path__, prefix=f"{_SCHEMA_PACKAGE}."):
+        module = importlib.import_module(info.name)
+        in_reads = info.name == _READS_PACKAGE or info.name.startswith(f"{_READS_PACKAGE}.")
+        for name, obj in vars(module).items():
+            if (
+                inspect.isclass(obj)
+                and issubclass(obj, BaseModel)
+                and obj.__module__ == info.name
+                and (in_reads or name.endswith("Read"))
+            ):
+                found.add(obj.__name__)
+    return found
+
+
+def server_model_names(app: Any) -> frozenset[str]:
+    """Names of the models the server builds responses from, computed once per app.
+
+    Every route's ``response_model`` walked through nested fields, list/dict/
+    union arguments and generic envelopes, plus the schema classes above.
+    """
+    cached = getattr(app.state, "server_model_names", None)
+    if cached is None:
+        found = _schema_classes()
+        seen: set[int] = set()
+        for route in app.routes:
+            if isinstance(route, APIRoute) and route.response_model is not None:
+                _collect(route.response_model, found, seen)
+        cached = frozenset(found)
+        app.state.server_model_names = cached
+    return cached
+
+
+def classify_validation_error(exc: ValidationError, app: Any) -> Exception:
+    """``ServerFaultError`` for a response or read model, else ``exc`` itself (a 422)."""
+    if exc.title in server_model_names(app):
+        return ServerFaultError(exc)
+    return exc
+
+
 class ServerFaultRoute(APIRoute):
-    """Route class: a ``ValidationError`` escaping the endpoint is a server fault."""
+    """Route class: a response or read model failing inside the endpoint is a server fault."""
 
     def get_route_handler(self) -> Callable[..., Any]:
         handler = super().get_route_handler()
@@ -78,6 +146,9 @@ class ServerFaultRoute(APIRoute):
             try:
                 return await handler(request)
             except ValidationError as exc:
-                raise ServerFaultError(exc) from exc
+                classified = classify_validation_error(exc, request.app)
+                if classified is exc:
+                    raise
+                raise classified from exc
 
         return guarded

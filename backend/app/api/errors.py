@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from sqlalchemy.exc import DBAPIError, IntegrityError, NoResultFound, OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -21,7 +22,7 @@ from app.api.error_contract import (
     validation_detail_code,
     validation_detail_context,
 )
-from app.api.server_faults import ServerFaultError
+from app.api.server_faults import ServerFaultError, classify_validation_error
 from app.services.artifact_storage import (
     ArtifactIntegrityError,
     ArtifactStorageUnavailable,
@@ -917,6 +918,9 @@ def render_handled_exception(
     would give, and rendering it through the same handler is what keeps the
     code and the sentence identical rather than similar.
     """
+    if isinstance(exc, ValidationError):
+        # Classify exactly as ServerFaultRoute would, so dry-run and submit agree.
+        exc = classify_validation_error(exc, request.app)
     handlers = request.app.exception_handlers
     handler = next(
         (handlers[cls] for cls in type(exc).__mro__ if cls in handlers), None
