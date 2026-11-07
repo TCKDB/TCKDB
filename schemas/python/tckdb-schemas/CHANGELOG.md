@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.161.0 - 2026-11-07
+
+One refusal is narrowed; no field is added or removed. A kinetics record's `energy_level_of_theory` is compared with its linked reactant, product and transition-state energies on every level-identity field except `spin_treatment` (method, basis, aux/cabs basis, dispersion, solvent, solvent model, core treatment, relativistic Hamiltonian, PNO truncation, RI approximation). Spin treatment is per species, so a reaction that mixes closed-shell and open-shell participants can now declare the shared method and basis with no spin treatment, and no longer draws `missing_level_of_theory_provenance`. A declaration that does state a spin treatment must still match every link on it, and `kinetics_energy_level_contradiction` still refuses any other difference. Thermo and statmech declarations are unchanged. Contract text on the field: "Spin treatment is per species; a kinetics level states none when the participants differ."
+
 ## 0.160.0 - 2026-11-07
 
 One refusal code is added: `server_response_invalid` (500). The server failed its own response model, so the request was not at fault; nothing in it needs changing. Before this, that failure reached a client as a bare `text/plain` 500, or as a 422 that blamed the request. No model or payload shape changed.

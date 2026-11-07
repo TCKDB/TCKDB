@@ -110,7 +110,7 @@ from app.chemistry.isotopes import implied_isotope_mass_number
 from app.chemistry.permuted_rigid_match import PreparedGeometry, SearchBudget, match_prepared
 from app.chemistry.torsion_fingerprint import kabsch_rmsd
 from app.db.models.calculation import Calculation
-from app.db.models.common import CalculationType
+from app.db.models.common import CalculationType, CompositeBindingSource
 from app.db.models.composite_scheme import CompositeScheme, LevelOfTheoryComposite
 from app.db.models.geometry import Geometry, GeometryAtom
 from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
@@ -1223,10 +1223,48 @@ def assert_role_consistency(
 _KINETICS_ENERGY_ROLES = frozenset({"reactant_energy", "product_energy", "ts_energy"})
 
 
+def kinetics_energy_level_matches(declared: LevelOfTheory, linked: LevelOfTheory | None) -> bool:
+    """Whether a linked energy's level satisfies a kinetics record's declared energy level.
+
+    Spin treatment is decided per species by its multiplicity, so a reaction that mixes
+    closed-shell and open-shell participants has no single spin treatment. The comparison is
+    therefore modulo ``spin_treatment``: every other identity field (the keys the level hash
+    is taken over, via ``_level_of_theory_payload``) must agree. A declared level that states
+    no spin treatment (stored as ``unknown``) matches a link of any spin treatment; one that
+    states a spin treatment must still match the link's.
+
+    A level that names a user-declared composite scheme hashes by the scheme's definition, not
+    by columns, so it keeps the row comparison.
+    """
+    if linked is None:
+        return True
+    if declared.id == linked.id:
+        return True
+    if _is_declared_scheme_level(declared) or _is_declared_scheme_level(linked):
+        return False
+    from app.services.calculation_resolution import _level_of_theory_payload, spin_agnostic_level_key
+
+    if spin_agnostic_level_key(declared) != spin_agnostic_level_key(linked):
+        return False
+    declared_spin = _level_of_theory_payload(declared)["spin_treatment"]
+    return declared_spin == "unknown" or declared_spin == _level_of_theory_payload(linked)["spin_treatment"]
+
+
+def _is_declared_scheme_level(level: LevelOfTheory) -> bool:
+    session = object_session(level)
+    if session is None:
+        return False
+    binding = session.get(LevelOfTheoryComposite, level.id)
+    return binding is not None and binding.binding_source == CompositeBindingSource.declared
+
+
 def assert_kinetics_energy_level_consistency(
     links: list[RoleLink], declared: LevelOfTheory | None
 ) -> None:
-    """A declared kinetics energy level must match every linked energy calculation's level.
+    """A declared kinetics energy level must match every linked energy calculation's level, modulo spin treatment.
+
+    "Match" is :func:`kinetics_energy_level_matches`: every level-identity field except the spin
+    treatment, which is per species and so cannot be one choice for a reaction.
 
     The kinetics counterpart of the R4' check at the end of :func:`assert_role_consistency`
     and refused the same way (a coded 422). Only the ``reactant_energy``, ``product_energy``
@@ -1239,7 +1277,13 @@ def assert_kinetics_energy_level_consistency(
     if declared is None:
         return
     energies = [link.calculation for link in links if link.role in _KINETICS_ENERGY_ROLES]
-    differing = list({c.id: c for c in energies if c.lot_id is not None and c.lot_id != declared.id}.values())
+    differing = list(
+        {
+            c.id: c
+            for c in energies
+            if c.lot_id is not None and not kinetics_energy_level_matches(declared, c.lot)
+        }.values()
+    )
     if not differing:
         return
     raise CodedValueError(
@@ -1279,6 +1323,7 @@ __all__ = [
     "RoleCalcInfo",
     "RoleLink",
     "assert_kinetics_energy_level_consistency",
+    "kinetics_energy_level_matches",
     "assert_role_consistency",
     "collect_composite_link_warnings",
     "derive_levels",

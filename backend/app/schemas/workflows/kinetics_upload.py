@@ -294,7 +294,8 @@ class KineticsUploadRequest(SchemaBase):
     :param is_third_body: True for a simple ``+M`` third-body reaction (no
         falloff), which raises the effective main-line Arrhenius A-units
         order by one.
-    :param energy_level_of_theory: SP level of theory for source-calc auto-resolution.
+    :param energy_level_of_theory: SP level of theory for source-calc auto-resolution. Spin treatment is
+        per species; a kinetics level states none when the participants differ.
     :param bath_gas: Optional bath gas the rate was obtained for (species entries with mole
         fractions summing to 1; not valid at ``pressure_context='high_p_limit'``).
     :param literature: Optional literature submission payload.

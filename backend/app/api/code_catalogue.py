@@ -1745,8 +1745,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship,
             note=(
                 "A declared kinetics energy_level_of_theory disagrees with the level of a "
-                "linked reactant, product or transition-state energy calculation. The "
-                "kinetics counterpart of thermo_energy_level_contradiction."
+                "linked reactant, product or transition-state energy calculation, compared on every "
+                "level-identity field except spin_treatment (spin is per species). A declared "
+                "spin treatment must still match every link. The kinetics counterpart of "
+                "thermo_energy_level_contradiction."
             )),
     ApiCode("kinetics_interpretation_conformer_selection_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",

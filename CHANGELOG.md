@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A kinetics energy level is compared without the spin treatment (2026-11-07)
+
+- **What changed:** a kinetics record's declared `energy_level_of_theory` is compared with each linked reactant, product and transition-state energy on every level-identity field except `spin_treatment`: method, basis, aux basis, cabs basis, dispersion, solvent, solvent model, core treatment, relativistic Hamiltonian, PNO truncation, RI approximation, normalised exactly as the level hash normalises them. A declaration with no spin treatment matches links of any spin treatment; one that states a spin treatment must still match every link on it. A level that names a user-declared composite scheme keeps the row comparison. The standalone kinetics route's lookup of source calculations for the declared level uses the same rule.
+- **Why:** spin treatment is decided per species by its multiplicity. A reaction mixing closed-shell (restricted) and open-shell (unrestricted) participants had no declaration the old row-id comparison accepted, so every such deposit drew `missing_level_of_theory_provenance`.
+- **Unchanged:** `spin_treatment` stays in level identity and in the hash; thermo and statmech level checks.
+- **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.161.0, `tckdb-client` 0.189.0.
+
 ## A response the server cannot build is a logged 500, not a bare error or a 422 (2026-11-07)
 
 - **What changed:** when the server fails its own response or read model it now returns a JSON 500 with the new code `server_response_invalid` and fixed text (no validation detail, object repr or id). Two cases lead there: a route whose returned object fails its `response_model` (it used to be a `text/plain` "Internal Server Error"), and a response or read model that fails while a route builds it from a database row (it used to be a 422 that blamed the caller and echoed an object repr).

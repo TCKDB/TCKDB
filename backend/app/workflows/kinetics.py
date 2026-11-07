@@ -35,6 +35,7 @@ from app.db.models.kinetics import (
     KineticsThirdBodyEfficiency,
     KineticsTunnelingApplication,
 )
+from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.reaction import (
     ChemReaction,
     ReactionEntry,
@@ -52,6 +53,7 @@ from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.reaction_family import find_canonical_reaction_family
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
+from app.services.calculation_levels import kinetics_energy_level_matches
 from app.services.calculation_ownership import (
     W_KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH,
     W_KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
@@ -108,6 +110,29 @@ class EnergySourceLookupError(ValueError):
         self.reason = reason
 
 
+def _calculations_at_declared_level(
+    session: Session, species_entry_id: int, calc_type: CalculationType, lot_id: int
+) -> list[Calculation]:
+    """The species entry's calculations of a type whose level satisfies the declared kinetics energy level.
+
+    The same rule the consistency check applies to linked energies
+    (:func:`~app.services.calculation_levels.kinetics_energy_level_matches`): every level-identity
+    field but the spin treatment, which is per species. A declaration that states a spin
+    treatment still needs the calculation's to equal it.
+    """
+    declared = session.get(LevelOfTheory, lot_id)
+    candidates = session.scalars(
+        select(Calculation)
+        .where(
+            Calculation.species_entry_id == species_entry_id,
+            Calculation.type == calc_type,
+            Calculation.lot_id.is_not(None),
+        )
+        .order_by(Calculation.id)
+    ).all()
+    return [c for c in candidates if kinetics_energy_level_matches(declared, c.lot)]
+
+
 def _find_sp_for_species(
     session: Session,
     *,
@@ -118,16 +143,7 @@ def _find_sp_for_species(
 
     :raises ValueError: If zero or multiple matches are found.
     """
-    results = session.scalars(
-        select(Calculation)
-        .where(
-            Calculation.species_entry_id == species_entry_id,
-            Calculation.type == CalculationType.sp,
-            Calculation.lot_id == lot_id,
-        )
-        .order_by(Calculation.id)
-        .limit(2)
-    ).all()
+    results = _calculations_at_declared_level(session, species_entry_id, CalculationType.sp, lot_id)[:2]
 
     if len(results) == 0:
         raise EnergySourceLookupError(
@@ -165,16 +181,7 @@ def _find_energy_calculation_for_species(
     :raises ValueError: If more than one composite matches, or (with none)
         zero or more than one single point does.
     """
-    composites = session.scalars(
-        select(Calculation)
-        .where(
-            Calculation.species_entry_id == species_entry_id,
-            Calculation.type == CalculationType.composite,
-            Calculation.lot_id == lot_id,
-        )
-        .order_by(Calculation.id)
-        .limit(2)
-    ).all()
+    composites = _calculations_at_declared_level(session, species_entry_id, CalculationType.composite, lot_id)[:2]
     if len(composites) == 1:
         return composites[0]
     if len(composites) > 1:
