@@ -2,20 +2,25 @@
 
 A pydantic ``ValidationError`` is a ``ValueError``, which the API maps to 422.
 FastAPI validates path, query and body input *before* an endpoint runs and
-reports that as ``RequestValidationError``. So a ``ValidationError`` that
-escapes an endpoint is, by default, the server's own: a read model built from a
-row that does not fit it, a stored manifest that no longer parses. Reported as
-a 422 it blames the caller and echoes an object repr.
+reports that as ``RequestValidationError``. A ``ValidationError`` that escapes
+an endpoint can still be either side's fault: a read model built from a row
+that does not fit it is the server's, but endpoint, service and workflow code
+also re-validates parts of what the caller sent (a lookup identity, an upload
+sub-object checked by a stricter internal model). Reported as a 422, the
+server's own failure blames the caller and echoes an object repr.
 
-:class:`ServerFaultRoute` turns such an escape into :class:`ServerFaultError`,
-which the API returns as a 500 ``server_response_invalid`` and logs.
+:class:`ServerFaultRoute` decides by the failing model: when the error's
+``title`` names a model in the server-model set (every route's
+``response_model``, walked through its nested fields, plus the read models),
+it raises :class:`ServerFaultError`, which the API returns as a 500
+``server_response_invalid`` and logs. Any other model keeps today's 422.
 
-The exception is endpoint or service code that validates *caller* input
-itself (a search request built from query parameters, a declaration the
-caller sent). Those sites call :func:`caller_input`, which raises
-:class:`CallerInputError` -- a ``ValueError`` that is not a pydantic
-``ValidationError`` -- so they keep their 422 and the route class leaves them
-alone.
+The rule is by class name and global. Some request and query models are also
+in the set (as response echoes), and a new echo or nested field can pull more
+in. So any code that validates *caller* data by hand must go through
+:func:`caller_input`, which raises :class:`CallerInputError` -- a ``ValueError``
+that is not a pydantic ``ValidationError`` -- so it keeps its 422 whatever the
+set later holds.
 """
 
 from __future__ import annotations
