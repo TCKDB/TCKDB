@@ -1323,9 +1323,9 @@ __all__ = [
     "RoleCalcInfo",
     "RoleLink",
     "assert_kinetics_energy_level_consistency",
-    "kinetics_energy_level_matches",
     "assert_role_consistency",
     "collect_composite_link_warnings",
     "derive_levels",
+    "kinetics_energy_level_matches",
     "role_calc_infos",
 ]
