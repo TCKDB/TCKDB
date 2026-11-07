@@ -278,9 +278,9 @@ _LOOKUP_CASES = [
 @pytest.mark.parametrize(("path", "params"), _LOOKUP_CASES)
 def test_lookup_caller_input_is_not_a_server_fault(client, path, params) -> None:
     resp = client.get(path, params=params)
-    assert resp.status_code in (400, 404, 422), (resp.status_code, resp.text)
-    assert resp.status_code != 500, resp.text
-    assert "server_response_invalid" not in resp.text
+    # The status and code origin/main gives for these inputs.
+    assert resp.status_code == 422, (resp.status_code, resp.text)
+    assert resp.json()["code"] == "validation_error", resp.text
     _record(f"lookup:{path}:{sorted(params.items())}", resp)
 
 
