@@ -294,7 +294,7 @@ class KineticsUploadRequest(SchemaBase):
     :param is_third_body: True for a simple ``+M`` third-body reaction (no
         falloff), which raises the effective main-line Arrhenius A-units
         order by one.
-    :param energy_level_of_theory: SP level of theory for source-calc auto-resolution. The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant: closed-shell participants computed restricted (or unrestricted collapsing to restricted) are equivalent to unrestricted and do not constrain it; open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference.
+    :param energy_level_of_theory: SP level of theory for source-calc auto-resolution. The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant. When at least one participant is open-shell, closed-shell participants (singlets computed restricted, restricted-open, or unrestricted collapsing to restricted) do not constrain it; the open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference. When every participant is closed-shell, a stated spin treatment must match their spin treatment.
     :param bath_gas: Optional bath gas the rate was obtained for (species entries with mole
         fractions summing to 1; not valid at ``pressure_context='high_p_limit'``).
     :param literature: Optional literature submission payload.

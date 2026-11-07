@@ -1225,7 +1225,24 @@ def assert_role_consistency(
 _KINETICS_ENERGY_ROLES = frozenset({"reactant_energy", "product_energy", "ts_energy"})
 
 
-def kinetics_level_fields_match(declared: LevelOfTheory, linked: LevelOfTheory | None) -> bool:
+def declared_scheme_level_ids(session: Session | None, lot_ids: Collection[int]) -> set[int]:
+    """Which of these levels name a user-declared composite scheme: one batched query."""
+    ids = {i for i in lot_ids if i is not None}
+    if session is None or not ids:
+        return set()
+    return set(
+        session.scalars(
+            select(LevelOfTheoryComposite.level_of_theory_id).where(
+                LevelOfTheoryComposite.level_of_theory_id.in_(ids),
+                LevelOfTheoryComposite.binding_source == CompositeBindingSource.declared,
+            )
+        )
+    )
+
+
+def kinetics_level_fields_match(
+    declared: LevelOfTheory, linked: LevelOfTheory | None, *, scheme_ids: Collection[int] = ()
+) -> bool:
     """Whether a linked energy's level agrees with the declared kinetics level on every field but spin.
 
     The fields are the keys the level hash is taken over (``spin_agnostic_level_key``, derived from
@@ -1233,23 +1250,16 @@ def kinetics_level_fields_match(declared: LevelOfTheory, linked: LevelOfTheory |
     per participant by :func:`assert_kinetics_energy_level_consistency`, not here.
 
     A level that names a user-declared composite scheme hashes by the scheme's definition, not
-    by columns, so it keeps the row comparison.
+    by columns, so it keeps the row comparison. ``scheme_ids`` is the set of such levels among the
+    ones being compared (:func:`declared_scheme_level_ids`, computed once by the caller).
     """
     if linked is None or declared.id == linked.id:
         return True
-    if _is_declared_scheme_level(declared) or _is_declared_scheme_level(linked):
+    if declared.id in scheme_ids or linked.id in scheme_ids:
         return False
     from app.services.calculation_resolution import spin_agnostic_level_key
 
     return spin_agnostic_level_key(declared) == spin_agnostic_level_key(linked)
-
-
-def _is_declared_scheme_level(level: LevelOfTheory) -> bool:
-    session = object_session(level)
-    if session is None:
-        return False
-    binding = session.get(LevelOfTheoryComposite, level.id)
-    return binding is not None and binding.binding_source == CompositeBindingSource.declared
 
 
 #: ``reason`` values on a spin-treatment ``kinetics_energy_level_contradiction`` (closed; no depositor text).
@@ -1257,20 +1267,21 @@ REASON_OPEN_SHELL_REFERENCE_MIXED = "open_shell_reference_mixed"
 REASON_DECLARED_SPIN_DIFFERS = "declared_spin_differs"
 
 
-def _spin_value(level: LevelOfTheory | None) -> str | None:
+def level_spin_value(level: LevelOfTheory | None) -> str | None:
     """The stated spin treatment of a level (``restricted``, ``unrestricted``, ``restricted_open``), else ``None``."""
     spin = getattr(getattr(level, "spin_treatment", None), "value", getattr(level, "spin_treatment", None))
     return None if spin in (None, "unknown") else spin
 
 
-def _link_spin_facts(session: Session, calculation_ids: list[int]) -> dict[int, tuple[int | None, float | None]]:
-    """``{calculation id: (multiplicity, stored <S^2>)}``: one query for every link.
+def kinetics_spin_facts(session: Session, calculation_ids: Collection[int]) -> dict[int, tuple[int | None, float | None]]:
+    """``{calculation id: (multiplicity, stored <S^2>)}``: one query for every calculation.
 
     Multiplicity is the owning species' or transition-state entry's; ``<S^2>`` is the stored
     ``calc_spin_diagnostic`` row, absent when none was parsed. The query autoflushes, so rows written
     earlier in the same request are seen.
     """
-    if not calculation_ids:
+    ids = list(calculation_ids)
+    if not ids:
         return {}
     rows = session.execute(
         select(
@@ -1283,12 +1294,12 @@ def _link_spin_facts(session: Session, calculation_ids: list[int]) -> dict[int, 
         .outerjoin(Species, Species.id == SpeciesEntry.species_id)
         .outerjoin(TransitionStateEntry, TransitionStateEntry.id == Calculation.transition_state_entry_id)
         .outerjoin(CalculationSpinDiagnostic, CalculationSpinDiagnostic.calculation_id == Calculation.id)
-        .where(Calculation.id.in_(calculation_ids))
+        .where(Calculation.id.in_(ids))
     ).all()
     return {cid: (species_m if species_m is not None else ts_m, s2) for cid, species_m, ts_m, s2 in rows}
 
 
-def _is_closed_shell_exempt(multiplicity: int | None, spin: str | None, s_squared: float | None) -> bool:
+def kinetics_closed_shell_exempt(multiplicity: int | None, spin: str | None, s_squared: float | None) -> bool:
     """A singlet computed restricted, or unrestricted and collapsed to the restricted solution.
 
     Such a link does not constrain the spin treatment: a closed-shell molecule's energy is the same
@@ -1306,38 +1317,34 @@ def _is_closed_shell_exempt(multiplicity: int | None, spin: str | None, s_square
     return spin == "unrestricted" and s_squared is not None and s_squared <= S_SQUARED_THRESHOLD
 
 
-def assert_kinetics_energy_level_consistency(
-    links: list[RoleLink], declared: LevelOfTheory | None
-) -> None:
-    """A declared kinetics energy level must agree with every linked energy, spin treatment per participant.
+def kinetics_energy_level_violation(
+    energies: Sequence[Calculation], declared: LevelOfTheory | None
+) -> CodedValueError | None:
+    """The refusal a declared kinetics energy level earns against these linked energy calculations, or ``None``.
 
-    The kinetics counterpart of the R4' check at the end of :func:`assert_role_consistency`
-    and refused the same way (a coded 422). Only the ``reactant_energy``, ``product_energy``
-    and ``ts_energy`` links are energies; a calculation with no level of theory of its own is
-    not compared (absence is not a contradiction), and no declaration, or no energy link, is
-    nothing to check. Nothing is inferred in either direction.
-
-    1. Every link must match the declared level on every field but spin
+    1. Every calculation with a level must match the declared level on every field but spin
        (:func:`kinetics_level_fields_match`).
-    2. A closed-shell link (:func:`_is_closed_shell_exempt`) never constrains spin.
-    3. The other links (every multiplicity above 1, a broken-symmetry or ``<S^2>``-less unrestricted
-       singlet) form the open-shell reference set. Links of unknown spin are skipped; the rest must
-       agree (``unrestricted`` against ``restricted_open`` is a real level difference).
-    4. A declared spin treatment must equal that shared open-shell reference; with no such link it
-       must equal every known link spin. A declaration that states none is accepted.
+    2. A closed-shell one (:func:`kinetics_closed_shell_exempt`) never constrains spin.
+    3. The others (every multiplicity above 1, a broken-symmetry or ``<S^2>``-less unrestricted
+       singlet) form the open-shell reference set. Unknown spin is skipped; the rest must agree
+       (``unrestricted`` against ``restricted_open`` is a real level difference).
+    4. A declared spin treatment must equal that shared open-shell reference; with no such calculation
+       it must equal every known spin. A declaration that states none is accepted.
 
-    :raises CodedValueError: ``kinetics_energy_level_contradiction``.
+    A calculation with no level of its own is not compared (absence is not a contradiction), and no
+    declaration, or no calculation, is nothing to check.
     """
     if declared is None:
-        return
-    energies = list(
-        {link.calculation.id: link.calculation for link in links if link.role in _KINETICS_ENERGY_ROLES}.values()
-    )
-    energies = [c for c in energies if c.lot_id is not None]
+        return None
+    energies = [c for c in {c.id: c for c in energies}.values() if c.lot_id is not None]
+    if not energies:
+        return None
+    session = object_session(declared)
+    scheme_ids = declared_scheme_level_ids(session, [declared.id, *(c.lot_id for c in energies)])
 
-    differing = [c for c in energies if not kinetics_level_fields_match(declared, c.lot)]
+    differing = [c for c in energies if not kinetics_level_fields_match(declared, c.lot, scheme_ids=scheme_ids)]
     if differing:
-        raise CodedValueError(
+        return CodedValueError(
             W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
             f"kinetics: the declared energy level of theory ({_lot_label(declared)}) does not match "
             f"the level of the linked energy calculations ({', '.join(c.public_ref for c in differing)} "
@@ -1349,56 +1356,81 @@ def assert_kinetics_energy_level_consistency(
             },
             message_prefix=False,
         )
-    if not energies or _is_declared_scheme_level(declared):
-        return
+    if declared.id in scheme_ids or session is None:
+        return None
 
-    session = object_session(declared)
-    facts = _link_spin_facts(session, [c.id for c in energies]) if session is not None else {}
+    facts = kinetics_spin_facts(session, [c.id for c in energies])
     open_shell: dict[str, list[Calculation]] = {}
     all_known: dict[str, list[Calculation]] = {}
     for calc in energies:
-        spin = _spin_value(calc.lot)
+        spin = level_spin_value(calc.lot)
         if spin is None:
             continue
         all_known.setdefault(spin, []).append(calc)
         multiplicity, s_squared = facts.get(calc.id, (None, None))
-        if multiplicity is None or _is_closed_shell_exempt(multiplicity, spin, s_squared):
+        if multiplicity is None or kinetics_closed_shell_exempt(multiplicity, spin, s_squared):
             continue
         open_shell.setdefault(spin, []).append(calc)
 
-    def refuse(reason: str, calcs: list[Calculation], detail: str) -> None:
-        raise CodedValueError(
-            W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
-            f"kinetics: {detail}",
-            context={
-                "declared_level_of_theory_ref": declared.public_ref,
-                "energy_calculation_refs": sorted({c.public_ref for c in calcs}),
-                "reason": reason,
-            },
-            message_prefix=False,
-        )
+    def spin_context(reason: str, calcs: list[Calculation]) -> dict[str, object]:
+        return {
+            "declared_level_of_theory_ref": declared.public_ref,
+            "energy_calculation_refs": sorted({c.public_ref for c in calcs}),
+            "reason": reason,
+        }
 
     if len(open_shell) > 1:
-        refuse(
-            REASON_OPEN_SHELL_REFERENCE_MIXED,
-            [c for group in open_shell.values() for c in group],
-            "the open-shell participants' energies were computed with different spin treatments "
+        return CodedValueError(
+            W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
+            "kinetics: the open-shell participants' energies were computed with different spin treatments "
             f"({', '.join(sorted(open_shell))}); they must share one reference (unrestricted or "
             "restricted-open).",
+            context=spin_context(
+                REASON_OPEN_SHELL_REFERENCE_MIXED, [c for group in open_shell.values() for c in group]
+            ),
+            message_prefix=False,
         )
-    declared_spin = _spin_value(declared)
+    declared_spin = level_spin_value(declared)
     if declared_spin is None:
-        return
+        return None
     reference = open_shell if open_shell else all_known
     wrong = [c for spin, group in reference.items() if spin != declared_spin for c in group]
-    if wrong:
-        refuse(
-            REASON_DECLARED_SPIN_DIFFERS,
-            wrong,
-            f"the declared spin treatment ({declared_spin}) differs from the linked "
-            f"{'open-shell' if open_shell else ''} energies' ({', '.join(sorted(reference))}). Declare "
-            "the open-shell reference, or none.",
+    if not wrong:
+        return None
+    if open_shell:
+        return CodedValueError(
+            W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
+            f"kinetics: the declared spin treatment ({declared_spin}) differs from the open-shell participants' "
+            f"({', '.join(sorted(reference))}). Declare the open-shell reference, or no spin treatment.",
+            context=spin_context(REASON_DECLARED_SPIN_DIFFERS, wrong),
+            message_prefix=False,
         )
+    return CodedValueError(
+        W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
+        f"kinetics: the declared spin treatment ({declared_spin}) differs from the linked energies' "
+        f"({', '.join(sorted(reference))}), and every participant is closed-shell. Declare the spin "
+        "treatment they were computed with, or none.",
+        context=spin_context(REASON_DECLARED_SPIN_DIFFERS, wrong),
+        message_prefix=False,
+    )
+
+
+def assert_kinetics_energy_level_consistency(
+    links: list[RoleLink], declared: LevelOfTheory | None
+) -> None:
+    """A declared kinetics energy level must agree with every linked energy, spin treatment per participant.
+
+    The kinetics counterpart of the R4' check at the end of :func:`assert_role_consistency`
+    and refused the same way (a coded 422). Only the ``reactant_energy``, ``product_energy``
+    and ``ts_energy`` links are energies. The rule is :func:`kinetics_energy_level_violation`.
+
+    :raises CodedValueError: ``kinetics_energy_level_contradiction``.
+    """
+    violation = kinetics_energy_level_violation(
+        [link.calculation for link in links if link.role in _KINETICS_ENERGY_ROLES], declared
+    )
+    if violation is not None:
+        raise violation
 
 
 __all__ = [
@@ -1426,7 +1458,12 @@ __all__ = [
     "assert_kinetics_energy_level_consistency",
     "assert_role_consistency",
     "collect_composite_link_warnings",
+    "declared_scheme_level_ids",
     "derive_levels",
+    "kinetics_closed_shell_exempt",
+    "kinetics_energy_level_violation",
     "kinetics_level_fields_match",
+    "kinetics_spin_facts",
+    "level_spin_value",
     "role_calc_infos",
 ]

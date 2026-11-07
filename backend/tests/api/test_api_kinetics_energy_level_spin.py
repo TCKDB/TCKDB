@@ -321,3 +321,253 @@ def test_the_spin_agnostic_key_is_the_hash_payload_minus_spin():
     key = spin_agnostic_level_key(ref)
     assert set(full) - set(key) == {"spin_treatment"}
     assert {k: v for k, v in full.items() if k != "spin_treatment"} == key
+
+
+# ---------------------------------------------------------------------------
+# Standalone (/uploads/kinetics) and bundle import: the same rule, through the lookup
+# ---------------------------------------------------------------------------
+
+_STANDALONE = "/api/v1/uploads/kinetics"
+_LEVEL = {"method": "B3LYP", "basis": "6-31G(d)"}
+
+
+def _calc(spin: str | None, *, s2: float | None = None) -> dict:
+    from tests.api.test_api_composite_kinetics_energy_level import _sp_calc
+
+    calc = _sp_calc({**_LEVEL, **({"spin_treatment": spin} if spin else {})})
+    if s2 is not None:
+        calc["spin_diagnostic"] = {"s_squared": s2}
+    return calc
+
+
+def _deposit_ch3_h_ch4(client, *, ch3, h, ch4) -> None:
+    """Each argument is a primary calculation, or a (primary, [additional]) pair."""
+    from tests.api.test_api_composite_kinetics_energy_level import _H_ATOM, _METHANE, _METHYL, _deposit
+
+    for species, given in ((_METHYL, ch3), (_H_ATOM, h), (_METHANE, ch4)):
+        primary, additional = given if isinstance(given, tuple) else (given, None)
+        _deposit(client, species, primary=primary, additional=additional)
+
+
+def _standalone_payload(level: dict) -> dict:
+    return {
+        "reaction": {
+            "reversible": False,
+            "reactants": [
+                {"species_entry": {"smiles": "[CH3]", "charge": 0, "multiplicity": 2}},
+                {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+            ],
+            "products": [{"species_entry": {"smiles": "C", "charge": 0, "multiplicity": 1}}],
+        },
+        "scientific_origin": "computed",
+        "energy_level_of_theory": level,
+        "a": 1.0e13,
+        "a_units": "cm3_mol_s",
+        "n": 0.0,
+        "reported_ea": 0.0,
+        "reported_ea_units": "kj_mol",
+        "tmin_k": 300.0,
+        "tmax_k": 2000.0,
+        "software_release": {"name": "Arkane", "version": "3.0"},
+    }
+
+
+def _bundle_mode(db_session, level: dict):
+    """The same payload through the bundle-import policy: returns (kinetics row, warnings)."""
+    from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
+    from app.workflows.kinetics import persist_kinetics_upload
+
+    warnings: list = []
+    row = persist_kinetics_upload(
+        db_session,
+        KineticsUploadRequest.model_validate(_standalone_payload(level)),
+        warnings=warnings,
+        require_energy_sources=False,
+    )
+    return row, warnings
+
+
+def _linked_calcs(db_session, kinetics_id: int):
+    from sqlalchemy import select
+
+    from app.db.models.calculation import Calculation
+    from app.db.models.kinetics import KineticsSourceCalculation
+
+    return db_session.scalars(
+        select(Calculation)
+        .join(KineticsSourceCalculation, KineticsSourceCalculation.calculation_id == Calculation.id)
+        .where(KineticsSourceCalculation.kinetics_id == kinetics_id)
+    ).all()
+
+
+def _assert_stored_without_sources(db_session, row, warnings) -> None:
+    assert [w.code for w in warnings] == ["energy_level_stored_without_source_calculations"]
+    assert row.energy_level_of_theory_id is not None
+    assert _linked_calcs(db_session, row.id) == []
+
+
+def test_standalone_a_radical_with_only_a_restricted_open_sp_does_not_serve_a_declared_unrestricted(client):
+    """Lookup, eligibility: a radical with no calculation at the declared spin finds none (as on main)."""
+    _deposit_ch3_h_ch4(client, ch3=_calc("restricted_open"), h=_calc("unrestricted"), ch4=_calc("restricted"))
+    resp = client.post(_STANDALONE, json=_standalone_payload({**_LEVEL, "spin_treatment": "unrestricted"}))
+    assert resp.status_code == 422, resp.text[:600]
+    assert "No SP calculation found" in resp.text
+
+
+def test_standalone_mixed_open_shell_references_are_refused_when_no_spin_is_declared(client):
+    """Check (b): CH3 restricted-open with H unrestricted, no spin declared."""
+    _deposit_ch3_h_ch4(client, ch3=_calc("restricted_open"), h=_calc("unrestricted"), ch4=_calc("restricted"))
+    body = _assert_refused(client.post(_STANDALONE, json=_standalone_payload(dict(_LEVEL))), "open_shell_reference_mixed")
+    assert len(body["context"]["energy_calculation_refs"]) == 2
+
+
+def test_bundle_mode_mixed_open_shell_references_store_the_level_without_sources(client, db_session):
+    """Bundle mode downgrades a violation exactly like 'no sources found'."""
+    _deposit_ch3_h_ch4(client, ch3=_calc("restricted_open"), h=_calc("unrestricted"), ch4=_calc("restricted"))
+    row, warnings = _bundle_mode(db_session, dict(_LEVEL))
+    _assert_stored_without_sources(db_session, row, warnings)
+
+
+def test_bundle_mode_a_radical_without_the_declared_spin_stores_the_level_without_sources(client, db_session):
+    _deposit_ch3_h_ch4(client, ch3=_calc("restricted_open"), h=_calc("unrestricted"), ch4=_calc("restricted"))
+    row, warnings = _bundle_mode(db_session, {**_LEVEL, "spin_treatment": "unrestricted"})
+    _assert_stored_without_sources(db_session, row, warnings)
+
+
+def test_standalone_a_consistent_deposit_links_and_a_declared_open_shell_reference_serves_closed_shell(
+    client, db_session
+):
+    """The closed-shell restricted methane is eligible under a declared unrestricted: three links."""
+    _deposit_ch3_h_ch4(client, ch3=_calc("unrestricted"), h=_calc("unrestricted"), ch4=_calc("restricted"))
+    resp = client.post(_STANDALONE, json=_standalone_payload({**_LEVEL, "spin_treatment": "unrestricted"}))
+    assert resp.status_code == 201, resp.text[:600]
+    assert len(_linked_calcs(db_session, resp.json()["id"])) == 3
+
+
+def test_bundle_mode_a_consistent_deposit_links_normally(client, db_session):
+    _deposit_ch3_h_ch4(client, ch3=_calc("unrestricted"), h=_calc("unrestricted"), ch4=_calc("restricted"))
+    row, warnings = _bundle_mode(db_session, dict(_LEVEL))
+    assert warnings == []
+    assert len(_linked_calcs(db_session, row.id)) == 3
+
+
+def test_the_calculation_on_the_declared_levels_own_row_is_preferred_when_no_spin_is_declared(client, db_session):
+    """Regression guard: one SP at exactly the declared level (spin unstated) plus another at unrestricted."""
+    _deposit_ch3_h_ch4(client, ch3=(_calc(None), [_calc("unrestricted")]), h=_calc(None), ch4=_calc(None))
+    resp = client.post(_STANDALONE, json=_standalone_payload(dict(_LEVEL)))
+    assert resp.status_code == 201, resp.text[:600]
+    assert {c.lot.spin_treatment for c in _linked_calcs(db_session, resp.json()["id"])} == {None}
+
+
+def test_with_several_single_points_the_declared_spin_is_preferred(client, db_session):
+    """Methane has restricted and unrestricted single points; both are eligible, the declared spin wins."""
+    _deposit_ch3_h_ch4(
+        client,
+        ch3=_calc("unrestricted"),
+        h=_calc("unrestricted"),
+        ch4=(_calc("restricted"), [_calc("unrestricted")]),
+    )
+    resp = client.post(_STANDALONE, json=_standalone_payload({**_LEVEL, "spin_treatment": "unrestricted"}))
+    assert resp.status_code == 201, resp.text[:600]
+    spins = {c.lot.spin_treatment.value for c in _linked_calcs(db_session, resp.json()["id"])}
+    assert spins == {"unrestricted"}
+
+
+# ---------------------------------------------------------------------------
+# Transition-state links, restricted-open singlets, declared composite schemes
+# ---------------------------------------------------------------------------
+
+
+def _ts_payload(*, ts_spin: str, declared: dict | None = None) -> dict:
+    import copy
+
+    from tests.api.test_api_bundle_monatomic_sp_primary import _reaction_payload
+
+    payload = copy.deepcopy(_reaction_payload("rotor_scan_1"))
+    spins = {"r0_sp": "restricted", "r1_sp": "unrestricted", "p0_sp": "unrestricted", "p1_sp": "restricted"}
+    calcs = [c for s in payload["species"] for c in s["calculations"]] + payload["transition_state"]["calculations"]
+    for calc in calcs:
+        if calc["key"] in spins:
+            calc["level_of_theory"]["spin_treatment"] = spins[calc["key"]]
+        if calc["key"] == "ts_sp":
+            calc["level_of_theory"]["spin_treatment"] = ts_spin
+            level = {k: v for k, v in calc["level_of_theory"].items() if k != "spin_treatment"}
+    payload["kinetics"][0]["energy_level_of_theory"] = declared if declared is not None else level
+    return payload
+
+
+def test_a_restricted_open_transition_state_against_unrestricted_radicals_is_refused(client):
+    """The TS link's multiplicity is read from the transition-state entry, so its energy joins the open-shell set."""
+    resp = client.post(_REACTION, json=_ts_payload(ts_spin="restricted_open"))
+    _assert_refused(resp, "open_shell_reference_mixed")
+
+
+def test_an_unrestricted_transition_state_with_unrestricted_radicals_is_accepted(client):
+    resp = client.post(_REACTION, json=_ts_payload(ts_spin="unrestricted"))
+    assert resp.status_code == 201, resp.text[:800]
+
+
+def test_a_restricted_open_singlet_is_closed_shell_exempt(client):
+    """Kills: restricted_open dropped from the singlet exemption."""
+    resp = client.post(_REACTION, json=_bundle(dict(_BASE), h=[_U, _U], h2=[_RO]))
+    assert resp.status_code == 201, resp.text[:800]
+    declared = client.post(_REACTION, json=_bundle({**_BASE, "spin_treatment": "unrestricted"}, h=[_U, _U], h2=[_RO]))
+    assert declared.status_code == 201, declared.text[:800]
+
+
+def _scheme_level(db_session, *, method: str, lot_hash: str, source, scheme_name: str, definition_hash: str):
+    from app.db.models.common import CompositeSchemeKind
+    from app.db.models.composite_scheme import CompositeScheme, LevelOfTheoryComposite
+    from app.db.models.level_of_theory import LevelOfTheory
+
+    scheme = CompositeScheme(kind=CompositeSchemeKind.extrapolation, name=scheme_name, definition_hash=definition_hash)
+    level = LevelOfTheory(method=method, lot_hash=lot_hash)
+    db_session.add_all([scheme, level])
+    db_session.flush()
+    db_session.add(LevelOfTheoryComposite(level_of_theory_id=level.id, scheme_id=scheme.id, binding_source=source))
+    db_session.flush()
+    return level
+
+
+def test_declared_composite_schemes_keep_the_row_comparison(db_session):
+    """Kills: the declared-scheme guard removed. Their columns are only a label, so equal labels are not equal levels."""
+    from app.db.models.common import CompositeBindingSource
+    from app.db.models.level_of_theory import LevelOfTheory
+    from app.services.calculation_levels import declared_scheme_level_ids, kinetics_level_fields_match
+
+    declared = CompositeBindingSource.declared
+    one = _scheme_level(db_session, method="Label", lot_hash="1" * 64, source=declared, scheme_name="Label", definition_hash="a" * 64)
+    two = _scheme_level(db_session, method="Label", lot_hash="2" * 64, source=declared, scheme_name="Label", definition_hash="b" * 64)
+    named = _scheme_level(db_session, method="CBS-QB3", lot_hash="3" * 64, source=declared, scheme_name="CBS-QB3", definition_hash="c" * 64)
+    plain = LevelOfTheory(method="CBS-QB3", lot_hash="4" * 64)
+    db_session.add(plain)
+    db_session.flush()
+    ids = declared_scheme_level_ids(db_session, [one.id, two.id, named.id, plain.id])
+    assert ids == {one.id, two.id, named.id}
+
+    # Two declared schemes with one name are two levels; a declared scheme named like a method is not that method.
+    assert kinetics_level_fields_match(one, two, scheme_ids=ids) is False
+    assert kinetics_level_fields_match(named, plain, scheme_ids=ids) is False
+    assert kinetics_level_fields_match(plain, named, scheme_ids=ids) is False
+    assert kinetics_level_fields_match(one, one, scheme_ids=ids) is True
+
+
+def test_a_catalogued_composite_binding_follows_the_ordinary_rule(db_session):
+    from app.db.models.common import CompositeBindingSource
+    from app.db.models.level_of_theory import LevelOfTheory
+    from app.services.calculation_levels import declared_scheme_level_ids, kinetics_level_fields_match
+
+    catalogued = _scheme_level(
+        db_session,
+        method="CBS-QB3",
+        lot_hash="5" * 64,
+        source=CompositeBindingSource.named_method_catalogue,
+        scheme_name="CBS-QB3",
+        definition_hash="d" * 64,
+    )
+    other = LevelOfTheory(method="cbs-qb3", lot_hash="6" * 64)
+    db_session.add(other)
+    db_session.flush()
+    ids = declared_scheme_level_ids(db_session, [catalogued.id, other.id])
+    assert ids == set()
+    assert kinetics_level_fields_match(catalogued, other, scheme_ids=ids) is True

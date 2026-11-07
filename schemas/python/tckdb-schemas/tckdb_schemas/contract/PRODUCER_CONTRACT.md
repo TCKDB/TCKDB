@@ -243,9 +243,9 @@ One refusal is narrowed and gains a `reason`; no field is added or removed. A ki
 - the other links (every multiplicity above 1, and an unrestricted singlet with ⟨S²⟩ above 0.1 or none stored) must share one reference, unrestricted or restricted-open; a link of unknown spin is skipped. Otherwise `kinetics_energy_level_contradiction` carries `reason: open_shell_reference_mixed`;
 - a declaration that states no spin treatment is accepted; one that states it must equal that open-shell reference (or, with no open-shell link, every known link spin), else `reason: declared_spin_differs`.
 
-A reaction mixing radicals computed unrestricted with closed-shell species computed restricted can therefore declare its method and basis (with or without `unrestricted`), and no longer draws `missing_level_of_theory_provenance`. Thermo and statmech declarations are unchanged. Sources: the 0.1 bound is the convention the wavefunction-reliability warning already uses (Williams et al. 2011, doi:10.1016/j.cplett.2011.01.020; Rettig et al. 2020, doi:10.1021/acs.jctc.0c00986; register entry 52). Restricted-open and unrestricted references are different levels for open-shell species (Wood et al. 2006 ROCBS-QB3, doi:10.1063/1.2335438; Henry, Sullivan and Radom 2003, G3-RAD).
+The same rule applies on `/uploads/kinetics` and bundle import, where it also decides which calculations a declared level finds: a calculation at the declared spin is preferred, a closed-shell one run restricted is eligible, and a radical with no calculation at the declared spin finds none. A violation refuses on the standalone route; on bundle import the level is stored without source calculations and `energy_level_stored_without_source_calculations` is returned, as when nothing matches. A reaction mixing radicals computed unrestricted with closed-shell species computed restricted can therefore declare its method and basis (with or without `unrestricted`), and no longer draws `missing_level_of_theory_provenance`. Thermo and statmech declarations are unchanged. Sources: the 0.1 bound is the convention the wavefunction-reliability warning already uses (Williams et al. 2011, doi:10.1016/j.cplett.2011.01.020; Rettig et al. 2020, doi:10.1021/acs.jctc.0c00986; register entry 52). Restricted-open and unrestricted references are different levels for open-shell species (Wood et al. 2006 ROCBS-QB3, doi:10.1063/1.2335438; Henry, Sullivan and Radom 2003, G3-RAD).
 
-Contract text on the field: "The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant: closed-shell participants computed restricted (or unrestricted collapsing to restricted) are equivalent to unrestricted and do not constrain it; open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference."
+Contract text on the field: "The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant. When at least one participant is open-shell, closed-shell participants (singlets computed restricted, restricted-open, or unrestricted collapsing to restricted) do not constrain it; the open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference. When every participant is closed-shell, a stated spin treatment must match their spin treatment."
 
 ### 0.160.0 - 2026-11-07
 
@@ -933,7 +933,7 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 
 ### Code group 4aa549
 
-18 codes on 3 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ContributionBundle`](#s-contributionbundle).
+19 codes on 3 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`KineticsUploadRequest`](#s-kineticsuploadrequest), [`ContributionBundle`](#s-contributionbundle).
 
 | Code | Status | Traced via |
 |---|---|---|
@@ -946,6 +946,7 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`kinetics_declaration_version_unsupported`](REFUSAL_CODES.md#c-kinetics-declaration-version-unsupported) | 422 | payload validation; route handler |
 | [`kinetics_determination_invalid`](REFUSAL_CODES.md#c-kinetics-determination-invalid) | 422 | payload validation; route handler |
 | [`kinetics_determination_mismatch`](REFUSAL_CODES.md#c-kinetics-determination-mismatch) | 422 | route handler |
+| [`kinetics_energy_level_contradiction`](REFUSAL_CODES.md#c-kinetics-energy-level-contradiction) | 422 | route handler |
 | [`kinetics_interpretation_conformer_selection_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-interpretation-conformer-selection-owner-mismatch) | 422 | route handler |
 | [`kinetics_interpretation_statmech_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-interpretation-statmech-owner-mismatch) | 422 | route handler |
 | [`kinetics_protocol_calculation_owner_mismatch`](REFUSAL_CODES.md#c-kinetics-protocol-calculation-owner-mismatch) | 422 | route handler |
@@ -1821,10 +1822,6 @@ Nested models (110; fields and rules in the [model reference](#model-reference))
 
 ### Refusal codes this surface can return
 
-| Code | Status | Traced via |
-|---|---|---|
-| [`kinetics_energy_level_contradiction`](REFUSAL_CODES.md#c-kinetics-energy-level-contradiction) | 422 | route handler |
-
 - [Code group cf7c13](#cg-cf7c13): 3 codes, returned on 16 surfaces
 - [Code group d9a7ea](#cg-d9a7ea): 4 codes, returned on 14 surfaces
 - [Code group af2230](#cg-af2230): [`geometry_isotope_symbol_conflict`](REFUSAL_CODES.md#c-geometry-isotope-symbol-conflict), returned on 13 surfaces
@@ -1844,7 +1841,7 @@ Nested models (110; fields and rules in the [model reference](#model-reference))
 - [Code group 2f985e](#cg-2f985e): 20 codes, returned on 4 surfaces
 - [Code group 1a217e](#cg-1a217e): 2 codes, returned on 3 surfaces
 - [Code group 2ac41f](#cg-2ac41f): [`transport_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-transport-source-calculation-owner-mismatch), returned on 3 surfaces
-- [Code group 4aa549](#cg-4aa549): 18 codes, returned on 3 surfaces
+- [Code group 4aa549](#cg-4aa549): 19 codes, returned on 3 surfaces
 - [Code group c8f060](#cg-c8f060): 13 codes, returned on 3 surfaces
 - [Code group 6aa675](#cg-6aa675): 5 codes, returned on 2 surfaces
 - [Code group 02b23e](#cg-02b23e): 9 codes, returned on 2 surfaces
@@ -2292,7 +2289,7 @@ Unknown keys are refused.
 | `determination` | [`KineticsDeterminationDeclaration`](#m-kineticsdeterminationdeclaration) \| null | no |  |  |  | Needs ``direction`` and a literature or workflow tool.
 | `applicability` | [`KineticsApplicabilityDeclaration`](#m-kineticsapplicabilitydeclaration) \| null | no |  |  |  | Optional declaration of what the coefficient is.
 | `protocol` | [`KineticsProtocolDeclaration`](#m-kineticsprotocoldeclaration) \| null | no |  |  |  | Optional declaration of how the rate was produced.
-| `energy_level_of_theory` | [`LevelOfTheoryRef`](#m-leveloftheoryref) \| null | no |  |  |  | SP level of theory for source-calc auto-resolution. The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant: closed-shell participants computed restricted (or unrestricted collapsing to restricted) are equivalent to unrestricted and do not constrain it; open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference.
+| `energy_level_of_theory` | [`LevelOfTheoryRef`](#m-leveloftheoryref) \| null | no |  |  |  | SP level of theory for source-calc auto-resolution. The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant. When at least one participant is open-shell, closed-shell participants (singlets computed restricted, restricted-open, or unrestricted collapsing to restricted) do not constrain it; the open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference. When every participant is closed-shell, a stated spin treatment must match their spin treatment.
 | `literature` | [`LiteratureUploadRequest`](#m-literatureuploadrequest) \| null | no |  |  |  | Optional literature submission payload.
 | `software_release` | [`SoftwareReleaseRef`](#m-softwarereleaseref) \| null | no |  |  |  | Optional software provenance reference (fitting tool).
 | `workflow_tool_release` | [`WorkflowToolReleaseRef`](#m-workflowtoolreleaseref) \| null | no |  |  |  | Optional workflow-tool provenance reference.
@@ -2436,7 +2433,7 @@ Nested models (26; fields and rules in the [model reference](#model-reference)):
 - [Code group a9912f](#cg-a9912f): [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum), returned on 10 surfaces
 - [Code group 6b005c](#cg-6b005c): 3 codes, returned on 8 surfaces
 - [Code group 31a411](#cg-31a411): 4 codes, returned on 7 surfaces
-- [Code group 4aa549](#cg-4aa549): 18 codes, returned on 3 surfaces
+- [Code group 4aa549](#cg-4aa549): 19 codes, returned on 3 surfaces
 - [Code group 463521](#cg-463521): [`reaction_reversible_required`](REFUSAL_CODES.md#c-reaction-reversible-required), returned on 3 surfaces
 - [Code group 505019](#cg-505019): 2 codes, returned on 2 surfaces
 
@@ -4074,7 +4071,7 @@ Nested models (105; fields and rules in the [model reference](#model-reference))
 - [Code group 4d199d](#cg-4d199d): [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared), returned on 5 surfaces
 - [Code group 0898ca](#cg-0898ca): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
 - [Code group 2f985e](#cg-2f985e): 20 codes, returned on 4 surfaces
-- [Code group 4aa549](#cg-4aa549): 18 codes, returned on 3 surfaces
+- [Code group 4aa549](#cg-4aa549): 19 codes, returned on 3 surfaces
 - [Code group 463521](#cg-463521): [`reaction_reversible_required`](REFUSAL_CODES.md#c-reaction-reversible-required), returned on 3 surfaces
 - [Code group 505019](#cg-505019): 2 codes, returned on 2 surfaces
 - [Code group 227dd0](#cg-227dd0): [`thermo_statmech_owner_mismatch`](REFUSAL_CODES.md#c-thermo-statmech-owner-mismatch), returned on 2 surfaces
@@ -4628,7 +4625,7 @@ Unknown keys are refused.
 | `determination` | [`KineticsDeterminationDeclaration`](#m-kineticsdeterminationdeclaration) \| null | no |  |  |  | Needs ``direction`` and the bundle's literature or workflow tool.
 | `applicability` | [`KineticsApplicabilityDeclaration`](#m-kineticsapplicabilitydeclaration) \| null | no |  |  |  | Optional declaration of what the coefficient is.
 | `protocol` | [`KineticsProtocolDeclaration`](#m-kineticsprotocoldeclaration) \| null | no |  |  |  | Optional declaration of how the rate was produced.
-| `energy_level_of_theory` | [`LevelOfTheoryRef`](#m-leveloftheoryref) \| null | no |  |  |  | Optional level of theory the fit's energies came from, stored as declared. A level the linked calculations contradict is refused. The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant: closed-shell participants computed restricted (or unrestricted collapsing to restricted) are equivalent to unrestricted and do not constrain it; open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference.
+| `energy_level_of_theory` | [`LevelOfTheoryRef`](#m-leveloftheoryref) \| null | no |  |  |  | Optional level of theory the fit's energies came from, stored as declared. A level the linked calculations contradict is refused. The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant. When at least one participant is open-shell, closed-shell participants (singlets computed restricted, restricted-open, or unrestricted collapsing to restricted) do not constrain it; the open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference. When every participant is closed-shell, a stated spin treatment must match their spin treatment.
 | `a` | number \| null | no |  |  |  | Arrhenius pre-exponential factor.
 | `a_units` | `ArrheniusAUnits` \| null | no |  |  | `per_s`, `cm3_mol_s`, `cm3_molecule_s`, `m3_mol_s`, `cm6_mol2_s`, `cm6_molecule2_s`, `m6_mol2_s` | Units for A.
 | `n` | number \| null | no |  |  |  | Temperature exponent.

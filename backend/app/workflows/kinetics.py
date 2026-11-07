@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from tckdb_schemas.fragments.kinetics_evidence import (
     KineticsInterpretationAssignmentUpload,
     KineticsTunnelingApplicationUpload,
@@ -53,7 +53,14 @@ from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.reaction_family import find_canonical_reaction_family
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
-from app.services.calculation_levels import kinetics_level_fields_match
+from app.services.calculation_levels import (
+    declared_scheme_level_ids,
+    kinetics_closed_shell_exempt,
+    kinetics_energy_level_violation,
+    kinetics_level_fields_match,
+    kinetics_spin_facts,
+    level_spin_value,
+)
 from app.services.calculation_ownership import (
     W_KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH,
     W_KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
@@ -113,19 +120,23 @@ class EnergySourceLookupError(ValueError):
 def _calculations_at_declared_level(
     session: Session, species_entry_id: int, calc_type: CalculationType, lot_id: int
 ) -> list[Calculation]:
-    """The species entry's calculations of a type whose level satisfies the declared kinetics energy level.
+    """The species entry's calculations of a type that can stand for the declared kinetics energy level.
 
-    The same field rule the consistency check applies to linked energies
-    (:func:`~app.services.calculation_levels.kinetics_level_fields_match`): every level-identity
-    field but the spin treatment, which is per participant. When the declaration states a spin
-    treatment and some matching calculation ran with it, only those are returned (so a species
-    with both an unrestricted and a restricted single point resolves to the declared one);
-    otherwise every matching calculation is (a closed-shell species run restricted under an
-    ``unrestricted`` declaration).
+    Fields: every level-identity field but the spin treatment must match
+    (:func:`~app.services.calculation_levels.kinetics_level_fields_match`).
+
+    Spin, when the declaration states one: a calculation that ran with it is eligible, and so is one
+    that is closed-shell exempt for its species
+    (:func:`~app.services.calculation_levels.kinetics_closed_shell_exempt`; a singlet run restricted).
+    A radical with no calculation at the declared spin therefore finds none, as it always did. Calculations
+    at the declared spin are preferred. With no spin declared, the calculation on the declared level's own
+    row is preferred, then every field match; the cross-participant spin rule is then applied to the links by
+    :func:`~app.services.calculation_levels.kinetics_energy_level_violation`.
     """
     declared = session.get(LevelOfTheory, lot_id)
     candidates = session.scalars(
         select(Calculation)
+        .options(joinedload(Calculation.lot))
         .where(
             Calculation.species_entry_id == species_entry_id,
             Calculation.type == calc_type,
@@ -133,12 +144,24 @@ def _calculations_at_declared_level(
         )
         .order_by(Calculation.id)
     ).all()
-    matching = [c for c in candidates if kinetics_level_fields_match(declared, c.lot)]
-    spin = getattr(declared.spin_treatment, "value", declared.spin_treatment)
-    if spin in (None, "unknown"):
-        return matching
-    exact = [c for c in matching if getattr(c.lot.spin_treatment, "value", c.lot.spin_treatment) == spin]
-    return exact or matching
+    scheme_ids = declared_scheme_level_ids(session, [lot_id, *{c.lot_id for c in candidates}])
+    matching = [c for c in candidates if kinetics_level_fields_match(declared, c.lot, scheme_ids=scheme_ids)]
+    spin = level_spin_value(declared)
+    if spin is None:
+        return [c for c in matching if c.lot_id == lot_id] or matching
+    facts = kinetics_spin_facts(session, [c.id for c in matching])
+    exact = [c for c in matching if level_spin_value(c.lot) == spin]
+    eligible = [
+        c
+        for c in matching
+        if c in exact or kinetics_closed_shell_exempt(*_exempt_args(c, facts))
+    ]
+    return exact or eligible
+
+
+def _exempt_args(calc: Calculation, facts: dict) -> tuple[int | None, str | None, float | None]:
+    multiplicity, s_squared = facts.get(calc.id, (None, None))
+    return multiplicity, level_spin_value(calc.lot), s_squared
 
 
 def _find_sp_for_species(
@@ -1142,7 +1165,11 @@ def persist_kinetics_upload(
     #    only finds the calculations it names.
     if request.energy_level_of_theory is not None:
         lot = resolve_level_of_theory_ref(session, request.energy_level_of_theory)
-        links: list[tuple[int, KineticsCalculationRole]] = []
+        links: list[tuple[Calculation, KineticsCalculationRole]] = []
+        # A bundle record is portable and carries no calculations, so a bundle import states the
+        # level without being able to name them; it links all of them or none, never some, and
+        # says so. The same goes when the found calculations contradict the declared level.
+        unlinked_reason: str | None = None
         try:
             for participants, role in (
                 (request.reaction.reactants, KineticsCalculationRole.reactant_energy),
@@ -1155,25 +1182,31 @@ def persist_kinetics_upload(
                     calc = _find_energy_calculation_for_species(
                         session, species_entry_id=species_entry.id, lot_id=lot.id
                     )
-                    links.append((calc.id, role))
+                    links.append((calc, role))
         except EnergySourceLookupError as error:
-            # A bundle record is portable and carries no calculations, so a bundle
-            # import states the level without being able to name the calculations; it
-            # links all of them or none, never some, and says so.
             if require_energy_sources:
                 raise
+            unlinked_reason = "none" if error.reason == "none" else "ambiguous"
+        if unlinked_reason is None:
+            # The same rule the computed-reaction route applies to its linked energies.
+            violation = kinetics_energy_level_violation([calc for calc, _role in links], lot)
+            if violation is not None:
+                if require_energy_sources:
+                    raise violation
+                unlinked_reason = "none"
+        if unlinked_reason is not None:
             links = []
             warning_sink.append(
                 UploadWarning.from_code(
                     field="energy_level_of_theory",
                     code="energy_level_stored_without_source_calculations",
-                    context={"reason": "none" if error.reason == "none" else "ambiguous"},
+                    context={"reason": unlinked_reason},
                 )
             )
-        for calc_id, role in links:
+        for calc, role in links:
             session.add(
                 KineticsSourceCalculation(
-                    kinetics_id=kinetics.id, calculation_id=calc_id, role=role
+                    kinetics_id=kinetics.id, calculation_id=calc.id, role=role
                 )
             )
         session.flush()
