@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.189.0 - 2026-11-07
+
+No client code changed. The server now judges a kinetics `energy_level_of_theory`'s spin treatment per participant (closed-shell links are exempt, open-shell links must share one reference), so a reaction mixing restricted closed-shell and unrestricted open-shell species can declare its method and basis (see `tckdb-schemas` 0.161.0). The `tckdb-schemas` window already contains 0.161.
+
 ## 0.188.0 - 2026-11-07
 
 `RejectionCode.ANONYMOUS_BODY_TOO_LARGE` (413) joins the refusal codes: the server refuses a request with no valid credential whose body is over its anonymous allowance, before reading it. The client always sends its credential, so it meets this only when the key is missing, unknown or revoked. No other client code changed.

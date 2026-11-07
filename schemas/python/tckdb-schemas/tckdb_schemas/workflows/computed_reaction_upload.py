@@ -1347,7 +1347,7 @@ class BundleKineticsIn(SchemaBase):
     :param applicability: Optional declaration of what the coefficient is.
     :param protocol: Optional declaration of how the rate was produced.
     :param energy_level_of_theory: Optional level of theory the fit's energies came from,
-        stored as declared. A level the linked calculations contradict is refused.
+        stored as declared. A level the linked calculations contradict is refused. The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant. When at least one participant is open-shell, closed-shell participants (singlets computed restricted, restricted-open, or unrestricted collapsing to restricted) do not constrain it; the open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference. When every participant is closed-shell, a stated spin treatment must match their spin treatment.
 
     This model and ``KineticsUploadRequest`` share their kinetics-evidence
     models and their cross-field checks (``kinetics_evidence``), so the two

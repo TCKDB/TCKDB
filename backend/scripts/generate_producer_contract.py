@@ -1198,6 +1198,17 @@ def _module_for_origin(origin: str) -> types.ModuleType | None:
 
 def _message_near_code(tree: ast.AST, code: str, namespace: dict[str, object]) -> str | None:
     """The first string expression written beside ``code`` in ``tree``."""
+    return next(iter(_messages_near_code(tree, code, namespace)), None)
+
+
+def _messages_near_code(
+    tree: ast.AST, code: str, namespace: dict[str, object], *, ordered: bool = False
+) -> list[str]:
+    """Every string expression written beside ``code`` in ``tree``, distinct.
+
+    ``ordered`` walks in source order (line, column); the default keeps ``ast.walk``'s order.
+    """
+    found: list[str] = []
 
     def is_code(node: ast.AST) -> bool:
         if isinstance(node, ast.Constant):
@@ -1211,7 +1222,12 @@ def _message_near_code(tree: ast.AST, code: str, namespace: dict[str, object]) -
         for child in ast.iter_child_nodes(parent):
             parents[child] = parent
 
-    for node in ast.walk(tree):
+    nodes = (
+        sorted(ast.walk(tree), key=lambda n: (getattr(n, 'lineno', 0), getattr(n, 'col_offset', 0)))
+        if ordered
+        else ast.walk(tree)
+    )
+    for node in nodes:
         text: str | None = None
         if isinstance(node, (ast.Constant, ast.JoinedStr)):
             rendered = _render_str_expr(node)
@@ -1245,9 +1261,32 @@ def _message_near_code(tree: ast.AST, code: str, namespace: dict[str, object]) -
                     if rendered and len(rendered.split()) >= 3:
                         text = rendered
                         break
-        if text:
-            return _one_line(text)
-    return None
+        if text and _one_line(text) not in found:
+            found.append(_one_line(text))
+    return found
+
+
+#: Codes whose raise sites carry different sentences for different reasons; the reference lists them all.
+ALL_MESSAGES_CODES = frozenset({"kinetics_energy_level_contradiction"})
+
+
+def code_all_messages(code: str, entries: list[ApiCode]) -> list[str]:
+    """Every distinct sentence written beside ``code`` in its defining module, in source order.
+
+    Only for ``ALL_MESSAGES_CODES``; the first is the headline and the rest are listed under "Also".
+    """
+    if code not in ALL_MESSAGES_CODES:
+        return []
+    out: list[str] = []
+    for entry in entries:
+        module = _module_for_origin(entry.origin)
+        path = REPO_ROOT / entry.origin
+        if module is None or not path.exists():
+            continue
+        for text in _messages_near_code(ast.parse(path.read_text()), code, vars(module), ordered=True):
+            if text not in out:
+                out.append(text)
+    return out
 
 
 def code_message(code: str, entries: list[ApiCode], sites: Iterable[Callable[..., object]]) -> str | None:
@@ -2676,7 +2715,11 @@ class ContractBuilder:
                 out.append("- The body's `context` names the things involved.")
             if any(e.is_replay_futile for e in entries):
                 out.append("- Never succeeds on replay; do not retry the identical request.")
-            out.append(f"- Message: {facts.message!r}" if facts.message else "- Message: not found by the static search.")
+            every = code_all_messages(code, entries)
+            headline = every[0] if every else facts.message
+            out.append(f"- Message: {headline!r}" if headline else "- Message: not found by the static search.")
+            for extra in every[1:]:
+                out.append(f"- Also: {extra!r}")
             for note in sorted({e.note for e in entries if e.note}):
                 out.append(f"- Note: {_first_sentence(note)}")
             shared_key = next((key for key, (checks, _) in shared.items() if facts.check in checks), None)

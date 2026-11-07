@@ -234,6 +234,19 @@ def _level_of_theory_payload(ref: LevelOfTheoryRef) -> dict[str, object]:
     return payload
 
 
+def spin_agnostic_level_key(ref: LevelOfTheoryRef | LevelOfTheory) -> dict[str, object]:
+    """The level-of-theory identity payload without ``spin_treatment``.
+
+    Derived from :func:`_level_of_theory_payload`, so a field added to the hash is compared
+    automatically. Used to compare a kinetics record's declared energy level with its linked
+    energies, where the spin treatment is per species.
+    """
+
+    payload = _level_of_theory_payload(ref)
+    payload.pop("spin_treatment")
+    return payload
+
+
 def resolve_workflow_tool_release_ref(
     session: Session,
     ref: WorkflowToolReleaseRef | None,

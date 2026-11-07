@@ -1509,6 +1509,11 @@ def _level_without_sources(context: Mapping[str, Any]) -> str | None:
         why = "no single calculation at that level exists for a participant on this instance"
     elif reason == "ambiguous":
         why = "more than one calculation at that level exists for a participant, so none was chosen"
+    elif reason == "contradiction":
+        why = (
+            "calculations were found for the participants, but they contradict the declared level or each other "
+            "on spin treatment (the open-shell participants do not share one reference), so none was chosen"
+        )
     else:
         return None
     return f"The declared energy level of theory was stored, but no source calculations were linked: {why}."
@@ -2081,7 +2086,7 @@ def _closed_values(key: str, code: str) -> Any:
     if key == "reason":
         by_code: dict[str, frozenset[str]] = {
             "composite_total_unverifiable": frozenset(COMPOSITE_TOTAL_UNVERIFIABLE_REASONS),
-            "energy_level_stored_without_source_calculations": frozenset({"none", "ambiguous"}),
+            "energy_level_stored_without_source_calculations": frozenset({"none", "ambiguous", "contradiction"}),
         }
         if code.startswith("hessian_not_stored_"):
             return _HESSIAN_REASONS
