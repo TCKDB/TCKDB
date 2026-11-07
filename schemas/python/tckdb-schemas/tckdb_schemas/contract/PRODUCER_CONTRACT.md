@@ -236,7 +236,16 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 ### 0.161.0 - 2026-11-07
 
-One refusal is narrowed; no field is added or removed. A kinetics record's `energy_level_of_theory` is compared with its linked reactant, product and transition-state energies on every level-identity field except `spin_treatment` (method, basis, aux/cabs basis, dispersion, solvent, solvent model, core treatment, relativistic Hamiltonian, PNO truncation, RI approximation). Spin treatment is per species, so a reaction that mixes closed-shell and open-shell participants can now declare the shared method and basis with no spin treatment, and no longer draws `missing_level_of_theory_provenance`. A declaration that does state a spin treatment must still match every link on it, and `kinetics_energy_level_contradiction` still refuses any other difference. Thermo and statmech declarations are unchanged. Contract text on the field: "Spin treatment is per species; a kinetics level states none when the participants differ."
+One refusal is narrowed and gains a `reason`; no field is added or removed. A kinetics record's `energy_level_of_theory` names method, basis and qualifiers, and its spin treatment is judged per participant against the linked reactant, product and transition-state energies:
+
+- every link must match the declared level on every identity field except spin (method, basis, aux/cabs basis, dispersion, solvent, solvent model, core treatment, relativistic Hamiltonian, PNO truncation, RI approximation);
+- a closed-shell link (multiplicity 1, computed restricted or restricted-open, or unrestricted with a stored ⟨S²⟩ at or below 0.1) never constrains spin;
+- the other links (every multiplicity above 1, and an unrestricted singlet with ⟨S²⟩ above 0.1 or none stored) must share one reference, unrestricted or restricted-open; a link of unknown spin is skipped. Otherwise `kinetics_energy_level_contradiction` carries `reason: open_shell_reference_mixed`;
+- a declaration that states no spin treatment is accepted; one that states it must equal that open-shell reference (or, with no open-shell link, every known link spin), else `reason: declared_spin_differs`.
+
+A reaction mixing radicals computed unrestricted with closed-shell species computed restricted can therefore declare its method and basis (with or without `unrestricted`), and no longer draws `missing_level_of_theory_provenance`. Thermo and statmech declarations are unchanged. Sources: the 0.1 bound is the convention the wavefunction-reliability warning already uses (Williams et al. 2011, doi:10.1016/j.cplett.2011.01.020; Rettig et al. 2020, doi:10.1021/acs.jctc.0c00986; register entry 52). Restricted-open and unrestricted references are different levels for open-shell species (Wood et al. 2006 ROCBS-QB3, doi:10.1063/1.2335438; Henry, Sullivan and Radom 2003, G3-RAD).
+
+Contract text on the field: "The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant: closed-shell participants computed restricted (or unrestricted collapsing to restricted) are equivalent to unrestricted and do not constrain it; open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference."
 
 ### 0.160.0 - 2026-11-07
 
@@ -2283,7 +2292,7 @@ Unknown keys are refused.
 | `determination` | [`KineticsDeterminationDeclaration`](#m-kineticsdeterminationdeclaration) \| null | no |  |  |  | Needs ``direction`` and a literature or workflow tool.
 | `applicability` | [`KineticsApplicabilityDeclaration`](#m-kineticsapplicabilitydeclaration) \| null | no |  |  |  | Optional declaration of what the coefficient is.
 | `protocol` | [`KineticsProtocolDeclaration`](#m-kineticsprotocoldeclaration) \| null | no |  |  |  | Optional declaration of how the rate was produced.
-| `energy_level_of_theory` | [`LevelOfTheoryRef`](#m-leveloftheoryref) \| null | no |  |  |  | SP level of theory for source-calc auto-resolution. Spin treatment is per species; a kinetics level states none when the participants differ.
+| `energy_level_of_theory` | [`LevelOfTheoryRef`](#m-leveloftheoryref) \| null | no |  |  |  | SP level of theory for source-calc auto-resolution. The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant: closed-shell participants computed restricted (or unrestricted collapsing to restricted) are equivalent to unrestricted and do not constrain it; open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference.
 | `literature` | [`LiteratureUploadRequest`](#m-literatureuploadrequest) \| null | no |  |  |  | Optional literature submission payload.
 | `software_release` | [`SoftwareReleaseRef`](#m-softwarereleaseref) \| null | no |  |  |  | Optional software provenance reference (fitting tool).
 | `workflow_tool_release` | [`WorkflowToolReleaseRef`](#m-workflowtoolreleaseref) \| null | no |  |  |  | Optional workflow-tool provenance reference.
@@ -4619,7 +4628,7 @@ Unknown keys are refused.
 | `determination` | [`KineticsDeterminationDeclaration`](#m-kineticsdeterminationdeclaration) \| null | no |  |  |  | Needs ``direction`` and the bundle's literature or workflow tool.
 | `applicability` | [`KineticsApplicabilityDeclaration`](#m-kineticsapplicabilitydeclaration) \| null | no |  |  |  | Optional declaration of what the coefficient is.
 | `protocol` | [`KineticsProtocolDeclaration`](#m-kineticsprotocoldeclaration) \| null | no |  |  |  | Optional declaration of how the rate was produced.
-| `energy_level_of_theory` | [`LevelOfTheoryRef`](#m-leveloftheoryref) \| null | no |  |  |  | Optional level of theory the fit's energies came from, stored as declared. A level the linked calculations contradict is refused. Spin treatment is per species; a kinetics level states none when the participants differ.
+| `energy_level_of_theory` | [`LevelOfTheoryRef`](#m-leveloftheoryref) \| null | no |  |  |  | Optional level of theory the fit's energies came from, stored as declared. A level the linked calculations contradict is refused. The kinetics energy level names method, basis and qualifiers. Spin treatment is per participant: closed-shell participants computed restricted (or unrestricted collapsing to restricted) are equivalent to unrestricted and do not constrain it; open-shell participants must share one reference (unrestricted or restricted-open), and a stated spin treatment names that reference.
 | `a` | number \| null | no |  |  |  | Arrhenius pre-exponential factor.
 | `a_units` | `ArrheniusAUnits` \| null | no |  |  | `per_s`, `cm3_mol_s`, `cm3_molecule_s`, `m3_mol_s`, `cm6_mol2_s`, `cm6_molecule2_s`, `m6_mol2_s` | Units for A.
 | `n` | number \| null | no |  |  |  | Temperature exponent.

@@ -53,7 +53,7 @@ from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.reaction_family import find_canonical_reaction_family
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
-from app.services.calculation_levels import kinetics_energy_level_matches
+from app.services.calculation_levels import kinetics_level_fields_match
 from app.services.calculation_ownership import (
     W_KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH,
     W_KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
@@ -115,10 +115,13 @@ def _calculations_at_declared_level(
 ) -> list[Calculation]:
     """The species entry's calculations of a type whose level satisfies the declared kinetics energy level.
 
-    The same rule the consistency check applies to linked energies
-    (:func:`~app.services.calculation_levels.kinetics_energy_level_matches`): every level-identity
-    field but the spin treatment, which is per species. A declaration that states a spin
-    treatment still needs the calculation's to equal it.
+    The same field rule the consistency check applies to linked energies
+    (:func:`~app.services.calculation_levels.kinetics_level_fields_match`): every level-identity
+    field but the spin treatment, which is per participant. When the declaration states a spin
+    treatment and some matching calculation ran with it, only those are returned (so a species
+    with both an unrestricted and a restricted single point resolves to the declared one);
+    otherwise every matching calculation is (a closed-shell species run restricted under an
+    ``unrestricted`` declaration).
     """
     declared = session.get(LevelOfTheory, lot_id)
     candidates = session.scalars(
@@ -130,7 +133,12 @@ def _calculations_at_declared_level(
         )
         .order_by(Calculation.id)
     ).all()
-    return [c for c in candidates if kinetics_energy_level_matches(declared, c.lot)]
+    matching = [c for c in candidates if kinetics_level_fields_match(declared, c.lot)]
+    spin = getattr(declared.spin_treatment, "value", declared.spin_treatment)
+    if spin in (None, "unknown"):
+        return matching
+    exact = [c for c in matching if getattr(c.lot.spin_treatment, "value", c.lot.spin_treatment) == spin]
+    return exact or matching
 
 
 def _find_sp_for_species(

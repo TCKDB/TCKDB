@@ -791,7 +791,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/calculation_levels.py`.
 - The body's `context` names the things involved.
 - Message: "kinetics: the declared energy level of theory ({_lot_label(declared)}) does not match the level of the linked energy calculations ({', '.join((c.public_ref for c in differing))} at {', '.join(sorted({_lot_label(c.lot) for c in differing}))}). Declare the level the linked energies ran at, or link energy calculations run at the declared level."
-- Note: A declared kinetics energy_level_of_theory disagrees with the level of a linked reactant, product or transition-state energy calculation, compared on every level-identity field except spin_treatment (spin is per species).
+- Note: A declared kinetics energy_level_of_theory disagrees with the level of a linked reactant, product or transition-state energy calculation on a level-identity field, or the open-shell participants' spin treatments disagree (context.reason is open_shell_reference_mixed) or a stated spin treatment is not the open-shell reference (declared_spin_differs).
 
 <a id="c-kinetics-interpretation-conformer-selection-owner-mismatch"></a>
 

@@ -109,11 +109,13 @@ from app.chemistry.geometry import resolve_element_symbol
 from app.chemistry.isotopes import implied_isotope_mass_number
 from app.chemistry.permuted_rigid_match import PreparedGeometry, SearchBudget, match_prepared
 from app.chemistry.torsion_fingerprint import kabsch_rmsd
-from app.db.models.calculation import Calculation
+from app.db.models.calculation import Calculation, CalculationSpinDiagnostic
 from app.db.models.common import CalculationType, CompositeBindingSource
 from app.db.models.composite_scheme import CompositeScheme, LevelOfTheoryComposite
 from app.db.models.geometry import Geometry, GeometryAtom
 from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
+from app.db.models.species import Species, SpeciesEntry
+from app.db.models.transition_state import TransitionStateEntry
 from app.schemas.upload_warning import UploadWarning
 
 #: Which role supplied the energy level -- shared by :class:`DerivedLevels`
@@ -1223,31 +1225,23 @@ def assert_role_consistency(
 _KINETICS_ENERGY_ROLES = frozenset({"reactant_energy", "product_energy", "ts_energy"})
 
 
-def kinetics_energy_level_matches(declared: LevelOfTheory, linked: LevelOfTheory | None) -> bool:
-    """Whether a linked energy's level satisfies a kinetics record's declared energy level.
+def kinetics_level_fields_match(declared: LevelOfTheory, linked: LevelOfTheory | None) -> bool:
+    """Whether a linked energy's level agrees with the declared kinetics level on every field but spin.
 
-    Spin treatment is decided per species by its multiplicity, so a reaction that mixes
-    closed-shell and open-shell participants has no single spin treatment. The comparison is
-    therefore modulo ``spin_treatment``: every other identity field (the keys the level hash
-    is taken over, via ``_level_of_theory_payload``) must agree. A declared level that states
-    no spin treatment (stored as ``unknown``) matches a link of any spin treatment; one that
-    states a spin treatment must still match the link's.
+    The fields are the keys the level hash is taken over (``spin_agnostic_level_key``, derived from
+    ``_level_of_theory_payload``), normalised as the hash normalises them. Spin treatment is judged
+    per participant by :func:`assert_kinetics_energy_level_consistency`, not here.
 
     A level that names a user-declared composite scheme hashes by the scheme's definition, not
     by columns, so it keeps the row comparison.
     """
-    if linked is None:
-        return True
-    if declared.id == linked.id:
+    if linked is None or declared.id == linked.id:
         return True
     if _is_declared_scheme_level(declared) or _is_declared_scheme_level(linked):
         return False
-    from app.services.calculation_resolution import _level_of_theory_payload, spin_agnostic_level_key
+    from app.services.calculation_resolution import spin_agnostic_level_key
 
-    if spin_agnostic_level_key(declared) != spin_agnostic_level_key(linked):
-        return False
-    declared_spin = _level_of_theory_payload(declared)["spin_treatment"]
-    return declared_spin == "unknown" or declared_spin == _level_of_theory_payload(linked)["spin_treatment"]
+    return spin_agnostic_level_key(declared) == spin_agnostic_level_key(linked)
 
 
 def _is_declared_scheme_level(level: LevelOfTheory) -> bool:
@@ -1258,13 +1252,64 @@ def _is_declared_scheme_level(level: LevelOfTheory) -> bool:
     return binding is not None and binding.binding_source == CompositeBindingSource.declared
 
 
+#: ``reason`` values on a spin-treatment ``kinetics_energy_level_contradiction`` (closed; no depositor text).
+REASON_OPEN_SHELL_REFERENCE_MIXED = "open_shell_reference_mixed"
+REASON_DECLARED_SPIN_DIFFERS = "declared_spin_differs"
+
+
+def _spin_value(level: LevelOfTheory | None) -> str | None:
+    """The stated spin treatment of a level (``restricted``, ``unrestricted``, ``restricted_open``), else ``None``."""
+    spin = getattr(getattr(level, "spin_treatment", None), "value", getattr(level, "spin_treatment", None))
+    return None if spin in (None, "unknown") else spin
+
+
+def _link_spin_facts(session: Session, calculation_ids: list[int]) -> dict[int, tuple[int | None, float | None]]:
+    """``{calculation id: (multiplicity, stored <S^2>)}``: one query for every link.
+
+    Multiplicity is the owning species' or transition-state entry's; ``<S^2>`` is the stored
+    ``calc_spin_diagnostic`` row, absent when none was parsed. The query autoflushes, so rows written
+    earlier in the same request are seen.
+    """
+    if not calculation_ids:
+        return {}
+    rows = session.execute(
+        select(
+            Calculation.id,
+            Species.multiplicity,
+            TransitionStateEntry.multiplicity,
+            CalculationSpinDiagnostic.s_squared,
+        )
+        .outerjoin(SpeciesEntry, SpeciesEntry.id == Calculation.species_entry_id)
+        .outerjoin(Species, Species.id == SpeciesEntry.species_id)
+        .outerjoin(TransitionStateEntry, TransitionStateEntry.id == Calculation.transition_state_entry_id)
+        .outerjoin(CalculationSpinDiagnostic, CalculationSpinDiagnostic.calculation_id == Calculation.id)
+        .where(Calculation.id.in_(calculation_ids))
+    ).all()
+    return {cid: (species_m if species_m is not None else ts_m, s2) for cid, species_m, ts_m, s2 in rows}
+
+
+def _is_closed_shell_exempt(multiplicity: int | None, spin: str | None, s_squared: float | None) -> bool:
+    """A singlet computed restricted, or unrestricted and collapsed to the restricted solution.
+
+    Such a link does not constrain the spin treatment: a closed-shell molecule's energy is the same
+    whether the program ran it restricted or unrestricted. ``<S^2>`` at or below the field's 0.1
+    convention (:data:`~app.services.wavefunction_reliability_warnings.S_SQUARED_THRESHOLD`; Williams
+    2011, Rettig 2020, register entry 52) is the collapsed case. An unrestricted singlet with no stored
+    ``<S^2>`` is not exempt (counted as unrestricted), as is a broken-symmetry one (above 0.1).
+    """
+    from app.services.wavefunction_reliability_warnings import S_SQUARED_THRESHOLD
+
+    if multiplicity != 1:
+        return False
+    if spin in ("restricted", "restricted_open"):
+        return True
+    return spin == "unrestricted" and s_squared is not None and s_squared <= S_SQUARED_THRESHOLD
+
+
 def assert_kinetics_energy_level_consistency(
     links: list[RoleLink], declared: LevelOfTheory | None
 ) -> None:
-    """A declared kinetics energy level must match every linked energy calculation's level, modulo spin treatment.
-
-    "Match" is :func:`kinetics_energy_level_matches`: every level-identity field except the spin
-    treatment, which is per species and so cannot be one choice for a reaction.
+    """A declared kinetics energy level must agree with every linked energy, spin treatment per participant.
 
     The kinetics counterpart of the R4' check at the end of :func:`assert_role_consistency`
     and refused the same way (a coded 422). Only the ``reactant_energy``, ``product_energy``
@@ -1272,32 +1317,88 @@ def assert_kinetics_energy_level_consistency(
     not compared (absence is not a contradiction), and no declaration, or no energy link, is
     nothing to check. Nothing is inferred in either direction.
 
+    1. Every link must match the declared level on every field but spin
+       (:func:`kinetics_level_fields_match`).
+    2. A closed-shell link (:func:`_is_closed_shell_exempt`) never constrains spin.
+    3. The other links (every multiplicity above 1, a broken-symmetry or ``<S^2>``-less unrestricted
+       singlet) form the open-shell reference set. Links of unknown spin are skipped; the rest must
+       agree (``unrestricted`` against ``restricted_open`` is a real level difference).
+    4. A declared spin treatment must equal that shared open-shell reference; with no such link it
+       must equal every known link spin. A declaration that states none is accepted.
+
     :raises CodedValueError: ``kinetics_energy_level_contradiction``.
     """
     if declared is None:
         return
-    energies = [link.calculation for link in links if link.role in _KINETICS_ENERGY_ROLES]
-    differing = list(
-        {
-            c.id: c
-            for c in energies
-            if c.lot_id is not None and not kinetics_energy_level_matches(declared, c.lot)
-        }.values()
+    energies = list(
+        {link.calculation.id: link.calculation for link in links if link.role in _KINETICS_ENERGY_ROLES}.values()
     )
-    if not differing:
+    energies = [c for c in energies if c.lot_id is not None]
+
+    differing = [c for c in energies if not kinetics_level_fields_match(declared, c.lot)]
+    if differing:
+        raise CodedValueError(
+            W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
+            f"kinetics: the declared energy level of theory ({_lot_label(declared)}) does not match "
+            f"the level of the linked energy calculations ({', '.join(c.public_ref for c in differing)} "
+            f"at {', '.join(sorted({_lot_label(c.lot) for c in differing}))}). Declare the level the "
+            "linked energies ran at, or link energy calculations run at the declared level.",
+            context={
+                "declared_level_of_theory_ref": declared.public_ref,
+                "energy_calculation_refs": [c.public_ref for c in differing],
+            },
+            message_prefix=False,
+        )
+    if not energies or _is_declared_scheme_level(declared):
         return
-    raise CodedValueError(
-        W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
-        f"kinetics: the declared energy level of theory ({_lot_label(declared)}) does not match "
-        f"the level of the linked energy calculations ({', '.join(c.public_ref for c in differing)} "
-        f"at {', '.join(sorted({_lot_label(c.lot) for c in differing}))}). Declare the level the "
-        "linked energies ran at, or link energy calculations run at the declared level.",
-        context={
-            "declared_level_of_theory_ref": declared.public_ref,
-            "energy_calculation_refs": [c.public_ref for c in differing],
-        },
-        message_prefix=False,
-    )
+
+    session = object_session(declared)
+    facts = _link_spin_facts(session, [c.id for c in energies]) if session is not None else {}
+    open_shell: dict[str, list[Calculation]] = {}
+    all_known: dict[str, list[Calculation]] = {}
+    for calc in energies:
+        spin = _spin_value(calc.lot)
+        if spin is None:
+            continue
+        all_known.setdefault(spin, []).append(calc)
+        multiplicity, s_squared = facts.get(calc.id, (None, None))
+        if multiplicity is None or _is_closed_shell_exempt(multiplicity, spin, s_squared):
+            continue
+        open_shell.setdefault(spin, []).append(calc)
+
+    def refuse(reason: str, calcs: list[Calculation], detail: str) -> None:
+        raise CodedValueError(
+            W_KINETICS_ENERGY_LEVEL_CONTRADICTION,
+            f"kinetics: {detail}",
+            context={
+                "declared_level_of_theory_ref": declared.public_ref,
+                "energy_calculation_refs": sorted({c.public_ref for c in calcs}),
+                "reason": reason,
+            },
+            message_prefix=False,
+        )
+
+    if len(open_shell) > 1:
+        refuse(
+            REASON_OPEN_SHELL_REFERENCE_MIXED,
+            [c for group in open_shell.values() for c in group],
+            "the open-shell participants' energies were computed with different spin treatments "
+            f"({', '.join(sorted(open_shell))}); they must share one reference (unrestricted or "
+            "restricted-open).",
+        )
+    declared_spin = _spin_value(declared)
+    if declared_spin is None:
+        return
+    reference = open_shell if open_shell else all_known
+    wrong = [c for spin, group in reference.items() if spin != declared_spin for c in group]
+    if wrong:
+        refuse(
+            REASON_DECLARED_SPIN_DIFFERS,
+            wrong,
+            f"the declared spin treatment ({declared_spin}) differs from the linked "
+            f"{'open-shell' if open_shell else ''} energies' ({', '.join(sorted(reference))}). Declare "
+            "the open-shell reference, or none.",
+        )
 
 
 __all__ = [
@@ -1326,6 +1427,6 @@ __all__ = [
     "assert_role_consistency",
     "collect_composite_link_warnings",
     "derive_levels",
-    "kinetics_energy_level_matches",
+    "kinetics_level_fields_match",
     "role_calc_infos",
 ]

@@ -2,7 +2,7 @@
 
 ## 0.189.0 - 2026-11-07
 
-No client code changed. The server now compares a kinetics `energy_level_of_theory` with its linked energies without the spin treatment (spin is per species), so a mixed closed-shell/open-shell reaction can declare the shared method and basis with no `spin_treatment` (see `tckdb-schemas` 0.161.0). The `tckdb-schemas` window already contains 0.161.
+No client code changed. The server now judges a kinetics `energy_level_of_theory`'s spin treatment per participant (closed-shell links are exempt, open-shell links must share one reference), so a reaction mixing restricted closed-shell and unrestricted open-shell species can declare its method and basis (see `tckdb-schemas` 0.161.0). The `tckdb-schemas` window already contains 0.161.
 
 ## 0.188.0 - 2026-11-07
 

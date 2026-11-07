@@ -22,10 +22,10 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
-## A kinetics energy level is compared without the spin treatment (2026-11-07)
+## A kinetics energy level's spin treatment is judged per participant (2026-11-07)
 
-- **What changed:** a kinetics record's declared `energy_level_of_theory` is compared with each linked reactant, product and transition-state energy on every level-identity field except `spin_treatment`: method, basis, aux basis, cabs basis, dispersion, solvent, solvent model, core treatment, relativistic Hamiltonian, PNO truncation, RI approximation, normalised exactly as the level hash normalises them. A declaration with no spin treatment matches links of any spin treatment; one that states a spin treatment must still match every link on it. A level that names a user-declared composite scheme keeps the row comparison. The standalone kinetics route's lookup of source calculations for the declared level uses the same rule.
-- **Why:** spin treatment is decided per species by its multiplicity. A reaction mixing closed-shell (restricted) and open-shell (unrestricted) participants had no declaration the old row-id comparison accepted, so every such deposit drew `missing_level_of_theory_provenance`.
+- **What changed:** a kinetics record's declared `energy_level_of_theory` is compared with each linked reactant, product and TS energy: every identity field except spin must match (normalised as the level hash normalises them); a closed-shell link (multiplicity 1, restricted or restricted-open, or unrestricted with stored ⟨S²⟩ at or below 0.1) never constrains spin; the remaining links must share one open-shell reference (unrestricted or restricted-open; unknown spin is skipped), and a stated spin treatment must equal it. Refusals are `kinetics_energy_level_contradiction` with `reason: open_shell_reference_mixed` or `declared_spin_differs`. A level that names a user-declared composite scheme keeps the row comparison. The standalone kinetics route's lookup of source calculations for the declared level uses the same field rule.
+- **Why:** spin treatment follows each species' multiplicity, so a reaction mixing radicals (unrestricted) and closed-shell molecules (restricted) had no declaration the old row-id comparison accepted, and every such deposit drew `missing_level_of_theory_provenance`.
 - **Unchanged:** `spin_treatment` stays in level identity and in the hash; thermo and statmech level checks.
 - **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.161.0, `tckdb-client` 0.189.0.
 
