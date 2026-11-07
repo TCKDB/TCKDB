@@ -34,6 +34,7 @@ from app.api.routes.scientific._response import (
     SEARCH_SCOPE,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.chemistry.method_families import MethodFamily
 from app.db.models.common import (
     CoreTreatment,
@@ -55,7 +56,7 @@ from app.services.scientific_read.level_of_theory_search import (
     search_levels_of_theory,
 )
 
-router = APIRouter(prefix="/level-of-theories")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/level-of-theories")
 
 # The router-level ``?profile=`` dependency puts these two keys on every
 # scientific operation, POSTs included, so they must be allowed through
@@ -98,7 +99,8 @@ def scientific_level_of_theory_search_get(
     calculation are returned -- see
     ``app/services/scientific_read/level_of_theory_search.py``.
     """
-    request_obj = LevelOfTheorySearchRequest(
+    request_obj = caller_input(
+        LevelOfTheorySearchRequest,
         level_of_theory_ref=level_of_theory_ref,
         lot_hash=lot_hash,
         method=method,

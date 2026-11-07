@@ -103,12 +103,14 @@ from app.api.routes.scientific import (
 )
 from app.api.routes.scientific._profile import resolve_profile_dependency
 from app.api.routes.scientific._removed_parameters import refuse_picking_parameters
+from app.api.server_faults import ServerFaultRoute
 
 # The ``?profile=`` dependency is attached to the whole router, not to
 # individual operations, so that *every* scientific endpoint declares and
 # honours the curated/exploratory contract. A profile that only some
 # endpoints support is worse than none: it teaches consumers to trust it.
 scientific_router = APIRouter(
+    route_class=ServerFaultRoute,
     dependencies=[Depends(resolve_profile_dependency), Depends(refuse_picking_parameters)]
 )
 # Register the RDKit-backed structure search router before the

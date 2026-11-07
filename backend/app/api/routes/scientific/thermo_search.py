@@ -16,6 +16,7 @@ from app.api.routes.scientific._response import (
     prepare_assessment_response,
     refuse_check_inputs,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.chemistry.method_families import MethodFamily
 from app.db.models.common import (
     RecordReviewStatus,
@@ -35,7 +36,7 @@ from app.services.scientific_read.public_assessments import (
 )
 from app.services.scientific_read.thermo_search import search_thermo
 
-router = APIRouter(prefix="/thermo")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/thermo")
 
 # The router-level ``?profile=`` dependency puts these two keys on every
 # scientific operation, POSTs included, so they must be allowed through the
@@ -93,7 +94,8 @@ def thermo_search_get(
     ``POST /species-entries/{ref}/thermo/select`` answers "give me one".
     """
     reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
-    request = ThermoSearchRequest(
+    request = caller_input(
+        ThermoSearchRequest,
         smiles=smiles,
         inchi=inchi,
         inchi_key=inchi_key,

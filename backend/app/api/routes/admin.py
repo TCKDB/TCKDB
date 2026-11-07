@@ -21,6 +21,7 @@ from tckdb_schemas.fragments.version import VersionRef
 from app.api.deps import get_db, get_write_db, require_admin, require_curator_or_admin
 from app.api.errors import not_found
 from app.api.routes._pagination import PaginatedResponse
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     AppUserRole,
@@ -76,7 +77,7 @@ from app.services.scientific_read.handles import (
 )
 from app.services.software_resolution import resolve_software_release_ref
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 
 
 class RoleChangeRequest(BaseModel):

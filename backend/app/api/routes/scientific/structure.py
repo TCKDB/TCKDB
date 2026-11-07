@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.api.routes.scientific._common import OFFSET_DESCRIPTION, CursorQuery, parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_structure_search import (
     ScientificSpeciesStructureSearchRequest,
@@ -37,7 +38,7 @@ from app.services.scientific_read.structure_search import (
     search_species_by_structure,
 )
 
-router = APIRouter(prefix="/species")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/species")
 
 
 # POST bodies own every filter/include/pagination knob. Mirrors the
@@ -86,7 +87,8 @@ def species_structure_search_get(
     rejected with 422 ``client_sort_not_supported``; the per-mode default
     deterministic sort always applies.
     """
-    request = ScientificSpeciesStructureSearchRequest(
+    request = caller_input(
+        ScientificSpeciesStructureSearchRequest,
         query_smiles=query_smiles,
         query_smarts=query_smarts,
         query_inchi=query_inchi,

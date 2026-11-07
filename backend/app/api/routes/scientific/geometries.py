@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_optional_current_user
 from app.api.routes.scientific._common import parse_include
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.app_user import AppUser
 from app.schemas.reads.scientific_geometry import (
     GeometryReadRequest,
@@ -23,7 +24,7 @@ from app.services.scientific_read.auth_visibility import (
 )
 from app.services.scientific_read.geometry import get_geometry
 
-router = APIRouter(prefix="/geometries")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/geometries")
 
 
 @router.get(
@@ -60,7 +61,7 @@ def scientific_geometry_detail(
     See ``docs/specs/public_identifier_policy.md`` and
     ``docs/specs/internal_ids_visibility_policy.md``.
     """
-    request = GeometryReadRequest(include=parse_include(include))
+    request = caller_input(GeometryReadRequest, include=parse_include(include))
     payload = get_geometry(
         session,
         geometry_handle=geometry_handle,

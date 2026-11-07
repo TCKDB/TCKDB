@@ -11,8 +11,9 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.config import settings
+from app.api.server_faults import ServerFaultRoute
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 
 
 @router.get("/meta")

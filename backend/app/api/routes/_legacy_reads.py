@@ -40,6 +40,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.routes._pagination import PaginatedResponse
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.common import ProfileRecommendation, ReadProfile, RecordReviewStatus, SubmissionRecordType
 from app.db.models.record_review import RecordReview
 from app.schemas.reads.scientific_common import (
@@ -568,7 +569,7 @@ def legacy_route_class(gates: dict[str, Gate] | None = None) -> type[APIRoute]:
     """
     declared = dict(gates or {})
 
-    class LegacyRoute(APIRoute):
+    class LegacyRoute(ServerFaultRoute):
         legacy_gates = declared
 
         def __init__(self, path: str, endpoint: Any, **kwargs: Any) -> None:

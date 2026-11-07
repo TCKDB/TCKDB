@@ -54,6 +54,7 @@ from tckdb_schemas.thermo_declarations import (
 )
 
 from app.api.error_contract import CodedValueError
+from app.api.server_faults import caller_input
 from app.db.models.calculation import Calculation
 from app.db.models.common import ThermoTargetKind
 from app.db.models.species import ConformerGroup
@@ -239,7 +240,7 @@ def _resolve_protocol(
     wire = (
         protocol
         if isinstance(protocol, ThermoProtocolDeclaration)
-        else ThermoProtocolDeclaration.model_validate(protocol)
+        else caller_input(ThermoProtocolDeclaration.model_validate, protocol)
     )
     refs: list[str] = []
     for index, supporting in enumerate(wire.supporting_calculations):
@@ -288,7 +289,7 @@ def _stored_json(wire: ThermoProtocolDeclaration, calculation_refs: list[str]) -
     raw.pop("supporting_calculations", None)
     if calculation_refs:
         raw["supporting_calculations"] = [{"calculation_ref": ref} for ref in calculation_refs]
-    stored = StoredThermoProtocolDeclaration.model_validate(raw)
+    stored = caller_input(StoredThermoProtocolDeclaration.model_validate, raw)
     return stored.model_dump(mode="json", exclude_none=True, exclude_defaults=True)
 
 

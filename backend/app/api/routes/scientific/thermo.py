@@ -22,6 +22,7 @@ from app.api.routes.scientific._response import (
     prepare_assessment_response,
     require_bounded_input_check,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.chemistry.method_families import MethodFamily
 from app.db.models.common import RecordReviewStatus, ScientificOriginKind
 from app.schemas.reads.removed_parameters import THERMO as _REMOVED_PARAMETERS
@@ -37,7 +38,7 @@ from app.services.scientific_read.public_assessments import (
 )
 from app.services.scientific_read.thermo import get_species_thermo
 
-router = APIRouter(prefix="/species-entries")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/species-entries")
 
 
 @router.get(
@@ -92,7 +93,8 @@ def species_thermo(
     """
     reject_removed_query_params(http_request, _REMOVED_PARAMETERS)
     resolved_species_entry_id = resolve_species_entry_handle(session, species_entry_id)
-    request = ThermoReadRequest(
+    request = caller_input(
+        ThermoReadRequest,
         coverage_temperature_min_k=coverage_temperature_min_k,
         coverage_temperature_max_k=coverage_temperature_max_k,
         model_kind=model_kind,

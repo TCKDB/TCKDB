@@ -23,6 +23,7 @@ from app.api.routes._legacy_reads import (
     entity_page,
     sub_response,
 )
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     MoleculeKind,
@@ -127,7 +128,7 @@ def get_species(species_id: int, session: Session = Depends(get_db), marker=Depe
 
 entries_router = APIRouter(route_class=LegacyReadRoute)
 #: The write route of the species-entries path: no read profile applies to it.
-entries_write_router = APIRouter()
+entries_write_router = APIRouter(route_class=ServerFaultRoute)
 
 
 def _forward_entry(session: Session, entry: SpeciesEntry, response: Response) -> SpeciesEntry:

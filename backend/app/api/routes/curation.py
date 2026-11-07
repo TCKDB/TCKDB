@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.client_version import require_supported_tckdb_client
 from app.api.deps import PaginationParams, get_db, get_write_db, require_curator_or_admin
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.common import StructureFindingScope, SubmissionRecordType
 from app.schemas.entities.reproducibility_assessment import ReproducibilityAssessmentRead
@@ -28,7 +29,7 @@ from app.services.structure_evidence_finding import (
     present_findings,
 )
 
-router = APIRouter()
+router = APIRouter(route_class=ServerFaultRoute)
 
 
 @router.post(

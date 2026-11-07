@@ -50,6 +50,7 @@ from app.api.routes.scientific._response import (
     SEARCH_SCOPE,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.chemistry.method_families import MethodFamily
 from app.db.models.common import (
     CoreTreatment,
@@ -67,7 +68,7 @@ from app.services.scientific_read.level_of_theory_search import (
     browse_levels_of_theory,
 )
 
-router = APIRouter(prefix="/level-of-theories")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/level-of-theories")
 
 
 @router.get("/browse", response_model=ScientificLevelOfTheorySearchResponse)
@@ -117,7 +118,8 @@ def scientific_level_of_theory_browse(
     rejected with 422 (``client_sort_not_supported``), matching the
     sibling endpoint.
     """
-    request = LevelOfTheoryBrowseRequest(
+    request = caller_input(
+        LevelOfTheoryBrowseRequest,
         level_of_theory_ref=level_of_theory_ref,
         lot_hash=lot_hash,
         method=method,

@@ -19,6 +19,7 @@ from app.api.public_openapi import install_hosted_openapi
 from app.api.rate_limit import RateLimitMiddleware
 from app.api.request_id import RequestIDMiddleware
 from app.api.router import api_router
+from app.api.server_faults import server_model_names
 from app.api.startup_checks import (
     report_artifact_storage_at_startup,
     report_database_encoding_at_startup,
@@ -169,5 +170,7 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIDMiddleware)
     app.include_router(api_router, prefix="/api/v1")
     register_exception_handlers(app)
+    # After every router is included, so the set sees every response model.
+    server_model_names(app)
     install_hosted_openapi(app)
     return app

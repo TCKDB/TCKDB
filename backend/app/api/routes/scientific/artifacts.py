@@ -26,6 +26,7 @@ from app.api.routes.scientific._response import (
     SEARCH_SCOPE,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     ArtifactIntegrityDetectionContext,
@@ -65,7 +66,7 @@ from app.services.scientific_read.internal_ids import (
 )
 from app.services.scientific_read.profile import current_read_profile
 
-router = APIRouter(prefix="/artifacts")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/artifacts")
 #: No call sites at present. The two lines this module used to log became
 #: duplicates of what the handlers in ``app.api.errors`` log for the same
 #: exceptions, once the download route stopped swallowing them (#212) --
@@ -131,7 +132,8 @@ def artifacts_search_get(
 
     Returns artifact metadata only; never bodies, never download URLs.
     """
-    request = ScientificArtifactSearchRequest(
+    request = caller_input(
+        ScientificArtifactSearchRequest,
         artifact_kind=artifact_kind,
         filename=filename,
         filename_contains=filename_contains,

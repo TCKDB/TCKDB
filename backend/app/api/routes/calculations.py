@@ -28,6 +28,7 @@ from app.api.routes._legacy_reads import (
     entity_page,
     legacy_route_class,
 )
+from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import (
     Calculation,
@@ -132,7 +133,7 @@ router = APIRouter(
 )
 
 #: The write routes of the calculations path: no read profile applies to them.
-write_router = APIRouter()
+write_router = APIRouter(route_class=ServerFaultRoute)
 
 
 # ---------------------------------------------------------------------------

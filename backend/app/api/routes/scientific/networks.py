@@ -17,6 +17,7 @@ from app.api.routes.scientific._response import (
     SEARCH_SCOPE,
     omit_unrequested_sections,
 )
+from app.api.server_faults import ServerFaultRoute, caller_input
 from app.db.models.common import (
     NetworkKineticsModelKind,
     NetworkSolveKind,
@@ -68,9 +69,9 @@ from app.services.scientific_read.network_solves_search import (
 from app.services.scientific_read.networks import get_network, get_network_solve
 from app.services.scientific_read.networks_search import search_networks
 
-router = APIRouter(prefix="/networks")
-solve_router = APIRouter(prefix="/network-solves")
-kinetics_router = APIRouter(prefix="/network-kinetics")
+router = APIRouter(route_class=ServerFaultRoute, prefix="/networks")
+solve_router = APIRouter(route_class=ServerFaultRoute, prefix="/network-solves")
+kinetics_router = APIRouter(route_class=ServerFaultRoute, prefix="/network-kinetics")
 
 
 # The router-level ``?profile=`` dependency puts these two keys on every
@@ -124,7 +125,8 @@ def scientific_networks_search_get(
     required. Explicit ``False`` bool filter values count as
     meaningful.
     """
-    request_obj = NetworkSearchRequest(
+    request_obj = caller_input(
+        NetworkSearchRequest,
         network_ref=network_ref,
         species_ref=species_ref,
         species_entry_ref=species_entry_ref,
@@ -354,7 +356,8 @@ def scientific_network_solves_search_get(
     ``method`` / ``basis`` filter through the source-calculation
     level-of-theory join.
     """
-    request_obj = NetworkSolveSearchRequest(
+    request_obj = caller_input(
+        NetworkSolveSearchRequest,
         network_solve_ref=network_solve_ref,
         network_ref=network_ref,
         kind=kind,
@@ -500,7 +503,8 @@ def scientific_network_kinetics_search_get(
     route through the parent solve's source-calc graph. Review state
     is inherited from the parent solve.
     """
-    request_obj = NetworkKineticsSearchRequest(
+    request_obj = caller_input(
+        NetworkKineticsSearchRequest,
         network_kinetics_ref=network_kinetics_ref,
         network_ref=network_ref,
         network_solve_ref=network_solve_ref,
