@@ -76,7 +76,8 @@ def _nasa():
 def _species(sid: int, smiles: str, ref: str) -> SpeciesExportRecord:
     sp = SimpleNamespace(id=sid, smiles=smiles, public_ref=ref, multiplicity=1)
     se = SimpleNamespace(
-        id=sid, public_ref=f"{ref}-e", stereo_descriptor=None, stereo_resolution=None, stereo_smiles=None
+        id=sid, public_ref=f"{ref}-e", stereo_descriptor=None, stereo_resolution=None, stereo_smiles=None,
+        isotope_key=None,
     )
     return SpeciesExportRecord(
         species_entry=se,

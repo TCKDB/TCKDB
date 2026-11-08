@@ -24,6 +24,7 @@ marker, the line of the ``DUPLICATE`` keyword.
 from __future__ import annotations
 
 from collections import defaultdict
+from fractions import Fraction
 
 from .ast import Reaction
 
@@ -53,11 +54,25 @@ def _participants(rxn: Reaction) -> frozenset:
     return frozenset(n for _, n in rxn.reactants) | frozenset(n for _, n in rxn.products)
 
 
+def _proportional(x: tuple, y: tuple) -> bool:
+    """Whether two (reactants, products) coefficient maps agree up to a common positive factor."""
+    dx = dict(x[0]) | {("p", k): v for k, v in x[1]}
+    dy = dict(y[0]) | {("p", k): v for k, v in y[1]}
+    if set(dx) != set(dy):
+        return False
+    ratios = {Fraction(dx[k], dy[k]) for k in dx}
+    return len(ratios) == 1
+
+
 def _same_reaction(a: Reaction, b: Reaction) -> bool:
+    """Same reaction up to a common positive stoichiometric factor (2H+2O2=2HO2 is H+O2=HO2).
+
+    Swapped sides count where at least one of the two is reversible.
+    """
     ar, ap, br, bp = _side(a.reactants), _side(a.products), _side(b.reactants), _side(b.products)
-    if (ar, ap) == (br, bp):
+    if _proportional((ar, ap), (br, bp)):
         return True
-    return (ar, ap) == (bp, br) and (a.reversible or b.reversible)
+    return _proportional((ar, ap), (bp, br)) and (a.reversible or b.reversible)
 
 
 def _eq(rxn: Reaction) -> str:
@@ -79,6 +94,15 @@ def _lines(rxns: list[Reaction]) -> str:
     return ", ".join(str(r.line_no) for r in rxns)
 
 
+def _orphan_message(rxn: Reaction) -> str:
+    at = f", DUPLICATE on line {rxn.duplicate_line_no}" if rxn.duplicate_line_no is not None else ""
+    return (
+        f"CHEMKIN DUPLICATE marker has no partner: reaction '{_eq(rxn)}' "
+        f"(line {rxn.line_no}{at}) has no other DUPLICATE reaction with the same "
+        "participants. Imported as written."
+    )
+
+
 def duplicate_flag_warnings(reactions: list[Reaction]) -> list[str]:
     """Warnings for undeclared repeats and orphaned ``DUPLICATE`` markers."""
     groups: dict[frozenset, list[Reaction]] = defaultdict(list)
@@ -88,15 +112,9 @@ def duplicate_flag_warnings(reactions: list[Reaction]) -> list[str]:
     warnings: list[str] = []
     for members in groups.values():
         marked = [m for m in members if m.duplicate]
-        if len(marked) == 1:
-            rxn = marked[0]
-            at = f", DUPLICATE on line {rxn.duplicate_line_no}" if rxn.duplicate_line_no is not None else ""
-            warnings.append(
-                f"CHEMKIN DUPLICATE marker has no partner: reaction '{_eq(rxn)}' "
-                f"(line {rxn.line_no}{at}) has no other DUPLICATE reaction with the same "
-                "participants. Imported as written."
-            )
         if len(members) < 2:
+            if len(marked) == 1:
+                warnings.append(_orphan_message(marked[0]))
             continue
         # Undeclared repeats: connected clusters of offending pairs.
         parent = list(range(len(members)))
@@ -116,6 +134,10 @@ def duplicate_flag_warnings(reactions: list[Reaction]) -> list[str]:
                 if _rate_type(a) == _rate_type(b) and _same_reaction(a, b):
                     offending.update((i, j))
                     parent[find(i)] = find(j)
+        # A lone marker whose own row is part of an undeclared repeat is one defect,
+        # not two: adding the missing marker to the repeat fixes both.
+        if len(marked) == 1 and members.index(marked[0]) not in offending:
+            warnings.append(_orphan_message(marked[0]))
         clusters: dict[int, list[int]] = defaultdict(list)
         for i in sorted(offending):
             clusters[find(i)].append(i)

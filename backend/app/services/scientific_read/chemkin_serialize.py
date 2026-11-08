@@ -120,6 +120,7 @@ def structure_comment(
     stereo_resolution,
     stereo_smiles: str | None,
     multiplicity: int | None = None,
+    isotope_key: str | None = None,
 ) -> str:
     """The ``SMILES=`` traceability text for one species entry, with its stereo (DR-0038).
 
@@ -137,6 +138,12 @@ def structure_comment(
       an allene's sense, or a cumulated chain with a tied pair of stereo-bearing arms at one end), whose
       isomers share the entry.
 
+    ``isotope_key`` is the entry's atom-resolved isotope SMILES, set only for an isotopologue. It is
+    printed as the ``SMILES=`` token in place of the isotope-blind species SMILES, so a re-import
+    reads the isotopologue as itself and not as the plain species. (An isotopologue that also has a
+    stereo descriptor keeps its ``STEREO=`` token; ``stereo_smiles`` has isotopes stripped, so it is
+    not combined with the isotope SMILES.)
+
     ``MULT=`` follows the structure on every species (including ``MULT=1``): a SMILES alone does not
     say the spin state (CH2 singlet and triplet, atomic C, O share one), and the importer reads it
     back so a re-import keeps the two apart.
@@ -146,6 +153,9 @@ def structure_comment(
     """
 
     mult = f"  MULT={multiplicity}" if multiplicity is not None else ""
+    if isotope_key:
+        smiles = isotope_key
+        stereo_smiles = isotope_key
     if stereo_descriptor is None:
         return f"SMILES={smiles}{mult}"
     text = f"SMILES={stereo_smiles or smiles}{mult}  STEREO={stereo_descriptor}"
@@ -166,6 +176,7 @@ def _species_structure_comment(sr: SpeciesExportRecord) -> str:
         stereo_resolution=entry.stereo_resolution,
         stereo_smiles=entry.stereo_smiles,
         multiplicity=sr.species.multiplicity,
+        isotope_key=entry.isotope_key,
     )
 
 

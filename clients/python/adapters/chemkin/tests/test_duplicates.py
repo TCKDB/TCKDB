@@ -74,10 +74,10 @@ def test_a_repeat_without_duplicate_is_reported_with_its_lines():
 
 def test_one_marked_and_one_unmarked_repeat_names_the_unmarked_line():
     _, w = _warn("H+HO2=H2+O2   1.0 0.0 0.0\nDUPLICATE\nH+HO2=H2+O2   2.0 0.0 0.0\n")
-    # Cantera reports both: the lone marker has no marked partner, and the repeat is undeclared.
-    assert len(w) == 2
-    assert any("line(s) 11 carry no DUPLICATE" in x for x in w)
-    assert any("no partner" in x for x in w)
+    # One defect, one warning: the marker belongs to the undeclared repeat, and
+    # marking line 11 fixes both.
+    assert len(w) == 1
+    assert "line(s) 11 carry no DUPLICATE" in w[0]
 
 
 def test_a_marker_with_no_partner_is_reported_with_both_lines():
@@ -160,3 +160,10 @@ def test_reversed_repeat_of_irreversible_reactions_is_not_a_repeat():
 def test_a_three_row_cluster_is_one_warning():
     _, w = _abc("A <=> B   1.0 0.0 0.0\nA <=> B   2.0 0.0 0.0\nA <=> B   3.0 0.0 0.0\n")
     assert len(w) == 1 and "3 times" in w[0]
+
+
+def test_stoichiometric_multiples_are_the_same_reaction():
+    _, w = _warn("H+HO2=H2+O2   1.0 0.0 0.0\n2H+2HO2=2H2+2O2   1.0 0.0 0.0\n")
+    assert len(w) == 1 and "undeclared" in w[0]
+    _, w = _warn("H+HO2=H2+O2   1.0 0.0 0.0\n2H+HO2=2H2+O2   1.0 0.0 0.0\n")
+    assert w == []
