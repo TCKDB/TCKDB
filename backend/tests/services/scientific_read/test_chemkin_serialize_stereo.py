@@ -45,42 +45,42 @@ def _export(*records):
 def test_resolved_entries_print_their_isomeric_smiles_and_descriptor() -> None:
     export = _export(_record(1, "C/C=C/C"), _record(2, "CC=CC", xyz=_CIS))
     assert _species_block(export.files["chem.inp"]) == [
-        "SMILES=C/C=C/C  STEREO=E ref=S1",
-        "SMILES=C/C=C\\C  STEREO=Z ref=S2",
+        "SMILES=C/C=C/C  MULT=1  STEREO=E ref=S1",
+        "SMILES=C/C=C\\C  MULT=1  STEREO=Z ref=S2",
     ]
 
 
 def test_therm_dat_carries_the_same_text() -> None:
     export = _export(_record(1, "C/C=C/C"))
-    assert "SMILES=C/C=C/C  STEREO=E  ref=S1" in export.files["therm.dat"]
+    assert "SMILES=C/C=C/C  MULT=1  STEREO=E  ref=S1" in export.files["therm.dat"]
 
 
 def test_an_entry_without_a_smiles_form_prints_the_constitution_and_the_descriptor() -> None:
     record = _record(1, "C/C=C/C")
     record.species_entry.stereo_smiles = None  # a resolved entry whose SMILES cannot be written
     export = _export(record)
-    assert _species_block(export.files["chem.inp"]) == ["SMILES=CC=CC  STEREO=E ref=S1"]
+    assert _species_block(export.files["chem.inp"]) == ["SMILES=CC=CC  MULT=1  STEREO=E ref=S1"]
 
 
 def test_partial_and_unresolved_entries_are_marked() -> None:
     export = _export(_record(1, "CC=CC"), _record(2, "C/C=C/C=CC"))
     assert _species_block(export.files["chem.inp"]) == [
-        "SMILES=CC=CC  STEREO=?  STEREO_RESOLUTION=unresolved ref=S1",
-        "SMILES=CC=CC=CC  STEREO=E,?  STEREO_RESOLUTION=partial ref=S2",
+        "SMILES=CC=CC  MULT=1  STEREO=?  STEREO_RESOLUTION=unresolved ref=S1",
+        "SMILES=CC=CC=CC  MULT=1  STEREO=E,?  STEREO_RESOLUTION=partial ref=S2",
     ]
 
 
 def test_a_small_ring_allene_axis_is_marked_not_represented() -> None:
     export = _export(_record(1, "C1=C=C(C)CC1"))
     assert _species_block(export.files["chem.inp"]) == [
-        "SMILES=CC1=C=CCC1  STEREO=?  STEREO_RESOLUTION=unresolved  STEREO_NOT_REPRESENTED=axial_small_ring ref=S1"
+        "SMILES=CC1=C=CCC1  MULT=1  STEREO=?  STEREO_RESOLUTION=unresolved  STEREO_NOT_REPRESENTED=axial_small_ring ref=S1"
     ]
 
 
 def test_an_open_allene_with_no_data_is_just_unresolved() -> None:
     export = _export(_record(1, "CC=C=CC"))
     assert _species_block(export.files["chem.inp"]) == [
-        "SMILES=CC=C=CC  STEREO=?  STEREO_RESOLUTION=unresolved ref=S1"
+        "SMILES=CC=C=CC  MULT=1  STEREO=?  STEREO_RESOLUTION=unresolved ref=S1"
     ]
 
 
@@ -89,12 +89,12 @@ def test_a_resolved_allene_prints_its_axis_token_and_no_isomeric_smiles() -> Non
     record.species_entry.stereo_descriptor = "Ra"
     record.species_entry.stereo_resolution = "resolved"
     record.species_entry.stereo_smiles = None
-    assert _species_block(_export(record).files["chem.inp"]) == ["SMILES=CC=C=CC  STEREO=Ra ref=S1"]
+    assert _species_block(_export(record).files["chem.inp"]) == ["SMILES=CC=C=CC  MULT=1  STEREO=Ra ref=S1"]
 
 
 def test_an_achiral_species_prints_no_stereo() -> None:
     export = _export(_record(1, "CCO"))
-    assert _species_block(export.files["chem.inp"]) == ["SMILES=CCO ref=S1"]
+    assert _species_block(export.files["chem.inp"]) == ["SMILES=CCO  MULT=1 ref=S1"]
 
 
 # ---------------------------------------------------------------------------

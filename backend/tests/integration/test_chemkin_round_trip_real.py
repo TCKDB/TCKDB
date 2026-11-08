@@ -97,6 +97,11 @@ CASES = {c.name: c for c in (AMMONIA, FORMIC)}
 FIXTURE_DIR = AMMONIA.dir
 
 
+def _read(name: str) -> str:
+    """Read a file of the ammonia-methane fixture (also used by the numerical-grid test)."""
+    return AMMONIA.read(name)
+
+
 def _canon(smiles: str) -> str:
     mol = Chem.MolFromSmiles(smiles)
     assert mol is not None, f"unparseable SMILES {smiles!r}"

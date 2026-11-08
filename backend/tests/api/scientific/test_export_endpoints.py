@@ -18,12 +18,13 @@ from tests.services.scientific_read._factories import (
     make_species,
     make_species_entry,
     make_thermo_scalar,
+    make_transport,
     next_inchi_key,
     set_review,
 )
 
 
-def _seed_reaction(db_session):
+def _seed_reaction(db_session, *, with_transport=False):
     def species(smiles):
         sp = make_species(db_session, smiles=smiles, inchi_key=next_inchi_key("AP"))
         entry = make_species_entry(db_session, sp)
@@ -37,6 +38,14 @@ def _seed_reaction(db_session):
             record_id=thermo.id,
             status=RecordReviewStatus.approved,
         )
+        if with_transport and smiles == "C":
+            row = make_transport(db_session, species_entry=entry)
+            set_review(
+                db_session,
+                record_type=SubmissionRecordType.transport,
+                record_id=row.id,
+                status=RecordReviewStatus.approved,
+            )
         return entry
 
     e_a = species("C")
@@ -108,10 +117,35 @@ def test_chemkin_export_returns_zip(
 
     zf = zipfile.ZipFile(io.BytesIO(resp.content))
     names = set(zf.namelist())
-    assert {"chem.inp", "therm.dat", "tran.dat", "manifest.json"} <= names
+    # The seeded species have no transport data, so no tran.dat is written and
+    # the manifest says why (an empty tran.dat would fail a strict Cantera load).
+    assert names == {"chem.inp", "therm.dat", "manifest.json"}
     manifest = json.loads(zf.read("manifest.json"))
     assert manifest["counts"]["species"] == 2
-    assert "REACTIONS" in zf.read("chem.inp").decode()
+    assert manifest["transport_file"] == {
+        "written": False,
+        "reason": "no tran.dat was written because no exported species had transport data",
+    }
+    chem = zf.read("chem.inp").decode()
+    assert "REACTIONS" in chem
+    species_lines = chem.split("SPECIES", 1)[1].split("END", 1)[0]
+    assert species_lines.count("MULT=1") == 2  # every species comment states its multiplicity
+
+
+def test_chemkin_export_with_some_transport_writes_tran_dat(
+    client, db_session, login_as, _api_curator_user
+):
+    entry = _seed_reaction(db_session, with_transport=True)
+    login_as(_api_curator_user)
+
+    resp = client.post(
+        "/api/v1/scientific/export/chemkin",
+        json={"seed": {"reaction_refs": [entry.public_ref]}},
+    )
+    assert resp.status_code == 200
+    zf = zipfile.ZipFile(io.BytesIO(resp.content))
+    assert {"chem.inp", "therm.dat", "tran.dat", "manifest.json"} <= set(zf.namelist())
+    assert json.loads(zf.read("manifest.json"))["transport_file"] == {"written": True, "reason": None}
 
 
 def test_chemkin_requires_curator(client, db_session):
