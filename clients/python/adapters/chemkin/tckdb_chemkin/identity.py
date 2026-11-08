@@ -158,9 +158,12 @@ _ATOM_RE = re.compile(
     r"([A-Z][a-z]?)\s+"  # element
     r"u(-?\d+)\s+"  # unpaired electrons
     r"p(-?\d+)\s+"  # lone pairs
-    r"c(-?\d+)"  # formal charge
+    r"c([+-]?\d+)"  # formal charge, signed as RMG writes it (c0, c+1, c-1)
     r"(.*)$"  # bond list
 )
+# A line that opens like an atom (index, element symbol) but is not one the
+# parser above accepts. Such a line is an error, never something to skip.
+_ATOM_LIKE_RE = re.compile(r"^\s*\d+\s+[A-Z]")
 _BOND_RE = re.compile(r"\{(\d+),\s*([SDTQB])\}")
 
 
@@ -231,11 +234,17 @@ def parse_species_dictionary(text: str) -> dict[str, ResolvedSpecies]:
         if not lines:
             return
         label = lines[0].strip()
-        atom_lines = [
-            ln
-            for ln in lines[1:]
-            if _ATOM_RE.match(ln)
-        ]
+        atom_lines = []
+        for ln in lines[1:]:
+            if _ATOM_RE.match(ln):
+                atom_lines.append(ln)
+            elif _ATOM_LIKE_RE.match(ln):
+                raise ValueError(
+                    f"Malformed adjacency-list atom line in species {label!r}: "
+                    f"{ln.strip()!r} (expected 'index element uN pN cN {{bonds}}'; "
+                    "the line is not skipped, because dropping an atom would change "
+                    "the species)."
+                )
         if not atom_lines:
             return
         resolved[label] = _adjlist_to_species(label, atom_lines)
@@ -287,6 +296,9 @@ def parse_species_map_csv(text: str) -> dict[str, ResolvedSpecies]:
 
 
 _COMMENT_SMILES_RE = re.compile(r"SMILES\s*[:=]\s*(\S+)", re.IGNORECASE)
+# ``MULT=<m>``: the spin multiplicity a TCKDB CHEMKIN export writes on every
+# species comment, so a structure shared by two spin states stays two species.
+_COMMENT_MULT_RE = re.compile(r"(?<![A-Za-z_])MULT\s*=\s*(\d+)")
 
 
 def _from_inline_comment(decl: SpeciesDecl) -> ResolvedSpecies | None:
@@ -295,7 +307,13 @@ def _from_inline_comment(decl: SpeciesDecl) -> ResolvedSpecies | None:
     m = _COMMENT_SMILES_RE.search(decl.comment)
     if not m:
         return None
-    return species_from_smiles(decl.name, m.group(1), source="comment")
+    mult = _COMMENT_MULT_RE.search(decl.comment)
+    return species_from_smiles(
+        decl.name,
+        m.group(1),
+        multiplicity=int(mult.group(1)) if mult else None,
+        source="comment",
+    )
 
 
 def _bath_gas(name: str) -> ResolvedSpecies | None:

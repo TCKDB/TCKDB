@@ -26,7 +26,7 @@ formula-based name with a numeric disambiguator; ``public_ref`` uses the
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pydantic import ValidationError
 from tckdb_schemas.thermo import ThermoNASACreate
@@ -82,6 +82,10 @@ class ChemkinOptions:
 class ChemkinExport:
     files: dict[str, str]
     gaps: list[ExportGap]
+    #: What happened to ``tran.dat``: ``written`` (bool) and a plain-language
+    #: ``reason`` when it was not. Carried into the export manifest so a missing
+    #: transport file is stated, not inferred from an absent zip member.
+    transport: dict[str, object] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -115,6 +119,7 @@ def structure_comment(
     stereo_descriptor: str | None,
     stereo_resolution,
     stereo_smiles: str | None,
+    multiplicity: int | None = None,
 ) -> str:
     """The ``SMILES=`` traceability text for one species entry, with its stereo (DR-0038).
 
@@ -132,13 +137,18 @@ def structure_comment(
       an allene's sense, or a cumulated chain with a tied pair of stereo-bearing arms at one end), whose
       isomers share the entry.
 
-    The first token after ``SMILES=`` is the structure; a reader that takes only that token (the
-    CHEMKIN importer does) ignores the rest.
+    ``MULT=`` follows the structure on every species (including ``MULT=1``): a SMILES alone does not
+    say the spin state (CH2 singlet and triplet, atomic C, O share one), and the importer reads it
+    back so a re-import keeps the two apart.
+
+    The first token after ``SMILES=`` is the structure; a reader that takes only that token ignores
+    the rest.
     """
 
+    mult = f"  MULT={multiplicity}" if multiplicity is not None else ""
     if stereo_descriptor is None:
-        return f"SMILES={smiles}"
-    text = f"SMILES={stereo_smiles or smiles}  STEREO={stereo_descriptor}"
+        return f"SMILES={smiles}{mult}"
+    text = f"SMILES={stereo_smiles or smiles}{mult}  STEREO={stereo_descriptor}"
     resolution = getattr(stereo_resolution, "value", stereo_resolution)
     if resolution and resolution != "resolved":
         text += f"  STEREO_RESOLUTION={resolution}"
@@ -155,6 +165,7 @@ def _species_structure_comment(sr: SpeciesExportRecord) -> str:
         stereo_descriptor=entry.stereo_descriptor,
         stereo_resolution=entry.stereo_resolution,
         stereo_smiles=entry.stereo_smiles,
+        multiplicity=entry.multiplicity,
     )
 
 
@@ -857,12 +868,20 @@ def serialize_chemkin(
             record_set, names, compositions, collider_names, options, gaps
         ),
     }
-    if options.include_transport:
-        files["tran.dat"] = _build_tran_dat(
-            record_set, names, compositions, gaps
-        )
+    if not options.include_transport:
+        transport = {"written": False, "reason": "transport export was not requested"}
+    elif not any(sr.transports for sr in record_set.species_records):
+        # An empty tran.dat is not a neutral file: Cantera's ck2yaml reads it and
+        # then fails the species it finds no line for. Write none, and say so.
+        transport = {
+            "written": False,
+            "reason": "no tran.dat was written because no exported species had transport data",
+        }
+    else:
+        files["tran.dat"] = _build_tran_dat(record_set, names, compositions, gaps)
+        transport = {"written": True, "reason": None}
 
-    return ChemkinExport(files=files, gaps=gaps)
+    return ChemkinExport(files=files, gaps=gaps, transport=transport)
 
 
 def validate_chemkin_mechanism(files: dict[str, str]) -> None:
