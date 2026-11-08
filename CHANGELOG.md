@@ -25,10 +25,11 @@ dataset must never require a code release.
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)
 
 - **What changed:**
-  - `tckdb-chemkin` reads an RMG `c+1` / `c-1` formal charge in `species_dictionary.txt` (it skipped such an atom line without a word and failed later with `KeyError`), and an atom-like line it cannot read is now an error that names the species and the line.
-  - A CHEMKIN export writes `MULT=<m>` on every species comment, right after `SMILES=` (therm, SPECIES block, tran and the network export), and `tckdb-chemkin` reads it back, so a structure shared by two spin states (CH2 singlet and triplet) stays two species.
-  - An export in which no species has transport data writes no `tran.dat`; the manifest says so under `transport_file` (`written: false` and the reason). A mixed export is unchanged.
-  - The importer's report warns, with line numbers, about a reaction repeated without `DUPLICATE` and about a `DUPLICATE` with no partner. It never adds or removes a marker or drops a reaction.
+  - `tckdb-chemkin` reads an RMG `c+1` / `c-1` formal charge, an atom label (`*1`) and an isotope tag (`i13`, kept in the SMILES) in `species_dictionary.txt`. It used to skip an atom line it could not read without a word; any atom-like line that does not parse now raises, naming the species and the line.
+  - A CHEMKIN export writes `MULT=<m>` on every species comment, right after `SMILES=` (therm, SPECIES block, tran and the network export). `tckdb-chemkin` reads it back, so a structure shared by two spin states (CH2 singlet and triplet) stays two species. A `MULT` that is not a whole number >= 1, or whose parity disagrees with the structure's electron count, is an error naming the species.
+  - An export writes `tran.dat` only if at least one transport line was written; otherwise the manifest says so under `transport_file` (`written: false`, a `reason_code` of `not_requested`, `no_exported_species_has_transport` or `no_transport_line_written`, and the reason text).
+  - The export marks `DUPLICATE` by the unordered pair of sides and the rate type, as Cantera 3.2's `checkDuplicates` requires, so a reaction stored in both directions is declared.
+  - The importer's report warns, with line numbers, about a reaction repeated without `DUPLICATE` and about a `DUPLICATE` with no other `DUPLICATE` reaction among the same participants (Cantera 3.2's rule). It never adds or removes a marker or drops a reaction.
 - **Why:** the published formic acid model (Wu and Grinberg Dana 2026, 123 species, 3002 reactions) could not be imported, and its export could not be told apart species-wise from its spin variants or loaded by Cantera next to a near-empty `tran.dat`.
 - **Schema and migration:** none. **Versions:** `tckdb-chemkin` 0.6.0.
 

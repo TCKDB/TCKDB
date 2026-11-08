@@ -34,9 +34,9 @@ numbers count the reactions in file order; line numbers are lines of
 
 | Reaction no. (line) | Equation | Problem |
 |---|---|---|
-| 223 (1976) and 313 (2660) | O(6) + CO3(212) <=> O2(2) + CO2(12) | the pair is repeated without `DUPLICATE` |
-| 387 (3262) and 389 (3284) | O(6) + CO3(212) <=> O2(2) + CO2(158) | the pair is repeated without `DUPLICATE` |
-| 412 (3449; marker on 3459) | HOCH2O(35) <=> H(3) + HOCHO(1) | `DUPLICATE` with no partner |
+| 223 (1976) and 313 (2660) | O(6) + CO3(212) (+M) <=> O2(2) + CO2(12) (+M), Chebyshev | the pair is repeated without `DUPLICATE` |
+| 387 (3262) and 389 (3284) | O(6) + CO3(212) (+M) <=> O2(2) + CO2(158) (+M), Chebyshev | the pair is repeated without `DUPLICATE` |
+| 412 (3449; marker on 3459) | HOCH2O(35) (+M) <=> H(3) + HOCHO(1) (+M), Chebyshev | `DUPLICATE` with no partner |
 
 Correcting those five flags makes the file load. The model is deposited and
 exported unmodified: the test checks that the importer reports exactly these

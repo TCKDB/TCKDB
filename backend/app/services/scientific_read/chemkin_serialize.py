@@ -646,16 +646,25 @@ def _build_chem_inp(
         # sides, or with swapped sides when at least one is reversible, unless
         # both carry DUPLICATE, and (b) a DUPLICATE reaction with no other
         # DUPLICATE reaction in its group. So the key is the *unordered* pair of
-        # sides: a reaction and its reverse share a key whatever their
-        # reversibility, and every member of a colliding key is marked. This
-        # marks a little more than (a) strictly needs (a cross-type or
-        # irreversible-reversed pair) and never leaves a marker without a
-        # marked partner, which is the safe side of both rules.
+        # sides, plus the coarse rate type: a reaction and its reverse share a
+        # key whatever their reversibility, and every member of a colliding key
+        # is marked, so a marker always has a marked partner. Different rate
+        # types (an Arrhenius row beside a Chebyshev row) are not a repeat, so
+        # they are left as the source wrote them.
         # ``validate_chemkin_mechanism`` loads the result through Cantera and is
         # the ground-truth backstop.
+        k = rr.kinetics[0].kinetics
+        kind = getattr(k.model_kind, "value", k.model_kind)
+        if kind in ("chebyshev", "plog", "lindemann", "troe", "sri"):
+            rate_type = kind
+        elif k.is_third_body:
+            rate_type = "three_body"
+        else:
+            rate_type = "arrhenius"  # plain, modified and multi-term Arrhenius
         return (
             "dup",
             frozenset((tuple(sorted(rr.reactant_refs)), tuple(sorted(rr.product_refs)))),
+            rate_type,
         )
 
     # Expand every record into its CHEMKIN reaction block(s) up front. A

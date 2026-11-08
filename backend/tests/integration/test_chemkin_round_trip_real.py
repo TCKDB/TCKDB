@@ -725,6 +725,7 @@ def test_formic_reactions_by_form_and_tolerances(formic_round_trip):
     assert len(kin_in) == 2926
 
     worst: dict[str, dict[str, float]] = {}
+    eff_rows: Counter = Counter()
 
     def note(form, what, value):
         d = worst.setdefault(form, {})
@@ -761,11 +762,16 @@ def test_formic_reactions_by_form_and_tolerances(formic_round_trip):
                 if form == "troe":
                     for what in ("troe_alpha", "troe_t3", "troe_t1", "troe_t2"):
                         note(form, what, _rel(getattr(fa, what), getattr(fb, what)))
-                eff_a = {_structure_key(rt["resolved_in"], n): v for n, v in a.efficiencies.items()}
-                eff_b = {_structure_key(rt["resolved_out"], n): v for n, v in b.efficiencies.items()}
-                assert set(eff_a) == set(eff_b)
-                for k, v in eff_a.items():
-                    note(form, "efficiency", _rel(v, eff_b[k]))
+            # Collider efficiencies, on every form that carries them (three-body
+            # Arrhenius, falloff and Chebyshev falloff rows alike).
+            eff_a = {_structure_key(rt["resolved_in"], n): v for n, v in a.efficiencies.items()}
+            eff_b = {_structure_key(rt["resolved_out"], n): v for n, v in b.efficiencies.items()}
+            assert set(eff_a) == set(eff_b), key
+            assert (a.is_third_body, a.is_falloff) == (b.is_third_body, b.is_falloff), key
+            for k, v in eff_a.items():
+                note(form, "efficiency", _rel(v, eff_b[k]))
+            if eff_a:
+                eff_rows[(form, a.is_third_body, a.is_falloff)] += 1
             if form == "plog":
                 assert len(a.plog) == len(b.plog)
                 for pa, pb in zip(a.plog, b.plog, strict=True):
@@ -775,6 +781,15 @@ def test_formic_reactions_by_form_and_tolerances(formic_round_trip):
                 for ta, tb in zip(a.arrhenius_entries, b.arrhenius_entries, strict=True):
                     note(form, "term_a", _rel(ta.a, tb.a))
                     note(form, "term_ea", _rel(_ea_kj(ta), _ea_kj(tb)))
+
+    # Rows whose collider efficiencies came back identical, by form.
+    assert dict(eff_rows) == {
+        ("troe", False, True): 6,
+        ("modified_arrhenius", True, False): 5,
+        ("arrhenius", True, False): 1,
+    }
+    three_body = lambda rows: sum(1 for r in rows if r.is_third_body and not r.is_falloff)  # noqa: E731
+    assert three_body(rt["normalized_in"].reactions) == three_body(rt["normalized_out"].reactions)
 
     # Largest differences after the trip. The exporter prints rates to a fixed
     # number of digits; that rounding is the only source of a nonzero entry.
@@ -848,11 +863,13 @@ def test_formic_export_declares_the_pairs_and_leaves_the_orphan_unmarked(formic_
     assert len(orphan) == 1
     assert orphan[0].duplicate is False  # the marker without a partner is not written
 
-    # The export, read by the adapter, has no wrong flag left to report; it
-    # states one DUPLICATE per repeated row (146 lines).
+    # The export, read by the adapter, has no wrong flag left to report. It
+    # writes 114 DUPLICATE lines: the original's 111, minus the orphan, plus the
+    # four rows of the two undeclared pairs. That is also the number of
+    # reactions the authors' own Cantera file flags (114).
     assert duplicate_flag_warnings(rt["mech_out"].reactions) == []
     text = rt["export"].files["chem.inp"]
-    assert sum(1 for ln in text.splitlines() if ln.strip().upper() == "DUPLICATE") == 146
+    assert sum(1 for ln in text.splitlines() if ln.strip().upper() == "DUPLICATE") == 114
 
 
 def test_formic_transport_is_absent_and_stated(formic_round_trip):

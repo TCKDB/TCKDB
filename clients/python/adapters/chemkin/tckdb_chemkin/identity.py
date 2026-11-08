@@ -155,15 +155,17 @@ def species_from_smiles(
 
 _ATOM_RE = re.compile(
     r"^\s*(\d+)\s+"  # index
+    r"(?:\*\d+\s+)?"  # optional RMG atom label (*1, *2, ...): a reaction-site mark, no chemistry
     r"([A-Z][a-z]?)\s+"  # element
     r"u(-?\d+)\s+"  # unpaired electrons
     r"p(-?\d+)\s+"  # lone pairs
     r"c([+-]?\d+)"  # formal charge, signed as RMG writes it (c0, c+1, c-1)
-    r"(.*)$"  # bond list
+    r"(?:\s+i(\d+))?"  # optional isotope mass number (i13): carried into the SMILES
+    r"((?:\s*\{\d+,\s*[SDTQB]\})*)\s*$"  # bond list, nothing else
 )
-# A line that opens like an atom (index, element symbol) but is not one the
-# parser above accepts. Such a line is an error, never something to skip.
-_ATOM_LIKE_RE = re.compile(r"^\s*\d+\s+[A-Z]")
+# Any line that opens like an atom (an index, then something). Such a line is
+# an error if the parser above does not accept it, never something to skip.
+_ATOM_LIKE_RE = re.compile(r"^\s*\d+\s+\S")
 _BOND_RE = re.compile(r"\{(\d+),\s*([SDTQB])\}")
 
 
@@ -182,9 +184,12 @@ def _adjlist_to_species(name: str, atom_lines: list[str]) -> ResolvedSpecies:
         element = m.group(2)
         u = int(m.group(3))
         c = int(m.group(5))
-        bonds = [(int(a), b) for a, b in _BOND_RE.findall(m.group(6))]
+        bonds = [(int(a), b) for a, b in _BOND_RE.findall(m.group(7))]
         total_u += u
         atom = Chem.Atom(element)
+        if m.group(6) is not None:
+            # An isotope tag is chemistry (13CH4 is not CH4): keep it in the SMILES.
+            atom.SetIsotope(int(m.group(6)))
         atom.SetFormalCharge(c)
         atom.SetNumRadicalElectrons(u)
         atom.SetNoImplicit(True)
@@ -298,7 +303,32 @@ def parse_species_map_csv(text: str) -> dict[str, ResolvedSpecies]:
 _COMMENT_SMILES_RE = re.compile(r"SMILES\s*[:=]\s*(\S+)", re.IGNORECASE)
 # ``MULT=<m>``: the spin multiplicity a TCKDB CHEMKIN export writes on every
 # species comment, so a structure shared by two spin states stays two species.
-_COMMENT_MULT_RE = re.compile(r"(?<![A-Za-z_])MULT\s*=\s*(\d+)")
+# The key is a whole token (``STEREO_MULT=`` is not it) and case-insensitive,
+# like ``SMILES=``. The value is read as a token and validated below.
+_COMMENT_MULT_RE = re.compile(r"(?<![\w])MULT\s*=\s*(\S+)", re.IGNORECASE)
+
+
+def _electron_count(smiles: str) -> int:
+    mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
+    return sum(a.GetAtomicNum() for a in mol.GetAtoms()) - Chem.GetFormalCharge(mol)
+
+
+def _comment_multiplicity(name: str, smiles: str, token: str) -> int:
+    """Validate a ``MULT=`` value: a whole integer >= 1 whose parity fits the structure."""
+    if not re.fullmatch(r"\d+", token) or int(token) < 1:
+        raise ValueError(
+            f"Species {name!r}: MULT={token!r} in the structure comment is not a whole number >= 1."
+        )
+    mult = int(token)
+    if Chem.MolFromSmiles(smiles) is None:
+        raise ValueError(f"RDKit could not parse SMILES {smiles!r}.")
+    electrons = _electron_count(smiles)
+    if (electrons % 2 == 0) != (mult % 2 == 1):
+        raise ValueError(
+            f"Species {name!r}: MULT={mult} disagrees with the structure {smiles!r} "
+            f"({electrons} electrons need an {'odd' if electrons % 2 == 0 else 'even'} multiplicity)."
+        )
+    return mult
 
 
 def _from_inline_comment(decl: SpeciesDecl) -> ResolvedSpecies | None:
@@ -308,10 +338,11 @@ def _from_inline_comment(decl: SpeciesDecl) -> ResolvedSpecies | None:
     if not m:
         return None
     mult = _COMMENT_MULT_RE.search(decl.comment)
+    multiplicity = _comment_multiplicity(decl.name, m.group(1), mult.group(1)) if mult else None
     return species_from_smiles(
         decl.name,
         m.group(1),
-        multiplicity=int(mult.group(1)) if mult else None,
+        multiplicity=multiplicity,
         source="comment",
     )
 
