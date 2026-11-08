@@ -144,6 +144,7 @@ class Reaction:
 
     rev: tuple[float, float, float] | None = None  # explicit reverse (parse+warn)
     duplicate: bool = False
+    duplicate_line_no: int | None = None  # line of the DUPLICATE keyword
 
     # Aux lines we recognised but do not support in v1 (LT, FORD, RORD, ...).
     unsupported_aux: list[str] = field(default_factory=list)

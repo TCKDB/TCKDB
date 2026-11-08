@@ -354,8 +354,10 @@ def _species_content(session: Session, refs: set[str]) -> dict[str, dict[str, An
             Species.smiles,
             Species.public_ref,
             SpeciesEntry.stereo_descriptor,
+            Species.multiplicity,
             SpeciesEntry.stereo_resolution,
             SpeciesEntry.stereo_smiles,
+            SpeciesEntry.isotope_key,
         )
         .join(Species, Species.id == SpeciesEntry.species_id)
         .where(SpeciesEntry.public_ref.in_(refs))
@@ -365,10 +367,12 @@ def _species_content(session: Session, refs: set[str]) -> dict[str, dict[str, An
             "smiles": smiles,
             "species_ref": species_ref,
             "stereo_descriptor": descriptor,
+            "multiplicity": multiplicity,
             "stereo_resolution": resolution,
             "stereo_smiles": stereo_smiles,
+            "isotope_key": isotope_key,
         }
-        for entry_ref, smiles, species_ref, descriptor, resolution, stereo_smiles in rows
+        for entry_ref, smiles, species_ref, descriptor, multiplicity, resolution, stereo_smiles, isotope_key in rows
     }
 
 
@@ -562,6 +566,8 @@ def _chemkin_files(
             stereo_descriptor=species[ref]["stereo_descriptor"],
             stereo_resolution=species[ref]["stereo_resolution"],
             stereo_smiles=species[ref]["stereo_smiles"],
+            multiplicity=species[ref]["multiplicity"],
+            isotope_key=species[ref]["isotope_key"],
         )
         lines.append(f"{names[ref]}   ! {comment} ref={species[ref]['species_ref']}")
     lines += ["END", "", f"REACTIONS {_EA_UNIT_HEADERS.get(choice.energy_units.lower(), 'CAL/MOLE')} MOLES"]

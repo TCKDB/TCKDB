@@ -96641,7 +96641,7 @@
     },
     "/api/v1/scientific/export/chemkin": {
       "post": {
-        "description": "Export a CHEMKIN mechanism zip (chem.inp/therm.dat/tran.dat + manifest).\n\nCHEMKIN holds exactly one thermo, transport and kinetics record per\nspecies or reaction, and the exporter never picks one. Where a species or\nreaction has more than one candidate, name the record in ``thermo_refs`` /\n``transport_refs`` / ``kinetics_refs``; otherwise the request is refused\nwith 422 ``export_selection_ambiguous``, which lists every ambiguous\nspecies/reaction with its candidate refs. Curator/admin only.\n\n:raises ValueError: 422 for an empty/unresolvable seed or an ``all``\n    request over the export cap.",
+        "description": "Export a CHEMKIN mechanism zip (chem.inp, therm.dat, optional tran.dat, and a manifest).\n\n``tran.dat`` is written only when at least one transport line can be\nwritten; otherwise ``manifest.json`` says so under ``transport_file`` with a\n``reason_code``.\n\nCHEMKIN holds exactly one thermo, transport and kinetics record per\nspecies or reaction, and the exporter never picks one. Where a species or\nreaction has more than one candidate, name the record in ``thermo_refs`` /\n``transport_refs`` / ``kinetics_refs``; otherwise the request is refused\nwith 422 ``export_selection_ambiguous``, which lists every ambiguous\nspecies/reaction with its candidate refs. Curator/admin only.\n\n:raises ValueError: 422 for an empty/unresolvable seed or an ``all``\n    request over the export cap.",
         "operationId": "export_chemkin_api_v1_scientific_export_chemkin_post",
         "parameters": [
           {

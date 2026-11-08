@@ -489,6 +489,7 @@ def _parse_reactions_block(
             continue
         if kw in ("DUP", "DUPLICATE"):
             current.duplicate = True
+            current.duplicate_line_no = no
             continue
         if kw == "LOW":
             vals = _slash_floats(text)

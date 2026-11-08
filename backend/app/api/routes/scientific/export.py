@@ -158,7 +158,11 @@ def export_chemkin(
     session: Session = Depends(get_db),
     _user: AppUser = Depends(require_curator_or_admin),
 ) -> StreamingResponse:
-    """Export a CHEMKIN mechanism zip (chem.inp/therm.dat/tran.dat + manifest).
+    """Export a CHEMKIN mechanism zip (chem.inp, therm.dat, optional tran.dat, and a manifest).
+
+    ``tran.dat`` is written only when at least one transport line can be
+    written; otherwise ``manifest.json`` says so under ``transport_file`` with a
+    ``reason_code``.
 
     CHEMKIN holds exactly one thermo, transport and kinetics record per
     species or reaction, and the exporter never picks one. Where a species or
@@ -199,6 +203,7 @@ def export_chemkin(
     manifest = record_set.manifest()
     manifest["gaps"] = [g.to_dict() for g in result.gaps]
     manifest["counts"]["gaps"] = len(result.gaps)
+    manifest["transport_file"] = result.transport
     # ``record_set.manifest()`` already carries the resolved read-profile echo,
     # so the zipped manifest.json states its contract exactly like every other
     # TCKDB manifest and response.

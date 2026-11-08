@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .ast import Mechanism, ThermoEntry, TransportEntry
+from .duplicates import duplicate_flag_warnings
 from .forms import MODEL_CHEBYSHEV
 from .identity import IdentityResolver, ResolvedSpecies
 from .normalizer import (
@@ -329,7 +330,7 @@ def build_all_payloads(
     if normalized is None:
         normalized = normalize_mechanism(mech)
 
-    warnings: list[str] = []
+    warnings: list[str] = duplicate_flag_warnings(mech.reactions)
 
     thermo_payloads: list[dict] = []
     for name, entry in mech.thermo.items():
