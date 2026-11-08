@@ -5,12 +5,16 @@ markers are wrong. Cantera refuses to load it. This module only *reports*: it
 never adds or removes a marker and never drops a reaction, so the deposit is
 the file as written.
 
-Two cases, using Cantera's rule for "the same reaction" (same participants with
-their coefficients, same direction, same rate type):
+Two cases:
 
 * a reaction written more than once where at least one of the repeats lacks
-  ``DUPLICATE`` (the pair is undeclared);
-* a ``DUPLICATE`` marker on a reaction that has no partner.
+  ``DUPLICATE`` (the pair is undeclared). Cantera's rule for "the same reaction":
+  same participants with their coefficients, same direction, same rate type;
+* a ``DUPLICATE`` marker on a reaction that has no partner. A partner is any other
+  reaction with the same participants and direction, whatever its rate type: a
+  marker beside an Arrhenius row and a Chebyshev row of one equation is accepted
+  (a TCKDB export writes such markers and Cantera loads them), so it is not
+  reported.
 
 Every message names CHEMKIN line numbers: the line of each reaction and, for a
 marker, the line of the ``DUPLICATE`` keyword.
@@ -38,13 +42,17 @@ def _rate_type(rxn: Reaction) -> tuple:
 
 
 def _key(rxn: Reaction) -> tuple:
+    return (*_equation_key(rxn), _rate_type(rxn))
+
+
+def _equation_key(rxn: Reaction) -> tuple:
     def side(pairs: list[tuple[int, str]]) -> tuple:
         merged: dict[str, int] = defaultdict(int)
         for coeff, name in pairs:
             merged[name] += coeff
         return tuple(sorted(merged.items()))
 
-    return (side(rxn.reactants), side(rxn.products), rxn.reversible, _rate_type(rxn))
+    return (side(rxn.reactants), side(rxn.products), rxn.reversible)
 
 
 def _eq(rxn: Reaction) -> str:
@@ -65,6 +73,10 @@ def duplicate_flag_warnings(reactions: list[Reaction]) -> list[str]:
     for rxn in reactions:
         groups[_key(rxn)].append(rxn)
 
+    by_equation: dict[tuple, int] = defaultdict(int)
+    for rxn in reactions:
+        by_equation[_equation_key(rxn)] += 1
+
     warnings: list[str] = []
     for members in groups.values():
         if len(members) >= 2:
@@ -76,7 +88,7 @@ def duplicate_flag_warnings(reactions: list[Reaction]) -> list[str]:
                     "DUPLICATE; the repeats are undeclared (Cantera refuses such a model). "
                     "Imported as written."
                 )
-        elif members[0].duplicate:
+        elif members[0].duplicate and by_equation[_equation_key(members[0])] == 1:
             rxn = members[0]
             marker = rxn.duplicate_line_no
             warnings.append(

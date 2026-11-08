@@ -354,7 +354,7 @@ def _species_content(session: Session, refs: set[str]) -> dict[str, dict[str, An
             Species.smiles,
             Species.public_ref,
             SpeciesEntry.stereo_descriptor,
-            SpeciesEntry.multiplicity,
+            Species.multiplicity,
             SpeciesEntry.stereo_resolution,
             SpeciesEntry.stereo_smiles,
         )

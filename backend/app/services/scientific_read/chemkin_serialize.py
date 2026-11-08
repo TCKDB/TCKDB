@@ -165,7 +165,7 @@ def _species_structure_comment(sr: SpeciesExportRecord) -> str:
         stereo_descriptor=entry.stereo_descriptor,
         stereo_resolution=entry.stereo_resolution,
         stereo_smiles=entry.stereo_smiles,
-        multiplicity=entry.multiplicity,
+        multiplicity=sr.species.multiplicity,
     )
 
 

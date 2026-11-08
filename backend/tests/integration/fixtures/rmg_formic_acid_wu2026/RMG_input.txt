@@ -1,0 +1,137 @@
+database(
+    thermoLibraries=['primaryThermoLibrary', 'BurkeH2O2', 'thermo_DFT_CCSDTF12_BAC', 'DFT_QCI_thermo', 'CBS_QB3_1dHR'],
+    reactionLibraries=['primaryH2O2', '2006_Joshi_OH_CO', 'NOx2018'],
+    transportLibraries=['OneDMinN2', 'PrimaryTransportLibrary', 'NOx2018', 'GRI-Mech'],
+    seedMechanisms=[],
+    kineticsDepositories='default',
+    kineticsFamilies='default',
+    kineticsEstimator='rate rules',
+)
+
+species(
+    label='HOCHO',
+    reactive=True,
+    structure=SMILES('OC=O'),
+)
+
+species(
+    label='O2',
+    reactive=True,
+    structure=SMILES('[O][O]'),
+)
+
+species(
+    label='N2',
+    reactive=False,
+    structure=SMILES('N#N'),
+)
+
+species(
+    label='He',
+    reactive=False,
+    structure=SMILES('[He]'),
+)
+
+species(
+    label='Ar',
+    reactive=False,
+    structure=SMILES('[Ar]'),
+)
+
+simpleReactor(
+    temperature=[(450.0, 'K'), (2000.0, 'K')],
+    pressure=[(1.0, 'bar'), (50.0, 'bar')],
+    initialMoleFractions={
+        'HOCHO': 1.0,
+        'O2': [0.5, 4.0],
+        'N2': [3.762, 49.0],
+    },
+    terminationTime=(5.0, 's'),
+    nSims=12,
+)
+
+simpleReactor(
+    temperature=[(450.0, 'K'), (2000.0, 'K')],
+    pressure=[(1.0, 'bar'), (50.0, 'bar')],
+    initialMoleFractions={
+        'HOCHO': 1.0,
+        'O2': [0.5, 4.0],
+        'He': [3.762, 49.0],
+    },
+    terminationTime=(5.0, 's'),
+    nSims=12,
+)
+
+simpleReactor(
+    temperature=[(450.0, 'K'), (2000.0, 'K')],
+    pressure=[(1.0, 'bar'), (50.0, 'bar')],
+    initialMoleFractions={
+        'HOCHO': 1.0,
+        'O2': [0.5, 4.0],
+        'Ar': [0.3, 1.5],
+    },
+    terminationTime=(5.0, 's'),
+    nSims=12,
+)
+
+simpleReactor(
+    temperature=[(450.0, 'K'), (2000.0, 'K')],
+    pressure=[(1.0, 'bar'), (50.0, 'bar')],
+    initialMoleFractions={
+        'HOCHO': 0.02,
+        'He': 0.98,
+    },
+    terminationTime=(5.0, 's'),
+    nSims=12,
+)
+
+model(
+    toleranceMoveToCore=0.001,
+    toleranceInterruptSimulation=0.001,
+    filterReactions=True,
+    filterThreshold=100000000.0,
+    maxNumObjsPerIter=1,
+    terminateAtMaxObjects=False,
+)
+
+simulator(atol=1e-16, rtol=1e-08)
+
+pressureDependence(
+    method='modified strong collision',
+    maximumGrainSize=(2.0, 'kJ/mol'),
+    minimumNumberOfGrains=250,
+    temperatures=(300, 2500, 'K', 10),
+    pressures=(0.1, 100, 'bar', 10),
+    interpolation=('Chebyshev', 6, 4),
+    maximumAtoms=16,
+)
+
+options(
+    name='Seed',
+    generateSeedEachIteration=True,
+    saveSeedToDatabase=False,
+    units='si',
+    generateOutputHTML=True,
+    generatePlots=False,
+    saveSimulationProfiles=True,
+    verboseComments=False,
+    saveEdgeSpecies=False,
+    keepIrreversible=False,
+    trimolecularProductReversible=True,
+    wallTime='00:00:00:00',
+    saveSeedModulus=-1,
+)
+
+generatedSpeciesConstraints(
+    allowed=['input species', 'seed mechanisms', 'reaction libraries'],
+    maximumCarbonAtoms=2,
+    maximumOxygenAtoms=4,
+    maximumNitrogenAtoms=0,
+    maximumSiliconAtoms=0,
+    maximumSulfurAtoms=0,
+    maximumHeavyAtoms=5,
+    maximumRadicalElectrons=2,
+    maximumSingletCarbenes=1,
+    maximumCarbeneRadicals=0,
+    allowSingletO2=True,
+)
