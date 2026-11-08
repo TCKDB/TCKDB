@@ -1031,7 +1031,9 @@ def test_unparseable_smiles_drops_the_line_with_a_gap(db_session):
 
     _rs, result = _export_species(db_session, entry)
 
-    assert result.files["tran.dat"].strip() == ""
+    assert "tran.dat" not in result.files  # no line could be written, so no empty file
+    assert result.transport["written"] is False
+    assert result.transport["reason_code"] == "no_transport_line_written"
     gaps = _transport_gaps(result)
     assert [g.ref for g in gaps] == [entry.public_ref]
     assert "unparseable SMILES" in gaps[0].detail

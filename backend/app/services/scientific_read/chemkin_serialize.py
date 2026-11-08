@@ -640,27 +640,22 @@ def _build_chem_inp(
     emitted = [rr for rr in record_set.reaction_records if rr.kinetics]
 
     def _dup_key(rr: ReactionExportRecord) -> tuple:
-        # Cantera's ``Kinetics::checkDuplicates`` requires the DUPLICATE keyword
-        # only when two reactions are genuinely *indistinguishable*: same
-        # reactant multiset, same product multiset, in the SAME written
-        # direction, and of the same kinetic type. It deliberately does NOT
-        # require it for a reversible reaction stated forwards vs. its reverse
-        # when the two are otherwise distinguishable (e.g. a plain Arrhenius
-        # ``A<=>B`` alongside a Chebyshev ``B(+M)<=>A(+M)`` — different types,
-        # different third-body form), and it *rejects* an over-declared marker
-        # only via the reverse check. So we key on the ordered (sorted
-        # reactants, sorted products, reversible) triple — same-direction
-        # collisions only — which is exactly the set Cantera demands here.
-        # Collapsing forward/reverse into one unordered key over-declares
-        # (marking reversed reversibles that Cantera treats as distinct) and
-        # inflates the DUPLICATE count. ``validate_chemkin_mechanism`` loads the
-        # result through Cantera and is the ground-truth backstop for any case
-        # this heuristic gets wrong.
+        # Cantera 3.2's ``Kinetics::checkDuplicates`` groups reactions by their
+        # participant set, ignoring side and direction. It rejects (a) two
+        # reactions of one rate type that are the same reaction, with identical
+        # sides, or with swapped sides when at least one is reversible, unless
+        # both carry DUPLICATE, and (b) a DUPLICATE reaction with no other
+        # DUPLICATE reaction in its group. So the key is the *unordered* pair of
+        # sides: a reaction and its reverse share a key whatever their
+        # reversibility, and every member of a colliding key is marked. This
+        # marks a little more than (a) strictly needs (a cross-type or
+        # irreversible-reversed pair) and never leaves a marker without a
+        # marked partner, which is the safe side of both rules.
+        # ``validate_chemkin_mechanism`` loads the result through Cantera and is
+        # the ground-truth backstop.
         return (
             "dup",
-            tuple(sorted(rr.reactant_refs)),
-            tuple(sorted(rr.product_refs)),
-            rr.reaction.reversible,
+            frozenset((tuple(sorted(rr.reactant_refs)), tuple(sorted(rr.product_refs)))),
         )
 
     # Expand every record into its CHEMKIN reaction block(s) up front. A
@@ -781,6 +776,7 @@ def _build_tran_dat(
     compositions: dict[int, Counter | None],
     gaps: list[ExportGap],
 ) -> str:
+    """The tran.dat text, or ``""`` when no species produced a line."""
     lines: list[str] = []
     for sr in record_set.species_records:
         se_id = sr.species_entry.id
@@ -823,7 +819,7 @@ def _build_tran_dat(
             f"    ! {_species_structure_comment(sr)} ref={sr.species.public_ref}"
             f" linearity={geom_source}"
         )
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines) + "\n" if lines else ""
 
 
 # ---------------------------------------------------------------------------
@@ -868,18 +864,35 @@ def serialize_chemkin(
             record_set, names, compositions, collider_names, options, gaps
         ),
     }
+    # An empty tran.dat is not a neutral file: Cantera's ck2yaml reads it and then
+    # fails the species it finds no line for. Write the file only if it has a
+    # line, and say why when it does not.
     if not options.include_transport:
-        transport = {"written": False, "reason": "transport export was not requested"}
-    elif not any(sr.transports for sr in record_set.species_records):
-        # An empty tran.dat is not a neutral file: Cantera's ck2yaml reads it and
-        # then fails the species it finds no line for. Write none, and say so.
         transport = {
             "written": False,
-            "reason": "no tran.dat was written because no exported species had transport data",
+            "reason_code": "not_requested",
+            "reason": "transport export was not requested",
         }
     else:
-        files["tran.dat"] = _build_tran_dat(record_set, names, compositions, gaps)
-        transport = {"written": True, "reason": None}
+        tran_text = _build_tran_dat(record_set, names, compositions, gaps)
+        if tran_text:
+            files["tran.dat"] = tran_text
+            transport = {"written": True, "reason_code": None, "reason": None}
+        elif not any(sr.transports for sr in record_set.species_records):
+            transport = {
+                "written": False,
+                "reason_code": "no_exported_species_has_transport",
+                "reason": "no tran.dat was written because no exported species had transport data",
+            }
+        else:
+            transport = {
+                "written": False,
+                "reason_code": "no_transport_line_written",
+                "reason": (
+                    "no tran.dat was written because no transport line could be written "
+                    "(see the transport gaps)"
+                ),
+            }
 
     return ChemkinExport(files=files, gaps=gaps, transport=transport)
 

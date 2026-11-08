@@ -124,6 +124,7 @@ def test_chemkin_export_returns_zip(
     assert manifest["counts"]["species"] == 2
     assert manifest["transport_file"] == {
         "written": False,
+        "reason_code": "no_exported_species_has_transport",
         "reason": "no tran.dat was written because no exported species had transport data",
     }
     chem = zf.read("chem.inp").decode()
@@ -145,7 +146,11 @@ def test_chemkin_export_with_some_transport_writes_tran_dat(
     assert resp.status_code == 200
     zf = zipfile.ZipFile(io.BytesIO(resp.content))
     assert {"chem.inp", "therm.dat", "tran.dat", "manifest.json"} <= set(zf.namelist())
-    assert json.loads(zf.read("manifest.json"))["transport_file"] == {"written": True, "reason": None}
+    assert json.loads(zf.read("manifest.json"))["transport_file"] == {
+        "written": True,
+        "reason_code": None,
+        "reason": None,
+    }
 
 
 def test_chemkin_requires_curator(client, db_session):

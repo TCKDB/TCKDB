@@ -5,16 +5,17 @@ markers are wrong. Cantera refuses to load it. This module only *reports*: it
 never adds or removes a marker and never drops a reaction, so the deposit is
 the file as written.
 
-Two cases:
+The rule follows Cantera 3.2's ``Kinetics::checkDuplicates``. Reactions are
+grouped by their participant set, ignoring side and direction. Within a group:
 
-* a reaction written more than once where at least one of the repeats lacks
-  ``DUPLICATE`` (the pair is undeclared). Cantera's rule for "the same reaction":
-  same participants with their coefficients, same direction, same rate type;
-* a ``DUPLICATE`` marker on a reaction that has no partner. A partner is any other
-  reaction with the same participants and direction, whatever its rate type: a
-  marker beside an Arrhenius row and a Chebyshev row of one equation is accepted
-  (a TCKDB export writes such markers and Cantera loads them), so it is not
-  reported.
+* **Orphan marker.** A ``DUPLICATE``-marked reaction with no *other* marked
+  reaction in its group. Rate type, direction and stoichiometry do not matter
+  for this match: an Arrhenius row marked beside a marked Chebyshev row of the
+  same participants is accepted, because both are marked; the same Arrhenius
+  row marked beside an unmarked Chebyshev row is an orphan.
+* **Undeclared repeat.** Two reactions of the same rate type that are the same
+  reaction (identical sides, or swapped sides where at least one is reversible)
+  and are not both marked.
 
 Every message names CHEMKIN line numbers: the line of each reaction and, for a
 marker, the line of the ``DUPLICATE`` keyword.
@@ -41,23 +42,34 @@ def _rate_type(rxn: Reaction) -> tuple:
     return ("arrhenius",)
 
 
-def _key(rxn: Reaction) -> tuple:
-    return (*_equation_key(rxn), _rate_type(rxn))
+def _side(pairs: list[tuple[int, str]]) -> tuple:
+    merged: dict[str, int] = defaultdict(int)
+    for coeff, name in pairs:
+        merged[name] += coeff
+    return tuple(sorted(merged.items()))
 
 
-def _equation_key(rxn: Reaction) -> tuple:
-    def side(pairs: list[tuple[int, str]]) -> tuple:
-        merged: dict[str, int] = defaultdict(int)
-        for coeff, name in pairs:
-            merged[name] += coeff
-        return tuple(sorted(merged.items()))
+def _participants(rxn: Reaction) -> frozenset:
+    return frozenset(n for _, n in rxn.reactants) | frozenset(n for _, n in rxn.products)
 
-    return (side(rxn.reactants), side(rxn.products), rxn.reversible)
+
+def _same_reaction(a: Reaction, b: Reaction) -> bool:
+    ar, ap, br, bp = _side(a.reactants), _side(a.products), _side(b.reactants), _side(b.products)
+    if (ar, ap) == (br, bp):
+        return True
+    return (ar, ap) == (bp, br) and (a.reversible or b.reversible)
 
 
 def _eq(rxn: Reaction) -> str:
+    """The equation as written, third body and falloff included."""
+
     def side(pairs: list[tuple[int, str]]) -> str:
-        return " + ".join(f"{c if c != 1 else ''}{n}" for c, n in pairs)
+        text = " + ".join(f"{c if c != 1 else ''}{n}" for c, n in pairs)
+        if rxn.is_falloff:
+            text += f" (+{rxn.falloff_collider or 'M'})"
+        elif rxn.is_third_body:
+            text += " + M"
+        return text
 
     arrow = "<=>" if rxn.reversible else "=>"
     return f"{side(rxn.reactants)} {arrow} {side(rxn.products)}"
@@ -69,32 +81,51 @@ def _lines(rxns: list[Reaction]) -> str:
 
 def duplicate_flag_warnings(reactions: list[Reaction]) -> list[str]:
     """Warnings for undeclared repeats and orphaned ``DUPLICATE`` markers."""
-    groups: dict[tuple, list[Reaction]] = defaultdict(list)
+    groups: dict[frozenset, list[Reaction]] = defaultdict(list)
     for rxn in reactions:
-        groups[_key(rxn)].append(rxn)
-
-    by_equation: dict[tuple, int] = defaultdict(int)
-    for rxn in reactions:
-        by_equation[_equation_key(rxn)] += 1
+        groups[_participants(rxn)].append(rxn)
 
     warnings: list[str] = []
     for members in groups.values():
-        if len(members) >= 2:
-            unmarked = [m for m in members if not m.duplicate]
-            if unmarked:
-                warnings.append(
-                    f"CHEMKIN reaction '{_eq(members[0])}' is written {len(members)} times "
-                    f"(lines {_lines(members)}) but line(s) {_lines(unmarked)} carry no "
-                    "DUPLICATE; the repeats are undeclared (Cantera refuses such a model). "
-                    "Imported as written."
-                )
-        elif members[0].duplicate and by_equation[_equation_key(members[0])] == 1:
-            rxn = members[0]
-            marker = rxn.duplicate_line_no
+        marked = [m for m in members if m.duplicate]
+        if len(marked) == 1:
+            rxn = marked[0]
+            at = f", DUPLICATE on line {rxn.duplicate_line_no}" if rxn.duplicate_line_no is not None else ""
             warnings.append(
                 f"CHEMKIN DUPLICATE marker has no partner: reaction '{_eq(rxn)}' "
-                f"(line {rxn.line_no}"
-                + (f", DUPLICATE on line {marker}" if marker is not None else "")
-                + ") is written once. Imported as written."
+                f"(line {rxn.line_no}{at}) has no other DUPLICATE reaction with the same "
+                "participants. Imported as written."
+            )
+        if len(members) < 2:
+            continue
+        # Undeclared repeats: connected clusters of offending pairs.
+        parent = list(range(len(members)))
+
+        def find(i: int) -> int:
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+
+        offending: set[int] = set()
+        for i in range(len(members)):
+            for j in range(i + 1, len(members)):
+                a, b = members[i], members[j]
+                if a.duplicate and b.duplicate:
+                    continue
+                if _rate_type(a) == _rate_type(b) and _same_reaction(a, b):
+                    offending.update((i, j))
+                    parent[find(i)] = find(j)
+        clusters: dict[int, list[int]] = defaultdict(list)
+        for i in sorted(offending):
+            clusters[find(i)].append(i)
+        for idxs in clusters.values():
+            rs = [members[i] for i in idxs]
+            unmarked = [r for r in rs if not r.duplicate]
+            warnings.append(
+                f"CHEMKIN reaction '{_eq(rs[0])}' is written {len(rs)} times "
+                f"(lines {_lines(rs)}) but line(s) {_lines(unmarked)} carry no "
+                "DUPLICATE; the repeats are undeclared (Cantera refuses such a model). "
+                "Imported as written."
             )
     return warnings
