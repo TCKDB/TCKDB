@@ -28,11 +28,10 @@ dataset must never require a code release.
   - Owned records (thermo, kinetics, statmech, transport, calculation, reaction entry, transition state and entry, network and solve, applied energy correction, conformer observation, molecular property observation) are refused to their depositor, judged on the record's own `created_by` and the review row's; linked-submission uploaders count only when both are NULL, because a link can merely cite another account's record.
   - Shared identities (`species`, `reaction`, `species_entry`, `conformer_group`) are refused only to their sole depositor, so who deposited first no longer decides. A `species` or `reaction` takes the signals of its entries.
   - The bulk submission approval returns a record that is already approved untouched (reviewer, time and history stay), and does not judge it again.
-  - The review queue read carries `actor_may_approve` per row (false when the rule would refuse the reader); the review page uses it to hide "approved" (it used to compare `created_by` with the signed-in user). Needs a frontend deploy.
-  - The refusal is now `record_self_approval`, HTTP 403 with `record_type` and `record_ref` in `context` (it was an uncoded 400 `domain_error`).
+  - The review queue read carries `actor_may_approve` per row (false when the rule would refuse the reader; null on approved and rejected rows); the review page uses it to hide "approved" (it used to compare `created_by` with the signed-in user). Needs a frontend deploy.
+  - The refusal is now `record_self_approval`, HTTP 403 with `record_type` and `record_ref` in `context` (was an uncoded 400 `domain_error`).
   - `POST /submissions/{id}/approve` by the submission's uploader now carries the code `submission_self_approval` (403, was an uncoded 400); the rule itself is unchanged.
   - `PATCH /record-reviews` on a record that does not exist is a 404 `record_not_found`, and on `record_type=artifact` a 422 `record_type_not_reviewable`; before, either created a review row.
-- **Why:** the submission-level check already refused a depositor; the record-level one did not for rows without a recorded creator, and a rule keyed on `created_by` alone made the first depositor of a shared entry special.
 - **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.162.0, `tckdb-client` 0.190.0.
 
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)

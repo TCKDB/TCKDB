@@ -47,14 +47,17 @@ from app.services.record_refs import (
     resolve_record_public_refs,
 )
 from app.services.record_review import (
-    actor_would_be_refused_approval,
     get_record_review,
     list_record_reviews,
+    refused_self_approval,
     set_record_review_status,
 )
 from app.services.review_queue import list_review_queue
 
 router = APIRouter(route_class=ServerFaultRoute)
+
+#: Statuses with no approve offer, so no ``actor_may_approve``.
+_NO_APPROVE_FLAG = frozenset({RecordReviewStatus.approved, RecordReviewStatus.rejected})
 
 
 def _read(
@@ -160,6 +163,21 @@ def list_review_queue_page(
         limit=pagination.limit,
         offset=pagination.skip,
     )
+    refused = refused_self_approval(
+        session,
+        actor=actor,
+        targets=[
+            (row.record_type, row.record_id)
+            for subject in result.subjects
+            for row in subject.rows
+            if row.status not in _NO_APPROVE_FLAG
+        ],
+        review_creators={
+            (row.record_type, row.record_id): row.created_by
+            for subject in result.subjects
+            for row in subject.rows
+        },
+    )
     subjects = [
         ReviewQueueSubjectRead(
             subject_type=subject.subject_type,
@@ -215,13 +233,8 @@ def list_review_queue_page(
                     update={
                         "actor_may_approve": (
                             None
-                            if row.status is RecordReviewStatus.approved
-                            else not actor_would_be_refused_approval(
-                                session,
-                                record_type=row.record_type,
-                                record_id=row.record_id,
-                                actor=actor,
-                            )
+                            if row.status in _NO_APPROVE_FLAG
+                            else not refused[(row.record_type, row.record_id)]
                         )
                     }
                 )

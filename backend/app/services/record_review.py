@@ -30,9 +30,8 @@ Self-approval guard: an actor who deposited a record cannot transition it to
 group) are refused only to their sole depositor, judged on the review row's
 ``created_by``, the record's own ``created_by`` and linked-submission
 uploaders. Every other record is refused to its depositor, judged on its own
-``created_by`` and the review row's (linked uploaders only when both are NULL,
-because a link can merely cite another account's record). Other transitions a
-creator can perform if they have the curator/admin role.
+``created_by`` and the review row's (linked uploaders only when both are NULL).
+Other transitions a creator can perform if they have the curator/admin role.
 """
 
 from __future__ import annotations
@@ -508,11 +507,8 @@ def _refuse_superseded_approval(
     )
 
 
-#: Identities many accounts deposit against. Resolution dedupes them across
-#: uploads, so one account can create the row while another deposits onto it;
-#: the first depositor is not "the" depositor. These are refused for approval
-#: only to their sole depositor. Every other record type is owned by what
-#: deposited it and is refused to any depositor.
+#: Identities several accounts deposit against: refused to their sole depositor only.
+#: Every other record type is refused to any of its depositors.
 _SHARED_IDENTITIES = frozenset(
     {
         SubmissionRecordType.species,
@@ -522,99 +518,109 @@ _SHARED_IDENTITIES = frozenset(
     }
 )
 
-#: Identity parents that carry no ``created_by`` and are never linked to a
-#: submission, mapped to the entry type that is and the column joining them.
+#: Identity parents with no ``created_by`` or submission link, mapped to their entry type and join column.
 _ENTRY_OF_IDENTITY: dict[SubmissionRecordType, tuple[SubmissionRecordType, str]] = {
     SubmissionRecordType.species: (SubmissionRecordType.species_entry, "species_id"),
     SubmissionRecordType.reaction: (SubmissionRecordType.reaction_entry, "reaction_id"),
 }
 
+_RecordKey = tuple[SubmissionRecordType, int]
 
-def _linked_uploaders(
-    session: Session, *, record_type: SubmissionRecordType, record_id: int
+
+def _by_type(keys: Iterable[_RecordKey]) -> dict[SubmissionRecordType, set[int]]:
+    grouped: dict[SubmissionRecordType, set[int]] = {}
+    for record_type, record_id in keys:
+        grouped.setdefault(record_type, set()).add(record_id)
+    return grouped
+
+
+def _depositors_of(
+    record_type: SubmissionRecordType, own: set[int], linked: set[int]
 ) -> set[int]:
-    return set(
-        session.scalars(
-            select(Submission.created_by)
-            .join(SubmissionRecordLink, SubmissionRecordLink.submission_id == Submission.id)
-            .where(
-                SubmissionRecordLink.record_type == record_type,
-                SubmissionRecordLink.record_id == record_id,
-            )
-        )
-    )
-
-
-def _own_creators(
-    session: Session, *, record_type: SubmissionRecordType, record_id: int
-) -> set[int]:
-    """The review row's ``created_by`` and the record's own ``created_by``."""
-    ids: set[int] = set()
-    review_creator = session.scalar(
-        select(RecordReview.created_by).where(
-            RecordReview.record_type == record_type,
-            RecordReview.record_id == record_id,
-        )
-    )
-    if review_creator is not None:
-        ids.add(review_creator)
-    model = RECORD_MODELS.get(record_type)
-    if model is not None and hasattr(model, "created_by"):
-        owner = session.scalar(select(model.created_by).where(model.id == record_id))
-        if owner is not None:
-            ids.add(owner)
-    return ids
-
-
-def _depositor_ids(
-    session: Session, *, record_type: SubmissionRecordType, record_id: int
-) -> set[int]:
-    """The accounts that deposited this record.
-
-    A shared identity takes every signal: the review row's ``created_by``,
-    the record's own ``created_by`` and the uploader of each linked
-    submission (a ``species`` or ``reaction`` takes those of its entries).
-
-    An owned record is judged on its own ``created_by`` and the review row's.
-    Linked-submission uploaders count only when both are NULL: a link can
-    merely cite a record another account deposited (a kinetics reusing a
-    reaction entry through its TS reference), and that citer is not its
-    depositor.
-    """
-    if record_type in _ENTRY_OF_IDENTITY:
-        entry_type, fk = _ENTRY_OF_IDENTITY[record_type]
-        entry_model = RECORD_MODELS[entry_type]
-        ids = _own_creators(session, record_type=record_type, record_id=record_id)
-        for entry_id in list(
-            session.scalars(select(entry_model.id).where(getattr(entry_model, fk) == record_id))
-        ):
-            ids |= _depositor_ids(session, record_type=entry_type, record_id=entry_id)
-        return ids
-    own = _own_creators(session, record_type=record_type, record_id=record_id)
+    """Shared identities take every signal; owned records use links only when no creator is known."""
     if record_type in _SHARED_IDENTITIES:
-        return own | _linked_uploaders(session, record_type=record_type, record_id=record_id)
-    return own or _linked_uploaders(session, record_type=record_type, record_id=record_id)
+        return own | linked
+    return own or linked
 
 
-def actor_would_be_refused_approval(
+def refused_self_approval(
     session: Session,
     *,
-    record_type: SubmissionRecordType,
-    record_id: int,
     actor: AppUser,
-) -> bool:
-    """Whether the self-approval rule refuses ``actor`` approving this record.
+    targets: Iterable[_RecordKey],
+    review_creators: Optional[dict[_RecordKey, Optional[int]]] = None,
+) -> dict[_RecordKey, bool]:
+    """Map each target to whether the self-approval rule refuses ``actor`` approving it.
 
-    Owned records are refused to any depositor; shared identities (species,
-    reaction, species entry, conformer group) only to their sole depositor,
-    so deposit order does not decide.
+    One query per record type for each signal (review creator, record creator,
+    linked uploaders), plus one per identity type for its entries.
+    ``review_creators`` supplies review rows already loaded.
     """
-    depositors = _depositor_ids(session, record_type=record_type, record_id=record_id)
-    if actor.id not in depositors:
-        return False
-    if record_type in _SHARED_IDENTITIES and depositors != {actor.id}:
-        return False
-    return True
+    targets = list(dict.fromkeys(targets))
+    entries_of: dict[_RecordKey, list[_RecordKey]] = {}
+    keys: set[_RecordKey] = set(targets)
+    for record_type, ids in _by_type(targets).items():
+        if record_type not in _ENTRY_OF_IDENTITY:
+            continue
+        entry_type, fk = _ENTRY_OF_IDENTITY[record_type]
+        model = RECORD_MODELS[entry_type]
+        for entry_id, parent_id in session.execute(
+            select(model.id, getattr(model, fk)).where(getattr(model, fk).in_(ids))
+        ):
+            entries_of.setdefault((record_type, parent_id), []).append((entry_type, entry_id))
+            keys.add((entry_type, entry_id))
+
+    own: dict[_RecordKey, set[int]] = {key: set() for key in keys}
+    linked: dict[_RecordKey, set[int]] = {key: set() for key in keys}
+    known = review_creators or {}
+    for key, creator in known.items():
+        if key in own and creator is not None:
+            own[key].add(creator)
+    for record_type, ids in _by_type(keys).items():
+        unknown = {i for i in ids if (record_type, i) not in known}
+        if unknown:
+            for record_id, creator in session.execute(
+                select(RecordReview.record_id, RecordReview.created_by).where(
+                    RecordReview.record_type == record_type,
+                    RecordReview.record_id.in_(unknown),
+                    RecordReview.created_by.is_not(None),
+                )
+            ):
+                own[(record_type, record_id)].add(creator)
+        model = RECORD_MODELS.get(record_type)
+        if model is not None and hasattr(model, "created_by"):
+            for record_id, creator in session.execute(
+                select(model.id, model.created_by).where(
+                    model.id.in_(ids), model.created_by.is_not(None)
+                )
+            ):
+                own[(record_type, record_id)].add(creator)
+        for record_id, uploader in session.execute(
+            select(SubmissionRecordLink.record_id, Submission.created_by)
+            .join(Submission, SubmissionRecordLink.submission_id == Submission.id)
+            .where(
+                SubmissionRecordLink.record_type == record_type,
+                SubmissionRecordLink.record_id.in_(ids),
+            )
+        ):
+            linked[(record_type, record_id)].add(uploader)
+
+    def depositors(key: _RecordKey) -> set[int]:
+        if key in entries_of or key[0] in _ENTRY_OF_IDENTITY:
+            found = set(own[key])
+            for entry in entries_of.get(key, []):
+                found |= _depositors_of(entry[0], own[entry], linked[entry])
+            return found
+        return _depositors_of(key[0], own[key], linked[key])
+
+    out: dict[_RecordKey, bool] = {}
+    for key in targets:
+        found = depositors(key)
+        refused = actor.id in found
+        if refused and key[0] in _SHARED_IDENTITIES and found != {actor.id}:
+            refused = False
+        out[key] = refused
+    return out
 
 
 def _refuse_self_approval(
@@ -624,17 +630,16 @@ def _refuse_self_approval(
     record_id: int,
     actor: AppUser,
 ) -> None:
-    """Refuse approval by a depositor of the record (``record_self_approval``, 403)."""
-    if not actor_would_be_refused_approval(
-        session, record_type=record_type, record_id=record_id, actor=actor
-    ):
+    """Raise ``record_self_approval`` (403) when ``actor`` deposited the record."""
+    key = (record_type, record_id)
+    if not refused_self_approval(session, actor=actor, targets=[key])[key]:
         return
     context: dict[str, str] = {"record_type": record_type.value}
-    refs = resolve_record_public_refs(session, [(record_type, record_id)])
-    if (record_type, record_id) in refs:
-        context["record_ref"] = refs[(record_type, record_id)]
+    refs = resolve_record_public_refs(session, [key])
+    if key in refs:
+        context["record_ref"] = refs[key]
     raise RecordSelfApprovalForbidden(
-        "record_self_approval: the actor deposited this record and cannot approve it; "
+        "record_self_approval: You deposited this record, so you cannot approve it; "
         "another curator or admin must.",
         context=context,
     )
@@ -707,9 +712,7 @@ def set_record_review_status(
         and status is RecordReviewStatus.approved
         and existing.status is RecordReviewStatus.approved
     ):
-        # The bulk submission path re-stamping an approved record changes no
-        # trust state: the first approval was judged, and its reviewer, time
-        # and history stay as they were.
+        # Bulk re-stamp of an approved record: leave reviewer, time and history as they are.
         return existing
 
     previous_status = existing.status

@@ -107,17 +107,14 @@ class RecordReviewRead(TimestampedCreatedByReadSchema):
         ),
     )
     status: RecordReviewStatus
-    #: Whether the reading actor may approve this record, by the rule the
-    #: PATCH route enforces (``record_self_approval``). Set only on the
-    #: review-queue read, which is per actor; null everywhere else, and null
-    #: for a row already approved, where there is nothing to offer.
+    #: Whether the reading actor may approve this record; set on the review queue only.
     actor_may_approve: bool | None = Field(
         default=None,
         description=(
             "Whether the signed-in reader may approve this record: false when "
             "the self-approval rule would refuse them (record_self_approval). "
-            "Present on the review queue only, and null on a row that is "
-            "already approved and on every other route."
+            "Present on the review queue only; null on an approved or "
+            "rejected row and on every other route."
         ),
     )
     submission_id: int | None = None

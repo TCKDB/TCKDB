@@ -75,14 +75,7 @@ class RecordReviewConflict(DomainError):
 
 
 class SelfApprovalForbidden(DomainError):
-    """An actor approving what they deposited themselves (403).
-
-    A :class:`DomainError` subclass so a caller that does not know about it
-    still refuses (400); the handler registered below, resolved by MRO, turns
-    it into 403. ``context`` carries the record type and public ref only,
-    never a row id. Subclassed per level (record, submission) so the raise
-    site says which rule fired.
-    """
+    """A refusal (403) of an actor approving what they deposited; ``context`` holds refs only."""
 
     def __init__(self, message: str, *, context: dict[str, Any] | None = None) -> None:
         super().__init__(message)

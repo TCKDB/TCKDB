@@ -552,7 +552,7 @@ def approve_submission(
 
     if submission.created_by == actor.id:
         raise SubmissionSelfApprovalForbidden(
-            "submission_self_approval: the actor uploaded this submission and cannot "
+            "submission_self_approval: You uploaded this submission, so you cannot "
             "approve it; another curator or admin must.",
             context=(
                 {"submission_ref": submission.public_ref}

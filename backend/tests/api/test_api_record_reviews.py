@@ -17,6 +17,7 @@ Covers:
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import event, func, select
@@ -913,6 +914,88 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
             f"the page cost {two_rows} queries for 2 rows and {ten_rows} for "
             "10 -- the ref or container resolve is running per row"
         )
+
+    def test_the_queue_flag_does_not_cost_more_queries_for_a_longer_page(
+        self, login_as, _api_curator_user, client, db_session
+    ):
+        """``actor_may_approve`` is computed in bulk: 2 rows and 10 rows cost the same."""
+
+        def _seed(n: int) -> None:
+            for i in range(n):
+                entry = make_species_entry(db_session, make_species(db_session))
+                thermo = make_thermo_scalar(
+                    db_session, species_entry=entry, h298_kj_mol=-400.0 - i
+                )
+                for record_type, record_id in (
+                    (SubmissionRecordType.thermo, thermo.id),
+                    (SubmissionRecordType.species, entry.species_id),
+                ):
+                    db_session.add(
+                        RecordReview(
+                            record_type=record_type,
+                            record_id=record_id,
+                            status=RecordReviewStatus.under_review,
+                        )
+                    )
+            db_session.flush()
+
+        login_as(_api_curator_user)
+
+        def _count() -> int:
+            statements = 0
+            engine = db_session.connection().engine
+
+            def _before(conn, cursor, statement, parameters, context, executemany):
+                nonlocal statements
+                statements += 1
+
+            event.listen(engine, "before_cursor_execute", _before)
+            try:
+                resp = client.get("/api/v1/record-reviews/queue", params={"limit": 200})
+                assert resp.status_code == 200
+                flags = [
+                    r["actor_may_approve"]
+                    for subj in resp.json()["subjects"]
+                    for r in subj["records"]
+                ]
+                assert flags and all(f is True for f in flags)
+            finally:
+                event.remove(engine, "before_cursor_execute", _before)
+            return statements
+
+        _seed(2)
+        two = _count()
+        _seed(8)
+        ten = _count()
+        assert ten == two, f"the queue cost {two} statements for 2 rows and {ten} for 10"
+
+    def test_the_queue_flag_is_null_for_approved_and_rejected_rows(
+        self, login_as, _api_curator_user, client, db_session
+    ):
+        for status in (RecordReviewStatus.approved, RecordReviewStatus.rejected):
+            thermo = make_thermo_scalar(
+                db_session,
+                species_entry=make_species_entry(db_session, make_species(db_session)),
+            )
+            db_session.add(
+                RecordReview(
+                    record_type=SubmissionRecordType.thermo,
+                    record_id=thermo.id,
+                    status=status,
+                    reviewed_by=_api_curator_user,
+                    reviewed_at=datetime(2026, 1, 1),
+                    first_approved_at=datetime(2026, 1, 1) if status is RecordReviewStatus.approved else None,
+                )
+            )
+        db_session.flush()
+        login_as(_api_curator_user)
+        resp = client.get("/api/v1/record-reviews/queue", params={"limit": 200})
+        flags = {
+            r["status"]: r["actor_may_approve"]
+            for subj in resp.json()["subjects"]
+            for r in subj["records"]
+        }
+        assert flags == {"approved": None, "rejected": None}
 
 
 class TestReviewQueueSubjectsApi:

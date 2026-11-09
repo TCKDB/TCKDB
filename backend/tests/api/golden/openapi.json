@@ -44018,7 +44018,7 @@
                 "type": "null"
               }
             ],
-            "description": "Whether the signed-in reader may approve this record: false when the self-approval rule would refuse them (record_self_approval). Present on the review queue only, and null on a row that is already approved and on every other route.",
+            "description": "Whether the signed-in reader may approve this record: false when the self-approval rule would refuse them (record_self_approval). Present on the review queue only; null on an approved or rejected row and on every other route.",
             "title": "Actor May Approve"
           },
           "container_ref": {

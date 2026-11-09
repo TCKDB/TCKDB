@@ -618,14 +618,8 @@ export default function ReviewQueuePage() {
     /**
      * The transitions this curator can actually perform on this row.
      *
-     * The service refuses to let an actor approve a record they
-     * deposited (`record_self_approval`), and who deposited a record is
-     * not something the page can work out from the row, so the server
-     * says it per row (`actor_may_approve`, computed for the signed-in
-     * reader with the same rule the PATCH enforces). Offering "approved"
-     * where it is false is a button that can only fail, which is the very
-     * thing mirroring the transition table was for. Null means the server
-     * did not say, so the button stays and the server's refusal is shown.
+     * "approved" is dropped when the server says the reader may not approve
+     * the row (`actor_may_approve === false`); null leaves it offered.
      */
     function offeredTransitions(row: RecordReview): readonly RecordReviewStatus[] {
         const all = allowedTransitions(row.status)
