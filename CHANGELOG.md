@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## An xtb output file is recognised as an `output_log`, and artifact refusals carry codes (2026-11-09)
+
+- **What changed:**
+  - An xtb output file (`xtb.out`, and the Gaussian-98-layout `g98.out` xtb writes) is accepted as an `output_log` and identified as xtb; the version in its banner (`* xtb version 6.7.1`) is compared with the declared software release like a Gaussian, ORCA or Molpro banner. Recognition only: no energy, frequency, Hessian, charge, multiplicity or geometry is read from it, and no warning is raised for that. A `g98.out` is detected as xtb before the Gaussian check, so its optimized geometry is never stored as a calculation's input geometry.
+  - Every artifact validation refusal now has a code and `context`: `output_log_signature_unrecognized`, `artifact_empty`, `artifact_too_large`, `artifact_sha256_mismatch`, `artifact_size_mismatch`, `artifact_not_utf8_text`, `artifact_invalid_base64`, `artifact_total_size_too_large`, `artifact_encoded_payload_too_large`, `artifact_total_encoded_payload_too_large` (all 422). A depositor's filename is no longer in the sentence; it is in `context.depositor_supplied`.
+- **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.162.0, `tckdb-client` 0.190.0.
+
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)
 
 - **What changed:**

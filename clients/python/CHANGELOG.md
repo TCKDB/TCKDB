@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.190.0 - 2026-11-09
+
+Ten `RejectionCode` members join the refusal codes, for artifact uploads that were refused with no code: `OUTPUT_LOG_SIGNATURE_UNRECOGNIZED`, `ARTIFACT_EMPTY`, `ARTIFACT_TOO_LARGE`, `ARTIFACT_SHA256_MISMATCH`, `ARTIFACT_SIZE_MISMATCH`, `ARTIFACT_NOT_UTF8_TEXT`, `ARTIFACT_INVALID_BASE64`, `ARTIFACT_TOTAL_SIZE_TOO_LARGE`, `ARTIFACT_ENCODED_PAYLOAD_TOO_LARGE` and `ARTIFACT_TOTAL_ENCODED_PAYLOAD_TOO_LARGE` (see `tckdb-schemas` 0.162.0). No other client code changed; the `tckdb-schemas` window already contains 0.162.
 ## 0.189.0 - 2026-11-07
 
 No client code changed. The server now judges a kinetics `energy_level_of_theory`'s spin treatment per participant (closed-shell links are exempt, open-shell links must share one reference), so a reaction mixing restricted closed-shell and unrestricted open-shell species can declare its method and basis (see `tckdb-schemas` 0.161.0). The `tckdb-schemas` window already contains 0.161.

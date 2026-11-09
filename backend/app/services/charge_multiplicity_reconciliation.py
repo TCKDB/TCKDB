@@ -200,18 +200,18 @@ def parse_charge_multiplicity_from_log(
     # entirely — and would report one confident pair for a log whose two
     # forms disagree, the exact fabricated mismatch this module exists to
     # avoid.
-    if software == "xtb":
-        # Recognised, not parsed: nothing is read from an xtb log, and it
-        # must not fall into the Gaussian branch below.
-        return None
     if software == "molpro":
         charge, multiplicity = _parse_molpro(text)
     elif software == "orca":
         charge, multiplicity = _parse_orca(text)
     elif software == "psi4":
         charge, multiplicity = _parse_psi4(text)
-    else:  # gaussian
+    elif software == "gaussian":
         charge, multiplicity = _parse_gaussian(text)
+    else:
+        # xtb is recognised, not parsed: nothing is read from its log, and it must never be handed to
+        # another program's parser.
+        return None
 
     # A multiplicity below 1 is unphysical (2S+1 >= 1, mirrored by the
     # ``multiplicity_ge_1`` check constraint on the entry tables): a parse
