@@ -28,6 +28,10 @@ allowed even under an approved record, because a later artifact upload can add a
 warning to an existing calculation. This is the regime ``record_reproducibility_assessment``
 lives under, not the accepted-science child guard.
 
+**Retirement.** A warning whose condition later stops holding (an artifact arrived that the rule was waiting for) is
+not edited or deleted: a row in ``deposit_warning_retirement`` points at it. The warning stays in the table as history;
+reads show a record's *current* warnings, the ones with no retirement row.
+
 Warnings never change a value, order a list or gate selection.
 """
 
@@ -122,4 +126,45 @@ class DepositWarning(Base):
             postgresql_nulls_not_distinct=True,
         ),
         Index("ix_deposit_warning_record", "record_type", "record_id"),
+    )
+
+
+#: Why a warning was retired. A closed set: a new reason is a new revision, so a reader can rely on the list.
+RETIREMENT_REASONS = ("artifact_attached", "superseded_by_recheck")
+
+
+class DepositWarningRetirement(Base):
+    """A deposit warning that no longer applies, kept as history rather than shown as current.
+
+    Append-only like ``deposit_warning`` (same trigger regime), and one row per warning at most: a retired warning
+    stays retired. The warning itself is untouched; this row says *when* and *why* it stopped being current.
+
+    ``artifact_attached``: an artifact arrived for the calculation and the rule that raised the warning, re-run on the
+    stored state, no longer finds the condition. ``superseded_by_recheck``: the re-run still finds a warning of the
+    same code but its stated facts differ (the artifact is there, the energy is still missing); the new warning is
+    stored as its own row and this one is retired.
+    """
+
+    __tablename__ = "deposit_warning_retirement"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    deposit_warning_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("deposit_warning.id", name="fk_deposit_warning_retirement_warning", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+    )
+    retired_reason_code: Mapped[str] = mapped_column(Text, nullable=False)
+    retired_by_user_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("app_user.id", name="fk_deposit_warning_retirement_by", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+    )
+    retired_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint(
+            "retired_reason_code IN ('artifact_attached', 'superseded_by_recheck')",
+            name="reason_known",
+        ),
+        UniqueConstraint("deposit_warning_id", name="uq_deposit_warning_retirement_warning"),
     )

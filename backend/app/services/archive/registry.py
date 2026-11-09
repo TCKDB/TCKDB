@@ -32,6 +32,8 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         # Deposit-time warnings, stored beside the record they concern (raw record_type/record_id, no FK, like
         # ``submission_record_link``). A restore that dropped them would hand every record back reading ``not_recorded``.
         "deposit_warning",
+        # Which of those stopped applying, and why (append-only). A restore without it would show retired warnings as current.
+        "deposit_warning_retirement",
         # An assembled composite's inputs (ADR 0021): the slot each cited
         # calculation fills. Evidence: a restore that dropped them would hand back
         # a composite energy with no recipe slots behind it.

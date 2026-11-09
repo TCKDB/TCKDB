@@ -2154,6 +2154,24 @@ Table deposit_warning {
   Note: 'One deposit-time warning (or one "checked" marker) for one record of one submission.'
 }
 
+Table deposit_warning_retirement {
+  id bigint [pk, not null]
+  deposit_warning_id bigint [not null, ref: > deposit_warning.id]
+  retired_reason_code text [not null]
+  retired_by_user_id bigint [ref: > app_user.id]
+  retired_at timestamp [not null, default: 'now']
+
+  indexes {
+    deposit_warning_id [unique, name: 'uq_deposit_warning_retirement_warning']
+  }
+
+  checks {
+    `retired_reason_code IN ('artifact_attached', 'superseded_by_recheck')` [name: 'ck_deposit_warning_retirement_reason_known']
+  }
+
+  Note: 'A deposit warning that no longer applies, kept as history rather than shown as current.'
+}
+
 Table energy_correction_scheme {
   id bigint [pk, not null]
   kind EnergyCorrectionSchemeKind [not null]

@@ -99,6 +99,7 @@ from app.services.calculation_parameter_extraction import (
 from app.services.charge_multiplicity_extraction import (
     try_reconcile_charge_multiplicity_from_output_upload,
 )
+from app.services.artifact_warning_recheck import recheck_artifact_dependent_warnings
 from app.services.deposit_warnings import store_deposit_warnings
 from app.services.hessian_extraction import (
     try_extract_hessian_from_artifact_upload,
@@ -868,6 +869,18 @@ def upload_calculation_artifacts(
             mark_checked=False,
             written_by=current_user.id,
         )
+
+    # A file arrived, so the deposit checks that depend on file presence are re-run on the stored state: a warning
+    # that no longer applies is retired (kept as history), one that now would be raised is added. Written in this
+    # request's transaction, so it commits or rolls back with the attach.
+    warnings.extend(
+        recheck_artifact_dependent_warnings(
+            session,
+            calc_pk,
+            submission_id=deposit_submission.id if deposit_submission is not None else None,
+            written_by=current_user.id,
+        )
+    )
 
     result = ArtifactsUploadResult(
         calculation_id=calc_pk,

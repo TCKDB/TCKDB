@@ -67,7 +67,7 @@ from tckdb_schemas.deposit_warning_messages import field_keys
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.db.models.common import SubmissionRecordType as RT
-from app.db.models.deposit_warning import DepositWarning
+from app.db.models.deposit_warning import DepositWarning, DepositWarningRetirement
 from app.db.models.submission import Submission, SubmissionRecordLink
 
 logger = logging.getLogger(__name__)
@@ -516,23 +516,32 @@ def _item(row: DepositWarning) -> Any:
     return item
 
 
-def deposit_warnings_for(session: Session, record_type: RT, record_ids: Iterable[int]) -> dict[int, dict[str, Any]]:
+def _current(statement):
+    """``statement`` (a select of ``DepositWarning``) limited to warnings that have not been retired."""
+    return statement.where(~select(DepositWarningRetirement.id).where(DepositWarningRetirement.deposit_warning_id == DepositWarning.id).exists())
+
+
+def deposit_warnings_for(
+    session: Session, record_type: RT, record_ids: Iterable[int], *, include_retired: bool = False
+) -> dict[int, dict[str, Any]]:
     """``{record_id: {"status", "items"}}`` for ``record_ids`` (every id is present in the result).
 
     ``status`` describes the deposit-time check: ``recorded`` when a submission left a marker for the record,
     otherwise ``not_recorded`` (deposited before warnings were stored, or one whose deposit could not place every
     warning). ``items`` is every stored warning for the record, including any added later by an artifact upload, so a
     ``not_recorded`` record can still list items. No row ids are returned.
+
+    ``items`` are the *current* warnings: one that has since been retired (``deposit_warning_retirement``) is history
+    and is left out unless ``include_retired`` is true.
     """
     ids = sorted(set(record_ids))
     out: dict[int, dict[str, Any]] = {i: {"status": "not_recorded", "items": []} for i in ids}
     if not ids:
         return out
-    rows = session.scalars(
-        select(DepositWarning)
-        .where(DepositWarning.record_type == record_type, DepositWarning.record_id.in_(ids))
-        .order_by(DepositWarning.id)
-    ).all()
+    statement = select(DepositWarning).where(DepositWarning.record_type == record_type, DepositWarning.record_id.in_(ids))
+    if not include_retired:
+        statement = _current(statement)
+    rows = session.scalars(statement.order_by(DepositWarning.id)).all()
     for row in rows:
         entry = out[row.record_id]
         if row.code is None:
@@ -565,13 +574,13 @@ def submission_warnings_for(session: Session, record_type: RT, record_ids: Itera
     if not submission_ids:
         return []
     rows = session.scalars(
-        select(DepositWarning)
-        .where(
-            DepositWarning.submission_id.in_(submission_ids),
-            DepositWarning.record_type.is_(None),
-            DepositWarning.code.is_not(None),
-        )
-        .order_by(DepositWarning.id)
+        _current(
+            select(DepositWarning).where(
+                DepositWarning.submission_id.in_(submission_ids),
+                DepositWarning.record_type.is_(None),
+                DepositWarning.code.is_not(None),
+            )
+        ).order_by(DepositWarning.id)
     ).all()
     if not rows:
         return []
