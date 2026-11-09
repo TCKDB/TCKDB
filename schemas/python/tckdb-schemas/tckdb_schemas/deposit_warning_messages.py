@@ -1605,6 +1605,17 @@ _HESSIAN_NOT_STORED = {
             "A Hessian was found in an uploaded artifact but not stored: the log has a force-constant block but no "
             "complete, trustworthy matrix could be read from it (it may be truncated)."
         ),
+        "archive_block_unreadable": (
+            "A Hessian was found in an uploaded artifact but not stored: the log has no force-constant block, and "
+            "the matrix in its archive block is not a complete, readable lower triangle for the atoms the archive "
+            "lists (it may be truncated)."
+        ),
+        "archive_orientation_unverified": (
+            "A Hessian was found in an uploaded artifact but not stored: the log has no force-constant block, and "
+            "the matrix in its archive block could not be tied to a frame, because the archive's atoms do not "
+            "coincide with the log's input orientation. A matrix in another orientation would be bound to the wrong "
+            "geometry."
+        ),
     },
     "hessian_not_stored_failed": {
         "read_failed": "A Hessian was found in an uploaded artifact but not stored: reading it failed unexpectedly.",
@@ -2108,6 +2119,8 @@ _HESSIAN_REASONS = frozenset(
         "store_failed",
         "sent_as_hessian",
         "log_block_unreadable",
+        "archive_block_unreadable",
+        "archive_orientation_unverified",
         "input_geometry_count",
         "geometry_not_found",
         "atom_count",

@@ -95,6 +95,8 @@ from app.services.calc_isotopes import assert_isotopes
 from app.services.calculation_geometry_composition import (
     assert_calculation_geometry_composition,
 )
+from app.services.ess_software_detection import detect_software_from_text
+from app.services.gaussian_archive_hessian import read_gaussian_archive_hessian
 from app.services.hessian_parsing import (
     GAUSSIAN_HESSIAN_MARKER,
     HESSIAN_PARSER,
@@ -250,6 +252,9 @@ def _extract_and_store(
             return _Outcome(
                 _not_stored(W_HESSIAN_NOT_STORED_UNPARSEABLE, artifact_in.filename, "log_block_unreadable", field)
             )
+        archive = _archive_refusal(text)
+        if archive is not None:
+            return _Outcome(_not_stored(W_HESSIAN_NOT_STORED_UNPARSEABLE, artifact_in.filename, archive, field))
         return _Outcome()
 
     geometry_id, refusal = _resolve_input_geometry_id(
@@ -259,6 +264,16 @@ def _extract_and_store(
         return _Outcome(refusal)
 
     return _Outcome(_insert(session, calculation, geometry_id, parsed, artifact_in.filename, field))
+
+
+def _archive_refusal(text: str) -> str | None:
+    """Why a Gaussian log with no force-constant block and no readable matrix still held an archive Hessian.
+
+    ``None`` when the log is not Gaussian, printed the block (handled above), or has no archive Hessian at all.
+    """
+    if detect_software_from_text(text) != "gaussian":
+        return None
+    return read_gaussian_archive_hessian(text).reason
 
 
 def _resolve_input_geometry_id(

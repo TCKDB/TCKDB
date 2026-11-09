@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.190.0 - 2026-11-09
+
+No client code changed. `HessianSource.parsed_log_archive` joins the enum and two reasons join `hessian_not_stored_unparseable` (see `tckdb-schemas` 0.162.0): the server now stores a Gaussian Hessian from the archive block when the log prints no force-constant block. The `tckdb-schemas` window already contains 0.162.
+
 ## 0.189.0 - 2026-11-07
 
 No client code changed. The server now judges a kinetics `energy_level_of_theory`'s spin treatment per participant (closed-shell links are exempt, open-shell links must share one reference), so a reaction mixing restricted closed-shell and unrestricted open-shell species can declare its method and basis (see `tckdb-schemas` 0.161.0). The `tckdb-schemas` window already contains 0.161.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.162.0 - 2026-11-09
+
+`HessianSource` gains `parsed_log_archive`: a Cartesian Hessian read from a Gaussian log's archive block, recorded as such and not as `parsed_log`. A Gaussian 16 frequency log of a larger molecule (14 atoms and up in the E2 study) prints no `Force constants in Cartesian coordinates` block, but its archive block carries the same lower triangle in hartree/bohr^2, to eight decimals. The server now reads it from there, and only when the archive's atoms coincide with the log's last `Input orientation` table and the stored geometry's atoms. No upload field changes.
+
+Two reasons join `hessian_not_stored_unparseable` (a warning, the artifact is stored either way): `archive_block_unreadable` (the log has no force-constant block and its archive matrix is not a complete lower triangle for the atoms the archive lists) and `archive_orientation_unverified` (the archive's atoms are not in the log's input orientation, so the matrix's frame is unknown).
+
 ## 0.161.0 - 2026-11-07
 
 One refusal is narrowed and gains a `reason`; no field is added or removed. A kinetics record's `energy_level_of_theory` names method, basis and qualifiers, and its spin treatment is judged per participant against the linked reactant, product and transition-state energies:

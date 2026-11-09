@@ -241,6 +241,10 @@ class HessianPrintFormat(str, Enum):
     #: ``0.3700857``: seven decimals, absolute.
     molpro_log = "molpro_log"
 
+    #: Gaussian's archive block, ``0.52772493``: eight decimals, absolute. Read when a log prints no
+    #: force-constant block (``calc_hessian.source = parsed_log_archive``).
+    gaussian_archive = "gaussian_archive"
+
     #: ``$hessian`` block of a ``.hess`` file, ``-6.9820446273E-02``:
     #: eleven significant figures.
     orca_hess = "orca_hess"
@@ -248,7 +252,7 @@ class HessianPrintFormat(str, Enum):
 
 COARSEST_PRINT_FORMAT = HessianPrintFormat.gaussian_log
 _SIGNIFICANT_FIGURES = {HessianPrintFormat.gaussian_log: 6, HessianPrintFormat.orca_hess: 11}
-_ABSOLUTE_DECIMALS = {HessianPrintFormat.molpro_log: 7}
+_ABSOLUTE_DECIMALS = {HessianPrintFormat.molpro_log: 7, HessianPrintFormat.gaussian_archive: 8}
 
 #: Decimal places every reported cm^-1 quantity is rounded to. Six is two
 #: beyond the finest printed frequency and well above LAPACK's run-to-run
@@ -441,6 +445,8 @@ def resolve_print_format(
     name = (software_name or "").strip().lower()
     if source is HessianSource.parsed_hess:
         return HessianPrintFormat.orca_hess, "calc_hessian.source=parsed_hess"
+    if source is HessianSource.parsed_log_archive and "gaussian" in name:
+        return HessianPrintFormat.gaussian_archive, f"calc_hessian.source=parsed_log_archive software={name}"
     if source is HessianSource.parsed_log:
         if "molpro" in name:
             return HessianPrintFormat.molpro_log, f"calc_hessian.source=parsed_log software={name}"
@@ -909,6 +915,7 @@ def hessian_reanalysis(
                 "print_formats": {
                     HessianPrintFormat.gaussian_log.value: "6 significant figures",
                     HessianPrintFormat.molpro_log.value: "7 decimals",
+                    HessianPrintFormat.gaussian_archive.value: "8 decimals",
                     HessianPrintFormat.orca_hess.value: "11 significant figures",
                 },
                 "fallback_print_format": COARSEST_PRINT_FORMAT.value,

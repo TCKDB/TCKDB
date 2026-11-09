@@ -318,6 +318,7 @@ class HessianSource(str, Enum):
     parsed_fchk = "parsed_fchk"
     parsed_hess = "parsed_hess"
     parsed_log = "parsed_log"
+    parsed_log_archive = "parsed_log_archive"
     uploaded = "uploaded"
     derived = "derived"
 
