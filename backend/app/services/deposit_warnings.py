@@ -418,6 +418,40 @@ def store_deposit_warnings(
     mark_checked: bool = True,
     written_by: int | None = None,
 ) -> None:
+    """:func:`_store_deposit_warnings`, then the retirements this deposit's records earn.
+
+    A single-point calculation among the deposit's records makes an opt's energy obtainable, so a stored
+    ``converged_opt_no_usable_energy`` on a same-owner opt is retired. That step is not isolated: a failure fails the
+    deposit (it is atomic with it), unlike the warning rows, which describe the deposit and get no vote on it.
+    """
+    warnings = list(warnings)
+    noted: dict[int, list[_Target]] = session.info.get(_TARGETS_KEY, {})
+    if targets is None:
+        seen = list(noted.get(submission_id, ())) if submission_id is not None else []
+    else:
+        seen = [_Target(t.record_type, t.record_id) for t in targets]
+    _store_deposit_warnings(
+        session, submission_id, warnings, targets=targets, mark_checked=mark_checked, written_by=written_by
+    )
+    calculation_ids = [t.record_id for t in seen if t.record_type is RT.calculation]
+    if calculation_ids:
+        from app.services.artifact_warning_recheck import recheck_owner_opts_after_single_points
+
+        writer = written_by
+        if writer is None and submission_id is not None:
+            writer = session.scalar(select(Submission.created_by).where(Submission.id == submission_id))
+        recheck_owner_opts_after_single_points(session, calculation_ids, written_by=writer)
+
+
+def _store_deposit_warnings(
+    session: Session,
+    submission_id: int | None,
+    warnings: Iterable[UploadWarning],
+    *,
+    targets: Iterable[Any] | None = None,
+    mark_checked: bool = True,
+    written_by: int | None = None,
+) -> None:
     """Write ``warnings`` (and one marker per checked record) for ``submission_id``; never raises.
 
     ``targets`` defaults to what the workflow noted via :func:`note_deposit_targets`; the artifact route passes its
@@ -497,7 +531,7 @@ def store_deposit_warnings(
 # ---------------------------------------------------------------------------
 
 
-def _item(row: DepositWarning) -> Any:
+def _item(row: DepositWarning, retirement: DepositWarningRetirement | None = None) -> Any:
     """One stored warning as a public item: TCKDB's words, with the depositor's kept privately for the owner."""
     from app.schemas.reads.scientific_deposit_warnings import DepositWarningItem
     from app.services.deposit_warning_messages import normalise_field, render_message
@@ -513,10 +547,13 @@ def _item(row: DepositWarning) -> Any:
     item._raw_message = row.message
     item._raw_field = row.field
     item._writer_id = row.written_by_user_id
+    if retirement is not None:
+        item._retired_at = retirement.retired_at
+        item._retired_reason = retirement.retired_reason_code
     return item
 
 
-def _current(statement):
+def current_warnings(statement):
     """``statement`` (a select of ``DepositWarning``) limited to warnings that have not been retired."""
     return statement.where(~select(DepositWarningRetirement.id).where(DepositWarningRetirement.deposit_warning_id == DepositWarning.id).exists())
 
@@ -538,20 +575,25 @@ def deposit_warnings_for(
     out: dict[int, dict[str, Any]] = {i: {"status": "not_recorded", "items": []} for i in ids}
     if not ids:
         return out
-    statement = select(DepositWarning).where(DepositWarning.record_type == record_type, DepositWarning.record_id.in_(ids))
+    statement = (
+        select(DepositWarning, DepositWarningRetirement)
+        .outerjoin(DepositWarningRetirement, DepositWarningRetirement.deposit_warning_id == DepositWarning.id)
+        .where(DepositWarning.record_type == record_type, DepositWarning.record_id.in_(ids))
+    )
     if not include_retired:
-        statement = _current(statement)
-    rows = session.scalars(statement.order_by(DepositWarning.id)).all()
-    for row in rows:
+        statement = statement.where(DepositWarningRetirement.id.is_(None))
+    for row, retirement in session.execute(statement.order_by(DepositWarning.id)).all():
         entry = out[row.record_id]
         if row.code is None:
             entry["status"] = "recorded"
             continue
-        entry["items"].append(_item(row))
+        entry["items"].append(_item(row, retirement))
     return out
 
 
-def submission_warnings_for(session: Session, record_type: RT, record_ids: Iterable[int]) -> list[Any]:
+def submission_warnings_for(
+    session: Session, record_type: RT, record_ids: Iterable[int], *, include_retired: bool = False
+) -> list[Any]:
     """The warnings of the submissions the named records belong to that no record could take, once per submission.
 
     They stay on the submission (nothing is copied onto a record). A submission appears when it has any, in
@@ -573,21 +615,24 @@ def submission_warnings_for(session: Session, record_type: RT, record_ids: Itera
     )
     if not submission_ids:
         return []
-    rows = session.scalars(
-        _current(
-            select(DepositWarning).where(
-                DepositWarning.submission_id.in_(submission_ids),
-                DepositWarning.record_type.is_(None),
-                DepositWarning.code.is_not(None),
-            )
-        ).order_by(DepositWarning.id)
-    ).all()
+    statement = (
+        select(DepositWarning, DepositWarningRetirement)
+        .outerjoin(DepositWarningRetirement, DepositWarningRetirement.deposit_warning_id == DepositWarning.id)
+        .where(
+            DepositWarning.submission_id.in_(submission_ids),
+            DepositWarning.record_type.is_(None),
+            DepositWarning.code.is_not(None),
+        )
+    )
+    if not include_retired:
+        statement = statement.where(DepositWarningRetirement.id.is_(None))
+    rows = session.execute(statement.order_by(DepositWarning.id)).all()
     if not rows:
         return []
     refs = dict(session.execute(select(Submission.id, Submission.public_ref).where(Submission.id.in_(submission_ids))).all())
     grouped: dict[int, list[Any]] = {}
-    for row in rows:
-        grouped.setdefault(row.submission_id, []).append(_item(row))
+    for row, retirement in rows:
+        grouped.setdefault(row.submission_id, []).append(_item(row, retirement))
     return [
         SubmissionWarnings(submission_ref=refs.get(submission_id), items=items)
         for submission_id, items in sorted(grouped.items())
@@ -599,8 +644,9 @@ def deposit_warning_envelope(session: Session, record_type: RT, id_to_ref: dict[
     ``deposit_warnings`` (what the named records' submissions could not place on a record)."""
     from app.schemas.reads.scientific_deposit_warnings import RecordWarnings
 
-    stored = deposit_warnings_for(session, record_type, id_to_ref)
+    # Retired warnings ride along; ``reveal_warning_views`` drops them for every reader but a curator or admin.
+    stored = deposit_warnings_for(session, record_type, id_to_ref, include_retired=True)
     return {
         "record_warnings": [RecordWarnings(record_ref=ref, **stored[rid]) for rid, ref in id_to_ref.items()],
-        "deposit_warnings": submission_warnings_for(session, record_type, id_to_ref),
+        "deposit_warnings": submission_warnings_for(session, record_type, id_to_ref, include_retired=True),
     }

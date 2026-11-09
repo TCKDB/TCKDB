@@ -87,3 +87,13 @@ def test_a_retirement_row_cannot_be_updated_or_deleted(db_engine):
                 connection.execute(text(insert_retirement), {"w": warning_id, "r": "whim"})
         finally:
             outer.rollback()
+
+
+def test_truncate_is_refused(db_engine):
+    with db_engine.connect() as connection:
+        outer = connection.begin()
+        try:
+            with pytest.raises(DBAPIError, match="append-only"), connection.begin_nested():
+                connection.execute(text("TRUNCATE deposit_warning_retirement"))
+        finally:
+            outer.rollback()

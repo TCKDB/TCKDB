@@ -5,8 +5,9 @@ cannot be marked in place. This revision adds a sibling table, itself append-onl
 when and why it stopped being current. The warning row stays untouched as history; reads show only warnings with no
 retirement row.
 
-First user: an output log attached after the deposit satisfies ``converged_opt_no_usable_energy``'s own "energy plus
-file" condition, so the warning raised before the file arrived is retired.
+Users: a file, a single point or a Hessian stored after the deposit can make a warning untrue (e.g.
+``converged_opt_no_usable_energy``, ``hessian_not_stored_*``); the warning is retired with the cause as its reason.
+The reason list is a literal here (a revision does not follow the model); a test pins it to the model's constant.
 
 Brand-new table, no backfill: every existing warning is current, as before.
 
@@ -55,7 +56,7 @@ def upgrade() -> None:
             initially="IMMEDIATE",
         ),
         sa.CheckConstraint(
-            "retired_reason_code IN ('artifact_attached', 'superseded_by_recheck')",
+            "retired_reason_code IN ('artifact_attached', 'single_point_deposited', 'hessian_stored', 'superseded_by_recheck')",
             name=op.f("ck_deposit_warning_retirement_reason_known"),
         ),
         sa.UniqueConstraint("deposit_warning_id", name="uq_deposit_warning_retirement_warning"),

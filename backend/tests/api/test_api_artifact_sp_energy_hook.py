@@ -228,7 +228,7 @@ class TestSpEnergyHook:
         assert _stored_energy(db_session, calc_id) is None
         # The hook raises nothing. (The energy-less converged opt still has no usable energy now that a file is
         # attached, so the file-presence re-check restates that warning with the file counted; it is not the hook's.)
-        assert [c for c in _warning_codes(resp) if c != "converged_opt_no_usable_energy"] == []
+        assert _warning_codes(resp) == ["converged_opt_no_usable_energy"]
 
     def test_fills_pre_existing_null_energy_row(
         self, client, db_session, stub_store_artifact

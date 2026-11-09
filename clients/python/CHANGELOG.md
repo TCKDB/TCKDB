@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.191.0 - 2026-11-09
+
+No client code changed. The `tckdb-schemas` window moves to `>=0.158,<0.164` so it contains 0.163 (the deposit-warning item gains optional `retired_at` and `retired_reason`, shown to curators and admins only).
+
 ## 0.189.0 - 2026-11-07
 
 No client code changed. The server now judges a kinetics `energy_level_of_theory`'s spin treatment per participant (closed-shell links are exempt, open-shell links must share one reference), so a reaction mixing restricted closed-shell and unrestricted open-shell species can declare its method and basis (see `tckdb-schemas` 0.161.0). The `tckdb-schemas` window already contains 0.161.

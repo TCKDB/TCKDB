@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.163.0 - 2026-11-09
+
+Two optional fields are added to the deposit-warning item a scientific read carries: `retired_at` and `retired_reason`. A warning whose condition later stopped holding (a file, a single point or a Hessian arrived) is retired rather than deleted. Curators and admins see it with those two fields (`retired_reason` is one of `artifact_attached`, `single_point_deposited`, `hessian_stored`, `superseded_by_recheck`); every other reader sees current warnings only and never receives the keys. No field is removed and no producer payload changes.
+
 ## 0.161.0 - 2026-11-07
 
 One refusal is narrowed and gains a `reason`; no field is added or removed. A kinetics record's `energy_level_of_theory` names method, basis and qualifiers, and its spin treatment is judged per participant against the linked reactant, product and transition-state energies:

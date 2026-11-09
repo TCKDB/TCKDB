@@ -412,7 +412,6 @@ def _insert(
             )
         )
         session.flush()
-        return None
     except Exception as exc:
         # Wider than the concurrent-duplicate ``IntegrityError`` this was
         # written for: a savepoint whose failure is not rolled back leaves the
@@ -439,3 +438,10 @@ def _insert(
                 refusal_code=exc.code,
             )
         return _not_stored(W_HESSIAN_NOT_STORED_FAILED, filename, "store_failed", field)
+    else:
+        # The Hessian a ``hessian_not_stored_*`` warning on this calculation said was missing is now stored. Outside
+        # the guarded block on purpose: a failure here fails the request, it is not reported as a failed Hessian.
+        from app.services.artifact_warning_recheck import retire_hessian_not_stored_warnings
+
+        retire_hessian_not_stored_warnings(session, calculation.id)
+        return None

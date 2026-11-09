@@ -8,17 +8,20 @@ current), one whose facts changed is superseded, and one that would now be raise
 
 from __future__ import annotations
 
-import base64
-
 import pytest
 from sqlalchemy import select
 
 from app.db.models.calculation import Calculation
+from app.db.models.common import AppUserRole
 from app.db.models.common import SubmissionRecordType as RT
 from app.db.models.deposit_warning import DepositWarning, DepositWarningRetirement
 from app.services.deposit_warnings import deposit_warnings_for
 from tests.api.artifact_urls import artifacts_url
-from tests.api.test_api_artifact_sp_energy_hook import XYZ_CH4, _b64, _molpro_output_log  # noqa: F401
+from tests.api.test_api_artifact_hessian_hook import GAUSSIAN_LOG, GAUSSIAN_NATOMS, MOLPRO_LOG
+from tests.api.test_api_artifact_hessian_hook import _artifact as _hessian_artifact
+from tests.api.test_api_artifact_hessian_hook import _create_calc as _create_freq
+from tests.api.test_api_artifact_sp_energy_hook import XYZ_CH4, _molpro_output_log
+from tests.api.test_deposit_warning_reads import _owner_key, _user
 
 CODE = "converged_opt_no_usable_energy"
 BASE = "/api/v1/scientific"
@@ -53,12 +56,17 @@ def _deposit_opt(client, *, energy: float | None, smiles_tag: str = "") -> int:
     return response.json()["primary_calculation"]["calculation_id"]
 
 
-def _current(client, db_session, calc_id: int) -> list[dict]:
+def _read_items(client, db_session, calc_id: int, key: str | None = None) -> list[dict]:
     ref = db_session.get(Calculation, calc_id).public_ref
-    read = client.get(f"{BASE}/calculations/{ref}")
+    read = client.get(f"{BASE}/calculations/{ref}", headers={"X-API-Key": key} if key else {})
     assert read.status_code == 200, read.text
     (entry,) = [w for w in read.json()["record_warnings"] if w["record_ref"] == ref]
-    return [i for i in entry["items"] if i["code"] == CODE]
+    return entry["items"]
+
+
+def _current(client, db_session, calc_id: int) -> list[dict]:
+    """The CODE items an anonymous reader sees."""
+    return [i for i in _read_items(client, db_session, calc_id) if i["code"] == CODE]
 
 
 def _history(db_session, calc_id: int) -> list[DepositWarning]:
@@ -157,3 +165,168 @@ def test_an_artifact_on_a_calculation_with_no_such_warning_writes_nothing(client
     _attach(client, calc_id)
     assert _history(db_session, calc_id) == []
     assert _retirements(db_session, calc_id) == []
+
+
+# ---------------------------------------------------------------------------
+# Who sees a retired warning
+# ---------------------------------------------------------------------------
+
+
+def test_curators_and_admins_see_a_retired_warning_marked_and_nobody_else_does(client, db_session):
+    calc_id = _deposit_opt(client, energy=-40.45, smiles_tag="f")
+    _attach(client, calc_id)
+    curator = _user(db_session, "retire-curator", AppUserRole.curator)[1]
+    admin = _user(db_session, "retire-admin", AppUserRole.admin)[1]
+    other = _user(db_session, "retire-other", AppUserRole.user)[1]
+
+    for key in (curator, admin):
+        (item,) = [i for i in _read_items(client, db_session, calc_id, key) if i["code"] == CODE]
+        assert item["retired_reason"] == "artifact_attached"
+        assert item["retired_at"]
+    readers = [None, _owner_key(db_session), other]
+    for key in readers:
+        assert [i for i in _read_items(client, db_session, calc_id, key) if i["code"] == CODE] == []
+    # A current warning carries neither key, for anyone.
+    calc2 = _deposit_opt(client, energy=-40.45, smiles_tag="g")
+    (live,) = [i for i in _read_items(client, db_session, calc2, curator) if i["code"] == CODE]
+    assert "retired_at" not in live and "retired_reason" not in live
+
+
+# ---------------------------------------------------------------------------
+# A single point deposited later
+# ---------------------------------------------------------------------------
+
+
+def _deposit_sp(client) -> int:
+    response = client.post(
+        "/api/v1/uploads/conformers",
+        json={
+            "species_entry": {"smiles": "C", "charge": 0, "multiplicity": 1},
+            "geometry": {"xyz_text": XYZ_CH4},
+            "calculation": {
+                "type": "sp",
+                "software_release": {"name": "Molpro", "version": "2022.1"},
+                "level_of_theory": {"method": "CCSD(T)-F12", "basis": "cc-pVTZ-F12"},
+                "sp_result": {"electronic_energy_hartree": -40.457885930635},
+            },
+            "label": "retire-sp",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["primary_calculation"]["calculation_id"]
+
+
+def test_depositing_a_single_point_for_the_owner_retires_the_opts_warning(client, db_session):
+    calc_id = _deposit_opt(client, energy=None, smiles_tag="h")
+    assert len(_current(client, db_session, calc_id)) == 1
+
+    _deposit_sp(client)
+
+    assert _current(client, db_session, calc_id) == []
+    (row,) = _history(db_session, calc_id)
+    (retirement,) = _retirements(db_session, calc_id)
+    assert retirement.deposit_warning_id == row.id
+    assert retirement.retired_reason_code == "single_point_deposited"
+
+
+def test_a_single_point_for_another_owner_retires_nothing(client, db_session):
+    calc_id = _deposit_opt(client, energy=None, smiles_tag="i")
+    response = client.post(
+        "/api/v1/uploads/conformers",
+        json={
+            "species_entry": {"smiles": "O", "charge": 0, "multiplicity": 1},
+            "geometry": {"xyz_text": "3\nwater\nO 0.0 0.0 0.0\nH 0.757 0.586 0.0\nH -0.757 0.586 0.0"},
+            "calculation": {
+                "type": "sp",
+                "software_release": {"name": "Molpro", "version": "2022.1"},
+                "level_of_theory": {"method": "CCSD(T)-F12", "basis": "cc-pVTZ-F12"},
+                "sp_result": {"electronic_energy_hartree": -76.3},
+            },
+            "label": "retire-sp-water",
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert len(_current(client, db_session, calc_id)) == 1
+    assert _retirements(db_session, calc_id) == []
+
+
+# ---------------------------------------------------------------------------
+# A Hessian stored later
+# ---------------------------------------------------------------------------
+
+
+def test_storing_the_hessian_retires_the_hessian_not_stored_warning(client, db_session):
+    calc_id = _create_freq(client, natoms=GAUSSIAN_NATOMS)
+    ref = db_session.get(Calculation, calc_id).public_ref
+    bad = client.post(
+        artifacts_url(client, calc_id),
+        json={"artifacts": [_hessian_artifact(MOLPRO_LOG, kind="output_log", filename="wrong.log")]},
+    )
+    assert bad.status_code == 201, bad.text
+
+    def codes(key=None):
+        return [i["code"] for i in _read_items(client, db_session, calc_id, key) if i["code"].startswith("hessian_not_stored")]
+
+    assert codes() == ["hessian_not_stored_geometry_mismatch"]
+    good = client.post(
+        artifacts_url(client, calc_id),
+        json={"artifacts": [_hessian_artifact(GAUSSIAN_LOG, kind="output_log", filename="freq.log")]},
+    )
+    assert good.status_code == 201, good.text
+
+    assert codes() == []
+    curator = _user(db_session, "retire-hess-curator", AppUserRole.curator)[1]
+    (item,) = [i for i in _read_items(client, db_session, calc_id, curator) if i["code"].startswith("hessian_not_stored")]
+    assert item["retired_reason"] == "hessian_stored"
+    assert ref
+
+
+# ---------------------------------------------------------------------------
+# Atomicity and the closed reason set
+# ---------------------------------------------------------------------------
+
+
+def test_a_failed_replacement_leaves_the_old_warning_current(client, db_session, monkeypatch):
+    """Supersede stores the replacement first; if that fails nothing is retired and the failure surfaces."""
+    from app.services import artifact_warning_recheck as recheck
+
+    calc_id = _deposit_opt(client, energy=None, smiles_tag="j")
+    monkeypatch.setattr("app.api.routes.calculations.recheck_calculation_warnings", lambda *a, **k: [])
+    _attach(client, calc_id)  # the file is there; the stored warning still says it is not
+    monkeypatch.undo()
+    monkeypatch.setattr(
+        "app.services.artifact_warning_recheck._insert_replacements",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("store failed")),
+    )
+    with pytest.raises(RuntimeError, match="store failed"), db_session.begin_nested():
+        recheck.recheck_calculation_warnings(
+            db_session, calc_id, cause="artifact_attached", submission_id=None, written_by=None
+        )
+    assert _retirements(db_session, calc_id) == []
+    assert len(_current(client, db_session, calc_id)) == 1
+
+
+def test_a_retirement_that_already_exists_is_left_alone(client, db_session):
+    from app.services.artifact_warning_recheck import _retire
+
+    calc_id = _deposit_opt(client, energy=-40.45, smiles_tag="k")
+    _attach(client, calc_id)
+    rows = _history(db_session, calc_id)
+    _retire(db_session, rows, "hessian_stored", None)  # a second retirement of the same row: no error, no change
+    (retirement,) = _retirements(db_session, calc_id)
+    assert retirement.retired_reason_code == "artifact_attached"
+
+
+def test_the_reason_set_in_the_service_the_model_and_the_database_agree(db_session):
+    from sqlalchemy import text
+
+    from app.db.models.deposit_warning import RETIREMENT_REASONS
+
+    definition = db_session.scalar(
+        text(
+            "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+            "WHERE conname = 'ck_deposit_warning_retirement_reason_known'"
+        )
+    )
+    assert definition and all(f"'{reason}'" in definition for reason in RETIREMENT_REASONS)
+    assert definition.count("::text") == len(RETIREMENT_REASONS)

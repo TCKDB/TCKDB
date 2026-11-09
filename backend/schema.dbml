@@ -2166,7 +2166,7 @@ Table deposit_warning_retirement {
   }
 
   checks {
-    `retired_reason_code IN ('artifact_attached', 'superseded_by_recheck')` [name: 'ck_deposit_warning_retirement_reason_known']
+    `retired_reason_code IN ('artifact_attached', 'single_point_deposited', 'hessian_stored', 'superseded_by_recheck')` [name: 'ck_deposit_warning_retirement_reason_known']
   }
 
   Note: 'A deposit warning that no longer applies, kept as history rather than shown as current.'

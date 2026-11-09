@@ -8,6 +8,10 @@ reader may see it:
   ``depositor_field``, the access rule ``GET /jobs/{id}`` uses;
 * everyone else, including an authenticated reader who owns nothing, gets neither key.
 
+A **retired** warning (its condition stopped holding; see ``deposit_warning_retirement``) is shown only to curators
+and admins, marked with ``retired_at`` and ``retired_reason``; every other reader, including the owner of the deposit,
+sees current warnings only.
+
 It also applies the existing ``submission_ref`` rule: the key is served only to an authenticated caller.
 
 The reader is published per request by :func:`app.api.routes.scientific._actor.publish_read_actor`, onto a context
@@ -62,6 +66,17 @@ def reveal_warning_views(payload: Any) -> None:
     if not records and not deposits:
         return
     actor = current_read_actor()
+    sees_retired = actor is not None and actor.role in _CURATION_ROLES
+    for block in (*(records or ()), *(deposits or ())):
+        if sees_retired:
+            for item in block.items:
+                item.retired_at, item.retired_reason = item._retired_at, item._retired_reason
+        else:
+            block.items = [item for item in block.items if item._retired_at is None]
+    if deposits is not None and not sees_retired:
+        # A block whose only warnings were retired has nothing left to say about the deposit.
+        payload.deposit_warnings = [block for block in deposits if block.items]
+        deposits = payload.deposit_warnings
     items = [item for block in records or () for item in block.items]
     for block in deposits or ():
         if actor is None:

@@ -130,7 +130,7 @@ class DepositWarning(Base):
 
 
 #: Why a warning was retired. A closed set: a new reason is a new revision, so a reader can rely on the list.
-RETIREMENT_REASONS = ("artifact_attached", "superseded_by_recheck")
+RETIREMENT_REASONS = ("artifact_attached", "single_point_deposited", "hessian_stored", "superseded_by_recheck")
 
 
 class DepositWarningRetirement(Base):
@@ -139,10 +139,10 @@ class DepositWarningRetirement(Base):
     Append-only like ``deposit_warning`` (same trigger regime), and one row per warning at most: a retired warning
     stays retired. The warning itself is untouched; this row says *when* and *why* it stopped being current.
 
-    ``artifact_attached``: an artifact arrived for the calculation and the rule that raised the warning, re-run on the
-    stored state, no longer finds the condition. ``superseded_by_recheck``: the re-run still finds a warning of the
-    same code but its stated facts differ (the artifact is there, the energy is still missing); the new warning is
-    stored as its own row and this one is retired.
+    The reason states the cause: ``artifact_attached`` (a file arrived and the re-run no longer finds the condition),
+    ``single_point_deposited`` (a single point for the same owner now makes the opt's energy obtainable),
+    ``hessian_stored`` (the Hessian a ``hessian_not_stored_*`` warning said was missing is now stored), or
+    ``superseded_by_recheck`` (the re-run still warns, but the stated facts changed; the replacement is its own row).
     """
 
     __tablename__ = "deposit_warning_retirement"
@@ -163,7 +163,7 @@ class DepositWarningRetirement(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "retired_reason_code IN ('artifact_attached', 'superseded_by_recheck')",
+            "retired_reason_code IN (" + ", ".join(f"'{r}'" for r in RETIREMENT_REASONS) + ")",
             name="reason_known",
         ),
         UniqueConstraint("deposit_warning_id", name="uq_deposit_warning_retirement_warning"),

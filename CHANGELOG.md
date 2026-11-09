@@ -22,15 +22,21 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
-## Attaching a file retires deposit warnings that depended on its absence (2026-11-09)
+## Deposit warnings are retired when later events make them untrue (2026-11-09)
 
-- An output log attached after the calculation was deposited now re-runs the check that depends on file presence,
-  `converged_opt_no_usable_energy`. A warning the file makes untrue is retired: it stays in the database as history
-  (new append-only table `deposit_warning_retirement`, migration `b8e3f1a7c524`) and is no longer shown on reads.
-- A converged opt with no energy that gets a file keeps a warning, restated with the file counted
-  (`has_artifact: true`); the earlier statement is retired as superseded.
-- The `has_artifact` fact in that warning was always false for an opt with no energy, even when it had a file. It now
-  reports the file.
+- A warning whose condition stops holding is retired, not deleted: new append-only table `deposit_warning_retirement`
+  (migration `b8e3f1a7c524`) records when and why. The warning row stays as history.
+- Three events retire: a file attached to a calculation (`artifact_attached`: `converged_opt_no_usable_energy`
+  needs the opt's energy and a file when no single point exists), a single point deposited for the same owner
+  (`single_point_deposited`: that warning on the owner's opts), and a Hessian stored (`hessian_stored`: the
+  calculation's `hessian_not_stored_*` warnings). A converged opt with no energy that gets a file keeps a warning,
+  restated with the file counted; the replacement is stored first, then the old one is retired
+  (`superseded_by_recheck`).
+- Reads show current warnings only. Curators and admins also see retired ones, marked with `retired_at` and
+  `retired_reason` (`tckdb-schemas` 0.163.0, optional fields; client window moved, client 0.191.0).
+- The `has_artifact` fact in the converged-opt warning was always false for an opt with no energy, even with a file;
+  it now reports the file. Warnings stored before this change keep their old context: no backfill (existing data is
+  dev data).
 
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)
 

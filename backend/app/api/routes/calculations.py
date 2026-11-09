@@ -92,6 +92,7 @@ from app.services.artifact_persistence import (
     link_artifacts_to_deposit_submission,
     persist_artifact_batch,
 )
+from app.services.artifact_warning_recheck import recheck_calculation_warnings
 from app.services.calculation_parameter_extraction import (
     inputs_first,
     try_extract_parameters_from_artifact_upload,
@@ -99,7 +100,6 @@ from app.services.calculation_parameter_extraction import (
 from app.services.charge_multiplicity_extraction import (
     try_reconcile_charge_multiplicity_from_output_upload,
 )
-from app.services.artifact_warning_recheck import recheck_artifact_dependent_warnings
 from app.services.deposit_warnings import store_deposit_warnings
 from app.services.hessian_extraction import (
     try_extract_hessian_from_artifact_upload,
@@ -874,9 +874,10 @@ def upload_calculation_artifacts(
     # that no longer applies is retired (kept as history), one that now would be raised is added. Written in this
     # request's transaction, so it commits or rolls back with the attach.
     warnings.extend(
-        recheck_artifact_dependent_warnings(
+        recheck_calculation_warnings(
             session,
             calc_pk,
+            cause="artifact_attached",
             submission_id=deposit_submission.id if deposit_submission is not None else None,
             written_by=current_user.id,
         )
