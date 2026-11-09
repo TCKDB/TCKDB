@@ -210,7 +210,7 @@ the wire on which endpoint. The same values appear in
 | `Statmech`  | emits + `source_calculations`  | emits + `source_calculations`         |
 | `Transport` | accepted, not emitted ⚠️       | accepted, not emitted ⚠️              |
 | `Kinetics`  | n/a                            | emits + `source_calculations`         |
-| Artifacts   | second-phase only ⚠️           | second-phase only ⚠️                  |
+| Artifacts   | emits inline (budgeted)        | emits inline (budgeted)               |
 
 ⚠️ entries surface a warning-level entry in `emission_diagnostics()`
 with a stable code (see `tckdb_client.builders.DIAG_CODES`). When the
@@ -218,17 +218,9 @@ backend bundle schemas grow the missing fields, the assemblers flip
 emission on and those diagnostics simply stop appearing — no client
 API change.
 
-### Two-phase artifact upload
+### Artifact upload (inline by default)
 
-Scientific uploads create calculation rows; *files* (input decks,
-output logs, checkpoints) ride on a separate POST per calculation
-once the server has assigned `calculation.id` values. The bundle
-endpoints **do not** accept inline artifact bytes — keeping the
-scientific upload and the file transport split means a 503 on file
-storage never leaves scientific rows half-written, and the
-calculation payload stays small.
-
-Attach files to any `Calculation` before upload:
+Attach files (input decks, output logs, checkpoints) to any `Calculation`:
 
 ```python
 opt = Calculation.opt(..., label="ethanol_opt")
@@ -236,7 +228,30 @@ opt.add_artifact("ethanol_opt.gjf", kind="input")
 opt.add_artifact("ethanol_opt.log", kind="output_log")
 ```
 
-Then upload in two phases:
+`upload.to_payload()` (and so `client.upload(upload)`) reads those files and
+sends them inline in the same request, in each calculation's `artifacts`
+list. The server stores them in that request and runs its evidence checks
+afterwards, so the deposit is not told "no artifact" about a calculation
+whose log is in the same upload. The files must exist when `to_payload()`
+runs.
+
+Size rules (the server caps one artifact at 50 MiB and one upload at 200 MB
+of decoded files):
+
+- A file over 50 MiB is refused when the payload is built, naming the file.
+- Inline files are limited to 64 MiB decoded in total per upload (about
+  85 MiB once base64-encoded), so the request stays under the roughly
+  100 MiB body limit a reverse proxy typically applies. Files past that
+  budget are left out of the payload and returned by
+  `upload.artifact_plan(result)`, to send in a second request as below.
+- `ComputedSpeciesUpload(..., inline_artifacts=False)` (also on
+  `ComputedReactionUpload`) defers every file to that second request.
+
+### Second-phase artifact upload
+
+Files that did not go inline ride on a separate POST per calculation once
+the server has assigned `calculation.id` values. After an inline upload,
+`artifact_plan(result)` is empty and there is nothing to do.
 
 ```python
 result = client.upload(upload)                  # phase 1: scientific bundle
@@ -280,7 +295,8 @@ deterministically.
 
 `emission_diagnostics()` reports
 `artifact_upload_requires_second_phase` per calculation that has
-attached artifacts — it is intentionally a warning-level reminder,
+artifacts which will not go inline (`inline_artifacts=False`, or over
+the inline budget) — it is intentionally a warning-level reminder,
 not an error, so the scientific upload can still go through.
 
 #### Introspection helpers

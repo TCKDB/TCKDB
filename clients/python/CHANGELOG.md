@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.190.0 - 2026-11-09
+
+- **Files go inline.** `ComputedSpeciesUpload.to_payload()` and `ComputedReactionUpload.to_payload()` now read each attached artifact and send it in its calculation's `artifacts` (the bundle schemas already accepted `content_base64`), instead of a second `POST /calculations/{ref}/artifacts`. The server stores the files in the same request before it checks evidence, so a deposit no longer carries stored warnings such as `converged_opt_no_usable_energy` that the second request made stale. Size handling: a file over 50 MiB (the server's per-artifact cap) is refused when the payload is built, naming the file; inline files total at most 64 MiB decoded per upload (under the proxy body limit once base64-encoded, and under the server's 200 MB per-upload cap), and files past that budget are left out and returned by `artifact_plan(result)` for the old second request. `inline_artifacts=False` on either upload class defers every file. **Behaviour changes:** the attached files must exist when `to_payload()` runs, `artifact_plan(result)` lists only what did not go inline (empty for a normal deposit), and `artifact_upload_requires_second_phase` is reported only for those files. `artifact_plan_preview()` still lists every file and reads none.
+- **`LevelOfTheory.spin_treatment`** (`restricted`, `unrestricted`, `restricted_open`, `unknown`, the `tckdb-schemas` `SpinTreatment` tokens) is sent as the wire field of the same name, so UB3LYP and closed-shell runs no longer share a level. It is sent only when set and never inferred from the method or multiplicity; any other spelling is refused by the builder.
+
 ## 0.189.0 - 2026-11-07
 
 No client code changed. The server now judges a kinetics `energy_level_of_theory`'s spin treatment per participant (closed-shell links are exempt, open-shell links must share one reference), so a reaction mixing restricted closed-shell and unrestricted open-shell species can declare its method and basis (see `tckdb-schemas` 0.161.0). The `tckdb-schemas` window already contains 0.161.

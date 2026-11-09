@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace as _NS
+
 from tckdb_client.builders.calculation import Calculation, LevelOfTheory, SoftwareRelease
 from tckdb_client.builders.uploads import ComputedReactionUpload, ComputedSpeciesUpload
 
@@ -44,9 +46,9 @@ def test_species_and_reaction_builder_wires_environment_on_the_calculation_paylo
         electronic_energy_hartree=-40.0,
         execution_environment=_environment(),
     )
-    species_payload = ComputedSpeciesUpload._calc_payload(object(), calc, _KeyMinter())
+    species_payload = ComputedSpeciesUpload._calc_payload(_NS(_inlined=set()), calc, _KeyMinter())
     reaction_payload = ComputedReactionUpload._calc_payload_flat(
-        object(), calc, key="calc-1", calc_keys=_KeyMinter(), geometry_key=None
+        _NS(_inlined=set()), calc, key="calc-1", calc_keys=_KeyMinter(), geometry_key=None
     )
     assert species_payload["execution_environment"] == reaction_payload["execution_environment"]
     assert species_payload["execution_environment"]["runtime"]["runtime_kind"] == "container"
@@ -85,9 +87,9 @@ def test_described_environment_survives_both_upload_wire_paths():
         electronic_energy_hartree=-40.0,
         execution_environment=_described_environment(),
     )
-    species_payload = ComputedSpeciesUpload._calc_payload(object(), calc, _KeyMinter())
+    species_payload = ComputedSpeciesUpload._calc_payload(_NS(_inlined=set()), calc, _KeyMinter())
     reaction_payload = ComputedReactionUpload._calc_payload_flat(
-        object(), calc, key="calc-1", calc_keys=_KeyMinter(), geometry_key=None
+        _NS(_inlined=set()), calc, key="calc-1", calc_keys=_KeyMinter(), geometry_key=None
     )
     assert species_payload["execution_environment"] == reaction_payload["execution_environment"]
     runtime = species_payload["execution_environment"]["runtime"]

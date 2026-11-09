@@ -446,11 +446,13 @@ stability policy.
 
 ### 8.7c Two-phase artifact upload (Phase 7 — shipped)
 
-Files (input decks, output logs, checkpoints) ride on a separate POST
-per calculation after the scientific bundle creates the calculation
-rows. Attach via `Calculation.add_artifact(path, kind, *, label?,
-sha256?, bytes?)`; the bundle's `to_payload()` is byte-identical
-whether or not calculations have artifacts.
+Files (input decks, output logs, checkpoints) attach via
+`Calculation.add_artifact(path, kind, *, label?, sha256?, bytes?)`.
+Since 0.190.0 `to_payload()` embeds them inline by default (see
+`docs/builders.md`, "Artifact upload"); only files that do not fit the
+inline budget, or all of them with `inline_artifacts=False`, ride on a
+separate POST per calculation after the bundle creates the rows, as
+described below.
 
 Resolution at upload time:
 
