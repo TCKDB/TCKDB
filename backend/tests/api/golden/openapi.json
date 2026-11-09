@@ -89617,7 +89617,7 @@
         ]
       },
       "patch": {
-        "description": "Curator/admin: manually transition a record's review status.\n\nThe transition policy and self-approval guard live in the service\nlayer; route-side authorisation is the curator/admin role check\nonly.",
+        "description": "Curator/admin: manually transition a record's review status.\n\nThe transition policy and self-approval guard live in the service\nlayer; route-side authorisation is the curator/admin role check\nonly.\n\nAn artifact never has a review row (``record_type_not_reviewable``, 422),\nand a record that does not exist is a 404 (``record_not_found``) rather\nthan a review row for nothing.",
         "operationId": "set_status_api_v1_record_reviews__record_type___record_id__patch",
         "parameters": [
           {
