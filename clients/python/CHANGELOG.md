@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.192.0 - 2026-11-09
+
+Ten `RejectionCode` members join the refusal codes for artifact uploads: `OUTPUT_LOG_SIGNATURE_UNRECOGNIZED`, `ARTIFACT_EMPTY`, `ARTIFACT_TOO_LARGE`, `ARTIFACT_SHA256_MISMATCH`, `ARTIFACT_SIZE_MISMATCH`, `ARTIFACT_NOT_UTF8_TEXT`, `ARTIFACT_INVALID_BASE64`, `ARTIFACT_TOTAL_SIZE_TOO_LARGE`, `ARTIFACT_ENCODED_PAYLOAD_TOO_LARGE` and `ARTIFACT_TOTAL_ENCODED_PAYLOAD_TOO_LARGE` (see `tckdb-schemas` 0.163.0). The `tckdb-schemas` window moves to `>=0.158,<0.164`.
+
 ## 0.191.0 - 2026-11-09
 
 - `ComputedSpeciesUpload.to_payload()` and `ComputedReactionUpload.to_payload()` now embed each attached artifact file inline (`content_base64` in the calculation's `artifacts`) instead of leaving it for a second request. The server therefore sees the files when it checks the deposit, and no longer stores warnings such as `converged_opt_no_usable_energy` that the second request made stale.

@@ -88,6 +88,15 @@ class RejectionCode(str, Enum):
     APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH = "applied_energy_correction_source_calculation_owner_mismatch"
     APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED = "applied_energy_correction_source_key_undeclared"
     ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH = "arrhenius_a_units_molecularity_mismatch"
+    ARTIFACT_EMPTY = "artifact_empty"
+    ARTIFACT_ENCODED_PAYLOAD_TOO_LARGE = "artifact_encoded_payload_too_large"
+    ARTIFACT_INVALID_BASE64 = "artifact_invalid_base64"
+    ARTIFACT_NOT_UTF8_TEXT = "artifact_not_utf8_text"
+    ARTIFACT_SHA256_MISMATCH = "artifact_sha256_mismatch"
+    ARTIFACT_SIZE_MISMATCH = "artifact_size_mismatch"
+    ARTIFACT_TOO_LARGE = "artifact_too_large"
+    ARTIFACT_TOTAL_ENCODED_PAYLOAD_TOO_LARGE = "artifact_total_encoded_payload_too_large"
+    ARTIFACT_TOTAL_SIZE_TOO_LARGE = "artifact_total_size_too_large"
     ASSESSMENT_INPUT_CHECK_LIMIT = "assessment_input_check_limit"
     ATOM_MAP_ATOMS_UNACCOUNTED_FOR = "atom_map_atoms_unaccounted_for"
     ATOM_MAP_CONTRADICTS_IRC_MAPPING = "atom_map_contradicts_irc_mapping"
@@ -257,6 +266,7 @@ class RejectionCode(str, Enum):
     OBSERVATION_IDENTITY_HINT_CONFLICT = "observation_identity_hint_conflict"
     OBSERVATION_IDENTITY_TARGET_NOT_GROUND_STATE_MINIMUM = "observation_identity_target_not_ground_state_minimum"
     OFFSET_TOO_LARGE = "offset_too_large"
+    OUTPUT_LOG_SIGNATURE_UNRECOGNIZED = "output_log_signature_unrecognized"
     OWNER_MISSING = "owner_missing"
     PARAMETER_RENAMED = "parameter_renamed"
     PARAMETER_VALUE_REQUIRES_KEY = "parameter_value_requires_key"
@@ -445,6 +455,15 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED,
         RejectionCode.ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH,
+        RejectionCode.ARTIFACT_EMPTY,
+        RejectionCode.ARTIFACT_ENCODED_PAYLOAD_TOO_LARGE,
+        RejectionCode.ARTIFACT_INVALID_BASE64,
+        RejectionCode.ARTIFACT_NOT_UTF8_TEXT,
+        RejectionCode.ARTIFACT_SHA256_MISMATCH,
+        RejectionCode.ARTIFACT_SIZE_MISMATCH,
+        RejectionCode.ARTIFACT_TOO_LARGE,
+        RejectionCode.ARTIFACT_TOTAL_ENCODED_PAYLOAD_TOO_LARGE,
+        RejectionCode.ARTIFACT_TOTAL_SIZE_TOO_LARGE,
         RejectionCode.ASSESSMENT_INPUT_CHECK_LIMIT,
         RejectionCode.ATOM_MAP_ATOMS_UNACCOUNTED_FOR,
         RejectionCode.ATOM_MAP_CONTRADICTS_IRC_MAPPING,
@@ -593,6 +612,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.OBSERVATION_IDENTITY_HINT_CONFLICT,
         RejectionCode.OBSERVATION_IDENTITY_TARGET_NOT_GROUND_STATE_MINIMUM,
         RejectionCode.OFFSET_TOO_LARGE,
+        RejectionCode.OUTPUT_LOG_SIGNATURE_UNRECOGNIZED,
         RejectionCode.PARAMETER_RENAMED,
         RejectionCode.PARAMETER_VALUE_REQUIRES_KEY,
         RejectionCode.POST_SEARCH_FIELDS_MUST_BE_IN_BODY,
@@ -787,6 +807,15 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH: frozenset({422}),
+    RejectionCode.ARTIFACT_EMPTY: frozenset({422}),
+    RejectionCode.ARTIFACT_ENCODED_PAYLOAD_TOO_LARGE: frozenset({422}),
+    RejectionCode.ARTIFACT_INVALID_BASE64: frozenset({422}),
+    RejectionCode.ARTIFACT_NOT_UTF8_TEXT: frozenset({422}),
+    RejectionCode.ARTIFACT_SHA256_MISMATCH: frozenset({422}),
+    RejectionCode.ARTIFACT_SIZE_MISMATCH: frozenset({422}),
+    RejectionCode.ARTIFACT_TOO_LARGE: frozenset({422}),
+    RejectionCode.ARTIFACT_TOTAL_ENCODED_PAYLOAD_TOO_LARGE: frozenset({422}),
+    RejectionCode.ARTIFACT_TOTAL_SIZE_TOO_LARGE: frozenset({422}),
     RejectionCode.ASSESSMENT_INPUT_CHECK_LIMIT: frozenset({422}),
     RejectionCode.ATOM_MAP_ATOMS_UNACCOUNTED_FOR: frozenset({422}),
     RejectionCode.ATOM_MAP_CONTRADICTS_IRC_MAPPING: frozenset({422}),
@@ -956,6 +985,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.OBSERVATION_IDENTITY_HINT_CONFLICT: frozenset({422}),
     RejectionCode.OBSERVATION_IDENTITY_TARGET_NOT_GROUND_STATE_MINIMUM: frozenset({422}),
     RejectionCode.OFFSET_TOO_LARGE: frozenset({422}),
+    RejectionCode.OUTPUT_LOG_SIGNATURE_UNRECOGNIZED: frozenset({422}),
     RejectionCode.OWNER_MISSING: frozenset({404}),
     RejectionCode.PARAMETER_RENAMED: frozenset({422}),
     RejectionCode.PARAMETER_VALUE_REQUIRES_KEY: frozenset({422}),

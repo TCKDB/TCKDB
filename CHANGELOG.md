@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## An xtb output file is accepted as an `output_log`, and artifact refusals carry codes (2026-11-09)
+
+- **What changed:**
+  - An xtb output file (`xtb.out`, and xtb's `g98.out`) is accepted as an `output_log` and identified as xtb. The banner version is compared with the declared software release. No energy, frequency, Hessian, charge, multiplicity or geometry is read from it, and no warning is raised for that.
+  - Every artifact validation refusal has a code and `context`: `output_log_signature_unrecognized`, `artifact_empty`, `artifact_too_large`, `artifact_sha256_mismatch`, `artifact_size_mismatch`, `artifact_not_utf8_text`, `artifact_invalid_base64`, `artifact_total_size_too_large`, `artifact_encoded_payload_too_large`, `artifact_total_encoded_payload_too_large` (all 422). A depositor's filename is in `context.depositor_supplied`, not the message.
+- **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.163.0, `tckdb-client` 0.192.0.
+
 ## Archives with enum or text primary keys restore (2026-11-09)
 
 An archive containing a table whose primary key includes an enum or text column
