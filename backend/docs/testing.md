@@ -817,8 +817,11 @@ The workflow uses the same RDKit-enabled Postgres image as local
 development:
 
 ```text
-informaticsmatters/rdkit-cartridge-debian:Release_2025_03_3
+ghcr.io/tckdb/rdkit-cartridge-debian@sha256:96c34a5b88d0cbe02bf57290531f27f3cb97f5d3e494f03baea75ea99749b5ef
 ```
+
+This is the GHCR mirror (`mirror-ci-images.yml`) of
+`informaticsmatters/rdkit-cartridge-debian:Release_2025_03_3`, pinned by digest.
 
 Plain Postgres is not sufficient because the Alembic chain enables the
 `rdkit` extension and the schema includes RDKit cartridge types and
