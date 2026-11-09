@@ -110,6 +110,7 @@ def _resolve_row_tau(session: Session, calc: Calculation) -> TauResolution:
         select(CalculationParameter.canonical_key, CalculationParameter.canonical_value)
         .where(CalculationParameter.calculation_id == calc.id)
         .where(CalculationParameter.canonical_key.in_(TAU_PARAMETER_KEYS))
+        .order_by(CalculationParameter.id)
     ).all():
         recorded[key] = value
 
@@ -120,7 +121,16 @@ def _resolve_row_tau(session: Session, calc: Calculation) -> TauResolution:
     )
     lot_method = calc.lot.method if calc.lot is not None else None
     version = calc.software_release.version if calc.software_release is not None else None
-    return resolve_tau_with_assumption(recorded.items(), software_name, lot_method, version)
+    lot = calc.lot
+    return resolve_tau_with_assumption(
+        recorded.items(),
+        software_name,
+        lot_method,
+        version,
+        spin_treatment=getattr(lot, "spin_treatment", None),
+        core_treatment=getattr(lot, "core_treatment", None),
+        ri_approximation=getattr(lot, "ri_approximation", None),
+    )
 
 
 def _scope(session: Session, *, limit: int | None) -> list[CalculationFreqResult]:

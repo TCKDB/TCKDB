@@ -16,7 +16,7 @@
       "1": "31e62d3bd83f7d785f115d18073a21ba7d18b9649945b5ea375591d8ab198724"
     },
     "computed_transition_state": {
-      "2": "87c7b18bb9fd1bbcea4fd698278d7061fa31ef779d1ab53ad8bb7b195e3a2753"
+      "2": "7233099d572561aedbe497f66847adb8dd103afb7520838a970d623f5392126e"
     },
     "computed_transport": {
       "1": "6413daa8ddd195f42385d37beb2ef704d45b361baecbe0e4a93b8e26d9062742"
@@ -417,6 +417,11 @@
       "name": "tckdb_reproducibility_ts_statmech",
       "version": 1,
       "reason": "hessian_source enum gained a value; no check or grading changed"
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "evaluate_transition_state_frequency gains a wrapper that appends a hessian_method_refined note only when the resolved tau carries refined_from (set at upload, never from stored rows); no check or grading changed"
     }
   ]
 }

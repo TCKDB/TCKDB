@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.194.0 - 2026-11-09
+
+The `tckdb-schemas` window is `>=0.158,<0.166`, for the schemas release that changes the assumed Hessian method (see its changelog). No client API changes.
+
 ## 0.193.0 - 2026-11-09
 
 No client code changed. `HessianSource.parsed_log_archive` joins the enum and four reasons join `hessian_not_stored_unparseable` (see `tckdb-schemas` 0.164.0). The `tckdb-schemas` window now includes 0.164.

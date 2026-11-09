@@ -1580,6 +1580,9 @@ class CalculationWithResultsPayload(CalculationPayload):
     #: above the deck.
     _echo_hessian_method: HessianMethod | None = PrivateAttr(default=None)
 
+    #: A deck or echoed input has a bare ORCA ``NumFreq`` that reads as energies (see ``numfreq_energy_implied``).
+    _numfreq_energy_implied: bool = PrivateAttr(default=False)
+
     def tau_resolution(self) -> TauResolution:
         """ADR 0012's τ for this calculation: recorded, else assumed, else conservative.
 
@@ -1603,6 +1606,10 @@ class CalculationWithResultsPayload(CalculationPayload):
             self._deck_hessian_method,
             self._reported_hessian_method,
             self._echo_hessian_method,
+            spin_treatment=getattr(self.level_of_theory, "spin_treatment", None),
+            core_treatment=getattr(self.level_of_theory, "core_treatment", None),
+            ri_approximation=getattr(self.level_of_theory, "ri_approximation", None),
+            numfreq_energy_implied=self._numfreq_energy_implied,
         )
 
     @model_validator(mode="after")
