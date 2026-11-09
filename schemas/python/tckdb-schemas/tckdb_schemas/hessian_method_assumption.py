@@ -301,7 +301,7 @@ def _mp4_variant(token: str) -> str | None:
 
 
 #: ``keyword(options)``, ``keyword (options)`` and ``keyword=(options)`` are the same Gaussian route item.
-_CC_WITH_OPTIONS = re.compile(r"^(ccsd|qcisd)(?:\s*=?\s*\(([^()]*)\))?([^()]*)$")
+_CC_WITH_OPTIONS = re.compile(r"^(ccsd|qcisd)(?:\s*(?:=\s*)?\(([^()]*)\))?([^()]*)$")
 
 
 def _cc_with_options(token: str) -> tuple[bool, str | None]:
@@ -335,6 +335,10 @@ _AUTOCI_WITH_GRADIENT = frozenset({
 })
 
 
+#: Method strings are short; longer ones are not classified (and never reach the option regexes).
+_MAX_METHOD_LENGTH = 128
+
+
 def classify_method_family(method: str | None) -> str | None:
     """Classify a free-text ``level_of_theory.method`` into a family.
 
@@ -347,7 +351,7 @@ def classify_method_family(method: str | None) -> str | None:
         does not match anything this module recognises.
     """
     token = _normalize(method)
-    if token is None:
+    if token is None or len(token) > _MAX_METHOD_LENGTH:
         return None
 
     if token in _HF_METHODS:
@@ -903,10 +907,10 @@ def resolve_tau_with_assumption(
         return resolve_tau_from_parameters([*pairs, ("freq.hessian_method", reported_method.value)])
     if echo_method is not None:
         echoed = resolve_tau_from_parameters([*pairs, ("freq.hessian_method", echo_method.value)])
-        if refines(echo_method):
+        if recorded_exact is not None and refines(echo_method):
             return replace(echoed, refined_from=recorded_exact.value)
         return echoed
-    if deck_method is not None and refines(deck_method):
+    if deck_method is not None and recorded_exact is not None and refines(deck_method):
         # Recorded gradient method plus ORCA NumFreq on a method without a gradient: refined to energies.
         deck_refined = resolve_tau_from_parameters([*pairs, ("freq.hessian_method", deck_method.value)])
         return replace(deck_refined, refined_from=recorded_exact.value)

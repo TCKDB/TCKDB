@@ -240,3 +240,14 @@ def test_newly_recognised_methods_are_scf_based_so_they_get_the_assumed_scf_defa
     assert uses_scf(method, "Gaussian") is True
     if method in ("MP5", "UMP5"):
         assert assumed_default_setting("Gaussian", "16", "scf_convergence", method) == "tight"
+
+
+@pytest.mark.parametrize("prefix", ["ccsd", "qcisd", "mp4", "ccsd(t", "ccsd="])
+def test_pathological_method_strings_return_quickly_with_no_assumption(prefix) -> None:
+    import time
+
+    method = prefix + " " * 50_000 + "x"
+    start = time.perf_counter()
+    assert infer_hessian_method("Gaussian", method) is None
+    assert infer_hessian_method("ORCA", method, "6.1.0") is None
+    assert time.perf_counter() - start < 1.0
