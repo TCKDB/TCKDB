@@ -28,10 +28,10 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
-from importlib import metadata
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +57,22 @@ import source_chemkin  # noqa: E402
 import source_e2  # noqa: E402
 import source_pdep  # noqa: E402
 from common import Report, Session  # noqa: E402
+
+#: The generators run for the snapshot. The registry holds more (ThermoML, the QCSchema round trip) that belong to
+#: other deposits; the QCSchema one also writes inside a rolled-back savepoint, which a snapshot instance should not see.
+EXPECTED_OUTPUTS = (
+    "corpus_counts",
+    "conformer_basins",
+    "calculation_evidence",
+    "deposit_warnings",
+    "hessian_reanalysis",
+    "selected_thermo_by_species",
+    "thermo_selection_outcomes",
+    "candidate_lineage",
+    "transition_state_evidence",
+    "mechanism_roundtrip_counts",
+    "mechanism_fixture_provenance",
+)
 
 #: Deposit order (brief section 1): E2, formic acid, ARC runs, network.
 SOURCES = (
@@ -114,14 +130,28 @@ def git_commit() -> dict[str, Any]:
     return {"commit": run("rev-parse", "HEAD"), "dirty_tracked_files": len(run("status", "--porcelain", "--untracked-files=no").splitlines())}
 
 
-def package_versions() -> dict[str, str]:
-    versions = {}
-    for name in ("tckdb-client", "tckdb-schemas", "tckdb-chemkin"):
-        try:
-            versions[name] = metadata.version(name)
-        except metadata.PackageNotFoundError:
-            versions[name] = "not installed (run from the checkout)"
-    return versions
+def package_versions() -> dict[str, Any]:
+    """Versions declared by this checkout's pyproject files, and whether the build imported them from here.
+
+    Installed-distribution metadata can describe another checkout (an editable install made elsewhere), so the
+    declared version comes from the files and the import location is checked separately.
+    """
+    import tckdb_chemkin
+    import tckdb_client
+    import tckdb_schemas
+
+    declared = {}
+    for name, path in (
+        ("tckdb-client", REPO_ROOT / "clients" / "python" / "pyproject.toml"),
+        ("tckdb-chemkin", REPO_ROOT / "clients" / "python" / "adapters" / "chemkin" / "pyproject.toml"),
+        ("tckdb-schemas", REPO_ROOT / "schemas" / "python" / "tckdb-schemas" / "pyproject.toml"),
+    ):
+        match = re.search(r'^version\s*=\s*"([^"]+)"', path.read_text(), flags=re.MULTILINE)
+        declared[name] = match.group(1) if match else "unknown"
+    here = all(
+        REPO_ROOT in Path(module.__file__).resolve().parents for module in (tckdb_client, tckdb_chemkin, tckdb_schemas)
+    )
+    return {"declared_by_this_checkout": declared, "imported_from_this_checkout": here}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -187,7 +217,9 @@ def main(argv: list[str] | None = None) -> int:
         exports["archive"] = export.create_archive(archive, env).strip().splitlines()
         exports["archive_verify"] = export.verify_archive(archive, env).strip().splitlines()
         print("[export] expected outputs ...")
-        exports["expected_outputs"] = export.expected_outputs(out_dir / "expected_outputs", env).strip().splitlines()
+        wanted = list(config.get("expected_outputs") or EXPECTED_OUTPUTS)
+        printed = export.expected_outputs(out_dir / "expected_outputs", env, only=wanted).splitlines()
+        exports["expected_outputs"] = [ln for ln in printed if re.match(r"^[0-9a-f]{64}  ", ln)]
         exports["archive_sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
 
     report.write(out_dir / "build_report.json")

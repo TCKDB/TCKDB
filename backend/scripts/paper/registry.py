@@ -17,22 +17,21 @@ Adding a generator
 3. Add it to the manuscript correspondence table in
    ``docs/research/tckdb-phase-b-implementation-plan.md``.
 
-Registry hook for ``hessian_reanalysis`` (work package B4b)
------------------------------------------------------------
+``hessian_reanalysis`` (work package B4b)
+-----------------------------------------
 The spectrum-from-Hessian agreement table (``3_results.md:44``,
-``SI.md:29``) is produced by a generator named ``hessian_reanalysis`` that
-B4b adds. It must accept a ``Session`` and return, per transition-state entry
-with a stored Hessian, the recomputed frequencies, the parsed frequencies and
-the residual, ordered by the entry's public ref; refusals (entries whose
-Hessian cannot be reanalysed) are counted, not dropped. Register it here as
-``"hessian_reanalysis": hessian_reanalysis`` once it exists; nothing else in
-the deposit builder needs to change.
+``SI.md:29``) is produced by
+:func:`app.services.hessian_reanalysis.hessian_reanalysis`, registered below
+through :mod:`scripts.paper.snapshot_generators`. It covers every calculation
+with a stored Hessian or a stored frequency list, ordered by public ref; a
+calculation whose Hessian cannot be reanalysed is counted under its refusal
+status, not dropped.
 """
 
 from __future__ import annotations
 
 from app.services.deposit.expected_outputs import Generator
-from scripts.paper import generators
+from scripts.paper import generators, snapshot_generators
 
 GENERATORS: dict[str, Generator] = {
     "corpus_counts": generators.corpus_counts,
@@ -49,7 +48,13 @@ GENERATORS: dict[str, Generator] = {
     # QCSchema adapter and back, and its Psi4-vs-Gaussian measurements. Reads
     # committed fixtures; the session only hosts a rolled-back round trip.
     "qcschema_interchange": generators.qcschema_interchange,
-    # "hessian_reanalysis": added by B4b -- see the module docstring.
+    # The spectrum-from-Hessian check (work package B4b): see the module docstring.
+    "hessian_reanalysis": snapshot_generators.hessian_reanalysis,
+    # Demonstration snapshot (scripts/paper_snapshot): see snapshot_generators for what each answers.
+    "conformer_basins": snapshot_generators.conformer_basins,
+    "calculation_evidence": snapshot_generators.calculation_evidence,
+    "deposit_warnings": snapshot_generators.deposit_warnings,
+    "thermo_selection_outcomes": snapshot_generators.thermo_selection_outcomes,
 }
 
 __all__ = ["GENERATORS"]

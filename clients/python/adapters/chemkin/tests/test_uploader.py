@@ -68,6 +68,25 @@ def test_idempotency_keys_are_deterministic_and_unique(built):
     assert len(set(keys1)) == len(keys1)  # unique per record (DUP disambiguated)
 
 
+def test_two_species_sharing_a_smiles_get_distinct_thermo_keys(built):
+    """Singlet and triplet CH2 (or O) share a SMILES; the second must not reuse the first's key."""
+    import copy
+    from types import SimpleNamespace
+
+    first = copy.deepcopy(built.thermo[0])
+    second = copy.deepcopy(built.thermo[0])
+    second["species_entry"] = {**second["species_entry"], "multiplicity": 3}
+    payloads = SimpleNamespace(thermo=[first, second], transport=[], kinetics=[], warnings=[])
+    client = _StubClient()
+    upload_payloads(payloads, client=client, mechanism_id="mech-1")
+    keys = [c[2] for c in client.calls]
+    assert len(keys) == 2 and keys[0] != keys[1]
+    # The first occurrence keeps the key an earlier import of the same record used.
+    alone = _StubClient()
+    upload_payloads(SimpleNamespace(thermo=[first], transport=[], kinetics=[], warnings=[]), client=alone, mechanism_id="mech-1")
+    assert alone.calls[0][2] == keys[0]
+
+
 def test_dry_run_builds_keys_without_client(built):
     report = upload_payloads(built, client=None, mechanism_id="mech-1", dry_run=True)
     assert report.summary()["errored_total"] == 0

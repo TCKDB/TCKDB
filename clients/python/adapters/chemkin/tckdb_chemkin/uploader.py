@@ -110,13 +110,22 @@ def upload_payloads(
                 RecordResult(kind=kind, key=key, ok=False, error=str(exc))
             )
 
-    for payload in payloads.thermo:
-        smiles = payload["species_entry"]["smiles"]
-        _send("thermo", "/uploads/thermo", payload, ["thermo", _slug(smiles)])
-
-    for payload in payloads.transport:
-        smiles = payload["species_entry"]["smiles"]
-        _send("transport", "/uploads/transport", payload, ["transport", _slug(smiles)])
+    # Two species of one mechanism can share a SMILES and differ in spin (singlet and
+    # triplet CH2, or O): the key is built from the SMILES, so the second would reuse the
+    # first's key with a different payload and be refused as an idempotency conflict. A
+    # stable ordinal suffix, from the second occurrence on, keeps the first occurrence's key
+    # unchanged (so earlier imports still replay) and separates the rest.
+    for kind, endpoint, items in (
+        ("thermo", "/uploads/thermo", payloads.thermo),
+        ("transport", "/uploads/transport", payloads.transport),
+    ):
+        seen_species: dict[str, int] = {}
+        for payload in items:
+            smiles = payload["species_entry"]["smiles"]
+            n = seen_species.get(smiles, 0)
+            seen_species[smiles] = n + 1
+            parts = [kind, _slug(smiles)] + ([str(n)] if n else [])
+            _send(kind, endpoint, payload, parts)
 
     seen: dict[str, int] = {}
     for payload in payloads.kinetics:
