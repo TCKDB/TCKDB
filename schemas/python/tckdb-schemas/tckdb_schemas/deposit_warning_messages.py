@@ -106,6 +106,12 @@ RENDERED: dict[str, str] = {
         "Hessian method from the one the tolerance stored with this frequency calculation rests on. The stored "
         "tolerance was not changed."
     ),
+    "hessian_method_refined": (
+        "The recorded Hessian method, finite differences of gradients, was refined to finite differences of "
+        "energies: ORCA's NumFreq differentiates gradients, and for this method, which has no analytic gradient, "
+        "those gradients are themselves numerical. The tolerance stored with the frequency calculation rests on "
+        "the refined method."
+    ),
     "freq_list_incomplete_for_geometry": (
         "The frequency list carries fewer modes than the geometry it is attached to has vibrations. The "
         "complete signed unrounded list is required, never filtered: a partial list agrees with an "
@@ -585,6 +591,9 @@ ASSUMED_FAMILY = {
     "mp2": "MP2",
     "mp3": "MP3",
     "mp4": "MP4",
+    "mp4(sdq)": "MP4(DQ/SDQ)",
+    "mp4(sdtq)": "MP4(SDTQ)",
+    "mp5": "MP5",
     "cis": "CIS",
     "cisd": "CISD/CID",
     "casscf": "CASSCF",
@@ -593,8 +602,13 @@ ASSUMED_FAMILY = {
     "ccsd": "CCSD",
     "ccsd(t)": "CCSD(T)",
     "dlpno_other": "DLPNO",
+    "mp2-f12": "F12-MP2",
+    "autoci": "AUTOCI",
 }
 ASSUMPTION_RULES = (
+    "orca_no_analytic_gradient",
+    "orca_open_shell_no_gradient",
+    "orca_autoci_gradient_from_6",
     "program_default",
     "orca_meta_gga_analytic_from_5",
     "orca_numerical_documented_vv10",
@@ -614,6 +628,22 @@ def _assumed_reason(context: Mapping[str, Any], basis: str) -> str:
         return (
             f"{_NOT_RECORDED}: ORCA's manuals document numerical frequencies from analytic gradients for {what} "
             f"functionals, so {method} are assumed ({basis}); {_ASSUMED_TAIL}"
+        )
+    if rule == "orca_no_analytic_gradient":
+        label = family or "this method"
+        return (
+            f"{_NOT_RECORDED}: ORCA has no analytic gradient for {label} calculations, so numerical frequencies from "
+            f"numerical gradients are assumed ({basis}); {_ASSUMED_TAIL}"
+        )
+    if rule == "orca_open_shell_no_gradient":
+        return (
+            f"{_NOT_RECORDED}: ORCA has no analytic gradient for open-shell DLPNO-MP2 or for high-spin ROHF MP2, so "
+            f"numerical frequencies from numerical gradients are assumed ({basis}); {_ASSUMED_TAIL}"
+        )
+    if rule == "orca_autoci_gradient_from_6":
+        return (
+            f"{_NOT_RECORDED}: ORCA 6 and later has analytic gradients for the AUTOCI methods without "
+            f"frozen core or RI, so {method} are assumed ({basis}); {_ASSUMED_TAIL}"
         )
     if rule == "orca_pre5_meta_gga_no_analytic":
         return (
@@ -1605,6 +1635,27 @@ _HESSIAN_NOT_STORED = {
             "A Hessian was found in an uploaded artifact but not stored: the log has a force-constant block but no "
             "complete, trustworthy matrix could be read from it (it may be truncated)."
         ),
+        "archive_block_unreadable": (
+            "A Hessian was found in an uploaded artifact but not stored: the log has no force-constant block, and "
+            "the matrix in its archive block is not a complete, readable lower triangle for the atoms the archive "
+            "lists (it may be truncated)."
+        ),
+        "archive_frame_inconsistent": (
+            "A Hessian was found in an uploaded artifact but not stored: the log has no force-constant block, and "
+            "the matrix in its archive block is not consistent with the archive's own atoms (it does not annihilate "
+            "their rigid translations and rotations), so it may be in a different frame from the atoms it would be "
+            "bound to."
+        ),
+        "archive_atoms_unsupported": (
+            "A Hessian was found in an uploaded artifact but not stored: the log has no force-constant block, and "
+            "the archive lists its atoms in a form that is not read (a Z-matrix, or atomic numbers instead of "
+            "element symbols), so the matrix cannot be tied to atoms."
+        ),
+        "archive_composite_geometry_mismatch": (
+            "A Hessian was found in an uploaded artifact but not stored: the log has no force-constant block, and "
+            "its archive block is a composite job's final one, whose atoms are at a different geometry from the "
+            "frequency step the matrix comes from, so the matrix does not belong to those atoms."
+        ),
     },
     "hessian_not_stored_failed": {
         "read_failed": "A Hessian was found in an uploaded artifact but not stored: reading it failed unexpectedly.",
@@ -1786,6 +1837,20 @@ def _hessian_disagrees(context: Mapping[str, Any]) -> str | None:
     return None
 
 
+def _hessian_refined(context: Mapping[str, Any]) -> str | None:
+    recorded, stored = context.get("recorded"), context.get("stored_method")
+    if recorded in _HESSIAN_METHODS and stored in _HESSIAN_METHODS and context.get("refined_because") == "no_analytic_gradient":
+        basis = context.get("stored_basis")
+        why = f" ({basis})" if isinstance(basis, str) and basis in _TAU_WHY else ""
+        return (
+            f"The recorded Hessian method, {recorded}, was refined to {stored}{why}: ORCA's NumFreq differentiates "
+            "gradients, and for this method, which has no analytic gradient, those gradients are themselves "
+            "numerical, built from energies. The tolerance stored with this frequency calculation rests on the "
+            f"refined method, {stored}."
+        )
+    return None
+
+
 _PARAMETER_ORIGINS = {"input": "input deck", "output_log": "output log"}
 
 
@@ -1903,6 +1968,7 @@ _WITH_CONTEXT: dict[str, Any] = {
     "sp_energy_payload_log_mismatch": _sp_mismatch,
     "sp_energy_filled_from_log": _sp_filled,
     "hessian_method_disagrees_with_stored_tau_basis": _hessian_disagrees,
+    "hessian_method_refined": _hessian_refined,
     "parameter_disagrees_with_artifact": _parameter_disagrees,
     "input_deck_disagrees_with_output_log": _deck_disagrees_with_log,
     "reported_setting_differs_from_requested": _reported_differs,
@@ -2030,6 +2096,8 @@ def _closed_values(key: str, code: str) -> Any:
         "component": _LOT_COMPONENTS,
         "observed_in": frozenset(_PARAMETER_ORIGINS),
         "deck_method": _HESSIAN_METHODS,
+        "recorded": _HESSIAN_METHODS,
+        "refined_because": frozenset({"no_analytic_gradient"}),
         "stated_in": frozenset({"input", "output_log"}),
         "reported_method": _HESSIAN_METHODS,
         "stored_method": _HESSIAN_METHODS,
@@ -2108,6 +2176,10 @@ _HESSIAN_REASONS = frozenset(
         "store_failed",
         "sent_as_hessian",
         "log_block_unreadable",
+        "archive_block_unreadable",
+        "archive_frame_inconsistent",
+        "archive_atoms_unsupported",
+        "archive_composite_geometry_mismatch",
         "input_geometry_count",
         "geometry_not_found",
         "atom_count",

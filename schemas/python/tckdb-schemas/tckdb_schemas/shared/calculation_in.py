@@ -57,6 +57,7 @@ from tckdb_schemas.stationary_point import (
 from tckdb_schemas.hessian_method_assumption import (
     calculation_deck_method,
     calculation_echo_method,
+    calculation_numfreq_energy_implied,
     calculation_reported_method,
     check_calculation_deck_agrees,
     resolve_tau_for_calculation,
@@ -479,6 +480,7 @@ def calculation_in_to_with_results_payload(
     payload._deck_hessian_method = calculation_deck_method(calc_in)
     payload._reported_hessian_method = calculation_reported_method(calc_in)
     payload._echo_hessian_method = calculation_echo_method(calc_in)
+    payload._numfreq_energy_implied = calculation_numfreq_energy_implied(calc_in)
     return payload
 
 

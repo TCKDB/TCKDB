@@ -74,6 +74,22 @@ class RecordReviewConflict(DomainError):
         self.context = dict(context or {})
 
 
+class SelfApprovalForbidden(DomainError):
+    """A refusal (403) of an actor approving what they deposited; ``context`` holds refs only."""
+
+    def __init__(self, message: str, *, context: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.context = dict(context or {})
+
+
+class RecordSelfApprovalForbidden(SelfApprovalForbidden):
+    """``record_self_approval``: the actor deposited this record."""
+
+
+class SubmissionSelfApprovalForbidden(SelfApprovalForbidden):
+    """``submission_self_approval``: the actor uploaded this submission."""
+
+
 class NotFoundError(Exception):
     """Explicit 404 raised by service code.
 
@@ -154,12 +170,7 @@ class DataIntegrityError(Exception):
 
 
 def _detail_without_input(exc: ValueError, errors: object) -> str:
-    """``str(exc)``, rebuilt from loc/msg/type when it is a pydantic error list.
-
-    pydantic's own text carries ``input_value='...'`` for every error: the
-    caller's value, echoed (up to its repr limit) once per error. The message
-    keeps what is wrong and where, not the value.
-    """
+    """``str(exc)`` rebuilt from each error's loc, msg and type, without pydantic's ``input_value``."""
     if not (isinstance(errors, list) and errors and all(isinstance(e, dict) for e in errors)):
         return str(exc)
     lines = [f"{len(errors)} validation error{'s' if len(errors) != 1 else ''}"]
@@ -198,9 +209,7 @@ def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
 def _request_validation_error_handler(
     _request: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    # ``input`` is the caller's own value, echoed by pydantic. A 55 MB body that
-    # failed validation came back as a 55 MB response; the caller already holds
-    # it, and the error's ``loc`` says where the problem is.
+    # Drop pydantic's echo of the caller's value; ``loc`` says where the problem is.
     details = [
         {key: value for key, value in error.items() if key != "input"}
         for error in exc.errors()
@@ -304,6 +313,17 @@ def _record_review_conflict_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=409,
+        content=error_envelope(
+            str(exc), context=exc.context, fallback_code="domain_error"
+        ),
+    )
+
+
+def _self_approval_forbidden_handler(
+    _request: Request, exc: SelfApprovalForbidden
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=403,
         content=error_envelope(
             str(exc), context=exc.context, fallback_code="domain_error"
         ),
@@ -965,6 +985,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ValueError, _value_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(DomainError, _domain_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RecordReviewConflict, _record_review_conflict_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(SelfApprovalForbidden, _self_approval_forbidden_handler)  # type: ignore[arg-type]
     app.add_exception_handler(NotFoundError, _not_found_handler)  # type: ignore[arg-type]
     app.add_exception_handler(DataIntegrityError, _data_integrity_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(NoResultFound, _no_result_found_handler)  # type: ignore[arg-type]

@@ -105,6 +105,11 @@ def test_registry_covers_every_data_claim_and_is_callable():
         "experimental_cp_comparison",
         "thermoml_source_provenance",
         "qcschema_interchange",
+        "hessian_reanalysis",
+        "conformer_basins",
+        "calculation_evidence",
+        "deposit_warnings",
+        "thermo_selection_outcomes",
     }
     assert expected <= set(GENERATORS)
     for name, generator in GENERATORS.items():
@@ -147,23 +152,46 @@ def test_no_generator_output_carries_a_database_id_key(db_session, tmp_path):
 
 
 def test_mechanism_roundtrip_counts_match_the_fixture_and_the_manuscript_line():
+    """The mechanism the paper deposits is the published formic acid model (123 species, 3002 rate rows)."""
     counts = generators.mechanism_roundtrip_counts(session=None)
-    assert counts["species"] == 21
-    assert counts["rate_expressions"] == 64
-    assert counts["distinct_reactions"] == 61
-    assert counts["forms"]["chebyshev"] == 9
-    assert counts["forms"]["troe"] == 5
-    assert counts["forms"]["troe_with_third_body_efficiencies"] == 5
-    assert counts["forms"]["duplicate"] == 6
-    assert counts["nasa7_thermo_entries"] == 21
-    assert counts["transport_entries"] == 21
+    assert counts["mechanism_file"] == "chem_annotated.inp"
+    assert counts["species"] == 123
+    assert counts["rate_expressions"] == 3002
+    assert counts["distinct_reactions"] == 2926
+    assert counts["forms"]["chebyshev"] == 1674
+    assert counts["forms"]["plog"] == 11  # 10 PLOG + 1 three-body PLOG in the authors' own count
+    assert counts["forms"]["troe"] == 8
+    assert counts["forms"]["lindemann"] == 4
+    assert counts["forms"]["duplicate"] == 111  # DUPLICATE lines in the CHEMKIN file
+    assert counts["nasa7_thermo_entries"] == 123
+    assert counts["transport_entries"] == 0  # the model's transport lives only in the authors' YAML
+    assert "deposited_by_workflow_tool" not in counts  # no session, no deposited side
+
+
+def test_mechanism_roundtrip_counts_report_what_a_deposit_put_in_the_database(db_session):
+    species = make_species(db_session, smiles="C=O")
+    entry = make_species_entry(db_session, species=species)
+    tool = make_workflow_tool_release(db_session, name="demo mechanism", version="1")
+    make_thermo_scalar(db_session, species_entry=entry, workflow_tool_release_id=tool.id)
+    db_session.flush()
+
+    counts = generators.mechanism_roundtrip_counts(db_session)
+    (row,) = [r for r in counts["deposited_by_workflow_tool"] if r["workflow_tool"] == "demo mechanism"]
+    assert row["thermo_records"] == 1 and row["thermo_species_entries"] == 1
+    assert row["kinetics_records"] == 0
 
 
 def test_mechanism_fixture_provenance_digests_the_committed_files():
     provenance = generators.mechanism_fixture_provenance(session=None)
-    assert [f["path"] for f in provenance["files"]] == ["chem.inp", "species_dictionary.txt", "tran.dat", "PROVENANCE.md"]
+    assert [f["path"] for f in provenance["files"]] == [
+        "chem_annotated.inp",
+        "species_dictionary.txt",
+        "chem_annotated.yaml",
+        "RMG_input.txt",
+        "PROVENANCE.md",
+    ]
     assert all(len(f["sha256"]) == 64 and f["bytes"] > 0 for f in provenance["files"])
-    assert "Energy & Fuels" in provenance["emulated_publication"]
+    assert "ACS Omega" in provenance["publication"]
     assert provenance["cantera_version"] is None or provenance["cantera_version"][0].isdigit()
 
 

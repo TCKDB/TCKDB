@@ -65,7 +65,6 @@ def test_resolve_conformer_group_takes_advisory_xact_lock(db_conn) -> None:
                 resolve_conformer_group(
                     session,
                     species_entry,
-                    label="conf-b",
                     smiles="[H]",
                     xyz_atoms=(("H", 0.0, 0.0, 0.0),),
                     defining=True,
@@ -177,7 +176,7 @@ def test_a_single_atom_never_joins_a_group_that_a_merge_emptied(db_conn) -> None
         session.flush()
         assert emptied.id < live.id
         group, fingerprint, _scheme = resolve_conformer_group(
-            session, entry, label=None, smiles=None, xyz_atoms=None, defining=True
+            session, entry, smiles=None, xyz_atoms=None, defining=True
         )
         assert fingerprint is None  # no structure to fingerprint: the fallback applies
         assert group.id == live.id

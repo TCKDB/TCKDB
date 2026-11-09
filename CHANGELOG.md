@@ -22,12 +22,56 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
-## An over-limit body gets a coded 413, and a 422 no longer echoes the body (2026-11-09)
+## An over-limit body gets a coded 413; a 422 does not echo the body (2026-11-09)
 
-- **What changed:** the frontend nginx answers a body over its cap (100 MiB on `/api/v1/uploads/`, `/api/v1/jobs/` and `/api/v1/calculations/<ref>/artifacts`, 10 MiB on the rest of `/api/`) with `413 request_body_too_large` as JSON in the API's error envelope (`context.max_bytes` is that location's cap), where it sent a bare HTML page. No limit changed. A request-validation 422 no longer carries the caller's value under each error's `input`; a 55 MB invalid body used to come back as a 55 MB response. `tckdb-client` turns a 413 with no TCKDB code (Cloudflare's or an unknown proxy's HTML page, or an empty body) into an error that names the limit and what to do.
-- **Not covered:** Cloudflare's own 100,000,000-byte limit on the hosted instance answers before the request reaches nginx, with its own page. The client explains that one.
-- **Schema and migration:** none. Needs a frontend image deploy for the nginx change.
-- **Versions:** `tckdb-schemas` 0.162.0, `tckdb-client` 0.190.0.
+- **Behaviour:** the frontend nginx answers a body over its cap (100 MiB on `/api/v1/uploads/`, `/api/v1/jobs/` and `/api/v1/calculations/<ref>/artifacts`, 10 MiB on other `/api/` routes) with `413 request_body_too_large` as JSON in the API's error envelope (`context.max_bytes` is the cap), instead of a bare HTML page. A request-validation 422 no longer carries the caller's value under each error's `input` or in its message. `tckdb-client` explains a 413 that carries no TCKDB code.
+- **Schema and migration:** none. The nginx change needs a frontend image deploy.
+- **Versions:** `tckdb-schemas` 0.170.0, `tckdb-client` 0.199.0.
+
+## A thermo target says whose claim it is; imported CHEMKIN thermo declares its target (2026-11-09)
+
+- **What changed:**
+  - A thermo record's `thermodynamic_target` gains `declared_by`: `depositor` (the default; existing targets read `depositor`) or `chemkin_format`, a statement by the depositing client that the CHEMKIN format defines the target. It is stored, returned in the thermo read's `thermodynamic_target`, carried by the bundle export, and shown as `target_declared_by` on each thermo selection candidate. The legacy thermo read returns `thermodynamic_target_declared_by` as `null` when no target is declared.
+  - A `chemkin_format` target is refused unless it is `equilibrium_ensemble` (`thermo_declared_by_target_incoherent`) on a record with phase `gas` and a NASA-7 block (`thermo_declared_by_record_incoherent`).
+  - `tckdb-chemkin` declares `equilibrium_ensemble` with `declared_by: chemkin_format` for gas-phase entries. The phase comes from the card's column-45 letter (`G`, `L`, `S`); `L` and `S` declare their phase and no target, and a blank or unknown letter declares neither (a blank used to read as `G`). It sends a new wire key an older server refuses, and needs a server at migration `e7a3c1d9f482` or later and `tckdb-schemas` 0.167.0 or later.
+  - Thermo selection of the formic acid model's 123 species answers `sole_eligible_candidate` instead of `no_applicable_candidate`.
+- **Schema and migration:** revision `e7a3c1d9f482` adds `thermo.thermodynamic_target_declared_by` (enum `thermo_declaration_source`, `NOT NULL DEFAULT 'depositor'`). **Versions:** `tckdb-schemas` 0.167.0, `tckdb-client` 0.196.0, `tckdb-chemkin` 0.7.0.
+
+## A depositor cannot approve their own record, and the record-review route checks what it is given (2026-11-09)
+
+- **What changed:** `PATCH /record-reviews/{record_type}/{record_id}` to `approved` compared the actor only with the review row's `created_by`, which is NULL when the curator's own request creates the row (a `species` or `reaction`, which no upload targets). The rule is now judged on every deposit signal: the review row's `created_by`, the record's own `created_by`, and the uploader of any submission linked to the record.
+  - Owned records (thermo, kinetics, statmech, transport, calculation, reaction entry, transition state and entry, network and solve, applied energy correction, conformer observation, molecular property observation) are refused to their depositor, judged on the record's own `created_by` and the review row's; linked-submission uploaders count only when both are NULL.
+  - Shared identities (`species`, `reaction`, `species_entry`, `conformer_group`) are refused only to their sole depositor, so who deposited first no longer decides. A `species` or `reaction` takes the signals of its entries.
+  - The bulk submission approval returns a record that is already approved untouched (reviewer, time and history stay), and does not judge it again.
+  - The review queue read carries `actor_may_approve` per row (false when the rule would refuse the reader; null on approved and rejected rows); the review page uses it to hide "approved" (it used to compare `created_by` with the signed-in user). Needs a frontend deploy.
+  - The refusal is now `record_self_approval`, HTTP 403 with `record_type` and `record_ref` in `context` (was an uncoded 400 `domain_error`).
+  - `POST /submissions/{id}/approve` by the submission's uploader now carries the code `submission_self_approval` (403, was an uncoded 400); the rule itself is unchanged.
+  - `PATCH /record-reviews` on a record that does not exist is a 404 `record_not_found`, and on `record_type=artifact` a 422 `record_type_not_reviewable`; before, either created a review row.
+- **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.166.0, `tckdb-client` 0.195.0.
+
+## An xtb output file is accepted as an `output_log`, and artifact refusals carry codes (2026-11-09)
+
+- **What changed:**
+  - An xtb output file (`xtb.out`, and xtb's `g98.out`) is accepted as an `output_log` and identified as xtb. The banner version is compared with the declared software release. No energy, frequency, Hessian, charge, multiplicity or geometry is read from it, and no warning is raised for that.
+  - Every artifact validation refusal has a code and `context`: `output_log_signature_unrecognized`, `artifact_empty`, `artifact_too_large`, `artifact_sha256_mismatch`, `artifact_size_mismatch`, `artifact_not_utf8_text`, `artifact_invalid_base64`, `artifact_total_size_too_large`, `artifact_encoded_payload_too_large`, `artifact_total_encoded_payload_too_large` (all 422). A depositor's filename is in `context.depositor_supplied`, not the message.
+- **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.163.0, `tckdb-client` 0.192.0.
+
+## Archives with enum or text primary keys restore (2026-11-09)
+
+An archive containing a table whose primary key includes an enum or text column
+(for example a species that is both reactant and product of one reaction) is
+no longer refused on restore with "Primary keys are duplicated or unsorted".
+Export now orders those keys by codepoint, which is the order restore checks.
+Older archives written with the mismatched order are refused; there is no
+legacy path. No schema or migration change.
+
+## A build script for the demonstration snapshot (2026-11-09)
+
+- **What changed:**
+  - `scripts/paper_snapshot/` builds a snapshot on an empty local instance from a sources config: the E2 conformer study through the client builders, the formic acid RMG model through the CHEMKIN adapter, curator approval, the archive and the expected outputs.
+  - `backend/scripts/paper/`: `hessian_reanalysis` is registered; new generators `conformer_basins`, `calculation_evidence`, `deposit_warnings`, `thermo_selection_outcomes` and `structure_selection_outcomes`; `mechanism_roundtrip_counts` and `mechanism_fixture_provenance` report on the formic acid model.
+  - `tckdb-chemkin` keys a species record (thermo, transport) by SMILES, multiplicity and charge (when not zero), so singlet and triplet CH2 or O no longer share an idempotency key. Species that still share all three are keyed by their CHEMKIN label, with a warning in the import report.
+- **Schema and migration:** none. **Versions:** `tckdb-chemkin` 0.6.1.
 
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)
 
@@ -47,6 +91,11 @@ dataset must never require a code release.
 - **Why:** spin treatment follows each species' multiplicity, so a reaction mixing radicals (unrestricted) and closed-shell molecules (restricted) had no declaration the old row-id comparison accepted, and every such deposit drew `missing_level_of_theory_provenance`.
 - **Unchanged:** `spin_treatment` stays in level identity and in the hash; thermo and statmech level checks.
 - **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.161.0, `tckdb-client` 0.189.0.
+
+## Two refusals gain codes (2026-11-09)
+
+- **What changed:** a reaction deposited under a reaction family different from the one it is already recorded under is still refused (422), now with the code `reaction_family_conflict` instead of the generic `validation_error`; its message no longer quotes depositor text and names a family only when it is a seeded vocabulary name. All three conflict shapes are refused: seeded against seeded, raw against raw, and seeded against raw in either order (the mixed case used to be accepted). A computed-reaction bundle's family now applies to the bundle's own reaction only, not to kinetics fits of other reactions in it. A network solve whose bath-gas mole fractions do not sum to 1 within 1e-9 now returns `kinetics_bath_gas_mole_fraction_sum`, the code a kinetics rate's bath gas already used (one rule, one code, one tolerance).
+- **Schema and migration:** none (`tckdb-schemas` 0.162.0, `tckdb-client` 0.190.0).
 
 ## A response the server cannot build is a logged 500, not a bare error or a 422 (2026-11-07)
 

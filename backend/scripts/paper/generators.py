@@ -43,6 +43,7 @@ from app.db.models.common import (
 )
 from app.db.models.dataset_release import DatasetRelease, ReleaseSelection
 from app.db.models.external_source import ExternalSourceRecord
+from app.db.models.kinetics import Kinetics
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.network import Network
 from app.db.models.reaction import ChemReaction, ReactionEntry
@@ -60,8 +61,17 @@ from app.services.machine_review.query import SCIENTIFIC_CHECK_PROVIDER
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
-MECHANISM_FIXTURE_DIR = BACKEND_ROOT / "tests" / "integration" / "fixtures" / "rmg_ammonia_methane"
-MECHANISM_FIXTURE_FILES = ("chem.inp", "species_dictionary.txt", "tran.dat", "PROVENANCE.md")
+#: The mechanism the paper deposits: the published formic acid model (Wu and Grinberg Dana 2026), unmodified.
+#: (The ammonia-methane fixture stays in the repository as a test fixture and is no longer reported on.)
+MECHANISM_FIXTURE_DIR = BACKEND_ROOT / "tests" / "integration" / "fixtures" / "rmg_formic_acid_wu2026"
+MECHANISM_FILE = "chem_annotated.inp"
+MECHANISM_FIXTURE_FILES = (
+    "chem_annotated.inp",
+    "species_dictionary.txt",
+    "chem_annotated.yaml",
+    "RMG_input.txt",
+    "PROVENANCE.md",
+)
 CHEMKIN_ADAPTER = REPO_ROOT / "clients" / "python" / "adapters" / "chemkin"
 
 
@@ -126,20 +136,41 @@ def _parse_fixture_mechanism():
     from tckdb_chemkin.parser import parse_mechanism
     from tckdb_chemkin.transport import parse_transport_file
 
-    mechanism = parse_mechanism((MECHANISM_FIXTURE_DIR / "chem.inp").read_text())
-    mechanism.transport = parse_transport_file((MECHANISM_FIXTURE_DIR / "tran.dat").read_text())
+    mechanism = parse_mechanism((MECHANISM_FIXTURE_DIR / MECHANISM_FILE).read_text())
+    transport_file = MECHANISM_FIXTURE_DIR / "tran.dat"
+    if transport_file.is_file():  # the formic acid model has none: its transport lives only in the authors' YAML
+        mechanism.transport = parse_transport_file(transport_file.read_text())
     return mechanism
 
 
-def mechanism_roundtrip_counts(session: Session) -> dict[str, Any]:
-    """Species, rate expressions, distinct reactions and rate forms in the fixture.
+def _deposited_by_workflow_tool(session: Session) -> list[dict[str, Any]]:
+    """Return thermo and kinetics record counts per workflow tool release."""
+    releases = sorted(
+        session.scalars(select(WorkflowToolRelease)),
+        key=lambda release: (release.workflow_tool.name, release.version or "", release.id),
+    )
+    rows = []
+    for release in releases:
+        thermo = list(session.scalars(select(Thermo).where(Thermo.workflow_tool_release_id == release.id)))
+        kinetics = list(session.scalars(select(Kinetics).where(Kinetics.workflow_tool_release_id == release.id)))
+        if not thermo and not kinetics:
+            continue
+        rows.append(
+            {
+                "workflow_tool": release.workflow_tool.name,
+                "version": release.version,
+                "thermo_records": len(thermo),
+                "thermo_species_entries": len({t.species_entry_id for t in thermo}),
+                "kinetics_records": len(kinetics),
+                "kinetics_reaction_entries": len({k.reaction_entry_id for k in kinetics}),
+                "kinetics_by_model_kind": dict(sorted(Counter(k.model_kind.value for k in kinetics).items())),
+            }
+        )
+    return rows
 
-    Reads the committed fixture through the importer's parser, the same
-    reader the round-trip test uses, so the number the paper quotes is the
-    number the test asserts. ``session`` is unused: the mechanism is a
-    file, not a database record.
-    """
-    del session
+
+def mechanism_roundtrip_counts(session: Session | None) -> dict[str, Any]:
+    """Return the fixture's species, rate and form counts and, given a session, what was deposited from it."""
     mechanism = _parse_fixture_mechanism()
 
     def _key(reaction) -> tuple:
@@ -169,7 +200,8 @@ def mechanism_roundtrip_counts(session: Session) -> dict[str, Any]:
         if reaction.duplicate:
             forms["duplicate"] += 1
 
-    return {
+    out: dict[str, Any] = {
+        "mechanism_file": MECHANISM_FILE,
         "species": len(mechanism.species),
         "rate_expressions": len(mechanism.reactions),
         "distinct_reactions": len({_key(reaction) for reaction in mechanism.reactions}),
@@ -177,6 +209,9 @@ def mechanism_roundtrip_counts(session: Session) -> dict[str, Any]:
         "nasa7_thermo_entries": len(mechanism.thermo),
         "transport_entries": len(mechanism.transport or {}),
     }
+    if session is not None:
+        out["deposited_by_workflow_tool"] = _deposited_by_workflow_tool(session)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -462,11 +497,17 @@ def mechanism_fixture_provenance(session: Session) -> dict[str, Any]:
         content = (MECHANISM_FIXTURE_DIR / name).read_bytes()
         files.append({"path": name, "sha256": hashlib.sha256(content).hexdigest(), "bytes": len(content)})
     provenance = (MECHANISM_FIXTURE_DIR / "PROVENANCE.md").read_text(encoding="utf-8")
-    citation = [line.strip("> ").strip() for line in provenance.splitlines() if line.startswith(">")]
+    # The "**Source.**" paragraph of the provenance note: the publication the files are the SI of.
+    source: list[str] = []
+    for line in provenance.splitlines():
+        if line.startswith("**Source.**") or (source and line.strip()):
+            source.append(line.replace("**Source.**", "").strip())
+        elif source:
+            break
     return {
         "fixture_directory": str(MECHANISM_FIXTURE_DIR.relative_to(REPO_ROOT)),
         "files": files,
-        "emulated_publication": " ".join(citation),
+        "publication": " ".join(source),
         "cantera_version": _distribution_version("cantera"),
         "round_trip_test": "backend/tests/integration/test_chemkin_round_trip_real.py",
     }

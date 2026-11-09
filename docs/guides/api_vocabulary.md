@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 353 | `backend/app/api/code_catalogue.py` |
-| **total** | **693** | |
+| Refusal codes a caller can receive | 370 | `backend/app/api/code_catalogue.py` |
+| **total** | **710** | |
 
 ## How a record is named
 
@@ -727,15 +727,17 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `invalid_idempotency_key` | a thing |
 
-### HTTP 403 (3 codes)
+### HTTP 403 (5 codes)
 
 | Code | Names |
 | --- | --- |
+| `record_self_approval` | a relationship — read `context` |
 | `rights_attestation_not_depositor` | a thing |
 | `rights_attestation_requires_curator` | a thing |
+| `submission_self_approval` | a relationship — read `context` |
 | `submission_supersede_not_owner` | a thing |
 
-### HTTP 404 (28 codes)
+### HTTP 404 (29 codes)
 
 | Code | Names |
 | --- | --- |
@@ -746,6 +748,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `manifest_not_frozen` | a thing |
 | `owner_missing` | a thing |
 | `path_search_result_not_found` | a thing |
+| `record_not_found` | a thing |
 | `scan_result_not_found` | a thing |
 | `structure_finding_reference_not_found` | a thing |
 | `structure_finding_subject_not_found` | a thing |
@@ -809,7 +812,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `network_export_body_too_large` | a relationship — read `context` |
 | `request_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (286 codes)
+### HTTP 422 (300 codes)
 
 | Code | Names |
 | --- | --- |
@@ -817,6 +820,15 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `applied_energy_correction_source_calculation_owner_mismatch` | a relationship — read `context` |
 | `applied_energy_correction_source_key_undeclared` | a thing |
 | `arrhenius_a_units_molecularity_mismatch` | a relationship — read `context` |
+| `artifact_empty` | a thing |
+| `artifact_encoded_payload_too_large` | a relationship — read `context` |
+| `artifact_invalid_base64` | a thing |
+| `artifact_not_utf8_text` | a thing |
+| `artifact_sha256_mismatch` | a relationship — read `context` |
+| `artifact_size_mismatch` | a relationship — read `context` |
+| `artifact_too_large` | a relationship — read `context` |
+| `artifact_total_encoded_payload_too_large` | a relationship — read `context` |
+| `artifact_total_size_too_large` | a relationship — read `context` |
 | `assessment_input_check_limit` | a relationship — read `context` |
 | `atom_map_atoms_unaccounted_for` | a relationship — read `context` |
 | `atom_map_contradicts_irc_mapping` | a relationship — read `context` |
@@ -965,6 +977,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `observation_identity_hint_conflict` | a relationship — read `context` |
 | `observation_identity_target_not_ground_state_minimum` | a relationship — read `context` |
 | `offset_too_large` | a relationship — read `context` |
+| `output_log_signature_unrecognized` | a relationship — read `context` |
 | `parameter_renamed` | a relationship — read `context` |
 | `parameter_value_requires_key` | a thing |
 | `post_search_fields_must_be_in_body` | a thing |
@@ -974,6 +987,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `reaction_charge_not_conserved` | a relationship — read `context` |
 | `reaction_entry_handle_conflict` | a relationship — read `context` |
 | `reaction_entry_null_reaction` | a relationship — read `context` |
+| `reaction_family_conflict` | a relationship — read `context` |
 | `reaction_handle_conflict` | a relationship — read `context` |
 | `reaction_mass_balance_failed` | a relationship — read `context` |
 | `reaction_reversible_required` | a thing |
@@ -981,6 +995,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `record_not_approved` | a thing |
 | `record_ref_not_selectable` | a thing |
 | `record_subject_mismatch` | a relationship — read `context` |
+| `record_type_not_reviewable` | a thing |
 | `record_type_not_selectable` | a thing |
 | `relative_conformer_energy_compare_identical_protocols` | a relationship — read `context` |
 | `relative_conformer_energy_population_too_large` | a relationship — read `context` |
@@ -1053,6 +1068,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `supersedes_same_record` | a relationship — read `context` |
 | `term_symbol_invalid` | a thing |
 | `thermo_declaration_invalid` | a thing |
+| `thermo_declared_by_record_incoherent` | a relationship — read `context` |
+| `thermo_declared_by_target_incoherent` | a relationship — read `context` |
 | `thermo_energy_level_ambiguous` | a relationship — read `context` |
 | `thermo_energy_level_contradiction` | a relationship — read `context` |
 | `thermo_energy_level_requires_sp` | a relationship — read `context` |

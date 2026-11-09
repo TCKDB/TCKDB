@@ -10,9 +10,16 @@ aids, not parallel APIs — the server remains authoritative.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import TYPE_CHECKING, Any, Callable, Iterator
 
-from tckdb_client.builders.artifact import Artifact, PlannedArtifactUpload
+from tckdb_client.builders.artifact import (
+    Artifact,
+    PlannedArtifactUpload,
+    artifact_wire,
+    file_sha256,
+    plan_inline_artifacts,
+    posted_artifact_keys,
+)
 from tckdb_client.builders.base import KeyMinter
 from tckdb_client.builders.calculation import Calculation
 from tckdb_client.builders.diagnostics import DIAG_CODES, Diagnostic
@@ -101,8 +108,16 @@ class ComputedSpeciesUpload:
     statmech: Statmech | None = None
     transport: Transport | None = None
     note: str | None = None
+    #: Send attached files inline in this upload (default). ``False`` defers
+    #: every file to the two-phase ``artifact_plan`` / ``upload_artifacts``
+    #: path. See ``tckdb_client.builders.artifact`` for the size rules.
+    inline_artifacts: bool = True
 
     upload_kind: str = field(default="computed_species", init=False)
+
+    # Working set of artifact ``id()``s while ``to_payload()`` builds; not read
+    # by ``artifact_plan``, which does not depend on it.
+    _inlined: set[int] = field(default_factory=set, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         if not isinstance(self.species, Species):
@@ -221,6 +236,19 @@ class ComputedSpeciesUpload:
     def to_payload(self) -> dict[str, Any]:
         """Return the dict shape accepted by ``ComputedSpeciesUploadRequest``.
 
+        Attached artifacts are read from disk and embedded in their
+        calculations' ``artifacts`` (see :mod:`tckdb_client.builders.artifact`
+        for what stays out). Raises :class:`TCKDBBuilderValidationError` when
+        an attached file is missing or over the per-artifact cap.
+        """
+        self._inlined = (
+            plan_inline_artifacts(self.calculations) if self.inline_artifacts else set()
+        )
+        return self._build_payload()
+
+    def _build_payload(self) -> dict[str, Any]:
+        """Assemble the payload, embedding the artifacts in ``self._inlined``.
+
         Two invariants underpin determinism (§10, §11 of the spec):
 
         - Local keys are minted from ``label`` slugs when present and
@@ -319,23 +347,33 @@ class ComputedSpeciesUpload:
                     path="transport",
                 )
             )
+        deferred = _deferred_artifacts(self.calculations, self.inline_artifacts)
         for calc in self.calculations:
-            if calc.artifacts:
-                out.append(_artifact_second_phase_diag(calc))
+            if id(calc) in deferred:
+                out.append(_artifact_second_phase_diag(calc, deferred[id(calc)]))
         return out
 
     # ------------------------------------------------------------------
     # Artifact plan
     # ------------------------------------------------------------------
 
-    def artifact_plan(self, upload_result: Any) -> list[PlannedArtifactUpload]:
+    def artifact_plan(
+        self, upload_result: Any, payload: Any = None
+    ) -> list[PlannedArtifactUpload]:
         """Resolve attached artifacts against the server upload result.
 
         Returns a list of :class:`PlannedArtifactUpload` records,
-        one per artifact, with ``calculation_id`` populated from the
-        server response. Pass the returned list to
+        one per artifact that did **not** go inline, with ``calculation_id``
+        populated from the server response. Pass the returned list to
         :meth:`tckdb_client.TCKDBClient.upload_artifacts` to execute
         the second-phase uploads.
+
+        ``payload`` is the dict you posted (``to_payload()``): files already
+        present in it (matched on calculation, kind, filename and content) are
+        skipped. **Pass it whenever the files may change after posting.**
+        Without it the choice is recomputed from the builders and the files on
+        disk, which can disagree with what was posted if a file was edited in
+        between; no state is kept from ``to_payload()``.
 
         Raises :class:`TCKDBBuilderValidationError` when:
 
@@ -349,7 +387,8 @@ class ComputedSpeciesUpload:
         """
         key_to_id = _extract_computed_species_calc_keys(upload_result)
         key_to_ref = _extract_computed_species_calc_refs(upload_result)
-        return _build_plan(self.calculations, key_to_id, key_to_ref)
+        skip = _inline_skip(self.calculations, self.inline_artifacts, payload)
+        return _build_plan(self.calculations, key_to_id, key_to_ref, skip)
 
     def artifact_plan_preview(
         self, *, starting_calculation_id: int = 1000,
@@ -366,10 +405,15 @@ class ComputedSpeciesUpload:
         let producers see what :meth:`artifact_plan` would produce
         once the bundle has been uploaded for real.
         """
-        synthetic_response = _build_species_preview_response(
-            self.to_payload(), start=starting_calculation_id,
-        )
-        return self.artifact_plan(synthetic_response)
+        # A preview lists every attached file and reads none of them.
+        saved, self._inlined = self._inlined, set()
+        try:
+            synthetic_response = _build_species_preview_response(
+                self._build_payload(), start=starting_calculation_id,
+            )
+            return self.artifact_plan(synthetic_response, payload={})
+        finally:
+            self._inlined = saved
 
     # ------------------------------------------------------------------
     # Public iteration
@@ -520,6 +564,7 @@ class ComputedSpeciesUpload:
             field_name, block = result
             out[field_name] = block
 
+        _put_inline_artifacts(out, calc, self._inlined)
         return out
 
 
@@ -536,18 +581,79 @@ def _is_in(target: object, items: list[object]) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _artifact_second_phase_diag(calc: Calculation) -> Diagnostic:
-    """One ``artifact_upload_requires_second_phase`` diagnostic per calc."""
+def _inline_skip(
+    calculations: "list[Calculation]", inline_artifacts: bool, payload: Any
+) -> "Callable[[str, Artifact], bool]":
+    """Predicate: did this artifact already go inline with the upload?
+
+    From the posted ``payload`` when given; otherwise recomputed (the choice
+    is a pure function of the builders and the files). If the files can no
+    longer be checked, nothing is assumed to have gone inline.
+    """
+    if payload is not None:
+        present = posted_artifact_keys(payload)
+        # Matched on content too: two files with one name and kind on a
+        # calculation are different artifacts. A file that cannot be read, or
+        # that changed since it was posted, is not assumed to be in the payload.
+        return lambda key, art: (key, art.kind, art.path.name, file_sha256(art.path) or "-") in present
+    if not inline_artifacts:
+        return lambda key, art: False
+    try:
+        chosen = plan_inline_artifacts(calculations)
+    except TCKDBBuilderValidationError:
+        chosen = set()
+    return lambda key, art: id(art) in chosen
+
+
+def _put_inline_artifacts(
+    out: dict[str, Any], calc: Calculation, inlined: set[int]
+) -> None:
+    """Embed ``calc``'s inline-chosen artifacts as ``out["artifacts"]``."""
+    wires = [artifact_wire(art) for art in calc.artifacts if id(art) in inlined]
+    if wires:
+        out["artifacts"] = wires
+
+
+def _deferred_artifacts(
+    calculations: "list[Calculation]", inline_artifacts: bool
+) -> "dict[int, int]":
+    """``id(calc) -> count`` of artifacts that will need the second phase.
+
+    Used by ``emission_diagnostics``, which must not raise: when the inline
+    choice cannot be made (a file is missing) every artifact is reported, as
+    the two-phase path would send them.
+    """
+    if inline_artifacts:
+        try:
+            inlined = plan_inline_artifacts(calculations)
+        except TCKDBBuilderValidationError:
+            inlined = set()
+    else:
+        inlined = set()
+    out: dict[int, int] = {}
+    for calc in calculations:
+        n = sum(1 for art in calc.artifacts if id(art) not in inlined)
+        if n:
+            out[id(calc)] = n
+    return out
+
+
+def _artifact_second_phase_diag(calc: Calculation, count: int | None = None) -> Diagnostic:
+    """One ``artifact_upload_requires_second_phase`` diagnostic per calc.
+
+    ``count`` is how many of the calculation's artifacts are not inlined.
+    """
     label = calc.label or calc.type
+    n = len(calc.artifacts) if count is None else count
     return Diagnostic(
         level="warning",
         code=DIAG_CODES.ARTIFACT_UPLOAD_REQUIRES_SECOND_PHASE,
         message=(
-            f"Calculation {label!r} has "
-            f"{len(calc.artifacts)} attached artifact(s). Artifacts are "
-            "not included in the scientific upload payload -- call "
-            "upload.artifact_plan(result) on the upload response and "
-            "pass the plan to client.upload_artifacts(plan)."
+            f"Calculation {label!r} has {n} attached artifact(s) that are "
+            "not included in the scientific upload payload (inline_artifacts "
+            "is off, or the inline size budget is used up, or a file could "
+            "not be read) -- call upload.artifact_plan(result) on the upload "
+            "response and pass the plan to client.upload_artifacts(plan)."
         ),
         path=f"calculations[{label}].artifacts",
     )
@@ -687,8 +793,12 @@ def _build_plan(
     calculations: "list[Calculation]",
     key_to_id: dict[str, int],
     key_to_ref: dict[str, str] | None = None,
+    skip: "Callable[[str, Artifact], bool] | None" = None,
 ) -> list[PlannedArtifactUpload]:
     """Render one ``PlannedArtifactUpload`` per attached artifact.
+
+    Artifacts for which ``skip(calculation_key, artifact)`` is true went
+    inline with the upload and are left out.
 
     The calculation's bundle-local key is recomputed from its label
     via the same :class:`KeyMinter` rules the upload assembler uses
@@ -703,9 +813,12 @@ def _build_plan(
         minter.mint(calc, label=calc.label)
 
     for calc in calculations:
-        if not calc.artifacts:
-            continue
         calc_key = minter.lookup(calc)
+        pending = [
+            art for art in calc.artifacts if skip is None or not skip(calc_key, art)
+        ]
+        if not pending:
+            continue
         if calc_key not in key_to_id:
             raise TCKDBBuilderValidationError(
                 f"artifact_plan: calculation key {calc_key!r} has "
@@ -714,7 +827,7 @@ def _build_plan(
                 "calc, or the response was tampered with."
             )
         calc_id = key_to_id[calc_key]
-        for art in calc.artifacts:
+        for art in pending:
             plan.append(
                 PlannedArtifactUpload(
                     calculation_key=calc_key,
@@ -846,8 +959,16 @@ class ComputedReactionUpload:
     species_statmech: dict[Species, Statmech] | None = None
     species_transport: dict[Species, Transport] | None = None
     note: str | None = None
+    #: Send attached files inline in this upload (default). ``False`` defers
+    #: every file to the two-phase ``artifact_plan`` / ``upload_artifacts``
+    #: path. See ``tckdb_client.builders.artifact`` for the size rules.
+    inline_artifacts: bool = True
 
     upload_kind: str = field(default="computed_reaction", init=False)
+
+    # Working set of artifact ``id()``s while ``to_payload()`` builds; not read
+    # by ``artifact_plan``, which does not depend on it.
+    _inlined: set[int] = field(default_factory=set, init=False, repr=False, compare=False)
 
     # Validated copy of ``species_calculations``: kept as a list of
     # ``(Species, [Calculation, …])`` pairs so payload generation can
@@ -1492,6 +1613,19 @@ class ComputedReactionUpload:
     def to_payload(self) -> dict[str, Any]:
         """Render the dict accepted by ``ComputedReactionUploadRequest``.
 
+        Attached artifacts are read from disk and embedded in their
+        calculations' ``artifacts`` (see :mod:`tckdb_client.builders.artifact`
+        for what stays out). Raises :class:`TCKDBBuilderValidationError` when
+        an attached file is missing or over the per-artifact cap.
+        """
+        self._inlined = (
+            plan_inline_artifacts(self.iter_calculations()) if self.inline_artifacts else set()
+        )
+        return self._build_payload()
+
+    def _build_payload(self) -> dict[str, Any]:
+        """Assemble the payload, embedding the artifacts in ``self._inlined``.
+
         Determinism mirrors :meth:`ComputedSpeciesUpload.to_payload` —
         all keys (species, conformer, geometry, calculation) are minted
         from a single set of :class:`KeyMinter` instances in a
@@ -1629,17 +1763,28 @@ class ComputedReactionUpload:
                     path=f"species_thermo[{label}].source_calculations",
                 )
             )
-        for calc in self._all_calculations_for_artifacts():
-            if calc.artifacts:
-                out.append(_artifact_second_phase_diag(calc))
+        all_calcs = self._all_calculations_for_artifacts()
+        deferred = _deferred_artifacts(all_calcs, self.inline_artifacts)
+        for calc in all_calcs:
+            if id(calc) in deferred:
+                out.append(_artifact_second_phase_diag(calc, deferred[id(calc)]))
         return out
 
     # ------------------------------------------------------------------
     # Artifact plan
     # ------------------------------------------------------------------
 
-    def artifact_plan(self, upload_result: Any) -> list[PlannedArtifactUpload]:
+    def artifact_plan(
+        self, upload_result: Any, payload: Any = None
+    ) -> list[PlannedArtifactUpload]:
         """Resolve attached artifacts against the server upload result.
+
+        Lists only files that did not go inline. ``payload`` is the dict you
+        posted (``to_payload()``): files already present in it (matched on
+        calculation, kind, filename and content) are skipped. **Pass it
+        whenever the files may change after posting.** Without it the choice
+        is recomputed from the builders and the files on disk, which can
+        disagree with what was posted if a file was edited in between.
 
         Requires the computed-reaction response to expose the
         ``calculation_keys: dict[str, int]`` field (added as a
@@ -1656,9 +1801,12 @@ class ComputedReactionUpload:
         key_to_id = _extract_computed_reaction_calc_keys(upload_result)
         key_to_ref = _extract_computed_reaction_calc_refs(upload_result)
         plan: list[PlannedArtifactUpload] = []
-        plan.extend(_build_plan(self.calculations, key_to_id, key_to_ref))
+        skip = _inline_skip(
+            list(self.iter_calculations()), self.inline_artifacts, payload
+        )
+        plan.extend(_build_plan(self.calculations, key_to_id, key_to_ref, skip))
         for _sp, sp_calcs in self._species_calc_pairs:
-            plan.extend(_build_plan(sp_calcs, key_to_id, key_to_ref))
+            plan.extend(_build_plan(sp_calcs, key_to_id, key_to_ref, skip))
         return plan
 
     def artifact_plan_preview(
@@ -1676,10 +1824,15 @@ class ComputedReactionUpload:
         and producer debugging; the returned IDs are **not** real
         server-side primary keys.
         """
-        synthetic_response = _build_reaction_preview_response(
-            self.to_payload(), start=starting_calculation_id,
-        )
-        return self.artifact_plan(synthetic_response)
+        # A preview lists every attached file and reads none of them.
+        saved, self._inlined = self._inlined, set()
+        try:
+            synthetic_response = _build_reaction_preview_response(
+                self._build_payload(), start=starting_calculation_id,
+            )
+            return self.artifact_plan(synthetic_response, payload={})
+        finally:
+            self._inlined = saved
 
     # ------------------------------------------------------------------
     # Public iteration
@@ -1881,6 +2034,7 @@ class ComputedReactionUpload:
                 mode="json", exclude_none=True
             )
         out.update(calc.result_fields_flat())
+        _put_inline_artifacts(out, calc, self._inlined)
         if calc.depends_on:
             out["depends_on"] = [
                 {

@@ -1,21 +1,8 @@
 """The frontend proxy's coded 413 (``request_body_too_large``).
 
-nginx (``frontend/nginx.conf``) caps request bodies before the API sees them:
-``100m`` on the upload, job and calculation-artifact routes and ``10m`` on every
-other ``/api/`` route. Over the cap, nginx used to answer with its own bare HTML
-413, which no client could tell from any other 413. ``nginx.conf`` now answers
-with the API's error envelope instead, written by hand in the config because
-nginx cannot call Python.
-
-This module is the single description of that body. ``nginx.conf`` carries the
-literal text, and ``tests/api/test_proxy_body_limit.py`` fails if the text and
-:func:`proxy_refusal_body` ever disagree, so the proxy's answer cannot drift from
-the envelope the catalogue documents. The API never emits this code itself; a
-body over these caps does not reach it.
-
-The edge in front of nginx (Cloudflare, 100,000,000 bytes) answers its own HTML
-413 before the request reaches nginx and cannot be customised on the plans in
-use; ``tckdb-client`` explains that one.
+``frontend/nginx.conf`` answers a body over its ``client_max_body_size`` with this envelope as JSON.
+nginx cannot call Python, so the text is written in the config and ``tests/api/test_proxy_body_limit.py``
+pins it to :func:`proxy_refusal_body`. The API never emits this code.
 """
 
 from __future__ import annotations

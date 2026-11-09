@@ -754,7 +754,10 @@ def _add_declarations(payload: dict[str, Any], thermo: Thermo) -> list[str]:
     notes: list[str] = []
     kind = thermo.thermodynamic_target_kind
     if kind is ThermoTargetKind.equilibrium_ensemble:
-        payload["thermodynamic_target"] = {"kind": ThermoTargetKind.equilibrium_ensemble.value}
+        payload["thermodynamic_target"] = {
+            "kind": ThermoTargetKind.equilibrium_ensemble.value,
+            "declared_by": thermo.thermodynamic_target_declared_by.value,
+        }
     elif kind is ThermoTargetKind.single_conformer:
         notes.append(
             "Its single_conformer target names a conformer group of this database, which a "
