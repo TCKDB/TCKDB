@@ -23,7 +23,7 @@ def _approved_network(db_session, *, name: str, actor: AppUser) -> Network:
         record_id=network.id,
     )
     # Approved by someone else: ``actor`` created the network and may not approve it.
-    approver = AppUser(username=f"approver_of_{name}", role=AppUserRole.curator)
+    approver = AppUser(username=f"approver_of_{name}_{network.id}", role=AppUserRole.curator)
     db_session.add(approver)
     db_session.flush()
     set_record_review_status(

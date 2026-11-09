@@ -22,12 +22,17 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
-## A depositor can no longer approve their own record through the record-review route (2026-11-09)
+## A depositor cannot approve their own record, and the record-review route checks what it is given (2026-11-09)
 
-- **What changed:** `PATCH /record-reviews/{record_type}/{record_id}` to `approved` compared the actor with the review row's `created_by`. That column is NULL when the curator's own request created the row (a record no upload targets, such as a `species` or `reaction`), so the depositor of the record could approve it. When `created_by` is NULL the check now looks at who deposited the record: the uploaders of the submissions linked to it, its own `created_by` where its table has one, and, for a `species` or `reaction`, the depositors of its entries. The refusal is the coded 400 `record_self_approval` (it was an uncoded `domain_error`).
-- **Why:** the submission-level check already refused this; the record-level one did not for rows without a recorded creator.
-- **Unchanged:** a row with a `created_by` is judged on it alone; other transitions; the submission-level check.
-- **Schema and migration:** none. **Versions:** `tckdb-client` 0.190.0.
+- **What changed:** `PATCH /record-reviews/{record_type}/{record_id}` to `approved` compared the actor only with the review row's `created_by`, which is NULL when the curator's own request creates the row (a `species` or `reaction`, which no upload targets). The rule is now judged on every deposit signal: the review row's `created_by`, the record's own `created_by`, and the uploader of any submission linked to the record.
+  - Owned records (thermo, kinetics, statmech, transport, calculation, reaction entry, transition state and entry, network and solve, applied energy correction, conformer observation, molecular property observation) are refused to any depositor.
+  - Shared identities (`species`, `reaction`, `species_entry`, `conformer_group`) are refused only to their sole depositor, so who deposited first no longer decides. A `species` or `reaction` takes the signals of its entries.
+  - The bulk submission approval skips the per-record check for a record that is already approved (a re-stamp changes no trust state).
+  - The refusal is now `record_self_approval`, HTTP 403 with `record_type` and `record_ref` in `context` (it was an uncoded 400 `domain_error`).
+  - `POST /submissions/{id}/approve` by the submission's uploader now carries the code `submission_self_approval` (403, was an uncoded 400); the rule itself is unchanged.
+  - `PATCH /record-reviews` on a record that does not exist is a 404 `record_not_found`, and on `record_type=artifact` a 422 `record_type_not_reviewable`; before, either created a review row.
+- **Why:** the submission-level check already refused a depositor; the record-level one did not for rows without a recorded creator, and a rule keyed on `created_by` alone made the first depositor of a shared entry special.
+- **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.162.0, `tckdb-client` 0.190.0.
 
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)
 

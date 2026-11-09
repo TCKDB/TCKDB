@@ -2777,6 +2777,13 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("subject_type_mismatch", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             shape=Shape.relationship),
+    ApiCode("submission_self_approval", 403, Surface.message_prefix,
+            "backend/app/services/submission.py",
+            shape=Shape.relationship,
+            note=(
+                "POST /submissions/{id}/approve by the account that uploaded "
+                "the submission. context carries submission_ref."
+            )),
     ApiCode("submission_supersede_not_owner", 403, Surface.message_prefix,
             "backend/app/services/submission.py",
             note=(
@@ -2786,14 +2793,33 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "submission, deliberately: the caller named both refs and "
                 "already knows which one they did not create."
             )),
-    ApiCode("record_self_approval", 400, Surface.message_prefix,
-            "backend/app/services/record_review.py",
+    ApiCode("record_not_found", 404, Surface.coded_exception,
+            "backend/app/api/routes/record_reviews.py",
             note=(
-                "PATCH /record-reviews: the actor deposited the record and "
-                "may not approve it. Judged against the review row's "
-                "created_by, or, where that is NULL (a row a curator's first "
-                "touch created), against the uploaders of the submissions "
-                "linked to the record and the record's own created_by."
+                "PATCH /record-reviews names a (record_type, record_id) that "
+                "does not exist. context carries record_type."
+            )),
+    ApiCode("record_self_approval", 403, Surface.message_prefix,
+            "backend/app/services/record_review.py",
+            shape=Shape.relationship,
+            note=(
+                "PATCH /record-reviews to approved, or the approval of a "
+                "submission whose linked record the actor deposited. A "
+                "depositor is any account named by the review row's "
+                "created_by, the record's own created_by, or the uploader of "
+                "a submission linked to it. Owned records (thermo, kinetics, "
+                "calculation and the like) are refused to any depositor; the "
+                "shared identities (species, reaction, species_entry, "
+                "conformer_group) only to their sole depositor, so deposit "
+                "order does not decide. A record the bulk submission path "
+                "re-stamps while already approved is not judged again. "
+                "context carries record_type and record_ref."
+            )),
+    ApiCode("record_type_not_reviewable", 422, Surface.coded_exception,
+            "backend/app/api/routes/record_reviews.py",
+            note=(
+                "PATCH /record-reviews on record_type=artifact: an artifact "
+                "is contribution evidence and never has a review row."
             )),
     ApiCode("superseded_record_not_approvable", 409, Surface.message_prefix,
             "backend/app/services/record_review.py",

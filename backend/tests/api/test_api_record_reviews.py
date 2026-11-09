@@ -595,8 +595,32 @@ class TestRecordReviewApi:
         refused = client.patch(
             f"/api/v1/record-reviews/species/{species_id}", json={"status": "approved"}
         )
-        assert refused.status_code == 400, refused.text
-        assert refused.json()["code"] == "record_self_approval"
+        assert refused.status_code == 403, refused.text
+        body = refused.json()
+        assert body["code"] == "record_self_approval"
+        assert body["context"]["record_type"] == "species"
+        assert body["context"]["record_ref"].startswith("spc_")
+
+    def test_patch_on_a_record_that_does_not_exist_is_a_coded_404(
+        self, client, login_as, _api_curator_user
+    ):
+        login_as(_api_curator_user)
+        resp = client.patch(
+            "/api/v1/record-reviews/thermo/987654321", json={"status": "approved"}
+        )
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["code"] == "record_not_found"
+        assert resp.json()["context"]["record_type"] == "thermo"
+
+    def test_patch_on_an_artifact_is_a_coded_422(
+        self, client, login_as, _api_curator_user
+    ):
+        login_as(_api_curator_user)
+        resp = client.patch(
+            "/api/v1/record-reviews/artifact/1", json={"status": "approved"}
+        )
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["code"] == "record_type_not_reviewable"
 
     def test_patch_requires_curator(self, client):
         thermo_id = self._seed_thermo(client)

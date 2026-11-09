@@ -10,7 +10,9 @@ table.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.coded_error import CodedValidationError
 
 from app.api.client_version import require_supported_tckdb_client
 from app.api.deps import (
@@ -20,6 +22,7 @@ from app.api.deps import (
     get_write_db,
     require_curator_or_admin,
 )
+from app.api.errors import not_found
 from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
@@ -38,6 +41,7 @@ from app.services.record_containers import (
     resolve_record_container,
     resolve_record_containers,
 )
+from app.services.record_models import RECORD_MODELS
 from app.services.record_refs import (
     resolve_record_public_ref,
     resolve_record_public_refs,
@@ -263,7 +267,26 @@ def set_status(
     The transition policy and self-approval guard live in the service
     layer; route-side authorisation is the curator/admin role check
     only.
+
+    An artifact never has a review row (``record_type_not_reviewable``, 422),
+    and a record that does not exist is a 404 (``record_not_found``) rather
+    than a review row for nothing.
     """
+    if record_type is SubmissionRecordType.artifact:
+        raise CodedValidationError(
+            "record_type_not_reviewable",
+            "artifact records have no review state: an artifact is contribution "
+            "evidence, reviewed through the calculation it belongs to.",
+            context={"record_type": record_type.value},
+        )
+    model = RECORD_MODELS[record_type]
+    if session.scalar(select(model.id).where(model.id == record_id)) is None:
+        raise not_found(
+            "record",
+            row_id=record_id,
+            code="record_not_found",
+            context={"record_type": record_type.value},
+        )
     row = set_record_review_status(
         session,
         record_type=record_type,

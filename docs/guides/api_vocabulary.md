@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 353 | `backend/app/api/code_catalogue.py` |
-| **total** | **693** | |
+| Refusal codes a caller can receive | 356 | `backend/app/api/code_catalogue.py` |
+| **total** | **696** | |
 
 ## How a record is named
 
@@ -721,22 +721,23 @@ Two facts accompany each one, and neither is obvious from the name:
 
 There is deliberately no definition column: the refusal already sent you a sentence, and a second copy kept here would drift from it. `backend/app/api/code_catalogue.py` names the module that raises each one.
 
-### HTTP 400 (2 codes)
+### HTTP 400 (1 code)
 
 | Code | Names |
 | --- | --- |
 | `invalid_idempotency_key` | a thing |
-| `record_self_approval` | a thing |
 
-### HTTP 403 (3 codes)
+### HTTP 403 (5 codes)
 
 | Code | Names |
 | --- | --- |
+| `record_self_approval` | a relationship — read `context` |
 | `rights_attestation_not_depositor` | a thing |
 | `rights_attestation_requires_curator` | a thing |
+| `submission_self_approval` | a relationship — read `context` |
 | `submission_supersede_not_owner` | a thing |
 
-### HTTP 404 (28 codes)
+### HTTP 404 (29 codes)
 
 | Code | Names |
 | --- | --- |
@@ -747,6 +748,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `manifest_not_frozen` | a thing |
 | `owner_missing` | a thing |
 | `path_search_result_not_found` | a thing |
+| `record_not_found` | a thing |
 | `scan_result_not_found` | a thing |
 | `structure_finding_reference_not_found` | a thing |
 | `structure_finding_subject_not_found` | a thing |
@@ -809,7 +811,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (286 codes)
+### HTTP 422 (287 codes)
 
 | Code | Names |
 | --- | --- |
@@ -981,6 +983,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `record_not_approved` | a thing |
 | `record_ref_not_selectable` | a thing |
 | `record_subject_mismatch` | a relationship — read `context` |
+| `record_type_not_reviewable` | a thing |
 | `record_type_not_selectable` | a thing |
 | `relative_conformer_energy_compare_identical_protocols` | a relationship — read `context` |
 | `relative_conformer_energy_population_too_large` | a relationship — read `context` |

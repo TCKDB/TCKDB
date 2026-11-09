@@ -25,9 +25,12 @@ Disallowed by default — these intentionally route through
 * ``approved`` → ``rejected``, ``rejected`` → ``approved``,
   ``deprecated`` → ``rejected``.
 
-Self-approval guard: an actor whose ``id`` equals the row's
-``created_by`` cannot transition the row to ``approved``. Other
-transitions a creator can perform if they have the curator/admin role.
+Self-approval guard: an actor who deposited a record cannot transition it to
+``approved``. A depositor is any account named by the review row's
+``created_by``, the record's own ``created_by`` or the uploader of a
+submission linked to it. Shared identities (species, reaction, species entry,
+conformer group) are refused only to their sole depositor. Other transitions a
+creator can perform if they have the curator/admin role.
 """
 
 from __future__ import annotations
@@ -40,7 +43,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from app.api.errors import DomainError, RecordReviewConflict
+from app.api.errors import DomainError, RecordReviewConflict, RecordSelfApprovalForbidden
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import CalculationArtifact
 from app.db.models.common import (
@@ -503,10 +506,22 @@ def _refuse_superseded_approval(
     )
 
 
-#: Identity parents that carry no ``created_by`` of their own, mapped to the
-#: entry type that does and the column joining the two. A user deposits the
-#: entry (that is what the upload targets and links); the parent is deduped
-#: across uploads, so it is deposited by whoever deposited any of its entries.
+#: Identities many accounts deposit against. Resolution dedupes them across
+#: uploads, so one account can create the row while another deposits onto it;
+#: the first depositor is not "the" depositor. These are refused for approval
+#: only to their sole depositor. Every other record type is owned by what
+#: deposited it and is refused to any depositor.
+_SHARED_IDENTITIES = frozenset(
+    {
+        SubmissionRecordType.species,
+        SubmissionRecordType.reaction,
+        SubmissionRecordType.species_entry,
+        SubmissionRecordType.conformer_group,
+    }
+)
+
+#: Identity parents that carry no ``created_by`` and are never linked to a
+#: submission, mapped to the entry type that is and the column joining them.
 _ENTRY_OF_IDENTITY: dict[SubmissionRecordType, tuple[SubmissionRecordType, str]] = {
     SubmissionRecordType.species: (SubmissionRecordType.species_entry, "species_id"),
     SubmissionRecordType.reaction: (SubmissionRecordType.reaction_entry, "reaction_id"),
@@ -516,16 +531,22 @@ _ENTRY_OF_IDENTITY: dict[SubmissionRecordType, tuple[SubmissionRecordType, str]]
 def _depositor_ids(
     session: Session, *, record_type: SubmissionRecordType, record_id: int
 ) -> set[int]:
-    """Users who deposited this record, read from the record rather than the review row.
+    """Every account with a deposit signal on this record.
 
-    ``record_review.created_by`` is NULL when a curator's first touch created
-    the row (a record no upload workflow targeted, such as a ``species``), so
-    it cannot say who deposited the record. Two places can: the uploader of
-    every submission linked to the record, and the ``created_by`` of the
-    record's own row where its table has one. A ``species`` or ``reaction``
-    has neither, so it takes the depositors of its entries.
+    Three signals: the review row's ``created_by``, the record's own
+    ``created_by`` where its table has one, and the uploader of every
+    submission linked to it. A ``species`` or ``reaction`` has none of the
+    last two, so it takes the signals of its entries.
     """
     ids: set[int] = set()
+    review_creator = session.scalar(
+        select(RecordReview.created_by).where(
+            RecordReview.record_type == record_type,
+            RecordReview.record_id == record_id,
+        )
+    )
+    if review_creator is not None:
+        ids.add(review_creator)
     if record_type in _ENTRY_OF_IDENTITY:
         entry_type, fk = _ENTRY_OF_IDENTITY[record_type]
         entry_model = RECORD_MODELS[entry_type]
@@ -556,25 +577,30 @@ def _depositor_ids(
 def _refuse_self_approval(
     session: Session,
     *,
-    review: RecordReview,
     record_type: SubmissionRecordType,
     record_id: int,
     actor: AppUser,
 ) -> None:
-    """Refuse approval by the record's depositor (``record_self_approval``).
+    """Refuse approval by a depositor of the record (``record_self_approval``, 403).
 
-    Compares with the review row's ``created_by``; when that is NULL, falls
-    back to the depositors of the record itself.
+    Owned records are refused to any account with a deposit signal. Shared
+    identities are refused only when the actor is the sole depositor, so
+    deposit order does not decide who may approve.
     """
-    if review.created_by is not None:
-        depositors = {review.created_by}
-    else:
-        depositors = _depositor_ids(session, record_type=record_type, record_id=record_id)
-    if actor.id in depositors:
-        raise DomainError(
-            "record_self_approval: the actor deposited this record and cannot approve it; "
-            "another curator or admin must."
-        )
+    depositors = _depositor_ids(session, record_type=record_type, record_id=record_id)
+    if actor.id not in depositors:
+        return
+    if record_type in _SHARED_IDENTITIES and depositors != {actor.id}:
+        return
+    context: dict[str, str] = {"record_type": record_type.value}
+    refs = resolve_record_public_refs(session, [(record_type, record_id)])
+    if (record_type, record_id) in refs:
+        context["record_ref"] = refs[(record_type, record_id)]
+    raise RecordSelfApprovalForbidden(
+        "record_self_approval: the actor deposited this record and cannot approve it; "
+        "another curator or admin must.",
+        context=context,
+    )
 
 
 def set_record_review_status(
@@ -586,6 +612,7 @@ def set_record_review_status(
     actor: AppUser,
     submission_id: Optional[int] = None,
     note: Optional[str] = None,
+    restamp_exempt: bool = False,
 ) -> RecordReview:
     """Curator/admin-gated transition of one record's review status.
 
@@ -594,11 +621,17 @@ def set_record_review_status(
     targets) so that an initial direct-to-approved/rejected/deprecated
     write is supported when the actor has the authority.
 
-    Self-approval guard: ``actor.id`` may not equal the existing row's
-    ``created_by`` when transitioning to :attr:`RecordReviewStatus.approved`.
-    Other transitions are allowed for the creator if they meet the role
-    check — self-deprecation and self-reopening are different trust
-    problems than self-approval and are not blocked here.
+    Self-approval guard (``record_self_approval``, 403) on a transition to
+    :attr:`RecordReviewStatus.approved`: the actor is refused when they are a
+    depositor of the record, judged from the review row's ``created_by``, the
+    record's own ``created_by`` and the uploaders of its linked submissions.
+    Shared identities (``species``, ``reaction``, ``species_entry``,
+    ``conformer_group``) are refused only to their sole depositor; every other
+    record type to any depositor. ``restamp_exempt`` (the bulk submission
+    path) skips the guard for a record that is already approved. Other
+    transitions are allowed for the creator if they meet the role check --
+    self-deprecation and self-reopening are different trust problems than
+    self-approval and are not blocked here.
     """
     _require_curator(actor)
 
@@ -639,13 +672,15 @@ def set_record_review_status(
     )
 
     if status is RecordReviewStatus.approved:
-        _refuse_self_approval(
-            session,
-            review=existing,
-            record_type=record_type,
-            record_id=record_id,
-            actor=actor,
-        )
+        # A restamp of an already-approved record by the bulk submission path
+        # changes no trust state; the first approval was judged.
+        if not (restamp_exempt and existing.status is RecordReviewStatus.approved):
+            _refuse_self_approval(
+                session,
+                record_type=record_type,
+                record_id=record_id,
+                actor=actor,
+            )
         lock_scientific_records(session, (RecordRef(record_type, record_id),))
         # After the root lock, which ``supersede_scientific_record`` also takes,
         # so a concurrent supersession and approval serialize.
@@ -730,6 +765,7 @@ def bulk_set_record_review_status(
                 actor=actor,
                 submission_id=submission_id,
                 note=note,
+                restamp_exempt=True,
             )
         )
     return out
