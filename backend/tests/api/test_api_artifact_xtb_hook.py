@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tests.api.artifact_urls import artifacts_url
 from tests.api.test_api_artifact_input_geometry_hook import (  # noqa: F401  (stub_store_artifact is a fixture)
     _artifact,
@@ -30,14 +32,16 @@ def _post(client, calc_id: int, filename: str):
     )
 
 
-def test_g98_out_is_accepted_and_stores_no_input_geometry(client, db_session, stub_store_artifact):
+@pytest.mark.usefixtures("stub_store_artifact")
+def test_g98_out_is_accepted_and_stores_no_input_geometry(client, db_session):
     calc_id = _create_opt_calc(client, smiles="CCO", conformer_xyz=ETHANOL_XYZ, software="xtb")
     resp = _post(client, calc_id, "g98_gfn2_ethanol.out")
     assert resp.status_code == 201, resp.text
     assert _input_links(db_session, calc_id) == []
 
 
-def test_xtb_out_is_accepted_and_stores_no_input_geometry(client, db_session, stub_store_artifact):
+@pytest.mark.usefixtures("stub_store_artifact")
+def test_xtb_out_is_accepted_and_stores_no_input_geometry(client, db_session):
     calc_id = _create_opt_calc(client, smiles="CCO", conformer_xyz=ETHANOL_XYZ, software="xtb")
     resp = _post(client, calc_id, "opt_freq_gfn2_ethanol.out")
     assert resp.status_code == 201, resp.text
