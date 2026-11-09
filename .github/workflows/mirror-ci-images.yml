@@ -56,9 +56,8 @@ jobs:
     steps:
       # Skipped for fork PRs, which get no secrets. Reading a public manifest
       # usually works anonymously, so the checks below still run. Docker Hub
-      # has throttled anonymous pulls from GitHub runners before (2026-09-24,
-      # see the service comment in backend-ci.yml); if that happens the
-      # anonymous read fails, and the dry run fails rather than passing.
+      # can throttle anonymous reads from GitHub runners; then the read fails
+      # and the dry run fails rather than passing.
       - uses: docker/login-action@v4
         if: github.event.pull_request.head.repo.full_name == github.repository
         with:
@@ -134,7 +133,7 @@ jobs:
               echo "::error::${dest} digest '${got}' != source ${digest}"
               exit 1
             fi
-            # The digest reference is what the follow-up pins; it must resolve too.
+            # The digest reference is what CI pins; it must resolve too.
             pinned="${dest%:*}@${digest}"
             got=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$pinned" | jq -r '.digest // empty')
             echo "${pinned} -> '${got}'"

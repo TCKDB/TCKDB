@@ -55,7 +55,7 @@ def test_workflow_does_not_pull_mirrored_images_from_docker_hub(path: Path) -> N
 
 def test_every_ghcr_reference_is_pinned_to_the_mirrored_digest() -> None:
     images = _mirror_images()
-    seen = {name: 0 for name in images}
+    seen = dict.fromkeys(images, 0)
     for path in _workflow_files():
         for name, tail in re.findall(r"ghcr\.io/tckdb/([a-z0-9-]+)(\S*)", path.read_text()):
             if name not in images:
@@ -69,3 +69,27 @@ def test_compose_pins_the_same_digests_on_docker_hub() -> None:
     text = COMPOSE.read_text()
     for name, (source, digest) in _mirror_images().items():
         assert re.search(rf"image:\s*{re.escape(source)}:\S+@{digest}\s*$", text, flags=re.M), name
+
+
+def _unmirrored_mentions(text: str) -> list[str]:
+    """Image references to a mirrored name whose registry path is not ``ghcr.io/tckdb/``."""
+    bad = []
+    for name in _mirror_images():
+        pattern = rf"(?:image:\s+(?:[\w.-]+/)*|(?:[\w.-]+/)+){re.escape(name)}(?![\w-])"
+        for match in re.finditer(pattern, text):
+            reference = re.sub(r"^image:\s+", "", match.group(0))
+            if reference != f"ghcr.io/tckdb/{name}":
+                start = text.rfind("\n", 0, match.start()) + 1
+                end = text.find("\n", match.end())
+                bad.append(text[start : end if end != -1 else len(text)].strip())
+    return bad
+
+
+@pytest.mark.parametrize("path", _workflow_files(), ids=lambda p: p.name)
+def test_every_mention_of_a_mirrored_image_is_the_ghcr_copy(path: Path) -> None:
+    assert _unmirrored_mentions(path.read_text()) == []
+
+
+def test_mention_check_rejects_another_registry() -> None:
+    other = f"image: quay.io/x/rdkit-cartridge-debian@sha256:{'0' * 64}"
+    assert _unmirrored_mentions(other) == [other]
