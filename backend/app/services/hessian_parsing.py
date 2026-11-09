@@ -469,9 +469,7 @@ def parse_hessian_from_artifact(
     result = parse_hessian(text)
     if result is None:
         if software == "gaussian" and GAUSSIAN_HESSIAN_MARKER not in text:
-            # Larger molecules print no force-constant block; the archive block at the end of the log has the
-            # matrix. Only when the block is absent: a block that was printed and declined (the opt + >13 atoms
-            # standard-orientation trap, a truncation) is not second-guessed from another section of the log.
+            # Only when the force-constant block is absent; a printed block that was declined is not second-guessed.
             from app.services.gaussian_archive_hessian import read_gaussian_archive_hessian
 
             return read_gaussian_archive_hessian(text).parsed

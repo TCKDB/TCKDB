@@ -241,8 +241,7 @@ class HessianPrintFormat(str, Enum):
     #: ``0.3700857``: seven decimals, absolute.
     molpro_log = "molpro_log"
 
-    #: Gaussian's archive block, ``0.52772493``: eight decimals, absolute. Read when a log prints no
-    #: force-constant block (``calc_hessian.source = parsed_log_archive``).
+    #: Gaussian archive block, ``0.52772493``: eight decimals, absolute.
     gaussian_archive = "gaussian_archive"
 
     #: ``$hessian`` block of a ``.hess`` file, ``-6.9820446273E-02``:

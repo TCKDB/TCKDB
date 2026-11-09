@@ -267,10 +267,7 @@ def _extract_and_store(
 
 
 def _archive_refusal(text: str) -> str | None:
-    """Why a Gaussian log with no force-constant block and no readable matrix still held an archive Hessian.
-
-    ``None`` when the log is not Gaussian, printed the block (handled above), or has no archive Hessian at all.
-    """
+    """The reason an archive Hessian in a Gaussian log was not read, or ``None``."""
     if detect_software_from_text(text) != "gaussian":
         return None
     return read_gaussian_archive_hessian(text).reason

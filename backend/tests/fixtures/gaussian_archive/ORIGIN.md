@@ -10,8 +10,7 @@ nothing inside a kept section was edited. Kept: the banner, the route, the last 
 * `ethanethiol_g16_both_blocks.log` -- ethanethiol, 9 atoms. The original prints both the force-constant block and
   the archive Hessian, so the two can be compared.
 
-Source: the E2 basin-tolerance study, `E2/raw_outputs/tasks/wb97xd/{n_butane,ethanethiol}/c00/job.log`
-(Zeus, 2026-10-26).
+Source: n-butane and ethanethiol opt+freq runs, Gaussian 16 Rev C.02.
 
 The user name, scratch path and host in the original were replaced by `username`/`USERNAME`, `xxxx-master` and
 `NODE` (same lengths, so the 70-column archive wrap is unchanged).

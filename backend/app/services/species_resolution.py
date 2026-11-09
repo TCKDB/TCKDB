@@ -654,7 +654,8 @@ def resolve_species_entry(
         identity's element composition and isotope labels.
     :param additional_geometries: Any further geometries deposited under this
         same entry (the second and later conformers). They are composition- and
-        isotope-checked too but never used for stereo perception. Checking only
+        isotope-checked too, and are passed to stereo perception with the first
+        geometry (:func:`resolve_entry_stereo`). Checking only
         the first conformer let a deuterated entry store all-protium geometries
         for every other conformer.
     :returns: Existing or newly created ``SpeciesEntry`` row.

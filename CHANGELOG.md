@@ -22,6 +22,22 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## An xtb output file is accepted as an `output_log`, and artifact refusals carry codes (2026-11-09)
+
+- **What changed:**
+  - An xtb output file (`xtb.out`, and xtb's `g98.out`) is accepted as an `output_log` and identified as xtb. The banner version is compared with the declared software release. No energy, frequency, Hessian, charge, multiplicity or geometry is read from it, and no warning is raised for that.
+  - Every artifact validation refusal has a code and `context`: `output_log_signature_unrecognized`, `artifact_empty`, `artifact_too_large`, `artifact_sha256_mismatch`, `artifact_size_mismatch`, `artifact_not_utf8_text`, `artifact_invalid_base64`, `artifact_total_size_too_large`, `artifact_encoded_payload_too_large`, `artifact_total_encoded_payload_too_large` (all 422). A depositor's filename is in `context.depositor_supplied`, not the message.
+- **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.163.0, `tckdb-client` 0.192.0.
+
+## Archives with enum or text primary keys restore (2026-11-09)
+
+An archive containing a table whose primary key includes an enum or text column
+(for example a species that is both reactant and product of one reaction) is
+no longer refused on restore with "Primary keys are duplicated or unsorted".
+Export now orders those keys by codepoint, which is the order restore checks.
+Older archives written with the mismatched order are refused; there is no
+legacy path. No schema or migration change.
+
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)
 
 - **What changed:**
@@ -40,6 +56,11 @@ dataset must never require a code release.
 - **Why:** spin treatment follows each species' multiplicity, so a reaction mixing radicals (unrestricted) and closed-shell molecules (restricted) had no declaration the old row-id comparison accepted, and every such deposit drew `missing_level_of_theory_provenance`.
 - **Unchanged:** `spin_treatment` stays in level identity and in the hash; thermo and statmech level checks.
 - **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.161.0, `tckdb-client` 0.189.0.
+
+## Two refusals gain codes (2026-11-09)
+
+- **What changed:** a reaction deposited under a reaction family different from the one it is already recorded under is still refused (422), now with the code `reaction_family_conflict` instead of the generic `validation_error`; its message no longer quotes depositor text and names a family only when it is a seeded vocabulary name. All three conflict shapes are refused: seeded against seeded, raw against raw, and seeded against raw in either order (the mixed case used to be accepted). A computed-reaction bundle's family now applies to the bundle's own reaction only, not to kinetics fits of other reactions in it. A network solve whose bath-gas mole fractions do not sum to 1 within 1e-9 now returns `kinetics_bath_gas_mole_fraction_sum`, the code a kinetics rate's bath gas already used (one rule, one code, one tolerance).
+- **Schema and migration:** none (`tckdb-schemas` 0.162.0, `tckdb-client` 0.190.0).
 
 ## A response the server cannot build is a logged 500, not a bare error or a 422 (2026-11-07)
 

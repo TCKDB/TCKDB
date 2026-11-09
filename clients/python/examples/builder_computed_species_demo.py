@@ -112,10 +112,10 @@ def build_upload(artifact_paths: dict[str, Path]) -> ComputedSpeciesUpload:
         depends_on=opt, label="ethanol sp",
     )
 
-    # ``add_artifact`` is local-only metadata; the bundle's to_payload()
-    # does not embed bytes. The second-phase ``client.upload_artifacts``
-    # call later in :func:`main` ships the files once the server has
-    # assigned ``calculation.id`` values.
+    # ``add_artifact`` records the file; to_payload() embeds it unless
+    # inline_artifacts=False, which this demo sets to show the second-phase
+    # path: the ``client.upload_artifacts`` call in :func:`main` ships the
+    # files once the server has assigned ``calculation.id`` values.
     opt.add_artifact(artifact_paths["opt"], kind="input")
     sp.add_artifact(artifact_paths["sp"], kind="output_log")
 
@@ -149,6 +149,7 @@ def build_upload(artifact_paths: dict[str, Path]) -> ComputedSpeciesUpload:
 
     return ComputedSpeciesUpload(
         species=ethanol,
+        inline_artifacts=False,  # this demo walks the two-phase path
         calculations=[opt, freq, sp],
         primary_calculation=opt,
         thermo=thermo,

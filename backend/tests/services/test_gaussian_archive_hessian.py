@@ -72,8 +72,7 @@ def test_both_blocks_agree_on_a_real_log_and_the_force_constant_block_is_preferr
     natoms, packed = block
     assert archive.natoms == natoms == 9
     assert len(archive.lower_triangle_hartree_bohr2) == len(packed) == 378
-    # The force-constant block prints six significant figures, so an element of magnitude ~0.5 is good to 5e-7:
-    # the two are the same matrix, same units (hartree/bohr^2), same atom order, same frame.
+    # The force-constant block prints six significant figures; the two blocks are the same matrix.
     differences = np.abs(np.array(archive.lower_triangle_hartree_bohr2) - np.array(packed))
     assert differences.max() < 1e-5
     assert (differences <= 0.5 * 10.0 ** (np.floor(np.log10(np.abs(packed) + 1e-300)) - 5) + 5e-9 + 1e-12).all()
@@ -182,7 +181,7 @@ def test_the_consistent_archive_has_a_rigid_motion_residual_well_inside_the_boun
 
 
 def test_a_hessian_whose_atoms_are_rotated_relative_to_it_is_refused():
-    """The failure the old Input-orientation guard was named for: matrix and atoms in different frames."""
+    """Matrix and atoms in different frames are refused."""
     read = read_gaussian_archive_hessian(_replace_atoms(BUTANE, _rotated_atoms_section(20.0)))
     assert read.parsed is None
     assert read.reason == REASON_ARCHIVE_FRAME

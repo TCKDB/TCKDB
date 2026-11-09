@@ -1,10 +1,20 @@
 # Changelog
 
+## 0.164.0 - 2026-11-09
+
+`HessianSource` gains `parsed_log_archive`: a Cartesian Hessian read from a Gaussian log's archive block, for logs that print no `Force constants in Cartesian coordinates` block. The matrix is stored only when it is consistent with the archive's own atoms (rigid translations and rotations annihilated, using the archive gradient) and the atoms match the stored input geometry. No upload field changes.
+
+Four reasons join `hessian_not_stored_unparseable` (a warning; the artifact is stored either way): `archive_block_unreadable`, `archive_frame_inconsistent`, `archive_atoms_unsupported` and `archive_composite_geometry_mismatch` (a composite job whose final block is at a different geometry from its frequency step, as in G1, G2, G3 and CBS-APNO).
+
+## 0.163.0 - 2026-11-09
+
+An xtb output file is recognised: `detect_software_from_text` returns `"xtb"` for `* xtb version N` and the boxed `x T B` title, and for xtb's `g98.out` (a Gaussian-98-layout file naming the xtb code). `SoftwareName` gains `"xtb"`. Nothing is parsed from an xtb log. An xtb file is accepted as an `output_log`.
+
+Ten artifact refusals gain codes (all 422, with `context`): `output_log_signature_unrecognized` (`supported`, `window_bytes`), `artifact_empty`, `artifact_too_large`, `artifact_sha256_mismatch`, `artifact_size_mismatch`, `artifact_not_utf8_text`, `artifact_invalid_base64` (the filename is in `context.depositor_supplied`), `artifact_total_size_too_large`, `artifact_encoded_payload_too_large` and `artifact_total_encoded_payload_too_large`.
+
 ## 0.162.0 - 2026-11-09
 
-`HessianSource` gains `parsed_log_archive`: a Cartesian Hessian read from a Gaussian log's archive block, recorded as such and not as `parsed_log`. A Gaussian 16 frequency log of a larger molecule (14 atoms and up in the E2 study) prints no `Force constants in Cartesian coordinates` block, but its archive block carries the same lower triangle in hartree/bohr^2, to eight decimals. The server now reads it from there. The archive's matrix is accepted only if it is self-consistent with the archive's own atoms: the rigid translations and rotations of those atoms must be annihilated, with the archive's gradient accounting for the rotation term at a non-stationary geometry, to a relative residual of 2e-3 (measured: at most 6.42e-4 on 188 consistent logs; at least 4.52e-3 for atoms rotated 2 degrees from the matrix's frame). It catches a frame mismatch of about 2 degrees or more and cannot see a pure translation; the existing check of the matrix's atoms against the stored input geometry then decides whether it applies to that geometry. No upload field changes.
-
-Four reasons join `hessian_not_stored_unparseable` (a warning, the artifact is stored either way): `archive_block_unreadable` (the log has no force-constant block and its archive matrix is not a complete lower triangle for the atoms the archive lists), `archive_frame_inconsistent` (the matrix fails the rigid-motion test above), `archive_atoms_unsupported` (the archive lists atoms as a Z-matrix or by atomic number) and `archive_composite_geometry_mismatch` (a composite job whose final archive block is at a different geometry from its frequency step, as in G1, G2, G3 and CBS-APNO, so the matrix does not belong to those atoms).
+One refusal code is added, `reaction_family_conflict` (422), and one existing refusal gains a code. A reaction deposited under a family different from the one it is already recorded under was refused with an uncoded `validation_error` whose text quoted both family names, including depositor text. It is still refused; it now carries `reaction_family_conflict`, and the message names a family only when it comes from the seeded `reaction_family` vocabulary (as `context.recorded_family` and `context.supplied_family`; depositor text is never repeated). All three conflict shapes are refused: seeded against seeded, raw against raw, and seeded against raw in either order (before, a deposit that named a seeded family for a reaction recorded under raw text, or the reverse, was accepted). A computed-reaction bundle's `reaction_family` now applies to the bundle's own reaction only: a kinetics fit for another reaction no longer has it stamped on, or refused because of it. A network solve whose `bath_gas` mole fractions do not sum to 1 within 1e-9 now carries `kinetics_bath_gas_mole_fraction_sum`, the code a kinetics rate's bath gas already used, with the field `solve.bath_gas` and the sum and tolerance in `context`. One rule, one code, one tolerance. The message text changes; no model or payload shape changed.
 
 ## 0.161.0 - 2026-11-07
 
