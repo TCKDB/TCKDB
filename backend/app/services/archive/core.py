@@ -248,6 +248,23 @@ def _select_expression(column):
     return column
 
 
+def _pk_order_expression(column):
+    """Order a primary-key column the way ``_parse_rows`` compares it.
+
+    The reader checks sortedness with Python comparison of the decoded value.
+    Enums are decoded to their label string, but PostgreSQL orders an enum by
+    declaration position (``reactant`` < ``product``), and orders text by the
+    database collation (``en_US`` is not codepoint order). Casting to text with
+    the ``C`` collation orders by UTF-8 bytes, which is Python's codepoint
+    order, so writer and reader agree. Other key types (integers, UUIDs in
+    canonical lowercase form, dates) already order identically in both.
+    """
+
+    if isinstance(column.type, (Enum, CHAR, String, Text)):
+        return cast(column, Text).collate("C")
+    return column
+
+
 def _current_revisions(session: Session) -> list[str]:
     try:
         revisions = session.scalars(text("SELECT version_num FROM alembic_version ORDER BY version_num")).all()
@@ -286,7 +303,7 @@ def _write_rows(session: Session, tables) -> tuple[BinaryIO, dict[str, int], str
             names = included_column_names(table)
             columns = [table.c[name] for name in names]
             expressions = [_select_expression(column) for column in columns]
-            order_by = [table.c[column.name] for column in table.primary_key.columns]
+            order_by = [_pk_order_expression(column) for column in table.primary_key.columns]
             rows = session.execute(select(*expressions).select_from(table).order_by(*order_by)).mappings()
             count = 0
             for row in rows:
