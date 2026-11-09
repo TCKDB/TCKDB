@@ -110,7 +110,7 @@ def scope(db_session):
     molpro = make_software_release(db_session, name="Molpro", version="2022.1")
 
     lot_b3lyp = make_lot(db_session, method="b3lyp-bkfl", basis="def2tzvp")
-    lot_ccsd_t = make_lot(db_session, method="ccsd(t)-bkfl", basis="def2tzvp")
+    lot_ccsd_t = make_lot(db_session, method="ccsd(t)", basis="def2tzvp-bkfl")
 
     # A: Gaussian + b3lyp, nothing recorded -> assumed_analytic_default.
     calc_a = make_calculation(
