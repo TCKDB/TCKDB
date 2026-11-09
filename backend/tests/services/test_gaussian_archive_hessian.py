@@ -15,6 +15,7 @@ from app.db.models.common import HessianSource
 from app.services.gaussian_archive_hessian import (
     FRAME_CONSISTENCY_RTOL,
     REASON_ARCHIVE_ATOMS,
+    REASON_ARCHIVE_COMPOSITE,
     REASON_ARCHIVE_FRAME,
     REASON_ARCHIVE_UNREADABLE,
     read_gaussian_archive_hessian,
@@ -325,3 +326,34 @@ def test_a_log_whose_gradient_section_is_missing_falls_back_to_the_stationary_te
     assert no_gradient != joined
     again = "\n".join(text.splitlines()[:2]) + "\n " + no_gradient + "\n"
     assert read_gaussian_archive_hessian(again).reason == REASON_ARCHIVE_FRAME
+
+
+# ---------------------------------------------------------------------------
+# Composite jobs: the final block's atoms must be where the frequency step ran
+# ---------------------------------------------------------------------------
+
+COMPOSITE = Path(__file__).resolve().parent.parent / "fixtures" / "gaussian_composite"
+
+
+def test_a_g3_hessian_is_not_read_for_the_mp2_geometry_of_the_final_block():
+    """G3 runs its HF/6-31G(d) frequency step at the HF geometry; the final block carries the MP2(Full) one."""
+    read = read_gaussian_archive_hessian((COMPOSITE / "g3_ethylene_g03.log").read_text())
+    assert read.parsed is None
+    assert read.reason == REASON_ARCHIVE_COMPOSITE
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "cbs_qb3_so2oo_g03.log",
+        "cbs_qb3_ts_intra_h_migration_g09.out",
+        "rocbs_qb3_methanol_g16.out",
+        "cbs_4m_methanol_g16.out",
+        "g4_methanol_g16.out",
+        "g4mp2_methanol_g16.out",
+    ],
+)
+def test_composites_that_run_frequencies_at_their_final_geometry_still_parse(name):
+    read = read_gaussian_archive_hessian((COMPOSITE / name).read_text())
+    assert read.reason is None
+    assert read.parsed is not None

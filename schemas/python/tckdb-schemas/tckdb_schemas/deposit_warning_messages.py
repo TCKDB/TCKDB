@@ -1621,6 +1621,11 @@ _HESSIAN_NOT_STORED = {
             "the archive lists its atoms in a form that is not read (a Z-matrix, or atomic numbers instead of "
             "element symbols), so the matrix cannot be tied to atoms."
         ),
+        "archive_composite_geometry_mismatch": (
+            "A Hessian was found in an uploaded artifact but not stored: the log has no force-constant block, and "
+            "its archive block is a composite job's final one, whose atoms are at a different geometry from the "
+            "frequency step the matrix comes from, so the matrix does not belong to those atoms."
+        ),
     },
     "hessian_not_stored_failed": {
         "read_failed": "A Hessian was found in an uploaded artifact but not stored: reading it failed unexpectedly.",
@@ -2127,6 +2132,7 @@ _HESSIAN_REASONS = frozenset(
         "archive_block_unreadable",
         "archive_frame_inconsistent",
         "archive_atoms_unsupported",
+        "archive_composite_geometry_mismatch",
         "input_geometry_count",
         "geometry_not_found",
         "atom_count",

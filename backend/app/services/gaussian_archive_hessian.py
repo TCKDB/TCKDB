@@ -34,11 +34,23 @@ gradient section the target is zero. Dividing by the rms row norm ``||H||_F / sq
 the molecule grows.
 
 Measured: on the 123 E2 and G09 logs here the largest consistent value is 6.4e-4, and atoms rotated 2 degrees
-away from the matrix's frame give at least 1.0e-2 (5 degrees: 2.6e-2). On the reviewer's 188 logs (up to 53
-atoms) the largest consistent value is 1.93e-3 and the smallest 2 degree value 4.5e-3. The bound is
-:data:`FRAME_CONSISTENCY_RTOL` = 4e-3: about twice the largest consistent value measured anywhere, below the
-smallest 2 degree value. It catches a frame mismatch of 2 degrees or more; a smaller one, and a pure translation
-(which no Hessian depends on), pass. The archive atoms are returned as the matrix's reference frame, so the
+away from the matrix's frame give at least 1.0e-2. On the reviewer's 188 logs (up to 53 atoms) the largest
+consistent value is 6.42e-4 and the smallest 2 degree value 4.52e-3. The bound is :data:`FRAME_CONSISTENCY_RTOL` =
+2e-3: three times the largest consistent value measured anywhere and well below the smallest 2 degree value. It
+catches a frame mismatch of 2 degrees or more; a smaller one, and a pure translation (which no Hessian depends
+on), pass. It is not a test of *which geometry* the matrix was computed at: a G3-family frequency step (HF/6-31G(d))
+runs at a different geometry from the MP2(Full) one the final archive block carries, and that pair measured 1.8e-3.
+That case is refused structurally, below.
+
+Composite jobs. A composite job's final ``Mixed`` archive block holds the final geometry, and its ``NImag=`` Hessian
+comes from the frequency step. G1, G2, G2MP2, G3, G3MP2 and CBS-APNO run the frequency step (HF) at a different
+geometry from the final one (MP2 or QCISD); CBS-QB3, ROCBS-QB3, CBS-4M, G3B3, G3MP2B3, G4, G4MP2 and the W1 family run
+both at one geometry. Rather than list methods, the reader compares the ``Mixed`` block's atoms with those of the
+earlier ``Freq`` block and refuses (``archive_composite_geometry_mismatch``) when they differ by more than
+:data:`COMPOSITE_GEOMETRY_ATOL_ANGSTROM`. Checked on the fixtures: G3 differs; CBS-QB3 (G03, G09, G16), ROCBS-QB3,
+CBS-4M, G4 and G4MP2 agree.
+
+The archive atoms are returned as the matrix's reference frame, so the
 caller's check against the bound geometry still decides whether the matrix applies to that geometry.
 
 Atom labels. ``C(Iso=13)``, ``C(Fragment=1)`` and a frozen-atom flag are parsed (the element is the leading
@@ -60,9 +72,14 @@ from app.services.hessian_parsing import ParsedHessian
 REASON_ARCHIVE_UNREADABLE = "archive_block_unreadable"
 REASON_ARCHIVE_FRAME = "archive_frame_inconsistent"
 REASON_ARCHIVE_ATOMS = "archive_atoms_unsupported"
+REASON_ARCHIVE_COMPOSITE = "archive_composite_geometry_mismatch"
+
+#: Atoms of a composite job's final block and of its ``Freq`` block coincide to the archive's ten decimals when the
+#: two steps ran at one geometry; this allows for nothing but rounding. The G3 pair differs by ~1e-2 Angstrom.
+COMPOSITE_GEOMETRY_ATOL_ANGSTROM = 1e-4
 
 #: Bound on the rigid-motion residual of the archive Hessian against the archive atoms; see the module docstring.
-FRAME_CONSISTENCY_RTOL = 4e-3
+FRAME_CONSISTENCY_RTOL = 2e-3
 
 _BOHR_PER_ANGSTROM = 1.0 / 0.52917721067
 
@@ -173,6 +190,30 @@ def rigid_motion_residual(
     return worst
 
 
+def _job_type(block: str) -> str | None:
+    header = block.split("\\\\", 1)[0].split("\\")
+    return header[3] if len(header) > 3 else None
+
+
+def _composite_geometry_differs(blocks: list[str], atoms: list[tuple[str, float, float, float]]) -> bool:
+    """True when ``blocks`` hold a ``Freq`` step whose atoms differ from the final block's ``atoms``."""
+    for earlier in reversed(blocks[:-1]):
+        if _job_type(earlier) != "Freq":
+            continue
+        freq_sections = earlier.split("\\\\")
+        freq_atoms = _read_atoms(freq_sections[3]) if len(freq_sections) > 3 else None
+        if freq_atoms is None:
+            return False
+        if len(freq_atoms) != len(atoms):
+            return True
+        return any(
+            abs(a - b) > COMPOSITE_GEOMETRY_ATOL_ANGSTROM
+            for (_, *p), (_, *q) in zip(atoms, freq_atoms, strict=True)
+            for a, b in zip(p, q, strict=True)
+        )
+    return False
+
+
 def read_gaussian_archive_hessian(text: str) -> ArchiveHessianRead:
     """Read the Hessian from the last archive block that has an ``NImag=`` section.
 
@@ -180,7 +221,9 @@ def read_gaussian_archive_hessian(text: str) -> ArchiveHessianRead:
     earlier block's matrix (which belongs to a different job step).
     """
     text = "\n".join(text.splitlines())  # one line ending, whatever the log was written with
-    for block in reversed(_archive_blocks(text)):
+    blocks = _archive_blocks(text)
+    for position in range(len(blocks) - 1, -1, -1):
+        block = blocks[position]
         sections = block.split("\\\\")
         nimag = next((i for i, s in enumerate(sections) if "NImag=" in s), None)
         if nimag is None:
@@ -191,6 +234,8 @@ def read_gaussian_archive_hessian(text: str) -> ArchiveHessianRead:
         atoms = _read_atoms(sections[3])
         if atoms is None:
             return ArchiveHessianRead(reason=REASON_ARCHIVE_ATOMS)
+        if _job_type(block) == "Mixed" and _composite_geometry_differs(blocks[: position + 1], atoms):
+            return ArchiveHessianRead(reason=REASON_ARCHIVE_COMPOSITE)
         values = _read_values(sections[nimag + 1])
         n3 = 3 * len(atoms)
         if values is None or len(values) != n3 * (n3 + 1) // 2:

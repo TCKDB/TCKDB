@@ -2,7 +2,7 @@
 
 ## 0.190.0 - 2026-11-09
 
-No client code changed. `HessianSource.parsed_log_archive` joins the enum and three reasons join `hessian_not_stored_unparseable` (see `tckdb-schemas` 0.162.0): the server now stores a Gaussian Hessian from the archive block when the log prints no force-constant block. The `tckdb-schemas` window already contains 0.162.
+No client code changed. `HessianSource.parsed_log_archive` joins the enum and four reasons join `hessian_not_stored_unparseable` (see `tckdb-schemas` 0.162.0): the server now stores a Gaussian Hessian from the archive block when the log prints no force-constant block. The `tckdb-schemas` window already contains 0.162.
 
 ## 0.189.0 - 2026-11-07
 
