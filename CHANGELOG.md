@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## An over-limit body gets a coded 413, and a 422 no longer echoes the body (2026-11-09)
+
+- **What changed:** the frontend nginx answers a body over its cap (100 MiB on `/api/v1/uploads/`, `/api/v1/jobs/` and `/api/v1/calculations/<ref>/artifacts`, 10 MiB on the rest of `/api/`) with `413 request_body_too_large` as JSON in the API's error envelope (`context.max_bytes` is that location's cap), where it sent a bare HTML page. No limit changed. A request-validation 422 no longer carries the caller's value under each error's `input`; a 55 MB invalid body used to come back as a 55 MB response. `tckdb-client` turns a 413 with no TCKDB code (Cloudflare's or an unknown proxy's HTML page, or an empty body) into an error that names the limit and what to do.
+- **Not covered:** Cloudflare's own 100,000,000-byte limit on the hosted instance answers before the request reaches nginx, with its own page. The client explains that one.
+- **Schema and migration:** none. Needs a frontend image deploy for the nginx change.
+- **Versions:** `tckdb-schemas` 0.162.0, `tckdb-client` 0.190.0.
+
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)
 
 - **What changed:**
@@ -47,13 +54,6 @@ dataset must never require a code release.
 - **The rule:** a failing response or read model is a 500; anything else keeps its 422. `ServerFaultRoute` (on every router) classifies a pydantic failure escaping an endpoint by the failing model's name: the models the routes return (walked through nested fields and generic envelopes), every class in `app/schemas/reads`, and every `*Read` class. A request or query model stays a 422 because FastAPI validates request bodies and queries before the route runs, and manual validation of caller data goes through `caller_input` (some request models are in the set as response echoes, so the name alone would not protect them). Lookup parameters, upload payloads and declarations keep their 422 and their bodies unchanged. `caller_input` pins a caller-input site to 422 even if its model shares a name with a response model. `/bundles/dry-run` classifies a raw failure the same way.
 - **Logged:** the validation errors, without their input values, capped at 20 plus the total, with the method and route path.
 - **Schema and migration:** none.
-
-## An over-limit body gets a coded 413, and a 422 no longer echoes the body (2026-11-09)
-
-- **What changed:** the frontend nginx answers a body over its cap (100 MiB on `/api/v1/uploads/`, `/api/v1/jobs/` and `/api/v1/calculations/<ref>/artifacts`, 10 MiB on the rest of `/api/`) with `413 request_body_too_large` as JSON in the API's error envelope (`context.max_bytes` is that location's cap), where it sent a bare HTML page. No limit changed. A request-validation 422 no longer carries the caller's value under each error's `input`; a 55 MB invalid body used to come back as a 55 MB response. `tckdb-client` turns a 413 with no TCKDB code (Cloudflare's or an unknown proxy's HTML page, or an empty body) into an error that names the limit and what to do.
-- **Not covered:** Cloudflare's own 100,000,000-byte limit on the hosted instance answers before the request reaches nginx, with its own page. The client explains that one.
-- **Schema and migration:** none. Needs a frontend image deploy for the nginx change.
-- **Versions:** `tckdb-schemas` 0.162.0, `tckdb-client` 0.190.0.
 
 ## A request with no valid credential may not make the API read a large body (2026-11-07)
 

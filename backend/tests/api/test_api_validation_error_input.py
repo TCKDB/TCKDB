@@ -50,6 +50,24 @@ def test_a_large_invalid_body_gets_a_small_422() -> None:
     assert big[:100] not in response.text
 
 
+def test_a_caller_input_error_message_carries_no_input_value() -> None:
+    from app.api.server_faults import caller_input
+
+    app = FastAPI()
+    register_exception_handlers(app)
+
+    @app.get("/caller")
+    def _caller() -> dict:
+        caller_input(_Payload.model_validate, {"n": "SECRET-VALUE-" + "q" * 40, "note": "x"})
+        return {}
+
+    response = TestClient(app).get("/caller")
+    assert response.status_code == 422
+    assert "SECRET-VALUE" not in response.text
+    assert "input_value" not in response.text
+    assert "n\n" in response.json()["detail"]  # still says where
+
+
 def test_a_valid_body_is_still_accepted() -> None:
     response = _client().post("/echo", json={"n": 1, "note": "x"})
     assert response.status_code == 200

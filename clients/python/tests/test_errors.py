@@ -151,8 +151,10 @@ def test_html_413_explains_the_size_limit() -> None:
     assert error.code is None
     message = str(error)
     assert "too large" in message and "proxy" in message
+    assert "did not state its limit" in message
     assert "100,000,000 bytes" in message and "71.5 MiB" in message
-    assert "inline_artifacts=False" in message and "upload_artifacts" in message
+    assert "upload_artifacts" in message and "inline_artifacts" not in message
+    assert "hosted" not in message
     assert "edge page" not in message  # nothing from the body
     assert error.response_text == _EDGE_HTML  # the raw page is still on the exception
 

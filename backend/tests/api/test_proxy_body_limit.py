@@ -30,28 +30,55 @@ def _text() -> str:
     return NGINX_CONF.read_text()
 
 
+def _locations(text: str) -> dict[str, str]:
+    """``{location pattern: block body}``; a quoted string may hold braces, comments are dropped first."""
+    pattern = r"^[ ]*location\s+([^{;]+?)\s*\{((?:[^}']|'[^']*')*)\}"
+    text = re.sub(r"^[ ]*#.*$", "", text, flags=re.M)  # comments hold apostrophes
+    return {m.group(1).strip(): m.group(2) for m in re.finditer(pattern, text, re.M)}
+
+
 def _named_location_bodies(text: str) -> dict[str, str]:
-    """``{location name: the single-quoted string its ``return 413`` sends}``."""
-    found = re.findall(
-        r"location\s+(@\w+)\s*\{\s*default_type application/json;\s*return 413 '([^']*)';\s*\}", text
-    )
-    return dict(found)
+    """``{@name: the single-quoted string its ``return 413`` sends}``; other directives are allowed."""
+    found = {}
+    for name, block in _locations(text).items():
+        if name.startswith("@"):
+            match = re.search(r"return 413 '([^']*)';", block)
+            if match:
+                found[name] = match.group(1)
+    return found
 
 
-def test_each_api_location_wires_its_cap_to_a_json_413() -> None:
+def test_every_capped_api_location_wires_a_json_413() -> None:
     text = _text()
+    locations = _locations(text)
     bodies = _named_location_bodies(text)
-    # (client_max_body_size, error_page target) pairs in the order the locations appear.
-    pairs = re.findall(r"client_max_body_size (\w+);\s*error_page 413 (@\w+);", text)
-    assert {size for size, _ in pairs} == set(_SIZES), f"expected both the 10m and 100m locations wired, got {pairs}"
-    for size, target in pairs:
+    capped = {
+        name: re.search(r"client_max_body_size (\w+);", block).group(1)
+        for name, block in locations.items()
+        if "/api" in name and "client_max_body_size" in block
+    }
+    assert set(capped.values()) == set(_SIZES), f"expected the 10m and 100m locations, got {capped}"
+    for name, size in capped.items():
+        match = re.search(r"error_page 413 (@\w+);", locations[name])
+        assert match, f"{name} caps the body at {size} but has no `error_page 413`: a refusal would be nginx's HTML"
+        target = match.group(1)
         assert target in bodies, f"error_page names {target}, which has no JSON `return 413` location"
+        assert size in _SIZES, f"{name} has cap {size}, which proxy_body_limit does not know"
         body = json.loads(bodies[target])  # must parse
         assert body == json.loads(json.dumps(proxy_refusal_body(_SIZES[size]))), (
             f"{target} (cap {size}) has drifted from app.api.proxy_body_limit.proxy_refusal_body"
         )
         assert body["code"] == CODE_REQUEST_BODY_TOO_LARGE
         assert body["context"] == {"max_bytes": _SIZES[size]}
+        block = locations[target]
+        assert "default_type application/json;" in block
+        assert "add_header X-Request-ID $request_id always;" in block
+
+
+def test_the_guard_notices_a_capped_location_without_an_error_page() -> None:
+    probe = "location /api/v1/exports/ { client_max_body_size 1m; proxy_pass http://x; }"
+    block = _locations(probe)["/api/v1/exports/"]
+    assert "client_max_body_size" in block and not re.search(r"error_page 413", block)
 
 
 def test_the_caps_in_the_module_are_the_caps_in_the_config() -> None:

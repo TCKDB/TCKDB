@@ -579,17 +579,15 @@ class TCKDBResponse:
         return None
 
 
-#: A 413 that carries no TCKDB code did not come from the API: Cloudflare's or
-#: a proxy's HTML page (the hosted instance's limit is Cloudflare's 100 MB), or
-#: an empty body. The API's own 413s (``request_body_too_large``,
+#: A 413 that carries no TCKDB code did not come from the API: an edge or proxy
+#: page (HTML) or an empty body. The API's own 413s (``request_body_too_large``,
 #: ``anonymous_body_too_large``, ``bundle_too_large``) carry a code and keep
 #: their own message. Nothing from the response body is put in the message.
 _UNCODED_413_MESSAGE = (
     "HTTP 413: the request body was too large for the server or a proxy in front of it, and the refusal "
-    "carried no TCKDB code. On the hosted instance the limit is Cloudflare's 100 MB (100,000,000 bytes), "
-    "which is about 71.5 MiB of files once they are base64-encoded into the JSON body. Send the artifacts "
-    "separately (TCKDBClient.upload_artifacts, or inline_artifacts=False where the builder offers it) or "
-    "split the deposit into smaller requests."
+    "did not state its limit. Behind Cloudflare Free/Pro the limit is 100,000,000 bytes, which is about "
+    "71.5 MiB of files once they are base64-encoded into the JSON body. Send the files separately "
+    "(TCKDBClient.upload_artifacts) or split the deposit into smaller requests."
 )
 
 

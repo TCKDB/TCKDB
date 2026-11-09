@@ -153,6 +153,23 @@ class DataIntegrityError(Exception):
     """
 
 
+def _detail_without_input(exc: ValueError, errors: object) -> str:
+    """``str(exc)``, rebuilt from loc/msg/type when it is a pydantic error list.
+
+    pydantic's own text carries ``input_value='...'`` for every error: the
+    caller's value, echoed (up to its repr limit) once per error. The message
+    keeps what is wrong and where, not the value.
+    """
+    if not (isinstance(errors, list) and errors and all(isinstance(e, dict) for e in errors)):
+        return str(exc)
+    lines = [f"{len(errors)} validation error{'s' if len(errors) != 1 else ''}"]
+    for error in errors:
+        loc = ".".join(str(part) for part in error.get("loc", ()))
+        lines.append(loc or "(root)")
+        lines.append(f"  {error.get('msg', '')} [type={error.get('type', '')}]")
+    return "\n".join(lines)
+
+
 def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
     # ``CodedValueError`` is the backend subclass; a wire-schema check raises
     # the base directly, because ``tckdb_schemas`` may not import ``app``.
@@ -168,7 +185,7 @@ def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
             exc.errors() if callable(getattr(exc, "errors", None)) else str(exc)
         )
         content = error_envelope(
-            str(exc),
+            _detail_without_input(exc, validation_detail),
             code=validation_detail_code(
                 validation_detail, fallback="validation_error"
             ),
