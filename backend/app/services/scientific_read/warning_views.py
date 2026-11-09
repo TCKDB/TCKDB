@@ -51,6 +51,12 @@ def current_read_actor() -> ReadActor | None:
     return _READ_ACTOR.get()
 
 
+def may_see_retired_warnings() -> bool:
+    """Whether the current request's reader is a curator or admin (the only readers shown retired warnings)."""
+    actor = current_read_actor()
+    return actor is not None and actor.role in _CURATION_ROLES
+
+
 def _may_see_depositor_text(actor: ReadActor | None, writer_id: int | None) -> bool:
     if actor is None:
         return False
@@ -66,7 +72,7 @@ def reveal_warning_views(payload: Any) -> None:
     if not records and not deposits:
         return
     actor = current_read_actor()
-    sees_retired = actor is not None and actor.role in _CURATION_ROLES
+    sees_retired = may_see_retired_warnings()
     for block in (*(records or ()), *(deposits or ())):
         if sees_retired:
             for item in block.items:
@@ -94,6 +100,7 @@ def reveal_warning_views(payload: Any) -> None:
 __all__ = [
     "ReadActor",
     "current_read_actor",
+    "may_see_retired_warnings",
     "reset_read_actor",
     "reveal_warning_views",
     "set_read_actor",

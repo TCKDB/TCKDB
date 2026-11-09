@@ -32,7 +32,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 from tckdb_schemas.upload_warning import UploadWarning
 
-from app.db.models.calculation import Calculation
+from app.db.models.calculation import Calculation, CalculationHessian
 from app.db.models.common import CalculationType
 from app.db.models.common import SubmissionRecordType as RT
 from app.db.models.deposit_warning import RETIREMENT_REASONS, DepositWarning, DepositWarningRetirement
@@ -202,3 +202,18 @@ def retire_hessian_not_stored_warnings(session: Session, calculation_id: int, *,
         )
     ).all()
     _retire(session, rows, "hessian_stored", written_by)
+
+
+def retire_hessian_not_stored_where_stored(
+    session: Session, calculation_ids: Iterable[int], *, written_by: int | None
+) -> None:
+    """Retire ``hessian_not_stored_*`` warnings on every one of ``calculation_ids`` that has a Hessian.
+
+    Runs after a deposit's warnings are stored: a batch whose failing file comes before its successful one stores the
+    failing file's warning after the Hessian's own retirement ran, and this clears it.
+    """
+    ids = list(dict.fromkeys(calculation_ids))
+    if not ids:
+        return
+    for calculation_id in session.scalars(select(CalculationHessian.calculation_id).where(CalculationHessian.calculation_id.in_(ids))):
+        retire_hessian_not_stored_warnings(session, calculation_id, written_by=written_by)

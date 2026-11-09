@@ -330,3 +330,116 @@ def test_the_reason_set_in_the_service_the_model_and_the_database_agree(db_sessi
     )
     assert definition and all(f"'{reason}'" in definition for reason in RETIREMENT_REASONS)
     assert definition.count("::text") == len(RETIREMENT_REASONS)
+
+
+def test_a_batch_with_a_failing_file_before_the_good_one_leaves_no_current_hessian_warning(client, db_session):
+    calc_id = _create_freq(client, natoms=GAUSSIAN_NATOMS)
+    response = client.post(
+        artifacts_url(client, calc_id),
+        json={
+            "artifacts": [
+                _hessian_artifact(MOLPRO_LOG, kind="output_log", filename="bad.log"),
+                _hessian_artifact(GAUSSIAN_LOG, kind="output_log", filename="freq.log"),
+            ]
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert [i for i in _read_items(client, db_session, calc_id) if i["code"].startswith("hessian_not_stored")] == []
+    curator = _user(db_session, "retire-batch-curator", AppUserRole.curator)[1]
+    (item,) = [i for i in _read_items(client, db_session, calc_id, curator) if i["code"].startswith("hessian_not_stored")]
+    assert item["retired_reason"] == "hessian_stored"
+    ids = [w.id for w in db_session.scalars(
+        select(DepositWarning).where(DepositWarning.record_id == calc_id, DepositWarning.code.startswith("hessian_not_stored"))
+    )]
+    (retirement,) = db_session.scalars(
+        select(DepositWarningRetirement).where(DepositWarningRetirement.deposit_warning_id.in_(ids))
+    ).all()
+    assert retirement.retired_by_user_id is not None
+
+
+# ---------------------------------------------------------------------------
+# Write order and the identical-retired-row guard
+# ---------------------------------------------------------------------------
+
+
+def _energyless_opt_with_file(client, db_session, monkeypatch, tag: str) -> int:
+    """An opt whose stored warning says "no file" although one is attached (the re-check was held off)."""
+    calc_id = _deposit_opt(client, energy=None, smiles_tag=tag)
+    with monkeypatch.context() as m:
+        m.setattr("app.api.routes.calculations.recheck_calculation_warnings", lambda *a, **k: [])
+        _attach(client, calc_id)
+    return calc_id
+
+
+def test_the_replacement_is_stored_before_the_old_warning_is_retired(client, db_session, monkeypatch):
+    from app.services import artifact_warning_recheck as recheck
+
+    calc_id = _energyless_opt_with_file(client, db_session, monkeypatch, "l")
+    seen: dict[str, int] = {}
+    real_insert = recheck._insert_replacements
+
+    def spy(*args, **kwargs):
+        seen["retired_when_storing"] = len(_retirements(db_session, calc_id))
+        return real_insert(*args, **kwargs)
+
+    monkeypatch.setattr(recheck, "_insert_replacements", spy)
+    recheck.recheck_calculation_warnings(db_session, calc_id, cause="artifact_attached", submission_id=None, written_by=None)
+    assert seen == {"retired_when_storing": 0}
+    (item,) = _current(client, db_session, calc_id)
+    assert item["context"] == {"has_energy": False, "has_artifact": True}
+
+
+def test_an_identical_retired_row_keeps_the_old_warning_current(client, db_session, monkeypatch):
+    """The replacement cannot become current (the same content was retired earlier): do not leave the record bare."""
+    from tckdb_schemas.upload_warning import UploadWarning
+
+    from app.services import artifact_warning_recheck as recheck
+    from app.services.deposit_warnings import _row, _Target
+
+    calc_id = _energyless_opt_with_file(client, db_session, monkeypatch, "m")
+    (old,) = _history(db_session, calc_id)
+    twin = UploadWarning.from_code(field="opt_result", code=CODE, context={"has_energy": False, "has_artifact": True})
+    twin_row = DepositWarning(**_row(old.submission_id, _Target(RT.calculation, calc_id), twin, None))
+    db_session.add(twin_row)
+    db_session.flush()
+    db_session.add(DepositWarningRetirement(deposit_warning_id=twin_row.id, retired_reason_code="artifact_attached"))
+    db_session.flush()
+
+    recheck.recheck_calculation_warnings(
+        db_session, calc_id, cause="artifact_attached", submission_id=old.submission_id, written_by=None
+    )
+    assert not [r for r in _retirements(db_session, calc_id) if r.deposit_warning_id == old.id]
+    (item,) = _current(client, db_session, calc_id)
+    assert item["context"] == {"has_energy": False, "has_artifact": False}
+
+
+# ---------------------------------------------------------------------------
+# The envelope itself hides retired warnings from anyone who is not a curator
+# ---------------------------------------------------------------------------
+
+
+def test_the_envelope_loads_retired_warnings_only_for_a_published_curator(client, db_session):
+    from app.db.models.app_user import AppUser
+    from app.services.deposit_warnings import deposit_warning_envelope
+    from app.services.scientific_read.warning_views import ReadActor, reset_read_actor, set_read_actor
+
+    calc_id = _deposit_opt(client, energy=-40.45, smiles_tag="n")
+    _attach(client, calc_id)
+    ref = db_session.get(Calculation, calc_id).public_ref
+
+    def codes() -> list[str]:
+        (entry,) = deposit_warning_envelope(db_session, RT.calculation, {calc_id: ref})["record_warnings"]
+        return [i.code for i in entry.items]
+
+    assert codes() == []  # no actor published: anonymous
+    user = db_session.scalars(select(AppUser).where(AppUser.username == "testuser")).one()
+    token = set_read_actor(ReadActor(user_id=user.id, role=AppUserRole.user))
+    try:
+        assert codes() == []
+    finally:
+        reset_read_actor(token)
+    token = set_read_actor(ReadActor(user_id=user.id, role=AppUserRole.curator))
+    try:
+        assert codes() == [CODE]
+    finally:
+        reset_read_actor(token)

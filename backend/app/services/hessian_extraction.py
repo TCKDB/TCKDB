@@ -169,6 +169,7 @@ def try_extract_hessian_from_artifact_upload(
     artifact_in: ArtifactIn,
     *,
     field: str = _FIELD,
+    written_by: int | None = None,
 ) -> UploadWarning | None:
     """Extract and store a Cartesian Hessian from an uploaded artifact.
 
@@ -204,7 +205,7 @@ def try_extract_hessian_from_artifact_upload(
 
     outcome = isolated_best_effort(
         session,
-        lambda: _extract_and_store(session, calculation, artifact_in, field),
+        lambda: _extract_and_store(session, calculation, artifact_in, field, written_by),
         what=f"hessian extraction for artifact '{artifact_in.filename}'",
     )
     if outcome is None:
@@ -218,6 +219,7 @@ def _extract_and_store(
     calculation: Calculation,
     artifact_in: ArtifactIn,
     field: str = _FIELD,
+    written_by: int | None = None,
 ) -> _Outcome:
     # Fill-when-absent: never overwrite an existing Hessian.
     if calculation.hessian is not None:
@@ -258,7 +260,7 @@ def _extract_and_store(
     if geometry_id is None:
         return _Outcome(refusal)
 
-    return _Outcome(_insert(session, calculation, geometry_id, parsed, artifact_in.filename, field))
+    return _Outcome(_insert(session, calculation, geometry_id, parsed, artifact_in.filename, field, written_by))
 
 
 def _resolve_input_geometry_id(
@@ -373,6 +375,7 @@ def _insert(
     parsed: ParsedHessian,
     filename: str,
     field: str = _FIELD,
+    written_by: int | None = None,
 ) -> UploadWarning | None:
     """Insert the ``calc_hessian`` row inside a SAVEPOINT; return a warning if it was refused.
 
@@ -443,5 +446,5 @@ def _insert(
         # the guarded block on purpose: a failure here fails the request, it is not reported as a failed Hessian.
         from app.services.artifact_warning_recheck import retire_hessian_not_stored_warnings
 
-        retire_hessian_not_stored_warnings(session, calculation.id)
+        retire_hessian_not_stored_warnings(session, calculation.id, written_by=written_by)
         return None

@@ -420,7 +420,8 @@ def store_deposit_warnings(
 ) -> None:
     """:func:`_store_deposit_warnings`, then the retirements this deposit's records earn.
 
-    A single-point calculation among the deposit's records makes an opt's energy obtainable, so a stored
+    A Hessian already stored for a calculation among the deposit's records retires its ``hessian_not_stored_*``
+    warnings, whichever order the batch's files arrived in. A single-point calculation among the deposit's records makes an opt's energy obtainable, so a stored
     ``converged_opt_no_usable_energy`` on a same-owner opt is retired. That step is not isolated: a failure fails the
     deposit (it is atomic with it), unlike the warning rows, which describe the deposit and get no vote on it.
     """
@@ -435,12 +436,16 @@ def store_deposit_warnings(
     )
     calculation_ids = [t.record_id for t in seen if t.record_type is RT.calculation]
     if calculation_ids:
-        from app.services.artifact_warning_recheck import recheck_owner_opts_after_single_points
+        from app.services.artifact_warning_recheck import (
+            recheck_owner_opts_after_single_points,
+            retire_hessian_not_stored_where_stored,
+        )
 
         writer = written_by
         if writer is None and submission_id is not None:
             writer = session.scalar(select(Submission.created_by).where(Submission.id == submission_id))
         recheck_owner_opts_after_single_points(session, calculation_ids, written_by=writer)
+        retire_hessian_not_stored_where_stored(session, calculation_ids, written_by=writer)
 
 
 def _store_deposit_warnings(
@@ -644,9 +649,13 @@ def deposit_warning_envelope(session: Session, record_type: RT, id_to_ref: dict[
     ``deposit_warnings`` (what the named records' submissions could not place on a record)."""
     from app.schemas.reads.scientific_deposit_warnings import RecordWarnings
 
-    # Retired warnings ride along; ``reveal_warning_views`` drops them for every reader but a curator or admin.
-    stored = deposit_warnings_for(session, record_type, id_to_ref, include_retired=True)
+    # Retired warnings are loaded only for a curator or admin (read from the request's published actor), so a route
+    # that skips ``reveal_warning_views`` still cannot show one as current. The reveal step filters again.
+    from app.services.scientific_read.warning_views import may_see_retired_warnings
+
+    include_retired = may_see_retired_warnings()
+    stored = deposit_warnings_for(session, record_type, id_to_ref, include_retired=include_retired)
     return {
         "record_warnings": [RecordWarnings(record_ref=ref, **stored[rid]) for rid, ref in id_to_ref.items()],
-        "deposit_warnings": submission_warnings_for(session, record_type, id_to_ref, include_retired=True),
+        "deposit_warnings": submission_warnings_for(session, record_type, id_to_ref, include_retired=include_retired),
     }
