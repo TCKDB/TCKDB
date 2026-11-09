@@ -265,3 +265,28 @@ def test_a_legacy_composite_role_on_an_sp_is_not_a_composite_for_these_rules(cli
     resp = client.post(url, json=payload)
     assert resp.status_code == 201, resp.text[:600]
     assert "composite_role_on_non_composite_calculation" in [w["code"] for w in resp.json()["warnings"]]
+
+
+_SP_AND_COMPOSITE = ({"o1": _opt(_G1), "s1": _sp(_G1), "c1": _composite(_G1)}, [("o1", "opt"), ("s1", "sp"), ("c1", "composite")])
+_TWO_COMPOSITE_LEVELS = (
+    {"o1": _opt(_G1), "o2": _opt(_G2), "c1": _composite(_G1, _CBS_QB3), "c2": _composite(_G2, _G4)},
+    [("o1", "opt"), ("o2", "opt"), ("c1", "composite"), ("c2", "composite")],
+)
+
+
+@pytest.mark.parametrize(
+    ("product", "code", "case"),
+    [
+        ("thermo", "thermo_energy_sp_and_composite_linked", _SP_AND_COMPOSITE),
+        ("statmech", "statmech_energy_sp_and_composite_linked", _SP_AND_COMPOSITE),
+        ("thermo", "thermo_energy_level_ambiguous", _TWO_COMPOSITE_LEVELS),
+        ("statmech", "statmech_energy_level_ambiguous", _TWO_COMPOSITE_LEVELS),
+    ],
+)
+def test_the_product_prefixed_codes_arrive_in_the_response_body_by_their_full_name(client, product, code, case):
+    """The helpers above compose ``f"{product}_{suffix}"``; this names each full code, as a client matches it."""
+    calcs, links = case
+    url, payload = _payload(product, calcs, links)
+    resp = client.post(url, json=payload)
+    assert resp.status_code == 422, resp.text[:600]
+    assert resp.json()["code"] == code

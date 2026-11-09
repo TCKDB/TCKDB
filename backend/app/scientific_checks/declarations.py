@@ -84,10 +84,11 @@ from app.scientific_checks import (
     ScientificCheck,
     collect_constraint_rejections,
     collect_registered_checks,
+    gap_declarations,
 )
 from app.scientific_checks import external_comparison as external_comparison_checks
 from app.services import (
-    calculation_geometry_composition,
+    calc_isotopes,
     charge_multiplicity_reconciliation,
     frequency_geometry_linearity,
     reaction_resolution,
@@ -144,7 +145,18 @@ _TAU_THRESHOLD = ProvenanceThreshold(
     parameter_keys=TAU_PARAMETER_KEYS,
     values=_TAU_VALUES,
     fallback=(
-        f"When ``freq.hessian_method`` is absent — which is the common case, "
+        f"Tau is resolved in a fixed order (``resolve_tau_with_assumption``, "
+        f"since #864): (1) the method an attached output log reports the "
+        f"frequency job ran; else (2) the method the input echoed in that log "
+        f"requests (what the job read outranks what was recorded about it); else (3) the recorded ``freq.hessian_method`` or the method "
+        f"the calculation's own input deck states; else (4) the producing "
+        f"program's assumed default for the level of theory's method family; "
+        f"else (5) {TAU_PROTOCOL_NOT_RECORDED_CM1:.0f} cm-1. A reported method "
+        f"outranks a recorded one because it is what ran; a request only says "
+        f"what was asked for, and the input a log echoes is what the job actually "
+        f"read, so it outranks a method recorded or typed about the job. When no log "
+        f"reports a method, no echoed input requests one and nothing is "
+        f"recorded or stated in a deck — which is the common case, "
         f"because most outputs do not say — validation resolves tau from the "
         f"producing program's documented default for the level of theory's "
         f"method family (ADR 0012's 2026-09-04 amendment, applied at "
@@ -185,10 +197,10 @@ _TAU_THRESHOLD = ProvenanceThreshold(
         f"transition-state extra mode in that band is no longer flagged. Other "
         f"DLPNO methods (DLPNO-CEPA and the like) assume nothing. The "
         f"record stores the matching ``assumed_*`` basis so an assumption is "
-        f"never confusable with a recorded statement. A recorded method always "
-        f"wins (a recorded finite difference of gradients on an ORCA ``NumFreq`` deck for a method "
+        f"never confusable with a recorded statement. An assumption never "
+        f"replaces a statement (a recorded finite difference of gradients on an ORCA ``NumFreq`` deck for a method "
         f"with no analytic gradient is refined to finite differences of energies and "
-        f"``hessian_method_refined`` says so), and a ``freq.hessian_method`` that is present but not "
+        f"``hessian_method_refined`` says so): a ``freq.hessian_method`` that is present but not "
         f"recognised is kept at the conservative row rather than replaced by an "
         f"assumption. "
         f"Only where the software or the method family is not in that table, "
@@ -937,11 +949,16 @@ CHECK_ATOM_MAP_IS_A_BIJECTION = ScientificCheck(
 CHECK_ATOM_MAP_INDICES_ARE_GEOMETRY_RELATIVE = ScientificCheck(
     group="Atom mapping across a reaction",
     sort_key=3,
-    code=wire_atom_map.W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
+    code=(
+        wire_atom_map.W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
+        wire_atom_map.W_ATOM_MAP_PARTICIPANT_NOT_DECLARED,
+        wire_atom_map.W_ATOM_MAP_WITHOUT_TRANSITION_STATE,
+    ),
     asserts=(
         "Every atom index in a map is counted against a named geometry that "
         "the participant actually owns, and names an atom that geometry "
-        "actually has."
+        "actually has; and a map belongs to a reaction that has a saddle "
+        "point and names only participants that reaction declares."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,
@@ -1456,13 +1473,14 @@ CHECK_REPRODUCIBILITY_IS_ITS_OWN_JUDGEMENT = ScientificCheck(
 #: listed here, so forgetting to register a module is caught rather than
 #: silently omitted from the register.
 DECLARING_MODULES: tuple[ModuleType, ...] = (
-    calculation_geometry_composition,
+    calc_isotopes,
     chemistry_species,
     chemistry_stereo,
     chemistry_units,
     charge_multiplicity_reconciliation,
     external_comparison_checks,
     frequency_geometry_linearity,
+    gap_declarations,
     geometry_validation_service,
     reaction_atom_map_service,
     reaction_resolution,

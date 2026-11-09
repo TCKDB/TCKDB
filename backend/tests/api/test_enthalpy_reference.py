@@ -36,9 +36,10 @@ POINT = [{"temperature_k": 400, "h_kj_mol": -74.5}]
     ({"s298_j_mol_k": 10}, REFERENCE, "enthalpy_declaration_without_content"),
     ({"s298_j_mol_k": 10}, None, None),
     ({"h298_kj_mol": 0}, "sensible_increment", "enthalpy_quantity_not_storable_here"),
+    ({"h298_kj_mol": 0}, "FORMATION_298K ", "enthalpy_reference_kind_unrecognized"),
 ], ids=["scalar_declared", "scalar_absent", "fit_only_declared", "fit_only_absent",
         "point_declared", "point_absent",
-        "declaration_without_content", "entropy_only", "other_quantity"])
+        "declaration_without_content", "entropy_only", "other_quantity", "near_miss_spelling"])
 def test_deposit_enthalpy_contract(client, db_session, route, content, reference, code):
     thermo = {**content, "enthalpy_reference_kind": reference}
     if route == "thermo":

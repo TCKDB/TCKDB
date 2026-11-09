@@ -4,6 +4,10 @@
 
 No client code changed. The `tckdb-schemas` window moves to `>=0.158,<0.170` to contain 0.169.
 
+## 0.197.0 - 2026-11-09
+
+The `tckdb-schemas` window is `>=0.158,<0.169`. No client behaviour changes.
+
 ## 0.196.0 - 2026-11-09
 
 `RejectionCode.THERMO_DECLARED_BY_TARGET_INCOHERENT` and `RejectionCode.THERMO_DECLARED_BY_RECORD_INCOHERENT` (422) join the refusal codes. Needs `tckdb-schemas` 0.167.0.

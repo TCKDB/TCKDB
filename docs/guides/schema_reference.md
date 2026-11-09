@@ -1705,7 +1705,7 @@ the gap.
 
 **Role:** role not stated on the model
 
-**Purpose:** A deposit warning that no longer applies, kept as history rather than shown as current.
+**Purpose:** A deposit warning that no longer applies, with the reason, actor and time.
 
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
