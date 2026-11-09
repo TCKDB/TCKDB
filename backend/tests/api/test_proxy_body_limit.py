@@ -13,6 +13,8 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 from app.api.code_catalogue import CATALOGUE
 from app.api.proxy_body_limit import (
     CODE_REQUEST_BODY_TOO_LARGE,
@@ -48,8 +50,8 @@ def _named_location_bodies(text: str) -> dict[str, str]:
     return found
 
 
-def test_every_capped_api_location_wires_a_json_413() -> None:
-    text = _text()
+def check_config(text: str) -> None:
+    """Raise AssertionError unless every capped /api location answers its 413 with the pinned JSON."""
     locations = _locations(text)
     bodies = _named_location_bodies(text)
     capped = {
@@ -57,7 +59,7 @@ def test_every_capped_api_location_wires_a_json_413() -> None:
         for name, block in locations.items()
         if "/api" in name and "client_max_body_size" in block
     }
-    assert set(capped.values()) == set(_SIZES), f"expected the 10m and 100m locations, got {capped}"
+    assert set(_SIZES) <= set(capped.values()), f"expected the 10m and 100m locations, got {capped}"
     for name, size in capped.items():
         match = re.search(r"error_page 413 (@\w+);", locations[name])
         assert match, f"{name} caps the body at {size} but has no `error_page 413`: a refusal would be nginx's HTML"
@@ -75,10 +77,40 @@ def test_every_capped_api_location_wires_a_json_413() -> None:
         assert "add_header X-Request-ID $request_id always;" in block
 
 
-def test_the_guard_notices_a_capped_location_without_an_error_page() -> None:
-    probe = "location /api/v1/exports/ { client_max_body_size 1m; proxy_pass http://x; }"
-    block = _locations(probe)["/api/v1/exports/"]
-    assert "client_max_body_size" in block and not re.search(r"error_page 413", block)
+def test_every_capped_api_location_wires_a_json_413() -> None:
+    check_config(_text())
+
+
+_INJECTED_LOCATION = """
+    location /api/v1/exports/ {
+        client_max_body_size 50m;
+        proxy_pass http://$tckdb_api_upstream:8010;
+    }
+"""
+
+
+def test_the_guard_fails_on_a_capped_location_with_no_error_page() -> None:
+    text = _text()
+    check_config(text)  # control: the real file passes
+    mutated = text.replace("    # Vite hashes assets", _INJECTED_LOCATION + "\n    # Vite hashes assets", 1)
+    assert mutated != text
+    with pytest.raises(AssertionError, match=r"/api/v1/exports/.*no `error_page 413`"):
+        check_config(mutated)
+
+
+def test_the_guard_fails_when_a_named_body_drifts_from_the_module() -> None:
+    text = _text()
+    drifted = text.replace('"code":"request_body_too_large"', '"code":"something_else"', 1)
+    assert drifted != text
+    with pytest.raises(AssertionError, match="drifted"):
+        check_config(drifted)
+
+
+def test_the_guard_fails_when_the_error_page_target_is_missing() -> None:
+    text = _text()
+    broken = text.replace("error_page 413 @request_body_too_large_100m;", "error_page 413 @nowhere;", 1)
+    with pytest.raises(AssertionError, match="no JSON"):
+        check_config(broken)
 
 
 def test_the_caps_in_the_module_are_the_caps_in_the_config() -> None:
