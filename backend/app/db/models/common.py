@@ -192,12 +192,9 @@ class ThermoTargetKind(str, Enum):
 class ThermoDeclarationSource(str, Enum):
     """Whose claim a thermo record's thermodynamic-target declaration is.
 
-    ``depositor`` is the depositor's own statement about their record, and is
-    what every target declared before this field existed is. ``chemkin_format``
-    is a statement by the depositing client that the CHEMKIN format defines the
-    target (a NASA-7 polynomial is the standard ideal-gas ensemble by
-    definition); the server checks it is coherent but cannot verify which tool
-    produced it. Machine tokens, not labels. Never set by the server.
+    ``depositor`` is the depositor's own statement. ``chemkin_format`` is a statement by the
+    depositing client that the CHEMKIN format defines the target; the server checks it is coherent
+    but cannot verify which tool produced it.
     """
 
     depositor = "depositor"

@@ -79,7 +79,7 @@ def build_thermo_payload(
     config: ImportConfig,
 ) -> dict:
     """Build a ``ThermoUploadRequest`` dict for one species."""
-    # Only what the phase letter states is declared; a blank or unknown letter stays unknown.
+    # A blank or unknown phase letter stays undeclared.
     phase = {"G": "gas", "L": "liquid", "S": "solid"}.get(entry.phase.upper())
     payload: dict = {
         "species_entry": species.identity_payload(),
@@ -100,10 +100,7 @@ def build_thermo_payload(
         "tmax_k": entry.t_high,
     }
     if phase == "gas":
-        # A CHEMKIN NASA-7 polynomial is the standard ideal-gas ensemble of the
-        # species by the definition of the format, so the importer declares that
-        # target for a gas-phase entry, and says the format declared it, not the
-        # mechanism's author. A liquid, solid or unstated phase declares nothing.
+        # The CHEMKIN format defines a NASA-7 polynomial as the standard ideal-gas ensemble.
         payload["thermodynamic_target"] = {
             "kind": "equilibrium_ensemble",
             "declared_by": "chemkin_format",

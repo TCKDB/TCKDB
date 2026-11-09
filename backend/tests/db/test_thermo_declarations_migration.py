@@ -362,8 +362,7 @@ def test_real_upgrade_downgrade_upgrade_keeps_existing_rows_null_and_their_diges
     harness.run("upgrade", _REVISION.parent)
     ids = _seed_thermo_rows(harness.engine)
 
-    # Digests are read through the ORM, which knows every column of head, so they are taken at head
-    # (a later revision adds ``thermodynamic_target_declared_by``, which a digest leaves out at its default).
+    # Digests are read through the ORM, so they are taken at head.
     harness.run("upgrade", "head")
     before = _digests(harness.engine, ids)
     with harness.engine.connect() as conn:

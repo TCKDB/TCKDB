@@ -22,15 +22,14 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
-## Imported CHEMKIN thermo declares its phase and target, and says the format declared it (2026-11-09)
+## A thermo target says whose claim it is; imported CHEMKIN thermo declares its target (2026-11-09)
 
 - **What changed:**
-  - A thermo record's `thermodynamic_target` gains `declared_by`: `depositor` (the default, and what every existing target is) or `chemkin_format` (a client's statement that the CHEMKIN format defines the target). It is stored (`thermo.thermodynamic_target_declared_by`) and returned in the thermo read's `thermodynamic_target` block, and a contribution bundle export carries it.
-  - `tckdb-chemkin` declares `equilibrium_ensemble` with `declared_by: chemkin_format` for every gas-phase entry (a NASA-7 polynomial is the standard ideal-gas ensemble by the definition of the format). The phase comes from the card's column-45 letter: `G` gas, `L` liquid, `S` solid. A liquid or solid card declares its phase and no target. A blank or unknown letter declares neither; a blank used to be read as `G`.
-  - `tckdb-chemkin` 0.7.0 is a minor bump because it sends a new wire key, `thermodynamic_target.declared_by`, which an older server refuses as an unknown field. It needs a server at migration `e7a3c1d9f482` or later and `tckdb-schemas` 0.162.0 or later.
-  - `chemkin_format` is a statement by the depositing client that the CHEMKIN format defines the target; the server checks it is coherent (an `equilibrium_ensemble` target, `thermo_declared_by_target_incoherent`; phase `gas` and a NASA-7 block on the record, `thermo_declared_by_record_incoherent`) but cannot verify which tool produced it. The thermo selection response shows it as `target_declared_by` on each candidate, and the legacy thermo read returns `thermodynamic_target_declared_by` as `null` when no target is declared.
-  - Thermo selection of imported mechanism thermo therefore answers (all 123 species of the formic acid model: `sole_eligible_candidate`) instead of `no_applicable_candidate` with `thermodynamic_target_not_declared`.
-- **Schema and migration:** one new revision, `e7a3c1d9f482`: `thermo.thermodynamic_target_declared_by`, enum `thermo_declaration_source`, `NOT NULL DEFAULT 'depositor'`; a metadata-only change, no UPDATE, so approved rows are untouched. The column is left out of the consistency hash and of the assessment digest at its default, so no stored review or assessment goes stale. **Versions:** `tckdb-schemas` 0.162.0, `tckdb-client` 0.190.0 (two new rejection codes), `tckdb-chemkin` 0.7.0.
+  - A thermo record's `thermodynamic_target` gains `declared_by`: `depositor` (the default; existing targets read `depositor`) or `chemkin_format`, a statement by the depositing client that the CHEMKIN format defines the target. It is stored, returned in the thermo read's `thermodynamic_target`, carried by the bundle export, and shown as `target_declared_by` on each thermo selection candidate. The legacy thermo read returns `thermodynamic_target_declared_by` as `null` when no target is declared.
+  - A `chemkin_format` target is refused unless it is `equilibrium_ensemble` (`thermo_declared_by_target_incoherent`) on a record with phase `gas` and a NASA-7 block (`thermo_declared_by_record_incoherent`).
+  - `tckdb-chemkin` declares `equilibrium_ensemble` with `declared_by: chemkin_format` for gas-phase entries. The phase comes from the card's column-45 letter (`G`, `L`, `S`); `L` and `S` declare their phase and no target, and a blank or unknown letter declares neither (a blank used to read as `G`). It sends a new wire key an older server refuses, and needs a server at migration `e7a3c1d9f482` or later and `tckdb-schemas` 0.162.0 or later.
+  - Thermo selection of the formic acid model's 123 species answers `sole_eligible_candidate` instead of `no_applicable_candidate`.
+- **Schema and migration:** revision `e7a3c1d9f482` adds `thermo.thermodynamic_target_declared_by` (enum `thermo_declaration_source`, `NOT NULL DEFAULT 'depositor'`). **Versions:** `tckdb-schemas` 0.162.0, `tckdb-client` 0.190.0, `tckdb-chemkin` 0.7.0.
 
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)
 

@@ -13,19 +13,19 @@ Read it in pieces: `python -m tckdb_schemas.contract --print` for all of it, `--
 
 | Surface | Endpoints | Key rules | Most specific refusals |
 |---|---|---|---|
-| [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest) | `POST /api/v1/uploads/computed-reaction`<br>`POST /api/v1/jobs/computed-reaction` | A thermo record with enthalpy content must declare what its enthalpies mean. A ``chemkin_format`` target needs a gas-phase record that carries a NASA-7 block. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
-| [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest) | `POST /api/v1/uploads/computed-species` | A thermo record with enthalpy content must declare what its enthalpies mean. A ``chemkin_format`` target needs a gas-phase record that carries a NASA-7 block. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
+| [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest) | `POST /api/v1/uploads/computed-reaction`<br>`POST /api/v1/jobs/computed-reaction` | A thermo record with enthalpy content must declare what its enthalpies mean. A thermo record's optional target and protocol declarations must be coherent. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
+| [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest) | `POST /api/v1/uploads/computed-species` | A thermo record with enthalpy content must declare what its enthalpies mean. A thermo record's optional target and protocol declarations must be coherent. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
 | [`ConformerUploadRequest`](#s-conformeruploadrequest) | `POST /api/v1/uploads/conformers`<br>`POST /api/v1/jobs/conformer` | - | `calculation_geometry_composition_mismatch`, `species_geometry_composition_mismatch`, `species_geometry_isotope_mismatch` |
 | [`KineticsUploadRequest`](#s-kineticsuploadrequest) | `POST /api/v1/uploads/kinetics`<br>`POST /api/v1/jobs/kinetics` | - | `reaction_charge_not_conserved`, `reaction_entry_null_reaction`, `reaction_mass_balance_failed` |
 | [`NetworkUploadRequest`](#s-networkuploadrequest) | `POST /api/v1/uploads/networks`<br>`POST /api/v1/jobs/network` | - | `reaction_charge_not_conserved`, `reaction_entry_null_reaction`, `reaction_mass_balance_failed` |
 | [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest) | `POST /api/v1/uploads/networks/pdep`<br>`POST /api/v1/jobs/network/pdep` | - | `network_energy_source_type_mismatch`, `network_state_energy_sum_mismatch`, `atom_map_contradicts_irc_mapping` |
 | [`ReactionUploadRequest`](#s-reactionuploadrequest) | `POST /api/v1/uploads/reactions`<br>`POST /api/v1/jobs/reaction` | - | `reaction_charge_not_conserved`, `reaction_entry_null_reaction`, `reaction_mass_balance_failed` |
 | [`StatmechUploadRequest`](#s-statmechuploadrequest) | `POST /api/v1/uploads/statmech` | - | `calculation_geometry_composition_mismatch`, `n_imag_contradicts_minimum`, `species_geometry_composition_mismatch` |
-| [`ThermoUploadRequest`](#s-thermouploadrequest) | `POST /api/v1/uploads/thermo`<br>`POST /api/v1/jobs/thermo` | A thermo record with enthalpy content must declare what its enthalpies mean. A ``chemkin_format`` target needs a gas-phase record that carries a NASA-7 block. Never defaulted: `enthalpy_reference_kind`, `reference_pressure_bar`. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
+| [`ThermoUploadRequest`](#s-thermouploadrequest) | `POST /api/v1/uploads/thermo`<br>`POST /api/v1/jobs/thermo` | A thermo record with enthalpy content must declare what its enthalpies mean. A thermo record's optional target and protocol declarations must be coherent. Never defaulted: `enthalpy_reference_kind`, `reference_pressure_bar`. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
 | [`ThermoMLUploadRequest`](#s-thermomluploadrequest) | `POST /api/v1/uploads/thermoml` | - | `thermoml_doi_conflict`, `thermoml_file_too_large`, `thermoml_invalid_base64` |
 | [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest) | `POST /api/v1/uploads/transition-states`<br>`POST /api/v1/jobs/transition-state` | - | `atom_map_contradicts_irc_mapping`, `transition_state_charge_mismatch`, `transition_state_composition_mismatch` |
 | [`TransportUploadRequest`](#s-transportuploadrequest) | `POST /api/v1/uploads/transport`<br>`POST /api/v1/jobs/transport` | - | `calculation_geometry_composition_mismatch`, `n_imag_contradicts_minimum`, `species_geometry_composition_mismatch` |
-| [`ContributionBundle`](#s-contributionbundle) | `POST /api/v1/bundles/dry-run`<br>`POST /api/v1/bundles/submit` | A thermo record with enthalpy content must declare what its enthalpies mean. A ``chemkin_format`` target needs a gas-phase record that carries a NASA-7 block. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
+| [`ContributionBundle`](#s-contributionbundle) | `POST /api/v1/bundles/dry-run`<br>`POST /api/v1/bundles/submit` | A thermo record with enthalpy content must declare what its enthalpies mean. A thermo record's optional target and protocol declarations must be coherent. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
 | [`ArtifactsUploadRequest`](#s-artifactsuploadrequest) | `POST /api/v1/calculations/{calculation_ref}/artifacts` | - | `calculation_geometry_composition_mismatch`, `handle_not_found`, `handle_type_mismatch` |
 | [`RightsAttestationCreate`](#s-rightsattestationcreate) | `POST /api/v1/submissions/{submission_ref}/rights-attestations` | - | `handle_not_found`, `handle_type_mismatch`, `invalid_handle` |
 | [`SubmissionSupersedeRequest`](#s-submissionsupersederequest) | `POST /api/v1/submissions/{submission_ref}/supersede` | - | `submission_supersede_not_owner`, `tckdb_client_version_invalid`, `tckdb_client_version_missing` |
@@ -236,7 +236,7 @@ The newest 5 entries of `schemas/python/tckdb-schemas/CHANGELOG.md`, copied verb
 
 ### 0.162.0 - 2026-11-09
 
-One optional field is added: `thermodynamic_target.declared_by` on a thermo record's target declaration, with the new enum `ThermoDeclarationSource` (`depositor`, `chemkin_format`). It says who made the claim: the depositor about their own record (the default when the field is omitted, and what every target declared before it existed is), or the CHEMKIN importer, which declares the standard ideal-gas ensemble (`equilibrium_ensemble`) for a gas-phase NASA-7 entry because that is what the format means by definition. The server stores it with the target and returns it in the thermo read's `thermodynamic_target` block. No field is removed and no existing payload changes meaning.
+`thermodynamic_target.declared_by` is added to a thermo record's target declaration, with the enum `ThermoDeclarationSource` (`depositor`, the default, and `chemkin_format`). A `chemkin_format` target is refused unless it is `equilibrium_ensemble` (`thermo_declared_by_target_incoherent`) on a record with phase `gas` and a NASA-7 block (`thermo_declared_by_record_incoherent`). No field is removed.
 
 ### 0.161.0 - 2026-11-07
 
@@ -630,13 +630,18 @@ If your chemistry is legitimate: None needed -- no check here refuses. A calcula
   Returns a refusal ``(code, message)``, or ``None`` for a coherent
   declaration.
 
-<a id="k-declared-by-record-error"></a>
+<a id="k-thermo-declaration-error"></a>
 
-### `_declared_by_record_error`
+### `thermo_declaration_error`
 
-`tckdb_schemas.thermo_declarations:_declared_by_record_error`. Marked producer rule. Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundle`](#s-contributionbundle).
+`tckdb_schemas.thermo_declarations:thermo_declaration_error`. Marked producer rule. Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundle`](#s-contributionbundle).
 
-  A ``chemkin_format`` target needs a gas-phase record that carries a NASA-7 block.
+  A thermo record's optional target and protocol declarations must be coherent.
+
+  A ``single_conformer`` target names exactly one conformer group, an
+  ``equilibrium_ensemble`` target none; ``protocol.version`` is exactly ``1`` and
+  unknown fields and values are refused. A target declared by ``chemkin_format`` must be
+  ``equilibrium_ensemble`` on a gas-phase record that carries a NASA-7 block.
 
 <a id="refusal-codes-several-surfaces-share"></a>
 
@@ -1649,7 +1654,7 @@ Payload model `tckdb_schemas.workflows.computed_reaction_upload.ComputedReaction
 - [`enthalpy_declaration_without_content`](REFUSAL_CODES.md#c-enthalpy-declaration-without-content) (422): enthalpy_reference_kind declares a quantity this thermo record does not carry.
 - [`enthalpy_quantity_not_storable_here`](REFUSAL_CODES.md#c-enthalpy-quantity-not-storable-here) (422): Thermo accepts only formation_298k enthalpies.
 - [`enthalpy_reference_kind_unrecognized`](REFUSAL_CODES.md#c-enthalpy-reference-kind-unrecognized) (422): '{reference}' is not a recognized enthalpy_reference_kind -- did you mean '{canonical}'?
-- [`thermo_declared_by_record_incoherent`](REFUSAL_CODES.md#c-thermo-declared-by-record-incoherent) (422): A target declared by chemkin_format needs phase gas and a NASA-7 block on the record; this record has phase {phase} and {'a' if…
+- [`thermo_declaration_invalid`](REFUSAL_CODES.md#c-thermo-declaration-invalid) (422): thermodynamic_target.kind {kind} is not recognised; use {' or '.join((repr(member.value) for member in ThermoTargetKind))}.
 - [`atom_map_contradicts_irc_mapping`](REFUSAL_CODES.md#c-atom-map-contradicts-irc-mapping) (422): Transition state '{subject_label}' {field_path} contradicts its own IRC participant mapping: the atom map assigns saddle-point atom(s)…
 - [`transition_state_charge_mismatch`](REFUSAL_CODES.md#c-transition-state-charge-mismatch) (422): Transition state '{subject_label}' carries charge {transition_state_charge}, but its reactants total {reactant_charge}…
 - [`transition_state_composition_mismatch`](REFUSAL_CODES.md#c-transition-state-composition-mismatch) (422): Transition state '{subject_label}' is {format_element_counts(ts_counts)}, but the reaction it sits in is…
@@ -1816,7 +1821,7 @@ Nested models (110; fields and rules in the [model reference](#model-reference))
 - [`persist_transition_state_validation_evidence`](#k-persist-transition-state-validation-evidence) (warn/block)
 - [`collect_wavefunction_reliability_warnings`](#k-collect-wavefunction-reliability-warnings) (warn)
 - [`enthalpy_reference_error`](#k-enthalpy-reference-error) (marked rule; reached from `POST /api/v1/uploads/computed-reaction`)
-- [`_declared_by_record_error`](#k-declared-by-record-error) (marked rule; reached from `POST /api/v1/uploads/computed-reaction`)
+- [`thermo_declaration_error`](#k-thermo-declaration-error) (marked rule; reached from `POST /api/v1/uploads/computed-reaction`)
 
 ### Refusal codes this surface can return
 
@@ -1894,7 +1899,7 @@ Payload model `tckdb_schemas.workflows.computed_species_upload.ComputedSpeciesUp
 - [`enthalpy_declaration_without_content`](REFUSAL_CODES.md#c-enthalpy-declaration-without-content) (422): enthalpy_reference_kind declares a quantity this thermo record does not carry.
 - [`enthalpy_quantity_not_storable_here`](REFUSAL_CODES.md#c-enthalpy-quantity-not-storable-here) (422): Thermo accepts only formation_298k enthalpies.
 - [`enthalpy_reference_kind_unrecognized`](REFUSAL_CODES.md#c-enthalpy-reference-kind-unrecognized) (422): '{reference}' is not a recognized enthalpy_reference_kind -- did you mean '{canonical}'?
-- [`thermo_declared_by_record_incoherent`](REFUSAL_CODES.md#c-thermo-declared-by-record-incoherent) (422): A target declared by chemkin_format needs phase gas and a NASA-7 block on the record; this record has phase {phase} and {'a' if…
+- [`thermo_declaration_invalid`](REFUSAL_CODES.md#c-thermo-declaration-invalid) (422): thermodynamic_target.kind {kind} is not recognised; use {' or '.join((repr(member.value) for member in ThermoTargetKind))}.
 - [`calculation_geometry_composition_mismatch`](REFUSAL_CODES.md#c-calculation-geometry-composition-mismatch) (422)
 - [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum) (422)
 - [`species_geometry_composition_mismatch`](REFUSAL_CODES.md#c-species-geometry-composition-mismatch) (422): Species geometry is {geometry_formula}, but species_entry.smiles={payload.smiles} is {identity_formula}…
@@ -2024,7 +2029,7 @@ Nested models (94; fields and rules in the [model reference](#model-reference)):
 - [`collect_wavefunction_reliability_warnings`](#k-collect-wavefunction-reliability-warnings) (warn)
 - [`enthalpy_reference_error`](#k-enthalpy-reference-error) (marked rule; reached from `POST /api/v1/uploads/computed-species`)
 - [`evaluate_species_entry_frequency`](#k-evaluate-species-entry-frequency) (block/warn)
-- [`_declared_by_record_error`](#k-declared-by-record-error) (marked rule; reached from `POST /api/v1/uploads/computed-species`)
+- [`thermo_declaration_error`](#k-thermo-declaration-error) (marked rule; reached from `POST /api/v1/uploads/computed-species`)
 
 ### Refusal codes this surface can return
 
@@ -3169,7 +3174,7 @@ Payload model `app.schemas.workflows.thermo_upload.ThermoUploadRequest`; JSON Sc
 - [`enthalpy_declaration_without_content`](REFUSAL_CODES.md#c-enthalpy-declaration-without-content) (422): enthalpy_reference_kind declares a quantity this thermo record does not carry.
 - [`enthalpy_quantity_not_storable_here`](REFUSAL_CODES.md#c-enthalpy-quantity-not-storable-here) (422): Thermo accepts only formation_298k enthalpies.
 - [`enthalpy_reference_kind_unrecognized`](REFUSAL_CODES.md#c-enthalpy-reference-kind-unrecognized) (422): '{reference}' is not a recognized enthalpy_reference_kind -- did you mean '{canonical}'?
-- [`thermo_declared_by_record_incoherent`](REFUSAL_CODES.md#c-thermo-declared-by-record-incoherent) (422): A target declared by chemkin_format needs phase gas and a NASA-7 block on the record; this record has phase {phase} and {'a' if…
+- [`thermo_declaration_invalid`](REFUSAL_CODES.md#c-thermo-declaration-invalid) (422): thermodynamic_target.kind {kind} is not recognised; use {' or '.join((repr(member.value) for member in ThermoTargetKind))}.
 - [`calculation_geometry_composition_mismatch`](REFUSAL_CODES.md#c-calculation-geometry-composition-mismatch) (422)
 - [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum) (422)
 - [`species_geometry_composition_mismatch`](REFUSAL_CODES.md#c-species-geometry-composition-mismatch) (422): Species geometry is {geometry_formula}, but species_entry.smiles={payload.smiles} is {identity_formula}…
@@ -3342,7 +3347,7 @@ Nested models (80; fields and rules in the [model reference](#model-reference)):
 - [`collect_wavefunction_reliability_warnings`](#k-collect-wavefunction-reliability-warnings) (warn)
 - [`enthalpy_reference_error`](#k-enthalpy-reference-error) (marked rule; reached from `POST /api/v1/uploads/thermo`)
 - [`evaluate_species_entry_frequency`](#k-evaluate-species-entry-frequency) (block/warn)
-- [`_declared_by_record_error`](#k-declared-by-record-error) (marked rule; reached from `POST /api/v1/uploads/thermo`)
+- [`thermo_declaration_error`](#k-thermo-declaration-error) (marked rule; reached from `POST /api/v1/uploads/thermo`)
 
 ### Refusal codes this surface can return
 
@@ -3904,7 +3909,7 @@ Payload model `app.schemas.workflows.contribution_bundle.ContributionBundle`; JS
 - [`enthalpy_declaration_without_content`](REFUSAL_CODES.md#c-enthalpy-declaration-without-content) (422): enthalpy_reference_kind declares a quantity this thermo record does not carry.
 - [`enthalpy_quantity_not_storable_here`](REFUSAL_CODES.md#c-enthalpy-quantity-not-storable-here) (422): Thermo accepts only formation_298k enthalpies.
 - [`enthalpy_reference_kind_unrecognized`](REFUSAL_CODES.md#c-enthalpy-reference-kind-unrecognized) (422): '{reference}' is not a recognized enthalpy_reference_kind -- did you mean '{canonical}'?
-- [`thermo_declared_by_record_incoherent`](REFUSAL_CODES.md#c-thermo-declared-by-record-incoherent) (422): A target declared by chemkin_format needs phase gas and a NASA-7 block on the record; this record has phase {phase} and {'a' if…
+- [`thermo_declaration_invalid`](REFUSAL_CODES.md#c-thermo-declaration-invalid) (422): thermodynamic_target.kind {kind} is not recognised; use {' or '.join((repr(member.value) for member in ThermoTargetKind))}.
 - [`reaction_charge_not_conserved`](REFUSAL_CODES.md#c-reaction-charge-not-conserved) (422): Reaction reactants total charge {reactant_charge} but products total {product_charge} (reaction_charge_not_conserved).
 - [`reaction_entry_null_reaction`](REFUSAL_CODES.md#c-reaction-entry-null-reaction) (422): The reactant and product entries are identical and the deposit carries no transition state, kinetics record or non-identity atom mapping…
 - [`reaction_mass_balance_failed`](REFUSAL_CODES.md#c-reaction-mass-balance-failed) (422): Reaction is not element-balanced (reaction_mass_balance_failed).
@@ -4046,7 +4051,7 @@ Nested models (105; fields and rules in the [model reference](#model-reference))
 - [`collect_wavefunction_reliability_warnings`](#k-collect-wavefunction-reliability-warnings) (warn)
 - [`enthalpy_reference_error`](#k-enthalpy-reference-error) (marked rule; reached from `POST /api/v1/bundles/dry-run`, `POST /api/v1/bundles/submit`)
 - [`evaluate_species_entry_frequency`](#k-evaluate-species-entry-frequency) (block/warn)
-- [`_declared_by_record_error`](#k-declared-by-record-error) (marked rule; reached from `POST /api/v1/bundles/dry-run`, `POST /api/v1/bundles/submit`)
+- [`thermo_declaration_error`](#k-thermo-declaration-error) (marked rule; reached from `POST /api/v1/bundles/dry-run`, `POST /api/v1/bundles/submit`)
 
 ### Refusal codes this surface can return
 
@@ -9075,7 +9080,7 @@ Unknown keys are refused.
 | Field | Type | Req | Default | Values / constraints | Description
 |---|---|---|---|---|---
 | `kind` | `ThermoTargetKind` | yes |  | `equilibrium_ensemble`, `single_conformer` | The target kind.
-| `declared_by` | `ThermoDeclarationSource` | no | `"depositor"` | `depositor`, `chemkin_format` | Whose claim the target is. ``depositor`` (the default) is the depositor's own statement about their record. ``chemkin_format`` is a statement by the depositing client that the CHEMKIN format defines the target. The server checks it is coherent (an ``equilibrium_ensemble`` target on a gas-phase record with a NASA-7 block) but cannot verify which tool produced it. Stored and read back with the target.
+| `declared_by` | `ThermoDeclarationSource` | no | `"depositor"` | `depositor`, `chemkin_format` | ``depositor`` (the default) is the depositor's own statement. ``chemkin_format`` is a statement by the depositing client that the CHEMKIN format defines the target; the server checks it is coherent but cannot verify which tool produced it.
 | `conformer_group_ref` | string \| null | no |  | length >= 1 | Public ref (``cg_...``). Standalone and contribution bundles only.
 | `conformer_key` | string \| null | no |  | length >= 1 | Key of a conformer the same bundle declares. Computed bundles only.
 

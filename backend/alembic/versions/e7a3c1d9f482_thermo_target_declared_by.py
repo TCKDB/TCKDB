@@ -1,40 +1,9 @@
-"""Say who made a thermo record's thermodynamic-target declaration.
+"""Add thermo.thermodynamic_target_declared_by (enum thermo_declaration_source).
 
-One column on ``thermo`` and one enum type:
-
-* ``thermodynamic_target_declared_by`` (enum ``thermo_declaration_source``:
-  ``depositor`` | ``chemkin_format``), ``NOT NULL DEFAULT 'depositor'``.
-
-Why a default, and why ``depositor``
-------------------------------------
-Before this revision the only way a thermo row got a
-``thermodynamic_target_kind`` was a depositor declaring it on an upload. The
-CHEMKIN importer declared nothing, and no other producer sets a target on its
-own. So every existing row that has a target is, in fact, depositor-declared;
-``depositor`` is the one honest value for it, not an assumption. A row with no
-target (``thermodynamic_target_kind IS NULL``) has nothing for the column to
-describe; the column carries the default there and every read surfaces it only
-inside a target block, so it never appears for a row with no target.
-
-Why NOT NULL with a server default, rather than nullable plus a backfill
--------------------------------------------------------------------------
-``thermo`` is an accepted-science root (``c6f2a9d4e7b1``,
-``trg_as_root_thermo``): an UPDATE of a row that has ever been approved is
-refused without a declared repair. A nullable column plus
-``UPDATE ... SET declared_by = 'depositor' WHERE kind IS NOT NULL`` would need a
-repair declaration and a ledger for a change that changes no number and no
-claim. ``ADD COLUMN ... NOT NULL DEFAULT <constant>`` is a metadata-only change
-in PostgreSQL 11+: it rewrites nothing and fires no UPDATE trigger, so the guard
-is not involved and approved rows are not touched.
-
-No CHECK ties the column to ``thermodynamic_target_kind``: for the reason above
-a row without a target holds the default, so "set iff a target" is not a rule
-the table can state.
-
-Downgrade drops the column and the enum. It forgets which target declarations
-were made by the CHEMKIN format and says so: it prints how many it is forgetting
-first, and re-upgrading attributes every one of those rows to the depositor (the
-column default), because nothing remains to say otherwise.
+NOT NULL DEFAULT 'depositor': existing targets read depositor, and a row with no target holds the
+default and is never surfaced. A constant default is metadata-only, so no UPDATE runs and
+accepted-science rows are untouched. Downgrade drops the column and the enum, prints how many
+CHEMKIN-format declarations it forgets, and re-upgrading attributes those rows to the depositor.
 """
 
 from typing import Sequence, Union

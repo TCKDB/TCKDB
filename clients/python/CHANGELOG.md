@@ -2,7 +2,7 @@
 
 ## 0.190.0 - 2026-11-09
 
-`RejectionCode.THERMO_DECLARED_BY_TARGET_INCOHERENT` and `RejectionCode.THERMO_DECLARED_BY_RECORD_INCOHERENT` (422) join the refusal codes. A thermo target's new `declared_by` is a statement by the depositing client; when it is `chemkin_format` the server refuses a target that is not `equilibrium_ensemble`, and a record that is not gas phase or has no NASA-7 block. Needs `tckdb-schemas` 0.162.0 (inside this client's `<0.163` window).
+`RejectionCode.THERMO_DECLARED_BY_TARGET_INCOHERENT` and `RejectionCode.THERMO_DECLARED_BY_RECORD_INCOHERENT` (422) join the refusal codes. Needs `tckdb-schemas` 0.162.0.
 
 ## 0.189.0 - 2026-11-07
 

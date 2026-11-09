@@ -574,7 +574,7 @@ def test_an_inexact_version_is_refused_over_http(client, version):
 
 
 # ---------------------------------------------------------------------------
-# declared_by: chemkin_format is a client statement the server checks for coherence
+# declared_by: chemkin_format
 # ---------------------------------------------------------------------------
 
 NASA = {
@@ -655,3 +655,19 @@ def test_chemkin_format_target_must_be_the_equilibrium_ensemble(client, db_sessi
     response = _post_chemkin(client, route, thermodynamic_target=target)
     assert _code(response) == "thermo_declared_by_target_incoherent"
     assert db_session.scalars(select(Thermo)).all() == []
+
+
+def test_the_thermo_entity_read_gives_declared_by_only_with_a_target(client, db_session):
+    assert client.post(THERMO, json=_standalone()).status_code == 201
+    row = _only_thermo(db_session)
+    body = client.get(f"/api/v1/thermo/{row.id}").json()
+    assert body["thermodynamic_target_kind"] is None
+    assert body["thermodynamic_target_declared_by"] is None
+
+    row.thermodynamic_target_kind = ThermoTargetKind.equilibrium_ensemble
+    db_session.flush()
+    body = client.get(f"/api/v1/thermo/{row.id}").json()
+    assert (body["thermodynamic_target_kind"], body["thermodynamic_target_declared_by"]) == (
+        "equilibrium_ensemble",
+        "depositor",
+    )

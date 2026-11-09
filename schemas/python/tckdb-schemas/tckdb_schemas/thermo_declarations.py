@@ -79,12 +79,9 @@ W_THERMO_TARGET_GROUP_REQUIRED = "thermo_target_group_required"
 W_THERMO_TARGET_GROUP_NOT_ALLOWED = "thermo_target_group_not_allowed"
 #: A protocol declaration carries a ``version`` this server does not accept.
 W_THERMO_PROTOCOL_VERSION_UNSUPPORTED = "thermo_protocol_version_unsupported"
-#: A target declared ``chemkin_format`` that is not an ``equilibrium_ensemble``. The CHEMKIN format
-#: defines the standard ideal-gas ensemble and nothing else, so no other target is a coherent claim.
+#: A ``chemkin_format`` target whose kind is not ``equilibrium_ensemble``.
 W_THERMO_DECLARED_BY_TARGET_INCOHERENT = "thermo_declared_by_target_incoherent"
-#: A target declared ``chemkin_format`` on a record that is not gas phase or carries no NASA-7 block.
-#: A CHEMKIN NASA-7 polynomial is what makes the format define the target, so without one (or with
-#: another phase) the claim describes a record the format does not describe.
+#: A ``chemkin_format`` target on a record that is not gas phase or has no NASA-7 block.
 W_THERMO_DECLARED_BY_RECORD_INCOHERENT = "thermo_declared_by_record_incoherent"
 #: A target or protocol declaration that reached a service or the client builder
 #: without passing request validation (a payload built with ``model_construct``)
@@ -126,11 +123,9 @@ class ThermoTargetDeclaration(SchemaBase):
     :param kind: The target kind.
     :param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.
     :param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.
-    :param declared_by: Whose claim the target is. ``depositor`` (the default) is the
-        depositor's own statement about their record. ``chemkin_format`` is a statement by the
-        depositing client that the CHEMKIN format defines the target. The server checks it is
-        coherent (an ``equilibrium_ensemble`` target on a gas-phase record with a NASA-7 block)
-        but cannot verify which tool produced it. Stored and read back with the target.
+    :param declared_by: ``depositor`` (the default) is the depositor's own statement.
+        ``chemkin_format`` is a statement by the depositing client that the CHEMKIN format defines
+        the target; the server checks it is coherent but cannot verify which tool produced it.
     """
 
     kind: ThermoTargetKind
@@ -514,9 +509,8 @@ class StoredThermoProtocolDeclaration(ThermoProtocolDeclaration):
 # ---------------------------------------------------------------------------
 
 
-@producer_rule
 def _declared_by_record_error(payload: Any) -> tuple[str, str] | None:
-    """A ``chemkin_format`` target needs a gas-phase record that carries a NASA-7 block."""
+    """The error for a ``chemkin_format`` target on a record that is not gas phase or has no NASA-7 block."""
     target = _get(payload, "thermodynamic_target")
     if target is None:
         return None
@@ -535,12 +529,14 @@ def _declared_by_record_error(payload: Any) -> tuple[str, str] | None:
     return None
 
 
+@producer_rule
 def thermo_declaration_error(payload: Any) -> tuple[str, str] | None:
     """A thermo record's optional target and protocol declarations must be coherent.
 
     A ``single_conformer`` target names exactly one conformer group, an
     ``equilibrium_ensemble`` target none; ``protocol.version`` is exactly ``1`` and
-    unknown fields and values are refused. Claims, never inferred or defaulted.
+    unknown fields and values are refused. A target declared by ``chemkin_format`` must be
+    ``equilibrium_ensemble`` on a gas-phase record that carries a NASA-7 block.
     """
     target = _get(payload, "thermodynamic_target")
     error = thermo_target_error(target)

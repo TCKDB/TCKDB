@@ -44,11 +44,7 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
     ("thermo", "thermodynamic_target_kind"): None,
     ("thermo", "target_conformer_group_id"): None,
     ("thermo", "protocol_declaration"): None,
-    # thermo.thermodynamic_target_declared_by: who made the target claim. A row stored
-    # before the column existed could only have been depositor-declared (nothing else
-    # declared a target), and a row with no target holds the column default, so
-    # ``depositor`` is the value that leaves a digest unchanged. A target declared by the
-    # CHEMKIN format includes the column, so its digest differs, as its meaning does.
+    # thermo.thermodynamic_target_declared_by: left out of a digest at its default.
     ("thermo", "thermodynamic_target_declared_by"): "depositor",
     # kinetics.determination_id / representation_role / applicability_declaration /
     # protocol_declaration: a kinetics row stored before the columns existed declared no

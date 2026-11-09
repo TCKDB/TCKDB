@@ -2,7 +2,7 @@
 
 ## 0.162.0 - 2026-11-09
 
-One optional field is added: `thermodynamic_target.declared_by` on a thermo record's target declaration, with the new enum `ThermoDeclarationSource` (`depositor`, `chemkin_format`). It says who made the claim: the depositor about their own record (the default when the field is omitted, and what every target declared before it existed is), or the CHEMKIN importer, which declares the standard ideal-gas ensemble (`equilibrium_ensemble`) for a gas-phase NASA-7 entry because that is what the format means by definition. The server stores it with the target and returns it in the thermo read's `thermodynamic_target` block. No field is removed and no existing payload changes meaning.
+`thermodynamic_target.declared_by` is added to a thermo record's target declaration, with the enum `ThermoDeclarationSource` (`depositor`, the default, and `chemkin_format`). A `chemkin_format` target is refused unless it is `equilibrium_ensemble` (`thermo_declared_by_target_incoherent`) on a record with phase `gas` and a NASA-7 block (`thermo_declared_by_record_incoherent`). No field is removed.
 
 ## 0.161.0 - 2026-11-07
 

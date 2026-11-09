@@ -274,7 +274,7 @@ class ThermoTargetBlock(BaseModel):
     :param kind: ``equilibrium_ensemble`` or ``single_conformer``.
     :param conformer_group_ref: Public ref of the conformer group a
         ``single_conformer`` target names; ``null`` for an equilibrium target.
-    :param declared_by: Who made the claim: ``depositor`` or ``chemkin_format``.
+    :param declared_by: Whose claim the target is: ``depositor`` or ``chemkin_format``.
     """
 
     kind: ThermoTargetKind

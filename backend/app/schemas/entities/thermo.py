@@ -324,11 +324,7 @@ class ThermoUpdate(SchemaBase):
 
 
 class ThermoRead(ThermoBase, TimestampedCreatedByReadSchema):
-    """Read schema for a thermo record.
-
-    ``thermodynamic_target_declared_by`` is ``null`` whenever no target is declared
-    (the stored column holds its default there, which would read as a claim nobody made).
-    """
+    """Read schema for a thermo record; ``thermodynamic_target_declared_by`` is ``null`` without a target."""
 
     thermodynamic_target_declared_by: ThermoDeclarationSource | None = None  # type: ignore[assignment]
     points: list[ThermoPointRead] = Field(default_factory=list)

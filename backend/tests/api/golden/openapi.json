@@ -63855,7 +63855,7 @@
         "type": "string"
       },
       "ThermoDeclarationSource": {
-        "description": "Whose claim a thermo record's thermodynamic-target declaration is.\n\n``depositor`` is the depositor's own statement about their record, and is\nwhat every target declared before this field existed is. ``chemkin_format``\nis a statement by the depositing client that the CHEMKIN format defines the\ntarget (a NASA-7 polynomial is the standard ideal-gas ensemble by\ndefinition); the server checks it is coherent but cannot verify which tool\nproduced it. Machine tokens, not labels. Never set by the server.",
+        "description": "Whose claim a thermo record's thermodynamic-target declaration is.\n\n``depositor`` is the depositor's own statement. ``chemkin_format`` is a statement by the\ndepositing client that the CHEMKIN format defines the target; the server checks it is coherent\nbut cannot verify which tool produced it.",
         "enum": [
           "depositor",
           "chemkin_format"
@@ -65536,7 +65536,7 @@
         "type": "object"
       },
       "ThermoRead": {
-        "description": "Read schema for a thermo record.\n\n``thermodynamic_target_declared_by`` is ``null`` whenever no target is declared\n(the stored column holds its default there, which would read as a claim nobody made).",
+        "description": "Read schema for a thermo record; ``thermodynamic_target_declared_by`` is ``null`` without a target.",
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -67727,7 +67727,7 @@
         "type": "object"
       },
       "ThermoTargetBlock": {
-        "description": "The thermodynamic target a record's depositor declared.\n\n:param kind: ``equilibrium_ensemble`` or ``single_conformer``.\n:param conformer_group_ref: Public ref of the conformer group a\n    ``single_conformer`` target names; ``null`` for an equilibrium target.\n:param declared_by: Who made the claim: ``depositor`` or ``chemkin_format``.",
+        "description": "The thermodynamic target a record's depositor declared.\n\n:param kind: ``equilibrium_ensemble`` or ``single_conformer``.\n:param conformer_group_ref: Public ref of the conformer group a\n    ``single_conformer`` target names; ``null`` for an equilibrium target.\n:param declared_by: Whose claim the target is: ``depositor`` or ``chemkin_format``.",
         "properties": {
           "conformer_group_ref": {
             "anyOf": [
@@ -67756,7 +67756,7 @@
       },
       "ThermoTargetDeclaration": {
         "additionalProperties": false,
-        "description": "What the record's values are claimed to describe.\n\nA ``single_conformer`` target names exactly one conformer group of the record's own species\nentry; an ``equilibrium_ensemble`` target names none and is refused if it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.\n:param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.\n:param declared_by: Whose claim the target is. ``depositor`` (the default) is the\n    depositor's own statement about their record. ``chemkin_format`` is a statement by the\n    depositing client that the CHEMKIN format defines the target. The server checks it is\n    coherent (an ``equilibrium_ensemble`` target on a gas-phase record with a NASA-7 block)\n    but cannot verify which tool produced it. Stored and read back with the target.",
+        "description": "What the record's values are claimed to describe.\n\nA ``single_conformer`` target names exactly one conformer group of the record's own species\nentry; an ``equilibrium_ensemble`` target names none and is refused if it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.\n:param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.\n:param declared_by: ``depositor`` (the default) is the depositor's own statement.\n    ``chemkin_format`` is a statement by the depositing client that the CHEMKIN format defines\n    the target; the server checks it is coherent but cannot verify which tool produced it.",
         "properties": {
           "conformer_group_ref": {
             "anyOf": [

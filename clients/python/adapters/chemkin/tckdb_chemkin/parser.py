@@ -266,8 +266,7 @@ def _parse_thermo_block(
 
         name = line1[:18].split()[0] if line1[:18].strip() else line1.split()[0]
         comp = _parse_composition(line1)
-        # Column 45 is the phase letter. A blank one is kept blank: the card does
-        # not say, so the importer declares nothing for it.
+        # Column 45 is the phase letter; blank stays blank.
         phase = line1[44:45].strip()
         # Temperatures in columns 46-73 (three E10 fields), fallback to split.
         temp_region = line1[45:73]

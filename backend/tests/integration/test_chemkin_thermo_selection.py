@@ -1,11 +1,4 @@
-"""Thermo imported through the CHEMKIN adapter can be selected, and says who declared its target.
-
-A CHEMKIN NASA-7 polynomial is the standard ideal-gas ensemble by the definition of the format,
-and the card's phase letter says the phase. The importer declares both for a gas-phase entry,
-with ``declared_by: chemkin_format`` (see ``tckdb_chemkin.payloads.build_thermo_payload``).
-Before that, every species of the published formic acid model answered
-``no_applicable_candidate`` with ``thermodynamic_target_not_declared``.
-"""
+"""Thermo imported through the CHEMKIN adapter is selectable and reports who declared its target."""
 
 from __future__ import annotations
 

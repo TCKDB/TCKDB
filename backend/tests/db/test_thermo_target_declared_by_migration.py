@@ -1,10 +1,4 @@
-"""``thermo.thermodynamic_target_declared_by``: a metadata-only addition that leaves existing rows alone.
-
-Every row that had a target before the column existed was declared by a depositor (nothing else
-declared one), so the column's default is the honest value for it. The addition is
-``NOT NULL DEFAULT 'depositor'`` so no UPDATE runs: ``thermo`` is an accepted-science root, and an
-UPDATE of an approved row would be refused.
-"""
+"""``thermo.thermodynamic_target_declared_by``: existing rows read depositor and are not updated."""
 
 from __future__ import annotations
 
@@ -94,16 +88,13 @@ def migration(db_session, monkeypatch):
 
 
 def test_an_approved_row_gets_the_default_without_any_update_firing(db_session, migration):
-    """``thermo`` is an accepted-science root: an UPDATE of an approved row is refused.
-
-    The column is added with a constant default, which rewrites nothing and fires no trigger, so the
-    approved row simply reads ``depositor`` and is still approved afterwards.
-    """
+    """An approved row gets the default through ADD COLUMN, with no UPDATE for the guard to refuse."""
     entry = make_species_entry(db_session, make_species(db_session, inchi_key=next_inchi_key("THMDECLBY")))
     row_id = db_session.scalar(
         text(
             "INSERT INTO thermo (public_ref, species_entry_id, scientific_origin, h298_kj_mol, "
-            "thermodynamic_target_kind) VALUES (:ref, :entry, 'computed', -74.5, 'equilibrium_ensemble') RETURNING id"
+            "enthalpy_reference_kind, thermodynamic_target_kind) "
+            "VALUES (:ref, :entry, 'computed', -74.5, 'formation_298k', 'equilibrium_ensemble') RETURNING id"
         ),
         {"ref": "thm_" + uuid4().hex[:26], "entry": entry.id},
     )
