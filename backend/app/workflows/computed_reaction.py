@@ -729,7 +729,7 @@ def persist_computed_reaction_upload(
             structure = primary_structure(conf.calculation, conf.geometry.xyz_text)
             parsed = parse_xyz(GeometryPayload(xyz_text=structure.xyz_text))
             conformer_group, fingerprint, scheme = resolve_conformer_group(
-                session, species_entry, label=conf.label, created_by=created_by,
+                session, species_entry, created_by=created_by,
                 smiles=sp.species_entry.smiles, xyz_atoms=parsed.atoms,
                 defining=structure.defining,
             )

@@ -43,6 +43,7 @@ __all__ = [
     "W_KINETICS_BATH_GAS_AT_HIGH_PRESSURE_LIMIT",
     "W_KINETICS_BATH_GAS_DUPLICATE_SPECIES",
     "W_KINETICS_BATH_GAS_MOLE_FRACTION_SUM",
+    "check_bath_gas_mole_fraction_sum",
     "check_kinetics_bath_gas",
 ]
 
@@ -68,6 +69,27 @@ class BundleKineticsBathGasIn(SchemaBase):
 
     species_key: str = Field(min_length=1)
     mole_fraction: float = Field(gt=0, le=1)
+
+
+def check_bath_gas_mole_fraction_sum(mole_fractions: Sequence[float], *, field: str = "bath_gas") -> None:
+    """Refuse mole fractions that do not sum to 1 within :data:`BATH_GAS_SUM_TOLERANCE`.
+
+    The one rule for every bath gas, a kinetics rate's and a network solve's alike. An empty
+    sequence sums to 0 and is refused here; callers that treat an empty bath gas as "not stated"
+    must not call this for it.
+
+    :param mole_fractions: The components' mole fractions.
+    :param field: Field path the refusal names.
+    :raises CodedValidationError: ``kinetics_bath_gas_mole_fraction_sum``.
+    """
+    total = math.fsum(mole_fractions)
+    if not math.isclose(total, 1.0, rel_tol=0.0, abs_tol=BATH_GAS_SUM_TOLERANCE):
+        raise CodedValidationError(
+            W_KINETICS_BATH_GAS_MOLE_FRACTION_SUM,
+            f"{field} mole fractions must sum to 1.0 within {BATH_GAS_SUM_TOLERANCE:g}; they sum to {total:.12g}.",
+            context={"field": field, "sum": total, "tolerance": BATH_GAS_SUM_TOLERANCE},
+            message_prefix=False,
+        )
 
 
 def check_kinetics_bath_gas(
@@ -112,11 +134,4 @@ def check_kinetics_bath_gas(
                 message_prefix=False,
             )
         seen[identity] = position
-    total = math.fsum(mole_fractions)
-    if not math.isclose(total, 1.0, rel_tol=0.0, abs_tol=BATH_GAS_SUM_TOLERANCE):
-        raise CodedValidationError(
-            W_KINETICS_BATH_GAS_MOLE_FRACTION_SUM,
-            f"{field} mole fractions must sum to 1.0 within {BATH_GAS_SUM_TOLERANCE:g}; they sum to {total:.12g}.",
-            context={"field": field, "sum": total, "tolerance": BATH_GAS_SUM_TOLERANCE},
-            message_prefix=False,
-        )
+    check_bath_gas_mole_fraction_sum(mole_fractions, field=field)

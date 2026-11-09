@@ -54,6 +54,7 @@ W_TRANSITION_STATE_CHARGE_MISMATCH = "transition_state_charge_mismatch"
 
 #: Raised when a stored SMILES cannot be parsed while balancing a reaction.
 W_STORED_SMILES_UNPARSEABLE = "stored_species_smiles_unparseable"
+W_REACTION_FAMILY_CONFLICT = "reaction_family_conflict"
 
 
 def compress_species_stoichiometry(
@@ -1139,19 +1140,35 @@ def _resolve_chem_reaction(
             if chem_reaction.reaction_family_id is None:
                 chem_reaction.reaction_family = resolved_reaction_family
             elif chem_reaction.reaction_family_id != resolved_reaction_family.id:
-                raise ValueError(
-                    "Resolved reaction already has a different reaction_family: "
-                    f"{chem_reaction.reaction_family.name!r} != "
-                    f"{resolved_reaction_family.name!r}."
+                # Both names come from the seeded reaction_family vocabulary, so
+                # naming them is TCKDB speaking, not the depositor.
+                raise CodedValueError(
+                    W_REACTION_FAMILY_CONFLICT,
+                    "This reaction is already recorded under reaction family "
+                    f"{chem_reaction.reaction_family.name!r}, but the deposit names "
+                    f"{resolved_reaction_family.name!r}. A reaction has one family; "
+                    "deposit it under the recorded family.",
+                    context={
+                        "recorded_family": chem_reaction.reaction_family.name,
+                        "supplied_family": resolved_reaction_family.name,
+                    },
+                    message_prefix=False,
                 )
         elif reaction_family_raw is not None:
             if chem_reaction.reaction_family_raw is None:
                 chem_reaction.reaction_family_raw = reaction_family_raw
                 chem_reaction.reaction_family_source_note = normalized_source_note
             elif chem_reaction.reaction_family_raw != reaction_family_raw:
-                raise ValueError(
-                    "Resolved reaction already has a different raw reaction_family: "
-                    f"{chem_reaction.reaction_family_raw!r} != {reaction_family_raw!r}."
+                # Neither value is in the seeded vocabulary: both are depositor
+                # text, so the message names neither.
+                raise CodedValueError(
+                    W_REACTION_FAMILY_CONFLICT,
+                    "This reaction is already recorded under a different "
+                    "reaction family that is not in the seeded vocabulary, and the deposit "
+                    "names another one. A reaction has one family; deposit it under the "
+                    "recorded family, or use a family from the seeded vocabulary.",
+                    context={},
+                    message_prefix=False,
                 )
             elif (
                 chem_reaction.reaction_family_source_note is None
