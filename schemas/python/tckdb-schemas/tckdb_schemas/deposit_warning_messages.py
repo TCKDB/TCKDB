@@ -584,7 +584,8 @@ ASSUMED_FAMILY = {
     "dft": "DFT",
     "mp2": "MP2",
     "mp3": "MP3",
-    "mp4": "MP4(DQ/SDQ)",
+    "mp4": "MP4",
+    "mp4(sdq)": "MP4(DQ/SDQ)",
     "mp4(sdtq)": "MP4(SDTQ)",
     "mp5": "MP5",
     "cis": "CIS",
@@ -595,6 +596,7 @@ ASSUMED_FAMILY = {
     "ccsd": "CCSD",
     "ccsd(t)": "CCSD(T)",
     "dlpno_other": "DLPNO",
+    "mp2-f12": "F12-MP2",
 }
 ASSUMPTION_RULES = (
     "program_default",

@@ -97,11 +97,13 @@ ORCA (``Software.name == "ORCA"``):
 * **Finite-difference-from-energies**
   (`TauBasis.assumed_finite_difference_energy`): coupled cluster, which has
   no analytic gradient behind the plain keyword: CCSD, CCSD(T), their F12
-  variants, and DLPNO-CCSD / DLPNO-CCSD(T). The ORCA 6.1 manual's example of a
+  variants, F12-MP2 (including RI-MP2-F12), and DLPNO-CCSD / DLPNO-CCSD(T). The
+  ORCA 6.1 DLPNO section says "Analytic gradients are not available" (chunk
+  16228), which covers plain DLPNO-CCSD as well as DLPNO-CCSD(T). The ORCA 6.1 manual's example of a
   method whose "analytic gradient is not available" is ``! CCSD(T)`` with
   ``! Opt NumGrad`` (p. 224); its frequency section lists analytic frequencies
   for "HF, DFT" only (p. 677); ORCA 5.0.4 says "Gradients are not available" for
-  F12 methods. So a frequency job differentiates numerical gradients, which
+  F12 methods (F12-MP2 as well as F12 coupled cluster). So a frequency job differentiates numerical gradients, which
   is finite differences of energies. ORCA 6.1 does have analytic CCSD and
   CCSD(T) gradients behind the separate ``AUTOCI-`` keyword prefix (manual
   section 3.11); that prefix is not recognised here, so such a method string gets no
@@ -167,18 +169,19 @@ __all__ = [
 # sees "wb97xd" or "m062x" written without a hyphen, both of which a
 # depositor's `level_of_theory.method` field legitimately holds), so it
 # is not reused here. This recogniser is deliberately small and explicit
-# instead, normalising away the hyphen/no-hyphen and case variation that
-# free-text `level_of_theory.method` values carry.
+# instead. It lower-cases and maps ``_`` to ``-``; it does NOT strip hyphens, so
+# the hyphen and no-hyphen spellings a depositor may write ("wb97x-d", "wb97xd",
+# "pbe0-dh", "pbe0dh") are each listed as prefixes where they matter.
 # ---------------------------------------------------------------------------
 
 
 def _normalize(value: str | None) -> str | None:
     if value is None:
         return None
-    # Method tokens are compared with hyphens stripped as well as
-    # lower-cased, so "wb97xd", "wb97x-d", and "wb97x_d" all match the
-    # same prefix -- free-text `level_of_theory.method` values are not
-    # normalised at write time, and depositors spell these differently.
+    # Method tokens are lower-cased and ``_`` becomes ``-``, so "wb97x_d" and
+    # "wb97x-d" match the same prefix. Hyphens are NOT removed: "wb97xd" and
+    # "wb97x-d" are separate prefixes in the lists below, since free-text
+    # `level_of_theory.method` values are not normalised at write time.
     stripped = value.strip().lower()
     if not stripped:
         return None
@@ -263,7 +266,7 @@ _DFT_PREFIXES = (
     "dsd", "revdsd", "pwpb95", "mpw2plyp", "b2gp-plyp", "b2gpplyp", "b2k-plyp",
     "b2t-plyp", "pbe-qidh", "wb2plyp", "wb2gpplyp", "ub2plyp", "pr2scan",
     "kpr2scan", "wpr2scan", "rsx-qidh", "rsx-0dh", "mpw1b95", "bb1k", "mpw1kcis",
-    "rscan",
+    "rscan", "b2kplyp", "b2tplyp",
 )
 
 
@@ -279,8 +282,11 @@ class MethodFamily:
     DFT = "dft"
     MP2 = "mp2"
     MP3 = "mp3"
-    #: MP4(DQ) and MP4(SDQ): analytic gradients exist in Gaussian.
+    #: Legacy token, never returned by the classifier now. Warnings stored before 0.162.0 carry ``mp4`` for every
+    #: MP4 variant; keeping the token and its label ("MP4") means they read as they did.
     MP4 = "mp4"
+    #: MP4(DQ) and MP4(SDQ): analytic gradients exist in Gaussian.
+    MP4_SDQ = "mp4(sdq)"
     #: MP4(SDTQ), and the bare keyword MP4 (which means MP4(SDTQ)): numerical gradients.
     MP4_SDTQ = "mp4(sdtq)"
     MP5 = "mp5"
@@ -292,6 +298,8 @@ class MethodFamily:
     CCSD = "ccsd"
     CCSD_T = "ccsd(t)"
     DLPNO_OTHER = "dlpno_other"
+    #: F12-MP2 (ORCA): no analytic gradient.
+    MP2_F12 = "mp2-f12"
 
 
 def is_dft_functional(method: str | None) -> bool:
@@ -308,18 +316,70 @@ def is_dft_functional(method: str | None) -> bool:
     return _startswith_any(token, _DFT_PREFIXES)
 
 
-def _mp4_variant(token: str) -> str:
-    """MP4 token -> ``MP4`` (DQ/SDQ) or ``MP4_SDTQ`` (full MP4, bare ``mp4`` included).
+#: Separators between a method and the options Gaussian accepts after it: ``MP4(SDTQ,FC)``, ``MP4=FC``, ``MP4 FC``,
+#: ``MP4(SDTQ)-FC``, ``mp4(sdtq)/fc``.
+_OPTION_SPLIT = re.compile(r"[(),/\s=-]+")
 
-    ``mp4`` means MP4(SDTQ) (G09 MP page: "Just specifying MP4 defaults to
-    MP4(SDTQ)"). Parentheses, commas and hyphens in the truncation are ignored, so
-    ``mp4(sdtq)`` and ``mp4sdtq`` agree. A truncation this module does not know
-    keeps the previous behaviour (gradients).
+#: Options that change neither which method runs nor how its derivatives are computed. Gaussian 09: the frozen-core
+#: options "are available with this keyword" (FC, Full, ...); the CCSD page lists T, E4T, T1Diag, Conver=N, MaxCyc=N,
+#: SaveAmplitudes, ReadAmplitudes (knowledge-base chunk 10440); RO marks the restricted open-shell variant.
+_IGNORED_OPTION = re.compile(
+    r"^(fc\d*|nofc|full|fu|ro|window.*|active.*|t1diag|e4t|conver|maxcyc|saveamplitudes|readamplitudes|\d+)$"
+)
+
+
+def _option_tokens(text: str) -> list[str]:
+    return [part for part in _OPTION_SPLIT.split(text) if part]
+
+
+def _mp4_variant(token: str) -> str | None:
+    """MP4 token -> ``MP4_SDQ`` (DQ/SDQ), ``MP4_SDTQ`` (SDTQ, or a bare ``mp4``), or ``None`` (unknown option).
+
+    ``mp4`` means MP4(SDTQ) (G09 MP page, chunk 10824: "Just specifying MP4 defaults to MP4(SDTQ)"). The text
+    after ``mp4`` is split on parentheses, commas, slashes, equals signs, hyphens and spaces; the first of
+    ``dq`` / ``sdq`` / ``sdtq`` names the truncation, and frozen-core and similar options are ignored, so
+    ``MP4(SDTQ,FC)``, ``MP4(FC)``, ``MP4(SDTQ)-FC``, ``mp4(sdtq)/fc``, ``MP4=FC``, ``MP4 FC`` and ``mp4sdtq`` all mean
+    SDTQ. A token that is neither a truncation nor a known option makes the method unrecognised (``None``,
+    no assumption), never the old gradient row.
     """
-    tail = re.sub(r"[(),/-]", "", token[len("mp4"):])
-    if tail in ("", "sdtq"):
-        return MethodFamily.MP4_SDTQ
-    return MethodFamily.MP4
+    tokens = _option_tokens(token[len("mp4"):])
+    variant = next((t for t in tokens if t in ("dq", "sdq", "sdtq")), None)
+    if any(t not in ("dq", "sdq", "sdtq") and not _IGNORED_OPTION.match(t) for t in tokens):
+        return None
+    if variant in ("dq", "sdq"):
+        return MethodFamily.MP4_SDQ
+    return MethodFamily.MP4_SDTQ
+
+
+_CC_WITH_OPTIONS = re.compile(r"^(ccsd|qcisd)(?:\(([^()]*)\))?([^()]*)$")
+
+
+def _cc_with_options(token: str) -> tuple[bool, str | None]:
+    """Read Gaussian's ``CCSD``/``QCISD`` options: ``(handled, family)``.
+
+    ``CCSD(T,FC)`` is CCSD(T), ``CCSD(FC)`` is CCSD, ``CCSD-T`` is a synonym for ``CCSD(T)`` and ``QCISD(T,E4T)`` is
+    QCISD(T) (G09 CCSD page, chunk 10440: options FC, T, E4T, T1Diag, ...; "CCSD-T is a synonym for CCSD(T)").
+    Availability (chunks 10441 and 10973): "Analytic energies and gradients for CCD and CCSD, numerical gradients
+    for CCSD(T), and numerical frequencies for all methods"; "numerical gradients for QCISD(T)". Not handled (so the
+    prefix rules decide, as before): anything with a suffix that is not an option, such as ``ccsd(t)-f12``. An
+    unknown option inside the parentheses is handled as unrecognised, ``(True, None)``.
+    """
+    m = _CC_WITH_OPTIONS.match(token)
+    if m is None:
+        return False, None
+    base, inner, tail = m.groups()
+    if tail and not _OPTION_SPLIT.match(tail):
+        return False, None  # "ccsdt" (full triples) is not "ccsd" plus an option
+    tail_tokens = _option_tokens(tail)
+    if any(t != "t" and not _IGNORED_OPTION.match(t) for t in tail_tokens):
+        return False, None
+    inner_tokens = _option_tokens(inner or "")
+    if any(t != "t" and not _IGNORED_OPTION.match(t) for t in inner_tokens):
+        return True, None
+    triples = "t" in inner_tokens or "t" in tail_tokens
+    if base == "ccsd":
+        return True, MethodFamily.CCSD_T if triples else MethodFamily.CCSD
+    return True, MethodFamily.QCISD_T if triples else MethodFamily.QCISD
 
 
 def classify_method_family(method: str | None) -> str | None:
@@ -345,6 +405,9 @@ def classify_method_family(method: str | None) -> str | None:
         return MethodFamily.CISD
     if _startswith_any(token, _CASSCF_PREFIXES):
         return MethodFamily.CASSCF
+    handled, family = _cc_with_options(token)
+    if handled:
+        return family
     if _startswith_any(token, _CCSD_T_PREFIXES):
         return MethodFamily.CCSD_T
     if _startswith_any(token, _QCISD_T_PREFIXES):
@@ -359,6 +422,8 @@ def classify_method_family(method: str | None) -> str | None:
         return MethodFamily.MP5
     if _startswith_any(token, _MP3_PREFIXES):
         return MethodFamily.MP3
+    if "f12" in token and "mp2" in token:
+        return MethodFamily.MP2_F12
     if _startswith_any(token, _MP2_PREFIXES):
         return MethodFamily.MP2
     if is_dft_functional(token):
@@ -380,7 +445,7 @@ _GAUSSIAN_ANALYTIC = frozenset({
 #: Gaussian families whose default is finite differences of the analytic
 #: gradient (no analytic Hessian, but an analytic gradient exists).
 _GAUSSIAN_FINITE_DIFFERENCE_GRADIENT = frozenset({
-    MethodFamily.MP3, MethodFamily.MP4, MethodFamily.QCISD,
+    MethodFamily.MP3, MethodFamily.MP4_SDQ, MethodFamily.QCISD,
     MethodFamily.CCSD, MethodFamily.CISD,
 })
 #: Gaussian families with neither an analytic Hessian nor an analytic
@@ -398,7 +463,7 @@ _ORCA_ANALYTIC = frozenset({MethodFamily.HF, MethodFamily.DFT})
 _ORCA_FINITE_DIFFERENCE_GRADIENT = frozenset({MethodFamily.MP2})
 #: ORCA coupled cluster behind the plain keywords: no analytic gradient, so
 #: `NumFreq` differentiates numerical gradients (finite differences of energies).
-_ORCA_FINITE_DIFFERENCE_ENERGY = frozenset({MethodFamily.CCSD, MethodFamily.CCSD_T})
+_ORCA_FINITE_DIFFERENCE_ENERGY = frozenset({MethodFamily.CCSD, MethodFamily.CCSD_T, MethodFamily.MP2_F12})
 
 # ---------------------------------------------------------------------------
 # ORCA: functional class and release gate
@@ -435,7 +500,10 @@ _ORCA_FINITE_DIFFERENCE_ENERGY = frozenset({MethodFamily.CCSD, MethodFamily.CCSD
 #   ``! CCSD(T)`` with ``! Opt NumGrad`` as the example of a method whose
 #   analytic gradient is not available; 4.6.4 (p. 677) lists analytic
 #   frequencies for HF and DFT only; ORCA 5.0.4 8.1.3.6 says "Gradients are not
-#   available" for F12 methods. Frequencies are therefore differences of
+#   available" for F12 methods (F12-MP2 too, so RI-MP2-F12 is in the energy
+#   row, not the MP2 row); ORCA 6.1 (chunk 16228) says "Analytic gradients are
+#   not available" for DLPNO, which covers plain DLPNO-CCSD. ORCA 5.0.4 8.3.2
+#   (chunk 13502) repeats the CCSD(T) / NumGrad example. Frequencies are therefore differences of
 #   numerical gradients: finite differences of energies. The AUTOCI- prefixed
 #   keywords (6.1, sections 3.11.2-3.11.3) have analytic CCSD/CCSD(T) gradients
 #   and so would be finite-difference-from-gradients; the plain keywords do not,
@@ -448,7 +516,15 @@ _ORCA_FINITE_DIFFERENCE_ENERGY = frozenset({MethodFamily.CCSD, MethodFamily.CCSD
 #   Freq page (Freq=Analytic is the default for "RHF, UHF, CIS, CASSCF, MP2, and
 #   all DFT methods") settle B2PLYP, B2PLYPD, B2PLYPD3, mPW2PLYP and
 #   mPW2PLYPD as analytic. Other double hybrids are not documented and get no
-#   assumption.
+#   assumption. U-prefixed spellings (UB2PLYP, UMP4) are not in the pages read
+#   and are not recognised.
+#
+# * Method options: Gaussian accepts options after a method (``MP4(SDTQ,FC)``,
+#   ``CCSD(T,FC)``, ``QCISD(T,E4T)``, ``MP4=FC``). The classifier reads the
+#   truncation and the triples flag and ignores frozen-core style options
+#   (G09 CCSD page, chunk 10440). Availability for CCSD(T) and QCISD(T) is
+#   "numerical gradients" (chunks 10441, 10973), so frequencies are numerical
+#   differences of energies; an unknown option makes the method unrecognised.
 #
 # Name lists are explicit and conservative; a name in no list is a plain
 # GGA/hybrid only if the family classifier already calls it DFT. Overlaps take
@@ -465,7 +541,8 @@ _ORCA_VV10_SUFFIXES = ("-nl", "-scnl")
 #: the ORCA row (assumed numerical) and the Gaussian row (no assumption).
 _DOUBLE_HYBRID_PREFIXES = (
     "b2plyp", "b2gp-plyp", "b2gpplyp", "b2k-plyp", "b2t-plyp", "mpw2plyp",
-    "dsd", "revdsd", "pwpb95", "pbe0-dh", "pbe0-2", "pbe-qidh",
+    "dsd", "revdsd", "pwpb95", "pbe0-dh", "pbe0dh", "pbe0-2", "pbe-qidh", "pbeqidh", "pbe0-qidh",
+    "wb97x2", "b2kplyp", "b2tplyp",
     "wb2plyp", "wb2gpplyp", "ub2plyp", "wb97x-2", "wb97m(2)", "wb97m-2",
     "pr2scan", "kpr2scan", "wpr2scan", "rsx-qidh", "rsx-0dh",
 )
@@ -518,7 +595,9 @@ _FAMILY_LABEL: dict[str, str] = {
     MethodFamily.DFT: "DFT",
     MethodFamily.MP2: "MP2",
     MethodFamily.MP3: "MP3",
-    MethodFamily.MP4: "MP4(DQ/SDQ)",
+    MethodFamily.MP4: "MP4",
+    MethodFamily.MP4_SDQ: "MP4(DQ/SDQ)",
+    MethodFamily.MP2_F12: "F12-MP2",
     MethodFamily.MP4_SDTQ: "MP4(SDTQ)",
     MethodFamily.MP5: "MP5",
     MethodFamily.CIS: "CIS",
@@ -579,7 +658,7 @@ _SOFTWARE_TABLE: dict[str, tuple[tuple[frozenset[str], TauBasis], ...]] = {
 #: The Gaussian double hybrids whose analytic frequencies the G09 MP page documents,
 #: compared with hyphens, underscores and case removed ("B2PLYP-D3" is "b2plypd3").
 _GAUSSIAN_ANALYTIC_DOUBLE_HYBRIDS = frozenset({
-    "b2plyp", "b2plypd", "b2plypd3", "mpw2plyp", "mpw2plypd",
+    "b2plyp", "b2plypd", "b2plypd3", "b2plypd3bj", "b2plypd3(bj)", "mpw2plyp", "mpw2plypd",
 })
 
 
