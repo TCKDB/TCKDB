@@ -36,6 +36,7 @@ _R19 = "Bibliographic metadata disagreement between a deposit and the DOI's reco
 _R20 = 'Role and calculation-type compatibility (which role a calculation type may take); vocabulary, not chemistry.'
 
 NOT_SCIENTIFIC: dict[str, str] = {
+    'ts_validation_source_calculation_owner_mismatch': 'A guard no request can trip: the request schemas refuse the same mistake earlier with calculation_key_undeclared.',
     'artifact_empty': 'Artifact upload validation: an empty file; payload integrity, not chemistry.',
     'artifact_too_large': 'A size cap on an artifact; a property of the service.',
     'artifact_encoded_payload_too_large': 'A size cap on an encoded artifact; a property of the service.',

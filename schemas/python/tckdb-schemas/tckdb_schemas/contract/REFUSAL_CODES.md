@@ -1878,7 +1878,6 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: A transition-state validation record cites a calculation of something other than what it is about.
-- Scientific check: [`assert_owned_by`](PRODUCER_CONTRACT.md#k-assert-owned-by).
 
 <a id="c-unknown-calculation-artifact-ref"></a>
 

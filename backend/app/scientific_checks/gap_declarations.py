@@ -667,7 +667,6 @@ CHECK_A_CITED_THING_IS_OF_THE_RECORDS_OWN_SUBJECT = ScientificCheck(
         calculation_ownership.W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH,
         calculation_ownership.W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
         calculation_ownership.W_THERMO_STATMECH_OWNER_MISMATCH,
-        calculation_ownership.W_TS_VALIDATION_SOURCE_CALCULATION_OWNER_MISMATCH,
     ),
     asserts=(
         "What a record cites as evidence belongs to the record's own subject (its species, transition state "

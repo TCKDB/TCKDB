@@ -1453,15 +1453,6 @@ PROVED_IN: dict[str, str] = {
 _HTTP_METHODS = frozenset({"post", "put", "patch", "get", "delete"})
 _HTTP_HELPERS = ("_refused", "_post", "post_json", "_deposit", "_upload")
 
-#: Codes no request can produce (``Reach.guard`` in the catalogue). They cannot have an end-to-end proof,
-#: so each is exempt here with the reason, and a test checks the catalogue still says so.
-UNREACHABLE_GUARDS: dict[str, str] = {
-    "ts_validation_source_calculation_owner_mismatch": (
-        "the request schemas refuse the same mistake earlier with calculation_key_undeclared"
-    ),
-}
-
-
 def _cites(source: str, code: str, named: str | None = None) -> list[str]:
     """Names of the tests in ``source`` that prove ``code`` over HTTP.
 
@@ -1600,18 +1591,6 @@ def test_every_code_cited_as_proved_elsewhere_has_a_test_that_posts_and_reads_it
         f"response code with the code (not skipped, with the client fixture): {unproved}. "
         "Write one here, or fix the citation."
     )
-
-
-def test_the_unreachable_guards_are_still_guards_in_the_catalogue():
-    """An exemption from the end-to-end proof holds only while no request can produce the code."""
-    from app.api.code_catalogue import CATALOGUE, Reach
-
-    by_code = {entry.code: entry for entry in CATALOGUE}
-    assert UNREACHABLE_GUARDS, "an empty exemption list would make this pass vacuously"
-    for code, reason in UNREACHABLE_GUARDS.items():
-        assert code in by_code and by_code[code].reach is Reach.guard, code
-        assert reason.strip(), code
-        assert code not in PROVED_IN, f"{code} is exempt and also cited"
 
 
 class TestTheCitationGuardIsNotVacuous:

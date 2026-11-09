@@ -1520,7 +1520,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | Field | Value |
 | --- | --- |
 | **Tier** | `block` |
-| **Code** | `network_energy_source_subject_mismatch`, `thermo_source_calculation_owner_mismatch`, `statmech_source_calculation_owner_mismatch`, `transport_source_calculation_owner_mismatch`, `scf_stability_source_calculation_owner_mismatch`, `composite_input_owner_mismatch`, `statmech_torsion_scan_calculation_owner_mismatch`, `applied_energy_correction_source_calculation_owner_mismatch`, `thermo_statmech_owner_mismatch`, `ts_validation_source_calculation_owner_mismatch` |
+| **Code** | `network_energy_source_subject_mismatch`, `thermo_source_calculation_owner_mismatch`, `statmech_source_calculation_owner_mismatch`, `transport_source_calculation_owner_mismatch`, `scf_stability_source_calculation_owner_mismatch`, `composite_input_owner_mismatch`, `statmech_torsion_scan_calculation_owner_mismatch`, `applied_energy_correction_source_calculation_owner_mismatch`, `thermo_statmech_owner_mismatch` |
 | **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
 | **Governing ADR** | 0008 |
 
