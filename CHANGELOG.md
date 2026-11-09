@@ -50,6 +50,11 @@ legacy path. No schema or migration change.
 - **Unchanged:** `spin_treatment` stays in level identity and in the hash; thermo and statmech level checks.
 - **Schema and migration:** none. **Versions:** `tckdb-schemas` 0.161.0, `tckdb-client` 0.189.0.
 
+## Two refusals gain codes (2026-11-09)
+
+- **What changed:** a reaction deposited under a reaction family different from the one it is already recorded under is still refused (422), now with the code `reaction_family_conflict` instead of the generic `validation_error`; its message no longer quotes depositor text and names a family only when it is a seeded vocabulary name. All three conflict shapes are refused: seeded against seeded, raw against raw, and seeded against raw in either order (the mixed case used to be accepted). A computed-reaction bundle's family now applies to the bundle's own reaction only, not to kinetics fits of other reactions in it. A network solve whose bath-gas mole fractions do not sum to 1 within 1e-9 now returns `kinetics_bath_gas_mole_fraction_sum`, the code a kinetics rate's bath gas already used (one rule, one code, one tolerance).
+- **Schema and migration:** none (`tckdb-schemas` 0.162.0, `tckdb-client` 0.190.0).
+
 ## A response the server cannot build is a logged 500, not a bare error or a 422 (2026-11-07)
 
 - **What changed:** when the server fails its own response or read model it now returns a JSON 500 with the new code `server_response_invalid` and fixed text (no validation detail, object repr or id). Two cases lead there: a route whose returned object fails its `response_model` (it used to be a `text/plain` "Internal Server Error"), and a response or read model that fails while a route builds it from a database row (it used to be a 422 that blamed the caller and echoed an object repr).
