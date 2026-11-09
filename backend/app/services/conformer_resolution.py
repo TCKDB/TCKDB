@@ -1,7 +1,8 @@
 """Service helpers for conformer group resolution.
 
 Implements DR-0005: torsional basin matching for conformer grouping.
-Falls back to label matching when torsion data is unavailable.
+When no torsion fingerprint can be made (a single atom, a failed computation) the structure joins the entry's
+existing no-fingerprint group, or starts a new ``conformer_N`` group. The depositor's conformer label is never read.
 
 A basin is a connected component
 --------------------------------
@@ -349,7 +350,6 @@ def resolve_conformer_group(
     session: Session,
     species_entry: SpeciesEntry,
     *,
-    label: str | None,
     created_by: int | None = None,
     smiles: str | None = None,
     xyz_atoms: tuple[tuple[str, float, float, float], ...] | None = None,
@@ -358,7 +358,8 @@ def resolve_conformer_group(
     """Resolve or create a conformer group for an uploaded observation.
 
     Uses torsional basin matching (DR-0005) when geometry data is available.
-    Falls back to label matching when torsion data cannot be computed.
+    A structure with no fingerprint (single atom, failed computation) joins the entry's existing no-fingerprint
+    group, or starts a new ``conformer_N`` group; the depositor's label plays no part.
     This function resolves only the basin-level ``ConformerGroup``; callers
     must still create a fresh ``ConformerObservation`` row for each distinct
     provenance-bearing upload event, and then call :func:`settle_conformer_basin`
@@ -366,7 +367,6 @@ def resolve_conformer_group(
 
     :param session: Active SQLAlchemy session.
     :param species_entry: Resolved species entry that owns the conformer group.
-    :param label: Optional user-supplied conformer label.
     :param created_by: Optional application user id for new rows.
     :param smiles: SMILES string for the species (needed for torsion extraction).
     :param xyz_atoms: Parsed XYZ atoms (needed for torsion extraction).

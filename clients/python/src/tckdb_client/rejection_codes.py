@@ -279,6 +279,7 @@ class RejectionCode(str, Enum):
     REACTION_CHARGE_NOT_CONSERVED = "reaction_charge_not_conserved"
     REACTION_ENTRY_HANDLE_CONFLICT = "reaction_entry_handle_conflict"
     REACTION_ENTRY_NULL_REACTION = "reaction_entry_null_reaction"
+    REACTION_FAMILY_CONFLICT = "reaction_family_conflict"
     REACTION_HANDLE_CONFLICT = "reaction_handle_conflict"
     REACTION_MASS_BALANCE_FAILED = "reaction_mass_balance_failed"
     REACTION_REVERSIBLE_REQUIRED = "reaction_reversible_required"
@@ -621,6 +622,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.REACTION_CHARGE_NOT_CONSERVED,
         RejectionCode.REACTION_ENTRY_HANDLE_CONFLICT,
         RejectionCode.REACTION_ENTRY_NULL_REACTION,
+        RejectionCode.REACTION_FAMILY_CONFLICT,
         RejectionCode.REACTION_HANDLE_CONFLICT,
         RejectionCode.REACTION_MASS_BALANCE_FAILED,
         RejectionCode.REACTION_REVERSIBLE_REQUIRED,
@@ -996,6 +998,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.REACTION_CHARGE_NOT_CONSERVED: frozenset({422}),
     RejectionCode.REACTION_ENTRY_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.REACTION_ENTRY_NULL_REACTION: frozenset({422}),
+    RejectionCode.REACTION_FAMILY_CONFLICT: frozenset({422}),
     RejectionCode.REACTION_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.REACTION_MASS_BALANCE_FAILED: frozenset({422}),
     RejectionCode.REACTION_REVERSIBLE_REQUIRED: frozenset({422}),

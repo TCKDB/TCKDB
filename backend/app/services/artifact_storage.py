@@ -250,13 +250,7 @@ _TEXT_KINDS = {
 
 
 class ArtifactValidationError(CodedValidationError):
-    """Raised when an artifact fails validation.
-
-    Every raise site names a catalogue code (``code=``) and carries the facts
-    as ``context``; the sentence is built from those and never repeats the
-    code. A depositor's own text (a filename) travels only in
-    ``context["depositor_supplied"]``, never in the sentence.
-    """
+    """An artifact failed validation; carries a catalogue code and context."""
 
     def __init__(self, *, code: str, detail: str, context: dict | None = None) -> None:
         super().__init__(code, detail, context=context, message_prefix=False)

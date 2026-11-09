@@ -1,8 +1,4 @@
-"""xtb output files are recognised as an ``output_log``: recognised, never parsed.
-
-Fixture: ``tests/fixtures/xtb/opt_freq_gfn2_ethanol.out`` is a trimmed real xtb 6.7.1 GFN2-xTB ``--ohess vtight`` run
-(ethanol; banner, setup block and final thermodynamics kept; hostname and install path redacted).
-"""
+"""An xtb output file is recognised as an ``output_log`` and nothing is parsed from it."""
 
 from __future__ import annotations
 

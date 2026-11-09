@@ -562,7 +562,6 @@ def persist_network_pdep_upload(
             conformer_group, fingerprint, scheme = resolve_conformer_group(
                 session,
                 species_entry,
-                label=conf.label,
                 created_by=created_by,
                 smiles=sp.species_entry.smiles,
                 xyz_atoms=parsed.atoms,

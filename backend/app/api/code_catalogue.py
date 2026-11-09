@@ -2298,6 +2298,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("reaction_entry_null_reaction", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py",
             shape=Shape.relationship),
+    ApiCode("reaction_family_conflict", 422, Surface.coded_exception,
+            "backend/app/services/reaction_resolution.py",
+            shape=Shape.relationship,
+            note=(
+                "The deposit resolves to a stored reaction recorded under a different reaction "
+                "family. context carries recorded_family and supplied_family only for a side that "
+                "is a seeded vocabulary name; depositor-supplied family text is never echoed."
+            )),
     ApiCode("reaction_mass_balance_failed", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py",
             shape=Shape.relationship),

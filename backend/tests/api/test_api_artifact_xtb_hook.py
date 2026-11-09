@@ -1,8 +1,4 @@
-"""An xtb output uploaded to an opt calculation: stored, recognised as xtb, nothing extracted.
-
-xtb's ``g98.out`` is written in Gaussian 98's layout and prints the optimized geometry under "Standard orientation".
-It must not be read as the calculation's *input* geometry (it was, while its Gaussian header won the sniff).
-"""
+"""An xtb output uploaded to an opt calculation is stored and no input geometry is extracted."""
 
 from __future__ import annotations
 

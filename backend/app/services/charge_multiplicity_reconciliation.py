@@ -209,8 +209,7 @@ def parse_charge_multiplicity_from_log(
     elif software == "gaussian":
         charge, multiplicity = _parse_gaussian(text)
     else:
-        # xtb is recognised, not parsed: nothing is read from its log, and it must never be handed to
-        # another program's parser.
+        # xtb: recognised, not parsed.
         return None
 
     # A multiplicity below 1 is unphysical (2S+1 >= 1, mirrored by the

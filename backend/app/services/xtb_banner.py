@@ -1,17 +1,10 @@
-"""xtb version banner -- the only thing TCKDB reads from an xtb output file.
-
-Recognition only. No energy, frequency, Hessian, charge or multiplicity is parsed from an xtb log; those values
-keep coming from the upload payload. The banner is read so that DR-0008 can compare the release a depositor
-declared with the release the log states.
-"""
+"""xtb version banner; no other value is read from an xtb log."""
 
 from __future__ import annotations
 
 import re
 
-#: ``* xtb version 6.7.1 (edcfbbe) compiled by 'conda@...' on 2024-11-25``. The commit hash in parentheses is not
-#: recorded as ``build``: it names a source revision, not a build a depositor declares, and treating it as one
-#: would turn a version-only declaration into a build contradiction.
+#: ``* xtb version 6.7.1 (edcfbbe) compiled by ...``; the commit hash is not recorded as ``build``.
 _VERSION_RE = re.compile(r"\*\s*xtb version\s+(\d+(?:\.\d+){1,2})(?=\s|\()")
 
 

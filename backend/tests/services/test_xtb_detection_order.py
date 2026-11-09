@@ -1,7 +1,4 @@
-"""Detection order around xtb: g98.out, ORCA look-alikes, charge/multiplicity, and the version regex.
-
-Fixtures are trimmed real xtb 6.7.1 outputs (see ``tests/fixtures/xtb/README.txt``).
-"""
+"""Detection order around xtb: g98.out, ORCA look-alikes, charge/multiplicity, version regex."""
 
 from __future__ import annotations
 
