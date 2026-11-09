@@ -172,7 +172,8 @@ class SpeciesEntry(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 
     #: Canonical stereo descriptor -- the entry's stereo key (DR-0038): one
     #: token per potential stereo element (``R S r s E Z e z Ra Sa - ?``; see
-    #: :mod:`app.chemistry.stereo` for the vocabulary), ordered by canonical atom rank of the stereo-stripped constitution.
+    #: :mod:`app.chemistry.stereo` for the vocabulary), ordered by
+    #: canonical atom rank of the stereo-stripped constitution.
     #: ``NULL`` only when the species is achiral (no stereo element). Partial and
     #: unknown configurations are their own entries (``E,?`` is not ``E,E``).
     stereo_descriptor: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

@@ -1005,7 +1005,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/reaction_resolution.py`.
 - The body's `context` names the things involved.
-- Message: 'This reaction is already recorded under reaction family {chem_reaction.reaction_family.name}, but the deposit names {resolved_reaction_family.name}. A reaction has one family; deposit it under the recorded family.'
+- Message: not found by the static search.
 - Note: The deposit resolves to a stored reaction recorded under a different reaction family.
 
 <a id="c-reaction-mass-balance-failed"></a>

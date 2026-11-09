@@ -1085,6 +1085,41 @@ def resolve_reaction_family(
     )
 
 
+def _reaction_family_conflict(*, recorded: str | None, supplied: str | None) -> CodedValueError:
+    """The refusal for a reaction deposited under a family other than the one it is recorded under.
+
+    A family is named only when it is a seeded ``reaction_family`` name; ``None`` means that side is
+    depositor text (``reaction_family_raw``), which is never repeated back as TCKDB's words.
+    """
+    named = {key: value for key, value in (("recorded_family", recorded), ("supplied_family", supplied)) if value}
+    if recorded is not None and supplied is not None:
+        detail = (
+            f"This reaction is already recorded under reaction family {recorded!r}, but the deposit "
+            f"names {supplied!r}."
+        )
+    elif recorded is not None:
+        detail = (
+            f"This reaction is already recorded under reaction family {recorded!r}, but the deposit "
+            "names a family that is not in the seeded vocabulary."
+        )
+    elif supplied is not None:
+        detail = (
+            "This reaction is already recorded under a reaction family that is not in the seeded "
+            f"vocabulary, but the deposit names {supplied!r}."
+        )
+    else:
+        detail = (
+            "This reaction is already recorded under a different reaction family that is not in the "
+            "seeded vocabulary, and the deposit names another one."
+        )
+    return CodedValueError(
+        W_REACTION_FAMILY_CONFLICT,
+        detail + " A reaction has one family; deposit it under the recorded family.",
+        context=named,
+        message_prefix=False,
+    )
+
+
 def _resolve_chem_reaction(
     session: Session,
     *,
@@ -1136,40 +1171,26 @@ def _resolve_chem_reaction(
         )
     )
     if chem_reaction is not None:
+        recorded_seeded = chem_reaction.reaction_family
+        recorded_raw = chem_reaction.reaction_family_raw
         if resolved_reaction_family is not None:
-            if chem_reaction.reaction_family_id is None:
+            if recorded_seeded is None and recorded_raw is None:
                 chem_reaction.reaction_family = resolved_reaction_family
-            elif chem_reaction.reaction_family_id != resolved_reaction_family.id:
-                # Both names come from the seeded reaction_family vocabulary, so
-                # naming them is TCKDB speaking, not the depositor.
-                raise CodedValueError(
-                    W_REACTION_FAMILY_CONFLICT,
-                    "This reaction is already recorded under reaction family "
-                    f"{chem_reaction.reaction_family.name!r}, but the deposit names "
-                    f"{resolved_reaction_family.name!r}. A reaction has one family; "
-                    "deposit it under the recorded family.",
-                    context={
-                        "recorded_family": chem_reaction.reaction_family.name,
-                        "supplied_family": resolved_reaction_family.name,
-                    },
-                    message_prefix=False,
+            elif recorded_seeded is None or recorded_seeded.id != resolved_reaction_family.id:
+                # Recorded under another seeded family, or under depositor text. Only the
+                # seeded side is named.
+                raise _reaction_family_conflict(
+                    recorded=recorded_seeded.name if recorded_seeded is not None else None,
+                    supplied=resolved_reaction_family.name,
                 )
         elif reaction_family_raw is not None:
-            if chem_reaction.reaction_family_raw is None:
+            if recorded_seeded is not None:
+                raise _reaction_family_conflict(recorded=recorded_seeded.name, supplied=None)
+            if recorded_raw is None:
                 chem_reaction.reaction_family_raw = reaction_family_raw
                 chem_reaction.reaction_family_source_note = normalized_source_note
-            elif chem_reaction.reaction_family_raw != reaction_family_raw:
-                # Neither value is in the seeded vocabulary: both are depositor
-                # text, so the message names neither.
-                raise CodedValueError(
-                    W_REACTION_FAMILY_CONFLICT,
-                    "This reaction is already recorded under a different "
-                    "reaction family that is not in the seeded vocabulary, and the deposit "
-                    "names another one. A reaction has one family; deposit it under the "
-                    "recorded family, or use a family from the seeded vocabulary.",
-                    context={},
-                    message_prefix=False,
-                )
+            elif recorded_raw != reaction_family_raw:
+                raise _reaction_family_conflict(recorded=None, supplied=None)
             elif (
                 chem_reaction.reaction_family_source_note is None
                 and normalized_source_note is not None

@@ -137,9 +137,12 @@ class TestOnlyTheCodePositionDeclaresACode:
     def test_a_token_the_sentence_merely_mentions_is_not_promoted(self):
         """The same defect, elsewhere: prose that names a column.
 
-        ``app/services/reaction_resolution.py`` refuses a reaction whose
-        family disagrees with the resolved one, and the sentence names the
-        column. That is prose about a field, not a declaration of a code.
+        ``app/services/reaction_resolution.py`` used to refuse a reaction whose
+        family disagrees with the resolved one with a bare ``ValueError``
+        whose sentence named the column. It is now the coded
+        ``reaction_family_conflict``; the sentence is kept here as an example
+        of prose that names a field. That is prose about a field, not a
+        declaration of a code.
         """
         message = (
             "Resolved reaction already has a different reaction_family: "

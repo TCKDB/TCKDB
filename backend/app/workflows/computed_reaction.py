@@ -1935,8 +1935,8 @@ def persist_computed_reaction_upload(
                 session,
                 warnings_out=sp_energy_warnings,
                 reversible=request.reversible,
-                reaction_family=request.reaction_family,
-                reaction_family_source_note=request.reaction_family_source_note,
+                # The bundle's family describes the bundle's own reaction, resolved above. A fit
+                # for another reaction must not stamp it there, nor be refused because of it.
                 reactant_stoichiometry=compress_species_stoichiometry(
                     kin_reactant_entries
                 ),

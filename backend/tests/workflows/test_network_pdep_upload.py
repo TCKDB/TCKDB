@@ -3474,6 +3474,5 @@ def test_network_solve_bath_gas_sum_over_the_api(client) -> None:
     payload = _full_payload()
     payload["solve"]["bath_gas"] = [{"species_key": "Ar", "mole_fraction": 0.5}]
     response = client.post("/api/v1/uploads/networks/pdep", json=payload)
-    print("NETWORK_BATH", response.status_code, response.text[:600])
     assert response.status_code == 422
     assert response.json()["code"] == "kinetics_bath_gas_mole_fraction_sum"
