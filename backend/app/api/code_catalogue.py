@@ -772,6 +772,11 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("arrhenius_a_units_molecularity_mismatch", 422, Surface.coded_exception,
             "backend/app/chemistry/units.py",
             shape=Shape.relationship),
+    ApiCode("artifact_empty", 422, Surface.coded_exception,
+            "backend/app/services/artifact_storage.py"),
+    ApiCode("artifact_encoded_payload_too_large", 422, Surface.coded_exception,
+            "backend/app/services/artifact_storage.py",
+            shape=Shape.relationship),
     ApiCode("artifact_integrity_failed", 502, Surface.response_literal,
             "backend/app/api/errors.py",
             replay=Replay.never_succeeds,
@@ -788,6 +793,25 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "is_client_facing's 4xx rule. Repair is an operator "
                 "restoring the object, not a caller waiting."
             )),
+    ApiCode("artifact_invalid_base64", 422, Surface.coded_exception,
+            "backend/app/services/artifact_persistence.py"),
+    ApiCode("artifact_not_utf8_text", 422, Surface.coded_exception,
+            "backend/app/services/artifact_storage.py"),
+    ApiCode("artifact_sha256_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/artifact_storage.py",
+            shape=Shape.relationship),
+    ApiCode("artifact_size_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/artifact_storage.py",
+            shape=Shape.relationship),
+    ApiCode("artifact_too_large", 422, Surface.coded_exception,
+            "backend/app/services/artifact_storage.py",
+            shape=Shape.relationship),
+    ApiCode("artifact_total_encoded_payload_too_large", 422, Surface.coded_exception,
+            "backend/app/services/artifact_storage.py",
+            shape=Shape.relationship),
+    ApiCode("artifact_total_size_too_large", 422, Surface.coded_exception,
+            "backend/app/services/artifact_storage.py",
+            shape=Shape.relationship),
     ApiCode("artifact_object_missing", 502, Surface.response_literal,
             "backend/app/api/errors.py",
             replay=Replay.never_succeeds,
@@ -2220,6 +2244,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "Shape.relationship since 2026-08-18; context carries "
                 "offset_max (a setting) and offset (the caller's own)."
             )),
+    ApiCode("output_log_signature_unrecognized", 422, Surface.coded_exception,
+            "backend/app/services/artifact_storage.py",
+            shape=Shape.relationship),
     ApiCode("output_not_empty", 422, Surface.message_prefix,
             "backend/app/services/deposit/build.py",
             reach=Reach.guard,
@@ -2271,6 +2298,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("reaction_entry_null_reaction", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py",
             shape=Shape.relationship),
+    ApiCode("reaction_family_conflict", 422, Surface.coded_exception,
+            "backend/app/services/reaction_resolution.py",
+            shape=Shape.relationship,
+            note=(
+                "The deposit resolves to a stored reaction recorded under a different reaction "
+                "family. context carries recorded_family and supplied_family only for a side that "
+                "is a seeded vocabulary name; depositor-supplied family text is never echoed."
+            )),
     ApiCode("reaction_mass_balance_failed", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py",
             shape=Shape.relationship),

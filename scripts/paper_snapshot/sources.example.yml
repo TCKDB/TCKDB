@@ -1,0 +1,61 @@
+# Sources for the paper snapshot build. Copy, edit the paths, pass with --sources.
+#
+# The values below match the README's "Run it" steps: `make up` (database tckdb_dev on 127.0.0.1:5432, store at
+# localhost:9000) and `make api` (port 8010). Point them at any other empty instance.
+#
+# A source with no entry here is skipped, and the build says so. An entry that is enabled but cannot be built
+# (a missing path, an unknown level, a stub source) stops the build before anything is deposited.
+# Large source files are read from these paths; none is copied into the repository.
+
+instance:
+  api_url: http://127.0.0.1:8010
+  # The archive export and the curator account read/write the instance's database directly, so the build needs to
+  # know it. Anything left out falls back to DB_* / S3_* in the environment.
+  database:
+    host: 127.0.0.1
+    port: 5432
+    name: tckdb_dev
+    user: tckdb
+    password: tckdb
+  s3:
+    endpoint_url: http://localhost:9000
+    access_key: tckdb
+    secret_key: tckdb_secret
+    bucket: tckdb-artifacts
+
+sources:
+  # Source 1: the E2 conformer study, deposited with the client builders.
+  # The directory must hold raw_outputs/manifest_union.json, raw_outputs/tasks.txt and
+  # raw_outputs/tasks/<level>/<molecule>/<start>/{job.log,job.gjf}. It is not in this repository.
+  e2_conformers:
+    enabled: true
+    root: /path/to/E2
+    levels: [b3lyp_d3bj, wb97xd]
+
+  # Source 4: the formic acid RMG model (Wu and Grinberg Dana, ACS Omega 2026), unmodified, through the CHEMKIN
+  # adapter. The files ship in this repository; the path is relative to the repository root.
+  chemkin_formic_acid:
+    enabled: true
+    fixture_dir: backend/tests/integration/fixtures/rmg_formic_acid_wu2026
+    mechanism_file: chem_annotated.inp
+    species_dictionary: species_dictionary.txt
+    scientific_origin: estimated
+
+  # Source 2: ARC runs through the ARC adapter. Not implemented; an enabled entry stops the build.
+  # arc_runs:
+  #   enabled: true
+  #   adapter_path: /path/to/tckdb-adapters
+  #   runs_root: /path/to/arc/runs
+
+  # Source 3: the N2H3 pressure-dependent network. Not implemented.
+  # pdep_network:
+  #   enabled: true
+  #   arkane_dir: /path/to/Final_Final_CCSDT_F12_Aug_F12
+
+# Optional: the generators to run (default: the list in build.py).
+# expected_outputs: [corpus_counts, conformer_basins]
+
+# Optional: throw-away local accounts (defaults in build.py).
+# accounts:
+#   depositor: {username: snapshot_depositor, password: ...}
+#   curator:   {username: snapshot_curator,   password: ...}
