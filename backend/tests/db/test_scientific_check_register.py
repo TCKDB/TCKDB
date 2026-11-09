@@ -135,10 +135,10 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # entry 12 compares a declared state with an output log, these judge a stored diagnostic against a criterion or
     # against the entry. Different tier from every blocking entry.
     #
-    # 52 -> 80: the codes that had no entry are declared in gap_declarations.py (the rest are in NOT_SCIENTIFIC).
-    assert 10 <= len(REGISTER) <= 80, (
+    # 52 -> 82: the codes that had no entry are declared in gap_declarations.py (the rest are in NOT_SCIENTIFIC).
+    assert 10 <= len(REGISTER) <= 82, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~80 the inclusion test ('could this check be wrong "
+        "the system; above ~82 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 
@@ -861,7 +861,7 @@ _OPENINGS: dict[int, str] = {
     50: "A calculation that records how its frequency job b",
     51: "A species entry states one stereo configuration: w",
     52: "A wavefunction reliability diagnostic that a calcu",
-    53: 'A bath gas a rate states is a composition: its mol',
+    53: 'A bath gas a rate or a network solve states is a c',
     54: 'The kind of a network channel (isomerization, asso',
     55: 'A network state is the multiset of its participant',
     56: 'One record has one energy level and the declared l',
@@ -889,6 +889,8 @@ _OPENINGS: dict[int, str] = {
     78: 'The Hessian method a deck or log attached after th',
     79: 'What a neutral ground-state atom declares agrees w',
     80: 'The job named as having measured an SCF stability ',
+    81: 'A thermo declaration the file format defines descr',
+    82: 'A recorded finite difference of gradients on an OR',
 }
 
 

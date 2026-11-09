@@ -503,6 +503,7 @@ def persist_thermo_upload(
             "source_calculations": resolved_source_calcs,
             "statmech_id": resolved_statmech_id,
             "thermodynamic_target_kind": declarations.thermodynamic_target_kind,
+            "thermodynamic_target_declared_by": declarations.thermodynamic_target_declared_by,
             "target_conformer_group_id": declarations.target_conformer_group_id,
             "protocol_declaration": declarations.protocol_declaration,
             # Stored as declared, after ``assert_role_consistency`` above.

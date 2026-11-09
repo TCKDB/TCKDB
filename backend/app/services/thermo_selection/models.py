@@ -139,6 +139,8 @@ class NormalizedCandidate:
 
     :param protocol_state: ``absent`` (no declaration), ``valid`` (parsed) or ``unreadable``
         (stored but not a version-1 declaration this server can read).
+    :param target_declared_by: Whose claim the declared target is (``depositor`` or ``chemkin_format``);
+        ``None`` when no target is declared.
     :param linked_recipe_keys: Catalogue keys of the named composite methods the record's own
         declared energy level and own source calculations carry. Empty when none does.
     """
@@ -155,6 +157,7 @@ class NormalizedCandidate:
     protocol_state: str
     protocol: dict[str, Any] | None
     linked_recipe_keys: tuple[str, ...] = ()
+    target_declared_by: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -170,6 +173,8 @@ class NormalizedCandidate:
             "protocol_state": self.protocol_state,
             "protocol": self.protocol,
             "linked_recipe_keys": list(self.linked_recipe_keys),
+            # Added only when a target is declared, so a record with none keeps the manifest it had.
+            **({"target_declared_by": self.target_declared_by} if self.target_declared_by is not None else {}),
         }
 
     @classmethod
@@ -187,6 +192,7 @@ class NormalizedCandidate:
             protocol_state=raw["protocol_state"],
             protocol=raw["protocol"],
             linked_recipe_keys=tuple(raw["linked_recipe_keys"]),
+            target_declared_by=raw.get("target_declared_by"),
         )
 
 

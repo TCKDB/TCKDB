@@ -152,6 +152,7 @@ REGISTER_ENTRY: dict[str, int] = {
     "term_symbol_contradicts_ground_term": 79,
     "scf_stability_source_conformer_unverified": 80,
     "scf_stability_source_level_mismatch": 80,
+    "hessian_method_refined": 82,
 }
 
 #: Codes whose subject is a shared, deduplicated identity row (a species, a reaction, a literature entry, a ref

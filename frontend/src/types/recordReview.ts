@@ -78,6 +78,8 @@ export const RecordReviewSchema = z.object({
     reviewed_at: z.string().nullable().default(null),
     first_approved_at: z.string().nullable().default(null),
     note: z.string().nullable().default(null),
+    // Server-computed: false when the reader may not approve this row (hides "approved"). Null leaves it offered.
+    actor_may_approve: z.boolean().nullable().default(null),
     created_at: z.string(),
     created_by: z.number().int().nullable().default(null),
 })

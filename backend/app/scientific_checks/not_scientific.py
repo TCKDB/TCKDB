@@ -36,6 +36,21 @@ _R19 = "Bibliographic metadata disagreement between a deposit and the DOI's reco
 _R20 = 'Role and calculation-type compatibility (which role a calculation type may take); vocabulary, not chemistry.'
 
 NOT_SCIENTIFIC: dict[str, str] = {
+    'artifact_empty': 'Artifact upload validation: an empty file; payload integrity, not chemistry.',
+    'artifact_too_large': 'A size cap on an artifact; a property of the service.',
+    'artifact_encoded_payload_too_large': 'A size cap on an encoded artifact; a property of the service.',
+    'artifact_total_encoded_payload_too_large': 'A size cap on the encoded artifacts of one upload; a property of the service.',
+    'artifact_total_size_too_large': 'A size cap on the artifacts of one upload; a property of the service.',
+    'artifact_invalid_base64': 'Artifact upload validation: the content is not valid base64; payload integrity.',
+    'artifact_not_utf8_text': 'Artifact upload validation: the content is not UTF-8 text; payload integrity.',
+    'artifact_sha256_mismatch': "Artifact integrity: the stated digest differs from the content's; custody, not chemistry.",
+    'artifact_size_mismatch': "Artifact integrity: the stated size differs from the content's; custody, not chemistry.",
+    'output_log_signature_unrecognized': 'Artifact kind recognition: the file is not a recognised output log; tooling, not chemistry.',
+    'reaction_family_conflict': 'A reaction-family label assigned by a tool and disagreeing with the stored one; a classification, not a position.',
+    'record_not_found': 'Review workflow: the record does not exist.',
+    'record_type_not_reviewable': 'Review workflow: the record type takes no review.',
+    'record_self_approval': 'Review workflow: who may approve a record.',
+    'submission_self_approval': 'Review workflow: who may approve a submission.',
     'account_not_allowlisted': _R04,
     'actor_outside_allowlist': _R04,
     'alembic_heads_ambiguous': _R05,

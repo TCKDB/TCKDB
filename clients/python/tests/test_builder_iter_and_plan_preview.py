@@ -112,6 +112,8 @@ def reaction_upload() -> ComputedReactionUpload:
         reaction=rxn,
         calculations=[ts_opt],
         species_calculations={ch4: [ch4_opt, ch4_sp], ch3: [ch3_opt]},
+        # The artifact paths are placeholders, so keep the files out of the payload.
+        inline_artifacts=False,
     )
 
 

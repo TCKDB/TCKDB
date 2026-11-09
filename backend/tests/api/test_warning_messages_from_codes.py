@@ -857,9 +857,18 @@ def test_the_assumed_rows_and_rules_come_from_the_assumption_table():
         ("ORCA", "4.2", "tpss"),
         ("ORCA", "6.0.0", "wb97x-v"),
         ("ORCA", "6.0.0", "b2plyp"),
+        ("ORCA", "6.0.0", "ccsd(t)"),
     ]:
         resolution = resolve_tau_with_assumption([], software, method, version)
         assert resolution.assumption_rule in ASSUMPTION_RULES, (software, method, resolution)
+        seen.add(resolution.assumption_rule)
+    # The two ORCA rules that need qualifiers on the level of theory.
+    for qualifiers, method in (
+        ({"spin_treatment": "unrestricted"}, "dlpno-mp2"),
+        ({"core_treatment": "all_electron", "ri_approximation": "none"}, "autoci-ccsd"),
+    ):
+        resolution = resolve_tau_with_assumption([], "ORCA", method, "6.1.0", **qualifiers)
+        assert resolution.assumption_rule in ASSUMPTION_RULES, (method, resolution)
         seen.add(resolution.assumption_rule)
     assert seen == set(ASSUMPTION_RULES)
 

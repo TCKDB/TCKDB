@@ -48,7 +48,7 @@
 
 services:
   db:
-    image: informaticsmatters/rdkit-cartridge-debian:Release_2025_03_3
+    image: informaticsmatters/rdkit-cartridge-debian:Release_2025_03_3@sha256:96c34a5b88d0cbe02bf57290531f27f3cb97f5d3e494f03baea75ea99749b5ef
     environment:
       POSTGRES_USER: ${DB_ADMIN_USER:-${DB_USER:-tckdb}}
       POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:-${DB_PASSWORD:?DB_PASSWORD must be set (copy .env.example to .env or pass --env-file)}}

@@ -10,7 +10,9 @@ table.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.coded_error import CodedValidationError
 
 from app.api.client_version import require_supported_tckdb_client
 from app.api.deps import (
@@ -20,6 +22,7 @@ from app.api.deps import (
     get_write_db,
     require_curator_or_admin,
 )
+from app.api.errors import not_found
 from app.api.server_faults import ServerFaultRoute
 from app.db.models.app_user import AppUser
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
@@ -38,6 +41,7 @@ from app.services.record_containers import (
     resolve_record_container,
     resolve_record_containers,
 )
+from app.services.record_models import RECORD_MODELS
 from app.services.record_refs import (
     resolve_record_public_ref,
     resolve_record_public_refs,
@@ -45,11 +49,15 @@ from app.services.record_refs import (
 from app.services.record_review import (
     get_record_review,
     list_record_reviews,
+    refused_self_approval,
     set_record_review_status,
 )
 from app.services.review_queue import list_review_queue
 
 router = APIRouter(route_class=ServerFaultRoute)
+
+#: Statuses with no approve offer, so no ``actor_may_approve``.
+_NO_APPROVE_FLAG = frozenset({RecordReviewStatus.approved, RecordReviewStatus.rejected})
 
 
 def _read(
@@ -139,7 +147,7 @@ def list_review_queue_page(
     status: RecordReviewStatus | None = Query(default=None),
     pagination: PaginationParams = Depends(),
     session: Session = Depends(get_db),
-    _user: AppUser = Depends(require_curator_or_admin),
+    actor: AppUser = Depends(require_curator_or_admin),
 ) -> ReviewQueuePageRead:
     """The review queue grouped by subject: one block per record a curator
     judges as one unit, every review row nested under it.
@@ -154,6 +162,21 @@ def list_review_queue_page(
         status=status,
         limit=pagination.limit,
         offset=pagination.skip,
+    )
+    refused = refused_self_approval(
+        session,
+        actor=actor,
+        targets=[
+            (row.record_type, row.record_id)
+            for subject in result.subjects
+            for row in subject.rows
+            if row.status not in _NO_APPROVE_FLAG
+        ],
+        review_creators={
+            (row.record_type, row.record_id): row.created_by
+            for subject in result.subjects
+            for row in subject.rows
+        },
     )
     subjects = [
         ReviewQueueSubjectRead(
@@ -206,6 +229,14 @@ def list_review_queue_page(
                     row,
                     result.refs.get((row.record_type, row.record_id)),
                     result.containers.get((row.record_type, row.record_id)),
+                ).model_copy(
+                    update={
+                        "actor_may_approve": (
+                            None
+                            if row.status in _NO_APPROVE_FLAG
+                            else not refused[(row.record_type, row.record_id)]
+                        )
+                    }
                 )
                 for row in subject.rows
             ],
@@ -263,7 +294,26 @@ def set_status(
     The transition policy and self-approval guard live in the service
     layer; route-side authorisation is the curator/admin role check
     only.
+
+    An artifact never has a review row (``record_type_not_reviewable``, 422),
+    and a record that does not exist is a 404 (``record_not_found``) rather
+    than a review row for nothing.
     """
+    if record_type is SubmissionRecordType.artifact:
+        raise CodedValidationError(
+            "record_type_not_reviewable",
+            "artifact records have no review state: an artifact is contribution "
+            "evidence, reviewed through the calculation it belongs to.",
+            context={"record_type": record_type.value},
+        )
+    model = RECORD_MODELS[record_type]
+    if session.scalar(select(model.id).where(model.id == record_id)) is None:
+        raise not_found(
+            "record",
+            row_id=record_id,
+            code="record_not_found",
+            context={"record_type": record_type.value},
+        )
     row = set_record_review_status(
         session,
         record_type=record_type,

@@ -49,6 +49,7 @@ from tckdb_schemas.fragments.kinetics_bath_gas import (
     W_KINETICS_BATH_GAS_AT_HIGH_PRESSURE_LIMIT,
     W_KINETICS_BATH_GAS_DUPLICATE_SPECIES,
     W_KINETICS_BATH_GAS_MOLE_FRACTION_SUM,
+    check_bath_gas_mole_fraction_sum,
     check_kinetics_bath_gas,
 )
 from tckdb_schemas.kinetics_declarations import (
@@ -66,6 +67,13 @@ from tckdb_schemas.sp_energy_components import (
     SP_ENERGY_COMPONENTS_DO_NOT_SUM,
     SUM_TOLERANCE_HARTREE,
     check_sp_energy_components,
+)
+from tckdb_schemas.stationary_point import W_HESSIAN_METHOD_REFINED, _refinement_findings
+from tckdb_schemas.thermo_declarations import (
+    W_THERMO_DECLARED_BY_RECORD_INCOHERENT,
+    W_THERMO_DECLARED_BY_TARGET_INCOHERENT,
+    _declared_by_record_error,
+    thermo_target_error,
 )
 
 from app.api.routes import lookup as lookup_routes
@@ -197,8 +205,8 @@ CHECK_KINETICS_BATH_GAS_IS_A_COMPOSITION = ScientificCheck(
         W_KINETICS_BATH_GAS_AT_HIGH_PRESSURE_LIMIT,
     ),
     asserts=(
-        "A bath gas a rate states is a composition: its mole fractions sum to one, each "
-        "species appears once, and it is not given for a rate at the high-pressure limit, "
+        "A bath gas a rate or a network solve states is a composition: its mole fractions sum to one, "
+        "and for a rate each species appears once and no bath gas is given at the high-pressure limit, "
         "where there is no collider."
     ),
     tier=CheckTier.block,
@@ -208,7 +216,8 @@ CHECK_KINETICS_BATH_GAS_IS_A_COMPOSITION = ScientificCheck(
         "twice, is not a composition, and no correct measurement or calculation can have been "
         "obtained in it. The high-pressure limit is the rate with collisional energy transfer "
         "removed, so a bath gas attached to it contradicts the pressure context the same record "
-        "states. All three are contradictions inside one payload, not expectations about a "
+        "states. A network solve's bath gas is held to the same sum, with the same tolerance. All "
+        "three are contradictions inside one payload, not expectations about a "
         "result. Nothing is refused for an absent bath gas: it reads as 'not stated' and is "
         "never inferred, which is why the check is a block and not a demand."
     ),
@@ -220,6 +229,10 @@ CHECK_KINETICS_BATH_GAS_IS_A_COMPOSITION = ScientificCheck(
                 "Shared by the kinetics upload and the computed-reaction bundle, so the two routes "
                 "cannot disagree about what a valid bath gas is."
             ),
+        ),
+        PythonCheck(
+            check_bath_gas_mole_fraction_sum,
+            note="The sum rule alone, which the network solve's bath gas also calls.",
         ),
     ),
     escape_hatch=(
@@ -1170,6 +1183,60 @@ CHECK_SCF_STABILITY_SOURCE_IS_COMPARABLE = ScientificCheck(
     adr="0008",
     enforced_by=(PythonCheck(scf_stability_sources.link_scf_stability_sources),),
     escape_hatch="None needed: the link is stored as stated.",
+)
+
+# ---------------------------------------------------------------------------
+# Thermo declarations
+# ---------------------------------------------------------------------------
+
+CHECK_A_FORMAT_DEFINED_THERMO_DECLARATION_DESCRIBES_WHAT_THE_FORMAT_DEFINES = ScientificCheck(
+    group="Thermo declarations",
+    sort_key=1,
+    code=(W_THERMO_DECLARED_BY_TARGET_INCOHERENT, W_THERMO_DECLARED_BY_RECORD_INCOHERENT),
+    asserts=(
+        "A thermo declaration the file format defines describes what the format defines: a target declared "
+        "by the CHEMKIN format is an equilibrium ensemble, on a gas-phase record that carries a NASA-7 block."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    tier_rationale=(
+        "Definitional. A CHEMKIN NASA-7 polynomial is the equilibrium-ensemble thermochemistry of a gas-phase "
+        "species, so a depositor cannot make the format declare a single conformer, a liquid, or a record "
+        "with no polynomial. The depositor's own declarations are unrestricted: the rule applies only where "
+        "the format is the declarer."
+    ),
+    adr="0008",
+    enforced_by=(
+        PythonCheck(thermo_target_error),
+        PythonCheck(_declared_by_record_error),
+    ),
+    escape_hatch="Declare the target as depositor-defined, or send a gas-phase record with its NASA-7 block.",
+)
+
+# ---------------------------------------------------------------------------
+# Hessian method of a stored tolerance
+# ---------------------------------------------------------------------------
+
+CHECK_A_RECORDED_HESSIAN_METHOD_IS_REFINED_WHEN_IT_CANNOT_HOLD = ScientificCheck(
+    group="Hessian method of a stored tolerance",
+    sort_key=1,
+    code=W_HESSIAN_METHOD_REFINED,
+    asserts=(
+        "A recorded finite difference of gradients on an ORCA NumFreq deck, for a method with no analytic "
+        "gradient, is stored as finite differences of energies, and the record says so."
+    ),
+    tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
+    tier_rationale=(
+        "Not a contradiction with the deck (the sibling of entry 50): NumFreq differentiates gradients, and "
+        "for a method with no analytic gradient those gradients are themselves numerical, so the recorded "
+        "label and the deck agree about the program's procedure and differ only in what the label means. The "
+        "tolerance stored with the record is the looser one for energies; the deposit is kept and the "
+        "refinement is stated."
+    ),
+    adr="0008, 0012",
+    enforced_by=(PythonCheck(_refinement_findings),),
+    escape_hatch="None needed: the deposit is accepted. Record finite_difference_energy to state it directly.",
 )
 
 __all__: list[str] = []

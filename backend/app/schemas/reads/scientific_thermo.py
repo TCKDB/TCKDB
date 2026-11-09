@@ -18,6 +18,7 @@ from app.db.models.common import (
     PhaseKind,
     RecordReviewStatus,
     ScientificOriginKind,
+    ThermoDeclarationSource,
     ThermoTargetKind,
 )
 from app.schemas.reads._method_family import DftRungBound, MethodFamilyFilter
@@ -273,10 +274,12 @@ class ThermoTargetBlock(BaseModel):
     :param kind: ``equilibrium_ensemble`` or ``single_conformer``.
     :param conformer_group_ref: Public ref of the conformer group a
         ``single_conformer`` target names; ``null`` for an equilibrium target.
+    :param declared_by: Whose claim the target is: ``depositor`` or ``chemkin_format``.
     """
 
     kind: ThermoTargetKind
     conformer_group_ref: str | None = None
+    declared_by: ThermoDeclarationSource
 
 
 class ThermoRecord(BaseModel):

@@ -258,15 +258,15 @@ class TestApprove:
         kinds = [e["event_kind"] for e in events]
         assert SubmissionAuditEventKind.curator_approved.value in kinds
 
-    def test_curator_who_is_creator_gets_400(
+    def test_curator_who_is_creator_gets_a_coded_403(
         self, client, db_session, _api_curator_user, login_as
     ):
         sub = _seed_submission(db_session, created_by=_api_curator_user)
         login_as(_api_curator_user)
 
         resp = client.post(f"/api/v1/submissions/{sub.id}/approve")
-        assert resp.status_code == 400
-        assert "self" in resp.text.lower() or "uploader" in resp.text.lower()
+        assert resp.status_code == 403
+        assert resp.json()["code"] == "submission_self_approval"
 
     def test_double_approve_rejected(
         self, client, db_session, _api_test_user, _api_curator_user, login_as

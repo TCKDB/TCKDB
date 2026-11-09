@@ -10,6 +10,7 @@ not duplicate result rows.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 
 from .payloads import BuiltPayloads
@@ -28,6 +29,14 @@ def _reaction_key(payload: dict) -> str:
     )
     arrow = "=" if payload["reaction"].get("reversible") else ">"
     return f"{reactants}{arrow}{products}:{payload.get('model_kind', '')}"
+
+
+def _species_key_parts(kind: str, entry: dict) -> tuple:
+    """Key parts naming a species by structure and spin: SMILES, multiplicity, and charge when not zero."""
+    parts = [kind, _slug(entry["smiles"]), f"m{entry['multiplicity']}"]
+    if entry.get("charge"):
+        parts.append(f"q{entry['charge']}")
+    return tuple(parts)
 
 
 @dataclass
@@ -110,13 +119,27 @@ def upload_payloads(
                 RecordResult(kind=kind, key=key, ok=False, error=str(exc))
             )
 
-    for payload in payloads.thermo:
-        smiles = payload["species_entry"]["smiles"]
-        _send("thermo", "/uploads/thermo", payload, ["thermo", _slug(smiles)])
-
-    for payload in payloads.transport:
-        smiles = payload["species_entry"]["smiles"]
-        _send("transport", "/uploads/transport", payload, ["transport", _slug(smiles)])
+    # Species records are keyed by SMILES, multiplicity and charge; species sharing all three use their CHEMKIN label.
+    for kind, endpoint, items, names in (
+        ("thermo", "/uploads/thermo", payloads.thermo, getattr(payloads, "thermo_names", [])),
+        ("transport", "/uploads/transport", payloads.transport, getattr(payloads, "transport_names", [])),
+    ):
+        base_keys = [_species_key_parts(kind, payload["species_entry"]) for payload in items]
+        shared = {key for key, n in Counter(base_keys).items() if n > 1}
+        for index, (payload, base) in enumerate(zip(items, base_keys)):
+            parts = list(base)
+            if base in shared:
+                if index >= len(names):
+                    raise ValueError(
+                        f"two {kind} records share structure and spin {base[1:]} and the CHEMKIN labels needed to "
+                        "tell them apart were not supplied"
+                    )
+                parts.append(_slug(names[index]))
+                report.warnings.append(
+                    f"Species sharing SMILES and multiplicity {base[1:]} are keyed by their CHEMKIN label "
+                    f"({names[index]}) for {kind}."
+                )
+            _send(kind, endpoint, payload, parts)
 
     seen: dict[str, int] = {}
     for payload in payloads.kinetics:

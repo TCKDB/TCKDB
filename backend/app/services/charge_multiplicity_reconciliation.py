@@ -208,8 +208,11 @@ def parse_charge_multiplicity_from_log(
         charge, multiplicity = _parse_orca(text)
     elif software == "psi4":
         charge, multiplicity = _parse_psi4(text)
-    else:  # gaussian
+    elif software == "gaussian":
         charge, multiplicity = _parse_gaussian(text)
+    else:
+        # xtb: recognised, not parsed.
+        return None
 
     # A multiplicity below 1 is unphysical (2S+1 >= 1, mirrored by the
     # ``multiplicity_ge_1`` check constraint on the entry tables): a parse

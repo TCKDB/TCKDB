@@ -51,6 +51,8 @@ READING_ORDER: tuple[str, ...] = (
     "Energy comparison",
     "Evidence a result rests on",
     "Declared against the uploaded evidence",
+    "Thermo declarations",
+    "Hessian method of a stored tolerance",
 )
 
 

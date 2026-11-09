@@ -231,6 +231,9 @@ class ThermoSelectionCandidate(CandidateEligibility):
     phase: str | None = None
     enthalpy_reference_kind: str | None = None
     target_kind: str | None = None
+    target_declared_by: str | None = Field(
+        default=None, description="Whose claim the target is (depositor or chemkin_format); null when no target is declared."
+    )
     target_group_ref: str | None = None
     protocol_state: str = Field(description="absent, valid or unreadable. Absent is 'not stated', never 'standard'.")
     protocol: dict[str, Any] | None = None

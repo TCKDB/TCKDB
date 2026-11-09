@@ -280,14 +280,15 @@ def test_meta_hybrids_never_get_the_analytic_assumption_on_old_or_unknown_orca(m
 
 
 # ---------------------------------------------------------------------------
-# Gaussian double hybrids: not settled by the Gaussian documentation we can read,
-# so nothing is assumed (ARC's table agrees for the names below).
+# Gaussian double hybrids: only B2PLYP[D(3)] and mPW2PLYP[D] are documented analytic
+# (G09 MP-methods page); every other double hybrid assumes nothing. See also
+# test_assumed_tau_manual_cases.py.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
     "method",
-    ["DSD-BLYP", "DSDPBEP86", "revDSD-PBEP86-D4", "PWPB95", "PBE-QIDH", "PBE0-DH", "B2GPPLYP", "wB97X-2", "B2PLYP", "B2PLYP-D3", "mPW2PLYP"],
+    ["DSD-BLYP", "DSDPBEP86", "revDSD-PBEP86-D4", "PWPB95", "PBE-QIDH", "PBE0-DH", "B2GPPLYP", "wB97X-2"],
 )
 def test_gaussian_double_hybrids_get_no_assumption(method) -> None:
     resolved = resolve_tau_with_assumption([], "Gaussian", method)
@@ -322,9 +323,17 @@ def test_orca_double_hybrids_reach_the_numerical_row_on_every_version(method) ->
         assert resolved.basis is TauBasis.assumed_finite_difference_gradient, (method, version)
 
 
+_GAUSSIAN_DOCUMENTED_DOUBLE_HYBRIDS = {"mPW2PLYP", "B2PLYP", "B2PLYP-D3"}
+
+
 @pytest.mark.parametrize("method", _DOUBLE_HYBRIDS)
 def test_gaussian_double_hybrids_get_no_assumption_by_name(method) -> None:
-    assert resolve_tau_with_assumption([], "Gaussian", method).basis is TauBasis.protocol_not_recorded
+    expected = (
+        TauBasis.assumed_analytic_default
+        if method in _GAUSSIAN_DOCUMENTED_DOUBLE_HYBRIDS
+        else TauBasis.protocol_not_recorded
+    )
+    assert resolve_tau_with_assumption([], "Gaussian", method).basis is expected
 
 
 @pytest.mark.parametrize("method", ["mPW1B95", "BB1K", "mPWB1K", "mPW1KCIS"])

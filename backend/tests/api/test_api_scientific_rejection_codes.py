@@ -1411,6 +1411,8 @@ PROVED_IN: dict[str, str] = {
     "unsupported_reaction_molecularity": "api/test_api_untested_refusals_tier_de.py",
     "atom_map_without_transition_state": "api/test_api_untested_refusals_tier_de.py",
     "atom_map_participant_not_declared": "api/test_api_untested_refusals_tier_de.py",
+    "thermo_declared_by_target_incoherent": "api/test_api_thermo_declarations.py",
+    "thermo_declared_by_record_incoherent": "api/test_api_thermo_declarations.py",
     "scf_stability_source_cycle": "api/test_api_bundle_extras_622_sources.py",
     "transition_state_calculation_species_geometry": "api/test_api_calculation_geometry_conformer_agreement.py",
     "thermo_source_role_type_mismatch": "api/test_api_upload_key_and_role_contracts.py",
