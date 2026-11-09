@@ -22,6 +22,12 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## An over-limit body gets a coded 413; a 422 does not echo the body (2026-11-09)
+
+- **Behaviour:** the frontend nginx answers a body over its cap (100 MiB on `/api/v1/uploads/`, `/api/v1/jobs/` and `/api/v1/calculations/<ref>/artifacts`, 10 MiB on other `/api/` routes) with `413 request_body_too_large` as JSON in the API's error envelope (`context.max_bytes` is the cap), instead of a bare HTML page. A request-validation 422 no longer carries the caller's value under each error's `input` or in its message. `tckdb-client` explains a 413 that carries no TCKDB code.
+- **Schema and migration:** none. The nginx change needs a frontend image deploy.
+- **Versions:** `tckdb-schemas` 0.170.0, `tckdb-client` 0.199.0.
+
 ## Deposit warnings are retired when later events make them untrue (2026-11-09)
 
 - A warning whose condition stops holding is retired, not deleted: the append-only table `deposit_warning_retirement` records when and why, and the warning row stays.

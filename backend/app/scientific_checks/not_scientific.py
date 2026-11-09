@@ -58,6 +58,7 @@ NOT_SCIENTIFIC: dict[str, str] = {
     'ambiguous_conformer_selection_locator': 'A selection locator that matches more than one selection; reference resolution.',
     'ambiguous_energy_correction_scheme_without_literature': 'Provenance hygiene: an energy-correction scheme with no literature.',
     'anonymous_body_too_large': _R03,
+    'request_body_too_large': _R03,
     'applied_energy_correction_source_key_undeclared': _R11,
     'archive_release_artifacts_differ': _R05,
     'archive_unreadable': _R05,

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.170.0 - 2026-11-09
+
+One refusal code is added: `request_body_too_large` (413). The frontend proxy answers a body over its size cap (100 MiB on the upload, job and calculation-artifact routes, 10 MiB on other `/api/` routes) with this code and `context.max_bytes`, where it sent a bare HTML page. A request-validation 422 no longer echoes the request body under each error's `input`. No model or payload shape changed.
+
 ## 0.169.0 - 2026-11-09
 
 The deposit-warning item on scientific reads gains optional `retired_at` and `retired_reason`, set only for curators and admins reading a retired warning (`artifact_attached`, `single_point_deposited`, `hessian_stored`, `superseded_by_recheck`). Other readers get current warnings only and never receive the keys. No field is removed.

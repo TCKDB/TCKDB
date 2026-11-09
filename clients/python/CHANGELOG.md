@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.199.0 - 2026-11-09
+
+A 413 with no TCKDB code (an HTML page from a proxy or edge, or an empty body) raises `TCKDBHTTPError` with a message that the body was too large for the server or a proxy, that the refusal did not state its limit, that behind Cloudflare Free/Pro it is 100,000,000 bytes (about 71.5 MiB of files after base64), and to send files separately (`upload_artifacts`) or split the deposit. A coded 413 keeps its code and message. `RejectionCode.REQUEST_BODY_TOO_LARGE` is added. The `tckdb-schemas` window is `>=0.158,<0.171`.
+
 ## 0.198.0 - 2026-11-09
 
 No client code changed. The `tckdb-schemas` window moves to `>=0.158,<0.170` to contain 0.169.

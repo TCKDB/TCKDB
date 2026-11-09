@@ -131,3 +131,50 @@ def test_error_carries_response_text_for_non_json() -> None:
     assert info.value.status_code == 502
     assert info.value.response_text == "Bad Gateway"
     assert info.value.response_json is None
+
+
+# --- 413: say what happened when no TCKDB code arrives --------------------
+
+_EDGE_HTML = "<html><body><h1>413 Request Entity Too Large</h1><p>edge page</p></body></html>"
+
+
+def _post_413(response: httpx.Response) -> TCKDBHTTPError:
+    client, _ = make_client(lambda request: response)
+    with pytest.raises(TCKDBHTTPError) as info:
+        client.post_json("/uploads/computed-species", {"a": 1})
+    return info.value
+
+
+def test_html_413_explains_the_size_limit() -> None:
+    error = _post_413(httpx.Response(413, text=_EDGE_HTML, headers={"content-type": "text/html"}))
+    assert error.status_code == 413
+    assert error.code is None
+    message = str(error)
+    assert "too large" in message and "proxy" in message
+    assert "did not state its limit" in message
+    assert "100,000,000 bytes" in message and "71.5 MiB" in message
+    assert "upload_artifacts" in message and "inline_artifacts" not in message
+    assert "hosted" not in message
+    assert "edge page" not in message  # nothing from the body
+    assert error.response_text == _EDGE_HTML  # the raw page is still on the exception
+
+
+def test_empty_413_explains_the_size_limit() -> None:
+    error = _post_413(httpx.Response(413))
+    assert error.code is None
+    assert "too large" in str(error) and "100,000,000 bytes" in str(error)
+
+
+@pytest.mark.parametrize(
+    "code",
+    ["request_body_too_large", "anonymous_body_too_large", "bundle_too_large"],
+)
+def test_coded_413_keeps_its_code_and_message(code: str) -> None:
+    error = _post_413(
+        _json_response(
+            413,
+            {"code": code, "detail": f"server words for {code}", "context": {"max_bytes": 5}},
+        )
+    )
+    assert error.code == code
+    assert str(error) == f"server words for {code}"

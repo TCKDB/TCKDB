@@ -169,6 +169,18 @@ class DataIntegrityError(Exception):
     """
 
 
+def _detail_without_input(exc: ValueError, errors: object) -> str:
+    """``str(exc)`` rebuilt from each error's loc, msg and type, without pydantic's ``input_value``."""
+    if not (isinstance(errors, list) and errors and all(isinstance(e, dict) for e in errors)):
+        return str(exc)
+    lines = [f"{len(errors)} validation error{'s' if len(errors) != 1 else ''}"]
+    for error in errors:
+        loc = ".".join(str(part) for part in error.get("loc", ()))
+        lines.append(loc or "(root)")
+        lines.append(f"  {error.get('msg', '')} [type={error.get('type', '')}]")
+    return "\n".join(lines)
+
+
 def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
     # ``CodedValueError`` is the backend subclass; a wire-schema check raises
     # the base directly, because ``tckdb_schemas`` may not import ``app``.
@@ -184,7 +196,7 @@ def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
             exc.errors() if callable(getattr(exc, "errors", None)) else str(exc)
         )
         content = error_envelope(
-            str(exc),
+            _detail_without_input(exc, validation_detail),
             code=validation_detail_code(
                 validation_detail, fallback="validation_error"
             ),
@@ -197,7 +209,11 @@ def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
 def _request_validation_error_handler(
     _request: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    details = exc.errors()
+    # Drop pydantic's echo of the caller's value; ``loc`` says where the problem is.
+    details = [
+        {key: value for key, value in error.items() if key != "input"}
+        for error in exc.errors()
+    ]
     return JSONResponse(
         status_code=422,
         content=jsonable_encoder(

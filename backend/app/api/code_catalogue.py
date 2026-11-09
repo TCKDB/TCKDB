@@ -1009,6 +1009,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "Content-Length, given_bytes. Not applied to the selected-network-export route, which keeps "
                 "network_export_body_too_large."
             )),
+    ApiCode("request_body_too_large", 413, Surface.response_literal,
+            "backend/app/api/proxy_body_limit.py",
+            shape=Shape.relationship,
+            note=(
+                "Not raised by the API: written by the frontend nginx (frontend/nginx.conf) when a body is over its "
+                "client_max_body_size, 100m on the upload, job and calculation-artifact routes and 10m on every other "
+                "/api/ route, before the request reaches the API. The envelope is hand-written in the config; "
+                "proxy_body_limit.py describes it and a test pins the two together. context carries max_bytes, the cap "
+                "of the route that refused. The API's own 413s keep their codes. Cloudflare's 100,000,000-byte edge "
+                "limit answers with its own HTML page and no code."
+            )),
     ApiCode("bundle_too_large", 413, Surface.response_literal,
             "backend/app/api/bundle_limits.py",
             shape=Shape.relationship,
