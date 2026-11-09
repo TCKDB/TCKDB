@@ -146,10 +146,10 @@ def build_upload(artifact_paths: dict[str, Path]) -> ComputedReactionUpload:
     )
 
     # --- Attach artifacts ---------------------------------------------
-    # ``add_artifact`` is local-only metadata; the bundle's to_payload()
-    # does not embed bytes. The second-phase ``client.upload_artifacts``
-    # call later in :func:`main` ships the files once the server has
-    # assigned ``calculation.id`` values.
+    # ``add_artifact`` records the file; to_payload() embeds it unless
+    # inline_artifacts=False, which this demo sets to show the second-phase
+    # path: the ``client.upload_artifacts`` call in :func:`main` ships the
+    # files once the server has assigned ``calculation.id`` values.
     ts_opt.add_artifact(artifact_paths["ts_opt"], kind="output_log")
     ch4_sp.add_artifact(artifact_paths["ch4_sp"], kind="output_log")
 
@@ -186,6 +186,7 @@ def build_upload(artifact_paths: dict[str, Path]) -> ComputedReactionUpload:
 
     return ComputedReactionUpload(
         reaction=rxn,
+        inline_artifacts=False,  # this demo walks the two-phase path
         calculations=[ts_opt, ts_freq, ts_sp],
         species_calculations={
             ch3: [ch3_opt, ch3_freq, ch3_sp],

@@ -145,10 +145,12 @@ for diag in upload.emission_diagnostics():
 
 # 5. Upload the scientific payload.
 with TCKDBClient(base_url, api_key=api_key) as client:
-    result = client.upload(upload, warn_on_dropped_fields=True)
+    payload = upload.to_payload()   # reads the attached files once
+    result = client.upload(upload.upload_kind, payload)
 
-# 6. Upload artifacts in the second phase.
-    plan = upload.artifact_plan(result)
+# 6. Upload whatever did not go inline (usually nothing). Pass the
+#    posted payload so the plan matches what was actually sent.
+    plan = upload.artifact_plan(result, payload)
     client.upload_artifacts(plan, idempotency_key_prefix="my-adapter:")
 ```
 
@@ -239,14 +241,19 @@ Full design rationale and rejected alternatives:
 ## 7. Artifacts
 
 Artifacts (input decks, output logs, checkpoint files, scan
-tables) ride a **two-phase** flow:
+tables) are sent **inline** with the upload by default. Only files that
+do not fit the inline budget (64 MiB of files per upload), or all of
+them with `inline_artifacts=False`, need a second phase:
 
 ```python
-# Phase 1 — scientific payload only (no artifact bytes).
-result = client.upload(upload, warn_on_dropped_fields=True)
+# The upload carries the attached files inline.
+payload = upload.to_payload()
+result = client.upload(upload.upload_kind, payload)
 
-# Phase 2 — artifact bytes, once the server has assigned calc IDs.
-plan = upload.artifact_plan(result)
+# The second phase covers only what did not go inline (empty for a
+# normal deposit). Pass the posted payload: without it the plan is
+# recomputed from the files on disk and can disagree if one changed.
+plan = upload.artifact_plan(result, payload)
 
 # Easiest to debug: one artifact per POST.
 client.upload_artifacts(plan, idempotency_key_prefix="my-adapter:run-42")
@@ -262,8 +269,9 @@ client.upload_artifacts(
 
 Key facts:
 
-- Artifacts are **not embedded** in the scientific payload. Phase 1
-  ships structured data; phase 2 ships bytes.
+- Artifacts are embedded in the scientific payload by default, so a file
+  the server refuses (or a storage outage) refuses the whole deposit;
+  `inline_artifacts=False` restores the split, where it fails alone.
 - Artifacts preserve the **original files** for auditability —
   workflow logs, conformer-search histories, raw deck text, etc.
   The conformer-boundary policy (§3) explicitly relies on this:

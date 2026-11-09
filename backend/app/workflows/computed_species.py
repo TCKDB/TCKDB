@@ -387,7 +387,6 @@ def persist_computed_species_upload(
         conformer_group, fingerprint, scheme = resolve_conformer_group(
             session,
             species_entry,
-            label=conf_in.label,
             created_by=created_by,
             smiles=request.species_entry.smiles,
             xyz_atoms=parsed.atoms,

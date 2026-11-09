@@ -38,6 +38,7 @@ from typing import NoReturn
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
+from tckdb_schemas.coded_error import CodedValidationError
 
 from app.db.models.common import ArtifactIntegrityFinding, ArtifactKind
 
@@ -95,6 +96,8 @@ OUTPUT_LOG_SIGNATURES: dict[str, bytes] = {
     "nwchem": b"Northwest Computational Chemistry Package",
     "turbomole": b"TURBOMOLE",
     "cfour": b"CFOUR",
+    # xtb prints ``* xtb version 6.7.1 (...)`` under a boxed ``x T B`` banner.
+    "xtb": b"xtb version",
 }
 
 #: How many bytes to inspect for signature detection.
@@ -246,8 +249,11 @@ _TEXT_KINDS = {
 # ---------------------------------------------------------------------------
 
 
-class ArtifactValidationError(ValueError):
-    """Raised when an artifact fails validation."""
+class ArtifactValidationError(CodedValidationError):
+    """An artifact failed validation; carries a catalogue code and context."""
+
+    def __init__(self, *, code: str, detail: str, context: dict | None = None) -> None:
+        super().__init__(code, detail, context=context, message_prefix=False)
 
 
 class ArtifactStorageUnavailable(Exception):
@@ -577,26 +583,32 @@ def validate_artifact(
     # -- Size check --
     if len(content) > MAX_ARTIFACT_BYTES:
         raise ArtifactValidationError(
-            f"Artifact exceeds maximum size: {len(content):,} bytes "
-            f"(limit: {MAX_ARTIFACT_BYTES:,} bytes)."
+            code="artifact_too_large",
+            detail=(
+                f"Artifact exceeds maximum size: {len(content):,} bytes "
+                f"(limit: {MAX_ARTIFACT_BYTES:,} bytes)."
+            ),
+            context={"size_bytes": len(content), "limit_bytes": MAX_ARTIFACT_BYTES},
         )
 
     if len(content) == 0:
-        raise ArtifactValidationError("Artifact is empty (0 bytes).")
+        raise ArtifactValidationError(code="artifact_empty", detail="Artifact is empty (0 bytes).")
 
     # -- Integrity check --
     computed_sha = hashlib.sha256(content).hexdigest()
 
     if declared_sha256 is not None and computed_sha != declared_sha256:
         raise ArtifactValidationError(
-            f"SHA-256 mismatch: declared {declared_sha256}, "
-            f"computed {computed_sha}."
+            code="artifact_sha256_mismatch",
+            detail=f"SHA-256 mismatch: declared {declared_sha256}, computed {computed_sha}.",
+            context={"declared_sha256": declared_sha256, "computed_sha256": computed_sha},
         )
 
     if declared_bytes is not None and len(content) != declared_bytes:
         raise ArtifactValidationError(
-            f"Size mismatch: declared {declared_bytes:,} bytes, "
-            f"actual {len(content):,} bytes."
+            code="artifact_size_mismatch",
+            detail=f"Size mismatch: declared {declared_bytes:,} bytes, actual {len(content):,} bytes.",
+            context={"declared_bytes": declared_bytes, "actual_bytes": len(content)},
         )
 
     # -- Text check for text-expected kinds --
@@ -605,8 +617,12 @@ def validate_artifact(
             content.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise ArtifactValidationError(
-                f"Artifact kind '{kind.value}' must be valid UTF-8 text, "
-                f"but the content contains invalid byte sequences."
+                code="artifact_not_utf8_text",
+                detail=(
+                    f"Artifact kind '{kind.value}' must be valid UTF-8 text, "
+                    f"but the content contains invalid byte sequences."
+                ),
+                context={"artifact_kind": kind.value},
             ) from exc
 
     # -- Output log signature check --
@@ -625,10 +641,14 @@ def _validate_output_log_signature(content: bytes) -> None:
 
     known = ", ".join(sorted(OUTPUT_LOG_SIGNATURES))
     raise ArtifactValidationError(
-        f"Output log does not match any known ESS signature in the "
-        f"first {_SIGNATURE_WINDOW} bytes. Supported: {known}. "
-        f"If this is a valid output file from a supported ESS, the "
-        f"signature detection may need updating."
+        code="output_log_signature_unrecognized",
+        detail=(
+            f"Output log does not match any known ESS signature in the "
+            f"first {_SIGNATURE_WINDOW} bytes. Supported: {known}. "
+            f"If this is a valid output file from a supported ESS, the "
+            f"signature detection may need updating."
+        ),
+        context={"supported": sorted(OUTPUT_LOG_SIGNATURES), "window_bytes": _SIGNATURE_WINDOW},
     )
 
 
@@ -641,8 +661,9 @@ def validate_total_upload_size(artifacts_bytes: list[int]) -> None:
     total = sum(artifacts_bytes)
     if total > MAX_TOTAL_UPLOAD_BYTES:
         raise ArtifactValidationError(
-            f"Total artifact upload size {total:,} bytes exceeds limit "
-            f"of {MAX_TOTAL_UPLOAD_BYTES:,} bytes."
+            code="artifact_total_size_too_large",
+            detail=f"Total artifact upload size {total:,} bytes exceeds limit of {MAX_TOTAL_UPLOAD_BYTES:,} bytes.",
+            context={"total_bytes": total, "limit_bytes": MAX_TOTAL_UPLOAD_BYTES},
         )
 
 
@@ -658,14 +679,22 @@ def validate_encoded_lengths(encoded_lengths: list[int]) -> None:
     for i, encoded_len in enumerate(encoded_lengths):
         if encoded_len > MAX_ENCODED_ARTIFACT_LEN:
             raise ArtifactValidationError(
-                f"Artifact {i} encoded payload is {encoded_len:,} chars; "
-                f"limit is {MAX_ENCODED_ARTIFACT_LEN:,} chars."
+                code="artifact_encoded_payload_too_large",
+                detail=(
+                    f"Artifact {i} encoded payload is {encoded_len:,} chars; "
+                    f"limit is {MAX_ENCODED_ARTIFACT_LEN:,} chars."
+                ),
+                context={"artifact_index": i, "encoded_chars": encoded_len, "limit_chars": MAX_ENCODED_ARTIFACT_LEN},
             )
     total = sum(encoded_lengths)
     if total > MAX_TOTAL_ENCODED_UPLOAD_LEN:
         raise ArtifactValidationError(
-            f"Total encoded artifact payload is {total:,} chars; "
-            f"limit is {MAX_TOTAL_ENCODED_UPLOAD_LEN:,} chars."
+            code="artifact_total_encoded_payload_too_large",
+            detail=(
+                f"Total encoded artifact payload is {total:,} chars; "
+                f"limit is {MAX_TOTAL_ENCODED_UPLOAD_LEN:,} chars."
+            ),
+            context={"total_chars": total, "limit_chars": MAX_TOTAL_ENCODED_UPLOAD_LEN},
         )
 
 

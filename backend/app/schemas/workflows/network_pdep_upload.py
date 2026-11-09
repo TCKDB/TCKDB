@@ -62,6 +62,7 @@ from tckdb_schemas.bundle_source_rules import (
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.enums import CalculationType as PayloadCalculationType
 from tckdb_schemas.fragments.calculation import SCFStabilityBase
+from tckdb_schemas.fragments.kinetics_bath_gas import check_bath_gas_mole_fraction_sum
 from tckdb_schemas.fragments.kinetics_evidence import (
     ENERGY_CORRECTION_CONVENTION_DESCRIPTION,
     ENERGY_ZERO_CONVENTION_DESCRIPTION,
@@ -1399,8 +1400,8 @@ class NetworkSolveIn(SchemaBase):
         # k(T,P) without stating the collider composition it was fitted in.
         # If it does name one, the composition still has to be a composition.
         if self.bath_gas or self.kind is NetworkSolveKind.computed:
-            if not math.isclose(sum(bg.mole_fraction for bg in self.bath_gas), 1.0, rel_tol=0.0, abs_tol=1e-9):
-                raise ValueError("bath_gas mole fractions must sum to 1.0 within 1e-9.")
+            # One rule, one code, one tolerance with a kinetics rate's bath gas.
+            check_bath_gas_mole_fraction_sum([bg.mole_fraction for bg in self.bath_gas], field="solve.bath_gas")
         keys = [item.state_key for item in self.state_energies]
         if len(keys) != len(set(keys)):
             raise ValueError("state_energies must be unique by state_key.")

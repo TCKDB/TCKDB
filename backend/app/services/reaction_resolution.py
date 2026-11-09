@@ -54,6 +54,7 @@ W_TRANSITION_STATE_CHARGE_MISMATCH = "transition_state_charge_mismatch"
 
 #: Raised when a stored SMILES cannot be parsed while balancing a reaction.
 W_STORED_SMILES_UNPARSEABLE = "stored_species_smiles_unparseable"
+W_REACTION_FAMILY_CONFLICT = "reaction_family_conflict"
 
 
 def compress_species_stoichiometry(
@@ -1084,6 +1085,37 @@ def resolve_reaction_family(
     )
 
 
+def _reaction_family_conflict(*, recorded: str | None, supplied: str | None) -> CodedValueError:
+    """The family-conflict refusal; a side that is ``None`` is depositor text and is not named."""
+    named = {key: value for key, value in (("recorded_family", recorded), ("supplied_family", supplied)) if value}
+    if recorded is not None and supplied is not None:
+        detail = (
+            f"This reaction is already recorded under reaction family {recorded!r}, but the deposit "
+            f"names {supplied!r}."
+        )
+    elif recorded is not None:
+        detail = (
+            f"This reaction is already recorded under reaction family {recorded!r}, but the deposit "
+            "names a family that is not in the seeded vocabulary."
+        )
+    elif supplied is not None:
+        detail = (
+            "This reaction is already recorded under a reaction family that is not in the seeded "
+            f"vocabulary, but the deposit names {supplied!r}."
+        )
+    else:
+        detail = (
+            "This reaction is already recorded under a different reaction family that is not in the "
+            "seeded vocabulary, and the deposit names another one."
+        )
+    return CodedValueError(
+        W_REACTION_FAMILY_CONFLICT,
+        detail + " A reaction has one family; deposit it under the recorded family.",
+        context=named,
+        message_prefix=False,
+    )
+
+
 def _resolve_chem_reaction(
     session: Session,
     *,
@@ -1135,24 +1167,26 @@ def _resolve_chem_reaction(
         )
     )
     if chem_reaction is not None:
+        recorded_seeded = chem_reaction.reaction_family
+        recorded_raw = chem_reaction.reaction_family_raw
         if resolved_reaction_family is not None:
-            if chem_reaction.reaction_family_id is None:
+            if recorded_seeded is None and recorded_raw is None:
                 chem_reaction.reaction_family = resolved_reaction_family
-            elif chem_reaction.reaction_family_id != resolved_reaction_family.id:
-                raise ValueError(
-                    "Resolved reaction already has a different reaction_family: "
-                    f"{chem_reaction.reaction_family.name!r} != "
-                    f"{resolved_reaction_family.name!r}."
+            elif recorded_seeded is None or recorded_seeded.id != resolved_reaction_family.id:
+                # Recorded under another seeded family, or under depositor text. Only the
+                # seeded side is named.
+                raise _reaction_family_conflict(
+                    recorded=recorded_seeded.name if recorded_seeded is not None else None,
+                    supplied=resolved_reaction_family.name,
                 )
         elif reaction_family_raw is not None:
-            if chem_reaction.reaction_family_raw is None:
+            if recorded_seeded is not None:
+                raise _reaction_family_conflict(recorded=recorded_seeded.name, supplied=None)
+            if recorded_raw is None:
                 chem_reaction.reaction_family_raw = reaction_family_raw
                 chem_reaction.reaction_family_source_note = normalized_source_note
-            elif chem_reaction.reaction_family_raw != reaction_family_raw:
-                raise ValueError(
-                    "Resolved reaction already has a different raw reaction_family: "
-                    f"{chem_reaction.reaction_family_raw!r} != {reaction_family_raw!r}."
-                )
+            elif recorded_raw != reaction_family_raw:
+                raise _reaction_family_conflict(recorded=None, supplied=None)
             elif (
                 chem_reaction.reaction_family_source_note is None
                 and normalized_source_note is not None
