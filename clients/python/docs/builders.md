@@ -251,8 +251,12 @@ of decoded files):
 - `ComputedSpeciesUpload(..., inline_artifacts=False)` (also on
   `ComputedReactionUpload`) defers every file to that second request.
 - `artifact_plan(result, payload)` takes the dict you posted and skips the
-  files in it; without `payload` it recomputes the same choice from the
-  builders and the files, so a copy or a rebuilt builder gives the same plan.
+  files in it (matched on calculation, kind, filename and content, so two
+  different files with one name on a calculation are told apart). **Pass it
+  whenever files may change after posting**: without `payload` the plan is
+  recomputed from the builders and the files on disk, which can disagree with
+  what was posted (a file that shrank, so a deferred checkpoint now fits and
+  is never uploaded).
 
 A file the server refuses now refuses the whole deposit, because the files
 travel with the science: an `output_log` from a program the server does not
@@ -272,8 +276,9 @@ the server has assigned `calculation.id` values. After an inline upload,
 `artifact_plan(result)` is empty and there is nothing to do.
 
 ```python
-result = client.upload(upload)                  # phase 1: scientific bundle
-plan   = upload.artifact_plan(result)           # resolve calc keys → ids
+payload = upload.to_payload()                   # reads the attached files once
+result  = client.upload(upload.upload_kind, payload)   # the scientific bundle
+plan    = upload.artifact_plan(result, payload) # what did not go inline → ids
 
 # Simple and easiest to debug: one POST per artifact.
 client.upload_artifacts(plan, idempotency_key_prefix="my-run:2026-05-16")

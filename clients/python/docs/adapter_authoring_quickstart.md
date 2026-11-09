@@ -145,10 +145,12 @@ for diag in upload.emission_diagnostics():
 
 # 5. Upload the scientific payload.
 with TCKDBClient(base_url, api_key=api_key) as client:
-    result = client.upload(upload, warn_on_dropped_fields=True)
+    payload = upload.to_payload()   # reads the attached files once
+    result = client.upload(upload.upload_kind, payload)
 
-# 6. Upload artifacts in the second phase.
-    plan = upload.artifact_plan(result)
+# 6. Upload whatever did not go inline (usually nothing). Pass the
+#    posted payload so the plan matches what was actually sent.
+    plan = upload.artifact_plan(result, payload)
     client.upload_artifacts(plan, idempotency_key_prefix="my-adapter:")
 ```
 
@@ -245,11 +247,13 @@ them with `inline_artifacts=False`, need a second phase:
 
 ```python
 # The upload carries the attached files inline.
-result = client.upload(upload, warn_on_dropped_fields=True)
+payload = upload.to_payload()
+result = client.upload(upload.upload_kind, payload)
 
 # The second phase covers only what did not go inline (empty for a
-# normal deposit).
-plan = upload.artifact_plan(result)
+# normal deposit). Pass the posted payload: without it the plan is
+# recomputed from the files on disk and can disagree if one changed.
+plan = upload.artifact_plan(result, payload)
 
 # Easiest to debug: one artifact per POST.
 client.upload_artifacts(plan, idempotency_key_prefix="my-adapter:run-42")

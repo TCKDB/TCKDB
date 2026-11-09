@@ -16,6 +16,7 @@ from tckdb_client.builders.artifact import (
     Artifact,
     PlannedArtifactUpload,
     artifact_wire,
+    file_sha256,
     plan_inline_artifacts,
     posted_artifact_keys,
 )
@@ -368,9 +369,11 @@ class ComputedSpeciesUpload:
         the second-phase uploads.
 
         ``payload`` is the dict you posted (``to_payload()``): files already
-        present in it are skipped. Without it the same choice is recomputed
-        from the builders and the files on disk, so a copy of the builders
-        gives the same plan; no state is kept from ``to_payload()``.
+        present in it (matched on calculation, kind, filename and content) are
+        skipped. **Pass it whenever the files may change after posting.**
+        Without it the choice is recomputed from the builders and the files on
+        disk, which can disagree with what was posted if a file was edited in
+        between; no state is kept from ``to_payload()``.
 
         Raises :class:`TCKDBBuilderValidationError` when:
 
@@ -589,7 +592,10 @@ def _inline_skip(
     """
     if payload is not None:
         present = posted_artifact_keys(payload)
-        return lambda key, art: (key, art.kind, art.path.name) in present
+        # Matched on content too: two files with one name and kind on a
+        # calculation are different artifacts. A file that cannot be read, or
+        # that changed since it was posted, is not assumed to be in the payload.
+        return lambda key, art: (key, art.kind, art.path.name, file_sha256(art.path) or "-") in present
     if not inline_artifacts:
         return lambda key, art: False
     try:
@@ -1774,9 +1780,11 @@ class ComputedReactionUpload:
         """Resolve attached artifacts against the server upload result.
 
         Lists only files that did not go inline. ``payload`` is the dict you
-        posted (``to_payload()``): files already present in it are skipped.
-        Without it the same choice is recomputed from the builders and the
-        files on disk, so a copy of the builders gives the same plan.
+        posted (``to_payload()``): files already present in it (matched on
+        calculation, kind, filename and content) are skipped. **Pass it
+        whenever the files may change after posting.** Without it the choice
+        is recomputed from the builders and the files on disk, which can
+        disagree with what was posted if a file was edited in between.
 
         Requires the computed-reaction response to expose the
         ``calculation_keys: dict[str, int]`` field (added as a

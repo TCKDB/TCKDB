@@ -258,13 +258,23 @@ def plan_inline_artifacts(calculations: Iterable[Any]) -> set[int]:
     return chosen
 
 
-def posted_artifact_keys(payload: Any) -> set[tuple[str, str, str]]:
-    """``(calculation key, kind, filename)`` of every artifact already inline in ``payload``.
+def file_sha256(path: Path) -> str | None:
+    """SHA-256 hex of the file's bytes, or ``None`` if it cannot be read."""
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
 
-    Walks a payload built by ``to_payload()`` (either upload class): any dict
-    with a ``key`` and an ``artifacts`` list is a calculation.
+
+def posted_artifact_keys(payload: Any) -> set[tuple[str, str, str, str]]:
+    """``(calculation key, kind, filename, sha256)`` of every artifact already inline in ``payload``.
+
+    The hash is of the decoded ``content_base64``, so two different files that
+    share a name and kind on one calculation are told apart. Walks a payload
+    built by ``to_payload()`` (either upload class): any dict with a ``key``
+    and an ``artifacts`` list is a calculation.
     """
-    found: set[tuple[str, str, str]] = set()
+    found: set[tuple[str, str, str, str]] = set()
 
     def walk(node: Any) -> None:
         if isinstance(node, dict):
@@ -272,7 +282,11 @@ def posted_artifact_keys(payload: Any) -> set[tuple[str, str, str]]:
             if isinstance(node.get("key"), str) and isinstance(arts, list):
                 for a in arts:
                     if isinstance(a, dict):
-                        found.add((node["key"], str(a.get("kind")), str(a.get("filename"))))
+                        try:
+                            digest = hashlib.sha256(base64.b64decode(a.get("content_base64") or "")).hexdigest()
+                        except ValueError:
+                            digest = ""
+                        found.add((node["key"], str(a.get("kind")), str(a.get("filename")), digest))
             for v in node.values():
                 walk(v)
         elif isinstance(node, list):

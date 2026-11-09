@@ -457,8 +457,9 @@ described below.
 Resolution at upload time:
 
 ```python
-result = client.upload(upload)            # phase 1: scientific bundle
-plan   = upload.artifact_plan(result)     # list[PlannedArtifactUpload]
+payload = upload.to_payload()
+result  = client.upload(upload.upload_kind, payload)   # the scientific bundle
+plan    = upload.artifact_plan(result, payload)  # list[PlannedArtifactUpload]
 
 # Default — one POST per artifact, easiest to debug.
 client.upload_artifacts(plan)
