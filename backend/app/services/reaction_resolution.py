@@ -1086,11 +1086,7 @@ def resolve_reaction_family(
 
 
 def _reaction_family_conflict(*, recorded: str | None, supplied: str | None) -> CodedValueError:
-    """The refusal for a reaction deposited under a family other than the one it is recorded under.
-
-    A family is named only when it is a seeded ``reaction_family`` name; ``None`` means that side is
-    depositor text (``reaction_family_raw``), which is never repeated back as TCKDB's words.
-    """
+    """The family-conflict refusal; a side that is ``None`` is depositor text and is not named."""
     named = {key: value for key, value in (("recorded_family", recorded), ("supplied_family", supplied)) if value}
     if recorded is not None and supplied is not None:
         detail = (

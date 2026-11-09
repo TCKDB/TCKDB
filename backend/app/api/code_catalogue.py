@@ -2276,10 +2276,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship,
             note=(
                 "The deposit resolves to a stored reaction recorded under a different reaction "
-                "family. Refused, as before; whether a disagreement should be recorded as a "
-                "warning instead is an open owner question. context carries recorded_family and "
-                "supplied_family only when both are seeded vocabulary names; depositor-supplied "
-                "family text is never echoed."
+                "family. context carries recorded_family and supplied_family only for a side that "
+                "is a seeded vocabulary name; depositor-supplied family text is never echoed."
             )),
     ApiCode("reaction_mass_balance_failed", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py",

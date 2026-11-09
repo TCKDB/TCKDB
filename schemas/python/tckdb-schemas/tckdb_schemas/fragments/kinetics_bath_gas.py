@@ -72,16 +72,7 @@ class BundleKineticsBathGasIn(SchemaBase):
 
 
 def check_bath_gas_mole_fraction_sum(mole_fractions: Sequence[float], *, field: str = "bath_gas") -> None:
-    """Refuse mole fractions that do not sum to 1 within :data:`BATH_GAS_SUM_TOLERANCE`.
-
-    The one rule for every bath gas, a kinetics rate's and a network solve's alike. An empty
-    sequence sums to 0 and is refused here; callers that treat an empty bath gas as "not stated"
-    must not call this for it.
-
-    :param mole_fractions: The components' mole fractions.
-    :param field: Field path the refusal names.
-    :raises CodedValidationError: ``kinetics_bath_gas_mole_fraction_sum``.
-    """
+    """Raise ``kinetics_bath_gas_mole_fraction_sum`` unless the fractions sum to 1 within the tolerance."""
     total = math.fsum(mole_fractions)
     if not math.isclose(total, 1.0, rel_tol=0.0, abs_tol=BATH_GAS_SUM_TOLERANCE):
         raise CodedValidationError(
