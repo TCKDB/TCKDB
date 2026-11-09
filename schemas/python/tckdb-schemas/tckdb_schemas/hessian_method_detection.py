@@ -404,6 +404,8 @@ def orca_numfreq_refines_gradient_to_energy(
     lot_method: str | None,
     recorded: HessianMethod | None,
     stated: HessianMethod | None,
+    *,
+    lacks_gradient: bool | None = None,
 ) -> bool:
     """True when a recorded ``finite_difference_gradient`` is refined to ``finite_difference_energy``, not contradicted.
 
@@ -417,7 +419,7 @@ def orca_numfreq_refines_gradient_to_energy(
         recorded is HessianMethod.finite_difference_gradient
         and stated is HessianMethod.finite_difference_energy
         and (software or "").strip().lower() == "orca"
-        and orca_lacks_analytic_gradient(lot_method)
+        and (orca_lacks_analytic_gradient(lot_method) if lacks_gradient is None else lacks_gradient)
     )
 
 
@@ -445,7 +447,12 @@ def orca_freq_hessian(keywords: Iterable[str]) -> tuple[str, HessianMethod] | No
         numgrad = first("numgrad")
         if numgrad is not None:
             return f"{numfreq} {numgrad}", HessianMethod.finite_difference_energy
-        if any(orca_lacks_analytic_gradient(k) for k in written):
+        lowered = [k.lower() for k in written]
+        references = {k for k in lowered if k in ("uhf", "uks", "rohf")}
+        open_shell_mp2 = (
+            any(k.startswith("dlpno-mp2") for k in lowered) and bool(references)
+        ) or ("rohf" in references and any(k.startswith(("mp2", "ri-mp2")) for k in lowered))
+        if open_shell_mp2 or any(orca_lacks_analytic_gradient(k) for k in written):
             return numfreq, HessianMethod.finite_difference_energy
         return numfreq, HessianMethod.finite_difference_gradient
     anfreq = first("anfreq")
@@ -595,6 +602,7 @@ def check_recorded_method_agrees_with_deck(
     stated_in: str = "input",
     software: str | None = None,
     lot_method: str | None = None,
+    lacks_gradient: bool | None = None,
 ) -> None:
     """Refuse a recorded ``freq.hessian_method`` that the input deck (or the input a log echoes) contradicts.
 
@@ -635,7 +643,9 @@ def check_recorded_method_agrees_with_deck(
         exact = None
     if recorded_class == deck_class and (exact is None or exact is deck_method):
         return
-    if orca_numfreq_refines_gradient_to_energy(software, lot_method, exact, deck_method):
+    if orca_numfreq_refines_gradient_to_energy(
+        software, lot_method, exact, deck_method, lacks_gradient=lacks_gradient
+    ):
         # Not a contradiction: ORCA's NumFreq differences gradients, which for this method are numerical. The
         # stored tau is refined to the energy basis and a ``hessian_method_refined`` warning says so.
         return

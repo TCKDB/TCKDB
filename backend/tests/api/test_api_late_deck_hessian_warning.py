@@ -163,7 +163,7 @@ def test_a_basis_that_rests_on_no_method_warns_nothing(client, db_session):
     assert _CODE not in {w["code"] for w in resp.json()["warnings"]}
 
 
-_ORCA_NUMFREQ_NUMGRAD = "! CCSD def2-SVP NumFreq NumGrad\n* xyz 0 2\nH 0 0 0\n*\n"
+_ORCA_NUMFREQ_NUMGRAD = "! MP2 def2-SVP NumFreq NumGrad\n* xyz 0 2\nH 0 0 0\n*\n"
 
 
 def test_gradient_against_energy_names_both_methods(client, db_session):
@@ -189,6 +189,23 @@ def test_gradient_against_energy_names_both_methods(client, db_session):
     (item,) = _read_codes(client, calc)
     assert "finite_difference_gradient" in item["message"] and "finite_difference_energy" in item["message"]
     assert " a analytic" not in item["message"]
+
+
+def test_coupled_cluster_is_stored_at_the_energy_basis_and_a_late_numfreq_deck_agrees(client, db_session):
+    """ORCA CCSD has no analytic gradient: assumed energies, so a later NumFreq deck (read as energies) agrees."""
+    payload = _payload(imag_freq_cm1=-40.0, label="late-cc-energy", software={"name": "ORCA", "version": "6.0.1"})
+    payload["additional_calculations"][0]["level_of_theory"] = {"method": "CCSD", "basis": "def2-SVP"}
+    resp = client.post("/api/v1/uploads/conformers", json=payload)
+    assert resp.status_code == 201, resp.text
+    freq = db_session.scalars(
+        select(CalculationFreqResult).order_by(CalculationFreqResult.calculation_id.desc())
+    ).first()
+    calc = db_session.get(Calculation, freq.calculation_id)
+    assert freq.imaginary_mode_tau_basis == "assumed_finite_difference_energy"
+
+    for deck in ("! CCSD def2-SVP NumFreq\n* xyz 0 2\nH 0 0 0\n*\n", "! CCSD def2-SVP NumFreq NumGrad\n* xyz 0 2\nH 0 0 0\n*\n"):
+        resp = _upload_deck(client, calc, deck, "late.in")
+        assert _CODE not in {w["code"] for w in resp.json()["warnings"]}
 
 
 def test_a_failing_check_cannot_fail_the_artifact_upload(client, db_session, monkeypatch):

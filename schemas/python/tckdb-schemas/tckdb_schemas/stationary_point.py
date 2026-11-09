@@ -662,7 +662,7 @@ def _refinement_findings(tau: TauResolution | None, *, location: str) -> list[St
                 "recorded": tau.refined_from,
                 "stored_method": HessianMethod.finite_difference_energy.value,
                 "stored_basis": tau.basis.value,
-                "reason": "no_analytic_gradient",
+                "refined_because": "no_analytic_gradient",
             },
             message=(
                 f"{location}: the recorded Hessian method was refined from {tau.refined_from} to "

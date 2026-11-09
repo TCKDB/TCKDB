@@ -84,31 +84,31 @@ ORCA (``Software.name == "ORCA"``):
 * **Analytic** (`TauBasis.assumed_analytic_default`): HF, any DFT
   functional. ORCA computes analytic Hessians for both by default.
 * **Finite-difference-from-gradients**
-  (`TauBasis.assumed_finite_difference_gradient`): the MP2 variants
-  (MP2, RI-MP2, DLPNO-MP2, SCS-MP2). ORCA's default `NumFreq` differentiates
-  the analytic MP2 gradient. The analytic (RI-)MP2 Hessian exists only
-  without frozen core (ORCA 5.0.4 section 8.1.2.4: "Frequencies can be
-  calculated analytically in all-electron calculations. With frozen core
-  orbitals, second derivatives of any kind are currently only available
-  numerically"), and the 6.1 manual says "the analytical (RI-)MP2-Hessians
-  are no longer available". So "numerical on every version" holds for the
-  default, frozen-core job; an all-electron ORCA 5 MP2 job can be analytic and
-  that is not assumed here.
+  (`TauBasis.assumed_finite_difference_gradient`): the MP2 variants with an
+  analytic gradient (MP2 and RI-MP2 for RHF and UHF, closed-shell DLPNO-MP2,
+  SCS-MP2), and ORCA 6 ``AUTOCI-CCSD``, ``AUTOCI-CCSD(T)``, ``AUTOCI-MP2``, ``AUTOCI-MP3`` and ``AUTOCI-MP4`` without frozen core
+  and without RI. ORCA's `NumFreq` differentiates gradients. The analytic
+  (RI-)MP2 Hessian exists only without frozen core (ORCA 5.0.4 section 8.1.2.4:
+  "Frequencies can be calculated analytically in all-electron calculations.
+  With frozen core orbitals, second derivatives of any kind are currently only
+  available numerically") and was removed in 6.0 (changelog: "Removed the slow
+  and limited analytic (RI-)MP2 Hessian code"; 6.1 manual: "the analytical
+  (RI-)MP2-Hessians are no longer available"). So "numerical on every version"
+  holds for the default, frozen-core job; an all-electron ORCA 5 MP2 job can be
+  analytic and that is not assumed here. AUTOCI: see the source notes; the
+  version must be 6 or later and the level of theory must STATE
+  ``core_treatment`` all-electron and ``ri_approximation`` none, otherwise
+  nothing is assumed.
 * **Finite-difference-from-energies**
-  (`TauBasis.assumed_finite_difference_energy`): coupled cluster, which has
-  no analytic gradient behind the plain keyword: CCSD, CCSD(T), their F12
-  variants, F12-MP2 (including RI-MP2-F12), and DLPNO-CCSD / DLPNO-CCSD(T). The
-  ORCA 6.1 DLPNO section says "Analytic gradients are not available" (chunk
-  16228), which covers plain DLPNO-CCSD as well as DLPNO-CCSD(T). The ORCA 6.1 manual's example of a
-  method whose "analytic gradient is not available" is ``! CCSD(T)`` with
-  ``! Opt NumGrad`` (p. 224); its frequency section lists analytic frequencies
-  for "HF, DFT" only (p. 677); ORCA 5.0.4 says "Gradients are not available" for
-  F12 methods (F12-MP2 as well as F12 coupled cluster). So a frequency job differentiates numerical gradients, which
-  is finite differences of energies. ORCA 6.1 does have analytic CCSD and
-  CCSD(T) gradients behind the separate ``AUTOCI-`` keyword prefix (manual
-  section 3.11); that prefix is not recognised here, so such a method string gets no
-  assumption. Any other ``DLPNO-*`` string (DLPNO-CEPA and the like) has no
-  documented answer and gets no assumption.
+  (`TauBasis.assumed_finite_difference_energy`): methods with no analytic
+  gradient, so `NumFreq` differentiates numerical gradients: CCSD, CCSD(T),
+  every DLPNO coupled-cluster method, every F12 method (F12-MP2 included), and
+  open-shell DLPNO-MP2 and high-spin ROHF MP2. Any other ``DLPNO-*`` string
+  (DLPNO-CEPA and the like) has no documented answer and gets no assumption.
+  Open shell is read from what the level of theory states: ``spin_treatment``
+  unrestricted or restricted open, or a ``UHF`` / ``ROHF`` prefix on the
+  method. The species' multiplicity is not visible to this table, so an
+  unstated spin treatment on DLPNO-MP2 keeps the closed-shell (gradient) row.
 
 Why some things stay ``None``
 ------------------------------
@@ -134,6 +134,7 @@ from tckdb_schemas.hessian_method_detection import (
     check_recorded_method_agrees_with_deck,
     deck_hessian_method,
     echo_hessian_method,
+    orca_lacks_analytic_gradient,
     orca_numfreq_refines_gradient_to_energy,
 )
 from tckdb_schemas.hessian_method_reported import reported_method_of_artifacts
@@ -302,6 +303,8 @@ class MethodFamily:
     DLPNO_OTHER = "dlpno_other"
     #: F12-MP2 (ORCA): no analytic gradient.
     MP2_F12 = "mp2-f12"
+    #: ORCA 6 ``AUTOCI-CCSD`` and ``AUTOCI-CCSD(T)``: analytic gradients (no frozen core, no RI).
+    AUTOCI = "autoci"
 
 
 def is_dft_functional(method: str | None) -> bool:
@@ -390,6 +393,13 @@ def _cc_with_options(token: str) -> tuple[bool, str | None]:
     return True, MethodFamily.QCISD_T if triples else MethodFamily.QCISD
 
 
+#: ORCA 6 AUTOCI methods with an analytic gradient that the owner asked for (6.1 manual, AUTOCI method table: RHF and
+#: UHF CCSD, CCSD(T), MP2, MP3 and MP4 tick the Gradient column). Other AUTOCI- methods are not recognised.
+_AUTOCI_WITH_GRADIENT = frozenset({
+    "autoci-ccsd", "autoci-ccsd(t)", "autoci-mp2", "autoci-mp3", "autoci-mp4",
+})
+
+
 def classify_method_family(method: str | None) -> str | None:
     """Classify a free-text ``level_of_theory.method`` into a family.
 
@@ -430,9 +440,12 @@ def classify_method_family(method: str | None) -> str | None:
         return MethodFamily.MP5
     if _startswith_any(token, _MP3_PREFIXES):
         return MethodFamily.MP3
+    if token in _AUTOCI_WITH_GRADIENT:
+        return MethodFamily.AUTOCI
     if "f12" in token and "mp2" in token:
         return MethodFamily.MP2_F12
-    if _startswith_any(token, _MP2_PREFIXES):
+    spinless = re.sub(r"^(rohf|uhf|rhf)-", "", token)
+    if _startswith_any(spinless, _MP2_PREFIXES):
         return MethodFamily.MP2
     if is_dft_functional(token):
         return MethodFamily.DFT
@@ -510,12 +523,25 @@ _ORCA_FINITE_DIFFERENCE_ENERGY = frozenset({MethodFamily.CCSD, MethodFamily.CCSD
 #   frequencies for HF and DFT only; ORCA 5.0.4 8.1.3.6 says "Gradients are not
 #   available" for F12 methods (F12-MP2 too, so RI-MP2-F12 is in the energy
 #   row, not the MP2 row); ORCA 6.1 (chunk 16228) says "Analytic gradients are
-#   not available" for DLPNO, which covers plain DLPNO-CCSD. ORCA 5.0.4 8.3.2
-#   (chunk 13502) repeats the CCSD(T) / NumGrad example. Frequencies are therefore differences of
-#   numerical gradients: finite differences of energies. The AUTOCI- prefixed
-#   keywords (6.1, sections 3.11.2-3.11.3) have analytic CCSD/CCSD(T) gradients
-#   and so would be finite-difference-from-gradients; the plain keywords do not,
-#   and ``AUTOCI-*`` strings are not recognised, so they get no assumption.
+#   not available" for DLPNO; ORCA 5.0.4 8.3.2 (chunk 13502) repeats the
+#   CCSD(T) / NumGrad example. Frequencies are therefore differences of
+#   numerical gradients: finite differences of energies. Web check 2026-11-09
+#   (paper/notes/si_code_issues_2026-11-09/hessian_web_research.md, section 1):
+#   confirmed, from the ORCA 6.1 MDCI and Numerical Gradients pages.
+# * AUTOCI: ORCA 6.0 changelog lists "CCSD(T) gradients" under automatic code
+#   generation; 6.1 manual, AUTOCI "Analytic Nuclear Gradients": "The analytic
+#   gradients can even be used to perform semi-numerical frequency calculations"
+#   (``! AUTOCI-CCSD NumFreq``); the method table ticks Gradient for RHF and UHF
+#   CCSD and CCSD(T); "there is no frozen core options implemented yet"; the
+#   6.0.1 changelog aborts when RI is requested. The 6.1 changelog also fixes
+#   the UHF CCSD(T) gradient accuracy (missing disconnected 3rd and 4th order
+#   terms), so a UHF AUTOCI-CCSD(T) gradient from 6.0 is slightly wrong; the
+#   table still calls the Hessian one from gradients. Version-gated at 6 like
+#   meta-GGA; an unstated core treatment or RI approximation assumes nothing.
+# * open-shell MP2: ORCA 6.1 MP2 chapter, "The analytical gradient has been
+#   implemented for the RHF variant of the DLPNO-MP2 method. No gradient is
+#   presently implemented for the UHF-DLPNO-MP2 variant" and "for high-spin ROHF
+#   the gradients are not available". Web check section 2 (same note).
 #
 # * Gaussian double hybrids: the Gaussian 09 MP-methods keyword page
 #   ("MP2, B2PLYP[D], mPW2PLYP[D]: Energies, analytic gradients, and analytic
@@ -606,6 +632,7 @@ _FAMILY_LABEL: dict[str, str] = {
     MethodFamily.MP4: "MP4",
     MethodFamily.MP4_SDQ: "MP4(DQ/SDQ)",
     MethodFamily.MP2_F12: "F12-MP2",
+    MethodFamily.AUTOCI: "AUTOCI",
     MethodFamily.MP4_SDTQ: "MP4(SDTQ)",
     MethodFamily.MP5: "MP5",
     MethodFamily.CIS: "CIS",
@@ -679,8 +706,18 @@ def infer_hessian_method(
     software_name: str | None,
     method: str | None,
     software_version: str | None = None,
+    *,
+    spin_treatment: object = None,
+    core_treatment: object = None,
+    ri_approximation: object = None,
 ) -> TauResolution | None:
     """Assume a Hessian method's tau basis from software and LOT method.
+
+    ``spin_treatment``, ``core_treatment`` and ``ri_approximation`` are the level of theory's typed qualifiers (an
+    enum member or its string value); they are read only where the answer depends on them: ORCA open-shell DLPNO-MP2
+    and ROHF-MP2 (no analytic gradient), and ORCA 6 ``AUTOCI-CCSD`` / ``AUTOCI-CCSD(T)`` (analytic gradient only
+    without frozen core and without RI). A qualifier that is not stated never decides: the multiplicity of the
+    species is not visible here, so an unstated spin treatment on a DLPNO-MP2 job keeps the closed-shell row.
 
     Called only when the caller has already confirmed no
     ``freq.hessian_method`` was recorded for this calculation — this
@@ -720,6 +757,18 @@ def infer_hessian_method(
 
     version_rule = ""
     rule = "program_default"
+    if software_token == "gaussian" and (_normalize(method) or "").startswith("rohf-"):
+        return None  # Gaussian's restricted open-shell MP methods are energies only
+    if software_token == "orca" and family == MethodFamily.AUTOCI:
+        return _orca_autoci(software_version, core_treatment, ri_approximation)
+    if software_token == "orca" and family == MethodFamily.MP2 and _orca_mp2_without_gradient(
+        method, spin_treatment
+    ):
+        return _orca_numerical_from_energies(
+            family,
+            "orca_open_shell_no_gradient",
+            "ORCA has no analytic gradient for open-shell DLPNO-MP2 or for high-spin ROHF MP2",
+        )
     if (
         software_token == "gaussian"
         and family == MethodFamily.DFT
@@ -748,6 +797,8 @@ def infer_hessian_method(
 
     for families, basis in rows:
         if family in families:
+            if software_token == "orca" and basis is TauBasis.assumed_finite_difference_energy:
+                rule = "orca_no_analytic_gradient"
             tau_cm1 = _ASSUMED_TAU_BY_BASIS[basis]
             # The reason is TCKDB prose, shown on warnings and refusals.
             # It names the table's own canonical program and the method
@@ -771,6 +822,83 @@ def infer_hessian_method(
                 assumption_rule=rule,
             )
     return None
+
+
+def _token_value(value: object) -> str | None:
+    value = getattr(value, "value", value)
+    return value.strip().lower() if isinstance(value, str) and value.strip() else None
+
+
+def _orca_mp2_without_gradient(method: str | None, spin_treatment: object) -> bool:
+    """ORCA open-shell DLPNO-MP2, or high-spin ROHF MP2: no analytic gradient (ORCA 6.1 MP2 chapter).
+
+    "The analytical gradient has been implemented for the RHF variant of the DLPNO-MP2 method. No gradient is
+    presently implemented for the UHF-DLPNO-MP2 variant"; "for high-spin ROHF the gradients are not available".
+    Open shell is read from the stated ``spin_treatment`` (unrestricted or restricted open) or a ``UHF`` / ``ROHF``
+    prefix on the method; canonical and RI MP2 have an analytic UHF gradient, so only ROHF counts for them.
+    """
+    token = _normalize(method) or ""
+    spin = _token_value(spin_treatment)
+    rohf = token.startswith("rohf-") or spin == "restricted_open"
+    open_shell = rohf or token.startswith("uhf-") or spin == "unrestricted"
+    return open_shell if "dlpno" in token else rohf
+
+
+def _orca_lacks_gradient(method: str | None, spin_treatment: object) -> bool:
+    """Whether an ORCA job's method has no analytic gradient: coupled cluster, F12, open-shell DLPNO-MP2, ROHF MP2."""
+    if orca_lacks_analytic_gradient(method):
+        return True
+    return classify_method_family(method) == MethodFamily.MP2 and _orca_mp2_without_gradient(method, spin_treatment)
+
+
+def _orca_numerical_from_energies(family: str, rule: str, why: str) -> TauResolution:
+    basis = TauBasis.assumed_finite_difference_energy
+    tau_cm1 = _ASSUMED_TAU_BY_BASIS[basis]
+    return TauResolution(
+        tau_cm1=tau_cm1,
+        basis=basis,
+        reason=(
+            f"tau = {tau_cm1:.0f} cm-1: 'freq.hessian_method' is not recorded, so this is an assumption, not a "
+            f"recorded statement. {why}, so numerical frequencies from numerical gradients are assumed "
+            f"({basis.value}). A later upload that states the Hessian method explicitly supersedes this assumption."
+        ),
+        assumed_software="orca",
+        assumed_family=family,
+        assumption_rule=rule,
+    )
+
+
+_ORCA_AUTOCI_GRADIENT_FROM = 6
+
+
+def _orca_autoci(software_version: str | None, core_treatment: object, ri_approximation: object) -> TauResolution | None:
+    """ORCA 6 ``AUTOCI-CCSD``, ``-CCSD(T)``, ``-MP2``, ``-MP3`` and ``-MP4``: analytic gradients, so ``NumFreq`` differences gradients.
+
+    The AUTOCI gradients exist from ORCA 6.0 and only without frozen core ("there is no frozen core options
+    implemented yet") and without RI (ORCA 6.0.1 aborts when RI is requested). Both must be stated on the level of
+    theory (``core_treatment`` all-electron, ``ri_approximation`` none) and the version must be 6 or later; if any of
+    the three cannot be determined from what is recorded, nothing is assumed.
+    """
+    major = _orca_major_version(software_version)
+    if major is None or major < _ORCA_AUTOCI_GRADIENT_FROM:
+        return None
+    if _token_value(core_treatment) != "all_electron" or _token_value(ri_approximation) != "none":
+        return None
+    basis = TauBasis.assumed_finite_difference_gradient
+    tau_cm1 = _ASSUMED_TAU_BY_BASIS[basis]
+    return TauResolution(
+        tau_cm1=tau_cm1,
+        basis=basis,
+        reason=(
+            f"tau = {tau_cm1:.0f} cm-1: 'freq.hessian_method' is not recorded, so this is an assumption, not a "
+            f"recorded statement. ORCA 6 and later has analytic gradients for the AUTOCI methods "
+            f"without frozen core or RI, so numerical frequencies from analytic gradients are assumed "
+            f"({basis.value}). A later upload that states the Hessian method explicitly supersedes this assumption."
+        ),
+        assumed_software="orca",
+        assumed_family=MethodFamily.AUTOCI,
+        assumption_rule="orca_autoci_gradient_from_6",
+    )
 
 
 def _orca_numerical_documented(functional: str, family: str) -> TauResolution:
@@ -823,8 +951,15 @@ def resolve_tau_with_assumption(
     deck_method: HessianMethod | None = None,
     reported_method: HessianMethod | None = None,
     echo_method: HessianMethod | None = None,
+    *,
+    spin_treatment: object = None,
+    core_treatment: object = None,
+    ri_approximation: object = None,
 ) -> TauResolution:
     """Resolve tau for one calculation: reported, echo, recorded, deck, assumed, conservative.
+
+    ``spin_treatment``, ``core_treatment`` and ``ri_approximation`` are the level of theory's typed qualifiers,
+    passed on to :func:`infer_hessian_method` (see there).
 
     The single resolution every validation adapter and the persistence step
     share, so what a deposit is judged at is what is stored.
@@ -880,7 +1015,11 @@ def resolve_tau_with_assumption(
 
     def refines(stated: HessianMethod | None) -> bool:
         return orca_numfreq_refines_gradient_to_energy(
-            normalize_software_name(software_name) if software_name else None, lot_method, recorded_exact, stated
+            normalize_software_name(software_name) if software_name else None,
+            lot_method,
+            recorded_exact,
+            stated,
+            lacks_gradient=_orca_lacks_gradient(lot_method, spin_treatment),
         )
 
     # The log's report, then the input the log echoes, outrank the recorded parameter and the deck: the same order
@@ -910,7 +1049,12 @@ def resolve_tau_with_assumption(
     if not software_name:
         return resolved
     assumed = infer_hessian_method(
-        normalize_software_name(software_name), lot_method, software_version
+        normalize_software_name(software_name),
+        lot_method,
+        software_version,
+        spin_treatment=spin_treatment,
+        core_treatment=core_treatment,
+        ri_approximation=ri_approximation,
     )
     return assumed if assumed is not None else resolved
 
@@ -961,6 +1105,9 @@ def resolve_tau_for_calculation(calc) -> TauResolution:
         calculation_deck_method(calc),
         calculation_reported_method(calc),
         calculation_echo_method(calc),
+        spin_treatment=getattr(calc.level_of_theory, "spin_treatment", None),
+        core_treatment=getattr(calc.level_of_theory, "core_treatment", None),
+        ri_approximation=getattr(calc.level_of_theory, "ri_approximation", None),
     )
 
 
@@ -975,8 +1122,14 @@ def check_calculation_deck_agrees(calc) -> None:
     release = calc.software_release
     software = release.name if release is not None else None
     lot_method = calc.level_of_theory.method
+    lacks_gradient = _orca_lacks_gradient(lot_method, getattr(calc.level_of_theory, "spin_treatment", None))
     check_recorded_method_agrees_with_deck(
-        parameters, calculation_deck_method(calc), calculation_key=key, software=software, lot_method=lot_method
+        parameters,
+        calculation_deck_method(calc),
+        calculation_key=key,
+        software=software,
+        lot_method=lot_method,
+        lacks_gradient=lacks_gradient,
     )
     check_recorded_method_agrees_with_deck(
         parameters,
@@ -985,4 +1138,5 @@ def check_calculation_deck_agrees(calc) -> None:
         stated_in="output_log",
         software=software,
         lot_method=lot_method,
+        lacks_gradient=lacks_gradient,
     )

@@ -1603,6 +1603,9 @@ class CalculationWithResultsPayload(CalculationPayload):
             self._deck_hessian_method,
             self._reported_hessian_method,
             self._echo_hessian_method,
+            spin_treatment=getattr(self.level_of_theory, "spin_treatment", None),
+            core_treatment=getattr(self.level_of_theory, "core_treatment", None),
+            ri_approximation=getattr(self.level_of_theory, "ri_approximation", None),
         )
 
     @model_validator(mode="after")

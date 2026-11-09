@@ -71,7 +71,7 @@ def test_a_recorded_gradient_method_and_a_numfreq_deck_on_coupled_cluster_is_ref
         "recorded": "finite_difference_gradient",
         "stored_method": "finite_difference_energy",
         "stored_basis": "finite_difference_energy",
-        "reason": "no_analytic_gradient",
+        "refined_because": "no_analytic_gradient",
     }
     assert "finite_difference_gradient" in warning["message"] and "finite_difference_energy" in warning["message"]
 
