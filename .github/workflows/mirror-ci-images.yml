@@ -18,12 +18,10 @@ name: Mirror CI images to GHCR
 # addressed by the sha256 of its OCI index, and `imagetools create` copies
 # the index and every platform manifest verbatim, so the GHCR copy has the
 # SAME index digest as the upstream image. CI can then pin
-# ghcr.io/tckdb/...@sha256:<same digest>. The digest is the one the upstream
-# rdkit tag resolves to today; docker-compose.yml still pulls rdkit by tag
-# only, so a later upstream re-point would make the two differ. SeaweedFS in
-# compose is digest-pinned to the same value as here. The follow-up PR that
-# switches CI to GHCR will digest-pin compose's rdkit too. The verify step
-# enforces the digest equality rather than assuming it.
+# ghcr.io/tckdb/...@sha256:<same digest>. CI and docker-compose.yml pin the
+# same digests; backend/tests/scripts/test_ci_image_pins.py checks they match
+# IMAGES below. The verify step enforces the digest equality rather than
+# assuming it.
 #
 # Adding an image later is one line in IMAGES.
 
