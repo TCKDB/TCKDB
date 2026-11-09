@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.169.0 - 2026-11-09
+
+The deposit-warning item on scientific reads gains optional `retired_at` and `retired_reason`, set only for curators and admins reading a retired warning (`artifact_attached`, `single_point_deposited`, `hessian_stored`, `superseded_by_recheck`). Other readers get current warnings only and never receive the keys. No field is removed.
+
 ## 0.168.0 - 2026-11-09
 
 No refusal, warning or payload shape changes. The generated producer contract (`contract/`) now names the scientific check register entry for every refusal and warning code the register gained an entry for (the register has 80 entries, up from 52), and the text of register entry 18 states the tolerance order in force since #864: the method the output log reports, then the method the echoed input requests, then the recorded `freq.hessian_method` or the input deck, then the program's assumed default, then 50 cm-1.

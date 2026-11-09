@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.198.0 - 2026-11-09
+
+No client code changed. The `tckdb-schemas` window moves to `>=0.158,<0.170` to contain 0.169.
+
 ## 0.197.0 - 2026-11-09
 
 The `tckdb-schemas` window is `>=0.158,<0.169`. No client behaviour changes.

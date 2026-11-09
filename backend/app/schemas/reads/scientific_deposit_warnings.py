@@ -35,12 +35,17 @@ artifact's) and for curators and admins (the access rule ``GET /jobs/{id}`` uses
 a producer puts in it sits under ``context.depositor_supplied`` and is depositor-typed text: a client that
 renders it must say so.
 
+Retired warnings
+----------------
+A retired warning is shown only to curators and admins, with ``retired_at`` and ``retired_reason``; other readers see current warnings only.
+
 ``submission_ref`` follows the existing rule for that field on the scientific reads: it is served only to a caller
 who authenticates, and the key is omitted for an anonymous reader.
 """
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, PrivateAttr, model_serializer
@@ -66,16 +71,21 @@ class DepositWarningItem(BaseModel):
     #: deposit or is a curator or admin.
     depositor_message: str | None = None
     depositor_field: str | None = None
+    #: Set only for a curator or admin reading a retired warning.
+    retired_at: datetime | None = None
+    retired_reason: str | None = None
 
     #: What the reading boundary needs to decide who may see the stored text. Never serialized.
     _raw_message: str = PrivateAttr(default="")
     _raw_field: str = PrivateAttr(default="")
     _writer_id: int | None = PrivateAttr(default=None)
+    _retired_at: datetime | None = PrivateAttr(default=None)
+    _retired_reason: str | None = PrivateAttr(default=None)
 
     @model_serializer(mode="wrap")
     def _omit_absent_depositor_text(self, handler):
         data = handler(self)
-        for key in ("depositor_message", "depositor_field"):
+        for key in ("depositor_message", "depositor_field", "retired_at", "retired_reason"):
             if data.get(key) is None:
                 data.pop(key, None)
         return data

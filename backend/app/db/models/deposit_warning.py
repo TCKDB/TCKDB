@@ -28,6 +28,8 @@ allowed even under an approved record, because a later artifact upload can add a
 warning to an existing calculation. This is the regime ``record_reproducibility_assessment``
 lives under, not the accepted-science child guard.
 
+**Retirement.** A warning that stops applying gets a row in ``deposit_warning_retirement``; reads show warnings without one.
+
 Warnings never change a value, order a list or gate selection.
 """
 
@@ -122,4 +124,36 @@ class DepositWarning(Base):
             postgresql_nulls_not_distinct=True,
         ),
         Index("ix_deposit_warning_record", "record_type", "record_id"),
+    )
+
+
+#: The closed set of retirement reasons.
+RETIREMENT_REASONS = ("artifact_attached", "single_point_deposited", "hessian_stored", "superseded_by_recheck")
+
+
+class DepositWarningRetirement(Base):
+    """A deposit warning that no longer applies, with the reason, actor and time."""
+
+    __tablename__ = "deposit_warning_retirement"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    deposit_warning_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("deposit_warning.id", name="fk_deposit_warning_retirement_warning", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+    )
+    retired_reason_code: Mapped[str] = mapped_column(Text, nullable=False)
+    retired_by_user_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("app_user.id", name="fk_deposit_warning_retirement_by", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+    )
+    retired_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint(
+            "retired_reason_code IN (" + ", ".join(f"'{r}'" for r in RETIREMENT_REASONS) + ")",
+            name="reason_known",
+        ),
+        UniqueConstraint("deposit_warning_id", name="uq_deposit_warning_retirement_warning"),
     )

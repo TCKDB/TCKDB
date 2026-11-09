@@ -815,6 +815,7 @@ def persist_computed_species_upload(
                             calc_row,
                             art_in,
                             field=f"calculations[{calc_in.key!r}].artifacts",
+                            written_by=created_by,
                         )
                         if hessian_warning is not None:
                             upload_warnings.append(hessian_warning)
