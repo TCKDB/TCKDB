@@ -144,6 +144,10 @@ MCP_INTEGRATION_TARGET = "../integrations/mcp/src/tckdb_mcp"
 # host, so their shell/Python diagnostics are runtime text rather than docs.
 FRONTEND_SCRIPTS_TARGET = "../frontend/scripts"
 
+#: The paper snapshot build. It prints to an operator's terminal and writes
+#: text into the instance it builds (approval summaries, the build report).
+PAPER_SNAPSHOT_TARGET = "../scripts/paper_snapshot"
+
 #: Checked by default, as paths relative to ``BACKEND_ROOT``.
 #:
 #: ``app`` because it is the deployed code. ``scripts`` because several of
@@ -185,6 +189,7 @@ DEFAULT_TARGETS = (
     QCSCHEMA_ADAPTER_TARGET,
     MCP_INTEGRATION_TARGET,
     FRONTEND_SCRIPTS_TARGET,
+    PAPER_SNAPSHOT_TARGET,
 )
 
 

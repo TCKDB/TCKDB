@@ -328,3 +328,6 @@ docs/specs/read_api_mvp.md
 # Psi4 writes run timings (including the hostname) to ./timer.dat in the
 # working directory; never commit it.
 timer.dat
+
+# paper snapshot build work directory (scripts/paper_snapshot)
+.paper_snapshot_work/
