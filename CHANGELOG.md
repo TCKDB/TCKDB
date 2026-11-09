@@ -22,6 +22,13 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A depositor can no longer approve their own record through the record-review route (2026-11-09)
+
+- **What changed:** `PATCH /record-reviews/{record_type}/{record_id}` to `approved` compared the actor with the review row's `created_by`. That column is NULL when the curator's own request created the row (a record no upload targets, such as a `species` or `reaction`), so the depositor of the record could approve it. When `created_by` is NULL the check now looks at who deposited the record: the uploaders of the submissions linked to it, its own `created_by` where its table has one, and, for a `species` or `reaction`, the depositors of its entries. The refusal is the coded 400 `record_self_approval` (it was an uncoded `domain_error`).
+- **Why:** the submission-level check already refused this; the record-level one did not for rows without a recorded creator.
+- **Unchanged:** a row with a `created_by` is judged on it alone; other transitions; the submission-level check.
+- **Schema and migration:** none. **Versions:** `tckdb-client` 0.190.0.
+
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)
 
 - **What changed:**

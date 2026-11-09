@@ -23,6 +23,13 @@ from app.db.models.common import (
     SubmissionRecordType,
 )
 from app.db.models.record_review import RecordReview
+from app.db.models.submission import Submission, SubmissionRecordLink
+from app.db.models.common import SubmissionKind, SubmissionSourceKind
+from tests.services.scientific_read._factories import (
+    make_species,
+    make_species_entry,
+    make_thermo_scalar,
+)
 from app.services.record_review import (
     RecordRef,
     bulk_set_record_review_status,
@@ -107,7 +114,7 @@ class TestTransitionPolicy:
             record_id=12,
             created_by=creator.id,
         )
-        with pytest.raises(DomainError, match="cannot approve a record they created"):
+        with pytest.raises(DomainError, match="record_self_approval"):
             set_record_review_status(
                 db_session,
                 record_type=SubmissionRecordType.species,
@@ -497,3 +504,77 @@ class TestReviewEventHistory:
             record_id=405,
         )
         assert len(after_noop) == 3
+
+
+class TestSelfApprovalWhenReviewRowHasNoCreator:
+    """``record_review.created_by`` is NULL when a curator's first touch made the row.
+
+    The guard then falls back to who deposited the record itself.
+    """
+
+    @staticmethod
+    def _deposit(session, uploader, record_type, record_id) -> None:
+        sub = Submission(
+            created_by=uploader.id,
+            submission_kind=SubmissionKind.conformer,
+            source_kind=SubmissionSourceKind.api,
+        )
+        session.add(sub)
+        session.flush()
+        session.add(
+            SubmissionRecordLink(
+                submission_id=sub.id, record_type=record_type, record_id=record_id
+            )
+        )
+        session.flush()
+
+    def _approve(self, session, actor, record_type, record_id):
+        return set_record_review_status(
+            session,
+            record_type=record_type,
+            record_id=record_id,
+            status=RecordReviewStatus.approved,
+            actor=actor,
+        )
+
+    def test_parent_identity_row_without_review_row_is_refused_for_its_depositor(self, db_session):
+        depositor = _user(db_session, "dep_species", AppUserRole.curator)
+        species = make_species(db_session, smiles="[H][H]")
+        entry = make_species_entry(db_session, species)
+        self._deposit(db_session, depositor, SubmissionRecordType.species_entry, entry.id)
+        assert get_record_review(
+            db_session, record_type=SubmissionRecordType.species, record_id=species.id
+        ) is None
+        with pytest.raises(DomainError, match="record_self_approval"):
+            self._approve(db_session, depositor, SubmissionRecordType.species, species.id)
+
+    def test_other_curator_may_approve_parent_identity_row(self, db_session):
+        depositor = _user(db_session, "dep_species2", AppUserRole.curator)
+        other = _user(db_session, "other_species2", AppUserRole.curator)
+        species = make_species(db_session, smiles="[H][H]")
+        entry = make_species_entry(db_session, species)
+        self._deposit(db_session, depositor, SubmissionRecordType.species_entry, entry.id)
+        row = self._approve(db_session, other, SubmissionRecordType.species, species.id)
+        assert row.status is RecordReviewStatus.approved
+
+    def test_linked_record_with_null_created_by_is_refused_for_the_uploader(self, db_session):
+        depositor = _user(db_session, "dep_thermo", AppUserRole.curator)
+        other = _user(db_session, "other_thermo", AppUserRole.curator)
+        species = make_species(db_session, smiles="[H][H]")
+        thermo = make_thermo_scalar(db_session, species_entry=make_species_entry(db_session, species))
+        thermo.created_by = None
+        self._deposit(db_session, depositor, SubmissionRecordType.thermo, thermo.id)
+        ensure_record_review(db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id)
+        with pytest.raises(DomainError, match="record_self_approval"):
+            self._approve(db_session, depositor, SubmissionRecordType.thermo, thermo.id)
+        row = self._approve(db_session, other, SubmissionRecordType.thermo, thermo.id)
+        assert row.status is RecordReviewStatus.approved
+
+    def test_record_row_created_by_is_refused_when_no_link_exists(self, db_session):
+        depositor = _user(db_session, "dep_owner", AppUserRole.curator)
+        species = make_species(db_session, smiles="[H][H]")
+        thermo = make_thermo_scalar(db_session, species_entry=make_species_entry(db_session, species))
+        thermo.created_by = depositor.id
+        db_session.flush()
+        with pytest.raises(DomainError, match="record_self_approval"):
+            self._approve(db_session, depositor, SubmissionRecordType.thermo, thermo.id)

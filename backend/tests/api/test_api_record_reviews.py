@@ -572,6 +572,32 @@ class TestRecordReviewApi:
         assert body["record_public_ref"] == before["record_public_ref"]
         assert body["record_public_ref"]
 
+    def test_a_curator_cannot_approve_the_species_their_own_upload_created(
+        self, client, db_session, login_as, _api_curator_user
+    ):
+        """The review row of a ``species`` is made by this PATCH, so its ``created_by`` is NULL.
+
+        The refusal must come from who deposited the species' entry, not from
+        that column: before the fallback this returned 200 and stamped the
+        depositor as reviewer.
+        """
+        login_as(_api_curator_user)
+        resp = client.post("/api/v1/uploads/conformers", json=_hydrogen_conformer_payload())
+        assert resp.status_code == 201, resp.text
+        species_id = db_session.scalars(select(SpeciesEntry)).first().species_id
+        assert db_session.scalar(
+            select(RecordReview).where(
+                RecordReview.record_type == SubmissionRecordType.species,
+                RecordReview.record_id == species_id,
+            )
+        ) is None
+
+        refused = client.patch(
+            f"/api/v1/record-reviews/species/{species_id}", json={"status": "approved"}
+        )
+        assert refused.status_code == 400, refused.text
+        assert refused.json()["code"] == "record_self_approval"
+
     def test_patch_requires_curator(self, client):
         thermo_id = self._seed_thermo(client)
         # Default test user is role=user → 403.

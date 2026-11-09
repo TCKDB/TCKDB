@@ -51,9 +51,10 @@ from app.db.models.common import (
 )
 from app.db.models.record_review import RecordReview, RecordReviewEvent
 from app.db.models.scientific_record_supersession import ScientificRecordSupersession
-from app.db.models.submission import SubmissionRecordLink
+from app.db.models.submission import Submission, SubmissionRecordLink
 from app.services.accepted_science import lock_scientific_records
 from app.services.deposit_warnings import note_deposit_targets
+from app.services.record_models import RECORD_MODELS
 from app.services.record_refs import resolve_record_public_refs
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
@@ -502,6 +503,80 @@ def _refuse_superseded_approval(
     )
 
 
+#: Identity parents that carry no ``created_by`` of their own, mapped to the
+#: entry type that does and the column joining the two. A user deposits the
+#: entry (that is what the upload targets and links); the parent is deduped
+#: across uploads, so it is deposited by whoever deposited any of its entries.
+_ENTRY_OF_IDENTITY: dict[SubmissionRecordType, tuple[SubmissionRecordType, str]] = {
+    SubmissionRecordType.species: (SubmissionRecordType.species_entry, "species_id"),
+    SubmissionRecordType.reaction: (SubmissionRecordType.reaction_entry, "reaction_id"),
+}
+
+
+def _depositor_ids(
+    session: Session, *, record_type: SubmissionRecordType, record_id: int
+) -> set[int]:
+    """Users who deposited this record, read from the record rather than the review row.
+
+    ``record_review.created_by`` is NULL when a curator's first touch created
+    the row (a record no upload workflow targeted, such as a ``species``), so
+    it cannot say who deposited the record. Two places can: the uploader of
+    every submission linked to the record, and the ``created_by`` of the
+    record's own row where its table has one. A ``species`` or ``reaction``
+    has neither, so it takes the depositors of its entries.
+    """
+    ids: set[int] = set()
+    if record_type in _ENTRY_OF_IDENTITY:
+        entry_type, fk = _ENTRY_OF_IDENTITY[record_type]
+        entry_model = RECORD_MODELS[entry_type]
+        entry_ids = list(
+            session.scalars(select(entry_model.id).where(getattr(entry_model, fk) == record_id))
+        )
+        for entry_id in entry_ids:
+            ids |= _depositor_ids(session, record_type=entry_type, record_id=entry_id)
+        return ids
+    ids.update(
+        session.scalars(
+            select(Submission.created_by)
+            .join(SubmissionRecordLink, SubmissionRecordLink.submission_id == Submission.id)
+            .where(
+                SubmissionRecordLink.record_type == record_type,
+                SubmissionRecordLink.record_id == record_id,
+            )
+        )
+    )
+    model = RECORD_MODELS.get(record_type)
+    if model is not None and hasattr(model, "created_by"):
+        owner = session.scalar(select(model.created_by).where(model.id == record_id))
+        if owner is not None:
+            ids.add(owner)
+    return ids
+
+
+def _refuse_self_approval(
+    session: Session,
+    *,
+    review: RecordReview,
+    record_type: SubmissionRecordType,
+    record_id: int,
+    actor: AppUser,
+) -> None:
+    """Refuse approval by the record's depositor (``record_self_approval``).
+
+    Compares with the review row's ``created_by``; when that is NULL, falls
+    back to the depositors of the record itself.
+    """
+    if review.created_by is not None:
+        depositors = {review.created_by}
+    else:
+        depositors = _depositor_ids(session, record_type=record_type, record_id=record_id)
+    if actor.id in depositors:
+        raise DomainError(
+            "record_self_approval: the actor deposited this record and cannot approve it; "
+            "another curator or admin must."
+        )
+
+
 def set_record_review_status(
     session: Session,
     *,
@@ -564,8 +639,13 @@ def set_record_review_status(
     )
 
     if status is RecordReviewStatus.approved:
-        if existing.created_by is not None and existing.created_by == actor.id:
-            raise DomainError("Actor cannot approve a record they created.")
+        _refuse_self_approval(
+            session,
+            review=existing,
+            record_type=record_type,
+            record_id=record_id,
+            actor=actor,
+        )
         lock_scientific_records(session, (RecordRef(record_type, record_id),))
         # After the root lock, which ``supersede_scientific_record`` also takes,
         # so a concurrent supersession and approval serialize.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.190.0 - 2026-11-09
+
+`RejectionCode.RECORD_SELF_APPROVAL` (400) joins the refusal codes: a curator approving, through the record-review route, a record they deposited themselves. No other client code changed.
+
 ## 0.189.0 - 2026-11-07
 
 No client code changed. The server now judges a kinetics `energy_level_of_theory`'s spin treatment per participant (closed-shell links are exempt, open-shell links must share one reference), so a reaction mixing restricted closed-shell and unrestricted open-shell species can declare its method and basis (see `tckdb-schemas` 0.161.0). The `tckdb-schemas` window already contains 0.161.

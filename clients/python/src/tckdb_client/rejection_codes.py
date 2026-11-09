@@ -275,6 +275,7 @@ class RejectionCode(str, Enum):
     RECORD_HAS_NO_SUBJECT = "record_has_no_subject"
     RECORD_NOT_APPROVED = "record_not_approved"
     RECORD_REF_NOT_SELECTABLE = "record_ref_not_selectable"
+    RECORD_SELF_APPROVAL = "record_self_approval"
     RECORD_SUBJECT_MISMATCH = "record_subject_mismatch"
     RECORD_TYPE_NOT_SELECTABLE = "record_type_not_selectable"
     REFERENCE_CONFLICT = "reference_conflict"
@@ -972,6 +973,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.RECORD_HAS_NO_SUBJECT: frozenset({422}),
     RejectionCode.RECORD_NOT_APPROVED: frozenset({422}),
     RejectionCode.RECORD_REF_NOT_SELECTABLE: frozenset({422}),
+    RejectionCode.RECORD_SELF_APPROVAL: frozenset({400}),
     RejectionCode.RECORD_SUBJECT_MISMATCH: frozenset({422}),
     RejectionCode.RECORD_TYPE_NOT_SELECTABLE: frozenset({422}),
     RejectionCode.REFERENCE_CONFLICT: frozenset({409}),

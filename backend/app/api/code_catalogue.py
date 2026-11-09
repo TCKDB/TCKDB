@@ -2786,6 +2786,15 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "submission, deliberately: the caller named both refs and "
                 "already knows which one they did not create."
             )),
+    ApiCode("record_self_approval", 400, Surface.message_prefix,
+            "backend/app/services/record_review.py",
+            note=(
+                "PATCH /record-reviews: the actor deposited the record and "
+                "may not approve it. Judged against the review row's "
+                "created_by, or, where that is NULL (a row a curator's first "
+                "touch created), against the uploaders of the submissions "
+                "linked to the record and the record's own created_by."
+            )),
     ApiCode("superseded_record_not_approvable", 409, Surface.message_prefix,
             "backend/app/services/record_review.py",
             shape=Shape.relationship,
