@@ -54,6 +54,7 @@ __all__ = [
     "gaussian_freq_hessian_option",
     "hessian_method_class",
     "orca_freq_hessian",
+    "orca_lacks_analytic_gradient",
 ]
 
 #: Gaussian ``Freq`` options that name the second-derivative method. Only
@@ -378,6 +379,25 @@ def gaussian_freq_hessian_option(text: str) -> tuple[str, HessianMethod] | None:
     return None
 
 
+def orca_lacks_analytic_gradient(method: str | None) -> bool:
+    """True for an ORCA method keyword with no analytic gradient behind it.
+
+    Coupled cluster behind the plain keywords (``CCSD``, ``CCSD(T)``, their F12 variants, ``DLPNO-CCSD`` and
+    ``DLPNO-CCSD(T)``) and the F12-MP2 methods. ORCA 5.0.4 8.3.2 "Numerical Gradients" (knowledge-base chunk
+    13502): "If the analytic gradient is not available, the numerical gradient can simply be requested via ! NumGrad",
+    with ``!CCSD(T) TZVPP`` / ``!Opt NumGrad`` as the example; 8.1.3.6 (13362): F12 "Gradients are not available";
+    ORCA 6.1 (16228): DLPNO "Analytic gradients are not available". The ``AUTOCI-`` prefixed methods of ORCA 6.1
+    do have analytic gradients and are not matched. ``tckdb_schemas.hessian_method_assumption`` assigns the same
+    methods to finite differences of energies when it assumes a method, so a deck and an assumption agree.
+    """
+    token = (method or "").strip().lower().replace("_", "-")
+    if not token or token.startswith("autoci"):
+        return False
+    if token.startswith(("ccsd", "dlpno-ccsd", "f12-ccsd", "f12/ri-ccsd")):
+        return True
+    return "f12" in token and "mp2" in token
+
+
 def orca_freq_hessian(keywords: Iterable[str]) -> tuple[str, HessianMethod] | None:
     """The Hessian method the ORCA keywords state, as ``(directive as written, method)``.
 
@@ -385,7 +405,10 @@ def orca_freq_hessian(keywords: Iterable[str]) -> tuple[str, HessianMethod] | No
     conservative tolerance). ``NumFreq`` differentiates gradients; with
     ``NumGrad`` those gradients are numerical too, so the Hessian is built from
     energies (ORCA 5.0.4 manual, 8.3.2 and 9.24.5 "Numerical Gradients":
-    ``! NumGrad`` requests numerical instead of analytic gradients). The
+    ``! NumGrad`` requests numerical instead of analytic gradients). The same holds
+    when the deck names a method with no analytic gradient (:func:`orca_lacks_analytic_gradient`,
+    e.g. ``CCSD(T)``): ``NumFreq`` then differentiates numerical gradients, so it
+    reads as finite differences of energies even without ``NumGrad``. The
     directive text is exactly what the deck says: ``NumFreq``, ``NumFreq NumGrad``
     (each as written) or ``AnFreq``.
     """
@@ -399,6 +422,8 @@ def orca_freq_hessian(keywords: Iterable[str]) -> tuple[str, HessianMethod] | No
         numgrad = first("numgrad")
         if numgrad is not None:
             return f"{numfreq} {numgrad}", HessianMethod.finite_difference_energy
+        if any(orca_lacks_analytic_gradient(k) for k in written):
+            return numfreq, HessianMethod.finite_difference_energy
         return numfreq, HessianMethod.finite_difference_gradient
     anfreq = first("anfreq")
     if anfreq is not None:
