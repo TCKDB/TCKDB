@@ -95,6 +95,8 @@ OUTPUT_LOG_SIGNATURES: dict[str, bytes] = {
     "nwchem": b"Northwest Computational Chemistry Package",
     "turbomole": b"TURBOMOLE",
     "cfour": b"CFOUR",
+    # xtb prints ``* xtb version 6.7.1 (...)`` under a boxed ``x T B`` banner.
+    "xtb": b"xtb version",
 }
 
 #: How many bytes to inspect for signature detection.

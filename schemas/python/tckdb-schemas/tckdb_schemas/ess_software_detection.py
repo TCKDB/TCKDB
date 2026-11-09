@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-SoftwareName = Literal["gaussian", "orca", "molpro", "psi4"]
+SoftwareName = Literal["gaussian", "orca", "molpro", "psi4", "xtb"]
 
 _GAUSSIAN_MARKERS = re.compile(
     r"Gaussian\s+\d+:|Entering Gaussian System", re.IGNORECASE
@@ -50,6 +50,11 @@ _PSI4_MARKERS = re.compile(
     re.IGNORECASE,
 )
 
+# xtb prints ``* xtb version 6.7.1 (edcfbbe) compiled by ...`` under a boxed
+# ``x T B`` banner. Both alternatives are anchored on the program's own name.
+# Recognition only: no xtb parser is wired on any extraction path.
+_XTB_MARKERS = re.compile(r"\*\s*xtb version\s+\d|\|\s*x T B\s*\|")
+
 
 def detect_software_from_text(text: str) -> SoftwareName | None:
     """Best-effort sniff for ``"gaussian"``, ``"orca"``, ``"molpro"`` or ``"psi4"``.
@@ -62,7 +67,7 @@ def detect_software_from_text(text: str) -> SoftwareName | None:
     must be ruled out first.
 
     Identifying a program here does **not** imply every extraction path
-    supports it. Psi4 is wired for charge/multiplicity only; the
+    supports it. xtb (``"xtb"``) is recognised only: no path parses it. Psi4 is wired for charge/multiplicity only; the
     single-point-energy, Hessian and parameter-extraction paths each decline
     it explicitly rather than falling through to another program's parser.
     """
@@ -73,6 +78,8 @@ def detect_software_from_text(text: str) -> SoftwareName | None:
         return "molpro"
     if _PSI4_MARKERS.search(head):
         return "psi4"
+    if _XTB_MARKERS.search(head):
+        return "xtb"
     if _ORCA_MARKERS.search(head):
         return "orca"
     return None

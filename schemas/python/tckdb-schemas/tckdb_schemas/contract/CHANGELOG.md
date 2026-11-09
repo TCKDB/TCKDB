@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.162.0 - 2026-11-09
+
+No field, model or code is added or removed. `tckdb_schemas.ess_software_detection.detect_software_from_text` now recognises an xtb output file (`* xtb version 6.7.1 (...)` under the boxed `x T B` banner) and returns `"xtb"`; `SoftwareName` gains `"xtb"`. An xtb file uploaded as an `output_log` is accepted, and its version banner is compared with the declared software release like a Gaussian, ORCA or Molpro banner. Recognition only: no energy, frequency, Hessian, charge or multiplicity is read from an xtb log, so those values keep coming from the upload payload.
+
 ## 0.161.0 - 2026-11-07
 
 One refusal is narrowed and gains a `reason`; no field is added or removed. A kinetics record's `energy_level_of_theory` names method, basis and qualifiers, and its spin treatment is judged per participant against the linked reactant, product and transition-state energies:

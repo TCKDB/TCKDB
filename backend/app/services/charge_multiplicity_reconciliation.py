@@ -200,6 +200,10 @@ def parse_charge_multiplicity_from_log(
     # entirely — and would report one confident pair for a log whose two
     # forms disagree, the exact fabricated mismatch this module exists to
     # avoid.
+    if software == "xtb":
+        # Recognised, not parsed: nothing is read from an xtb log, and it
+        # must not fall into the Gaussian branch below.
+        return None
     if software == "molpro":
         charge, multiplicity = _parse_molpro(text)
     elif software == "orca":
