@@ -1412,6 +1412,24 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Message: "thermodynamic_target.kind {kind} is not recognised; use {' or '.join((repr(member.value) for member in ThermoTargetKind))}. Matching is exact and case-sensitive."
 - Note: A declaration that skipped request validation (model_construct) and fails it in a service: unrecognised target kind, or an invalid protocol.
 
+<a id="c-thermo-declared-by-record-incoherent"></a>
+
+#### `thermo_declared_by_record_incoherent`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/thermo_declarations.py`.
+- The body's `context` names the things involved.
+- Message: "A target declared by chemkin_format needs phase gas and a NASA-7 block on the record; this record has phase {phase} and {'a' if _get(payload, 'nasa') is not None else 'no'} NASA-7 block."
+- Note: A target declared by chemkin_format on a record that is not gas phase or has no NASA-7 block.
+
+<a id="c-thermo-declared-by-target-incoherent"></a>
+
+#### `thermo_declared_by_target_incoherent`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/thermo_declarations.py`.
+- The body's `context` names the things involved.
+- Message: 'A target declared by chemkin_format must be equilibrium_ensemble, not {kind}: the CHEMKIN format defines the standard ideal-gas ensemble and no single conformer.'
+- Note: A target declared by chemkin_format whose kind is not equilibrium_ensemble.
+
 <a id="c-thermo-energy-level-ambiguous"></a>
 
 #### `thermo_energy_level_ambiguous`

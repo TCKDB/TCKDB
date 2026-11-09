@@ -308,3 +308,29 @@ def test_declared_by_defaults_to_depositor_and_accepts_the_chemkin_format():
 
     with pytest.raises(ValueError):
         ThermoTargetDeclaration(kind="equilibrium_ensemble", declared_by="the_server")
+
+
+def test_chemkin_format_target_must_be_equilibrium():
+    import pytest
+
+    from tckdb_schemas.thermo_declarations import W_THERMO_DECLARED_BY_TARGET_INCOHERENT, thermo_target_error
+
+    with pytest.raises(ValueError, match="declared by chemkin_format must be equilibrium_ensemble"):
+        ThermoTargetDeclaration(kind="single_conformer", conformer_key="c0", declared_by="chemkin_format")
+    assert thermo_target_error({"kind": "single_conformer", "declared_by": "chemkin_format"})[0] == (
+        W_THERMO_DECLARED_BY_TARGET_INCOHERENT
+    )
+
+
+def test_chemkin_format_needs_gas_and_a_nasa_block():
+    from tckdb_schemas.thermo_declarations import W_THERMO_DECLARED_BY_RECORD_INCOHERENT, thermo_declaration_error
+
+    target = {"kind": "equilibrium_ensemble", "declared_by": "chemkin_format"}
+    ok = {"thermodynamic_target": target, "phase": "gas", "nasa": {"a1": 1.0}}
+    assert thermo_declaration_error(ok) is None
+    for broken in ({**ok, "phase": "liquid"}, {**ok, "phase": None}, {**ok, "nasa": None}):
+        error = thermo_declaration_error(broken)
+        assert error is not None and error[0] == W_THERMO_DECLARED_BY_RECORD_INCOHERENT
+    # Another source is not judged by this rule.
+    plain = {**ok, "thermodynamic_target": {"kind": "equilibrium_ensemble"}, "phase": "liquid", "nasa": None}
+    assert thermo_declaration_error(plain) is None

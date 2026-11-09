@@ -339,7 +339,9 @@ UNGATED_ID_FIELDS: dict[str, str] = {
 
 #: Columns that only make sense together with a pointer: blanking the pointer blanks them too, so the record stays valid
 #: (a ``single_conformer`` thermo target must name its group; with the group hidden the target is not stated).
-COUPLED_FIELDS: dict[str, tuple[str, ...]] = {"target_conformer_group_id": ("thermodynamic_target_kind",)}
+COUPLED_FIELDS: dict[str, tuple[str, ...]] = {
+    "target_conformer_group_id": ("thermodynamic_target_kind", "thermodynamic_target_declared_by")
+}
 
 #: Read models that are a gated record, by the kind their ``id`` names. A record embedded in another response
 #: (``TransitionStateRead.entries``, a group's observations) is dropped when the request does not show it.

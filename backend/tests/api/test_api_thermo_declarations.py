@@ -571,3 +571,87 @@ def test_a_listed_recipe_declared_as_other_is_refused_over_http(client, db_sessi
 def test_an_inexact_version_is_refused_over_http(client, version):
     response = client.post(THERMO, json=_standalone(protocol={**G4_PROTOCOL, "version": version}))
     assert response.status_code == 422, response.text
+
+
+# ---------------------------------------------------------------------------
+# declared_by: chemkin_format is a client statement the server checks for coherence
+# ---------------------------------------------------------------------------
+
+NASA = {
+    "t_low": 300.0, "t_mid": 1000.0, "t_high": 5000.0,
+    **{f"a{i}": 1.0 + i / 10 for i in range(1, 8)},
+    **{f"b{i}": 2.0 + i / 10 for i in range(1, 8)},
+}
+CHEMKIN_TARGET = {"kind": "equilibrium_ensemble", "declared_by": "chemkin_format"}
+
+
+def _chemkin_thermo(**extra) -> dict:
+    return {"phase": "gas", "nasa": NASA, **extra}
+
+
+def _post_chemkin(client, route: str, **thermo_extra):
+    thermo = _chemkin_thermo(**thermo_extra)
+    if route == "thermo":
+        return client.post(THERMO, json=_standalone(**thermo))
+    if route == "computed-species":
+        return client.post(SPECIES, json=_species_bundle(thermo=_bundle_thermo(**thermo)))
+    bundle = _reaction_bundle()
+    bundle["species"][0]["thermo"] = _bundle_thermo(**thermo)
+    return client.post(REACTION, json=bundle)
+
+
+@pytest.mark.parametrize("route", ["thermo", "computed-species", "computed-reaction"])
+def test_chemkin_format_declared_by_is_stored_and_read_back_on_every_upload_route(client, db_session, route):
+    response = _post_chemkin(client, route, thermodynamic_target=CHEMKIN_TARGET)
+    assert response.status_code == 201, response.text
+    row = _only_thermo(db_session)
+    assert row.thermodynamic_target_declared_by.value == "chemkin_format"
+    (record,) = _read(client, row.species_entry_id)
+    assert record["thermodynamic_target"] == {
+        "kind": "equilibrium_ensemble",
+        "conformer_group_ref": None,
+        "declared_by": "chemkin_format",
+    }
+
+
+def test_chemkin_format_declared_by_survives_a_contribution_bundle_export_and_import(client, db_session):
+    assert _post_chemkin(client, "thermo", thermodynamic_target=CHEMKIN_TARGET).status_code == 201
+    source = _only_thermo(db_session)
+    exported = export_thermo_bundle(
+        db_session, thermo_ids=[source.id], title="declared by", summary="round trip", exporter_label="tester"
+    )
+    (upload,) = exported.bundle.records.thermo_uploads
+    assert upload.thermodynamic_target.declared_by.value == "chemkin_format"
+    imported = _import(db_session, exported.bundle)
+    assert imported.thermodynamic_target_declared_by.value == "chemkin_format"
+
+
+def test_a_declaration_that_omits_declared_by_is_the_depositors(client, db_session):
+    assert client.post(THERMO, json=_standalone(thermodynamic_target={"kind": "equilibrium_ensemble"})).status_code == 201
+    assert _only_thermo(db_session).thermodynamic_target_declared_by.value == "depositor"
+
+
+@pytest.mark.parametrize("route", ["thermo", "computed-species", "computed-reaction"])
+@pytest.mark.parametrize(
+    "extra, code",
+    [
+        ({"phase": "liquid"}, "thermo_declared_by_record_incoherent"),
+        ({"phase": None}, "thermo_declared_by_record_incoherent"),
+        ({"nasa": None}, "thermo_declared_by_record_incoherent"),
+    ],
+    ids=["liquid", "phase_unknown", "no_nasa"],
+)
+def test_chemkin_format_needs_a_gas_phase_record_with_a_nasa_block(client, db_session, route, extra, code):
+    response = _post_chemkin(client, route, thermodynamic_target=CHEMKIN_TARGET, **extra)
+    assert _code(response) == code
+    assert db_session.scalars(select(Thermo)).all() == []
+
+
+@pytest.mark.parametrize("route", ["thermo", "computed-species", "computed-reaction"])
+def test_chemkin_format_target_must_be_the_equilibrium_ensemble(client, db_session, route):
+    target = {"kind": "single_conformer", "conformer_group_ref": "cg_x", "declared_by": "chemkin_format"}
+    if route != "thermo":
+        target = {"kind": "single_conformer", "conformer_key": "c0", "declared_by": "chemkin_format"}
+    response = _post_chemkin(client, route, thermodynamic_target=target)
+    assert _code(response) == "thermo_declared_by_target_incoherent"
+    assert db_session.scalars(select(Thermo)).all() == []

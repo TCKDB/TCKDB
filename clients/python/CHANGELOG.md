@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.190.0 - 2026-11-09
+
+`RejectionCode.THERMO_DECLARED_BY_TARGET_INCOHERENT` and `RejectionCode.THERMO_DECLARED_BY_RECORD_INCOHERENT` (422) join the refusal codes. A thermo target's new `declared_by` is a statement by the depositing client; when it is `chemkin_format` the server refuses a target that is not `equilibrium_ensemble`, and a record that is not gas phase or has no NASA-7 block. Needs `tckdb-schemas` 0.162.0 (inside this client's `<0.163` window).
+
 ## 0.189.0 - 2026-11-07
 
 No client code changed. The server now judges a kinetics `energy_level_of_theory`'s spin treatment per participant (closed-shell links are exempt, open-shell links must share one reference), so a reaction mixing restricted closed-shell and unrestricted open-shell species can declare its method and basis (see `tckdb-schemas` 0.161.0). The `tckdb-schemas` window already contains 0.161.

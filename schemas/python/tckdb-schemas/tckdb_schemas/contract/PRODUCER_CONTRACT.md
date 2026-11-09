@@ -13,19 +13,19 @@ Read it in pieces: `python -m tckdb_schemas.contract --print` for all of it, `--
 
 | Surface | Endpoints | Key rules | Most specific refusals |
 |---|---|---|---|
-| [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest) | `POST /api/v1/uploads/computed-reaction`<br>`POST /api/v1/jobs/computed-reaction` | A thermo record with enthalpy content must declare what its enthalpies mean. A thermo record's optional target and protocol declarations must be coherent. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
-| [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest) | `POST /api/v1/uploads/computed-species` | A thermo record with enthalpy content must declare what its enthalpies mean. A thermo record's optional target and protocol declarations must be coherent. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
+| [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest) | `POST /api/v1/uploads/computed-reaction`<br>`POST /api/v1/jobs/computed-reaction` | A thermo record with enthalpy content must declare what its enthalpies mean. A ``chemkin_format`` target needs a gas-phase record that carries a NASA-7 block. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
+| [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest) | `POST /api/v1/uploads/computed-species` | A thermo record with enthalpy content must declare what its enthalpies mean. A ``chemkin_format`` target needs a gas-phase record that carries a NASA-7 block. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
 | [`ConformerUploadRequest`](#s-conformeruploadrequest) | `POST /api/v1/uploads/conformers`<br>`POST /api/v1/jobs/conformer` | - | `calculation_geometry_composition_mismatch`, `species_geometry_composition_mismatch`, `species_geometry_isotope_mismatch` |
 | [`KineticsUploadRequest`](#s-kineticsuploadrequest) | `POST /api/v1/uploads/kinetics`<br>`POST /api/v1/jobs/kinetics` | - | `reaction_charge_not_conserved`, `reaction_entry_null_reaction`, `reaction_mass_balance_failed` |
 | [`NetworkUploadRequest`](#s-networkuploadrequest) | `POST /api/v1/uploads/networks`<br>`POST /api/v1/jobs/network` | - | `reaction_charge_not_conserved`, `reaction_entry_null_reaction`, `reaction_mass_balance_failed` |
 | [`NetworkPDepUploadRequest`](#s-networkpdepuploadrequest) | `POST /api/v1/uploads/networks/pdep`<br>`POST /api/v1/jobs/network/pdep` | - | `network_energy_source_type_mismatch`, `network_state_energy_sum_mismatch`, `atom_map_contradicts_irc_mapping` |
 | [`ReactionUploadRequest`](#s-reactionuploadrequest) | `POST /api/v1/uploads/reactions`<br>`POST /api/v1/jobs/reaction` | - | `reaction_charge_not_conserved`, `reaction_entry_null_reaction`, `reaction_mass_balance_failed` |
 | [`StatmechUploadRequest`](#s-statmechuploadrequest) | `POST /api/v1/uploads/statmech` | - | `calculation_geometry_composition_mismatch`, `n_imag_contradicts_minimum`, `species_geometry_composition_mismatch` |
-| [`ThermoUploadRequest`](#s-thermouploadrequest) | `POST /api/v1/uploads/thermo`<br>`POST /api/v1/jobs/thermo` | A thermo record with enthalpy content must declare what its enthalpies mean. A thermo record's optional target and protocol declarations must be coherent. Never defaulted: `enthalpy_reference_kind`, `reference_pressure_bar`. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
+| [`ThermoUploadRequest`](#s-thermouploadrequest) | `POST /api/v1/uploads/thermo`<br>`POST /api/v1/jobs/thermo` | A thermo record with enthalpy content must declare what its enthalpies mean. A ``chemkin_format`` target needs a gas-phase record that carries a NASA-7 block. Never defaulted: `enthalpy_reference_kind`, `reference_pressure_bar`. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
 | [`ThermoMLUploadRequest`](#s-thermomluploadrequest) | `POST /api/v1/uploads/thermoml` | - | `thermoml_doi_conflict`, `thermoml_file_too_large`, `thermoml_invalid_base64` |
 | [`TransitionStateUploadRequest`](#s-transitionstateuploadrequest) | `POST /api/v1/uploads/transition-states`<br>`POST /api/v1/jobs/transition-state` | - | `atom_map_contradicts_irc_mapping`, `transition_state_charge_mismatch`, `transition_state_composition_mismatch` |
 | [`TransportUploadRequest`](#s-transportuploadrequest) | `POST /api/v1/uploads/transport`<br>`POST /api/v1/jobs/transport` | - | `calculation_geometry_composition_mismatch`, `n_imag_contradicts_minimum`, `species_geometry_composition_mismatch` |
-| [`ContributionBundle`](#s-contributionbundle) | `POST /api/v1/bundles/dry-run`<br>`POST /api/v1/bundles/submit` | A thermo record with enthalpy content must declare what its enthalpies mean. A thermo record's optional target and protocol declarations must be coherent. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
+| [`ContributionBundle`](#s-contributionbundle) | `POST /api/v1/bundles/dry-run`<br>`POST /api/v1/bundles/submit` | A thermo record with enthalpy content must declare what its enthalpies mean. A ``chemkin_format`` target needs a gas-phase record that carries a NASA-7 block. | `enthalpy_declaration_absent`, `enthalpy_declaration_without_content`, `enthalpy_quantity_not_storable_here` |
 | [`ArtifactsUploadRequest`](#s-artifactsuploadrequest) | `POST /api/v1/calculations/{calculation_ref}/artifacts` | - | `calculation_geometry_composition_mismatch`, `handle_not_found`, `handle_type_mismatch` |
 | [`RightsAttestationCreate`](#s-rightsattestationcreate) | `POST /api/v1/submissions/{submission_ref}/rights-attestations` | - | `handle_not_found`, `handle_type_mismatch`, `invalid_handle` |
 | [`SubmissionSupersedeRequest`](#s-submissionsupersederequest) | `POST /api/v1/submissions/{submission_ref}/supersede` | - | `submission_supersede_not_owner`, `tckdb_client_version_invalid`, `tckdb_client_version_missing` |
@@ -630,17 +630,13 @@ If your chemistry is legitimate: None needed -- no check here refuses. A calcula
   Returns a refusal ``(code, message)``, or ``None`` for a coherent
   declaration.
 
-<a id="k-thermo-declaration-error"></a>
+<a id="k-declared-by-record-error"></a>
 
-### `thermo_declaration_error`
+### `_declared_by_record_error`
 
-`tckdb_schemas.thermo_declarations:thermo_declaration_error`. Marked producer rule. Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundle`](#s-contributionbundle).
+`tckdb_schemas.thermo_declarations:_declared_by_record_error`. Marked producer rule. Applied on: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundle`](#s-contributionbundle).
 
-  A thermo record's optional target and protocol declarations must be coherent.
-
-  A ``single_conformer`` target names exactly one conformer group, an
-  ``equilibrium_ensemble`` target none; ``protocol.version`` is exactly ``1`` and
-  unknown fields and values are refused. Claims, never inferred or defaulted.
+  A ``chemkin_format`` target needs a gas-phase record that carries a NASA-7 block.
 
 <a id="refusal-codes-several-surfaces-share"></a>
 
@@ -883,7 +879,7 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 
 ### Code group 2f985e
 
-20 codes on 4 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundle`](#s-contributionbundle).
+22 codes on 4 surfaces: [`ComputedReactionUploadRequest`](#s-computedreactionuploadrequest), [`ComputedSpeciesUploadRequest`](#s-computedspeciesuploadrequest), [`ThermoUploadRequest`](#s-thermouploadrequest), [`ContributionBundle`](#s-contributionbundle).
 
 | Code | Status | Traced via |
 |---|---|---|
@@ -893,6 +889,8 @@ A refusal code that two or more surfaces can return is printed once, here, in a 
 | [`enthalpy_quantity_not_storable_here`](REFUSAL_CODES.md#c-enthalpy-quantity-not-storable-here) | 422 | route handler |
 | [`enthalpy_reference_kind_unrecognized`](REFUSAL_CODES.md#c-enthalpy-reference-kind-unrecognized) | 422 | route handler |
 | [`thermo_declaration_invalid`](REFUSAL_CODES.md#c-thermo-declaration-invalid) | 422 | payload validation; route handler |
+| [`thermo_declared_by_record_incoherent`](REFUSAL_CODES.md#c-thermo-declared-by-record-incoherent) | 422 | route handler |
+| [`thermo_declared_by_target_incoherent`](REFUSAL_CODES.md#c-thermo-declared-by-target-incoherent) | 422 | payload validation; route handler |
 | [`thermo_energy_level_ambiguous`](REFUSAL_CODES.md#c-thermo-energy-level-ambiguous) | 422 | route handler |
 | [`thermo_energy_level_contradiction`](REFUSAL_CODES.md#c-thermo-energy-level-contradiction) | 422 | route handler |
 | [`thermo_energy_level_requires_sp`](REFUSAL_CODES.md#c-thermo-energy-level-requires-sp) | 422 | route handler |
@@ -1651,7 +1649,7 @@ Payload model `tckdb_schemas.workflows.computed_reaction_upload.ComputedReaction
 - [`enthalpy_declaration_without_content`](REFUSAL_CODES.md#c-enthalpy-declaration-without-content) (422): enthalpy_reference_kind declares a quantity this thermo record does not carry.
 - [`enthalpy_quantity_not_storable_here`](REFUSAL_CODES.md#c-enthalpy-quantity-not-storable-here) (422): Thermo accepts only formation_298k enthalpies.
 - [`enthalpy_reference_kind_unrecognized`](REFUSAL_CODES.md#c-enthalpy-reference-kind-unrecognized) (422): '{reference}' is not a recognized enthalpy_reference_kind -- did you mean '{canonical}'?
-- [`thermo_declaration_invalid`](REFUSAL_CODES.md#c-thermo-declaration-invalid) (422): thermodynamic_target.kind {kind} is not recognised; use {' or '.join((repr(member.value) for member in ThermoTargetKind))}.
+- [`thermo_declared_by_record_incoherent`](REFUSAL_CODES.md#c-thermo-declared-by-record-incoherent) (422): A target declared by chemkin_format needs phase gas and a NASA-7 block on the record; this record has phase {phase} and {'a' if…
 - [`atom_map_contradicts_irc_mapping`](REFUSAL_CODES.md#c-atom-map-contradicts-irc-mapping) (422): Transition state '{subject_label}' {field_path} contradicts its own IRC participant mapping: the atom map assigns saddle-point atom(s)…
 - [`transition_state_charge_mismatch`](REFUSAL_CODES.md#c-transition-state-charge-mismatch) (422): Transition state '{subject_label}' carries charge {transition_state_charge}, but its reactants total {reactant_charge}…
 - [`transition_state_composition_mismatch`](REFUSAL_CODES.md#c-transition-state-composition-mismatch) (422): Transition state '{subject_label}' is {format_element_counts(ts_counts)}, but the reaction it sits in is…
@@ -1818,7 +1816,7 @@ Nested models (110; fields and rules in the [model reference](#model-reference))
 - [`persist_transition_state_validation_evidence`](#k-persist-transition-state-validation-evidence) (warn/block)
 - [`collect_wavefunction_reliability_warnings`](#k-collect-wavefunction-reliability-warnings) (warn)
 - [`enthalpy_reference_error`](#k-enthalpy-reference-error) (marked rule; reached from `POST /api/v1/uploads/computed-reaction`)
-- [`thermo_declaration_error`](#k-thermo-declaration-error) (marked rule; reached from `POST /api/v1/uploads/computed-reaction`)
+- [`_declared_by_record_error`](#k-declared-by-record-error) (marked rule; reached from `POST /api/v1/uploads/computed-reaction`)
 
 ### Refusal codes this surface can return
 
@@ -1838,7 +1836,7 @@ Nested models (110; fields and rules in the [model reference](#model-reference))
 - [Code group 4d199d](#cg-4d199d): [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared), returned on 5 surfaces
 - [Code group 0898ca](#cg-0898ca): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
 - [Code group 1544cf](#cg-1544cf): 2 codes, returned on 4 surfaces
-- [Code group 2f985e](#cg-2f985e): 20 codes, returned on 4 surfaces
+- [Code group 2f985e](#cg-2f985e): 22 codes, returned on 4 surfaces
 - [Code group 1a217e](#cg-1a217e): 2 codes, returned on 3 surfaces
 - [Code group 2ac41f](#cg-2ac41f): [`transport_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-transport-source-calculation-owner-mismatch), returned on 3 surfaces
 - [Code group 4aa549](#cg-4aa549): 19 codes, returned on 3 surfaces
@@ -1896,7 +1894,7 @@ Payload model `tckdb_schemas.workflows.computed_species_upload.ComputedSpeciesUp
 - [`enthalpy_declaration_without_content`](REFUSAL_CODES.md#c-enthalpy-declaration-without-content) (422): enthalpy_reference_kind declares a quantity this thermo record does not carry.
 - [`enthalpy_quantity_not_storable_here`](REFUSAL_CODES.md#c-enthalpy-quantity-not-storable-here) (422): Thermo accepts only formation_298k enthalpies.
 - [`enthalpy_reference_kind_unrecognized`](REFUSAL_CODES.md#c-enthalpy-reference-kind-unrecognized) (422): '{reference}' is not a recognized enthalpy_reference_kind -- did you mean '{canonical}'?
-- [`thermo_declaration_invalid`](REFUSAL_CODES.md#c-thermo-declaration-invalid) (422): thermodynamic_target.kind {kind} is not recognised; use {' or '.join((repr(member.value) for member in ThermoTargetKind))}.
+- [`thermo_declared_by_record_incoherent`](REFUSAL_CODES.md#c-thermo-declared-by-record-incoherent) (422): A target declared by chemkin_format needs phase gas and a NASA-7 block on the record; this record has phase {phase} and {'a' if…
 - [`calculation_geometry_composition_mismatch`](REFUSAL_CODES.md#c-calculation-geometry-composition-mismatch) (422)
 - [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum) (422)
 - [`species_geometry_composition_mismatch`](REFUSAL_CODES.md#c-species-geometry-composition-mismatch) (422): Species geometry is {geometry_formula}, but species_entry.smiles={payload.smiles} is {identity_formula}…
@@ -2026,7 +2024,7 @@ Nested models (94; fields and rules in the [model reference](#model-reference)):
 - [`collect_wavefunction_reliability_warnings`](#k-collect-wavefunction-reliability-warnings) (warn)
 - [`enthalpy_reference_error`](#k-enthalpy-reference-error) (marked rule; reached from `POST /api/v1/uploads/computed-species`)
 - [`evaluate_species_entry_frequency`](#k-evaluate-species-entry-frequency) (block/warn)
-- [`thermo_declaration_error`](#k-thermo-declaration-error) (marked rule; reached from `POST /api/v1/uploads/computed-species`)
+- [`_declared_by_record_error`](#k-declared-by-record-error) (marked rule; reached from `POST /api/v1/uploads/computed-species`)
 
 ### Refusal codes this surface can return
 
@@ -2045,7 +2043,7 @@ Nested models (94; fields and rules in the [model reference](#model-reference)):
 - [Code group 4d199d](#cg-4d199d): [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared), returned on 5 surfaces
 - [Code group 0898ca](#cg-0898ca): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
 - [Code group 1544cf](#cg-1544cf): 2 codes, returned on 4 surfaces
-- [Code group 2f985e](#cg-2f985e): 20 codes, returned on 4 surfaces
+- [Code group 2f985e](#cg-2f985e): 22 codes, returned on 4 surfaces
 - [Code group 1a217e](#cg-1a217e): 2 codes, returned on 3 surfaces
 - [Code group 2ac41f](#cg-2ac41f): [`transport_source_calculation_owner_mismatch`](REFUSAL_CODES.md#c-transport-source-calculation-owner-mismatch), returned on 3 surfaces
 - [Code group 6aa675](#cg-6aa675): 5 codes, returned on 2 surfaces
@@ -3171,7 +3169,7 @@ Payload model `app.schemas.workflows.thermo_upload.ThermoUploadRequest`; JSON Sc
 - [`enthalpy_declaration_without_content`](REFUSAL_CODES.md#c-enthalpy-declaration-without-content) (422): enthalpy_reference_kind declares a quantity this thermo record does not carry.
 - [`enthalpy_quantity_not_storable_here`](REFUSAL_CODES.md#c-enthalpy-quantity-not-storable-here) (422): Thermo accepts only formation_298k enthalpies.
 - [`enthalpy_reference_kind_unrecognized`](REFUSAL_CODES.md#c-enthalpy-reference-kind-unrecognized) (422): '{reference}' is not a recognized enthalpy_reference_kind -- did you mean '{canonical}'?
-- [`thermo_declaration_invalid`](REFUSAL_CODES.md#c-thermo-declaration-invalid) (422): thermodynamic_target.kind {kind} is not recognised; use {' or '.join((repr(member.value) for member in ThermoTargetKind))}.
+- [`thermo_declared_by_record_incoherent`](REFUSAL_CODES.md#c-thermo-declared-by-record-incoherent) (422): A target declared by chemkin_format needs phase gas and a NASA-7 block on the record; this record has phase {phase} and {'a' if…
 - [`calculation_geometry_composition_mismatch`](REFUSAL_CODES.md#c-calculation-geometry-composition-mismatch) (422)
 - [`n_imag_contradicts_minimum`](REFUSAL_CODES.md#c-n-imag-contradicts-minimum) (422)
 - [`species_geometry_composition_mismatch`](REFUSAL_CODES.md#c-species-geometry-composition-mismatch) (422): Species geometry is {geometry_formula}, but species_entry.smiles={payload.smiles} is {identity_formula}…
@@ -3197,7 +3195,7 @@ Unknown keys are refused. Non-finite numbers (NaN, Infinity) are refused.
 | `rights` | [`DepositRights`](#m-depositrights) \| null | no
 | `existing_statmech_id` | integer \| null | no |  |  | > 0
 | `energy_level_of_theory` | [`LevelOfTheoryRef`](#m-leveloftheoryref) \| null | no
-| `thermodynamic_target` | [`ThermoTargetDeclaration`](#m-thermotargetdeclaration) \| null | no |  |  |  | What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted.
+| `thermodynamic_target` | [`ThermoTargetDeclaration`](#m-thermotargetdeclaration) \| null | no |  |  |  | What the values describe (see ThermoTargetDeclaration). The server never infers it; omitted, it reads as not stated.
 | `protocol` | [`ThermoProtocolDeclaration`](#m-thermoprotocoldeclaration) \| null | no |  |  |  | How the values were produced (see ThermoProtocolDeclaration). Never inferred or defaulted.
 | `h298_kj_mol` | number \| null | no |  | kJ/mol
 | `s298_j_mol_k` | number \| null | no |  | J/(mol*K)
@@ -3344,7 +3342,7 @@ Nested models (80; fields and rules in the [model reference](#model-reference)):
 - [`collect_wavefunction_reliability_warnings`](#k-collect-wavefunction-reliability-warnings) (warn)
 - [`enthalpy_reference_error`](#k-enthalpy-reference-error) (marked rule; reached from `POST /api/v1/uploads/thermo`)
 - [`evaluate_species_entry_frequency`](#k-evaluate-species-entry-frequency) (block/warn)
-- [`thermo_declaration_error`](#k-thermo-declaration-error) (marked rule; reached from `POST /api/v1/uploads/thermo`)
+- [`_declared_by_record_error`](#k-declared-by-record-error) (marked rule; reached from `POST /api/v1/uploads/thermo`)
 
 ### Refusal codes this surface can return
 
@@ -3361,7 +3359,7 @@ Nested models (80; fields and rules in the [model reference](#model-reference)):
 - [Code group 4c0c71](#cg-4c0c71): 3 codes, returned on 6 surfaces
 - [Code group 4d199d](#cg-4d199d): [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared), returned on 5 surfaces
 - [Code group 0898ca](#cg-0898ca): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
-- [Code group 2f985e](#cg-2f985e): 20 codes, returned on 4 surfaces
+- [Code group 2f985e](#cg-2f985e): 22 codes, returned on 4 surfaces
 - [Code group 227dd0](#cg-227dd0): [`thermo_statmech_owner_mismatch`](REFUSAL_CODES.md#c-thermo-statmech-owner-mismatch), returned on 2 surfaces
 
 ### Minimal valid example
@@ -3906,7 +3904,7 @@ Payload model `app.schemas.workflows.contribution_bundle.ContributionBundle`; JS
 - [`enthalpy_declaration_without_content`](REFUSAL_CODES.md#c-enthalpy-declaration-without-content) (422): enthalpy_reference_kind declares a quantity this thermo record does not carry.
 - [`enthalpy_quantity_not_storable_here`](REFUSAL_CODES.md#c-enthalpy-quantity-not-storable-here) (422): Thermo accepts only formation_298k enthalpies.
 - [`enthalpy_reference_kind_unrecognized`](REFUSAL_CODES.md#c-enthalpy-reference-kind-unrecognized) (422): '{reference}' is not a recognized enthalpy_reference_kind -- did you mean '{canonical}'?
-- [`thermo_declaration_invalid`](REFUSAL_CODES.md#c-thermo-declaration-invalid) (422): thermodynamic_target.kind {kind} is not recognised; use {' or '.join((repr(member.value) for member in ThermoTargetKind))}.
+- [`thermo_declared_by_record_incoherent`](REFUSAL_CODES.md#c-thermo-declared-by-record-incoherent) (422): A target declared by chemkin_format needs phase gas and a NASA-7 block on the record; this record has phase {phase} and {'a' if…
 - [`reaction_charge_not_conserved`](REFUSAL_CODES.md#c-reaction-charge-not-conserved) (422): Reaction reactants total charge {reactant_charge} but products total {product_charge} (reaction_charge_not_conserved).
 - [`reaction_entry_null_reaction`](REFUSAL_CODES.md#c-reaction-entry-null-reaction) (422): The reactant and product entries are identical and the deposit carries no transition state, kinetics record or non-identity atom mapping…
 - [`reaction_mass_balance_failed`](REFUSAL_CODES.md#c-reaction-mass-balance-failed) (422): Reaction is not element-balanced (reaction_mass_balance_failed).
@@ -4048,7 +4046,7 @@ Nested models (105; fields and rules in the [model reference](#model-reference))
 - [`collect_wavefunction_reliability_warnings`](#k-collect-wavefunction-reliability-warnings) (warn)
 - [`enthalpy_reference_error`](#k-enthalpy-reference-error) (marked rule; reached from `POST /api/v1/bundles/dry-run`, `POST /api/v1/bundles/submit`)
 - [`evaluate_species_entry_frequency`](#k-evaluate-species-entry-frequency) (block/warn)
-- [`thermo_declaration_error`](#k-thermo-declaration-error) (marked rule; reached from `POST /api/v1/bundles/dry-run`, `POST /api/v1/bundles/submit`)
+- [`_declared_by_record_error`](#k-declared-by-record-error) (marked rule; reached from `POST /api/v1/bundles/dry-run`, `POST /api/v1/bundles/submit`)
 
 ### Refusal codes this surface can return
 
@@ -4070,7 +4068,7 @@ Nested models (105; fields and rules in the [model reference](#model-reference))
 - [Code group 4c0c71](#cg-4c0c71): 3 codes, returned on 6 surfaces
 - [Code group 4d199d](#cg-4d199d): [`applied_energy_correction_source_key_undeclared`](REFUSAL_CODES.md#c-applied-energy-correction-source-key-undeclared), returned on 5 surfaces
 - [Code group 0898ca](#cg-0898ca): [`conformer_key_undeclared`](REFUSAL_CODES.md#c-conformer-key-undeclared), returned on 5 surfaces
-- [Code group 2f985e](#cg-2f985e): 20 codes, returned on 4 surfaces
+- [Code group 2f985e](#cg-2f985e): 22 codes, returned on 4 surfaces
 - [Code group 4aa549](#cg-4aa549): 19 codes, returned on 3 surfaces
 - [Code group 463521](#cg-463521): [`reaction_reversible_required`](REFUSAL_CODES.md#c-reaction-reversible-required), returned on 3 surfaces
 - [Code group 505019](#cg-505019): 2 codes, returned on 2 surfaces
@@ -4965,7 +4963,7 @@ Unknown keys are refused. Non-finite numbers (NaN, Infinity) are refused.
 | `reference_pressure_bar` | number \| null | no |  | bar | > 0 | Standard-state reference pressure, in bar, that the entropy (and any Gibbs energy) was computed or reported at. Never defaulted, for any scientific_origin: an omitted value is stored as not stated. 1 atm is 1.01325 bar, not 1.0.
 | `enthalpy_formation_0k_kj_mol` | number \| null | no |  | kJ/mol
 | `enthalpy_formation_0k_uncertainty_kj_mol` | number \| null | no |  | kJ/mol | >= 0
-| `thermodynamic_target` | [`ThermoTargetDeclaration`](#m-thermotargetdeclaration) \| null | no |  |  |  | What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted.
+| `thermodynamic_target` | [`ThermoTargetDeclaration`](#m-thermotargetdeclaration) \| null | no |  |  |  | What the values describe (see ThermoTargetDeclaration). The server never infers it; omitted, it reads as not stated.
 | `protocol` | [`ThermoProtocolDeclaration`](#m-thermoprotocoldeclaration) \| null | no |  |  |  | How the values were produced (see ThermoProtocolDeclaration). Never inferred or defaulted.
 | `literature` | [`LiteratureUploadRequest`](#m-literatureuploadrequest) \| null | no |  |  |  | Optional literature provenance for this thermo.
 | `software_release` | [`SoftwareReleaseRef`](#m-softwarereleaseref) \| null | no |  |  |  | Optional analysis-code provenance. Overrides the bundle-level ``analysis_software_release`` for this species.
@@ -8829,7 +8827,7 @@ Unknown keys are refused. Non-finite numbers (NaN, Infinity) are refused.
 | `reference_pressure_bar` | number \| null | no |  | bar | > 0 | Standard-state reference pressure, in bar, that the entropy (and any Gibbs energy) was computed or reported at. Never defaulted, for any scientific_origin: an omitted value is stored as not stated. 1 atm is 1.01325 bar, not 1.0.
 | `enthalpy_formation_0k_kj_mol` | number \| null | no |  | kJ/mol
 | `enthalpy_formation_0k_uncertainty_kj_mol` | number \| null | no |  | kJ/mol | >= 0
-| `thermodynamic_target` | [`ThermoTargetDeclaration`](#m-thermotargetdeclaration) \| null | no |  |  |  | What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted.
+| `thermodynamic_target` | [`ThermoTargetDeclaration`](#m-thermotargetdeclaration) \| null | no |  |  |  | What the values describe (see ThermoTargetDeclaration). The server never infers it; omitted, it reads as not stated.
 | `protocol` | [`ThermoProtocolDeclaration`](#m-thermoprotocoldeclaration) \| null | no |  |  |  | How the values were produced (see ThermoProtocolDeclaration). Never inferred or defaulted.
 | `literature` | [`LiteratureUploadRequest`](#m-literatureuploadrequest) \| null | no
 | `software_release` | [`SoftwareReleaseRef`](#m-softwarereleaseref) \| null | no
@@ -9077,7 +9075,7 @@ Unknown keys are refused.
 | Field | Type | Req | Default | Values / constraints | Description
 |---|---|---|---|---|---
 | `kind` | `ThermoTargetKind` | yes |  | `equilibrium_ensemble`, `single_conformer` | The target kind.
-| `declared_by` | `ThermoDeclarationSource` | no | `"depositor"` | `depositor`, `chemkin_format` | Who made the claim: ``depositor`` (the default, and what a client states about its own record) or ``chemkin_format`` (the CHEMKIN importer, for a gas-phase NASA-7 entry, whose polynomial means the standard ideal-gas ensemble by definition of the format). Stored and read back with the target.
+| `declared_by` | `ThermoDeclarationSource` | no | `"depositor"` | `depositor`, `chemkin_format` | Whose claim the target is. ``depositor`` (the default) is the depositor's own statement about their record. ``chemkin_format`` is a statement by the depositing client that the CHEMKIN format defines the target. The server checks it is coherent (an ``equilibrium_ensemble`` target on a gas-phase record with a NASA-7 block) but cannot verify which tool produced it. Stored and read back with the target.
 | `conformer_group_ref` | string \| null | no |  | length >= 1 | Public ref (``cg_...``). Standalone and contribution bundles only.
 | `conformer_key` | string \| null | no |  | length >= 1 | Key of a conformer the same bundle declares. Computed bundles only.
 
@@ -9549,7 +9547,7 @@ Enums with more than 8 values, linked from the fields that take them.
 
 ## Refusal code reference
 
-The per-code reference (211 codes) is its own file, `REFUSAL_CODES.md`, beside this one in the installed package. Every code in a table above links to its entry there. Each entry gives the code's HTTP status, how it arrives, where it is defined, the sentence written beside it at its raise site, and the scientific check behind it; the file ends with the client-facing codes no producer route was traced to. Find it with `python -m tckdb_schemas.contract --codes` (prints the path) or `tckdb_schemas.contract.refusal_codes_path()`; read it with `refusal_codes_markdown()`.
+The per-code reference (213 codes) is its own file, `REFUSAL_CODES.md`, beside this one in the installed package. Every code in a table above links to its entry there. Each entry gives the code's HTTP status, how it arrives, where it is defined, the sentence written beside it at its raise site, and the scientific check behind it; the file ends with the client-facing codes no producer route was traced to. Find it with `python -m tckdb_schemas.contract --codes` (prints the path) or `tckdb_schemas.contract.refusal_codes_path()`; read it with `refusal_codes_markdown()`.
 
 ## Write routes that are not producer surfaces
 

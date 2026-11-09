@@ -41,6 +41,8 @@ def test_every_formic_acid_species_selects_its_sole_candidate(db_session, client
         body = response.json()
         outcomes[body["outcome"]] += 1
         assert body["selection"]["thermo_ref"] == row.public_ref
+        (candidate,) = body["candidates"]
+        assert candidate["target_declared_by"] == "chemkin_format"
 
     assert outcomes == {"sole_eligible_candidate": 123}
 

@@ -32,7 +32,9 @@ a row without a target holds the default, so "set iff a target" is not a rule
 the table can state.
 
 Downgrade drops the column and the enum. It forgets which target declarations
-were made by the CHEMKIN format; it prints how many it is forgetting first.
+were made by the CHEMKIN format and says so: it prints how many it is forgetting
+first, and re-upgrading attributes every one of those rows to the depositor (the
+column default), because nothing remains to say otherwise.
 """
 
 from typing import Sequence, Union
@@ -73,6 +75,9 @@ def downgrade() -> None:
     forgotten = bind.execute(
         sa.text("SELECT count(*) FROM thermo WHERE thermodynamic_target_declared_by <> 'depositor'")
     ).scalar_one()
-    print(f"e7a3c1d9f482 downgrade forgets: {forgotten} CHEMKIN-format target declaration(s).")
+    print(
+        f"e7a3c1d9f482 downgrade forgets: {forgotten} CHEMKIN-format target declaration(s); "
+        "re-upgrading attributes these rows to the depositor."
+    )
     op.drop_column("thermo", "thermodynamic_target_declared_by")
     _SOURCE.drop(bind, checkfirst=True)

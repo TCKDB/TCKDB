@@ -196,7 +196,7 @@ class ThermoUploadRequest(SchemaBase):
     # that the group exists and belongs to this record's species entry.
     thermodynamic_target: ThermoTargetDeclaration | None = Field(
         default=None,
-        description="What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted.",
+        description="What the values describe (see ThermoTargetDeclaration). The server never infers it; omitted, it reads as not stated.",
     )
 
     # How the values were produced: a versioned, schema-validated declaration

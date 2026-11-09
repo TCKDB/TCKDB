@@ -6079,7 +6079,7 @@
       "type": "string"
     },
     "ThermoDeclarationSource": {
-      "description": "Who made a thermo record's thermodynamic-target declaration.\n\n``depositor`` is a claim the depositor made about their own record, and\nis what every target declared before this field existed is, because only\na depositor could declare one then. ``chemkin_format`` is a claim the\nCHEMKIN importer made on the record's behalf: a NASA-7 polynomial means\nthe standard ideal-gas ensemble by the definition of the format, not\nbecause the mechanism's author said so. Machine tokens, not labels. Never\ninferred: the importer names itself; nothing else sets it.",
+      "description": "Whose claim a thermo record's thermodynamic-target declaration is.\n\n``depositor`` is the depositor's own statement about their record, and is\nwhat every target declared before this field existed is. ``chemkin_format``\nis a statement by the depositing client that the CHEMKIN format defines the\ntarget (a NASA-7 polynomial is the standard ideal-gas ensemble by\ndefinition); the server checks it is coherent but cannot verify which tool\nproduced it. Machine tokens, not labels. Never set by the server.",
       "enum": [
         "depositor",
         "chemkin_format"
@@ -6382,7 +6382,7 @@
             }
           ],
           "default": null,
-          "description": "What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted."
+          "description": "What the values describe (see ThermoTargetDeclaration). The server never infers it; omitted, it reads as not stated."
         },
         "tmax_k": {
           "anyOf": [
@@ -6809,7 +6809,7 @@
     },
     "ThermoTargetDeclaration": {
       "additionalProperties": false,
-      "description": "What the record's values are claimed to describe.\n\nA ``single_conformer`` target names exactly one conformer group of the record's own species\nentry; an ``equilibrium_ensemble`` target names none and is refused if it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.\n:param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.\n:param declared_by: Who made the claim: ``depositor`` (the default, and what a client states\n    about its own record) or ``chemkin_format`` (the CHEMKIN importer, for a gas-phase\n    NASA-7 entry, whose polynomial means the standard ideal-gas ensemble by definition of\n    the format). Stored and read back with the target.",
+      "description": "What the record's values are claimed to describe.\n\nA ``single_conformer`` target names exactly one conformer group of the record's own species\nentry; an ``equilibrium_ensemble`` target names none and is refused if it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.\n:param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.\n:param declared_by: Whose claim the target is. ``depositor`` (the default) is the\n    depositor's own statement about their record. ``chemkin_format`` is a statement by the\n    depositing client that the CHEMKIN format defines the target. The server checks it is\n    coherent (an ``equilibrium_ensemble`` target on a gas-phase record with a NASA-7 block)\n    but cannot verify which tool produced it. Stored and read back with the target.",
       "properties": {
         "conformer_group_ref": {
           "anyOf": [

@@ -122,11 +122,14 @@ block out to say nothing; a record that says nothing reads `null` for it.
   computed-reaction bundle you name the conformer the bundle declares,
   `"conformer_key": "..."`, instead of a ref.
 
-`declared_by` on the target says who made the claim: `depositor` (the default,
-and what you state about your own record) or `chemkin_format`, which only the
-CHEMKIN importer sets, for a gas-phase NASA-7 entry. It is stored and read back
-with the target; every target declared before the field existed reads
-`depositor`.
+`declared_by` on the target says whose claim it is: `depositor` (the default) is
+your own statement about your record; `chemkin_format` is a statement by the
+depositing client that the CHEMKIN format defines the target. The server checks
+that it is coherent, but cannot verify which tool produced it. Coherent means an
+`equilibrium_ensemble` target (`thermo_declared_by_target_incoherent`) on a record
+with phase `gas` and a NASA-7 block (`thermo_declared_by_record_incoherent`). It
+is stored and read back with the target; every target declared before the field
+existed reads `depositor`.
 
 **`protocol`** says how the values were produced. It is versioned
 (`"version": 1` is the only accepted value, `thermo_protocol_version_unsupported`

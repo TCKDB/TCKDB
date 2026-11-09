@@ -24,8 +24,8 @@ from app.db.models.common import (
     PhaseKind,
     ScientificOriginKind,
     ThermoCalculationRole,
-    ThermoModelKind,
     ThermoDeclarationSource,
+    ThermoModelKind,
     ThermoTargetKind,
 )
 from app.schemas.common import (
@@ -324,8 +324,13 @@ class ThermoUpdate(SchemaBase):
 
 
 class ThermoRead(ThermoBase, TimestampedCreatedByReadSchema):
-    """Read schema for a thermo record."""
+    """Read schema for a thermo record.
 
+    ``thermodynamic_target_declared_by`` is ``null`` whenever no target is declared
+    (the stored column holds its default there, which would read as a claim nobody made).
+    """
+
+    thermodynamic_target_declared_by: ThermoDeclarationSource | None = None  # type: ignore[assignment]
     points: list[ThermoPointRead] = Field(default_factory=list)
     nasa: ThermoNASARead | None = None
     nasa9_intervals: list[ThermoNASA9IntervalRead] = Field(default_factory=list)
@@ -333,3 +338,9 @@ class ThermoRead(ThermoBase, TimestampedCreatedByReadSchema):
     source_calculations: list[ThermoSourceCalculationRead] = Field(
         default_factory=list
     )
+
+    @model_validator(mode="after")
+    def blank_declared_by_without_a_target(self) -> Self:
+        if self.thermodynamic_target_kind is None:
+            self.thermodynamic_target_declared_by = None
+        return self

@@ -22,8 +22,8 @@ from app.db.models.common import (
     PhaseKind,
     ScientificOriginKind,
     ThermoCalculationRole,
-    ThermoModelKind,
     ThermoDeclarationSource,
+    ThermoModelKind,
     ThermoTargetKind,
 )
 
