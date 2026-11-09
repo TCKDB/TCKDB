@@ -4,31 +4,31 @@
   "algorithm": 6,
   "pins": {
     "computed_calculation": {
-      "1": "47d7776a900e64280990d9f6bb261f128443cf2e1a61d4a5d831b46d88db90bb"
+      "1": "135e18e4c004dc9d8a52ec860465cf5cf1d8ab402823a9856559ece2eb4bfe21"
     },
     "computed_kinetics": {
-      "1": "dab1de92a3f70fa8d2c68553e9fb1aeb8f0348640cfc6ae495bc077f6d3d8782"
+      "1": "6c731ff3f9768beea6d5fc2c6096e1c67c549710eeeea04b6779cd30fb3e655a"
     },
     "computed_statmech": {
-      "1": "b7d7d39fe51d691e4cf36ec0e6949e31c80ed8a02b3decb7d56d137eed52496d"
+      "1": "be4b5334ad9be59a51469f168e6d3386a6c77805db26b701aa89c4fabc4903dc"
     },
     "computed_thermo": {
-      "1": "428069c231f6f078027c12abd54508d577b6863baf5b4f3af244c71b741990d1"
+      "1": "31e62d3bd83f7d785f115d18073a21ba7d18b9649945b5ea375591d8ab198724"
     },
     "computed_transition_state": {
-      "2": "ab715bd1410899abf8bd9dc32e62fc9b709ecadc32babe0c1a2c0ec69b0c8901"
+      "2": "7233099d572561aedbe497f66847adb8dd103afb7520838a970d623f5392126e"
     },
     "computed_transport": {
-      "1": "82c1fe52d41fa620c5a3163a2938b9cd2d67d77e552f9f76f2c0c2649b6a5bc5"
+      "1": "6413daa8ddd195f42385d37beb2ef704d45b361baecbe0e4a93b8e26d9062742"
     },
     "computed_ts_statmech": {
-      "1": "ae7692c79ee3ccdf01fd847deb62262b385a54fb3e537eca140557b4032fa06a"
+      "1": "5e5832cb366f3778d81da417a9cb322cbffd0296622c3b495e709470b372c242"
     },
     "tckdb_reproducibility": {
-      "1": "3cc3d2ec8d6cd2fd15bad327fdb690c18e7ba04b6865d8593328464dd1067097"
+      "1": "7f722d0e97d9ef6d3e2ab386b87acf8c9344ef68a2d64db81e72ac7cb9422565"
     },
     "tckdb_reproducibility_ts_statmech": {
-      "1": "dee0973888ffa5d152a8e927918703f752da5d5d5f1477bd74656f65b89ac26b"
+      "1": "067fa0687a5ae3558f68481baf3d34bdc8c840131252ef865a692459e74d3b24"
     }
   },
   "unbumped_overrides": [
@@ -372,6 +372,56 @@
       "name": "tckdb_reproducibility_ts_statmech",
       "version": 1,
       "reason": "level_of_theory loses its free-text keywords column and gains nullable relativistic_hamiltonian, pno_truncation and ri_approximation enum columns, and core_treatment gains the window member: the walker follows ORM enum columns of reached models, so the new enums entered the fingerprint. No check, threshold or grading reads them; decides nothing new. Stored reproducibility digests do move (the keywords key leaves every level-of-theory snapshot, and the lot_hash and public_ref of every level change with the reseed); the reseed discards the stored assessments, so nothing reads stale. For the two reproducibility rubrics the new columns are also listed in snapshot_defaults.UNCHANGED_DEFAULTS (NULL), so a level that states none digests as before the columns existed."
+    },
+    {
+      "name": "computed_calculation",
+      "version": 1,
+      "reason": "hessian_source enum gained a value; no check or grading changed"
+    },
+    {
+      "name": "computed_kinetics",
+      "version": 1,
+      "reason": "hessian_source enum gained a value; no check or grading changed"
+    },
+    {
+      "name": "computed_statmech",
+      "version": 1,
+      "reason": "hessian_source enum gained a value; no check or grading changed"
+    },
+    {
+      "name": "computed_thermo",
+      "version": 1,
+      "reason": "hessian_source enum gained a value; no check or grading changed"
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "hessian_source enum gained a value; no check or grading changed"
+    },
+    {
+      "name": "computed_transport",
+      "version": 1,
+      "reason": "hessian_source enum gained a value; no check or grading changed"
+    },
+    {
+      "name": "computed_ts_statmech",
+      "version": 1,
+      "reason": "hessian_source enum gained a value; no check or grading changed"
+    },
+    {
+      "name": "tckdb_reproducibility",
+      "version": 1,
+      "reason": "hessian_source enum gained a value; no check or grading changed"
+    },
+    {
+      "name": "tckdb_reproducibility_ts_statmech",
+      "version": 1,
+      "reason": "hessian_source enum gained a value; no check or grading changed"
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "evaluate_transition_state_frequency gains a wrapper that appends a hessian_method_refined note only when the resolved tau carries refined_from (set at upload, never from stored rows); no check or grading changed"
     }
   ]
 }
