@@ -148,4 +148,8 @@ dependencies:
       # so the two must be kept in step; `openai` is pure Python, so it
       # adds no compile step to the arm64 image built under QEMU, which is
       # the usual reason this project keeps dependencies out.
-      - openai>=1.40
+      #
+      # Pinned exactly like every other direct dependency, to the version
+      # backend/uv.lock resolves. pyproject keeps the range `>=1.40` because
+      # it describes what the code works with, not what the image installs.
+      - openai==3.16.2

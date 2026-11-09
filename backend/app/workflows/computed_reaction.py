@@ -729,7 +729,7 @@ def persist_computed_reaction_upload(
             structure = primary_structure(conf.calculation, conf.geometry.xyz_text)
             parsed = parse_xyz(GeometryPayload(xyz_text=structure.xyz_text))
             conformer_group, fingerprint, scheme = resolve_conformer_group(
-                session, species_entry, label=conf.label, created_by=created_by,
+                session, species_entry, created_by=created_by,
                 smiles=sp.species_entry.smiles, xyz_atoms=parsed.atoms,
                 defining=structure.defining,
             )
@@ -1936,8 +1936,8 @@ def persist_computed_reaction_upload(
                 session,
                 warnings_out=sp_energy_warnings,
                 reversible=request.reversible,
-                reaction_family=request.reaction_family,
-                reaction_family_source_note=request.reaction_family_source_note,
+                # The bundle's family describes the bundle's own reaction, resolved above. A fit
+                # for another reaction must not stamp it there, nor be refused because of it.
                 reactant_stoichiometry=compress_species_stoichiometry(
                     kin_reactant_entries
                 ),

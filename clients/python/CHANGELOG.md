@@ -1,8 +1,28 @@
 # Changelog
 
+## 0.196.0 - 2026-11-09
+
+`RejectionCode.THERMO_DECLARED_BY_TARGET_INCOHERENT` and `RejectionCode.THERMO_DECLARED_BY_RECORD_INCOHERENT` (422) join the refusal codes. Needs `tckdb-schemas` 0.167.0.
+
+## 0.192.0 - 2026-11-09
+
+Ten `RejectionCode` members join the refusal codes for artifact uploads: `OUTPUT_LOG_SIGNATURE_UNRECOGNIZED`, `ARTIFACT_EMPTY`, `ARTIFACT_TOO_LARGE`, `ARTIFACT_SHA256_MISMATCH`, `ARTIFACT_SIZE_MISMATCH`, `ARTIFACT_NOT_UTF8_TEXT`, `ARTIFACT_INVALID_BASE64`, `ARTIFACT_TOTAL_SIZE_TOO_LARGE`, `ARTIFACT_ENCODED_PAYLOAD_TOO_LARGE` and `ARTIFACT_TOTAL_ENCODED_PAYLOAD_TOO_LARGE` (see `tckdb-schemas` 0.163.0). The `tckdb-schemas` window moves to `>=0.158,<0.164`.
+
+## 0.191.0 - 2026-11-09
+
+- `ComputedSpeciesUpload.to_payload()` and `ComputedReactionUpload.to_payload()` now embed each attached artifact file inline (`content_base64` in the calculation's `artifacts`) instead of leaving it for a second request. The server therefore sees the files when it checks the deposit, and no longer stores warnings such as `converged_opt_no_usable_energy` that the second request made stale.
+  - The attached files must exist when `to_payload()` runs. A file the server refuses, or a storage outage, now refuses the whole deposit. Before any request, a missing, zero-byte or over-50-MiB file, a kind/extension the schema disallows, or a declared `sha256`/`bytes` that does not match raises `TCKDBBuilderValidationError` naming the file. The recognised-program check for `output_log` stays with the server.
+  - Inline files total at most 64 MiB per upload; `output_log` and `input` files are admitted first. Files past the budget stay out of the payload and are returned by `artifact_plan(result)`.
+  - `inline_artifacts=False` on either upload class restores the previous behaviour (every file in the second request, nothing checked at build time).
+  - `artifact_plan(result, payload=None)` lists only files that did not go inline. With `payload` (the dict that was posted) it skips files present in it, matched on calculation, kind, filename and content; without it the choice is recomputed from the files on disk. `artifact_plan_preview()` still lists every file.
+  - `artifact_upload_requires_second_phase` is reported only for files that will not go inline.
+  - `upload_artifacts(batch_by_calculation=True)` returns one result per request, not per calculation, and splits a calculation's files across requests of at most 64 MiB. The first request keeps the key `...:artifact-batch`; later ones end in `-2`, `-3`.
+  - A retry of a deposit under an existing idempotency key sends a different body than before 0.191.0 (or after a file changed), so the server answers 409 `idempotency_conflict`; use a new key.
+- `LevelOfTheory.spin_treatment` (`restricted`, `unrestricted`, `restricted_open`, `unknown`) is sent as the `spin_treatment` wire field when set, never inferred. Another spelling raises `TCKDBBuilderValidationError`.
+
 ## 0.190.0 - 2026-11-09
 
-`RejectionCode.THERMO_DECLARED_BY_TARGET_INCOHERENT` and `RejectionCode.THERMO_DECLARED_BY_RECORD_INCOHERENT` (422) join the refusal codes. Needs `tckdb-schemas` 0.162.0.
+`RejectionCode.REACTION_FAMILY_CONFLICT` (422) joins the refusal codes: a reaction deposited under a family other than the one it is already recorded under is refused with it (before, an uncoded `validation_error`). A network solve's bath-gas sum refusal now carries `RejectionCode.KINETICS_BATH_GAS_MOLE_FRACTION_SUM`, the code a kinetics rate's bath gas already used. No other client code changed.
 
 ## 0.189.0 - 2026-11-07
 

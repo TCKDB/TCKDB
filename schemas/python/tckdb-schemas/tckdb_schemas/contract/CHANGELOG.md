@@ -1,8 +1,18 @@
 # Changelog
 
-## 0.162.0 - 2026-11-09
+## 0.167.0 - 2026-11-09
 
 `thermodynamic_target.declared_by` is added to a thermo record's target declaration, with the enum `ThermoDeclarationSource` (`depositor`, the default, and `chemkin_format`). A `chemkin_format` target is refused unless it is `equilibrium_ensemble` (`thermo_declared_by_target_incoherent`) on a record with phase `gas` and a NASA-7 block (`thermo_declared_by_record_incoherent`). No field is removed.
+
+## 0.163.0 - 2026-11-09
+
+An xtb output file is recognised: `detect_software_from_text` returns `"xtb"` for `* xtb version N` and the boxed `x T B` title, and for xtb's `g98.out` (a Gaussian-98-layout file naming the xtb code). `SoftwareName` gains `"xtb"`. Nothing is parsed from an xtb log. An xtb file is accepted as an `output_log`.
+
+Ten artifact refusals gain codes (all 422, with `context`): `output_log_signature_unrecognized` (`supported`, `window_bytes`), `artifact_empty`, `artifact_too_large`, `artifact_sha256_mismatch`, `artifact_size_mismatch`, `artifact_not_utf8_text`, `artifact_invalid_base64` (the filename is in `context.depositor_supplied`), `artifact_total_size_too_large`, `artifact_encoded_payload_too_large` and `artifact_total_encoded_payload_too_large`.
+
+## 0.162.0 - 2026-11-09
+
+One refusal code is added, `reaction_family_conflict` (422), and one existing refusal gains a code. A reaction deposited under a family different from the one it is already recorded under was refused with an uncoded `validation_error` whose text quoted both family names, including depositor text. It is still refused; it now carries `reaction_family_conflict`, and the message names a family only when it comes from the seeded `reaction_family` vocabulary (as `context.recorded_family` and `context.supplied_family`; depositor text is never repeated). All three conflict shapes are refused: seeded against seeded, raw against raw, and seeded against raw in either order (before, a deposit that named a seeded family for a reaction recorded under raw text, or the reverse, was accepted). A computed-reaction bundle's `reaction_family` now applies to the bundle's own reaction only: a kinetics fit for another reaction no longer has it stamped on, or refused because of it. A network solve whose `bath_gas` mole fractions do not sum to 1 within 1e-9 now carries `kinetics_bath_gas_mole_fraction_sum`, the code a kinetics rate's bath gas already used, with the field `solve.bath_gas` and the sum and tolerance in `context`. One rule, one code, one tolerance. The message text changes; no model or payload shape changed.
 
 ## 0.161.0 - 2026-11-07
 
