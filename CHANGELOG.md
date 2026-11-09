@@ -22,6 +22,14 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A build script for the paper's demonstration snapshot (2026-11-09)
+
+- **What changed:**
+  - `scripts/paper_snapshot/` builds the snapshot on an empty local instance from a sources config: the E2 conformer study through the client builders, the formic acid RMG model through the CHEMKIN adapter, a build-script curator approval (recorded as a demonstration), the archive export and the expected outputs. Sources 2 (ARC runs) and 3 (N2H3 network) are stubs behind configuration.
+  - `backend/scripts/paper/`: `hessian_reanalysis` is registered; new generators `conformer_basins`, `calculation_evidence`, `deposit_warnings`, `thermo_selection_outcomes`; `mechanism_roundtrip_counts` and `mechanism_fixture_provenance` report on the formic acid model (and the first also on what the database holds for it).
+  - `tckdb-chemkin` no longer reuses one idempotency key for two species that share a SMILES and differ in spin (singlet and triplet CH2 or O); the second was refused as `idempotency_conflict` and its thermo never deposited. The first occurrence keeps its old key.
+- **Schema and migration:** none. **Versions:** `tckdb-chemkin` 0.6.1.
+
 ## A CHEMKIN model with charged species and flawed DUPLICATE flags round-trips (2026-11-09)
 
 - **What changed:**

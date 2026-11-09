@@ -7,6 +7,7 @@ that do not carry the ``tckdb_test_`` prefix.
 
     python scripts/paper_snapshot/instance.py up   --name a --port 8101
     python scripts/paper_snapshot/instance.py down --name a [--drop]
+    python scripts/paper_snapshot/instance.py restore --name c --archive snapshot/tckdb.archive
 
 ``up`` needs the compose stack's Postgres (``docker compose up -d db``) and an
 S3-compatible store reachable at ``S3_ENDPOINT_URL`` (default
@@ -135,20 +136,35 @@ def down(name: str, work_dir: Path, drop: bool) -> None:
             pass
 
 
+def restore(name: str, archive: Path) -> None:
+    """Restore an archive into the freshly migrated, empty instance ``name`` with the repository's own script."""
+    done = subprocess.run(
+        [sys.executable, "scripts/tckdb_archive.py", "restore", str(archive.resolve())],
+        cwd=BACKEND, env=_db_env(name), capture_output=True, text=True,
+    )
+    if done.returncode != 0:
+        raise SystemExit(f"restore failed:\n{done.stdout}\n{done.stderr}")
+    print(done.stdout.strip())
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
-    for command in ("up", "down"):
+    for command in ("up", "down", "restore"):
         p = sub.add_parser(command)
         p.add_argument("--name", required=True, help="suffix: database tckdb_test_snapshot_<name>")
         p.add_argument("--work-dir", type=Path, default=REPO_ROOT / ".paper_snapshot_work")
         if command == "up":
             p.add_argument("--port", type=int, required=True)
+        elif command == "restore":
+            p.add_argument("--archive", type=Path, required=True)
         else:
             p.add_argument("--drop", action="store_true", help="also drop the database and empty the bucket")
     args = parser.parse_args(argv)
     if args.command == "up":
         up(args.name, args.port, args.work_dir)
+    elif args.command == "restore":
+        restore(args.name, args.archive)
     else:
         down(args.name, args.work_dir, args.drop)
     return 0
