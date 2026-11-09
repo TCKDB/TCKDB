@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 123 | 28 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 43 | `backend/app/services/public_refs.py` |
 | Trust check names | 174 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 353 | `backend/app/api/code_catalogue.py` |
-| **total** | **693** | |
+| Refusal codes a caller can receive | 363 | `backend/app/api/code_catalogue.py` |
+| **total** | **703** | |
 
 ## How a record is named
 
@@ -808,7 +808,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `bundle_too_large` | a relationship — read `context` |
 | `network_export_body_too_large` | a relationship — read `context` |
 
-### HTTP 422 (287 codes)
+### HTTP 422 (297 codes)
 
 | Code | Names |
 | --- | --- |
@@ -816,6 +816,15 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `applied_energy_correction_source_calculation_owner_mismatch` | a relationship — read `context` |
 | `applied_energy_correction_source_key_undeclared` | a thing |
 | `arrhenius_a_units_molecularity_mismatch` | a relationship — read `context` |
+| `artifact_empty` | a thing |
+| `artifact_encoded_payload_too_large` | a relationship — read `context` |
+| `artifact_invalid_base64` | a thing |
+| `artifact_not_utf8_text` | a thing |
+| `artifact_sha256_mismatch` | a relationship — read `context` |
+| `artifact_size_mismatch` | a relationship — read `context` |
+| `artifact_too_large` | a relationship — read `context` |
+| `artifact_total_encoded_payload_too_large` | a relationship — read `context` |
+| `artifact_total_size_too_large` | a relationship — read `context` |
 | `assessment_input_check_limit` | a relationship — read `context` |
 | `atom_map_atoms_unaccounted_for` | a relationship — read `context` |
 | `atom_map_contradicts_irc_mapping` | a relationship — read `context` |
@@ -964,6 +973,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `observation_identity_hint_conflict` | a relationship — read `context` |
 | `observation_identity_target_not_ground_state_minimum` | a relationship — read `context` |
 | `offset_too_large` | a relationship — read `context` |
+| `output_log_signature_unrecognized` | a relationship — read `context` |
 | `parameter_renamed` | a relationship — read `context` |
 | `parameter_value_requires_key` | a thing |
 | `post_search_fields_must_be_in_body` | a thing |

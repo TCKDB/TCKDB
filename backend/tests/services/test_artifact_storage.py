@@ -74,6 +74,9 @@ class _ReadClient:
 # ---------------------------------------------------------------------------
 
 
+XTB_LOG = Path(__file__).resolve().parents[1] / "fixtures" / "xtb" / "opt_freq_gfn2_ethanol.out"
+
+
 class TestOutputLogSignatureValidation:
     """output_log artifacts must match a known ESS header."""
 
@@ -91,6 +94,16 @@ class TestOutputLogSignatureValidation:
         content = ORCA_OPT_LOG.read_bytes()
         sha = validate_artifact(content, ArtifactKind.output_log)
         assert len(sha) == 64
+
+    def test_xtb_log_accepted(self):
+        content = XTB_LOG.read_bytes()
+        sha = validate_artifact(content, ArtifactKind.output_log)
+        assert len(sha) == 64
+
+    def test_non_xtb_dot_out_still_rejected(self):
+        content = b"  some program\n  total energy -1.0 Eh\n" * 20
+        with pytest.raises(ArtifactValidationError, match="does not match any known ESS"):
+            validate_artifact(content, ArtifactKind.output_log)
 
     def test_unknown_ess_rejected(self):
         content = b"This is not a real ESS output log file.\n" * 10
