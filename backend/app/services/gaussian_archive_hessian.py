@@ -25,16 +25,21 @@ freq log of a 12-atom radical; a CBS-QB3 G09 log):
 
 Frame. The archive's atoms are written in the frame the Hessian is in; this was measured, not assumed, and the
 reader does not rely on it. A Hessian computed in one frame and paired with atoms in another is a wrong matrix
-that looks right, so the reader tests the pair for self-consistency: a Cartesian Hessian annihilates rigid
-translations and (at a stationary point, to the accuracy of the residual gradient) infinitesimal rigid rotations of
-the atoms it was computed at. ``max ||H v|| / (||v|| ||H||_F)`` over the three translations and three rotations
-(rotations about the centroid, atoms in bohr) is at most 1.1e-4 on the 123 logs measured here and 6.4e-4 on the
-reviewer's 64 non-NoSymm G03/G09/G16 logs, and at least 3.7e-3 when the atoms are rotated 5 degrees away from the
-Hessian's frame (1.8e-2 for a standard-versus-input orientation pair). The bound is
-:data:`FRAME_CONSISTENCY_RTOL` = 2e-3, three times the largest consistent value and below the 5 degree case. This
-catches a frame mismatch of more than a few degrees; it cannot see a pure translation, which no Hessian depends on.
-The archive atoms are returned as the matrix's reference frame, so the caller's check against the bound geometry
-still decides whether the matrix applies to that geometry.
+that looks right, so the reader tests the pair for self-consistency. Rotation invariance of the energy gives, for
+an infinitesimal rotation ``v = e x r`` of the atoms, ``H v = e x g`` (``g`` the gradient), and ``H t = 0`` for a
+translation ``t``. The test is the worst ``||H v - target|| / (||v|| ||H||_F / sqrt(3N))`` over the six motions
+(rotations about the centroid, atoms in bohr), with the archive's own gradient (the section after the Hessian)
+in ``target``, so a frequency job at a non-stationary geometry is not mistaken for a frame mismatch; without a
+gradient section the target is zero. Dividing by the rms row norm ``||H||_F / sqrt(3N)`` keeps the sensitivity as
+the molecule grows.
+
+Measured: on the 123 E2 and G09 logs here the largest consistent value is 6.4e-4, and atoms rotated 2 degrees
+away from the matrix's frame give at least 1.0e-2 (5 degrees: 2.6e-2). On the reviewer's 188 logs (up to 53
+atoms) the largest consistent value is 1.93e-3 and the smallest 2 degree value 4.5e-3. The bound is
+:data:`FRAME_CONSISTENCY_RTOL` = 4e-3: about twice the largest consistent value measured anywhere, below the
+smallest 2 degree value. It catches a frame mismatch of 2 degrees or more; a smaller one, and a pure translation
+(which no Hessian depends on), pass. The archive atoms are returned as the matrix's reference frame, so the
+caller's check against the bound geometry still decides whether the matrix applies to that geometry.
 
 Atom labels. ``C(Iso=13)``, ``C(Fragment=1)`` and a frozen-atom flag are parsed (the element is the leading
 letters; the label does not change the Hessian). An atomic-number element or a Z-matrix geometry is not
@@ -57,7 +62,7 @@ REASON_ARCHIVE_FRAME = "archive_frame_inconsistent"
 REASON_ARCHIVE_ATOMS = "archive_atoms_unsupported"
 
 #: Bound on the rigid-motion residual of the archive Hessian against the archive atoms; see the module docstring.
-FRAME_CONSISTENCY_RTOL = 2e-3
+FRAME_CONSISTENCY_RTOL = 4e-3
 
 _BOHR_PER_ANGSTROM = 1.0 / 0.52917721067
 
@@ -125,26 +130,46 @@ def _read_values(section: str) -> list[float] | None:
     return [float(t) for t in tokens]
 
 
-def rigid_motion_residual(packed: list[float], atoms: list[tuple[str, float, float, float]]) -> float:
-    """``max ||H v|| / (||v|| ||H||_F)`` over the 3 translations and 3 rotations of ``atoms`` (Angstrom)."""
+def rigid_motion_residual(
+    packed: list[float],
+    atoms: list[tuple[str, float, float, float]],
+    gradient: list[float] | None = None,
+) -> float:
+    """Worst ``||H v - t|| / (||v|| ||H||_F / sqrt(3N))`` over the rigid motions ``v`` of ``atoms`` (Angstrom).
+
+    The motions are the 3 translations (``t = 0``) and the 3 rotations about the centroid, ``v_i = e x r_i`` with
+    ``r`` in bohr. Rotation invariance of the energy gives ``H v = e x g`` (``g`` the gradient, per atom), which
+    is zero only at a stationary point; a frequency job at a non-stationary geometry has ``g != 0``. With the
+    archive's own ``gradient`` (``dE/dx``, hartree/bohr: it equals minus the log's ``Forces`` table; checked on
+    two logs) the target is ``e x g``; without it the target is zero. ``||H||_F / sqrt(3N)`` is the rms row norm,
+    so the residual keeps its sensitivity as the molecule grows (``||H||_F`` alone grows with ``sqrt(3N)``). A
+    rotation whose ``v`` is under 1% of the largest rotation's (the axis of a linear molecule) is skipped: it
+    carries no information and dividing by it only amplifies rounding.
+    """
     n3 = 3 * len(atoms)
     matrix = np.zeros((n3, n3))
     rows, cols = np.tril_indices(n3)
     matrix[rows, cols] = packed
     matrix = matrix + matrix.T - np.diag(np.diag(matrix))
-    scale = np.linalg.norm(matrix)
+    scale = np.linalg.norm(matrix) / np.sqrt(n3)
     if scale == 0.0:
         return float("inf")
     xyz = np.array([[x, y, z] for _, x, y, z in atoms]) * _BOHR_PER_ANGSTROM
     xyz = xyz - xyz.mean(axis=0)
+    grad = None if gradient is None else np.asarray(gradient, dtype=float).reshape(-1, 3)
+    units = np.eye(3)
+    rotations = [np.cross(unit, xyz).reshape(-1) for unit in units]
+    largest = max(np.linalg.norm(v) for v in rotations)
     worst = 0.0
-    for axis in range(3):
-        unit = np.zeros(3)
-        unit[axis] = 1.0
-        for vector in (np.tile(unit, len(atoms)), np.cross(unit, xyz).reshape(-1)):
-            norm = np.linalg.norm(vector)
-            if norm > 0.0:
-                worst = max(worst, float(np.linalg.norm(matrix @ vector) / (norm * scale)))
+    for axis, unit in enumerate(units):
+        translation = np.tile(unit, len(atoms))
+        worst = max(worst, float(np.linalg.norm(matrix @ translation) / (np.linalg.norm(translation) * scale)))
+        vector = rotations[axis]
+        norm = np.linalg.norm(vector)
+        if norm < 0.01 * largest:
+            continue
+        target = np.zeros(n3) if grad is None else np.cross(unit, grad).reshape(-1)
+        worst = max(worst, float(np.linalg.norm(matrix @ vector - target) / (norm * scale)))
     return worst
 
 
@@ -170,7 +195,10 @@ def read_gaussian_archive_hessian(text: str) -> ArchiveHessianRead:
         n3 = 3 * len(atoms)
         if values is None or len(values) != n3 * (n3 + 1) // 2:
             return ArchiveHessianRead(reason=REASON_ARCHIVE_UNREADABLE)
-        if rigid_motion_residual(values, atoms) > FRAME_CONSISTENCY_RTOL:
+        gradient = _read_values(sections[nimag + 2]) if nimag + 2 < len(sections) else None
+        if gradient is not None and len(gradient) != n3:
+            gradient = None  # not the gradient section: fall back to the stationary-point test
+        if rigid_motion_residual(values, atoms, gradient) > FRAME_CONSISTENCY_RTOL:
             return ArchiveHessianRead(reason=REASON_ARCHIVE_FRAME)
 
         return ArchiveHessianRead(

@@ -233,3 +233,95 @@ def test_a_log_with_no_archive_hessian_reads_nothing_and_says_nothing(text):
     read = read_gaussian_archive_hessian(text)
     assert read.parsed is None
     assert read.reason is None
+
+
+# ---------------------------------------------------------------------------
+# A non-stationary geometry: rotation invariance gives H (e x r) = e x g, not 0
+# ---------------------------------------------------------------------------
+
+_BOHR = 0.52917721067
+
+
+def _spring_model(atoms_angstrom):
+    """Energy sum 0.5 k (d_ij - L_ij)^2 over all pairs, away from its minimum: analytic gradient and Hessian."""
+    xyz = np.array([a[1:] for a in atoms_angstrom], dtype=float) / _BOHR
+    n = len(xyz)
+    rest = np.linspace(1.0, 2.0, n * (n - 1) // 2)
+    grad = np.zeros((n, 3))
+    hess = np.zeros((3 * n, 3 * n))
+    k = 0
+    for i in range(n):
+        for j in range(i):
+            d = xyz[i] - xyz[j]
+            dist = np.linalg.norm(d)
+            u = d / dist
+            stretch = dist - rest[k]
+            k += 1
+            grad[i] += stretch * u
+            grad[j] -= stretch * u
+            block = np.outer(u, u) + stretch / dist * (np.eye(3) - np.outer(u, u))
+            hess[3 * i : 3 * i + 3, 3 * i : 3 * i + 3] += block
+            hess[3 * j : 3 * j + 3, 3 * j : 3 * j + 3] += block
+            hess[3 * i : 3 * i + 3, 3 * j : 3 * j + 3] -= block
+            hess[3 * j : 3 * j + 3, 3 * i : 3 * i + 3] -= block
+    packed = [float(hess[r, c]) for r in range(3 * n) for c in range(r + 1)]
+    return packed, grad.reshape(-1).tolist()
+
+
+_MODEL_ATOMS = [
+    ("C", 0.0, 0.0, 0.0),
+    ("C", 1.4, 0.2, 0.1),
+    ("O", 2.1, 1.3, -0.4),
+    ("H", -0.6, 0.9, 0.3),
+    ("H", -0.5, -0.8, 0.5),
+    ("H", 0.3, 0.1, -1.1),
+]
+
+
+def test_a_consistent_non_stationary_hessian_is_accepted_only_with_its_gradient():
+    packed, gradient = _spring_model(_MODEL_ATOMS)
+    assert max(abs(g) for g in gradient) > 0.1  # far from stationary
+    assert rigid_motion_residual(packed, _MODEL_ATOMS, gradient) < 1e-9
+    assert rigid_motion_residual(packed, _MODEL_ATOMS) > FRAME_CONSISTENCY_RTOL  # the plain test would refuse it
+
+
+def test_the_gradient_sign_convention_is_dE_dx():
+    packed, gradient = _spring_model(_MODEL_ATOMS)
+    assert rigid_motion_residual(packed, _MODEL_ATOMS, [-g for g in gradient]) > FRAME_CONSISTENCY_RTOL
+
+
+def test_a_rotated_frame_is_refused_even_with_a_gradient():
+    packed, gradient = _spring_model(_MODEL_ATOMS)
+    a = np.radians(5.0)
+    rotation = np.array([[np.cos(a), -np.sin(a), 0], [np.sin(a), np.cos(a), 0], [0, 0, 1]])
+    rotated = [(e, *(rotation @ np.array([x, y, z]))) for e, x, y, z in _MODEL_ATOMS]
+    assert rigid_motion_residual(packed, rotated, gradient) > FRAME_CONSISTENCY_RTOL
+
+
+def _synthetic_log(atoms, packed, gradient) -> str:
+    rows = "\\".join(f"{e},{x:.10f},{y:.10f},{z:.10f}" for e, x, y, z in atoms)
+    hess = ",".join(f"{v:.8f}" for v in packed)
+    grad = ",".join(f"{v:.8f}" for v in gradient)
+    body = f"1\\1\\GINC-NODE\\Freq\\X\\\\#P freq\\\\title\\\\0,1\\{rows}\\\\Version=X\\NImag=0\\\\{hess}\\\\{grad}\\\\\\@"
+    lines = [" Entering Gaussian System, Link 0=g16", " Gaussian 16:  ES64L-G16RevC.02"]
+    lines += [" " + body[k : k + 69] for k in range(0, len(body), 69)]
+    return "\n".join(lines) + "\n"
+
+
+def test_a_log_at_a_non_stationary_geometry_is_read_through_its_gradient_section():
+    packed, gradient = _spring_model(_MODEL_ATOMS)
+    read = read_gaussian_archive_hessian(_synthetic_log(_MODEL_ATOMS, packed, gradient))
+    assert read.reason is None
+    assert read.parsed is not None
+    assert read.parsed.natoms == 6
+
+
+def test_a_log_whose_gradient_section_is_missing_falls_back_to_the_stationary_test():
+    packed, gradient = _spring_model(_MODEL_ATOMS)
+    text = _synthetic_log(_MODEL_ATOMS, packed, gradient)
+    # Drop the gradient section: the non-stationary matrix now fails the plain test.
+    joined = "".join(line[1:] for line in text.splitlines()[2:])
+    no_gradient = joined.replace("\\\\" + ",".join(f"{v:.8f}" for v in gradient), "")
+    assert no_gradient != joined
+    again = "\n".join(text.splitlines()[:2]) + "\n " + no_gradient + "\n"
+    assert read_gaussian_archive_hessian(again).reason == REASON_ARCHIVE_FRAME
