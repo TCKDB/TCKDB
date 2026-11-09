@@ -14,7 +14,6 @@ import io
 import json
 
 import pytest
-
 from sqlalchemy import Column, MetaData, Table, select, text
 from sqlalchemy.sql.sqltypes import CHAR, Enum, String, Text
 
