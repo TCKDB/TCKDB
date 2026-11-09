@@ -159,15 +159,16 @@ def test_gaussian_matching_is_case_and_alias_insensitive():
             TauBasis.assumed_finite_difference_gradient,
             TAU_FINITE_DIFFERENCE_GRADIENT_CM1,
         ),
+        # No analytic gradient behind the plain CC keywords (ORCA 6.1 manual p. 224).
         (
             "ccsd(t)",
-            TauBasis.assumed_finite_difference_gradient,
-            TAU_FINITE_DIFFERENCE_GRADIENT_CM1,
+            TauBasis.assumed_finite_difference_energy,
+            TAU_FINITE_DIFFERENCE_ENERGY_CM1,
         ),
         (
             "dlpno-ccsd(t)",
-            TauBasis.assumed_finite_difference_gradient,
-            TAU_FINITE_DIFFERENCE_GRADIENT_CM1,
+            TauBasis.assumed_finite_difference_energy,
+            TAU_FINITE_DIFFERENCE_ENERGY_CM1,
         ),
     ],
 )

@@ -54,37 +54,59 @@ Gaussian (``Software.name == "Gaussian"``, matched case-insensitively —
 see :func:`tckdb_schemas.software.normalize_software_name`):
 
 * **Analytic** (`TauBasis.assumed_analytic_default`): HF, any DFT
-  functional, MP2, CIS, CASSCF. Gaussian has computed analytic second
+  functional, MP2, CIS, CASSCF, and the double hybrids B2PLYP, B2PLYPD,
+  B2PLYPD3, mPW2PLYP and mPW2PLYPD. Gaussian has computed analytic second
   derivatives for these method families by default since at least G03;
-  a user gets `Freq=Numer` only by asking for it.
+  a user gets `Freq=Numer` only by asking for it. For the double hybrids
+  the G09 MP-methods page (the keyword page for MP2, MP3, MP4, MP5, B2PLYP
+  and mPW2PLYP) says "MP2, B2PLYP[D], mPW2PLYP[D]: Energies, analytic
+  gradients, and analytic frequencies", and the Freq page makes analytic the
+  default for "RHF, UHF, CIS, CASSCF, MP2, and all DFT methods". Other
+  double hybrids (B2GP-PLYP, DSD-*, PBE0-DH, ...) are still not assumed.
 * **Finite-difference-from-gradients**
-  (`TauBasis.assumed_finite_difference_gradient`): MP3, MP4 (any
-  variant — SDQ, SDTQ, DQ), QCISD, CCSD, CISD, CID (exactly CIS is analytic;
+  (`TauBasis.assumed_finite_difference_gradient`): MP3, MP4(DQ),
+  MP4(SDQ), QCISD, CCSD, CISD, CID (exactly CIS is analytic;
   CISD/CID have numerical frequencies only). None of these have an analytic
   Hessian implementation in Gaussian; the default frequency job
   numerically differentiates the analytic gradient, which these methods
-  do have.
+  do have. For MP3, MP4(DQ) and MP4(SDQ) the G09 MP page says "Energies,
+  analytic gradients, and numerical frequencies".
 * **Finite-difference-from-energies**
-  (`TauBasis.assumed_finite_difference_energy`): CCSD(T) and QCISD(T).
-  Neither has an analytic *or* semi-analytic (gradient-based) second
-  derivative in Gaussian; the default frequency job double-differentiates
-  the energy.
+  (`TauBasis.assumed_finite_difference_energy`): CCSD(T), QCISD(T), and
+  MP4(SDTQ) (which is what a bare ``MP4`` means) and MP5. None has an analytic
+  *or* semi-analytic (gradient-based) second derivative in Gaussian; the
+  default frequency job double-differentiates the energy. The G09 MP page
+  says "MP4(SDTQ) and MP5: Analytic energies, numerical gradients, and
+  numerical frequencies", and "Just specifying MP4 defaults to MP4(SDTQ)".
 
 ORCA (``Software.name == "ORCA"``):
 
 * **Analytic** (`TauBasis.assumed_analytic_default`): HF, any DFT
   functional. ORCA computes analytic Hessians for both by default.
 * **Finite-difference-from-gradients**
-  (`TauBasis.assumed_finite_difference_gradient`): correlated
-  wavefunction methods without an analytic Hessian in ORCA — MP2
-  variants (MP2, RI-MP2, DLPNO-MP2, SCS-MP2), coupled cluster (CCSD,
-  CCSD(T)), and every ``DLPNO-*`` method. ORCA's default `NumFreq` for
-  these differentiates the analytic gradient, which all of them have;
-  the table does not split a gradient/energy sub-case for ORCA because
-  the amendment's own wording ("finite-difference for correlated
-  wavefunction methods") does not ask for one, and ORCA does not
-  publish a documented energy-only fallback the way Gaussian's CCSD(T)
-  path is documented.
+  (`TauBasis.assumed_finite_difference_gradient`): the MP2 variants
+  (MP2, RI-MP2, DLPNO-MP2, SCS-MP2). ORCA's default `NumFreq` differentiates
+  the analytic MP2 gradient. The analytic (RI-)MP2 Hessian exists only
+  without frozen core (ORCA 5.0.4 section 8.1.2.4: "Frequencies can be
+  calculated analytically in all-electron calculations. With frozen core
+  orbitals, second derivatives of any kind are currently only available
+  numerically"), and the 6.1 manual says "the analytical (RI-)MP2-Hessians
+  are no longer available". So "numerical on every version" holds for the
+  default, frozen-core job; an all-electron ORCA 5 MP2 job can be analytic and
+  that is not assumed here.
+* **Finite-difference-from-energies**
+  (`TauBasis.assumed_finite_difference_energy`): coupled cluster, which has
+  no analytic gradient behind the plain keyword: CCSD, CCSD(T), their F12
+  variants, and DLPNO-CCSD / DLPNO-CCSD(T). The ORCA 6.1 manual's example of a
+  method whose "analytic gradient is not available" is ``! CCSD(T)`` with
+  ``! Opt NumGrad`` (p. 224); its frequency section lists analytic frequencies
+  for "HF, DFT" only (p. 677); ORCA 5.0.4 says "Gradients are not available" for
+  F12 methods. So a frequency job differentiates numerical gradients, which
+  is finite differences of energies. ORCA 6.1 does have analytic CCSD and
+  CCSD(T) gradients behind the separate ``AUTOCI-`` keyword prefix (manual
+  section 3.11); that prefix is not recognised here, so such a method string gets no
+  assumption. Any other ``DLPNO-*`` string (DLPNO-CEPA and the like) has no
+  documented answer and gets no assumption.
 
 Why some things stay ``None``
 ------------------------------
@@ -196,6 +218,9 @@ _MP3_PREFIXES = ("mp3",)
 #: MP4 and its truncations: mp4(sdq), mp4(sdtq), mp4(dq).
 _MP4_PREFIXES = ("mp4",)
 
+#: MP5 (Gaussian: analytic energies, numerical gradients).
+_MP5_PREFIXES = ("mp5", "ump5")
+
 #: QCISD(T) is checked before bare QCISD so the "(t)" tail is not lost to
 #: the shorter prefix.
 _QCISD_T_PREFIXES = ("qcisd(t)",)
@@ -205,9 +230,9 @@ _QCISD_PREFIXES = ("qcisd",)
 #: same reason as QCISD(T)/QCISD.
 _CCSD_T_PREFIXES = (
     "ccsd(t)", "dlpno-ccsd(t)", "dlpno-ccsd(t1)", "ccsd(t)-f12",
-    "dlpno-ccsd(t)-f12",
+    "dlpno-ccsd(t)-f12", "f12-ccsd(t)", "f12/ri-ccsd(t)",
 )
-_CCSD_PREFIXES = ("ccsd", "dlpno-ccsd")
+_CCSD_PREFIXES = ("ccsd", "dlpno-ccsd", "f12-ccsd", "f12/ri-ccsd")
 
 #: DLPNO-tagged local correlation methods not already matched above by a
 #: more specific CC/MP2 prefix -- e.g. DLPNO-CEPA, DLPNO-QCISD(T) should
@@ -254,7 +279,11 @@ class MethodFamily:
     DFT = "dft"
     MP2 = "mp2"
     MP3 = "mp3"
+    #: MP4(DQ) and MP4(SDQ): analytic gradients exist in Gaussian.
     MP4 = "mp4"
+    #: MP4(SDTQ), and the bare keyword MP4 (which means MP4(SDTQ)): numerical gradients.
+    MP4_SDTQ = "mp4(sdtq)"
+    MP5 = "mp5"
     CIS = "cis"
     CISD = "cisd"
     CASSCF = "casscf"
@@ -277,6 +306,20 @@ def is_dft_functional(method: str | None) -> bool:
     if token is None:
         return False
     return _startswith_any(token, _DFT_PREFIXES)
+
+
+def _mp4_variant(token: str) -> str:
+    """MP4 token -> ``MP4`` (DQ/SDQ) or ``MP4_SDTQ`` (full MP4, bare ``mp4`` included).
+
+    ``mp4`` means MP4(SDTQ) (G09 MP page: "Just specifying MP4 defaults to
+    MP4(SDTQ)"). Parentheses, commas and hyphens in the truncation are ignored, so
+    ``mp4(sdtq)`` and ``mp4sdtq`` agree. A truncation this module does not know
+    keeps the previous behaviour (gradients).
+    """
+    tail = re.sub(r"[(),/-]", "", token[len("mp4"):])
+    if tail in ("", "sdtq"):
+        return MethodFamily.MP4_SDTQ
+    return MethodFamily.MP4
 
 
 def classify_method_family(method: str | None) -> str | None:
@@ -311,7 +354,9 @@ def classify_method_family(method: str | None) -> str | None:
     if _startswith_any(token, _QCISD_PREFIXES):
         return MethodFamily.QCISD
     if _startswith_any(token, _MP4_PREFIXES):
-        return MethodFamily.MP4
+        return _mp4_variant(token)
+    if _startswith_any(token, _MP5_PREFIXES):
+        return MethodFamily.MP5
     if _startswith_any(token, _MP3_PREFIXES):
         return MethodFamily.MP3
     if _startswith_any(token, _MP2_PREFIXES):
@@ -343,17 +388,17 @@ _GAUSSIAN_FINITE_DIFFERENCE_GRADIENT = frozenset({
 #: energy twice.
 _GAUSSIAN_FINITE_DIFFERENCE_ENERGY = frozenset({
     MethodFamily.CCSD_T, MethodFamily.QCISD_T,
+    MethodFamily.MP4_SDTQ, MethodFamily.MP5,
 })
 
 #: ORCA families whose default frequency job is analytic.
 _ORCA_ANALYTIC = frozenset({MethodFamily.HF, MethodFamily.DFT})
-#: ORCA's correlated-wavefunction families: no analytic Hessian, so the
-#: default `NumFreq` differentiates the analytic gradient (all of MP2,
-#: CC and DLPNO-* have one in ORCA).
-_ORCA_FINITE_DIFFERENCE_GRADIENT = frozenset({
-    MethodFamily.MP2, MethodFamily.CCSD, MethodFamily.CCSD_T,
-    MethodFamily.DLPNO_OTHER,
-})
+#: ORCA MP2 (default frozen core): no analytic Hessian, so `NumFreq`
+#: differentiates the analytic MP2 gradient.
+_ORCA_FINITE_DIFFERENCE_GRADIENT = frozenset({MethodFamily.MP2})
+#: ORCA coupled cluster behind the plain keywords: no analytic gradient, so
+#: `NumFreq` differentiates numerical gradients (finite differences of energies).
+_ORCA_FINITE_DIFFERENCE_ENERGY = frozenset({MethodFamily.CCSD, MethodFamily.CCSD_T})
 
 # ---------------------------------------------------------------------------
 # ORCA: functional class and release gate
@@ -378,17 +423,32 @@ _ORCA_FINITE_DIFFERENCE_GRADIENT = frozenset({
 #   assumed ``assumed_finite_difference_gradient`` on any ORCA version. (No
 #   statement about an analytic double-hybrid Hessian was found in the 5.0.4
 #   or 6.1 manuals.)
-# * MP2: ORCA 6.1 manual, "MP2 and RI-MP2 Second Derivatives" (p. 290): the
-#   analytic (RI-)MP2 Hessians are no longer available. ORCA MP2 stays in the
-#   finite-difference-from-gradients row.
+# * MP2: ORCA 5.0.4 manual 8.1.2.4 "MP2 and RI-MP2 Gradients and Hessians"
+#   (pp. 109-110): frequencies "can be calculated analytically in all-electron
+#   calculations. With frozen core orbitals, second derivatives of any kind are
+#   currently only available numerically"; ORCA 6.1 manual, "MP2 and RI-MP2
+#   Second Derivatives" (p. 290): "the analytical (RI-)MP2-Hessians are no
+#   longer available". The default is frozen core, so ORCA MP2 stays in the
+#   finite-difference-from-gradients row on every version; an all-electron
+#   ORCA 5 job could be analytic and is not assumed so.
+# * coupled cluster: ORCA 6.1 manual 2.23 "Numerical Gradients" (p. 224) gives
+#   ``! CCSD(T)`` with ``! Opt NumGrad`` as the example of a method whose
+#   analytic gradient is not available; 4.6.4 (p. 677) lists analytic
+#   frequencies for HF and DFT only; ORCA 5.0.4 8.1.3.6 says "Gradients are not
+#   available" for F12 methods. Frequencies are therefore differences of
+#   numerical gradients: finite differences of energies. The AUTOCI- prefixed
+#   keywords (6.1, sections 3.11.2-3.11.3) have analytic CCSD/CCSD(T) gradients
+#   and so would be finite-difference-from-gradients; the plain keywords do not,
+#   and ``AUTOCI-*`` strings are not recognised, so they get no assumption.
 #
-# * Gaussian double hybrids: the Gaussian 16 sources available through the group
-#   knowledge base (Foresman & Frisch, "Exploring Chemistry with Electronic
-#   Structure Methods"; no Gaussian 16 keyword pages) name analytic frequencies
-#   for HF, DFT, MP2, CIS and CASSCF and say nothing that settles double
-#   hybrids, so Gaussian double hybrids (the prefix list below) get no
-#   assumption. Some workflow tools treat B2PLYP and mPW2PLYP as analytic; the
-#   table needs a documentation citation before it can say so.
+# * Gaussian double hybrids: the Gaussian 09 MP-methods keyword page
+#   ("MP2, B2PLYP[D], mPW2PLYP[D]: Energies, analytic gradients, and analytic
+#   frequencies"; "B2PLYPD3 requests the same but with Grimme's D3BJ
+#   dispersion. Energies, gradients and frequencies are available") and the
+#   Freq page (Freq=Analytic is the default for "RHF, UHF, CIS, CASSCF, MP2, and
+#   all DFT methods") settle B2PLYP, B2PLYPD, B2PLYPD3, mPW2PLYP and
+#   mPW2PLYPD as analytic. Other double hybrids are not documented and get no
+#   assumption.
 #
 # Name lists are explicit and conservative; a name in no list is a plain
 # GGA/hybrid only if the family classifier already calls it DFT. Overlaps take
@@ -458,7 +518,9 @@ _FAMILY_LABEL: dict[str, str] = {
     MethodFamily.DFT: "DFT",
     MethodFamily.MP2: "MP2",
     MethodFamily.MP3: "MP3",
-    MethodFamily.MP4: "MP4",
+    MethodFamily.MP4: "MP4(DQ/SDQ)",
+    MethodFamily.MP4_SDTQ: "MP4(SDTQ)",
+    MethodFamily.MP5: "MP5",
     MethodFamily.CIS: "CIS",
     MethodFamily.CISD: "CISD/CID",
     MethodFamily.CASSCF: "CASSCF",
@@ -506,8 +568,24 @@ _SOFTWARE_TABLE: dict[str, tuple[tuple[frozenset[str], TauBasis], ...]] = {
             _ORCA_FINITE_DIFFERENCE_GRADIENT,
             TauBasis.assumed_finite_difference_gradient,
         ),
+        (
+            _ORCA_FINITE_DIFFERENCE_ENERGY,
+            TauBasis.assumed_finite_difference_energy,
+        ),
     ),
 }
+
+
+#: The Gaussian double hybrids whose analytic frequencies the G09 MP page documents,
+#: compared with hyphens, underscores and case removed ("B2PLYP-D3" is "b2plypd3").
+_GAUSSIAN_ANALYTIC_DOUBLE_HYBRIDS = frozenset({
+    "b2plyp", "b2plypd", "b2plypd3", "mpw2plyp", "mpw2plypd",
+})
+
+
+def _is_gaussian_documented_double_hybrid(method: str | None) -> bool:
+    token = _normalize(method)
+    return token is not None and token.replace("-", "") in _GAUSSIAN_ANALYTIC_DOUBLE_HYBRIDS
 
 
 def infer_hessian_method(
@@ -559,10 +637,11 @@ def infer_hessian_method(
         software_token == "gaussian"
         and family == MethodFamily.DFT
         and (_normalize(method) or "").startswith(_DOUBLE_HYBRID_PREFIXES)
+        and not _is_gaussian_documented_double_hybrid(method)
     ):
-        # Gaussian's documentation of analytic second derivatives names HF, DFT,
-        # MP2, CIS and CASSCF; it does not settle double hybrids (B2PLYP and
-        # mPW2PLYP included, in the sources read 2026-10-31), so nothing is assumed.
+        # Only the double hybrids the G09 MP-methods page names (B2PLYP[D],
+        # mPW2PLYP[D], and B2PLYPD3) are documented analytic; every other double
+        # hybrid has no documented Gaussian answer, so nothing is assumed.
         return None
     if software_token == "orca" and family == MethodFamily.DFT:
         functional = _orca_functional_class(_normalize(method) or "")
