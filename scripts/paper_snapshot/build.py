@@ -1,25 +1,15 @@
-"""Build the paper's demonstration snapshot on an empty local TCKDB instance.
+"""Build the demonstration snapshot on an empty local TCKDB instance.
 
     python scripts/paper_snapshot/build.py --sources scripts/paper_snapshot/sources.example.yml
 
-Steps, in order:
+Steps:
 
-1. refuse unless the instance is reachable and empty;
-2. register a depositor through the public route and mint its API key;
-3. deposit each configured source through its public route
-   (source 1 through the client builders, source 4 through the CHEMKIN adapter;
-   sources 2 and 3 are stubs that run only when configured);
-4. create a curator account (operator CLI) and approve the submissions through
-   ``POST /submissions/{id}/approve``, recording that this is a build-script
-   demonstration and not an independent review;
-5. export the archive (``backend/scripts/tckdb_archive.py``) and the expected
-   outputs (``backend/scripts/paper/generate_expected_outputs.py``);
-6. write ``build_report.json`` (every warning and refusal grouped by code) and
-   ``snapshot_record.json`` (what was built, from which commit, with what).
-
-Everything is deposited through HTTP. The only non-HTTP steps are the curator
-account creation (no public route grants the role) and the two exports, which
-read the instance's database the way a restore-and-regenerate reproducer does.
+1. validate the sources config, then check the instance is reachable and empty;
+2. register a depositor and mint its API key;
+3. deposit each configured source through its public route;
+4. create a curator and approve every submission (a demonstration, recorded as such);
+5. export the archive and the expected outputs;
+6. write ``build_report.json`` (warnings and refusals by code) and ``snapshot_record.json``.
 """
 
 from __future__ import annotations
@@ -43,7 +33,7 @@ PACKAGE_PATHS = [
     REPO_ROOT / "clients" / "python" / "adapters" / "chemkin",
     REPO_ROOT / "backend",
 ]
-# Prefer this checkout's packages over any editable install that points at another checkout.
+# This checkout's packages come first on the path.
 for _path in reversed([HERE, *PACKAGE_PATHS]):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
@@ -58,8 +48,7 @@ import source_e2  # noqa: E402
 import source_pdep  # noqa: E402
 from common import Report, Session  # noqa: E402
 
-#: The generators run for the snapshot. The registry holds more (ThermoML, the QCSchema round trip) that belong to
-#: other deposits; the QCSchema one also writes inside a rolled-back savepoint, which a snapshot instance should not see.
+#: Generators run for the snapshot.
 EXPECTED_OUTPUTS = (
     "corpus_counts",
     "conformer_basins",
@@ -71,13 +60,10 @@ EXPECTED_OUTPUTS = (
     "mechanism_roundtrip_counts",
     "mechanism_fixture_provenance",
 )
-#: Registered but not run: they would be empty. ``selected_thermo_by_species`` reads dataset-release selections (the
-#: snapshot publishes no release); ``candidate_lineage`` needs a species entry with several thermo candidates and
-#: ``transition_state_evidence`` needs transition states, which only the ARC runs (source 2) bring. Add them back
-#: when the sources that feed them exist.
+#: Registered generators not run for these sources (their outputs would be empty).
 NOT_RUN_UNTIL_FED = ("selected_thermo_by_species", "candidate_lineage", "transition_state_evidence")
 
-#: Config keys that hold a path on the builder's machine. They are never written to ``snapshot_record.json``.
+#: Config keys holding local paths; omitted from ``snapshot_record.json``.
 PATH_KEYS = frozenset({"root", "fixture_dir", "adapter_path", "runs_root", "arkane_dir"})
 TOP_LEVEL_KEYS = frozenset({"instance", "sources", "accounts", "expected_outputs"})
 
@@ -98,13 +84,13 @@ def load_config(path: Path) -> dict[str, Any]:
 
 
 def registered_generators() -> set[str]:
-    """Names in the generator registry, read as text so validation needs no database or app import."""
+    """Generator names in the registry, read as text."""
     text = (REPO_ROOT / "backend" / "scripts" / "paper" / "registry.py").read_text()
     return set(re.findall(r'^\s+"([a-z0-9_]+)":\s', text, flags=re.MULTILINE))
 
 
 def validate_config(config: dict[str, Any]) -> list[str]:
-    """Check the whole config, enabled stub sources included, before anything is deposited."""
+    """Return the problems in the whole config, enabled stub sources included."""
     problems = [f"unknown top-level key {k!r}" for k in sorted(set(config) - TOP_LEVEL_KEYS)]
     known = {name for name, _ in SOURCES}
     sources = config.get("sources") or {}
@@ -281,7 +267,6 @@ def main(argv: list[str] | None = None) -> int:
             exports["archive_sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
 
     finally:
-        # Written whether or not the build finished: a failed approval still leaves the refusals that explain it.
         report.write(out_dir / "build_report.json")
     record = {
         "snapshot": "TCKDB paper demonstration snapshot",

@@ -55,11 +55,7 @@ def error_message(exc: BaseException, limit: int = 400) -> str:
 
 @dataclass
 class Report:
-    """Everything the deposits produced that a reader needs to see.
-
-    ``warnings`` and ``refusals`` are grouped by code in the written report so
-    the Checks-and-curation subsection of the paper can quote them.
-    """
+    """Deposit outcomes: per-source status, warnings and refusals."""
 
     sources: dict[str, dict[str, Any]] = field(default_factory=dict)
     warnings: list[dict[str, Any]] = field(default_factory=list)
@@ -140,7 +136,7 @@ def collect_response_warnings(report: Report, source: str, where: str, response:
 
 
 class Session:
-    """The instance under build: base URL plus the two accounts' credentials."""
+    """The instance under build and the depositor's API key."""
 
     def __init__(self, base_url: str, timeout: float = 120.0) -> None:
         self.base = api_base(base_url)
@@ -155,15 +151,9 @@ class Session:
     def client(self) -> TCKDBClient:
         return TCKDBClient(self.base, api_key=self.depositor_key, timeout=self.timeout)
 
-    # -- accounts (public routes only) ---------------------------------
 
     def session_header(self, response: httpx.Response) -> dict[str, str]:
-        """The session cookie as a header.
-
-        The server marks its cookie ``Secure``, so an HTTP client talking to a
-        plain-http local instance will not send it back on its own; the token
-        is taken from ``Set-Cookie`` and sent explicitly.
-        """
+        """Return the session cookie as a ``Cookie`` header (the server's cookie is ``Secure``)."""
         raw = response.headers.get("set-cookie", "")
         match = re.search(r"tckdb_session=([^;]+)", raw)
         if not match:
@@ -171,11 +161,7 @@ class Session:
         return {"Cookie": f"tckdb_session={match.group(1)}"}
 
     def register_depositor(self, username: str, password: str, email: str, full_name: str) -> None:
-        """Register through the open-registration route and mint an API key.
-
-        An already-registered username logs in instead, so a retry of the same
-        build on the same instance does not fail on its own first step.
-        """
+        """Register the depositor (log in if it exists) and mint an API key."""
         with httpx.Client(timeout=30.0) as http:
             response = http.post(
                 self.base + "/auth/register",
@@ -192,11 +178,7 @@ class Session:
 
 
 def digest_files(root: Path, files: list[Path]) -> dict[str, Any]:
-    """Count and one SHA-256 over (path relative to ``root``, SHA-256 of content) pairs, sorted.
-
-    The record of what a deposit read, without a single absolute path in it: the
-    same files give the same digest wherever the source tree sits.
-    """
+    """Return the file count and one SHA-256 over sorted (relative path, content digest) pairs."""
     import hashlib
 
     pairs = []

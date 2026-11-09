@@ -1,21 +1,14 @@
-"""Read a sample of records back from an instance and check them against the sources.
+"""Read sample records back from an instance and check them against the sources.
 
     python scripts/paper_snapshot/readback.py --api-url http://127.0.0.1:8103 --sources my_sources.yml
 
-Meant for a third, empty instance that the snapshot archive was restored into
-(``instance.py restore``), but it reads any instance. One sample per deposited
-source, chosen the same way every time:
+One sample per configured source:
 
-* **E2**: n-butane. The species entry's calculation count equals what the
-  sources hold for it; one output log is downloaded **by digest**, its SHA-256
-  is recomputed, and it must equal the digest asked for and the digest of a
-  file in the E2 source directory.
-* **Formic acid model**: HOCHO. Its stored NASA-7 coefficients and temperature
-  ranges equal the CHEMKIN file's entry for that species.
+* E2: n-butane. Its calculation count equals the sources'; one output log is downloaded by digest and its SHA-256
+  equals the digest requested and a source file's.
+* Formic acid model: HOCHO. Its stored NASA-7 coefficients and temperature ranges equal the CHEMKIN file's.
 
-A source with no entry in the sources file is skipped, and the result says so.
-It registers a throw-away reader account through the open-registration route
-(downloads need any authenticated caller).
+Registers a reader account through open registration. A source with no entry is skipped.
 """
 
 from __future__ import annotations

@@ -36,7 +36,7 @@ DEFAULT_LITERATURE = {
 
 
 class _Recorder:
-    """Wraps the real client so every response the adapter's uploader gets is kept."""
+    """Client wrapper that records response warnings and refusals."""
 
     def __init__(self, client: Any, report: Report) -> None:
         self._client = client
@@ -63,7 +63,7 @@ def _fixture(cfg: dict[str, Any]) -> Path:
 
 
 def validate(cfg: dict[str, Any]) -> list[str]:
-    """Everything that can be checked before a single deposit is made."""
+    """Return the problems with this source's config."""
     problems: list[str] = []
     fixture = _fixture(cfg)
     for name in (cfg.get("mechanism_file", "chem_annotated.inp"), cfg.get("species_dictionary", "species_dictionary.txt")):
@@ -75,14 +75,14 @@ def validate(cfg: dict[str, Any]) -> list[str]:
 
 
 def describe_inputs(cfg: dict[str, Any]) -> dict[str, Any]:
-    """Count and digest of the files the importer reads, for the snapshot record (no absolute paths)."""
+    """Return the count and digest of the files read."""
     fixture = _fixture(cfg)
     names = (cfg.get("mechanism_file", "chem_annotated.inp"), cfg.get("species_dictionary", "species_dictionary.txt"))
     return digest_files(fixture, [fixture / n for n in names])
 
 
 def _find_key(node: Any, key: str) -> Any:
-    """First value stored under ``key`` anywhere in a nested JSON document, in document order."""
+    """Return the first non-empty value under ``key`` in a nested document."""
     if isinstance(node, dict):
         if key in node and node[key]:
             return node[key]
@@ -99,21 +99,7 @@ def _find_key(node: Any, key: str) -> Any:
 
 
 def literature_record(client: Any, literature: dict[str, Any] | None, reactant_smiles: str) -> dict[str, Any]:
-    """What the instance stored for the cited DOI, and where its title came from.
-
-    The server fetches metadata for a DOI from Crossref when it deposits a
-    literature row, so the stored row (title, authors) depends on whether that
-    lookup was reachable and what it returned at the time. ``title_source``
-    says which: ``resolved_metadata`` (fetched) or ``depositor_supplied``
-    (typed by the depositor, here the title in the sources config).
-
-    The literature ref is read from a deposited kinetics record's provenance
-    (a public read, scoped by the first reactant of the first deposited reaction),
-    then the row is read by ref. Nothing is guessed and no
-    error is swallowed: an authentication or network failure, a deposit that
-    carries no literature ref, or a row whose DOI is not the one cited stops
-    the build.
-    """
+    """Return what the instance stored for the cited DOI, read by the ref on a deposited kinetics record; raise on any failure."""
     if not literature or not literature.get("doi"):
         return {"literature_supplied": False}
     found = client.search_kinetics(reactants=[reactant_smiles], limit=1)

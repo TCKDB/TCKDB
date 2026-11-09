@@ -24,7 +24,7 @@ def deposit(session: Session, cfg: dict[str, Any], report: Report, work_dir: Pat
 
 
 def validate(cfg: dict[str, Any]) -> list[str]:
-    """An enabled entry is a configuration error."""
+    """Report an enabled entry as a configuration error."""
     return [SOURCE + ": enabled, but there is no deposit step yet"]
 
 

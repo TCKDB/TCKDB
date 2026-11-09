@@ -89,12 +89,12 @@ class Parsed:
 
 
 # --------------------------------------------------------------------------
-# reading the campaign
+# campaign
 # --------------------------------------------------------------------------
 
 
 def load_tasks(root: Path, levels: list[str]) -> tuple[list[Task], dict[str, Any]]:
-    """The campaign table (``raw_outputs/tasks.txt``) joined with molecule metadata."""
+    """Return the campaign tasks joined with molecule metadata, and a count table."""
     raw = root / "raw_outputs"
     manifest = {m["label"]: m for m in json.loads((raw / "manifest_union.json").read_text())}
     listed = [ln.strip() for ln in (raw / "tasks.txt").read_text().splitlines() if ln.strip()]
@@ -134,7 +134,7 @@ def load_tasks(root: Path, levels: list[str]) -> tuple[list[Task], dict[str, Any
 
 
 def provenance_check(root: Path, tasks_all: list[Task]) -> dict[str, Any]:
-    """Check that every task in the campaign table has its output."""
+    """Report tasks without output, with empty output, or without a status file."""
     missing: list[str] = []
     empty: list[str] = []
     no_status: list[str] = []
@@ -156,7 +156,7 @@ def provenance_check(root: Path, tasks_all: list[Task]) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------
-# parsing the outputs
+# parsing
 # --------------------------------------------------------------------------
 
 
@@ -173,7 +173,7 @@ def _last_input_orientation(text: str, elements: list[str]) -> list[list[Any]] |
 
 
 def parse_gjf(path: Path, elements: list[str]) -> list[list[Any]] | None:
-    """Start coordinates from the input deck (blank-line separated Gaussian layout)."""
+    """Return the start coordinates from a Gaussian input deck."""
     if not path.is_file():
         return None
     blocks = re.split(r"\n\s*\n", path.read_text())
@@ -243,7 +243,7 @@ def xyz_text(atoms: list[list[Any]], comment: str) -> str:
 
 
 # --------------------------------------------------------------------------
-# building and sending
+# deposit
 # --------------------------------------------------------------------------
 
 
@@ -288,7 +288,7 @@ GFN2_REFUSAL = "the gfn2 level is not deposited: xtb job files are not part of t
 
 
 def validate(cfg: dict[str, Any]) -> list[str]:
-    """Everything that can be checked before a single deposit is made."""
+    """Return the problems with this source's config."""
     problems: list[str] = []
     root = Path(str(cfg.get("root", ""))).expanduser()
     if not cfg.get("root"):
@@ -309,7 +309,7 @@ def validate(cfg: dict[str, Any]) -> list[str]:
 
 
 def describe_inputs(cfg: dict[str, Any]) -> dict[str, Any]:
-    """Count and digest of the source files this deposit reads, for the snapshot record (no absolute paths)."""
+    """Return the count and digest of the files read."""
     root = Path(cfg["root"]).expanduser()
     levels = list(cfg.get("levels") or LEVELS_AVAILABLE)
     tasks, _ = load_tasks(root, levels)

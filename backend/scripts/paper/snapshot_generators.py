@@ -78,18 +78,7 @@ def _software_label(release) -> str:
 
 
 def hessian_reanalysis(session: Session) -> dict[str, Any]:
-    """The spectrum recovered from every stored Hessian beside the stored frequency list.
-
-    Scope is every calculation with a stored Hessian or a stored frequency
-    list. A calculation without a stored Hessian is reported with status
-    ``hessian_not_stored`` and counted in ``scope.by_status``; refusals are
-    counted, never dropped.
-
-    Each record also names the species (SMILES and multiplicity), the level of
-    theory and the calculation type, and the records are ordered by those and
-    then by content, not by public ref, so two builds of the same data list
-    them in the same order.
-    """
+    """Return the Hessian reanalysis of every calculation with a stored Hessian or frequency list, ordered by content."""
     out = _hessian_reanalysis(session, include_modes=True)
     by_ref = {
         calc.public_ref: calc
@@ -279,7 +268,7 @@ def deposit_warnings(session: Session) -> dict[str, Any]:
 
 
 def _selection_session(session: Session):
-    """A read-only snapshot session, as the route opens one, or the caller's own in a test harness."""
+    """Return a read-only snapshot session (or the caller's own under a test harness) and whether it is owned."""
     from app.services.read_snapshot import begin_read_snapshot
     from app.services.thermo_selection.public import SNAPSHOT_OPT_OUT
 
@@ -293,14 +282,7 @@ def _selection_session(session: Session):
 
 
 def thermo_selection_outcomes(session: Session) -> dict[str, Any]:
-    """For each species entry with a thermo record: what the H298 selection route answers.
-
-    Runs the service behind ``POST /species-entries/{ref}/thermo/select`` with
-    its default request (equilibrium-ensemble target, default eligibility,
-    exploratory profile). The answer is one of ``sole_eligible_candidate``,
-    ``incomparable_alternatives`` or ``no_applicable_candidate``; no outcome
-    names a best record, and ``result_mode`` is left at ``all``.
-    """
+    """Return the H298 selection answer for each species entry with a thermo record."""
     from app.schemas.reads.scientific_thermo_selection import ThermoSelectionRequest, ThermoSelectionTargetIn
     from app.services.thermo_selection.public import run_selection
 
@@ -354,17 +336,7 @@ def thermo_selection_outcomes(session: Session) -> dict[str, Any]:
 
 
 def structure_selection_outcomes(session: Session) -> dict[str, Any]:
-    """For each species entry with conformers: what the calculation and conformer selections answer.
-
-    Runs the services behind ``POST /species-entries/{ref}/calculations/select``
-    (intent ``recorded_minimum``) and ``.../conformers/select`` (intent
-    ``validated_minimum``), each with its default request: electronic energy,
-    default eligibility, exploratory profile, ``result_mode`` all. A value is
-    ordered only inside one cohort (the same established recipe); entries with
-    determinations at several recipes end as ``incomparable_alternatives``,
-    and no outcome names a method winner. ``administrative_first_named`` is
-    reported so a change that starts naming one is visible.
-    """
+    """Return the calculation and conformer selection answers for each species entry with conformers."""
     from app.schemas.reads.scientific_structure_selection import (
         CalculationSelectionRequest,
         ConformerSelectionRequest,

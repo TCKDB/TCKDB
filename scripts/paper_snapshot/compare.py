@@ -1,22 +1,13 @@
-"""Compare two snapshot builds: the determinism check.
+"""Compare two snapshot builds.
 
     python scripts/paper_snapshot/compare.py <build-one-dir> <build-two-dir>
 
-Each directory is a ``build.py`` output (``tckdb.archive`` and
-``expected_outputs/``). Two builds from an empty instance are expected to
-agree on content, not on bytes: public refs are random, so they differ between
-builds, and so do timestamps. This tool states exactly how much it ignores.
+Each directory is a ``build.py`` output. Compared:
 
-* **expected_outputs/**: per file, byte-identical or not. A file that is not
-  byte-identical is compared again with every public ref replaced by a
-  placeholder, and nothing else: no list is re-sorted, so a difference in row
-  order is a difference. The file is then reported as
-  ``identical after masking public refs`` or ``DIFFERS``.
-* **archive blobs**: the set of SHA-256 digests and sizes (job files), compared
-  exactly.
-* **archive rows**: per table, the multiset of rows with timestamps removed,
-  every public ref masked and the object-store bucket name in artifact URIs masked, compared exactly. Integer ids are kept, so the check
-  also says that the two builds assigned the same ids in the same order.
+* ``expected_outputs/``: per file, byte-identical, or identical after masking public refs (no list is re-sorted).
+* Archive blobs: the set of (SHA-256, size) pairs.
+* Archive rows: per table, the multiset of rows after removing timestamps and masking public refs and the bucket name
+  in artifact URIs. Integer ids are kept.
 
 Exit status 0 only if nothing differs.
 """
@@ -40,7 +31,7 @@ BUCKET = re.compile(r"s3://[^/\"]+/")
 
 
 def mask_refs(text: str) -> str:
-    """Public refs, and the bucket name inside an artifact URI (it names the instance, not the content)."""
+    """Mask public refs and the bucket name in artifact URIs."""
     return BUCKET.sub("s3://<bucket>/", REF.sub("<ref>", text))
 
 
@@ -49,7 +40,7 @@ def canonical(value: Any) -> str:
 
 
 def compare_expected(one: Path, two: Path) -> dict[str, Any]:
-    """Per file: byte-identical, or identical once public refs are masked (nothing else is masked, nothing re-sorted)."""
+    """Per expected-output file: byte-identical, identical after masking refs, or differing."""
     a, b = one / "expected_outputs", two / "expected_outputs"
     names = sorted({p.name for p in a.glob("*")} | {p.name for p in b.glob("*")})
     result: dict[str, str] = {}

@@ -1,18 +1,14 @@
-"""Create, run and tear down a throw-away local TCKDB instance for a snapshot build.
+"""Create, run and remove a throw-away local TCKDB instance.
 
-An instance is a database (``tckdb_test_snapshot_<name>``), an object-store
-bucket (``tckdb-test-snapshot-<name>``) and an API process on a local port.
-Nothing here touches any other database or bucket, and ``drop`` refuses names
-that do not carry the ``tckdb_test_`` prefix.
+An instance is a database (``tckdb_test_snapshot_<name>``), a bucket (``tckdb-test-snapshot-<name>``) and an API process
+on a local port. ``down --drop`` refuses names without the ``tckdb_test_`` prefix.
 
-    python scripts/paper_snapshot/instance.py up   --name a --port 8101
+    python scripts/paper_snapshot/instance.py up --name a --port 8101
     python scripts/paper_snapshot/instance.py down --name a [--drop]
     python scripts/paper_snapshot/instance.py restore --name c --archive snapshot/tckdb.archive
 
-``up`` needs the compose stack's Postgres (``docker compose up -d db``) and an
-S3-compatible store reachable at ``S3_ENDPOINT_URL`` (default
-``http://localhost:9000``, credentials ``S3_ACCESS_KEY``/``S3_SECRET_KEY``).
-State (pid, log, ports) lives under ``--work-dir``.
+Needs Postgres (``docker compose up -d db``) and an S3-compatible store at ``S3_ENDPOINT_URL`` (default
+``http://localhost:9000``, credentials ``S3_ACCESS_KEY`` / ``S3_SECRET_KEY``). Process state lives under ``--work-dir``.
 """
 
 from __future__ import annotations
@@ -49,7 +45,6 @@ def _db_env(name: str) -> dict[str, str]:
         S3_ENDPOINT_URL=os.environ.get("S3_ENDPOINT_URL", "http://localhost:9000"),
         S3_ACCESS_KEY=os.environ.get("S3_ACCESS_KEY", "tckdb"),
         S3_SECRET_KEY=os.environ.get("S3_SECRET_KEY", "tckdb_secret"),
-        # The build is one client making thousands of calls; the fixed per-minute budgets would only slow it.
         RATE_LIMIT_ENABLED="false",
         PYTHONPATH=os.pathsep.join(str(p) for p in PACKAGE_PATHS),
     )
@@ -137,7 +132,7 @@ def down(name: str, work_dir: Path, drop: bool) -> None:
 
 
 def restore(name: str, archive: Path) -> None:
-    """Restore an archive into the freshly migrated, empty instance ``name`` with the repository's own script."""
+    """Restore an archive into the empty instance ``name`` with ``tckdb_archive.py``."""
     done = subprocess.run(
         [sys.executable, "scripts/tckdb_archive.py", "restore", str(archive.resolve())],
         cwd=BACKEND, env=_db_env(name), capture_output=True, text=True,

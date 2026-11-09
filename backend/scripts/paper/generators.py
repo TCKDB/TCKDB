@@ -144,12 +144,7 @@ def _parse_fixture_mechanism():
 
 
 def _deposited_by_workflow_tool(session: Session) -> list[dict[str, Any]]:
-    """What the database holds per workflow tool release: thermo and kinetics records and what they hang on.
-
-    The mechanism importer names the mechanism as the workflow tool release of
-    every record it deposits, so this is the deposited side of the round trip:
-    the file side is counted from the fixture.
-    """
+    """Return thermo and kinetics record counts per workflow tool release."""
     releases = sorted(
         session.scalars(select(WorkflowToolRelease)),
         key=lambda release: (release.workflow_tool.name, release.version or "", release.id),
@@ -175,15 +170,7 @@ def _deposited_by_workflow_tool(session: Session) -> list[dict[str, Any]]:
 
 
 def mechanism_roundtrip_counts(session: Session | None) -> dict[str, Any]:
-    """Species, rate expressions, distinct reactions and rate forms in the fixture, and what was deposited.
-
-    The file side is read from the committed fixture through the importer's
-    parser, the same reader the round-trip test uses, so the number the paper
-    quotes is the number the test asserts. The deposited side
-    (``deposited_by_workflow_tool``) is read from the database when a session
-    is given: the importer names the mechanism as the workflow tool release of
-    every record it uploads. Compare the two to see what reached the database.
-    """
+    """Return the fixture's species, rate and form counts and, given a session, what was deposited from it."""
     mechanism = _parse_fixture_mechanism()
 
     def _key(reaction) -> tuple:

@@ -23,7 +23,7 @@ APPROVAL_SUMMARY = (
 
 
 def create_curator(db_env: dict[str, str], username: str, password: str, email: str, full_name: str) -> str:
-    """Create (or leave in place) a curator-role user through the operator CLI."""
+    """Create a curator account with the operator CLI."""
     env = dict(os.environ)
     env.update(db_env)
     env["TCKDB_BOOTSTRAP_PASSWORD"] = password
@@ -42,7 +42,7 @@ PAGE = 200
 
 
 def _pending(http: httpx.Client, session: Session, auth: dict[str, str]) -> list[dict[str, Any]]:
-    """Every submission awaiting review, paged until the listing is exhausted."""
+    """Return every submission awaiting review, paged to the end."""
     rows: list[dict[str, Any]] = []
     offset = 0
     while True:
@@ -60,11 +60,7 @@ def _pending(http: httpx.Client, session: Session, auth: dict[str, str]) -> list
 def approve_all(
     session: Session, username: str, password: str, report: Report, summary: str = APPROVAL_SUMMARY
 ) -> dict[str, Any]:
-    """Log in as the curator and approve every pending submission, oldest first.
-
-    The pending list is read to its end (not just the first page), each is approved once, and the list is read
-    again at the end: anything still pending, or any approval that failed, stops the build with an error.
-    """
+    """Approve every pending submission as the curator; raise if any approval fails or any submission stays pending."""
     approved = 0
     failed: list[dict[str, Any]] = []
     with httpx.Client(timeout=120.0) as http:

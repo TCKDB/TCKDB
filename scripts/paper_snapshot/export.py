@@ -1,10 +1,7 @@
-"""Exports from the finished instance: the archive and the expected outputs.
+"""Archive and expected-output export from the finished instance.
 
-Both are produced by the repository's own scripts, run as subprocesses against
-the instance's database (``backend/scripts/tckdb_archive.py`` and
-``backend/scripts/paper/generate_expected_outputs.py``). Nothing is rewritten
-here. The generators read the database through the ORM, as they would after
-``tckdb_archive.py restore`` into a fresh instance.
+Runs ``backend/scripts/tckdb_archive.py`` and ``backend/scripts/paper/generate_expected_outputs.py`` as subprocesses
+against the instance's database.
 """
 
 from __future__ import annotations
