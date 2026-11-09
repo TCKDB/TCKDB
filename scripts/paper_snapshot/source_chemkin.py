@@ -103,23 +103,24 @@ def literature_record(client: Any, literature: dict[str, Any] | None) -> dict[st
         return {"literature_supplied": False}
     for candidate in range(1, 8):  # a fresh instance holds the one row this deposit created
         try:
-            detail = client.get_literature(candidate)
+            detail = client.get_literature(candidate, include=["authors"])
         except Exception:  # noqa: BLE001 - a missing id ends the scan; it is not an error
             continue
         record = detail["record"]
         identifiers = record.get("identifiers") or {}
         if (identifiers.get("doi") or "").lower() != literature["doi"].lower():
             continue
-        core = record["core"]
-        authors = record.get("authors") or []
+        core = record["literature"]
         return {
             "literature_supplied": True,
             "doi": identifiers.get("doi"),
             "title_stored": core.get("title"),
             "title_supplied_in_config": literature.get("title"),
-            "title_source": getattr(core.get("title_source"), "value", core.get("title_source")),
+            "title_source": core.get("title_source"),
             "metadata_resolved_by_the_server": core.get("title_source") == "resolved_metadata",
-            "authors_stored": len(authors),
+            "issue_stored": core.get("issue"),
+            "publisher_stored": core.get("publisher"),
+            "authors_stored": len(record.get("authors") or []),
             "note": "Rebuilding offline, or after the registry changes the record, can change this row.",
         }
     return {"literature_supplied": True, "found_on_instance": False}

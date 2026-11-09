@@ -421,6 +421,7 @@ def structure_selection_outcomes(session: Session) -> dict[str, Any]:
                     "cohorts": len(decision["cohorts"]),
                     "selected_refs": len(decision["selected_refs"]),
                     "administrative_first_named": decision["administrative_first"] is not None,
+                    "unresolved": {u["code"]: len(u["refs"]) for u in sorted(decision["unresolved"], key=lambda u: u["code"])},
                 }
             rows.append(row)
         rows.sort(key=lambda r: (r["species_smiles"], r["multiplicity"], _content_key(r)))
