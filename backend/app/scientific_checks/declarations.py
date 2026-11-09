@@ -34,7 +34,6 @@ from types import ModuleType
 
 from tckdb_schemas.fragments import reaction_atom_map as wire_atom_map
 from tckdb_schemas.fragments.calculation import (
-    W_FREQ_MODE_INDEX_NOT_UNIQUE,
     W_FREQ_N_IMAG_DISAGREES_WITH_MODES,
     FreqResultPayload,
 )
@@ -149,12 +148,14 @@ _TAU_THRESHOLD = ProvenanceThreshold(
         f"Tau is resolved in a fixed order (``resolve_tau_with_assumption``, "
         f"since #864): (1) the method an attached output log reports the "
         f"frequency job ran; else (2) the method the input echoed in that log "
-        f"requests; else (3) the recorded ``freq.hessian_method`` or the method "
+        f"requests (what the job read outranks what was recorded about it); else (3) the recorded ``freq.hessian_method`` or the method "
         f"the calculation's own input deck states; else (4) the producing "
         f"program's assumed default for the level of theory's method family; "
         f"else (5) {TAU_PROTOCOL_NOT_RECORDED_CM1:.0f} cm-1. A reported method "
         f"outranks a recorded one because it is what ran; a request only says "
-        f"what was asked for. When no log reports a method and nothing is "
+        f"what was asked for, and the input a log echoes is what the job actually "
+        f"read, so it outranks a method recorded or typed about the job. When no log "
+        f"reports a method, no echoed input requests one and nothing is "
         f"recorded or stated in a deck — which is the common case, "
         f"because most outputs do not say — validation resolves tau from the "
         f"producing program's documented default for the level of theory's "
@@ -566,11 +567,11 @@ CHECK_TRANSITION_STATE_SOFT_REACTION_COORDINATE = ScientificCheck(
 CHECK_FREQ_N_IMAG_AGREES_WITH_ITS_MODES = ScientificCheck(
     group="Stationary points",
     sort_key=7,
-    code=(W_FREQ_N_IMAG_DISAGREES_WITH_MODES, W_FREQ_MODE_INDEX_NOT_UNIQUE),
+    code=W_FREQ_N_IMAG_DISAGREES_WITH_MODES,
     asserts=(
         "A frequency result that deposits both a scalar imaginary-mode count "
         "and a frequency list agrees with itself about how many imaginary "
-        "modes it has, and a frequency list numbers its modes uniquely."
+        "modes it has."
     ),
     tier=CheckTier.block,
     channel=CodeChannel.error_envelope,

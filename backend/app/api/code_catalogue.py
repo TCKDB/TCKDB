@@ -2145,7 +2145,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "is refused rather than silently proceeding without an "
                 "audit trail."
             )),
-    ApiCode("observation_identity_hint_conflict", 422, Surface.message_prefix,
+    ApiCode("observation_identity_hint_conflict", 422, Surface.coded_exception,
             "backend/app/services/observation_identity_attach.py",
             shape=Shape.relationship,
             note=(
@@ -2159,7 +2159,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "this tool is for) -- but a different molecular skeleton "
                 "is refused rather than silently attached."
             )),
-    ApiCode("observation_identity_target_not_ground_state_minimum", 422, Surface.message_prefix,
+    ApiCode("observation_identity_target_not_ground_state_minimum", 422, Surface.coded_exception,
             "backend/app/services/observation_identity_attach.py",
             shape=Shape.relationship,
             note=(

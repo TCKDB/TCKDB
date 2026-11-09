@@ -55,11 +55,9 @@ from app.scientific_checks import (
 from app.services.ess_software_detection import SoftwareName, detect_software_from_text
 from app.services.upload_reconciliation import (
     W_ELECTRONIC_STATE_CONTRADICTS_METHOD,
-    W_TERM_SYMBOL_CONTRADICTS_GROUND_TERM,
     W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY,
     W_TERM_SYMBOL_MISMATCH,
     _reconcile_deduction,
-    term_symbol_warnings,
 )
 
 #: Emitted when the declared charge and the log's charge disagree.
@@ -328,7 +326,6 @@ CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
         W_TERM_SYMBOL_MISMATCH,
         W_ELECTRONIC_STATE_CONTRADICTS_METHOD,
         W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY,
-        W_TERM_SYMBOL_CONTRADICTS_GROUND_TERM,
     ),
     asserts=(
         "The charge and spin multiplicity a depositor declares agree with the "
@@ -336,8 +333,7 @@ CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
         "state and term symbol they declare agree with what the calculation's "
         "declared method, multiplicity and statmech point group and linearity "
         "imply; and a term symbol agrees with the spin multiplicity declared "
-        "beside it and, for a neutral ground-state atom, with the NIST ground "
-        "term of its element."
+        "beside it."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
@@ -378,9 +374,7 @@ CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
         "``multiplicity=2`` is a contradiction no correct deposit can contain, which the ADR "
         "would put at the blocking tier; it warns here for the reason above (a species-entry "
         "payload is shared by every upload route, and promoting a warning is a migration). "
-        "The ground-term half compares a one-atom entry with the NIST table, a reference, "
-        "and so could not block in any case: an excited atom is a legitimate entry, which is "
-        "why only a neutral ground-state atom is judged."
+        "A one-atom entry's term against the NIST ground term is entry 76's."
     ),
     adr="0008",
     enforced_by=(
@@ -389,15 +383,6 @@ CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
             note=(
                 "Re-reads charge and multiplicity from the uploaded artifact "
                 "using the wired Gaussian, ORCA, Psi4 and Molpro parsers."
-            ),
-        ),
-        PythonCheck(
-            term_symbol_warnings,
-            note=(
-                "The term symbol against the multiplicity beside it (``term_symbol_contradicts_multiplicity``, "
-                "read only from symbols that start with the multiplicity digit) and a neutral ground-state "
-                "atom's term against its NIST ground term (``term_symbol_contradicts_ground_term``). "
-                "No log is read."
             ),
         ),
         PythonCheck(

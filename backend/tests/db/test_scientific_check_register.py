@@ -135,18 +135,17 @@ def test_register_is_non_empty_and_proportionate() -> None:
     # entry 12 compares a declared state with an output log, these judge a stored diagnostic against a criterion or
     # against the entry. Different tier from every blocking entry.
     #
-    # Raised 52 -> 71 (2026-11-09) by the catalogue/register audit: the code catalogue and the warning map were
-    # compared and scientific codes had no entry, and they are now 19 entries (bath gas, network composition and energy sources,
+    # Raised 52 -> 77 (2026-11-09) by the catalogue/register audit: the code catalogue and the warning map were
+    # compared and scientific codes had no entry, and they are now 25 entries (bath gas, network composition and energy sources,
     # declared energy levels, composite and single-point arithmetic, declarations against the record, the enthalpy
     # reference, the calculation graph, and five families of warnings against the uploaded evidence). They are
-    # declared in ``app/scientific_checks/gap_declarations.py`` with a tier and a reason each. Seven further codes
-    # joined five existing entries instead (10, 12, 20, the Arrhenius A units entry and the atom-map indices
-    # entry), because they are the same check; the codes left out as not scientific are listed in the pull
-    # request. The ceiling is still a filter: it is now 71 because that is what the audit measured, and anything
+    # declared in ``app/scientific_checks/gap_declarations.py`` with a tier and a reason each. Five further codes
+    # joined four existing entries instead (10, 12, 29 and the Arrhenius A units entry), because they are the same check; every code left out is in ``NOT_SCIENTIFIC`` with a reason, and a
+    # test below fails when one is in neither. The ceiling is still a filter: it is now 77 because that is what the audit measured, and anything
     # past it needs the same explicit argument.
-    assert 10 <= len(REGISTER) <= 71, (
+    assert 10 <= len(REGISTER) <= 77, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~71 the inclusion test ('could this check be wrong "
+        "the system; above ~77 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 
@@ -872,22 +871,28 @@ _OPENINGS: dict[int, str] = {
     53: 'A bath gas a rate states is a composition: its mol',
     54: 'The kind of a network channel (isomerization, asso',
     55: 'A network state is the multiset of its participant',
-    56: 'A calculation cited as the source of a network ene',
-    57: 'The level of theory a record declares its energy s',
-    58: 'An energy calculation linked to a thermo or statme',
-    59: 'A calculation is evidence for one conformer and ra',
-    60: 'The numbers a composite energy states agree with e',
-    61: 'Each input of an assembled composite ran at the le',
-    62: "The parts of a single point's electronic energy do",
-    63: 'A kinetics applicability or protocol declaration d',
-    64: 'A determination, statistical-model or structure de',
-    65: 'A thermo record that carries an enthalpy states wh',
-    66: 'The graph of which calculation depends on which is',
-    67: "What a depositor typed about a calculation's setti",
-    68: 'The electronic energy a tool states for a single p',
-    69: 'The Hessian method a deck or log attached after th',
-    70: 'The degeneracy of the lowest electronic level a si',
-    71: 'The job named as having measured an SCF stability ',
+    56: 'One record has one energy level and the declared l',
+    57: 'Energy calculations and optimisations pair one-to-',
+    58: 'A calculation is evidence for one conformer and ra',
+    59: 'The numbers a composite energy states agree with e',
+    60: 'Each input of an assembled composite ran at the le',
+    61: "The parts of a single point's electronic energy do",
+    62: 'A frequency calculation linked beside a composite ',
+    63: 'A named composite method (CBS-QB3, G4, W1U) is one',
+    64: "An assembled composite's inputs each declare the g",
+    65: 'What a record cites as evidence belongs to the rec',
+    66: 'A kinetics applicability or protocol declaration d',
+    67: 'A determination, statistical-model, structure or p',
+    68: 'A curator attaches an observation of unresolved id',
+    69: 'A bond-additivity correction applied as a total ca',
+    70: 'The frequency scale factor a statmech record appli',
+    71: 'A thermo record that carries an enthalpy states wh',
+    72: 'The graph of which calculation depends on which is',
+    73: "What a depositor typed about a calculation's setti",
+    74: 'The electronic energy a tool states for a single p',
+    75: 'The Hessian method a deck or log attached after th',
+    76: 'What a neutral ground-state atom declares agrees w',
+    77: 'The job named as having measured an SCF stability ',
 }
 
 
@@ -926,3 +931,43 @@ def test_existing_entries_keep_their_numbers() -> None:
     # Every code stored with a register number still points at the entry that declares it.
     for code, stored in REGISTER_ENTRY.items():
         assert number_of[code] == stored, code
+
+
+def _register_codes() -> set[str]:
+    """Every code a register entry reports, including the codes its database constraints name."""
+    codes: set[str] = set()
+    for check in REGISTER:
+        codes.update(check.codes)
+        for site in check.enforced_by:
+            if isinstance(site, DatabaseConstraint) and site.rejection_code:
+                codes.add(site.rejection_code)
+    return codes
+
+
+def test_every_catalogue_and_warning_code_is_in_exactly_one_of_the_register_and_not_scientific() -> None:
+    """Classify everything: a code that is in neither list is a decision nobody made.
+
+    The register was found short of codes it should have claimed because nothing compared it with the
+    list of codes the system emits. This is that comparison, and it is two-sided: a scientific code
+    cannot hide in the catalogue, and a code named in ``NOT_SCIENTIFIC`` cannot also be claimed, nor
+    outlive its removal from the catalogue.
+    """
+    from tckdb_schemas.deposit_warning_messages import RENDERED
+
+    from app.api.code_catalogue import CATALOGUE
+    from app.scientific_checks.not_scientific import NOT_SCIENTIFIC
+
+    emitted = {entry.code for entry in CATALOGUE} | set(RENDERED)
+    registered = _register_codes()
+    assert len(emitted) > 300 and len(NOT_SCIENTIFIC) > 100, "an empty side would make this pass vacuously"
+    unclassified = sorted(emitted - registered - set(NOT_SCIENTIFIC))
+    assert not unclassified, (
+        f"{len(unclassified)} codes are in neither the register nor NOT_SCIENTIFIC: {unclassified}. "
+        "Declare a register entry for a scientific one, or add it to NOT_SCIENTIFIC with the reason it is not."
+    )
+    both = sorted(registered & set(NOT_SCIENTIFIC))
+    assert not both, f"codes claimed by the register and also listed as not scientific: {both}"
+    stale = sorted(set(NOT_SCIENTIFIC) - emitted)
+    assert not stale, f"NOT_SCIENTIFIC names codes nothing emits any more: {stale}"
+    blank = sorted(code for code, reason in NOT_SCIENTIFIC.items() if len(reason.strip()) < 15)
+    assert not blank, f"NOT_SCIENTIFIC entries with no real reason: {blank}"

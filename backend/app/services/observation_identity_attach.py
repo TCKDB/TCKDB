@@ -52,6 +52,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import CodedValueError
 from app.api.errors import not_found
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
@@ -71,6 +72,11 @@ from app.services.scientific_read.handles import (
     resolve_species_entry_handle,
 )
 from app.services.submission import append_audit_event, resolve_actor_kind
+
+#: An attach target is not a ground-state, minimum-energy entry of its species.
+W_OBSERVATION_IDENTITY_TARGET_NOT_GROUND_STATE_MINIMUM = "observation_identity_target_not_ground_state_minimum"
+#: The observation's own identity hint names another molecular connectivity than the attach target's species.
+W_OBSERVATION_IDENTITY_HINT_CONFLICT = "observation_identity_hint_conflict"
 
 
 def _resolve_observation(
@@ -126,15 +132,17 @@ def _assert_ground_state_minimum_entry(session: Session, target: SpeciesEntry) -
         session, target.species_id
     )
     if target.id not in {row.id for row in candidates}:
-        raise ValueError(
-            "observation_identity_target_not_ground_state_minimum: an "
-            "observation can only be attached to a ground-state, "
-            "minimum-energy entry of a species; this entry is "
-            f"kind={target.kind.value!r} "
+        raise CodedValueError(
+            W_OBSERVATION_IDENTITY_TARGET_NOT_GROUND_STATE_MINIMUM,
+            "an observation can only be attached to a ground-state, minimum-energy entry of a species; "
+            f"this entry is kind={target.kind.value!r} "
             f"electronic_state_kind={target.electronic_state_kind.value!r}. "
-            "An observation carries no stereochemical or excited-state "
-            "resolution of its own, so it cannot be attached to a target "
-            "that is not a ground-state minimum."
+            "An observation carries no stereochemical or excited-state resolution of its own, so it "
+            "cannot be attached to a target that is not a ground-state minimum.",
+            context={
+                "kind": target.kind.value,
+                "electronic_state_kind": target.electronic_state_kind.value,
+            },
         )
 
 
@@ -187,15 +195,16 @@ def _assert_no_identity_hint_conflict(
         return
     species_block = species.inchi_key.strip().upper().split("-", 1)[0]
     if hint_block != species_block:
-        raise ValueError(
-            "observation_identity_hint_conflict: this observation's own "
-            f"identity_hint.inchikey names a different molecular "
-            f"connectivity ({hint_block}) than the target species's "
-            f"InChIKey ({species_block}). Only the InChIKey's first "
-            "(connectivity) block is compared, so a stereochemistry-only "
-            "difference is still accepted -- resolving that is what a "
-            "curator attach is for -- but a different molecular skeleton "
-            "is refused."
+        raise CodedValueError(
+            W_OBSERVATION_IDENTITY_HINT_CONFLICT,
+            "this observation's own identity_hint.inchikey names a different molecular connectivity than "
+            "the target species's InChIKey. Only the InChIKey's first (connectivity) block is compared, so "
+            "a stereochemistry-only difference is still accepted -- resolving that is what a curator attach "
+            "is for -- but a different molecular skeleton is refused.",
+            context={
+                "depositor_supplied": {"hint_connectivity_block": hint_block},
+                "species_connectivity_block": species_block,
+            },
         )
 
 

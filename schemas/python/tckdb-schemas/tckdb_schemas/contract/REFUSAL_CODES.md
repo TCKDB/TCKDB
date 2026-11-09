@@ -37,6 +37,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: Reach.guard until #195, and the note it carried named the repair that ended it: /uploads/computed-reaction resolves source_calculation_key in a namespace spanning every species and the transition state, then attaches the correction to one of them.
+- Scientific check: [`assert_owned_by`](PRODUCER_CONTRACT.md#k-assert-owned-by).
 
 <a id="c-applied-energy-correction-source-key-undeclared"></a>
 
@@ -186,6 +187,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: "{field}: application_role='bac_total' with no bond component cannot target a transition state. A transition state carries no bond assignment, so a total with nothing behind it can never be shown to be a real bond additivity correction rather than an empty sum. {remedy}"
 - Note: Task #264.
+- Scientific check: [`assert_bac_total_has_required_components`](PRODUCER_CONTRACT.md#k-assert-bac-total-has-required-components).
 
 <a id="c-bundle-too-large"></a>
 
@@ -333,7 +335,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: "the inputs of an assembled composite must all be computed at one geometry, but {', '.join((repr(n) for n in names))} declare different ones. A recipe that sums energies taken at different geometries describes no single molecule."
 - Note: Two inputs of an assembled composite, or an input and the composite itself, that both declare a geometry declare different ones.
-- Scientific check: [`_check_geometries`](PRODUCER_CONTRACT.md#k-check-geometries).
+- Scientific check: [`_finalize_one`](PRODUCER_CONTRACT.md#k-finalize-one).
 
 <a id="c-composite-input-level-mismatch"></a>
 
@@ -343,7 +345,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: An input calculation ran at a different level of theory than the slot of the scheme it fills (merged spellings of one level are followed on both sides).
-- Scientific check: [`_check_geometries`](PRODUCER_CONTRACT.md#k-check-geometries).
+- Scientific check: [`_finalize_one`](PRODUCER_CONTRACT.md#k-finalize-one).
 
 <a id="c-composite-input-missing"></a>
 
@@ -361,6 +363,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: An input of an assembled composite belongs to another species or transition-state entry than the composite.
+- Scientific check: [`assert_owned_by`](PRODUCER_CONTRACT.md#k-assert-owned-by).
 
 <a id="c-composite-input-reference-invalid"></a>
 
@@ -638,8 +641,6 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: "mode_index values must be unique within a freq result. Index {', '.join((str(i) for i in duplicates))} appears more than once, so the list does not say which row is which mode and a consumer reading it cannot reconstruct the spectrum ({W_FREQ_MODE_INDEX_NOT_UNIQUE}). Renumber the modes to the ESS's own 1-based ordering."
 - Note: Catalogued but deliberately absent from the scientific check register, unlike its file neighbour freq_n_imag_disagrees_with_modes.
-- Scientific check (block): A frequency result that deposits both a scalar imaginary-mode count and a frequency list agrees with itself about how many imaginary modes it has, and a frequency list numbers its modes uniquely.
-- If your chemistry is legitimate: Omit ``modes``. A record that deposits only the scalar is incomplete, warns nowhere and is refused nowhere — ADR 0012 asks for the complete signed frequency list, and asking is as far as this tier goes. What has no door is depositing both and letting them contradict each other.
 
 <a id="c-freq-n-imag-disagrees-with-modes"></a>
 
@@ -648,7 +649,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py`.
 - The body's `context` names the things involved.
 - Message: 'n_imag={self.n_imag} does not match imaginary mode count {imaginary_count} in modes. The scalar the ESS printed and the frequency list deposited beside it are the same claim made twice, and a record that makes it two ways tells a consumer reading the summary something different from one reading the evidence ({W_FREQ_N_IMAG_DISAGREES_WITH_MODES}). Deposit the complete signed frequency list, or omit modes entirely -- absence is incompleteness, which is accepted, and only contradiction is refused.'
-- Scientific check (block): A frequency result that deposits both a scalar imaginary-mode count and a frequency list agrees with itself about how many imaginary modes it has, and a frequency list numbers its modes uniquely.
+- Scientific check (block): A frequency result that deposits both a scalar imaginary-mode count and a frequency list agrees with itself about how many imaginary modes it has.
 - If your chemistry is legitimate: Omit ``modes``. A record that deposits only the scalar is incomplete, warns nowhere and is refused nowhere — ADR 0012 asks for the complete signed frequency list, and asking is as far as this tier goes. What has no door is depositing both and letting them contradict each other.
 
 <a id="c-geometry-isotope-symbol-conflict"></a>
@@ -810,7 +811,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: "{field} names {what} that does not belong to this record's reaction."
 - Note: context.reason names reaction, direction, source, target or role.
-- Scientific check: [`resolve_kinetics_declarations`](PRODUCER_CONTRACT.md#k-resolve-kinetics-declarations).
+- Scientific check: [`_mismatch`](PRODUCER_CONTRACT.md#k-app-services-kinetics-declaration-resolution-mismatch).
 
 <a id="c-kinetics-energy-level-contradiction"></a>
 
@@ -833,6 +834,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: Two raise sites, one repair: cite a conformer record belonging to the right species entry.
+- Scientific check: [`assert_owned_by`](PRODUCER_CONTRACT.md#k-assert-owned-by).
 
 <a id="c-kinetics-interpretation-statmech-owner-mismatch"></a>
 
@@ -842,6 +844,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: One code, two comparisons: a reactant/product assignment is held to the participant's species entry and a transition-state one to the declared TS entry.
+- Scientific check: [`assert_owned_by`](PRODUCER_CONTRACT.md#k-assert-owned-by).
 
 <a id="c-kinetics-protocol-calculation-owner-mismatch"></a>
 
@@ -850,6 +853,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/kinetics_declaration_resolution.py`.
 - The body's `context` names the things involved.
 - Message: not found by the static search.
+- Scientific check: [`_mismatch`](PRODUCER_CONTRACT.md#k-app-services-kinetics-declaration-resolution-mismatch).
 
 <a id="c-level-of-theory-method-is-compound"></a>
 
@@ -934,8 +938,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: A network solve's state energy, channel barrier or well_energy / barrier_energy source link cites a calculation owned by a subject other than the one the energy is stated for (a species outside the state, another transition state, or a species calculation for a barrier).
-- Scientific check (block): A calculation cited as the source of a network energy belongs to the subject the energy is stated for: a participant of the state, or the saddle point of the barrier.
-- If your chemistry is legitimate: Cite the calculation of the species (or saddle point) the energy is for.
+- Scientific check: [`assert_owned_by`](PRODUCER_CONTRACT.md#k-assert-owned-by).
 
 <a id="c-network-energy-source-type-mismatch"></a>
 
@@ -1105,6 +1108,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: scf_stability.source_calculation_key names a calculation owned by another species entry or transition state than the calculation carrying the verdict.
+- Scientific check: [`assert_owned_by`](PRODUCER_CONTRACT.md#k-assert-owned-by).
 
 <a id="c-scf-stability-source-conformer-unanchored"></a>
 
@@ -1114,6 +1118,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: "{field}='{key}': '{unanchored_key}' is not tied to any conformer (it has no conformer_key, and no geometry_key naming a conformer's geometry), so whether the job that measured the verdict is on the same conformer as '{carrier_key}' cannot be checked. Give both calculations a conformer_key."
 - Note: Exactly one of the calculation carrying an scf_stability verdict and the job named as having measured it is tied to a conformer, so the same-conformer rule cannot hold.
+- Scientific check: [`assert_role_consistency`](PRODUCER_CONTRACT.md#k-assert-role-consistency).
 
 <a id="c-scf-stability-source-cycle"></a>
 
@@ -1157,6 +1162,8 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 - Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/sp_energy_components.py`.
 - Message: 'sp_energy_components lists component {kind.value} more than once. A single point has one value per component.'
+- Scientific check (block): The parts of a single point's electronic energy do not contradict the energy they are parts of: each component is stated once, a stated total is the energy, and reference plus correlation (plus triples, where the program prints it separately) is the energy.
+- If your chemistry is legitimate: Send the parts the program printed with its energy, or omit the components.
 
 <a id="c-sp-energy-component-not-on-sp"></a>
 
@@ -1174,7 +1181,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: "The 'total' energy component ({total} Eh) differs from the single point's electronic_energy_hartree ({energy} Eh) by more than {SUM_TOLERANCE_HARTREE} Eh. A total is the electronic energy; send one value, or the matching one."
 - Note: A 'total' component differs from the single point's electronic_energy_hartree by more than 1e-6 Eh.
-- Scientific check (block): The parts of a single point's electronic energy do not contradict the energy they are parts of: a stated total is the energy, and reference plus correlation (plus triples, where the program prints it separately) is the energy.
+- Scientific check (block): The parts of a single point's electronic energy do not contradict the energy they are parts of: each component is stated once, a stated total is the energy, and reference plus correlation (plus triples, where the program prints it separately) is the energy.
 - If your chemistry is legitimate: Send the parts the program printed with its energy, or omit the components.
 
 <a id="c-sp-energy-components-do-not-sum"></a>
@@ -1185,7 +1192,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: reference + correlation differs from the single point's electronic_energy_hartree by more than 1e-6 Eh.
-- Scientific check (block): The parts of a single point's electronic energy do not contradict the energy they are parts of: a stated total is the energy, and reference plus correlation (plus triples, where the program prints it separately) is the energy.
+- Scientific check (block): The parts of a single point's electronic energy do not contradict the energy they are parts of: each component is stated once, a stated total is the energy, and reference plus correlation (plus triples, where the program prints it separately) is the energy.
 - If your chemistry is legitimate: Send the parts the program printed with its energy, or omit the components.
 
 <a id="c-sp-energy-components-require-energy"></a>
@@ -1271,6 +1278,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: Two or more linked 'sp' calculations (a multi-conformer ensemble's per-conformer single points) disagree on level of theory, so this statmech record's energy level has no single answer -- distinct from statmech_energy_level_contradiction (a declared level disagreeing with what IS agreed) because here nothing the depositor declared is at fault; the linked sps themselves disagree.
+- Scientific check: [`assert_role_consistency`](PRODUCER_CONTRACT.md#k-assert-role-consistency).
 
 <a id="c-statmech-energy-level-contradiction"></a>
 
@@ -1289,6 +1297,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/calculation_levels.py`.
 - The body's `context` names the things involved.
 - Message: not found by the static search.
+- Scientific check: [`assert_role_consistency`](PRODUCER_CONTRACT.md#k-assert-role-consistency).
 
 <a id="c-statmech-energy-sp-and-composite-linked"></a>
 
@@ -1298,6 +1307,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: A statmech record links both an 'sp' and a 'composite' as its energy (ADR 0021, decision 4).
+- Scientific check: [`assert_role_consistency`](PRODUCER_CONTRACT.md#k-assert-role-consistency).
 
 <a id="c-statmech-model-declaration-invalid"></a>
 
@@ -1314,7 +1324,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: context.reason names owner, scope, basin, determination, member_owner, source_owner, source_geometry or source_type.
-- Scientific check: [`resolve_kinetics_declarations`](PRODUCER_CONTRACT.md#k-resolve-kinetics-declarations).
+- Scientific check: [`_mismatch`](PRODUCER_CONTRACT.md#k-app-services-kinetics-declaration-resolution-mismatch).
 
 <a id="c-statmech-model-declaration-version-unsupported"></a>
 
@@ -1330,6 +1340,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/calculation_levels.py`.
 - The body's `context` names the things involved.
 - Message: not found by the static search.
+- Scientific check: [`assert_role_consistency`](PRODUCER_CONTRACT.md#k-assert-role-consistency).
 
 <a id="c-statmech-source-calculation-owner-mismatch"></a>
 
@@ -1338,6 +1349,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/calculation_ownership.py`.
 - The body's `context` names the things involved.
 - Message: not found by the static search.
+- Scientific check: [`assert_owned_by`](PRODUCER_CONTRACT.md#k-assert-owned-by).
 
 <a id="c-statmech-source-role-type-mismatch"></a>
 
@@ -1371,6 +1383,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/calculation_ownership.py`.
 - The body's `context` names the things involved.
 - Message: not found by the static search.
+- Scientific check: [`assert_owned_by`](PRODUCER_CONTRACT.md#k-assert-owned-by).
 
 <a id="c-stored-species-smiles-unparseable"></a>
 
@@ -1410,7 +1423,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: context.reason names target (the kind does not fit the upload's owner), owner (a pinned calculation belongs to another subject), observation (a basin claim pins a calculation anchored to another observation), geometry (the pinned calculation has no single geometry on the side named, or the evaluated geometry is read from a calculation the determination does not pin) or content (the same determination key was stated with different content).
-- Scientific check: [`resolve_kinetics_declarations`](PRODUCER_CONTRACT.md#k-resolve-kinetics-declarations).
+- Scientific check: [`_mismatch`](PRODUCER_CONTRACT.md#k-app-services-kinetics-declaration-resolution-mismatch).
 
 <a id="c-submission-supersede-not-owner"></a>
 
@@ -1466,6 +1479,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: Thermo's mirror of statmech_energy_level_ambiguous -- same rule (app/services/calculation_levels.py), own code per product per the house convention.
+- Scientific check: [`assert_role_consistency`](PRODUCER_CONTRACT.md#k-assert-role-consistency).
 
 <a id="c-thermo-energy-level-contradiction"></a>
 
@@ -1484,6 +1498,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/calculation_levels.py`.
 - The body's `context` names the things involved.
 - Message: not found by the static search.
+- Scientific check: [`assert_role_consistency`](PRODUCER_CONTRACT.md#k-assert-role-consistency).
 
 <a id="c-thermo-energy-sp-and-composite-linked"></a>
 
@@ -1493,6 +1508,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: Thermo's mirror of statmech_energy_sp_and_composite_linked -- same rule (app/services/calculation_levels.py), own code per product per the house convention.
+- Scientific check: [`assert_role_consistency`](PRODUCER_CONTRACT.md#k-assert-role-consistency).
 
 <a id="c-thermo-protocol-calculation-owner-mismatch"></a>
 
@@ -1502,6 +1518,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: A protocol's supporting calculation belongs to another species entry; distinct from the thermo source-link code.
+- Scientific check: [`_mismatch`](PRODUCER_CONTRACT.md#k-app-services-kinetics-declaration-resolution-mismatch).
 
 <a id="c-thermo-protocol-version-unsupported"></a>
 
@@ -1525,6 +1542,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/calculation_levels.py`.
 - The body's `context` names the things involved.
 - Message: not found by the static search.
+- Scientific check: [`assert_role_consistency`](PRODUCER_CONTRACT.md#k-assert-role-consistency).
 
 <a id="c-thermo-source-calculation-owner-mismatch"></a>
 
@@ -1533,6 +1551,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - Status: 422; client-facing; arrives as: coded_exception; defined in `backend/app/services/calculation_ownership.py`.
 - The body's `context` names the things involved.
 - Message: not found by the static search.
+- Scientific check: [`assert_owned_by`](PRODUCER_CONTRACT.md#k-assert-owned-by).
 
 <a id="c-thermo-source-role-type-mismatch"></a>
 
@@ -1559,6 +1578,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: The ownership family's first code over a cited row that is not a calculation.
+- Scientific check: [`assert_owned_by`](PRODUCER_CONTRACT.md#k-assert-owned-by).
 
 <a id="c-thermo-target-group-not-allowed"></a>
 
@@ -1717,6 +1737,7 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 - The body's `context` names the things involved.
 - Message: not found by the static search.
 - Note: A transport source_calculations link names a calculation of another species entry.
+- Scientific check: [`assert_owned_by`](PRODUCER_CONTRACT.md#k-assert-owned-by).
 
 <a id="c-ts-energy-ordering-source-type-mismatch"></a>
 
