@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.193.0 - 2026-11-09
+
+No client code changed. `HessianSource.parsed_log_archive` joins the enum and four reasons join `hessian_not_stored_unparseable` (see `tckdb-schemas` 0.164.0). The `tckdb-schemas` window now includes 0.164.
+
 ## 0.192.0 - 2026-11-09
 
 Ten `RejectionCode` members join the refusal codes for artifact uploads: `OUTPUT_LOG_SIGNATURE_UNRECOGNIZED`, `ARTIFACT_EMPTY`, `ARTIFACT_TOO_LARGE`, `ARTIFACT_SHA256_MISMATCH`, `ARTIFACT_SIZE_MISMATCH`, `ARTIFACT_NOT_UTF8_TEXT`, `ARTIFACT_INVALID_BASE64`, `ARTIFACT_TOTAL_SIZE_TOO_LARGE`, `ARTIFACT_ENCODED_PAYLOAD_TOO_LARGE` and `ARTIFACT_TOTAL_ENCODED_PAYLOAD_TOO_LARGE` (see `tckdb-schemas` 0.163.0). The `tckdb-schemas` window moves to `>=0.158,<0.164`.
