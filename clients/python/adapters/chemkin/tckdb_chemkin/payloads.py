@@ -79,12 +79,14 @@ def build_thermo_payload(
     config: ImportConfig,
 ) -> dict:
     """Build a ``ThermoUploadRequest`` dict for one species."""
+    # A blank or unknown phase letter stays undeclared.
+    phase = {"G": "gas", "L": "liquid", "S": "solid"}.get(entry.phase.upper())
     payload: dict = {
         "species_entry": species.identity_payload(),
         "scientific_origin": config.scientific_origin,
         # The supported CHEMKIN NASA7 profile is referenced to 1 atm.
         # Preserve the card phase; an unrecognized token remains unknown.
-        "phase": {"G": "gas", "L": "liquid", "S": "solid"}.get(entry.phase.upper()),
+        "phase": phase,
         "reference_pressure_bar": 1.01325,
         # CHEMKIN's NASA-7 thermodynamic format is formation-referenced by
         # definition (the polynomial's constant of integration IS the
@@ -97,6 +99,12 @@ def build_thermo_payload(
         "tmin_k": entry.t_low,
         "tmax_k": entry.t_high,
     }
+    if phase == "gas":
+        # The CHEMKIN format defines a NASA-7 polynomial as the standard ideal-gas ensemble.
+        payload["thermodynamic_target"] = {
+            "kind": "equilibrium_ensemble",
+            "declared_by": "chemkin_format",
+        }
     if config.literature:
         payload["literature"] = config.literature
     wtr = config.workflow_tool_release()

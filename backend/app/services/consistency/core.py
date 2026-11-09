@@ -87,6 +87,7 @@ THERMO_HASH_EXCLUDED_COLUMNS = frozenset(
         "energy_level_of_theory_id",
         "thermodynamic_target_kind",
         "target_conformer_group_id",
+        "thermodynamic_target_declared_by",
         "protocol_declaration",
     }
 )

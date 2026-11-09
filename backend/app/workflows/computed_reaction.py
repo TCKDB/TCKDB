@@ -1523,6 +1523,7 @@ def persist_computed_reaction_upload(
                 species_entry_id=species_entry.id,
                 scientific_origin=t.scientific_origin,
                 thermodynamic_target_kind=thermo_declarations.thermodynamic_target_kind,
+                thermodynamic_target_declared_by=thermo_declarations.thermodynamic_target_declared_by,
                 target_conformer_group_id=thermo_declarations.target_conformer_group_id,
                 protocol_declaration=thermo_protocol_json,
                 # Stored as declared, after ``assert_role_consistency`` above.

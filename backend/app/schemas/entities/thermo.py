@@ -24,6 +24,7 @@ from app.db.models.common import (
     PhaseKind,
     ScientificOriginKind,
     ThermoCalculationRole,
+    ThermoDeclarationSource,
     ThermoModelKind,
     ThermoTargetKind,
 )
@@ -170,6 +171,8 @@ class ThermoBase(BaseModel):
     :param thermodynamic_target_kind: What the values are claimed to describe
         (``equilibrium_ensemble`` or ``single_conformer``); None when no
         target was declared. Never inferred.
+    :param thermodynamic_target_declared_by: Who made the target claim
+        (``depositor`` or ``chemkin_format``); meaningful only with a target.
     :param target_conformer_group_id: The conformer group a ``single_conformer``
         target names; set exactly when the kind is ``single_conformer`` and
         owned by ``species_entry_id``.
@@ -191,6 +194,7 @@ class ThermoBase(BaseModel):
     statmech_id: int | None = None
     energy_level_of_theory_id: int | None = None
     thermodynamic_target_kind: ThermoTargetKind | None = None
+    thermodynamic_target_declared_by: ThermoDeclarationSource = ThermoDeclarationSource.depositor
     target_conformer_group_id: int | None = None
     protocol_declaration: StoredThermoProtocolDeclaration | None = None
 
@@ -320,8 +324,9 @@ class ThermoUpdate(SchemaBase):
 
 
 class ThermoRead(ThermoBase, TimestampedCreatedByReadSchema):
-    """Read schema for a thermo record."""
+    """Read schema for a thermo record; ``thermodynamic_target_declared_by`` is ``null`` without a target."""
 
+    thermodynamic_target_declared_by: ThermoDeclarationSource | None = None  # type: ignore[assignment]
     points: list[ThermoPointRead] = Field(default_factory=list)
     nasa: ThermoNASARead | None = None
     nasa9_intervals: list[ThermoNASA9IntervalRead] = Field(default_factory=list)
@@ -329,3 +334,9 @@ class ThermoRead(ThermoBase, TimestampedCreatedByReadSchema):
     source_calculations: list[ThermoSourceCalculationRead] = Field(
         default_factory=list
     )
+
+    @model_validator(mode="after")
+    def blank_declared_by_without_a_target(self) -> Self:
+        if self.thermodynamic_target_kind is None:
+            self.thermodynamic_target_declared_by = None
+        return self

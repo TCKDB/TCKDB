@@ -4335,7 +4335,7 @@
                 "type": "null"
               }
             ],
-            "description": "What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted."
+            "description": "What the values describe (see ThermoTargetDeclaration). The server never infers it; omitted, it reads as not stated."
           },
           "tmax_k": {
             "anyOf": [
@@ -63868,6 +63868,15 @@
         "title": "ThermoCalculationRole",
         "type": "string"
       },
+      "ThermoDeclarationSource": {
+        "description": "Whose claim a thermo record's thermodynamic-target declaration is.\n\n``depositor`` is the depositor's own statement. ``chemkin_format`` is a statement by the\ndepositing client that the CHEMKIN format defines the target; the server checks it is coherent\nbut cannot verify which tool produced it.",
+        "enum": [
+          "depositor",
+          "chemkin_format"
+        ],
+        "title": "ThermoDeclarationSource",
+        "type": "string"
+      },
       "ThermoDepartureComponent": {
         "description": "The part of a standard recipe a depositor departed from.",
         "enum": [
@@ -64145,7 +64154,7 @@
                 "type": "null"
               }
             ],
-            "description": "What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted."
+            "description": "What the values describe (see ThermoTargetDeclaration). The server never infers it; omitted, it reads as not stated."
           },
           "tmax_k": {
             "anyOf": [
@@ -65541,7 +65550,7 @@
         "type": "object"
       },
       "ThermoRead": {
-        "description": "Read schema for a thermo record.",
+        "description": "Read schema for a thermo record; ``thermodynamic_target_declared_by`` is ``null`` without a target.",
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -65786,6 +65795,16 @@
               }
             ],
             "title": "Target Conformer Group Id"
+          },
+          "thermodynamic_target_declared_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThermoDeclarationSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "thermodynamic_target_kind": {
             "anyOf": [
@@ -66734,6 +66753,18 @@
           "scientific_origin": {
             "title": "Scientific Origin",
             "type": "string"
+          },
+          "target_declared_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whose claim the target is (depositor or chemkin_format); null when no target is declared.",
+            "title": "Target Declared By"
           },
           "target_group_ref": {
             "anyOf": [
@@ -67710,7 +67741,7 @@
         "type": "object"
       },
       "ThermoTargetBlock": {
-        "description": "The thermodynamic target a record's depositor declared.\n\n:param kind: ``equilibrium_ensemble`` or ``single_conformer``.\n:param conformer_group_ref: Public ref of the conformer group a\n    ``single_conformer`` target names; ``null`` for an equilibrium target.",
+        "description": "The thermodynamic target a record's depositor declared.\n\n:param kind: ``equilibrium_ensemble`` or ``single_conformer``.\n:param conformer_group_ref: Public ref of the conformer group a\n    ``single_conformer`` target names; ``null`` for an equilibrium target.\n:param declared_by: Whose claim the target is: ``depositor`` or ``chemkin_format``.",
         "properties": {
           "conformer_group_ref": {
             "anyOf": [
@@ -67723,19 +67754,23 @@
             ],
             "title": "Conformer Group Ref"
           },
+          "declared_by": {
+            "$ref": "#/components/schemas/ThermoDeclarationSource"
+          },
           "kind": {
             "$ref": "#/components/schemas/ThermoTargetKind"
           }
         },
         "required": [
-          "kind"
+          "kind",
+          "declared_by"
         ],
         "title": "ThermoTargetBlock",
         "type": "object"
       },
       "ThermoTargetDeclaration": {
         "additionalProperties": false,
-        "description": "What the record's values are claimed to describe.\n\nA ``single_conformer`` target names exactly one conformer group of the record's own species\nentry; an ``equilibrium_ensemble`` target names none and is refused if it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.\n:param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.",
+        "description": "What the record's values are claimed to describe.\n\nA ``single_conformer`` target names exactly one conformer group of the record's own species\nentry; an ``equilibrium_ensemble`` target names none and is refused if it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.\n:param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.\n:param declared_by: ``depositor`` (the default) is the depositor's own statement.\n    ``chemkin_format`` is a statement by the depositing client that the CHEMKIN format defines\n    the target; the server checks it is coherent but cannot verify which tool produced it.",
         "properties": {
           "conformer_group_ref": {
             "anyOf": [
@@ -67760,6 +67795,10 @@
               }
             ],
             "title": "Conformer Key"
+          },
+          "declared_by": {
+            "$ref": "#/components/schemas/ThermoDeclarationSource",
+            "default": "depositor"
           },
           "kind": {
             "$ref": "#/components/schemas/ThermoTargetKind"
@@ -68104,7 +68143,7 @@
                 "type": "null"
               }
             ],
-            "description": "What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted."
+            "description": "What the values describe (see ThermoTargetDeclaration). The server never infers it; omitted, it reads as not stated."
           },
           "tmax_k": {
             "anyOf": [

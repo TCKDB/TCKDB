@@ -4,31 +4,31 @@
   "algorithm": 6,
   "pins": {
     "computed_calculation": {
-      "1": "135e18e4c004dc9d8a52ec860465cf5cf1d8ab402823a9856559ece2eb4bfe21"
+      "1": "a99f0d4a7bfd53829c7ade18ef53662be22f27baa06e65e81c56f10777f42257"
     },
     "computed_kinetics": {
-      "1": "6c731ff3f9768beea6d5fc2c6096e1c67c549710eeeea04b6779cd30fb3e655a"
+      "1": "a8dbfa4e776955958f8b6b970353a4727e4461ea1ef690bcb36b39c29917fe17"
     },
     "computed_statmech": {
-      "1": "be4b5334ad9be59a51469f168e6d3386a6c77805db26b701aa89c4fabc4903dc"
+      "1": "f8874e534b830b631662ae96fb32268ea18347b6481c41832f4af976e09e4e03"
     },
     "computed_thermo": {
-      "1": "31e62d3bd83f7d785f115d18073a21ba7d18b9649945b5ea375591d8ab198724"
+      "1": "e358f9d314fc9932a3a041cc928e44dbee95e5b694872a6dbaefcfac0bbf3969"
     },
     "computed_transition_state": {
-      "2": "7233099d572561aedbe497f66847adb8dd103afb7520838a970d623f5392126e"
+      "2": "786ed0e8c129a1537b9da80e2c31fc9d828ce260b1ab3385396d2301238aa148"
     },
     "computed_transport": {
-      "1": "6413daa8ddd195f42385d37beb2ef704d45b361baecbe0e4a93b8e26d9062742"
+      "1": "13dab1e06c1df4ba078d326f530d3f51a6a790aca3612b319924cde9f2eab786"
     },
     "computed_ts_statmech": {
-      "1": "5e5832cb366f3778d81da417a9cb322cbffd0296622c3b495e709470b372c242"
+      "1": "90951074d2bcd429547a90f5690bb8d9fb892f1aa170f45ebbe52110766290d8"
     },
     "tckdb_reproducibility": {
-      "1": "7f722d0e97d9ef6d3e2ab386b87acf8c9344ef68a2d64db81e72ac7cb9422565"
+      "1": "17edf720190c3e3b047175077615f6ea861bac3801d5695f188d86cdfe74500a"
     },
     "tckdb_reproducibility_ts_statmech": {
-      "1": "067fa0687a5ae3558f68481baf3d34bdc8c840131252ef865a692459e74d3b24"
+      "1": "f8c2d4d2b729fe6cbaec61e185d41bcd9d9257a22524e90a07f06ea1c07e47d7"
     }
   },
   "unbumped_overrides": [
@@ -422,6 +422,51 @@
       "name": "computed_transition_state",
       "version": 2,
       "reason": "evaluate_transition_state_frequency gains a wrapper that appends a hessian_method_refined note only when the resolved tau carries refined_from (set at upload, never from stored rows); no check or grading changed"
+    },
+    {
+      "name": "computed_calculation",
+      "version": 1,
+      "reason": "snapshot_defaults.UNCHANGED_DEFAULTS gains thermo.thermodynamic_target_declared_by at its default; no existing row's snapshot or digest changes and no check or grading decides differently"
+    },
+    {
+      "name": "computed_kinetics",
+      "version": 1,
+      "reason": "snapshot_defaults.UNCHANGED_DEFAULTS gains thermo.thermodynamic_target_declared_by at its default; no existing row's snapshot or digest changes and no check or grading decides differently"
+    },
+    {
+      "name": "computed_statmech",
+      "version": 1,
+      "reason": "snapshot_defaults.UNCHANGED_DEFAULTS gains thermo.thermodynamic_target_declared_by at its default; no existing row's snapshot or digest changes and no check or grading decides differently"
+    },
+    {
+      "name": "computed_thermo",
+      "version": 1,
+      "reason": "snapshot_defaults.UNCHANGED_DEFAULTS gains thermo.thermodynamic_target_declared_by at its default; no existing row's snapshot or digest changes and no check or grading decides differently"
+    },
+    {
+      "name": "computed_transition_state",
+      "version": 2,
+      "reason": "snapshot_defaults.UNCHANGED_DEFAULTS gains thermo.thermodynamic_target_declared_by at its default; no existing row's snapshot or digest changes and no check or grading decides differently"
+    },
+    {
+      "name": "computed_transport",
+      "version": 1,
+      "reason": "snapshot_defaults.UNCHANGED_DEFAULTS gains thermo.thermodynamic_target_declared_by at its default; no existing row's snapshot or digest changes and no check or grading decides differently"
+    },
+    {
+      "name": "computed_ts_statmech",
+      "version": 1,
+      "reason": "snapshot_defaults.UNCHANGED_DEFAULTS gains thermo.thermodynamic_target_declared_by at its default; no existing row's snapshot or digest changes and no check or grading decides differently"
+    },
+    {
+      "name": "tckdb_reproducibility",
+      "version": 1,
+      "reason": "snapshot_defaults.UNCHANGED_DEFAULTS gains thermo.thermodynamic_target_declared_by at its default; no existing row's snapshot or digest changes and no check or grading decides differently"
+    },
+    {
+      "name": "tckdb_reproducibility_ts_statmech",
+      "version": 1,
+      "reason": "snapshot_defaults.UNCHANGED_DEFAULTS gains thermo.thermodynamic_target_declared_by at its default; no existing row's snapshot or digest changes and no check or grading decides differently"
     }
   ]
 }

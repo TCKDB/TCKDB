@@ -189,6 +189,18 @@ class ThermoTargetKind(str, Enum):
     single_conformer = "single_conformer"
 
 
+class ThermoDeclarationSource(str, Enum):
+    """Whose claim a thermo record's thermodynamic-target declaration is.
+
+    ``depositor`` is the depositor's own statement. ``chemkin_format`` is a statement by the
+    depositing client that the CHEMKIN format defines the target; the server checks it is coherent
+    but cannot verify which tool produced it.
+    """
+
+    depositor = "depositor"
+    chemkin_format = "chemkin_format"
+
+
 class PhaseKind(str, Enum):
     """Physical phase a thermochemistry record is referenced to.
 

@@ -381,6 +381,8 @@ class RejectionCode(str, Enum):
     TCKDB_CLIENT_VERSION_UNSUPPORTED = "tckdb_client_version_unsupported"
     TERM_SYMBOL_INVALID = "term_symbol_invalid"
     THERMO_DECLARATION_INVALID = "thermo_declaration_invalid"
+    THERMO_DECLARED_BY_RECORD_INCOHERENT = "thermo_declared_by_record_incoherent"
+    THERMO_DECLARED_BY_TARGET_INCOHERENT = "thermo_declared_by_target_incoherent"
     THERMO_ENERGY_LEVEL_AMBIGUOUS = "thermo_energy_level_ambiguous"
     THERMO_ENERGY_LEVEL_CONTRADICTION = "thermo_energy_level_contradiction"
     THERMO_ENERGY_LEVEL_REQUIRES_SP = "thermo_energy_level_requires_sp"
@@ -707,6 +709,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.SUPERSEDES_SAME_RECORD,
         RejectionCode.TERM_SYMBOL_INVALID,
         RejectionCode.THERMO_DECLARATION_INVALID,
+        RejectionCode.THERMO_DECLARED_BY_RECORD_INCOHERENT,
+        RejectionCode.THERMO_DECLARED_BY_TARGET_INCOHERENT,
         RejectionCode.THERMO_ENERGY_LEVEL_AMBIGUOUS,
         RejectionCode.THERMO_ENERGY_LEVEL_CONTRADICTION,
         RejectionCode.THERMO_ENERGY_LEVEL_REQUIRES_SP,
@@ -1105,6 +1109,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.TCKDB_CLIENT_VERSION_UNSUPPORTED: frozenset({426}),
     RejectionCode.TERM_SYMBOL_INVALID: frozenset({422}),
     RejectionCode.THERMO_DECLARATION_INVALID: frozenset({422}),
+    RejectionCode.THERMO_DECLARED_BY_RECORD_INCOHERENT: frozenset({422}),
+    RejectionCode.THERMO_DECLARED_BY_TARGET_INCOHERENT: frozenset({422}),
     RejectionCode.THERMO_ENERGY_LEVEL_AMBIGUOUS: frozenset({422}),
     RejectionCode.THERMO_ENERGY_LEVEL_CONTRADICTION: frozenset({422}),
     RejectionCode.THERMO_ENERGY_LEVEL_REQUIRES_SP: frozenset({422}),

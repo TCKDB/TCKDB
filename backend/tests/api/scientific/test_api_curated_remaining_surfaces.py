@@ -363,7 +363,7 @@ def test_thermo_curated_names_an_unreviewed_target_group_statmech_and_traced_con
     """ADR 0023: none of the three is reviewed, and each is linked evidence of the approved thermo, so each is named."""
     entry, sm, group, obs = _gated_refs_world(db_session)
     prov, rec = _provenance(client, entry, "curated")
-    assert rec["thermodynamic_target"] == {"kind": "single_conformer", "conformer_group_ref": group.public_ref}
+    assert rec["thermodynamic_target"] == {"kind": "single_conformer", "conformer_group_ref": group.public_ref, "declared_by": "depositor"}
     assert prov["statmech_ref"] == sm.public_ref
     assert prov["conformer_observation_ref"] == obs.public_ref
     assert prov["conformer_group_ref"] == group.public_ref
@@ -379,7 +379,7 @@ def test_thermo_curated_does_not_name_a_withheld_target_group_statmech_or_traced
     for path, row in (("conformer-groups", group), ("conformer-observations", obs), ("statmech", sm)):
         assert client.get(f"{BASE}/{path}/{row.public_ref}", params={"profile": "curated"}).status_code == 404
     prov, rec = _provenance(client, entry, "curated")
-    assert rec["thermodynamic_target"] == {"kind": "single_conformer", "conformer_group_ref": None}
+    assert rec["thermodynamic_target"] == {"kind": "single_conformer", "conformer_group_ref": None, "declared_by": "depositor"}
     assert prov["statmech_ref"] is None
     assert prov["conformer_observation_ref"] is None
     assert prov["conformer_group_ref"] is None

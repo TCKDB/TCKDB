@@ -22,6 +22,15 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A thermo target says whose claim it is; imported CHEMKIN thermo declares its target (2026-11-09)
+
+- **What changed:**
+  - A thermo record's `thermodynamic_target` gains `declared_by`: `depositor` (the default; existing targets read `depositor`) or `chemkin_format`, a statement by the depositing client that the CHEMKIN format defines the target. It is stored, returned in the thermo read's `thermodynamic_target`, carried by the bundle export, and shown as `target_declared_by` on each thermo selection candidate. The legacy thermo read returns `thermodynamic_target_declared_by` as `null` when no target is declared.
+  - A `chemkin_format` target is refused unless it is `equilibrium_ensemble` (`thermo_declared_by_target_incoherent`) on a record with phase `gas` and a NASA-7 block (`thermo_declared_by_record_incoherent`).
+  - `tckdb-chemkin` declares `equilibrium_ensemble` with `declared_by: chemkin_format` for gas-phase entries. The phase comes from the card's column-45 letter (`G`, `L`, `S`); `L` and `S` declare their phase and no target, and a blank or unknown letter declares neither (a blank used to read as `G`). It sends a new wire key an older server refuses, and needs a server at migration `e7a3c1d9f482` or later and `tckdb-schemas` 0.167.0 or later.
+  - Thermo selection of the formic acid model's 123 species answers `sole_eligible_candidate` instead of `no_applicable_candidate`.
+- **Schema and migration:** revision `e7a3c1d9f482` adds `thermo.thermodynamic_target_declared_by` (enum `thermo_declaration_source`, `NOT NULL DEFAULT 'depositor'`). **Versions:** `tckdb-schemas` 0.167.0, `tckdb-client` 0.196.0, `tckdb-chemkin` 0.7.0.
+
 ## A depositor cannot approve their own record, and the record-review route checks what it is given (2026-11-09)
 
 - **What changed:** `PATCH /record-reviews/{record_type}/{record_id}` to `approved` compared the actor only with the review row's `created_by`, which is NULL when the curator's own request creates the row (a `species` or `reaction`, which no upload targets). The rule is now judged on every deposit signal: the review row's `created_by`, the record's own `created_by`, and the uploader of any submission linked to the record.

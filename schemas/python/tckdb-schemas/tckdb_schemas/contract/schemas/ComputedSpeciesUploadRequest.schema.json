@@ -6079,6 +6079,15 @@
       "title": "ThermoCalculationRole",
       "type": "string"
     },
+    "ThermoDeclarationSource": {
+      "description": "Whose claim a thermo record's thermodynamic-target declaration is.\n\n``depositor`` is the depositor's own statement. ``chemkin_format`` is a statement by the\ndepositing client that the CHEMKIN format defines the target; the server checks it is coherent\nbut cannot verify which tool produced it.",
+      "enum": [
+        "depositor",
+        "chemkin_format"
+      ],
+      "title": "ThermoDeclarationSource",
+      "type": "string"
+    },
     "ThermoDepartureComponent": {
       "description": "The part of a standard recipe a depositor departed from.",
       "enum": [
@@ -6374,7 +6383,7 @@
             }
           ],
           "default": null,
-          "description": "What the values describe (see ThermoTargetDeclaration). Never inferred or defaulted."
+          "description": "What the values describe (see ThermoTargetDeclaration). The server never infers it; omitted, it reads as not stated."
         },
         "tmax_k": {
           "anyOf": [
@@ -6801,7 +6810,7 @@
     },
     "ThermoTargetDeclaration": {
       "additionalProperties": false,
-      "description": "What the record's values are claimed to describe.\n\nA ``single_conformer`` target names exactly one conformer group of the record's own species\nentry; an ``equilibrium_ensemble`` target names none and is refused if it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.\n:param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.",
+      "description": "What the record's values are claimed to describe.\n\nA ``single_conformer`` target names exactly one conformer group of the record's own species\nentry; an ``equilibrium_ensemble`` target names none and is refused if it does.\n\n:param kind: The target kind.\n:param conformer_group_ref: Public ref (``cg_...``). Standalone and contribution bundles only.\n:param conformer_key: Key of a conformer the same bundle declares. Computed bundles only.\n:param declared_by: ``depositor`` (the default) is the depositor's own statement.\n    ``chemkin_format`` is a statement by the depositing client that the CHEMKIN format defines\n    the target; the server checks it is coherent but cannot verify which tool produced it.",
       "properties": {
         "conformer_group_ref": {
           "anyOf": [
@@ -6828,6 +6837,10 @@
           ],
           "default": null,
           "title": "Conformer Key"
+        },
+        "declared_by": {
+          "$ref": "#/$defs/ThermoDeclarationSource",
+          "default": "depositor"
         },
         "kind": {
           "$ref": "#/$defs/ThermoTargetKind"
