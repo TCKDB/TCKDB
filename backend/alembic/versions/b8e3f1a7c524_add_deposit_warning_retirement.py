@@ -1,18 +1,9 @@
 """add deposit_warning_retirement
 
-``deposit_warning`` is append-only (triggers refuse UPDATE, DELETE, TRUNCATE), so a warning that stops applying
-cannot be marked in place. This revision adds a sibling table, itself append-only: one row per retired warning, saying
-when and why it stopped being current. The warning row stays untouched as history; reads show only warnings with no
-retirement row.
-
-Users: a file, a single point or a Hessian stored after the deposit can make a warning untrue (e.g.
-``converged_opt_no_usable_energy``, ``hessian_not_stored_*``); the warning is retired with the cause as its reason.
-The reason list is a literal here (a revision does not follow the model); a test pins it to the model's constant.
-
-Brand-new table, no backfill: every existing warning is current, as before.
+Append-only table recording when and why a deposit warning stopped applying.
 
 Revision ID: b8e3f1a7c524
-Revises: d5f2b8c1a704
+Revises: e7a3c1d9f482
 Create Date: 2026-11-09
 """
 
@@ -23,7 +14,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "b8e3f1a7c524"
-down_revision: Union[str, Sequence[str], None] = "d5f2b8c1a704"
+down_revision: Union[str, Sequence[str], None] = "e7a3c1d9f482"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -54,6 +54,9 @@ __all__ = [
     "gaussian_freq_hessian_option",
     "hessian_method_class",
     "orca_freq_hessian",
+    "orca_lacks_analytic_gradient",
+    "orca_numfreq_refines_gradient_to_energy",
+    "numfreq_energy_implied",
 ]
 
 #: Gaussian ``Freq`` options that name the second-derivative method. Only
@@ -378,17 +381,62 @@ def gaussian_freq_hessian_option(text: str) -> tuple[str, HessianMethod] | None:
     return None
 
 
-def orca_freq_hessian(keywords: Iterable[str]) -> tuple[str, HessianMethod] | None:
-    """The Hessian method the ORCA keywords state, as ``(directive as written, method)``.
+def orca_lacks_analytic_gradient(method: str | None) -> bool:
+    """True for an ORCA method keyword with no analytic gradient: CCSD, CCSD(T), DLPNO and F12 methods (not ``AUTOCI-``)."""
+    token = re.sub(r"^(rohf|uhf|rhf)-", "", (method or "").strip().lower().replace("_", "-"))
+    if not token or token.startswith("autoci"):
+        return False
+    if token.startswith(("ccsd", "dlpno-ccsd", "dlpno2013-ccsd", "f12-ccsd", "f12/ri-ccsd")):
+        return True
+    return "f12" in token and "mp2" in token
 
-    ``NumFreq`` wins over ``AnFreq`` when both are present (numerical, the
-    conservative tolerance). ``NumFreq`` differentiates gradients; with
-    ``NumGrad`` those gradients are numerical too, so the Hessian is built from
-    energies (ORCA 5.0.4 manual, 8.3.2 and 9.24.5 "Numerical Gradients":
-    ``! NumGrad`` requests numerical instead of analytic gradients). The
-    directive text is exactly what the deck says: ``NumFreq``, ``NumFreq NumGrad``
-    (each as written) or ``AnFreq``.
-    """
+
+def orca_numfreq_refines_gradient_to_energy(
+    software: str | None,
+    lot_method: str | None,
+    recorded: HessianMethod | None,
+    stated: HessianMethod | None,
+    *,
+    lacks_gradient: bool | None = None,
+) -> bool:
+    """True when a recorded finite difference of gradients is refined to energies (ORCA ``NumFreq``, method without a gradient)."""
+    return (
+        recorded is HessianMethod.finite_difference_gradient
+        and stated is HessianMethod.finite_difference_energy
+        and (software or "").strip().lower() == "orca"
+        and (orca_lacks_analytic_gradient(lot_method) if lacks_gradient is None else lacks_gradient)
+    )
+
+
+_ORCA_COORDINATE_LINE = re.compile(
+    r"^\*\s*(?:xyzfile|intfile|gzmtfile|pdbfile|xyz|int|gzmt)\s+(-?\d+)\s+(\d+)", re.I
+)
+_ORCA_COORDS_MULT = re.compile(r"^mult(?:iplicity)?\s+(\d+)", re.I)
+
+
+def _orca_multiplicity(text: str) -> int | None:
+    """The multiplicity from the ``* xyz <charge> <mult>`` style line or a ``%coords`` block ``Mult``, else ``None``."""
+    in_coords = False
+    for raw in text.splitlines():
+        line = re.sub(r"^\|\s*\d+>\s*", "", raw.strip())
+        match = _ORCA_COORDINATE_LINE.match(line)
+        if match:
+            return int(match.group(2))
+        if line.lower().startswith("%coords"):
+            in_coords = True
+        elif in_coords and line.lower() == "end":
+            in_coords = False
+        elif in_coords:
+            mult = _ORCA_COORDS_MULT.match(line)
+            if mult:
+                return int(mult.group(1))
+    return None
+
+
+def orca_freq_hessian(
+    keywords: Iterable[str], multiplicity: int | None = None
+) -> tuple[str, HessianMethod] | None:
+    """The Hessian method the ORCA keywords state, as ``(directive as written, method)``."""
     written = list(keywords)
 
     def first(name: str) -> str | None:
@@ -399,6 +447,14 @@ def orca_freq_hessian(keywords: Iterable[str]) -> tuple[str, HessianMethod] | No
         numgrad = first("numgrad")
         if numgrad is not None:
             return f"{numfreq} {numgrad}", HessianMethod.finite_difference_energy
+        lowered = [k.lower() for k in written]
+        references = {k for k in lowered if k in ("uhf", "uks", "rohf")}
+        open_shell = bool(references) or (multiplicity or 1) > 1
+        open_shell_mp2 = (
+            any(k.startswith("dlpno-mp2") for k in lowered) and open_shell
+        ) or ("rohf" in references and any(k.startswith(("mp2", "ri-mp2")) for k in lowered))
+        if open_shell_mp2 or any(orca_lacks_analytic_gradient(k) for k in written):
+            return numfreq, HessianMethod.finite_difference_energy
         return numfreq, HessianMethod.finite_difference_gradient
     anfreq = first("anfreq")
     if anfreq is not None:
@@ -413,8 +469,38 @@ def _gaussian_method(text: str) -> HessianMethod | None:
 
 def _orca_method(text: str) -> HessianMethod | None:
     keywords = [kw for line in orca_keyword_lines(_extract_input_block(text)) for kw in line.split()]
-    found = orca_freq_hessian(keywords)
+    found = orca_freq_hessian(keywords, _orca_multiplicity(text))
     return found[1] if found is not None else None
+
+
+def _orca_numfreq_implies_energy(text: str) -> bool:
+    """True when a bare ``NumFreq`` (no ``NumGrad``) reads as finite differences of energies."""
+    keywords = [kw for line in orca_keyword_lines(_extract_input_block(text)) for kw in line.split()]
+    lowered = {k.lower() for k in keywords}
+    found = orca_freq_hessian(keywords, _orca_multiplicity(text))
+    return (
+        found is not None
+        and found[1] is HessianMethod.finite_difference_energy
+        and "numfreq" in lowered
+        and "numgrad" not in lowered
+    )
+
+
+def numfreq_energy_implied(declared_software: str | None, artifacts: Iterable[_ArtifactLike]) -> bool:
+    """True when an input deck or an ORCA log's echoed input has a bare ``NumFreq`` that reads as energies."""
+    declared = (declared_software or "").strip().lower() or None
+    for artifact in artifacts:
+        kind = getattr(artifact.kind, "value", artifact.kind)
+        if kind not in ("input", "output_log"):
+            continue
+        try:
+            text = base64.b64decode(artifact.content_base64, validate=True).decode("utf-8", errors="replace")
+        except (binascii.Error, ValueError):
+            continue
+        program = detect_software_from_text(text) or _PARSED_PROGRAMS.get(declared or "")
+        if program == "orca" and _orca_numfreq_implies_energy(text):
+            return True
+    return False
 
 
 def detect_hessian_method(software: str | None, text: str) -> HessianMethod | None:
@@ -545,6 +631,9 @@ def check_recorded_method_agrees_with_deck(
     *,
     calculation_key: str | None = None,
     stated_in: str = "input",
+    software: str | None = None,
+    lot_method: str | None = None,
+    lacks_gradient: bool | None = None,
 ) -> None:
     """Refuse a recorded ``freq.hessian_method`` that the input deck (or the input a log echoes) contradicts.
 
@@ -560,6 +649,9 @@ def check_recorded_method_agrees_with_deck(
     The message is built from the code and TCKDB's own words ("analytic",
     "numerical"); neither the depositor's recorded string nor any deck text is
     echoed. The calculation's local key goes in ``context``.
+
+    A recorded gradient method against a stated energy method is accepted for ORCA methods with no analytic gradient
+    (:func:`orca_numfreq_refines_gradient_to_energy`).
 
     :raises CodedValidationError: ``hessian_method_contradicts_input_deck``.
     """
@@ -580,6 +672,11 @@ def check_recorded_method_agrees_with_deck(
     except ValueError:
         exact = None
     if recorded_class == deck_class and (exact is None or exact is deck_method):
+        return
+    if orca_numfreq_refines_gradient_to_energy(
+        software, lot_method, exact, deck_method, lacks_gradient=lacks_gradient
+    ):
+        # Refined to the energy basis, with a ``hessian_method_refined`` warning; not a contradiction.
         return
     # Both sides in TCKDB's vocabulary: the parsed method when the recorded value is
     # exactly a HessianMethod token, otherwise its analytic / numerical kind.

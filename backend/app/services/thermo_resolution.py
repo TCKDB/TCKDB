@@ -171,6 +171,7 @@ def persist_thermo(
         statmech_id=thermo_create.statmech_id,
         energy_level_of_theory_id=thermo_create.energy_level_of_theory_id,
         thermodynamic_target_kind=thermo_create.thermodynamic_target_kind,
+        thermodynamic_target_declared_by=thermo_create.thermodynamic_target_declared_by,
         target_conformer_group_id=thermo_create.target_conformer_group_id,
         protocol_declaration=protocol_declaration,
         h298_kj_mol=thermo_create.h298_kj_mol,

@@ -119,6 +119,7 @@ function record(over: Record<string, unknown> = {}) {
         note: null,
         created_at: "2026-09-14T10:00:00Z",
         created_by: 5,
+        actor_may_approve: null,
         ...over,
     }
 }
@@ -1149,8 +1150,12 @@ describe("recording a judgement", () => {
         server.use(
             http.patch(`${PATCH_BASE}/:type/:id`, () =>
                 HttpResponse.json(
-                    { code: "domain_error", detail: "You cannot approve a record you deposited." },
-                    { status: 400 },
+                    {
+                        code: "record_self_approval",
+                        detail: "record_self_approval: the actor deposited this record and cannot approve it; another curator or admin must.",
+                        context: { record_type: "species", record_ref: "spc_h2o" },
+                    },
+                    { status: 403 },
                 ),
             ),
         )
@@ -1162,7 +1167,7 @@ describe("recording a judgement", () => {
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
 
         expect(await screen.findByRole("alert")).toHaveTextContent(
-            /cannot approve a record you deposited/i,
+            /cannot approve it/i,
         )
     })
 
@@ -1316,7 +1321,7 @@ describe("a refusal is still said when its row has gone", () => {
 describe("what a curator may not do to their own deposit", () => {
     it("does not offer approval on a record this curator deposited", async () => {
         meIs(curator)
-        queueIs([subject([record({ created_by: curator.id })])])
+        queueIs([subject([record({ actor_may_approve: false })])])
         renderPage()
 
         const user = userEvent.setup()
@@ -1331,7 +1336,7 @@ describe("what a curator may not do to their own deposit", () => {
 
     it("still offers approval on somebody else's deposit", async () => {
         meIs(curator)
-        queueIs([subject([record({ created_by: curator.id + 999 })])])
+        queueIs([subject([record({ actor_may_approve: true })])])
         renderPage()
 
         const user = userEvent.setup()
@@ -1343,9 +1348,9 @@ describe("what a curator may not do to their own deposit", () => {
         expect(options).toContain("approved")
     })
 
-    it("offers approval when the depositor is unknown", async () => {
+    it("offers approval when the server did not say", async () => {
         meIs(curator)
-        queueIs([subject([record({ created_by: null })])])
+        queueIs([subject([record({ actor_may_approve: null })])])
         renderPage()
 
         const user = userEvent.setup()

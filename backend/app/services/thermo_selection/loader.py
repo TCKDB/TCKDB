@@ -329,6 +329,9 @@ def normalize_rows(
             target_kind=(
                 thermo.thermodynamic_target_kind.value if thermo.thermodynamic_target_kind is not None else None
             ),
+            target_declared_by=(
+                thermo.thermodynamic_target_declared_by.value if thermo.thermodynamic_target_kind is not None else None
+            ),
             target_group_ref=(
                 group_refs[thermo.target_conformer_group_id] if thermo.target_conformer_group_id is not None else None
             ),

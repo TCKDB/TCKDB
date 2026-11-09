@@ -17,6 +17,7 @@ Covers:
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import event, func, select
@@ -572,6 +573,69 @@ class TestRecordReviewApi:
         assert body["record_public_ref"] == before["record_public_ref"]
         assert body["record_public_ref"]
 
+    def test_a_curator_cannot_approve_the_species_their_own_upload_created(
+        self, client, db_session, login_as, _api_curator_user
+    ):
+        """The review row of a ``species`` is made by this PATCH, so its ``created_by`` is NULL.
+
+        The refusal must come from who deposited the species' entry, not from
+        that column: before the fallback this returned 200 and stamped the
+        depositor as reviewer.
+        """
+        login_as(_api_curator_user)
+        resp = client.post("/api/v1/uploads/conformers", json=_hydrogen_conformer_payload())
+        assert resp.status_code == 201, resp.text
+        species_id = db_session.scalars(select(SpeciesEntry)).first().species_id
+        assert db_session.scalar(
+            select(RecordReview).where(
+                RecordReview.record_type == SubmissionRecordType.species,
+                RecordReview.record_id == species_id,
+            )
+        ) is None
+
+        refused = client.patch(
+            f"/api/v1/record-reviews/species/{species_id}", json={"status": "approved"}
+        )
+        assert refused.status_code == 403, refused.text
+        body = refused.json()
+        assert body["code"] == "record_self_approval"
+        assert body["context"]["record_type"] == "species"
+        assert body["context"]["record_ref"].startswith("spc_")
+
+    def test_the_queue_says_per_row_whether_the_reader_may_approve(
+        self, client, db_session, login_as, _api_curator_user
+    ):
+        login_as(_api_curator_user)
+        resp = client.post("/api/v1/uploads/conformers", json=_hydrogen_conformer_payload())
+        assert resp.status_code == 201, resp.text
+        queue = client.get("/api/v1/record-reviews/queue", params={"limit": 50})
+        assert queue.status_code == 200, queue.text
+        records = [r for s in queue.json()["subjects"] for r in s["records"]]
+        assert records
+        # The reader deposited all of it: nothing here is theirs to approve.
+        assert {r["actor_may_approve"] for r in records} == {False}
+
+    def test_patch_on_a_record_that_does_not_exist_is_a_coded_404(
+        self, client, login_as, _api_curator_user
+    ):
+        login_as(_api_curator_user)
+        resp = client.patch(
+            "/api/v1/record-reviews/thermo/987654321", json={"status": "approved"}
+        )
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["code"] == "record_not_found"
+        assert resp.json()["context"]["record_type"] == "thermo"
+
+    def test_patch_on_an_artifact_is_a_coded_422(
+        self, client, login_as, _api_curator_user
+    ):
+        login_as(_api_curator_user)
+        resp = client.patch(
+            "/api/v1/record-reviews/artifact/1", json={"status": "approved"}
+        )
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["code"] == "record_type_not_reviewable"
+
     def test_patch_requires_curator(self, client):
         thermo_id = self._seed_thermo(client)
         # Default test user is role=user → 403.
@@ -850,6 +914,88 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
             f"the page cost {two_rows} queries for 2 rows and {ten_rows} for "
             "10 -- the ref or container resolve is running per row"
         )
+
+    def test_the_queue_flag_does_not_cost_more_queries_for_a_longer_page(
+        self, login_as, _api_curator_user, client, db_session
+    ):
+        """``actor_may_approve`` is computed in bulk: 2 rows and 10 rows cost the same."""
+
+        def _seed(n: int) -> None:
+            for i in range(n):
+                entry = make_species_entry(db_session, make_species(db_session))
+                thermo = make_thermo_scalar(
+                    db_session, species_entry=entry, h298_kj_mol=-400.0 - i
+                )
+                for record_type, record_id in (
+                    (SubmissionRecordType.thermo, thermo.id),
+                    (SubmissionRecordType.species, entry.species_id),
+                ):
+                    db_session.add(
+                        RecordReview(
+                            record_type=record_type,
+                            record_id=record_id,
+                            status=RecordReviewStatus.under_review,
+                        )
+                    )
+            db_session.flush()
+
+        login_as(_api_curator_user)
+
+        def _count() -> int:
+            statements = 0
+            engine = db_session.connection().engine
+
+            def _before(conn, cursor, statement, parameters, context, executemany):
+                nonlocal statements
+                statements += 1
+
+            event.listen(engine, "before_cursor_execute", _before)
+            try:
+                resp = client.get("/api/v1/record-reviews/queue", params={"limit": 200})
+                assert resp.status_code == 200
+                flags = [
+                    r["actor_may_approve"]
+                    for subj in resp.json()["subjects"]
+                    for r in subj["records"]
+                ]
+                assert flags and all(f is True for f in flags)
+            finally:
+                event.remove(engine, "before_cursor_execute", _before)
+            return statements
+
+        _seed(2)
+        two = _count()
+        _seed(8)
+        ten = _count()
+        assert ten == two, f"the queue cost {two} statements for 2 rows and {ten} for 10"
+
+    def test_the_queue_flag_is_null_for_approved_and_rejected_rows(
+        self, login_as, _api_curator_user, client, db_session
+    ):
+        for status in (RecordReviewStatus.approved, RecordReviewStatus.rejected):
+            thermo = make_thermo_scalar(
+                db_session,
+                species_entry=make_species_entry(db_session, make_species(db_session)),
+            )
+            db_session.add(
+                RecordReview(
+                    record_type=SubmissionRecordType.thermo,
+                    record_id=thermo.id,
+                    status=status,
+                    reviewed_by=_api_curator_user,
+                    reviewed_at=datetime(2026, 1, 1),
+                    first_approved_at=datetime(2026, 1, 1) if status is RecordReviewStatus.approved else None,
+                )
+            )
+        db_session.flush()
+        login_as(_api_curator_user)
+        resp = client.get("/api/v1/record-reviews/queue", params={"limit": 200})
+        flags = {
+            r["status"]: r["actor_may_approve"]
+            for subj in resp.json()["subjects"]
+            for r in subj["records"]
+        }
+        assert flags == {"approved": None, "rejected": None}
 
 
 class TestReviewQueueSubjectsApi:

@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
+from tckdb_schemas.enums import SpinTreatment
 from tckdb_schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
 from tckdb_schemas.structure_declarations import ActualProtocolDeclaration
 
@@ -42,6 +43,9 @@ __all__ = [
 # (see ``docs/builder_api_mvp.md`` §16).
 _ALLOWED_TYPES: frozenset[str] = frozenset({"opt", "freq", "sp"})
 
+# The wire tokens of ``tckdb_schemas.enums.SpinTreatment`` (lowercase).
+_SPIN_TREATMENTS: frozenset[str] = frozenset({m.value for m in SpinTreatment})
+
 
 @dataclass
 class LevelOfTheory:
@@ -57,6 +61,11 @@ class LevelOfTheory:
     dispersion: str | None = None
     solvent: str | None = None
     solvent_model: str | None = None
+    #: Spin treatment of the method: ``restricted``, ``unrestricted``, ``restricted_open`` or ``unknown`` (the
+    #: server's ``SpinTreatment`` tokens, lowercase). It joins the level's identity, so UB3LYP and B3LYP are
+    #: different levels. Never inferred from the method name or the multiplicity: send it only when the caller
+    #: states it; left ``None`` it is absent from the payload.
+    spin_treatment: str | None = None
     #: Method qualifiers, sent only when the run states them (they join the level's identity only when set).
     #: Closed values: ``core_treatment`` frozen_core / all_electron / window; ``relativistic_hamiltonian`` none, dkh0,
     #: dkh2, dkhso, resc, x2c, zora, iora; ``pno_truncation`` loose / normal / tight; ``ri_approximation`` none,
@@ -77,6 +86,7 @@ class LevelOfTheory:
             "dispersion",
             "solvent",
             "solvent_model",
+            "spin_treatment",
             "core_treatment",
             "relativistic_hamiltonian",
             "pno_truncation",
@@ -87,6 +97,11 @@ class LevelOfTheory:
                 self,
                 attr,
                 ensure_optional_non_empty_str(getattr(self, attr), field=attr),
+            )
+        if self.spin_treatment is not None and self.spin_treatment not in _SPIN_TREATMENTS:
+            raise TCKDBBuilderValidationError(
+                f"LevelOfTheory.spin_treatment must be one of {sorted(_SPIN_TREATMENTS)}, "
+                f"got {self.spin_treatment!r}."
             )
         self._validated = True
 
@@ -100,6 +115,7 @@ class LevelOfTheory:
             "dispersion",
             "solvent",
             "solvent_model",
+            "spin_treatment",
             "core_treatment",
             "relativistic_hamiltonian",
             "pno_truncation",
@@ -205,11 +221,11 @@ class Calculation:
 
     electronic_energy_hartree: float | None = None
 
-    # Builder-attached artifact metadata. Files are NOT embedded in
-    # the scientific upload payload — they are uploaded in a second
-    # phase via :meth:`ComputedSpeciesUpload.artifact_plan` /
-    # :meth:`ComputedReactionUpload.artifact_plan` once the server
-    # has assigned ``calculation.id`` values. See
+    # Builder-attached artifacts. The upload's ``to_payload()`` embeds the
+    # files inline (``inline_artifacts=True``, the default); files that do
+    # not fit the inline budget, or every file when it is off, go in a
+    # second phase via :meth:`ComputedSpeciesUpload.artifact_plan` /
+    # :meth:`ComputedReactionUpload.artifact_plan`. See
     # ``tckdb_client/builders/artifact.py``.
     artifacts: list[Artifact] = field(default_factory=list)
 

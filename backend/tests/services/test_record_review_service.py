@@ -14,15 +14,18 @@ from __future__ import annotations
 
 import pytest
 
-from app.api.errors import DomainError
+from app.api.errors import DomainError, RecordSelfApprovalForbidden, SubmissionSelfApprovalForbidden
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     AppUserRole,
     RecordReviewEventKind,
     RecordReviewStatus,
+    SubmissionKind,
     SubmissionRecordType,
+    SubmissionSourceKind,
 )
 from app.db.models.record_review import RecordReview
+from app.db.models.submission import Submission, SubmissionRecordLink
 from app.services.record_review import (
     RecordRef,
     bulk_set_record_review_status,
@@ -31,6 +34,12 @@ from app.services.record_review import (
     list_record_review_events,
     list_record_reviews,
     set_record_review_status,
+)
+from app.services.submission import approve_submission
+from tests.services.scientific_read._factories import (
+    make_species,
+    make_species_entry,
+    make_thermo_scalar,
 )
 
 
@@ -107,7 +116,7 @@ class TestTransitionPolicy:
             record_id=12,
             created_by=creator.id,
         )
-        with pytest.raises(DomainError, match="cannot approve a record they created"):
+        with pytest.raises(DomainError, match="record_self_approval"):
             set_record_review_status(
                 db_session,
                 record_type=SubmissionRecordType.species,
@@ -497,3 +506,231 @@ class TestReviewEventHistory:
             record_id=405,
         )
         assert len(after_noop) == 3
+
+
+class TestSelfApprovalRule:
+    """Owned records refuse any depositor; shared identities only a sole depositor."""
+
+    @staticmethod
+    def _deposit(session, uploader, record_type, record_id) -> Submission:
+        sub = Submission(
+            created_by=uploader.id,
+            submission_kind=SubmissionKind.conformer,
+            source_kind=SubmissionSourceKind.api,
+        )
+        session.add(sub)
+        session.flush()
+        session.add(
+            SubmissionRecordLink(
+                submission_id=sub.id, record_type=record_type, record_id=record_id
+            )
+        )
+        session.flush()
+        return sub
+
+    @staticmethod
+    def _approve(session, actor, record_type, record_id):
+        return set_record_review_status(
+            session,
+            record_type=record_type,
+            record_id=record_id,
+            status=RecordReviewStatus.approved,
+            actor=actor,
+        )
+
+    @staticmethod
+    def _entry(session, smiles="[H][H]"):
+        species = make_species(session, smiles=smiles)
+        return species, make_species_entry(session, species)
+
+    def test_sole_depositor_of_a_species_is_refused(self, db_session):
+        depositor = _user(db_session, "dep_species", AppUserRole.curator)
+        species, entry = self._entry(db_session)
+        self._deposit(db_session, depositor, SubmissionRecordType.species_entry, entry.id)
+        assert get_record_review(
+            db_session, record_type=SubmissionRecordType.species, record_id=species.id
+        ) is None
+        with pytest.raises(RecordSelfApprovalForbidden, match="record_self_approval") as caught:
+            self._approve(db_session, depositor, SubmissionRecordType.species, species.id)
+        assert caught.value.context["record_type"] == "species"
+        assert caught.value.context["record_ref"].startswith("spc_")
+
+    def test_other_curator_may_approve_a_species(self, db_session):
+        depositor = _user(db_session, "dep_species2", AppUserRole.curator)
+        other = _user(db_session, "other_species2", AppUserRole.curator)
+        species, entry = self._entry(db_session)
+        self._deposit(db_session, depositor, SubmissionRecordType.species_entry, entry.id)
+        row = self._approve(db_session, other, SubmissionRecordType.species, species.id)
+        assert row.status is RecordReviewStatus.approved
+
+    def test_P1_second_depositor_of_a_shared_entry_may_approve_it(self, db_session):
+        first = _user(db_session, "p1_first", AppUserRole.curator)
+        second = _user(db_session, "p1_second", AppUserRole.curator)
+        _species, entry = self._entry(db_session)
+        ensure_record_review(
+            db_session,
+            record_type=SubmissionRecordType.species_entry,
+            record_id=entry.id,
+            created_by=first.id,
+        )
+        self._deposit(db_session, first, SubmissionRecordType.species_entry, entry.id)
+        self._deposit(db_session, second, SubmissionRecordType.species_entry, entry.id)
+        # Two accounts deposited: neither is the sole depositor, so order is moot.
+        row = self._approve(db_session, second, SubmissionRecordType.species_entry, entry.id)
+        assert row.status is RecordReviewStatus.approved
+
+    def test_sole_depositor_of_a_shared_entry_is_refused_by_row_creator(self, db_session):
+        creator = _user(db_session, "entry_creator", AppUserRole.curator)
+        _species, entry = self._entry(db_session)
+        ensure_record_review(
+            db_session,
+            record_type=SubmissionRecordType.species_entry,
+            record_id=entry.id,
+            created_by=creator.id,
+        )
+        with pytest.raises(RecordSelfApprovalForbidden):
+            self._approve(db_session, creator, SubmissionRecordType.species_entry, entry.id)
+
+    def test_owned_record_is_judged_on_its_creators_not_on_a_citing_link(self, db_session):
+        row_creator = _user(db_session, "own_rowcreator", AppUserRole.curator)
+        citer = _user(db_session, "own_citer", AppUserRole.curator)
+        _species, entry = self._entry(db_session)
+        thermo = make_thermo_scalar(db_session, species_entry=entry)
+        ensure_record_review(
+            db_session,
+            record_type=SubmissionRecordType.thermo,
+            record_id=thermo.id,
+            created_by=row_creator.id,
+        )
+        # The record names its creator, so another account's link only cites it.
+        self._deposit(db_session, citer, SubmissionRecordType.thermo, thermo.id)
+        with pytest.raises(RecordSelfApprovalForbidden):
+            self._approve(db_session, row_creator, SubmissionRecordType.thermo, thermo.id)
+        row = self._approve(db_session, citer, SubmissionRecordType.thermo, thermo.id)
+        assert row.status is RecordReviewStatus.approved
+
+    def test_Q3_approving_a_submission_that_cites_anothers_record_is_allowed(self, db_session):
+        owner = _user(db_session, "q3_owner", AppUserRole.user)
+        citer = _user(db_session, "q3_citer", AppUserRole.user)
+        approver = _user(db_session, "q3_approver", AppUserRole.curator)
+        _species, entry = self._entry(db_session)
+        thermo = make_thermo_scalar(db_session, species_entry=entry)
+        thermo.created_by = owner.id
+        db_session.flush()
+        self._deposit(db_session, owner, SubmissionRecordType.thermo, thermo.id)
+        cite = self._deposit(db_session, citer, SubmissionRecordType.thermo, thermo.id)
+        # The citer, made a curator, may approve what they only cited.
+        citer.role = AppUserRole.curator
+        db_session.flush()
+        approve_submission(db_session, submission_id=cite.id, actor=approver)
+        row = self._approve(db_session, citer, SubmissionRecordType.thermo, thermo.id)
+        assert row.status is RecordReviewStatus.approved
+
+    def test_restamp_leaves_an_approved_record_untouched(self, db_session):
+        depositor_a = _user(db_session, "rs2_a", AppUserRole.curator)
+        approver_b = _user(db_session, "rs2_b", AppUserRole.curator)
+        uploader_c = _user(db_session, "rs2_c", AppUserRole.user)
+        _species, entry = self._entry(db_session)
+        thermo = make_thermo_scalar(db_session, species_entry=entry)
+        thermo.created_by = depositor_a.id
+        db_session.flush()
+        self._deposit(db_session, depositor_a, SubmissionRecordType.thermo, thermo.id)
+        self._approve(db_session, approver_b, SubmissionRecordType.thermo, thermo.id)
+        c_sub = self._deposit(db_session, uploader_c, SubmissionRecordType.thermo, thermo.id)
+        events_before = len(
+            list_record_review_events(
+                db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id
+            )
+        )
+        approve_submission(db_session, submission_id=c_sub.id, actor=depositor_a)
+        review = get_record_review(
+            db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id
+        )
+        assert review.reviewed_by == approver_b.id
+        assert len(
+            list_record_review_events(
+                db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id
+            )
+        ) == events_before
+
+    def test_owned_record_refuses_its_own_created_by_with_no_link(self, db_session):
+        depositor = _user(db_session, "dep_owner", AppUserRole.curator)
+        _species, entry = self._entry(db_session)
+        thermo = make_thermo_scalar(db_session, species_entry=entry)
+        thermo.created_by = depositor.id
+        db_session.flush()
+        with pytest.raises(RecordSelfApprovalForbidden):
+            self._approve(db_session, depositor, SubmissionRecordType.thermo, thermo.id)
+
+    def test_P2_first_depositor_may_approve_anothers_submission_over_a_shared_entry(self, db_session):
+        first = _user(db_session, "p2_first", AppUserRole.curator)
+        second = _user(db_session, "p2_second", AppUserRole.user)
+        _species, entry = self._entry(db_session)
+        self._deposit(db_session, first, SubmissionRecordType.species_entry, entry.id)
+        sub = self._deposit(db_session, second, SubmissionRecordType.species_entry, entry.id)
+        ensure_record_review(
+            db_session,
+            record_type=SubmissionRecordType.species_entry,
+            record_id=entry.id,
+            created_by=first.id,
+            submission_id=sub.id,
+        )
+        approve_submission(db_session, submission_id=sub.id, actor=first)
+        review = get_record_review(
+            db_session, record_type=SubmissionRecordType.species_entry, record_id=entry.id
+        )
+        assert review.status is RecordReviewStatus.approved
+        assert review.reviewed_by == first.id
+
+    def test_P2b_depositor_is_refused_an_owned_record_in_a_submission_they_also_linked(self, db_session):
+        first = _user(db_session, "p2b_first", AppUserRole.curator)
+        other = _user(db_session, "p2b_other", AppUserRole.user)
+        _species, entry = self._entry(db_session)
+        thermo = make_thermo_scalar(db_session, species_entry=entry)
+        sub = self._deposit(db_session, other, SubmissionRecordType.thermo, thermo.id)
+        self._deposit(db_session, first, SubmissionRecordType.thermo, thermo.id)
+        with pytest.raises(RecordSelfApprovalForbidden):
+            approve_submission(db_session, submission_id=sub.id, actor=first)
+
+    def test_P3_bulk_approval_with_a_null_creator_shared_row_is_allowed(self, db_session):
+        uploader = _user(db_session, "p3_uploader", AppUserRole.user)
+        curator = _user(db_session, "p3_curator", AppUserRole.curator)
+        _species, entry = self._entry(db_session)
+        sub = self._deposit(db_session, uploader, SubmissionRecordType.species_entry, entry.id)
+        ensure_record_review(
+            db_session,
+            record_type=SubmissionRecordType.species_entry,
+            record_id=entry.id,
+            submission_id=sub.id,
+        )
+        approve_submission(db_session, submission_id=sub.id, actor=curator)
+        review = get_record_review(
+            db_session, record_type=SubmissionRecordType.species_entry, record_id=entry.id
+        )
+        assert review.status is RecordReviewStatus.approved
+
+    def test_submission_approval_by_its_uploader_is_a_coded_403_error(self, db_session):
+        uploader = _user(db_session, "sub_uploader", AppUserRole.curator)
+        _species, entry = self._entry(db_session)
+        sub = self._deposit(db_session, uploader, SubmissionRecordType.species_entry, entry.id)
+        with pytest.raises(SubmissionSelfApprovalForbidden, match="submission_self_approval"):
+            approve_submission(db_session, submission_id=sub.id, actor=uploader)
+
+    def test_bulk_restamp_of_an_already_approved_owned_record_is_not_rejudged(self, db_session):
+        depositor = _user(db_session, "rs_dep", AppUserRole.curator)
+        approver = _user(db_session, "rs_approver", AppUserRole.curator)
+        _species, entry = self._entry(db_session)
+        thermo = make_thermo_scalar(db_session, species_entry=entry)
+        sub = self._deposit(db_session, depositor, SubmissionRecordType.thermo, thermo.id)
+        self._approve(db_session, approver, SubmissionRecordType.thermo, thermo.id)
+        # The single-record route still refuses the depositor re-approving...
+        with pytest.raises(RecordSelfApprovalForbidden):
+            self._approve(db_session, depositor, SubmissionRecordType.thermo, thermo.id)
+        # ...but the bulk path re-stamping an approved record does not.
+        bulk_set_record_review_status(
+            db_session,
+            targets=[RecordRef(SubmissionRecordType.thermo, thermo.id)],
+            status=RecordReviewStatus.approved,
+            actor=depositor,
+            submission_id=sub.id,
+        )

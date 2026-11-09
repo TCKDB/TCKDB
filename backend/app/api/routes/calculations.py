@@ -872,9 +872,7 @@ def upload_calculation_artifacts(
             written_by=current_user.id,
         )
 
-    # A file arrived, so the deposit checks that depend on file presence are re-run on the stored state: a warning
-    # that no longer applies is retired (kept as history), one that now would be raised is added. Written in this
-    # request's transaction, so it commits or rolls back with the attach.
+    # Re-run the file-dependent checks; retirements commit or roll back with the attach.
     warnings.extend(
         recheck_calculation_warnings(
             session,

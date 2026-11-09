@@ -239,6 +239,7 @@ class TauResolution:
     :param opt_convergence: ``opt.convergence`` as recorded, or ``None``.
     :param assumed_software: For an ``assumed_*`` basis, the table's program (``gaussian`` or ``orca``).
     :param assumed_family: For an ``assumed_*`` basis, the method family the recogniser assigned.
+    :param refined_from: The recorded method (``finite_difference_gradient``) refined to ``finite_difference_energy``, else ``None``.
     :param assumption_rule: For an ``assumed_*`` basis, which rule chose it: ``program_default``,
         ``orca_meta_gga_analytic_from_5``, ``orca_numerical_documented_vv10``,
         ``orca_numerical_documented_double_hybrid`` or ``orca_pre5_meta_gga_no_analytic``.
@@ -253,6 +254,7 @@ class TauResolution:
     assumed_software: str | None = None
     assumed_family: str | None = None
     assumption_rule: str | None = None
+    refined_from: str | None = None
 
 
 def _grid_or_opt_token(value: str | None, tight: frozenset[str]) -> str:
@@ -638,7 +640,61 @@ def expects_zero_imaginary_modes(kind: StationaryPointKind) -> bool:
 # ---------------------------------------------------------------------------
 
 
+#: A recorded finite difference of gradients was refined to energies (ORCA ``NumFreq`` on a method with no analytic gradient).
+W_HESSIAN_METHOD_REFINED = "hessian_method_refined"
+
+
+def _refinement_findings(tau: TauResolution | None, *, location: str) -> list[StationaryPointFinding]:
+    if tau is None or tau.refined_from is None:
+        return []
+    return [
+        StationaryPointFinding(
+            tier=ValidationTier.warn,
+            code=W_HESSIAN_METHOD_REFINED,
+            location=location,
+            tau=tau,
+            context={
+                "recorded": tau.refined_from,
+                "stored_method": HessianMethod.finite_difference_energy.value,
+                "stored_basis": tau.basis.value,
+                "refined_because": "no_analytic_gradient",
+            },
+            message=(
+                f"{location}: the recorded Hessian method was refined from {tau.refined_from} to "
+                f"{HessianMethod.finite_difference_energy.value} ({W_HESSIAN_METHOD_REFINED}): ORCA's NumFreq "
+                "differentiates gradients, and for a method with no analytic gradient those gradients are themselves "
+                f"numerical. tau = {tau.tau_cm1:.0f} cm-1 is stored."
+            ),
+        )
+    ]
+
+
 def evaluate_species_entry_frequency(
+    kind: StationaryPointKind,
+    n_imag: int | None,
+    imag_freq_cm1: float | None = None,
+    *,
+    location: str,
+    imaginary_modes: Sequence[ImaginaryMode] | None = None,
+    tau: TauResolution | None = None,
+    reaction_coordinate_mode_index: int | None = None,
+) -> list[StationaryPointFinding]:
+    """The findings of :func:`_evaluate_species_entry_frequency`, plus the refinement note when ``tau`` carries one."""
+    findings = _evaluate_species_entry_frequency(
+        kind,
+        n_imag,
+        imag_freq_cm1,
+        location=location,
+        imaginary_modes=imaginary_modes,
+        tau=tau,
+        reaction_coordinate_mode_index=reaction_coordinate_mode_index,
+    )
+    if n_imag is None:
+        return findings
+    return [*findings, *_refinement_findings(tau, location=location)]
+
+
+def _evaluate_species_entry_frequency(
     kind: StationaryPointKind,
     n_imag: int | None,
     imag_freq_cm1: float | None = None,
@@ -940,6 +996,29 @@ def _mode_context(mode: ImaginaryMode) -> dict[str, Any]:
 
 
 def evaluate_transition_state_frequency(
+    n_imag: int | None,
+    imag_freq_cm1: float | None = None,
+    *,
+    location: str,
+    imaginary_modes: Sequence[ImaginaryMode] | None = None,
+    reaction_coordinate_mode_index: int | None = None,
+    tau: TauResolution | None = None,
+) -> list[StationaryPointFinding]:
+    """The findings of :func:`_evaluate_transition_state_frequency`, plus the refinement note when ``tau`` carries one."""
+    findings = _evaluate_transition_state_frequency(
+        n_imag,
+        imag_freq_cm1,
+        location=location,
+        imaginary_modes=imaginary_modes,
+        reaction_coordinate_mode_index=reaction_coordinate_mode_index,
+        tau=tau,
+    )
+    if n_imag is None:
+        return findings
+    return [*findings, *_refinement_findings(tau, location=location)]
+
+
+def _evaluate_transition_state_frequency(
     n_imag: int | None,
     imag_freq_cm1: float | None = None,
     *,
@@ -1317,6 +1396,7 @@ __all__ = [
     "W_TS_REACTION_COORDINATE_AMBIGUOUS",
     "W_TS_REACTION_COORDINATE_NOT_DESIGNATED",
     "blocking_findings",
+    "W_HESSIAN_METHOD_REFINED",
     "evaluate_species_entry_frequency",
     "evaluate_transition_state_frequency",
     "expects_zero_imaginary_modes",

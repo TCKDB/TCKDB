@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from tckdb_schemas.hessian_method_assumption import (
     calculation_deck_method,
     calculation_echo_method,
+    calculation_numfreq_energy_implied,
     calculation_reported_method,
 )
 from tckdb_schemas.upload_warning import UploadWarning
@@ -272,6 +273,7 @@ def _to_calc_with_results_payload(
     payload._deck_hessian_method = calculation_deck_method(calc_in)
     payload._reported_hessian_method = calculation_reported_method(calc_in)
     payload._echo_hessian_method = calculation_echo_method(calc_in)
+    payload._numfreq_energy_implied = calculation_numfreq_energy_implied(calc_in)
     return payload
 
 
@@ -385,7 +387,6 @@ def persist_computed_species_upload(
         conformer_group, fingerprint, scheme = resolve_conformer_group(
             session,
             species_entry,
-            label=conf_in.label,
             created_by=created_by,
             smiles=request.species_entry.smiles,
             xyz_atoms=parsed.atoms,
@@ -1147,6 +1148,7 @@ def _persist_thermo_block(
         update={
             "source_calculations": resolved_sources,
             "thermodynamic_target_kind": declarations.thermodynamic_target_kind,
+            "thermodynamic_target_declared_by": declarations.thermodynamic_target_declared_by,
             "target_conformer_group_id": declarations.target_conformer_group_id,
             "protocol_declaration": declarations.protocol_declaration,
             # Stored as declared, after ``assert_role_consistency`` above.

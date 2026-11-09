@@ -37,10 +37,7 @@ renders it must say so.
 
 Retired warnings
 ----------------
-A warning whose condition later stopped holding (a file, a single point or a Hessian arrived) is *retired*, not
-deleted. Ordinary and anonymous readers see current warnings only. Curators and admins also see the retired ones,
-each marked with ``retired_at`` and ``retired_reason`` (``artifact_attached``, ``single_point_deposited``,
-``hessian_stored`` or ``superseded_by_recheck``); ``status`` is unaffected.
+A retired warning is shown only to curators and admins, with ``retired_at`` and ``retired_reason``; other readers see current warnings only.
 
 ``submission_ref`` follows the existing rule for that field on the scientific reads: it is served only to a caller
 who authenticates, and the key is omitted for an anonymous reader.
@@ -74,8 +71,7 @@ class DepositWarningItem(BaseModel):
     #: deposit or is a curator or admin.
     depositor_message: str | None = None
     depositor_field: str | None = None
-    #: Present only for a curator or admin reading a warning that has since been retired (its condition no longer
-    #: holds). Every other reader is never shown a retired warning, and the keys are absent.
+    #: Set only for a curator or admin reading a retired warning.
     retired_at: datetime | None = None
     retired_reason: str | None = None
 

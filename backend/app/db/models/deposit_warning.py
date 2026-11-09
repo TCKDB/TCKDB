@@ -28,9 +28,7 @@ allowed even under an approved record, because a later artifact upload can add a
 warning to an existing calculation. This is the regime ``record_reproducibility_assessment``
 lives under, not the accepted-science child guard.
 
-**Retirement.** A warning whose condition later stops holding (an artifact arrived that the rule was waiting for) is
-not edited or deleted: a row in ``deposit_warning_retirement`` points at it. The warning stays in the table as history;
-reads show a record's *current* warnings, the ones with no retirement row.
+**Retirement.** A warning that stops applying gets a row in ``deposit_warning_retirement``; reads show warnings without one.
 
 Warnings never change a value, order a list or gate selection.
 """
@@ -129,21 +127,12 @@ class DepositWarning(Base):
     )
 
 
-#: Why a warning was retired. A closed set: a new reason is a new revision, so a reader can rely on the list.
+#: The closed set of retirement reasons.
 RETIREMENT_REASONS = ("artifact_attached", "single_point_deposited", "hessian_stored", "superseded_by_recheck")
 
 
 class DepositWarningRetirement(Base):
-    """A deposit warning that no longer applies, kept as history rather than shown as current.
-
-    Append-only like ``deposit_warning`` (same trigger regime), and one row per warning at most: a retired warning
-    stays retired. The warning itself is untouched; this row says *when* and *why* it stopped being current.
-
-    The reason states the cause: ``artifact_attached`` (a file arrived and the re-run no longer finds the condition),
-    ``single_point_deposited`` (a single point for the same owner now makes the opt's energy obtainable),
-    ``hessian_stored`` (the Hessian a ``hessian_not_stored_*`` warning said was missing is now stored), or
-    ``superseded_by_recheck`` (the re-run still warns, but the stated facts changed; the replacement is its own row).
-    """
+    """A deposit warning that no longer applies, with the reason, actor and time."""
 
     __tablename__ = "deposit_warning_retirement"
 

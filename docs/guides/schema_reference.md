@@ -1166,7 +1166,7 @@ the gap.
 | `geometry_id` | BIGINT | no | — | geometry.id | — | not documented |
 | `natoms` | INTEGER | no | — | — | — | not documented |
 | `lower_triangle_hartree_bohr2` | FLOAT[] | no | — | — | — | not documented |
-| `source` | HessianSource (enum) | no | — | — | `parsed_fchk`, `parsed_hess`, `parsed_log`, `uploaded`, `derived` | not documented |
+| `source` | HessianSource (enum) | no | — | — | `parsed_fchk`, `parsed_hess`, `parsed_log`, `parsed_log_archive`, `uploaded`, `derived` | not documented |
 | `parser_name` | TEXT | yes | — | — | — | not documented |
 | `parser_version` | TEXT | yes | — | — | — | not documented |
 | `note` | TEXT | yes | — | — | — | not documented |
@@ -1700,6 +1700,24 @@ the gap.
 - `ck_deposit_warning_marker_or_complete`: `(code IS NULL AND register_entry IS NULL AND field IS NULL AND message IS NULL AND context IS NULL AND content_hash IS NULL) OR (code IS NOT NULL AND field IS NOT NULL AND message IS NOT NULL AND content_hash IS NOT NULL AND content_hash ~ '^[0-9a-f]{64}$')`
 - `ck_deposit_warning_record_both_or_neither`: `(record_type IS NULL) = (record_id IS NULL)`
 - `ck_deposit_warning_submission_or_record_warning`: `submission_id IS NOT NULL OR (record_type IS NOT NULL AND code IS NOT NULL)`
+
+### `deposit_warning_retirement`
+
+**Role:** role not stated on the model
+
+**Purpose:** A deposit warning that no longer applies, kept as history rather than shown as current.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `deposit_warning_id` | BIGINT | no | — | deposit_warning.id | — | not documented |
+| `retired_reason_code` | TEXT | no | — | — | — | not documented |
+| `retired_by_user_id` | BIGINT | yes | — | app_user.id | — | not documented |
+| `retired_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_deposit_warning_retirement_reason_known`: `retired_reason_code IN ('artifact_attached', 'single_point_deposited', 'hessian_stored', 'superseded_by_recheck')`
 
 ### `energy_correction_scheme`
 
@@ -3337,6 +3355,7 @@ the gap.
 | `energy_level_of_theory_id` | BIGINT | yes | — | level_of_theory.id | — | not documented |
 | `enthalpy_reference_kind` | EnthalpyReferenceKind (enum) | yes | — | — | `formation_298k` | ``enthalpy_reference_kind`` declares which reference every enthalpy on this record uses. ``formation_298k`` is the standard enthalpy of formation at 298.15 K; an enthalpy at any other temperature is that value plus the species' own enthalpy increment from 298.15 K, with the elemental term not reevaluated. ``NULL`` means the reference was never recorded -- it is never inferred from a value, a producer or a neighbouring row, and never backfilled. |
 | `thermodynamic_target_kind` | ThermoTargetKind (enum) | yes | — | — | `equilibrium_ensemble`, `single_conformer` | ``thermodynamic_target_kind`` declares what the values are claimed to describe: ``equilibrium_ensemble`` (the thermally equilibrated population of the species' conformers) or ``single_conformer`` (one named conformer group). ``NULL`` means no target was declared -- it is never inferred from ``statmech_id`` or a conformer selection, and never backfilled. |
+| `thermodynamic_target_declared_by` | ThermoDeclarationSource (enum) | no | depositor | — | `depositor`, `chemkin_format` | ``thermodynamic_target_declared_by`` is whose claim the target is (``depositor`` or ``chemkin_format``); meaningful only with a target. |
 | `target_conformer_group_id` | BIGINT | yes | — | conformer_group.id | — | ``target_conformer_group_id`` is the conformer group a ``single_conformer`` target names, and is set exactly then (``ck_thermo_target_group_iff_single_conformer``). That the group belongs to this row's species entry is checked where the row is written. |
 | `protocol_declaration` | JSONB | yes | — | — | — | ``protocol_declaration`` is the depositor's versioned protocol declaration -- recipe, formation-reference construction, thermal approximation, departures from the standard recipe, supporting calculations (by public ref) -- validated against ``tckdb_schemas.thermo_declarations.StoredThermoProtocolDeclaration``. An attributed claim, stored as made. ``NULL`` means none was declared. All three are frozen with the rest of an accepted row. |
 | `h298_kj_mol` | DOUBLE PRECISION | yes | — | — | — | ``h298_kj_mol`` / ``s298_j_mol_k`` are the standard enthalpy of formation and standard entropy at 298.15 K. |

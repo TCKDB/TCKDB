@@ -418,13 +418,7 @@ def store_deposit_warnings(
     mark_checked: bool = True,
     written_by: int | None = None,
 ) -> None:
-    """:func:`_store_deposit_warnings`, then the retirements this deposit's records earn.
-
-    A Hessian already stored for a calculation among the deposit's records retires its ``hessian_not_stored_*``
-    warnings, whichever order the batch's files arrived in. A single-point calculation among the deposit's records makes an opt's energy obtainable, so a stored
-    ``converged_opt_no_usable_energy`` on a same-owner opt is retired. That step is not isolated: a failure fails the
-    deposit (it is atomic with it), unlike the warning rows, which describe the deposit and get no vote on it.
-    """
+    """Store the warnings, then retire warnings the deposit's calculations make untrue; retirement failures raise."""
     warnings = list(warnings)
     noted: dict[int, list[_Target]] = session.info.get(_TARGETS_KEY, {})
     if targets is None:
@@ -559,7 +553,7 @@ def _item(row: DepositWarning, retirement: DepositWarningRetirement | None = Non
 
 
 def current_warnings(statement):
-    """``statement`` (a select of ``DepositWarning``) limited to warnings that have not been retired."""
+    """``statement`` limited to warnings that have not been retired."""
     return statement.where(~select(DepositWarningRetirement.id).where(DepositWarningRetirement.deposit_warning_id == DepositWarning.id).exists())
 
 
@@ -649,8 +643,7 @@ def deposit_warning_envelope(session: Session, record_type: RT, id_to_ref: dict[
     ``deposit_warnings`` (what the named records' submissions could not place on a record)."""
     from app.schemas.reads.scientific_deposit_warnings import RecordWarnings
 
-    # Retired warnings are loaded only for a curator or admin (read from the request's published actor), so a route
-    # that skips ``reveal_warning_views`` still cannot show one as current. The reveal step filters again.
+    # Retired warnings are loaded only for a curator or admin.
     from app.services.scientific_read.warning_views import may_see_retired_warnings
 
     include_retired = may_see_retired_warnings()

@@ -1034,8 +1034,7 @@ def collect_converged_opt_energy_warnings(
             CalculationRecordKind.transition_state: ts_ids,
         },
     )
-    # Looked up for every row, not only those with an energy: the warning's context states ``has_artifact``, and an
-    # energy-less opt that does have a file must not claim it has none (the verdict is unchanged -- it needs both).
+    # Looked up for every row so the warning's ``has_artifact`` is accurate.
     artifact_calc_ids = _load_calc_ids_with_artifacts(session, [r.id for r in rows])
 
     warnings: list[UploadWarning] = []

@@ -1,26 +1,4 @@
-"""Re-run deposit checks whose outcome depends on state that arrives after the deposit, and retire what no longer holds.
-
-A deposit is judged once, with what it carried. Later events can make a stored warning untrue:
-
-* **a file is attached** (``POST /calculations/{ref}/artifacts``): ``converged_opt_no_usable_energy`` needs the opt's
-  energy *and* a file when no single point exists (reason ``artifact_attached``);
-* **a single point is deposited** for the same owner: it makes an opt's energy obtainable, so that same warning on
-  the owner's opts no longer applies (``single_point_deposited``);
-* **a Hessian is stored** for a calculation: every ``hessian_not_stored_*`` warning on it no longer applies
-  (``hessian_stored``).
-
-A retired warning is kept: ``deposit_warning_retirement`` points at it, reads stop showing it as current (curators and
-admins still see it, marked retired), and nothing is edited or deleted. Where a check is re-run and still warns but
-about different facts (the file is there, the energy is not), the replacement is stored first and the old row is
-retired as ``superseded_by_recheck`` only once the replacement exists; a newly raised warning is added by the same
-rules as at deposit.
-
-Only checks whose verdict is decided by stored state alone are included. Every other deposit check was audited:
-they read parsed values or payload structure, which none of these events change.
-
-Atomic with the event: every write here happens in the caller's transaction, outside the swallowing savepoint that
-``store_deposit_warnings`` uses, so a failure fails the request and the event rolls back with it.
-"""
+"""Re-run deposit checks that depend on later events and retire warnings that no longer hold."""
 
 from __future__ import annotations
 
@@ -54,7 +32,7 @@ def _key(code: str, field: str, context: Any) -> tuple[str, str, str]:
 
 
 def _retire(session: Session, rows: Iterable[DepositWarning], reason: str, by_user_id: int | None) -> None:
-    """Retire ``rows`` (a retirement already present is left as it is)."""
+    """Insert retirement rows for ``rows``, leaving existing retirements alone."""
     assert reason in RETIREMENT_REASONS, reason
     values = [
         {"deposit_warning_id": r.id, "retired_reason_code": reason, "retired_by_user_id": by_user_id} for r in rows
@@ -71,7 +49,7 @@ def _retire(session: Session, rows: Iterable[DepositWarning], reason: str, by_us
 def _insert_replacements(
     session: Session, submission_id: int | None, calculation_id: int, warnings: list[UploadWarning], written_by: int | None
 ) -> None:
-    """Store ``warnings`` on the calculation. Unlike ``store_deposit_warnings`` this does not swallow a failure."""
+    """Insert ``warnings`` on the calculation; a failure raises."""
     rows = [_row(submission_id, _Target(RT.calculation, calculation_id), w, written_by) for w in warnings]
     session.execute(
         pg_insert(DepositWarning).values(rows).on_conflict_do_nothing(constraint="uq_deposit_warning_identity")
@@ -97,16 +75,13 @@ def _is_stored_current(session: Session, calculation_id: int, warning_row: dict[
 def recheck_calculation_warnings(
     session: Session, calculation_id: int, *, cause: str, submission_id: int | None, written_by: int | None
 ) -> list[UploadWarning]:
-    """Re-run the converged-opt energy check for ``calculation_id`` against stored state; return newly raised warnings.
-
-    ``cause`` is the retirement reason when the warning no longer applies. Call after the event is flushed.
-    """
+    """Return the warnings newly raised for ``calculation_id``, retiring stored ones that no longer hold."""
     fresh = [
         w
         for w in collect_converged_opt_energy_warnings(session, [calculation_id])
         if w.code in RECHECKED_CODES
     ]
-    reset_deposit_notes(session)  # the collector leaves producer notes on the session; this path places explicitly
+    reset_deposit_notes(session)  # drop the producer notes the collector leaves
     stored = list(
         session.scalars(
             current_warnings(
@@ -124,9 +99,7 @@ def recheck_calculation_warnings(
     stale = [r for r in stored if _key(r.code, r.field, r.context) not in fresh_by_key]
     added = [w for k, w in fresh_by_key.items() if k not in stored_keys]
 
-    # The replacement goes in first; the old statement is retired only once the replacement is current. A failure to
-    # store raises (the event rolls back with it); a replacement that cannot become current (an identical row was
-    # retired earlier) leaves the old warning in place rather than leaving the record with none.
+    # Store the replacement first; retire the old row only once the replacement is current.
     if added:
         _insert_replacements(session, submission_id, calculation_id, added, written_by)
     retire_as_superseded: list[DepositWarning] = []
@@ -149,11 +122,7 @@ def recheck_calculation_warnings(
 def recheck_owner_opts_after_single_points(
     session: Session, single_point_ids: Iterable[int], *, written_by: int | None
 ) -> None:
-    """A single point was deposited: retire ``converged_opt_no_usable_energy`` on same-owner opts it now resolves.
-
-    Only opts that already carry a current stored warning are visited, so nothing is added to a record that was never
-    warned.
-    """
+    """Retire ``converged_opt_no_usable_energy`` on opts of the same owner as the given single points."""
     ids = list(dict.fromkeys(single_point_ids))
     if not ids:
         return
@@ -191,7 +160,7 @@ def recheck_owner_opts_after_single_points(
 
 
 def retire_hessian_not_stored_warnings(session: Session, calculation_id: int, *, written_by: int | None = None) -> None:
-    """A Hessian is now stored for ``calculation_id``: its ``hessian_not_stored_*`` warnings no longer apply."""
+    """Retire the calculation's current ``hessian_not_stored_*`` warnings."""
     rows = session.scalars(
         current_warnings(
             select(DepositWarning).where(
@@ -207,11 +176,7 @@ def retire_hessian_not_stored_warnings(session: Session, calculation_id: int, *,
 def retire_hessian_not_stored_where_stored(
     session: Session, calculation_ids: Iterable[int], *, written_by: int | None
 ) -> None:
-    """Retire ``hessian_not_stored_*`` warnings on every one of ``calculation_ids`` that has a Hessian.
-
-    Runs after a deposit's warnings are stored: a batch whose failing file comes before its successful one stores the
-    failing file's warning after the Hessian's own retirement ran, and this clears it.
-    """
+    """Retire ``hessian_not_stored_*`` warnings on each given calculation that has a Hessian."""
     ids = list(dict.fromkeys(calculation_ids))
     if not ids:
         return

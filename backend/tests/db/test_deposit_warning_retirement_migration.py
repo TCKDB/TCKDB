@@ -59,7 +59,7 @@ def test_downgrade_then_upgrade_round_trips_and_keeps_deposit_warning(db_engine,
 
 
 def test_a_retirement_row_cannot_be_updated_or_deleted(db_engine):
-    """Everything runs in one transaction that is rolled back: an append-only table cannot be cleaned up after."""
+    """Runs in a rolled-back transaction."""
     insert_retirement = (
         "INSERT INTO deposit_warning_retirement (deposit_warning_id, retired_reason_code) VALUES (:w, :r) RETURNING id"
     )

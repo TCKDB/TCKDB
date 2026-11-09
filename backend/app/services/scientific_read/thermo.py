@@ -644,6 +644,7 @@ def get_species_thermo(
             thermodynamic_target=(
                 ThermoTargetBlock(
                     kind=t.thermodynamic_target_kind,
+                    declared_by=t.thermodynamic_target_declared_by,
                     conformer_group_ref=target_group_refs.get(t.target_conformer_group_id),
                 )
                 if t.thermodynamic_target_kind is not None

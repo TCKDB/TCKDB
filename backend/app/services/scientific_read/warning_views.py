@@ -8,9 +8,7 @@ reader may see it:
   ``depositor_field``, the access rule ``GET /jobs/{id}`` uses;
 * everyone else, including an authenticated reader who owns nothing, gets neither key.
 
-A **retired** warning (its condition stopped holding; see ``deposit_warning_retirement``) is shown only to curators
-and admins, marked with ``retired_at`` and ``retired_reason``; every other reader, including the owner of the deposit,
-sees current warnings only.
+A retired warning is shown only to curators and admins, with ``retired_at`` and ``retired_reason``.
 
 It also applies the existing ``submission_ref`` rule: the key is served only to an authenticated caller.
 

@@ -184,7 +184,6 @@ def persist_conformer_upload(
     conformer_group, fingerprint, scheme = resolve_conformer_group(
         session,
         species_entry,
-        label=request.label,
         created_by=created_by,
         smiles=smiles,
         xyz_atoms=parsed.atoms,

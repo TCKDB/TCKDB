@@ -95,6 +95,8 @@ from app.services.calc_isotopes import assert_isotopes
 from app.services.calculation_geometry_composition import (
     assert_calculation_geometry_composition,
 )
+from app.services.ess_software_detection import detect_software_from_text
+from app.services.gaussian_archive_hessian import read_gaussian_archive_hessian
 from app.services.hessian_parsing import (
     GAUSSIAN_HESSIAN_MARKER,
     HESSIAN_PARSER,
@@ -252,6 +254,9 @@ def _extract_and_store(
             return _Outcome(
                 _not_stored(W_HESSIAN_NOT_STORED_UNPARSEABLE, artifact_in.filename, "log_block_unreadable", field)
             )
+        archive = _archive_refusal(text)
+        if archive is not None:
+            return _Outcome(_not_stored(W_HESSIAN_NOT_STORED_UNPARSEABLE, artifact_in.filename, archive, field))
         return _Outcome()
 
     geometry_id, refusal = _resolve_input_geometry_id(
@@ -261,6 +266,13 @@ def _extract_and_store(
         return _Outcome(refusal)
 
     return _Outcome(_insert(session, calculation, geometry_id, parsed, artifact_in.filename, field, written_by))
+
+
+def _archive_refusal(text: str) -> str | None:
+    """The reason an archive Hessian in a Gaussian log was not read, or ``None``."""
+    if detect_software_from_text(text) != "gaussian":
+        return None
+    return read_gaussian_archive_hessian(text).reason
 
 
 def _resolve_input_geometry_id(
@@ -442,8 +454,7 @@ def _insert(
             )
         return _not_stored(W_HESSIAN_NOT_STORED_FAILED, filename, "store_failed", field)
     else:
-        # The Hessian a ``hessian_not_stored_*`` warning on this calculation said was missing is now stored. Outside
-        # the guarded block on purpose: a failure here fails the request, it is not reported as a failed Hessian.
+        # Outside the guarded block: a failure here fails the request.
         from app.services.artifact_warning_recheck import retire_hessian_not_stored_warnings
 
         retire_hessian_not_stored_warnings(session, calculation.id, written_by=written_by)

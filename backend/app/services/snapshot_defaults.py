@@ -44,6 +44,8 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
     ("thermo", "thermodynamic_target_kind"): None,
     ("thermo", "target_conformer_group_id"): None,
     ("thermo", "protocol_declaration"): None,
+    # thermo.thermodynamic_target_declared_by: left out of a digest at its default.
+    ("thermo", "thermodynamic_target_declared_by"): "depositor",
     # kinetics.determination_id / representation_role / applicability_declaration /
     # protocol_declaration: a kinetics row stored before the columns existed declared no
     # determination, no role, no applicability and no protocol, which is NULL. A record that

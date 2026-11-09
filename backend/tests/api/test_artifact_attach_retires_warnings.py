@@ -1,10 +1,4 @@
-"""An artifact attached after the deposit re-runs the checks that depend on file presence.
-
-``converged_opt_no_usable_energy`` is judged at deposit. A client that uploads the calculation first and the output
-log second leaves a warning behind that the log has made untrue. The artifact route now re-evaluates the check from
-stored state: a warning that no longer applies is retired (kept in ``deposit_warning_retirement``, not shown as
-current), one whose facts changed is superseded, and one that would now be raised is added.
-"""
+"""Later events (a file, a single point, a Hessian) retire the deposit warnings they make untrue."""
 
 from __future__ import annotations
 
@@ -287,7 +281,7 @@ def test_storing_the_hessian_retires_the_hessian_not_stored_warning(client, db_s
 
 
 def test_a_failed_replacement_leaves_the_old_warning_current(client, db_session, monkeypatch):
-    """Supersede stores the replacement first; if that fails nothing is retired and the failure surfaces."""
+    """A failed replacement store retires nothing."""
     from app.services import artifact_warning_recheck as recheck
 
     calc_id = _deposit_opt(client, energy=None, smiles_tag="j")
@@ -363,7 +357,7 @@ def test_a_batch_with_a_failing_file_before_the_good_one_leaves_no_current_hessi
 
 
 def _energyless_opt_with_file(client, db_session, monkeypatch, tag: str) -> int:
-    """An opt whose stored warning says "no file" although one is attached (the re-check was held off)."""
+    """An opt whose stored warning says no file although one is attached."""
     calc_id = _deposit_opt(client, energy=None, smiles_tag=tag)
     with monkeypatch.context() as m:
         m.setattr("app.api.routes.calculations.recheck_calculation_warnings", lambda *a, **k: [])
@@ -390,7 +384,7 @@ def test_the_replacement_is_stored_before_the_old_warning_is_retired(client, db_
 
 
 def test_an_identical_retired_row_keeps_the_old_warning_current(client, db_session, monkeypatch):
-    """The replacement cannot become current (the same content was retired earlier): do not leave the record bare."""
+    """A replacement identical to a retired row cannot become current, so the old warning stays."""
     from tckdb_schemas.upload_warning import UploadWarning
 
     from app.services import artifact_warning_recheck as recheck
